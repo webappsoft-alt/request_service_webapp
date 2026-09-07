@@ -84,7 +84,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-svh flex-col">
+      <body className="flex min-h-svh flex-col" suppressHydrationWarning>
         <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
         <a
           href="#main-content"

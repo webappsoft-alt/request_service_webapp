@@ -1,0 +1,710 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-teal: var(--accent-teal);
+  --color-accent-amber: var(--accent-amber);
+  --color-accent-green: var(--accent-green);
+  --color-accent-violet: var(--accent-violet);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-surface: var(--ink-surface);
+  --color-ink-border: var(--ink-border);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Brand: #003F7D → oklch(0.372 0.12 254). All navy tokens are tones of this. */
+  --background: oklch(0.993 0.006 254);
+  --foreground: oklch(0.24 0.04 254);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.04 254);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.04 254);
+  --primary: #003f7d;
+  --primary-foreground: oklch(0.99 0.005 254);
+  --secondary: oklch(0.955 0.02 254);
+  --secondary-foreground: #003f7d;
+  --muted: oklch(0.964 0.012 254);
+  --muted-foreground: oklch(0.46 0.03 254);
+  --accent: oklch(0.948 0.024 254);
+  --accent-foreground: #003f7d;
+  --destructive: oklch(0.577 0.2 27);
+  --border: oklch(0.91 0.02 254);
+  --input: color-mix(in oklab, var(--foreground) 35%, transparent);
+  --ring: oklch(0.42 0.1 254);
+  --success: oklch(0.5 0.1 155);
+  --success-foreground: oklch(0.985 0.01 155);
+  --warning: oklch(0.75 0.13 75);
+  --warning-foreground: oklch(0.3 0.06 55);
+  --brand: #003f7d;
+  --brand-foreground: oklch(0.99 0.005 254);
+  /* Category accents: one tonal family — matched lightness and chroma so the
+     grid reads as a system rather than a set of unrelated colors. */
+  --accent-blue: #003f7d;
+  --accent-teal: oklch(0.54 0.1 205);
+  /* Held a touch darker than the other accents so white text on the solid fill
+     clears WCAG AA; amber is the lightest hue at equal lightness. */
+  --accent-amber: oklch(0.54 0.12 65);
+  --accent-green: oklch(0.52 0.11 155);
+  --accent-violet: oklch(0.54 0.13 295);
+  --ink: #003f7d;
+  --ink-foreground: oklch(0.98 0.008 254);
+  --ink-muted: oklch(0.82 0.04 254);
+  --ink-surface: oklch(0.42 0.1 254);
+  --ink-border: oklch(0.99 0 0 / 16%);
+  --chart-1: #003f7d;
+  --chart-2: oklch(0.48 0.1 254);
+  --chart-3: oklch(0.6 0.07 254);
+  --chart-4: oklch(0.74 0.04 254);
+  --chart-5: oklch(0.88 0.02 254);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.985 0.01 254);
+  --sidebar-foreground: oklch(0.24 0.04 254);
+  --sidebar-primary: #003f7d;
+  --sidebar-primary-foreground: oklch(0.99 0.005 254);
+  --sidebar-accent: oklch(0.955 0.02 254);
+  --sidebar-accent-foreground: #003f7d;
+  --sidebar-border: oklch(0.91 0.02 254);
+  --sidebar-ring: oklch(0.42 0.1 254);
+}
+
+.dark {
+  --background: oklch(0.2 0.04 254);
+  --foreground: oklch(0.985 0.008 254);
+  --card: oklch(0.24 0.04 254);
+  --card-foreground: oklch(0.985 0.008 254);
+  --popover: oklch(0.24 0.04 254);
+  --popover-foreground: oklch(0.985 0.008 254);
+  /* Lifted tone of #003F7D so primary text and fills stay visible on ink. */
+  --primary: oklch(0.72 0.09 254);
+  --primary-foreground: #003f7d;
+  --secondary: oklch(0.3 0.04 254);
+  --secondary-foreground: oklch(0.985 0.008 254);
+  --muted: oklch(0.3 0.04 254);
+  --muted-foreground: oklch(0.74 0.03 254);
+  --accent: oklch(0.3 0.04 254);
+  --accent-foreground: oklch(0.985 0.008 254);
+  --destructive: oklch(0.7 0.18 22);
+  --border: oklch(1 0 0 / 10%);
+  --input: color-mix(in oklab, white 28%, transparent);
+  --ring: oklch(0.68 0.08 254);
+  --success: oklch(0.7 0.12 155);
+  --success-foreground: oklch(0.2 0.04 155);
+  --warning: oklch(0.8 0.12 75);
+  --warning-foreground: oklch(0.28 0.06 55);
+  --brand: oklch(0.72 0.09 254);
+  --brand-foreground: #003f7d;
+  --ink: #003f7d;
+  --ink-foreground: oklch(0.98 0.008 254);
+  --ink-muted: oklch(0.8 0.04 254);
+  --ink-surface: oklch(0.32 0.08 254);
+  --ink-border: oklch(0.99 0 0 / 16%);
+  --chart-1: oklch(0.72 0.09 254);
+  --chart-2: oklch(0.6 0.08 254);
+  --chart-3: oklch(0.5 0.07 254);
+  --chart-4: oklch(0.42 0.06 254);
+  --chart-5: oklch(0.34 0.05 254);
+  --sidebar: oklch(0.24 0.04 254);
+  --sidebar-foreground: oklch(0.985 0.008 254);
+  --sidebar-primary: oklch(0.72 0.09 254);
+  --sidebar-primary-foreground: #003f7d;
+  --sidebar-accent: oklch(0.3 0.04 254);
+  --sidebar-accent-foreground: oklch(0.985 0.008 254);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.68 0.08 254);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    scroll-behavior: auto;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    overflow-x: clip;
+  }
+
+  body {
+    line-height: 1.6;
+  }
+
+  a.text-primary {
+    font-weight: 600;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    font-family: var(--font-heading);
+    text-wrap: balance;
+  }
+
+  h1 {
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1.04;
+  }
+
+  h2 {
+    font-weight: 600;
+    letter-spacing: -0.034em;
+    line-height: 1.08;
+  }
+
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    line-height: 1.25;
+  }
+
+  h4,
+  h5 {
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.35;
+  }
+}
+
+@utility container-site {
+  margin-inline: auto;
+  width: min(80%, 90rem);
+}
+
+.filters-sidebar {
+  max-height: calc(100dvh - 7rem) !important;
+  overflow-x: hidden !important;
+  overflow-y: scroll !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #9aa4b2 transparent;
+}
+
+.filters-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.filters-sidebar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #9aa4b2;
+}
+
+@utility section-space {
+  padding-block: 4.5rem;
+
+  @media (min-width: 768px) {
+    padding-block: 6rem;
+  }
+
+  @media (min-width: 1024px) {
+    padding-block: 7rem;
+  }
+}
+
+@utility section-space-tight {
+  padding-block: 2.5rem;
+
+  @media (min-width: 768px) {
+    padding-block: 3rem;
+  }
+
+  @media (min-width: 1024px) {
+    padding-block: 3.5rem;
+  }
+}
+
+@utility eyebrow {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+@utility hero-photo-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent 6%, #000 58%);
+  mask-image: linear-gradient(to right, transparent 6%, #000 58%);
+
+  @media (max-width: 1023px) {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 18%, #000 78%);
+    mask-image: linear-gradient(to bottom, transparent 18%, #000 78%);
+  }
+}
+
+@utility hero-photo-fade {
+  background: linear-gradient(
+    90deg,
+    #fff 0%,
+    #fff 34%,
+    rgb(255 255 255 / 88%) 46%,
+    rgb(255 255 255 / 42%) 64%,
+    rgb(255 255 255 / 8%) 82%,
+    transparent 100%
+  );
+
+  @media (max-width: 1023px) {
+    background: linear-gradient(
+      180deg,
+      #fff 0%,
+      #fff 48%,
+      rgb(255 255 255 / 82%) 66%,
+      rgb(255 255 255 / 18%) 88%,
+      transparent 100%
+    );
+  }
+}
+
+@utility hero-wash {
+  background-image:
+    radial-gradient(
+      54rem 32rem at 80% -10%,
+      oklch(0.372 0.12 254 / 16%),
+      transparent 64%
+    ),
+    radial-gradient(
+      42rem 28rem at 2% 2%,
+      oklch(0.372 0.12 254 / 8%),
+      transparent 60%
+    ),
+    linear-gradient(to bottom, oklch(1 0 0), oklch(0.975 0.01 254) 72%, oklch(0.988 0.006 254));
+}
+
+@utility page-wash {
+  background-image:
+    radial-gradient(
+      54rem 32rem at 80% -10%,
+      oklch(0.372 0.12 254 / 26%),
+      transparent 64%
+    ),
+    radial-gradient(
+      42rem 28rem at 2% 2%,
+      oklch(0.372 0.12 254 / 14%),
+      transparent 60%
+    ),
+    linear-gradient(to bottom, oklch(0.97 0.022 254), oklch(0.988 0.01 254));
+}
+
+@utility hero-grid {
+  background-image:
+    linear-gradient(to right, oklch(0.372 0.12 254 / 8%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.372 0.12 254 / 8%) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 10%, transparent 78%);
+}
+
+@utility dot-grid {
+  background-image: radial-gradient(
+    var(--border) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dialog-step {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.page-enter {
+  animation: page-enter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dialog-step {
+  animation: dialog-step 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.reveal-list > * {
+  animation: reveal-in 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.reveal-list > *:nth-child(1) { animation-delay: 0.02s; }
+.reveal-list > *:nth-child(2) { animation-delay: 0.06s; }
+.reveal-list > *:nth-child(3) { animation-delay: 0.1s; }
+.reveal-list > *:nth-child(4) { animation-delay: 0.14s; }
+.reveal-list > *:nth-child(5) { animation-delay: 0.18s; }
+.reveal-list > *:nth-child(6) { animation-delay: 0.22s; }
+.reveal-list > *:nth-child(7) { animation-delay: 0.26s; }
+.reveal-list > *:nth-child(8) { animation-delay: 0.3s; }
+.reveal-list > *:nth-child(9) { animation-delay: 0.34s; }
+.reveal-list > *:nth-child(10) { animation-delay: 0.38s; }
+
+/* Scroll-driven reveal. Gated behind @supports so browsers without view
+   timelines render the content immediately instead of leaving it invisible.
+   The range end is a length, not a percentage, so tall sections finish just as
+   quickly as short ones instead of staying faded while being read. */
+@utility reveal {
+  @supports (animation-timeline: view()) {
+    animation: reveal-in linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 260px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Load-time entrance for above-the-fold content, which never gets a scroll
+   event to drive a view() timeline. Children animate in sequence. Delays are
+   kept short so the hero headline still paints early for LCP. */
+@utility enter-stagger {
+  & > * {
+    animation: reveal-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  & > *:nth-child(1) {
+    animation-delay: 0.04s;
+  }
+  & > *:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  & > *:nth-child(3) {
+    animation-delay: 0.16s;
+  }
+  & > *:nth-child(4) {
+    animation-delay: 0.22s;
+  }
+  & > *:nth-child(5) {
+    animation-delay: 0.28s;
+  }
+  & > *:nth-child(6) {
+    animation-delay: 0.34s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    & > * {
+      animation: none;
+    }
+  }
+}
+
+@utility enter-visual {
+  animation: reveal-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee 50s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility marquee-mask {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 3rem,
+    #000 calc(100% - 3rem),
+    transparent
+  );
+}
+
+@utility elevate {
+  box-shadow:
+    0 1px 2px oklch(0.372 0.12 254 / 6%),
+    0 8px 24px -12px oklch(0.372 0.12 254 / 14%);
+}
+
+@utility elevate-lg {
+  box-shadow:
+    0 1px 2px oklch(0.372 0.12 254 / 7%),
+    0 24px 60px -24px oklch(0.372 0.12 254 / 22%);
+}
+
+.rs-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: oklch(0.96 0.012 254);
+  font-family: var(--font-sans);
+}
+
+.rs-map .leaflet-control-attribution {
+  font-size: 10px;
+  background: oklch(1 0 0 / 72%);
+}
+
+.rs-map .rs-marker-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.rs-pill {
+  display: flex;
+  min-width: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #003f7d;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 6px 16px oklch(0.24 0.04 254 / 22%);
+  transition:
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 200ms ease;
+}
+
+.rs-pill.is-active {
+  z-index: 80;
+  background: #0b63c7;
+  transform: scale(1.12);
+}
+
+.rs-shop-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #003f7d;
+  border-radius: 999px;
+  background: #fff;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #003f7d;
+  box-shadow: 0 6px 16px oklch(0.24 0.04 254 / 18%);
+}
+
+.rs-shop-pin.is-active {
+  background: #003f7d;
+  color: #fff;
+}
+
+.rs-map .leaflet-popup {
+  overflow: visible;
+}
+
+.rs-map .leaflet-popup-content-wrapper {
+  padding: 0;
+  overflow: visible;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rs-map .leaflet-popup-content {
+  width: 320px !important;
+  margin: 0;
+  overflow: visible;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.rs-map .leaflet-popup-content p {
+  margin: 0;
+}
+
+.rs-map .leaflet-popup-content a[data-slot="button"][data-variant="default"] {
+  color: var(--primary-foreground);
+}
+
+.rs-map .leaflet-popup-content a[data-slot="button"][data-variant="outline"] {
+  color: var(--foreground);
+}
+
+.rs-map .leaflet-popup-tip {
+  background: var(--card);
+}
+
+.rs-map .leaflet-container a.leaflet-popup-close-button {
+  top: -8px;
+  right: -8px;
+  z-index: 50;
+  display: flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 8px oklch(0.24 0.04 254 / 18%);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  color: #17324f !important;
+  text-decoration: none;
+}
+
+.rs-map .leaflet-container a.leaflet-popup-close-button:hover {
+  background: #f4f6f8;
+}
+
+.home-motion section.will-reveal {
+  opacity: 0;
+  transform: translate3d(0, 1.25rem, 0);
+}
+
+.home-motion section.is-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.home-motion section.is-in [data-stagger] > * {
+  animation: reveal-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.home-motion section.is-in [data-stagger] > *:nth-child(1) { animation-delay: 0.02s; }
+.home-motion section.is-in [data-stagger] > *:nth-child(2) { animation-delay: 0.07s; }
+.home-motion section.is-in [data-stagger] > *:nth-child(3) { animation-delay: 0.12s; }
+.home-motion section.is-in [data-stagger] > *:nth-child(4) { animation-delay: 0.17s; }
+.home-motion section.is-in [data-stagger] > *:nth-child(5) { animation-delay: 0.22s; }
+.home-motion section.is-in [data-stagger] > *:nth-child(6) { animation-delay: 0.27s; }
+.home-motion section.is-in [data-stagger] > *:nth-child(7) { animation-delay: 0.32s; }
+.home-motion section.is-in [data-stagger] > *:nth-child(8) { animation-delay: 0.37s; }
+
+.job-rich-text .ck.ck-toolbar {
+  border: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  background: #f8fafc;
+}
+
+.job-rich-text .ck.ck-editor__main > .ck-editor__editable {
+  min-height: 180px;
+  border: 0;
+  box-shadow: none;
+}
+
+.job-activity-html p {
+  margin: 0 0 0.5rem;
+}
+
+.job-activity-html ul,
+.job-activity-html ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.job-activity-html a {
+  color: #003f7d;
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .dialog-step,
+  .reveal-list > *,
+  .home-motion section.will-reveal,
+  .home-motion section.is-in,
+  .home-motion section.is-in [data-stagger] > * {
+    opacity: 1;
+    transform: none;
+    animation: none;
+    transition: none;
+  }
+}

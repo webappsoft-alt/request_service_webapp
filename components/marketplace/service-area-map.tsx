@@ -5,8 +5,11 @@ import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from "rea
 import L from "leaflet";
 import { getServiceAreaPoints } from "@/lib/data/provider-media";
 import { formatLocation } from "@/lib/format";
+import { getMapTileLayerProps } from "@/lib/maps";
 import type { Provider } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
+
+const mapTiles = getMapTileLayerProps();
 
 function FitBounds({
   points,
@@ -53,8 +56,8 @@ export function ServiceAreaMap({ provider }: { provider: Provider }) {
         className="h-full w-full"
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution={mapTiles.attribution}
+          url={mapTiles.url}
         />
         <ZoomControl position="bottomright" />
         <FitBounds points={allPoints} />

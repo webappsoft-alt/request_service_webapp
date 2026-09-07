@@ -1,9 +1,11 @@
 import CryptoJS from "crypto-js";
 
 function getSecretKey(): string {
-  const key = process.env.NEXT_PUBLIC_SECRET_KEY;
+  const key = process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
   if (!key) {
-    console.warn("[encrypted] NEXT_PUBLIC_SECRET_KEY is not set");
+    console.warn(
+      "[encrypted] NEXT_PUBLIC_ENCRYPTION_KEY is not set — using insecure fallback",
+    );
     return "rs-fallback-dev-key";
   }
   return key;
@@ -18,7 +20,9 @@ export function encryptData(data: unknown): string | null {
   }
 }
 
-export function decryptData<T = unknown>(data: string | null | undefined): T | null {
+export function decryptData<T = unknown>(
+  data: string | null | undefined,
+): T | null {
   try {
     if (data && typeof data === "string") {
       const bytes = CryptoJS.AES.decrypt(data, getSecretKey());

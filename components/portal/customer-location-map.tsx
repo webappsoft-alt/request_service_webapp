@@ -5,8 +5,11 @@ import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from "rea
 import L from "leaflet";
 import { getServiceAreaPoints } from "@/lib/data/provider-media";
 import { formatLocation } from "@/lib/format";
+import { getMapTileLayerProps } from "@/lib/maps";
 import type { Provider, ServiceAddress } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
+
+const mapTiles = getMapTileLayerProps();
 
 export function getCustomerMapPoint(provider: Provider, address: ServiceAddress) {
   const zipPoint =
@@ -70,8 +73,8 @@ export function CustomerLocationMap({
           className="h-full w-full"
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={mapTiles.attribution}
+            url={mapTiles.url}
           />
           <ZoomControl position="bottomright" />
           <Recenter lat={point.lat} lng={point.lng} />

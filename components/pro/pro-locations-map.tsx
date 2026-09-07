@@ -3,7 +3,10 @@
 import { useEffect } from "react";
 import { Circle, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
+import { getMapTileLayerProps } from "@/lib/maps";
 import "leaflet/dist/leaflet.css";
+
+const mapTiles = getMapTileLayerProps();
 
 export const locationShops = [
   {
@@ -93,7 +96,7 @@ export function ProLocationsMap({
         attributionControl={false}
         className="h-full w-full"
       >
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+        <TileLayer url={mapTiles.url} attribution={mapTiles.attribution} />
         <FitShops />
         <Circle
           center={[shop.lat, shop.lng]}

@@ -29,6 +29,7 @@ function asPlace(input: {
   };
 }
 
+/** Public place suggestions for the marketing search UI (no backend secrets). */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const q = searchParams.get("q")?.trim() ?? "";
@@ -96,10 +97,13 @@ export async function GET(request: NextRequest) {
         city: feature.properties?.city || feature.properties?.name,
         state: feature.properties?.state,
         zip: feature.properties?.postcode,
-      })
+      }),
     )
     .filter((place): place is PlaceSuggestion => Boolean(place))
-    .filter((place, index, list) => list.findIndex((item) => item.label === place.label) === index)
+    .filter(
+      (place, index, list) =>
+        list.findIndex((item) => item.label === place.label) === index,
+    )
     .slice(0, 6);
 
   return Response.json({ places });

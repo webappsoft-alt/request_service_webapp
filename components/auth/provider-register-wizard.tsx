@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -16,6 +16,10 @@ import {
   NativeSelectOption,
 } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AddressAutocomplete,
+  type MapboxAddress,
+} from "@/components/shared/address-autocomplete";
 import { serviceCategories } from "@/lib/data/services";
 import { cn } from "@/lib/utils";
 
@@ -23,20 +27,6 @@ const STEPS = ["account", "business", "services", "profile", "coverage"] as cons
 type Step = (typeof STEPS)[number];
 
 const OPTIONAL_STEPS: Step[] = ["services", "profile", "coverage"];
-
-const STATES = [
-  "TX",
-  "AZ",
-  "CA",
-  "CO",
-  "FL",
-  "GA",
-  "IL",
-  "MA",
-  "MN",
-  "NY",
-  "WA",
-] as const;
 
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
 
@@ -66,6 +56,9 @@ type Draft = {
   city: string;
   state: string;
   zip: string;
+  country: string;
+  latitude: string;
+  longitude: string;
   categoryIds: string[];
   jobs: string[];
   startingPrice: string;
@@ -92,6 +85,9 @@ const emptyDraft: Draft = {
   city: "",
   state: "TX",
   zip: "",
+  country: "",
+  latitude: "",
+  longitude: "",
   categoryIds: [],
   jobs: [],
   startingPrice: "",
@@ -146,6 +142,7 @@ function toggleValue(list: string[], value: string) {
 export function ProviderRegisterWizard() {
   const router = useRouter();
   const { signIn } = useDemoSession();
+  const zipRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("account");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const stepIndex = STEPS.indexOf(step);
@@ -156,6 +153,21 @@ export function ProviderRegisterWizard() {
 
   function patch(partial: Partial<Draft>) {
     setDraft((current) => ({ ...current, ...partial }));
+  }
+
+  function applyAddress(address: MapboxAddress) {
+    patch({
+      street: address.formattedAddress || address.streetAddress,
+      city: address.city,
+      state: address.state,
+      zip: address.zipCode,
+      country: address.country || "",
+      latitude: address.latitude != null ? String(address.latitude) : "",
+      longitude: address.longitude != null ? String(address.longitude) : "",
+    });
+    if (!address.zipCode) {
+      window.setTimeout(() => zipRef.current?.focus(), 0);
+    }
   }
 
   function goTo(next: Step) {
@@ -402,51 +414,31 @@ export function ProviderRegisterWizard() {
             </Field>
             <Field>
               <FieldLabel htmlFor="street">Street address</FieldLabel>
-              <Input
+              <AddressAutocomplete
                 id="street"
                 value={draft.street}
-                onChange={(event) => patch({ street: event.target.value })}
-                autoComplete="street-address"
-                placeholder="1644 Platte Street"
+                onChange={(street) => patch({ street })}
+                onSelect={applyAddress}
+                placeholder="Start typing your business address…"
               />
             </Field>
-            <div className="grid gap-5 sm:grid-cols-3">
-              <Field className="sm:col-span-1">
-                <FieldLabel htmlFor="city">City</FieldLabel>
-                <Input
-                  id="city"
-                  value={draft.city}
-                  onChange={(event) => patch({ city: event.target.value })}
-                  autoComplete="address-level2"
-                  placeholder="Optional — Austin"
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="state">State</FieldLabel>
-                <NativeSelect
-                  id="state"
-                  value={draft.state}
-                  onChange={(event) => patch({ state: event.target.value })}
-                  className="w-full"
-                >
-                  {STATES.map((state) => (
-                    <NativeSelectOption key={state} value={state}>
-                      {state}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="zip">ZIP</FieldLabel>
-                <Input
-                  id="zip"
-                  value={draft.zip}
-                  onChange={(event) => patch({ zip: event.target.value })}
-                  autoComplete="postal-code"
-                  placeholder="Optional — 78701"
-                />
-              </Field>
-            </div>
+            <Field>
+              <FieldLabel htmlFor="zip">ZIP</FieldLabel>
+              <Input
+                ref={zipRef}
+                id="zip"
+                value={draft.zip}
+                onChange={(event) => patch({ zip: event.target.value })}
+                autoComplete="postal-code"
+                placeholder="Optional — 78701"
+              />
+            </Field>
+            {/* Kept in draft/payload only — auto-filled from Mapbox, not shown in UI */}
+            <input type="hidden" name="city" value={draft.city} readOnly />
+            <input type="hidden" name="state" value={draft.state} readOnly />
+            <input type="hidden" name="country" value={draft.country} readOnly />
+            <input type="hidden" name="latitude" value={draft.latitude} readOnly />
+            <input type="hidden" name="longitude" value={draft.longitude} readOnly />
           </FieldGroup>
         ) : null}
 

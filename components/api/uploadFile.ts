@@ -1,6 +1,6 @@
 import axios, { type AxiosResponse } from "axios";
 import { DocUpload, FileUpload, imageUpload } from "./ApiRoutesFile";
-import { getAuthToken } from "./cookieUtils";
+import { getAuthToken } from "./apiFuntions";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -48,6 +48,36 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
 export type UploadError = {
   message: string;
 };
+
+/** Pull a usable image URL/path from common upload response shapes. */
+export function extractUploadedUrl(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, unknown>;
+  const nested =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : null;
+
+  const candidates = [
+    root.url,
+    root.path,
+    root.location,
+    root.imageUrl,
+    root.fileUrl,
+    root.avatarUrl,
+    nested?.url,
+    nested?.path,
+    nested?.location,
+    nested?.imageUrl,
+    nested?.fileUrl,
+    nested?.avatarUrl,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
 
 export async function uploadFile(
   file: File,

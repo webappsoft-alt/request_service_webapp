@@ -11,6 +11,7 @@ function getSecretKey(): string {
   return key;
 }
 
+/** Encrypt any JSON-serializable value (login /me response, etc.). */
 export function encryptData(data: unknown): string | null {
   try {
     return CryptoJS.AES.encrypt(JSON.stringify(data), getSecretKey()).toString();
@@ -20,6 +21,7 @@ export function encryptData(data: unknown): string | null {
   }
 }
 
+/** Decrypt a ciphertext string back to its original value. */
 export function decryptData<T = unknown>(
   data: string | null | undefined,
 ): T | null {

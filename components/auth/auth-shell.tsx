@@ -63,7 +63,7 @@ export function AuthShell({
   audience = "customer",
 }: {
   title: string;
-  description: string;
+  description: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
   eyebrow?: string;
@@ -74,13 +74,12 @@ export function AuthShell({
   const quote = panel.quote;
 
   return (
-    <div className="flex flex-1 flex-col bg-[#f5f5f5] p-3 sm:p-5 lg:min-h-0 lg:items-center lg:justify-center lg:p-8">
+    <div className="flex flex-1 flex-col bg-[#f5f5f5] p-3 sm:p-5 lg:items-center lg:justify-center lg:p-8">
       <div
         className={cn(
           "grid w-full max-w-[88rem] overflow-hidden rounded-2xl bg-card shadow-[0_24px_64px_rgba(4,26,54,0.12)]",
-          // Mobile: natural card height — the page itself scrolls (reliable with/without Lenis).
-          // Desktop: fixed card height with an internal form scroller.
-          "lg:min-h-[min(42rem,calc(100dvh-9rem))] lg:max-h-[calc(100dvh-9rem)] lg:grid-cols-2",
+          // Grow with form content so the page (not a trapped panel) can scroll to the submit button.
+          "lg:min-h-[min(42rem,calc(100dvh-9rem))] lg:grid-cols-2",
         )}
       >
         <aside className="relative isolate min-h-48 shrink-0 overflow-hidden sm:min-h-56 lg:min-h-full">
@@ -135,12 +134,8 @@ export function AuthShell({
         </aside>
 
         <div
-          data-lenis-prevent
-          data-lenis-prevent-wheel
-          data-lenis-prevent-touch
           className={cn(
             "flex flex-col bg-card",
-            "lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain",
             "[&_[data-slot=checkbox]]:border-foreground/40",
             size === "lg" ? "justify-start" : "justify-start lg:justify-center",
           )}

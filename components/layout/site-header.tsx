@@ -15,20 +15,35 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { Logo } from "@/components/layout/logo";
+import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { ProHeader } from "@/components/pro/pro-header";
-import { useDemoSession } from "@/components/auth/use-demo-session";
 import { primaryNav, secondaryNav } from "@/lib/data/navigation";
 import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
+import {
+  selectAuth,
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
+import { handleUserLogout } from "@/components/api/apiFuntions";
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const { session, signOut } = useDemoSession();
   const onPro = pathname === proPaths.home || pathname.startsWith(`${proPaths.home}/`);
 
   if (onPro) {
     return <ProHeader />;
   }
+
+  return <CustomerSiteHeader pathname={pathname} />;
+}
+
+function CustomerSiteHeader({ pathname }: { pathname: string }) {
+  const auth = useAppSelector(selectAuth);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const user = useAppSelector(selectAuthUser);
+  const showAccount = Boolean(user && (isAuthenticated || auth.token));
 
   return (
     <header className="sticky top-0 z-40 border-b bg-card">
@@ -47,7 +62,7 @@ export function SiteHeader() {
                   "relative px-3 py-2 text-sm font-medium transition-colors hover:text-foreground",
                   isActive
                     ? "text-foreground after:absolute after:bottom-0.5 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-primary"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
                 )}
               >
                 {item.label}
@@ -56,11 +71,23 @@ export function SiteHeader() {
           })}
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
-          <HeaderActions session={session} onSignOut={signOut} />
+          {!auth.hydrated ? (
+            <div
+              className="size-9 animate-pulse rounded-full bg-muted"
+              aria-hidden="true"
+            />
+          ) : (
+            <HeaderActions showAccount={showAccount} user={user} />
+          )}
         </div>
         <Sheet>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open menu">
+            <Button
+              variant="outline"
+              size="icon"
+              className="lg:hidden"
+              aria-label="Open menu"
+            >
               <Menu />
             </Button>
           </SheetTrigger>
@@ -79,7 +106,7 @@ export function SiteHeader() {
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
                         "rounded-md px-2 py-2 text-sm font-medium hover:bg-muted",
-                        isActive && "bg-muted text-foreground ring-1 ring-border"
+                        isActive && "bg-muted text-foreground ring-1 ring-border",
                       )}
                     >
                       {item.label}
@@ -88,7 +115,16 @@ export function SiteHeader() {
                 );
               })}
               <Separator className="my-3" />
-              <HeaderActions session={session} onSignOut={signOut} stacked closeOnNavigate />
+              {auth.hydrated ? (
+                <HeaderActions
+                  showAccount={showAccount}
+                  user={user}
+                  stacked
+                  closeOnNavigate
+                />
+              ) : (
+                <p className="px-2 text-sm text-muted-foreground">Loading…</p>
+              )}
             </div>
           </SheetContent>
         </Sheet>
@@ -98,49 +134,68 @@ export function SiteHeader() {
 }
 
 function HeaderActions({
-  session,
-  onSignOut,
+  showAccount,
+  user,
   stacked = false,
   closeOnNavigate = false,
 }: {
-  session: ReturnType<typeof useDemoSession>["session"];
-  onSignOut: () => void;
+  showAccount: boolean;
+  user: ReturnType<typeof selectAuthUser>;
   stacked?: boolean;
   closeOnNavigate?: boolean;
 }) {
   const wrap = (node: ReactElement) =>
     closeOnNavigate ? <SheetClose asChild>{node}</SheetClose> : node;
 
-  if (session) {
-    return (
-      <>
-        <p className={cn("text-sm text-muted-foreground", stacked ? "px-2" : "max-w-40 truncate px-2")}>
-          Hi, {session.firstName}
-        </p>
-        {session.role === "provider"
-          ? wrap(
-              <Button asChild>
-                <Link href={proPaths.dashboard}>Dashboard</Link>
-              </Button>,
-            )
-          : wrap(
-              <Button asChild>
-                <Link href={proPaths.home}>Join as Pro</Link>
-              </Button>,
-            )}
-        {closeOnNavigate ? (
-          <SheetClose asChild>
-            <Button variant="ghost" onClick={onSignOut}>
+  if (showAccount && user) {
+    const isProvider = user.role === "provider";
+    const settingsHref = isProvider
+      ? "/pro/dashboard/settings"
+      : "/account/settings";
+
+    const onLogout = () =>
+      handleUserLogout({
+        skipRedirect: false,
+      });
+
+    if (stacked) {
+      return (
+        <div className="flex flex-col gap-2">
+          <p className="px-2 text-sm font-medium">
+            {[user.firstName, user.lastName].filter(Boolean).join(" ") ||
+              String(user.email || "Account")}
+          </p>
+          {user.email ? (
+            <p className="px-2 text-xs text-muted-foreground">{String(user.email)}</p>
+          ) : null}
+          {isProvider
+            ? wrap(
+                <Button asChild>
+                  <Link href={proPaths.dashboard}>Dashboard</Link>
+                </Button>,
+              )
+            : null}
+          {wrap(
+            <Button variant="outline" asChild>
+              <Link href={settingsHref}>Settings</Link>
+            </Button>,
+          )}
+          {closeOnNavigate ? (
+            <SheetClose asChild>
+              <Button variant="ghost" onClick={onLogout}>
+                Log out
+              </Button>
+            </SheetClose>
+          ) : (
+            <Button variant="ghost" onClick={onLogout}>
               Log out
             </Button>
-          </SheetClose>
-        ) : (
-          <Button variant="ghost" onClick={onSignOut}>
-            Log out
-          </Button>
-        )}
-      </>
-    );
+          )}
+        </div>
+      );
+    }
+
+    return <UserAccountMenu user={user} />;
   }
 
   return (

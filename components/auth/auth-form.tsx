@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import { useDemoSession } from "@/components/auth/use-demo-session";
@@ -13,6 +13,14 @@ import { Input } from "@/components/ui/input";
 import type { DemoRole } from "@/lib/auth/demo-session";
 import { getAllProviders } from "@/lib/data/providers";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/store/hooks";
+import { clearAuthError, setAuthLoading, setCredentials } from "@/store/authSlice";
+import {
+  postData,
+  showApiErrorToast,
+} from "@/components/api/apiFuntions";
+import { authApi } from "@/components/api/ApiRoutesFile";
+import type { AuthPayload } from "@/store/authSlice";
 
 type AuthMode = "login" | "forgot" | "reset";
 
@@ -23,24 +31,28 @@ function copyFor(role: DemoRole, mode: AuthMode) {
         ? {
             eyebrow: "Service companies",
             title: "Provider login",
-            description: "Sign in to manage your business profile, services, and incoming requests.",
+            description:
+              "Sign in to manage your business profile, services, and incoming requests.",
           }
         : {
             eyebrow: "Homeowners",
             title: "Welcome back",
-            description: "Sign in to review estimates, message pros, and keep your job history in one place.",
+            description:
+              "Sign in to review estimates, message pros, and keep your job history in one place.",
           };
     case "forgot":
       return {
         eyebrow: role === "provider" ? "Service companies" : "Homeowners",
         title: "Forgot password",
-        description: "Enter the email on the account. We’ll send a reset link you can open on the next screen.",
+        description:
+          "Enter the email on the account. We’ll send a reset link you can open on the next screen.",
       };
     case "reset":
       return {
         eyebrow: role === "provider" ? "Service companies" : "Homeowners",
         title: "Choose a new password",
-        description: "Use a password you haven’t used here before. You’ll sign in again after this.",
+        description:
+          "Use a password you haven’t used here before. You’ll sign in again after this.",
       };
     default: {
       const _never: never = mode;
@@ -49,7 +61,7 @@ function copyFor(role: DemoRole, mode: AuthMode) {
   }
 }
 
-export function AuthForm({
+function AuthFormInner({
   role,
   mode,
 }: {
@@ -57,6 +69,8 @@ export function AuthForm({
   mode: AuthMode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const dispatch = useAppDispatch();
   const { signIn } = useDemoSession();
   const isProvider = role === "provider";
   const copy = copyFor(role, mode);
@@ -64,6 +78,9 @@ export function AuthForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const resetToken = searchParams.get("token")?.trim() || "";
 
   let canSubmit = false;
   switch (mode) {
@@ -85,50 +102,117 @@ export function AuthForm({
   const loginHref = isProvider ? "/pro/login" : "/login";
   const registerHref = isProvider ? "/pro/register" : "/register";
   const forgotHref = isProvider ? "/pro/forgot-password" : "/forgot-password";
-  const resetHref = isProvider ? "/pro/reset-password" : "/reset-password";
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const email = String(data.get("email") ?? "").trim();
-    const password = String(data.get("password") ?? "");
-    const confirm = String(data.get("confirmPassword") ?? "");
+    dispatch(clearAuthError());
 
     switch (mode) {
       case "login": {
-        const matched = isProvider
-          ? getAllProviders().find((item) => item.email.toLowerCase() === email.toLowerCase())
-          : undefined;
-        const firstName =
-          matched?.contact?.name.split(" ")[0] ||
-          email.split("@")[0] ||
-          "There";
-        signIn({
-          role,
-          firstName: firstName.charAt(0).toUpperCase() + firstName.slice(1),
-          lastName: matched?.contact?.name.split(" ").slice(1).join(" ") ?? "",
-          email,
-          companyName: isProvider ? matched?.companyName ?? "Your company" : undefined,
-        });
-        toast.success(isProvider ? "Signed in to your business account." : "Welcome back.");
-        router.push(isProvider ? "/pro/dashboard" : "/");
+        if (isProvider) {
+          const matched = getAllProviders().find(
+            (item) => item.email.toLowerCase() === email.toLowerCase(),
+          );
+          const firstName =
+            matched?.contact?.name.split(" ")[0] ||
+            email.split("@")[0] ||
+            "There";
+          signIn({
+            role,
+            firstName: firstName.charAt(0).toUpperCase() + firstName.slice(1),
+            lastName: matched?.contact?.name.split(" ").slice(1).join(" ") ?? "",
+            email,
+            companyName: matched?.companyName ?? "Your company",
+          });
+          toast.success("Signed in to your business account.");
+          router.push("/pro/dashboard");
+          return;
+        }
+
+        setSubmitting(true);
+        dispatch(setAuthLoading(true));
+        try {
+          const data = await postData<AuthPayload>(
+            authApi.login,
+            {
+              email: email.trim(),
+              password,
+              expectedRole: "customer",
+            },
+            { silent: true, skipLogoutOn401: true },
+          );
+
+          if (!data?.token || !data?.user) {
+            showApiErrorToast("Login succeeded but session data was incomplete.");
+            return;
+          }
+
+          dispatch(setCredentials(data));
+          toast.success(
+            (typeof data.message === "string" && data.message) ||
+              "Welcome back.",
+          );
+          router.push("/");
+        } catch (error) {
+          showApiErrorToast(error, "Invalid email or password.");
+        } finally {
+          setSubmitting(false);
+          dispatch(setAuthLoading(false));
+        }
         return;
       }
-      case "forgot":
-        setSent(true);
+      case "forgot": {
+        setSubmitting(true);
+        try {
+          const data = await postData<{ message?: string }>(
+            authApi.forgotPassword,
+            { email: email.trim() },
+            { silent: true, skipLogoutOn401: true },
+          );
+          setSent(true);
+          toast.success(
+            data?.message ||
+              "If an account exists, a reset link has been sent.",
+          );
+        } catch (error) {
+          showApiErrorToast(error);
+        } finally {
+          setSubmitting(false);
+        }
         return;
-      case "reset":
+      }
+      case "reset": {
         if (password.length < 8) {
           toast.error("Use at least 8 characters.");
           return;
         }
-        if (password !== confirm) {
+        if (password !== confirmPassword) {
           toast.error("Passwords do not match.");
           return;
         }
-        toast.success("Password updated. Sign in to continue.");
-        router.push(loginHref);
+        if (!resetToken) {
+          toast.error("Reset link is missing or invalid. Request a new one.");
+          return;
+        }
+
+        setSubmitting(true);
+        try {
+          const data = await postData<{ message?: string }>(
+            authApi.resetPassword,
+            { token: resetToken, newPassword: password },
+            { silent: true, skipLogoutOn401: true },
+          );
+          toast.success(
+            data?.message || "Password updated. Sign in to continue.",
+          );
+          router.push(loginHref);
+        } catch (error) {
+          showApiErrorToast(error);
+        } finally {
+          setSubmitting(false);
+        }
         return;
+      }
       default: {
         const _never: never = mode;
         return _never;
@@ -164,11 +248,12 @@ export function AuthForm({
       {mode === "forgot" && sent ? (
         <div className="flex flex-col gap-4">
           <p className="rounded-lg border border-foreground/25 bg-muted/40 px-4 py-3 text-sm leading-6">
-            If an account exists for that email, a reset link is ready. This demo opens the reset
-            page directly.
+            If an account exists for that email, a reset link has been
+            dispatched. Check your inbox and follow the link to choose a new
+            password.
           </p>
           <Button size="xl" asChild>
-            <Link href={resetHref}>Open reset page</Link>
+            <Link href={loginHref}>Back to login</Link>
           </Button>
         </div>
       ) : (
@@ -198,8 +283,12 @@ export function AuthForm({
                 <PasswordInput
                   id="password"
                   name="password"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  placeholder={mode === "reset" ? "At least 8 characters" : "Your password"}
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
+                  placeholder={
+                    mode === "reset" ? "At least 8 characters" : "Your password"
+                  }
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
@@ -232,11 +321,41 @@ export function AuthForm({
             </div>
           ) : null}
 
-          <Button type="submit" size="xl" disabled={!canSubmit}>
-            {mode === "login" ? "Sign in" : mode === "forgot" ? "Send reset link" : "Update password"}
+          <Button type="submit" size="xl" disabled={!canSubmit || submitting}>
+            {submitting
+              ? mode === "login"
+                ? "Signing in…"
+                : mode === "forgot"
+                  ? "Sending…"
+                  : "Updating…"
+              : mode === "login"
+                ? "Sign in"
+                : mode === "forgot"
+                  ? "Send reset link"
+                  : "Update password"}
           </Button>
         </form>
       )}
     </AuthShell>
+  );
+}
+
+export function AuthForm({
+  role,
+  mode,
+}: {
+  role: DemoRole;
+  mode: AuthMode;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+          Loading…
+        </div>
+      }
+    >
+      <AuthFormInner role={role} mode={mode} />
+    </Suspense>
   );
 }

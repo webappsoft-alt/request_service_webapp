@@ -1,88 +1,242 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import {
-  type AuthUser,
-  getAuthToken,
-  getUserDataCookie,
-  removeAuthToken,
-  removeUserDataCookie,
-  setAuthToken,
-  setUserDataCookie,
-} from "@/components/api/cookieUtils";
+import { decryptData, encryptData } from "@/components/api/encrypted";
 
-export type AuthStatus = "idle" | "authenticated" | "failed" | string;
+export type AuthUser = {
+  id?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  phone?: string;
+  zip?: string;
+  /** Customer avatar URL from auth /me and profile update */
+  avatarUrl?: string;
+  avatar?: string;
+  name?: string;
+  status?: string;
+  location?: {
+    type?: string;
+    coordinates?: [number, number] | number[];
+    city?: string;
+    country?: string;
+    address?: string;
+    zip?: string;
+    state?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+/** Resolve display URL from avatarUrl / avatar. */
+export function getUserAvatarSrc(
+  user: AuthUser | null | undefined,
+): string | undefined {
+  if (!user) return undefined;
+  for (const key of ["avatarUrl", "avatar"] as const) {
+    const value = user[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/**
+ * Normalize profile /me user payloads (may use `_id` + combined `name`)
+ * into the shape we store from login/register.
+ */
+export function normalizeAuthUser(
+  raw: AuthUser & { _id?: string; name?: string },
+  previous?: AuthUser | null,
+): AuthUser {
+  const id =
+    (typeof raw.id === "string" && raw.id) ||
+    (typeof raw._id === "string" && raw._id) ||
+    previous?.id;
+
+  let firstName =
+    typeof raw.firstName === "string" ? raw.firstName.trim() : undefined;
+  let lastName =
+    typeof raw.lastName === "string" ? raw.lastName.trim() : undefined;
+
+  if ((!firstName || !lastName) && typeof raw.name === "string" && raw.name.trim()) {
+    const parts = raw.name.trim().split(/\s+/);
+    firstName = firstName || parts[0] || previous?.firstName;
+    lastName =
+      lastName ||
+      (parts.length > 1 ? parts.slice(1).join(" ") : previous?.lastName);
+  }
+
+  return {
+    ...previous,
+    ...raw,
+    id,
+    firstName: firstName || previous?.firstName,
+    lastName: lastName || previous?.lastName,
+    email: (typeof raw.email === "string" && raw.email) || previous?.email,
+    phone: (typeof raw.phone === "string" && raw.phone) || previous?.phone,
+    zip: (typeof raw.zip === "string" && raw.zip) || previous?.zip,
+    avatarUrl:
+      (typeof raw.avatarUrl === "string" && raw.avatarUrl) ||
+      previous?.avatarUrl,
+    role: (typeof raw.role === "string" && raw.role) || previous?.role,
+  };
+}
+
+/** Shape of login / verify-otp payloads we encrypt into `userData`. */
+export type AuthPayload = {
+  token?: string;
+  refreshToken?: string;
+  user?: AuthUser;
+  provider?: unknown;
+  message?: string;
+  verificationToken?: string;
+  email?: string;
+  [key: string]: unknown;
+};
 
 export type AuthState = {
-  token: string | null;
+  /** Single encrypted blob persisted by redux-persist (key: userData). */
+  userData: string | null;
   user: AuthUser | null;
+  token: string | null;
+  refreshToken: string | null;
   role: string | null;
-  hydrated: boolean;
-  status: AuthStatus;
+  isAuthenticated: boolean;
+  loading: boolean;
   error: string | null;
+  hydrated: boolean;
 };
 
 const initialState: AuthState = {
-  token: null,
+  userData: null,
   user: null,
+  token: null,
+  refreshToken: null,
   role: null,
-  hydrated: false,
-  status: "idle",
+  isAuthenticated: false,
+  loading: false,
   error: null,
+  hydrated: false,
 };
 
-type CredentialsPayload = {
-  token?: string;
-  user?: AuthUser;
-};
+function applyDecryptedPayload(state: AuthState, payload: AuthPayload | null) {
+  if (!payload?.token || !payload?.user) {
+    state.user = null;
+    state.token = null;
+    state.refreshToken = null;
+    state.role = null;
+    state.isAuthenticated = false;
+    return;
+  }
+  state.user = payload.user;
+  state.token = payload.token;
+  state.refreshToken =
+    typeof payload.refreshToken === "string" ? payload.refreshToken : null;
+  state.role = payload.user.role || null;
+  state.isAuthenticated = true;
+}
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
+    /** Mark persist rehydration complete and decrypt `userData` into memory. */
     hydrateAuth(state) {
-      if (typeof window === "undefined") {
-        state.hydrated = true;
+      if (state.userData) {
+        applyDecryptedPayload(state, decryptData<AuthPayload>(state.userData));
+      } else {
+        applyDecryptedPayload(state, null);
+      }
+      state.hydrated = true;
+      state.error = null;
+    },
+
+    /**
+     * Encrypt the full login / register / verify-otp response
+     * and store it as the single persisted `userData` field.
+     */
+    setCredentials(state, action: PayloadAction<AuthPayload>) {
+      const encrypted = encryptData(action.payload);
+      if (!encrypted) {
+        state.error = "Could not save session.";
         return;
       }
-      state.token = getAuthToken();
-      state.user = getUserDataCookie();
-      state.role = state.user?.role || null;
-      state.hydrated = true;
-    },
-    setCredentials(state, action: PayloadAction<CredentialsPayload>) {
-      const { token, user } = action.payload || {};
-      if (token) {
-        setAuthToken(token);
-        state.token = token;
-      }
-      if (user) {
-        setUserDataCookie(user);
-        state.user = user;
-        state.role = user.role || null;
-      }
+      state.userData = encrypted;
+      applyDecryptedPayload(state, action.payload);
+      state.loading = false;
       state.error = null;
-      state.status = "authenticated";
     },
-    setUser(state, action: PayloadAction<AuthUser>) {
-      const user = action.payload;
-      setUserDataCookie(user);
-      state.user = user;
-      state.role = user?.role || null;
+
+    /**
+     * Replace only the persisted `user` (and optional `provider`) from
+     * profile update or GET /auth/me. Token / refreshToken stay as-is.
+     */
+    updateAuthUser(
+      state,
+      action: PayloadAction<{
+        user: AuthUser & { _id?: string; name?: string };
+        provider?: unknown;
+      }>,
+    ) {
+      const current =
+        (state.userData
+          ? decryptData<AuthPayload>(state.userData)
+          : null) ||
+        (state.token && state.user
+          ? {
+              token: state.token,
+              refreshToken: state.refreshToken || undefined,
+              user: state.user,
+            }
+          : null);
+
+      if (!current?.token) {
+        state.error = "No active session to update.";
+        return;
+      }
+
+      const nextUser = normalizeAuthUser(action.payload.user, current.user);
+      const nextPayload: AuthPayload = {
+        ...current,
+        token: current.token,
+        refreshToken: current.refreshToken,
+        user: nextUser,
+      };
+
+      if (action.payload.provider !== undefined) {
+        nextPayload.provider = action.payload.provider;
+      }
+
+      const encrypted = encryptData(nextPayload);
+      if (!encrypted) {
+        state.error = "Could not save session.";
+        return;
+      }
+
+      state.userData = encrypted;
+      state.user = nextUser;
+      state.role = nextUser.role || state.role;
+      // token + refreshToken intentionally untouched
+      state.error = null;
     },
-    setAuthStatus(state, action: PayloadAction<AuthStatus>) {
-      state.status = action.payload;
+
+    setAuthLoading(state, action: PayloadAction<boolean>) {
+      state.loading = action.payload;
     },
+
     setAuthError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
-      state.status = "failed";
+      state.loading = false;
     },
-    clearAuth(state) {
-      removeAuthToken();
-      removeUserDataCookie();
-      state.token = null;
-      state.user = null;
-      state.role = null;
+
+    clearAuthError(state) {
       state.error = null;
-      state.status = "idle";
+    },
+
+    clearAuth(state) {
+      state.userData = null;
+      applyDecryptedPayload(state, null);
+      state.loading = false;
+      state.error = null;
     },
   },
 });
@@ -90,19 +244,24 @@ const authSlice = createSlice({
 export const {
   hydrateAuth,
   setCredentials,
-  setUser,
-  setAuthStatus,
+  updateAuthUser,
+  setAuthLoading,
   setAuthError,
+  clearAuthError,
   clearAuth,
 } = authSlice.actions;
 
-/** Alias used by the API layer for session expiry / forced sign-out. */
 export const logout = clearAuth;
 
 export const selectAuth = (state: { auth: AuthState }) => state.auth;
 export const selectIsAuthenticated = (state: { auth: AuthState }) =>
-  Boolean(state.auth.token);
+  state.auth.isAuthenticated || Boolean(state.auth.token);
 export const selectAuthUser = (state: { auth: AuthState }) => state.auth.user;
 export const selectAuthToken = (state: { auth: AuthState }) => state.auth.token;
+export const selectAuthLoading = (state: { auth: AuthState }) =>
+  state.auth.loading;
+export const selectAuthError = (state: { auth: AuthState }) => state.auth.error;
+export const selectEncryptedUserData = (state: { auth: AuthState }) =>
+  state.auth.userData;
 
 export default authSlice.reducer;

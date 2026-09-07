@@ -7,30 +7,19 @@ import axios, {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from "axios";
-import Cookies from "js-cookie";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getStore } from "@/store";
-import { logout as logoutAction } from "@/store/authSlice";
-import { decryptData } from "./encrypted";
 import {
-  TOKEN_COOKIE_NAME,
-  TOKEN_STORAGE_KEY,
-  USER_STORAGE_KEY,
+  clearAuth,
+  logout as logoutAction,
+  setCredentials,
+  updateAuthUser,
+  type AuthPayload,
   type AuthUser,
-  getAuthToken,
-  getUserDataCookie,
-  removeAuthToken,
-  removeUserDataCookie,
-  setUserDataCookie,
-  shouldSuppressAuthChange,
-  logUserCookieDebug,
-} from "./cookieUtils";
-import { userApi } from "./ApiRoutesFile";
-
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
+} from "@/store/authSlice";
+import { decryptData } from "./encrypted";
+import { authApi } from "./ApiRoutesFile";
 
 export type QueryParams = Record<
   string,
@@ -38,26 +27,17 @@ export type QueryParams = Record<
 >;
 
 export type RequestOptions = {
-  /** Skip Sonner toasts for this call (caller handles UI). */
   silent?: boolean;
-  /** Send multipart/form-data (do not force JSON Content-Type). */
   multipart?: boolean;
-  /** Override Bearer token for this request. */
   token?: string | null;
-  /** Extra Axios config merged into the request. */
   config?: AxiosRequestConfig;
+  skipLogoutOn401?: boolean;
 };
 
 export type LogoutOptions = {
   silent?: boolean;
   skipRedirect?: boolean;
 };
-
-type CookiesWithPatch = typeof Cookies & { __rsPatched?: boolean };
-
-/* -------------------------------------------------------------------------- */
-/* Env / URL                                                                  */
-/* -------------------------------------------------------------------------- */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -72,58 +52,6 @@ function buildUrl(endpoint: string): string {
   return `${base}/${path}`;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Cookie auth-change patch (browser only)                                    */
-/* -------------------------------------------------------------------------- */
-
-function patchCookieAuthEvents(): void {
-  if (!isBrowser()) return;
-
-  const cookieJar = Cookies as CookiesWithPatch;
-  if (cookieJar.__rsPatched) return;
-
-  const originalSet = Cookies.set.bind(Cookies);
-  Cookies.set = ((
-    name: string,
-    value: string,
-    options?: Cookies.CookieAttributes,
-  ) => {
-    const result = originalSet(name, value, options);
-    if (
-      !shouldSuppressAuthChange() &&
-      (name === TOKEN_COOKIE_NAME ||
-        name.startsWith("userData-rs-user") ||
-        name.startsWith("rs-user-data-chunk"))
-    ) {
-      window.dispatchEvent(new Event("auth-change"));
-    }
-    return result;
-  }) as typeof Cookies.set;
-
-  const originalRemove = Cookies.remove.bind(Cookies);
-  Cookies.remove = ((name: string, options?: Cookies.CookieAttributes) => {
-    const result = originalRemove(name, options);
-    if (
-      !shouldSuppressAuthChange() &&
-      (name === TOKEN_COOKIE_NAME ||
-        name.startsWith("userData-rs-user") ||
-        name.startsWith("rs-user-data-chunk"))
-    ) {
-      window.dispatchEvent(new Event("auth-change"));
-    }
-    return result;
-  }) as typeof Cookies.remove;
-
-  cookieJar.__rsPatched = true;
-}
-
-patchCookieAuthEvents();
-
-/* -------------------------------------------------------------------------- */
-/* Auth helpers                                                               */
-/* -------------------------------------------------------------------------- */
-
-/** Shared /user/me bootstrap so every useAuth() mount does not hit the network. */
 let authMePromise: Promise<AuthUser | null> | null = null;
 let logoutInFlight = false;
 
@@ -131,34 +59,83 @@ function clearAuthMeCache(): void {
   authMePromise = null;
 }
 
+/** Decrypt the persisted `userData` blob from Redux. */
+export function getPersistedAuth(): AuthPayload | null {
+  if (!isBrowser()) return null;
+  try {
+    const encrypted = getStore().getState().auth.userData;
+    if (!encrypted) return null;
+    return decryptData<AuthPayload>(encrypted);
+  } catch {
+    return null;
+  }
+}
+
+export function getAuthToken(): string | null {
+  if (!isBrowser()) return null;
+  const fromPersist = getPersistedAuth()?.token;
+  if (fromPersist) return fromPersist;
+  return getStore().getState().auth.token;
+}
+
+export function getAuthUser(): AuthUser | null {
+  if (!isBrowser()) return null;
+  const fromPersist = getPersistedAuth()?.user;
+  if (fromPersist) return fromPersist;
+  return getStore().getState().auth.user;
+}
+
 function getBearerToken(override?: string | null): string | null {
   if (override !== undefined && override !== null) return override;
-  if (!isBrowser()) return null;
   return getAuthToken();
 }
 
-function extractErrorMessage(error: unknown): string {
+export function extractErrorMessage(error: unknown): string {
   if (!axios.isAxiosError(error)) {
+    if (typeof error === "string" && error.trim()) return error.trim();
     if (error instanceof Error && error.message) return error.message;
     return "Something went wrong. Please try again.";
   }
 
   const data = error.response?.data as
-    | { message?: string; error?: string; errors?: string[] }
+    | {
+        message?: string;
+        error?: string;
+        errors?: Array<string | { field?: string; message?: string }>;
+      }
     | string
     | undefined;
 
-  if (typeof data === "string" && data.trim()) return data;
+  if (typeof data === "string" && data.trim()) return data.trim();
+
   if (data && typeof data === "object") {
-    if (typeof data.message === "string" && data.message.trim()) {
-      return data.message;
+    const fieldErrors = Array.isArray(data.errors)
+      ? data.errors
+          .map((item) => {
+            if (typeof item === "string") return item.trim();
+            const field = item.field?.trim();
+            const msg = item.message?.trim();
+            if (field && msg) return `${field}: ${msg}`;
+            return msg || field || "";
+          })
+          .filter(Boolean)
+      : [];
+
+    const apiMessage =
+      (typeof data.message === "string" && data.message.trim()) ||
+      (typeof data.error === "string" && data.error.trim()) ||
+      "";
+
+    if (apiMessage && fieldErrors.length > 0) {
+      if (fieldErrors.length === 1 && fieldErrors[0] === apiMessage) {
+        return apiMessage;
+      }
+      if (/validation error/i.test(apiMessage)) return fieldErrors.join(" · ");
+      return `${apiMessage} — ${fieldErrors.join(" · ")}`;
     }
-    if (typeof data.error === "string" && data.error.trim()) {
-      return data.error;
-    }
-    if (Array.isArray(data.errors) && data.errors.length > 0) {
-      return data.errors.join(", ");
-    }
+
+    if (apiMessage) return apiMessage;
+    if (fieldErrors.length > 0) return fieldErrors.join(" · ");
   }
 
   if (error.code === "ERR_NETWORK") {
@@ -172,32 +149,29 @@ function extractErrorMessage(error: unknown): string {
   return error.message || "Request failed. Please try again.";
 }
 
-/**
- * Clears encrypted session, dispatches Redux logout, and redirects safely.
- */
+export function showApiErrorToast(
+  errorOrMessage: unknown,
+  fallback = "Something went wrong. Please try again.",
+): string {
+  const message =
+    typeof errorOrMessage === "string" && errorOrMessage.trim()
+      ? errorOrMessage.trim()
+      : extractErrorMessage(errorOrMessage) || fallback;
+  if (isBrowser()) toast.error(message);
+  return message;
+}
+
 export function handleUserLogout(options: LogoutOptions = {}): void {
   if (logoutInFlight) return;
   logoutInFlight = true;
 
   try {
     clearAuthMeCache();
-
     if (isBrowser()) {
       try {
         getStore().dispatch(logoutAction());
       } catch {
-        // Store may be unavailable outside the provider tree — still clear storage.
-        removeAuthToken();
-        removeUserDataCookie();
-      }
-
-      try {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-        localStorage.removeItem(USER_STORAGE_KEY);
-        localStorage.removeItem("rs-temp-otp-token");
-        localStorage.removeItem("rs-redux-auth");
-      } catch {
-        // ignore storage errors
+        getStore().dispatch(clearAuth());
       }
 
       if (!options.silent) {
@@ -210,6 +184,7 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
           path.startsWith("/login") ||
           path.startsWith("/register") ||
           path.startsWith("/signup") ||
+          path.startsWith("/verify-otp") ||
           path.startsWith("/pro/login") ||
           path.startsWith("/pro/register") ||
           path.startsWith("/forgot-password") ||
@@ -223,13 +198,8 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
             : "/login";
         }
       }
-    } else {
-      // SSR / non-browser: clear cookie helpers only (no window / no redirect).
-      removeAuthToken();
-      removeUserDataCookie();
     }
   } finally {
-    // Allow a future logout after navigation settles.
     if (isBrowser()) {
       window.setTimeout(() => {
         logoutInFlight = false;
@@ -246,14 +216,26 @@ function notifyRequestError(error: unknown, silent?: boolean): void {
   toast.error(extractErrorMessage(error));
 }
 
-function handleHttpError(error: unknown, silent?: boolean): never {
+function handleHttpError(
+  error: unknown,
+  options?: RequestOptions | boolean,
+): never {
+  const silent = typeof options === "boolean" ? options : options?.silent;
+  const skipLogout =
+    typeof options === "object" && Boolean(options?.skipLogoutOn401);
+
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     if (status === 401) {
       if (!silent && isBrowser()) {
-        toast.error("Your session has expired. Please sign in again.");
+        toast.error(
+          extractErrorMessage(error) ||
+            "Your session has expired. Please sign in again.",
+        );
       }
-      handleUserLogout({ silent: true });
+      if (!skipLogout) {
+        handleUserLogout({ silent: true });
+      }
       throw error;
     }
   }
@@ -261,10 +243,6 @@ function handleHttpError(error: unknown, silent?: boolean): never {
   notifyRequestError(error, silent);
   throw error;
 }
-
-/* -------------------------------------------------------------------------- */
-/* Axios instance + interceptors                                              */
-/* -------------------------------------------------------------------------- */
 
 function createApiClient(): AxiosInstance {
   const instance = axios.create({
@@ -293,14 +271,7 @@ function createApiClient(): AxiosInstance {
 
   instance.interceptors.response.use(
     (response: AxiosResponse) => response,
-    (error: AxiosError) => {
-      // Let per-call handlers decide toast / logout; still normalize here for 401.
-      if (error.response?.status === 401 && isBrowser()) {
-        // Defer to handleHttpError when called from helpers; interceptor alone
-        // should not double-toast. Logout is triggered in handleHttpError.
-      }
-      return Promise.reject(error);
-    },
+    (error: AxiosError) => Promise.reject(error),
   );
 
   return instance;
@@ -308,19 +279,10 @@ function createApiClient(): AxiosInstance {
 
 const http = createApiClient();
 
-function resolveConfig(
-  options: RequestOptions = {},
-): AxiosRequestConfig {
+function resolveConfig(options: RequestOptions = {}): AxiosRequestConfig {
   const headers: Record<string, string> = {};
   const token = getBearerToken(options.token);
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  if (options.multipart) {
-    // Let the browser set multipart boundary.
-  }
+  if (token) headers.Authorization = `Bearer ${token}`;
 
   return {
     ...options.config,
@@ -339,15 +301,10 @@ async function unwrap<T>(
     const response = await promise;
     return response.data;
   } catch (error) {
-    handleHttpError(error, options?.silent);
+    handleHttpError(error, options);
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Centralized CRUD                                                           */
-/* -------------------------------------------------------------------------- */
-
-/** GET — optional query params object. */
 export async function getData<T = unknown>(
   endpoint: string,
   params?: QueryParams,
@@ -362,7 +319,6 @@ export async function getData<T = unknown>(
   );
 }
 
-/** GET that treats 404 as `null` (no error toast). */
 export async function getDataOptional<T = unknown>(
   endpoint: string,
   params?: QueryParams,
@@ -383,7 +339,6 @@ export async function getDataOptional<T = unknown>(
   }
 }
 
-/** POST */
 export async function postData<T = unknown>(
   endpoint: string,
   payload?: unknown,
@@ -395,7 +350,6 @@ export async function postData<T = unknown>(
   );
 }
 
-/** PUT */
 export async function putData<T = unknown>(
   endpoint: string,
   payload?: unknown,
@@ -407,7 +361,6 @@ export async function putData<T = unknown>(
   );
 }
 
-/** PATCH */
 export async function patchData<T = unknown>(
   endpoint: string,
   payload?: unknown,
@@ -419,7 +372,6 @@ export async function patchData<T = unknown>(
   );
 }
 
-/** DELETE */
 export async function deleteData<T = unknown>(
   endpoint: string,
   options?: RequestOptions,
@@ -430,10 +382,6 @@ export async function deleteData<T = unknown>(
   );
 }
 
-/**
- * Backward-compatible namespace used by existing call sites.
- * Prefer the named helpers (`getData`, `postData`, …) for new code.
- */
 export const api = {
   get: getData,
   getOptional: getDataOptional,
@@ -454,97 +402,69 @@ export const api = {
   deleteData,
 };
 
-/* -------------------------------------------------------------------------- */
-/* Auth bootstrap hook                                                        */
-/* -------------------------------------------------------------------------- */
+/**
+ * Refresh latest user via GET /auth/me when logged in.
+ * Only updates the persisted `user` (and provider) — never replaces the
+ * login/register token or full session blob.
+ */
+export async function refreshAuthMe(): Promise<AuthUser | null> {
+  if (!isBrowser()) return null;
 
-function fetchAuthMeOnce(): Promise<AuthUser | null> {
+  const previousToken = getAuthToken();
+  if (!previousToken) return null;
   if (authMePromise) return authMePromise;
 
-  authMePromise = getData<Record<string, unknown>>(userApi.me, undefined, {
-    silent: true,
-  })
-    .then((meRes) => {
-      const data = meRes?.data;
-      if (data && typeof data === "object" && data !== null && "user" in data) {
-        return (data as { user: AuthUser }).user;
-      }
-      if (data && typeof data === "object" && data !== null) {
-        return data as AuthUser;
-      }
-      if (meRes?.user && typeof meRes.user === "object") {
-        return meRes.user as AuthUser;
-      }
-      return (meRes as unknown as AuthUser) || null;
-    })
-    .catch((err: unknown) => {
+  authMePromise = (async () => {
+    try {
+      const meRes = await getData<{
+        user?: AuthUser & { _id?: string; name?: string };
+        provider?: unknown;
+      }>(authApi.me, undefined, { silent: true });
+
+      const rawUser = meRes?.user;
+      if (!rawUser || typeof rawUser !== "object") return null;
+
+      getStore().dispatch(
+        updateAuthUser({
+          user: rawUser,
+          ...(meRes?.provider !== undefined
+            ? { provider: meRes.provider }
+            : {}),
+        }),
+      );
+
+      return getAuthUser();
+    } finally {
       authMePromise = null;
-      throw err;
-    });
+    }
+  })();
 
   return authMePromise;
 }
 
 export function useAuth() {
-  const readUser = (): AuthUser | null => {
-    const fromCookie = getUserDataCookie();
-    if (fromCookie) return fromCookie;
-
-    if (isBrowser()) {
-      try {
-        const userDataStr = localStorage.getItem(USER_STORAGE_KEY);
-        if (userDataStr) return decryptData<AuthUser>(userDataStr);
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  };
-
   const [token, setToken] = useState<string | null>(() =>
     isBrowser() ? getAuthToken() : null,
   );
   const [userData, setUserData] = useState<AuthUser | null>(() =>
-    isBrowser() ? readUser() : null,
+    isBrowser() ? getAuthUser() : null,
   );
 
   useEffect(() => {
     if (!isBrowser()) return;
 
-    const onAuthChange = () => {
+    const sync = () => {
       clearAuthMeCache();
       setToken(getAuthToken());
-      setUserData(readUser());
+      setUserData(getAuthUser());
     };
 
-    window.addEventListener("auth-change", onAuthChange);
-    window.addEventListener("storage", onAuthChange);
-
-    (async () => {
-      logUserCookieDebug("useAuth mount");
-      const activeToken = getAuthToken();
-      if (!activeToken) return;
-
-      try {
-        const apiUser = await fetchAuthMeOnce();
-        if (apiUser && typeof apiUser === "object") {
-          setUserDataCookie(apiUser, { quiet: true });
-          setUserData(apiUser);
-        }
-      } catch (err) {
-        const axiosErr = err as AxiosError;
-        console.error(
-          "[useAuth] GET user/me failed:",
-          axiosErr?.response?.data || axiosErr?.message || err,
-        );
-      } finally {
-        clearAuthMeCache();
-      }
-    })();
+    window.addEventListener("auth-change", sync);
+    window.addEventListener("storage", sync);
 
     return () => {
-      window.removeEventListener("auth-change", onAuthChange);
-      window.removeEventListener("storage", onAuthChange);
+      window.removeEventListener("auth-change", sync);
+      window.removeEventListener("storage", sync);
     };
   }, []);
 
@@ -552,6 +472,9 @@ export function useAuth() {
     token,
     userData,
     handleUserLogout,
+    getPersistedAuth,
+    getAuthToken,
+    getAuthUser,
   };
 }
 
@@ -572,12 +495,3 @@ export default function ApiFunction() {
     ...auth,
   };
 }
-
-export {
-  getUserDataCookie,
-  setUserDataCookie,
-  removeUserDataCookie,
-  getAuthToken,
-  setAuthToken,
-  removeAuthToken,
-} from "./cookieUtils";

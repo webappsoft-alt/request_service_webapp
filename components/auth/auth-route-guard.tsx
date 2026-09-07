@@ -11,6 +11,7 @@ function isCustomerAuthPath(pathname: string): boolean {
     pathname === "/register" ||
     pathname === "/signup" ||
     pathname === "/verify-otp" ||
+    pathname === "/verify-forgot-otp" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
     pathname.startsWith("/login/") ||
@@ -23,6 +24,7 @@ function isProAuthPath(pathname: string): boolean {
     pathname === "/pro/login" ||
     pathname === "/pro/register" ||
     pathname === "/pro/forgot-password" ||
+    pathname === "/pro/verify-forgot-otp" ||
     pathname === "/pro/reset-password"
   );
 }

@@ -188,8 +188,10 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
           path.startsWith("/pro/login") ||
           path.startsWith("/pro/register") ||
           path.startsWith("/forgot-password") ||
+          path.startsWith("/verify-forgot-otp") ||
           path.startsWith("/reset-password") ||
           path.startsWith("/pro/forgot-password") ||
+          path.startsWith("/pro/verify-forgot-otp") ||
           path.startsWith("/pro/reset-password");
 
         if (!isAuthPage) {

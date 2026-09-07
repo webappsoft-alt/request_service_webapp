@@ -12,35 +12,20 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Mail } from "lucide-react";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
+import {
+  clearPasswordResetSession,
+  readPasswordResetEmail,
+  savePasswordResetEmail,
+  savePasswordResetToken,
+} from "@/components/auth/password-reset-session";
 import { Button } from "@/components/ui/button";
-import { useAppDispatch } from "@/store/hooks";
-import { setCredentials, type AuthPayload } from "@/store/authSlice";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
+import type { DemoRole } from "@/lib/auth/demo-session";
 import { cn } from "@/lib/utils";
 
-const PENDING_KEY = "rs-pending-registration";
+/** Password-reset OTP is 4 digits (matches API / registration OTP). */
 const OTP_LENGTH = 4;
-
-type PendingRegistration = Record<string, unknown> & { email?: string };
-
-function readPending(): PendingRegistration | null {
-  try {
-    const raw = sessionStorage.getItem(PENDING_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as PendingRegistration;
-  } catch {
-    return null;
-  }
-}
-
-function clearPending() {
-  try {
-    sessionStorage.removeItem(PENDING_KEY);
-  } catch {
-    // ignore
-  }
-}
 
 function OtpBoxes({
   value,
@@ -64,24 +49,19 @@ function OtpBoxes({
   function updateDigit(index: number, raw: string) {
     const char = raw.replace(/\D/g, "").slice(-1);
     const next = digits.map((d, i) => (i === index ? char : d));
-    const joined = next.join("").slice(0, OTP_LENGTH);
-    onChange(joined);
-    if (char && index < OTP_LENGTH - 1) {
-      focusAt(index + 1);
-    }
+    onChange(next.join("").slice(0, OTP_LENGTH));
+    if (char && index < OTP_LENGTH - 1) focusAt(index + 1);
   }
 
   function onKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Backspace") {
       event.preventDefault();
       if (digits[index]) {
-        const next = digits.map((d, i) => (i === index ? "" : d));
-        onChange(next.join(""));
+        onChange(digits.map((d, i) => (i === index ? "" : d)).join(""));
         return;
       }
       if (index > 0) {
-        const next = digits.map((d, i) => (i === index - 1 ? "" : d));
-        onChange(next.join(""));
+        onChange(digits.map((d, i) => (i === index - 1 ? "" : d)).join(""));
         focusAt(index - 1);
       }
       return;
@@ -140,29 +120,32 @@ function OtpBoxes({
   );
 }
 
-export function OtpVerificationForm() {
+export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const dispatch = useAppDispatch();
+  const isProvider = role === "provider";
 
   const emailFromQuery = searchParams.get("email")?.trim() || "";
-  const [pending, setPending] = useState<PendingRegistration | null>(null);
-  const email = emailFromQuery || pending?.email || "";
-
+  const [email, setEmail] = useState(emailFromQuery);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
 
-  useEffect(() => {
-    setPending(readPending());
-  }, []);
+  const forgotHref = isProvider ? "/pro/forgot-password" : "/forgot-password";
+  const resetHref = isProvider ? "/pro/reset-password" : "/reset-password";
+  const loginHref = isProvider ? "/pro/login" : "/login";
 
   useEffect(() => {
-    if (!emailFromQuery && !readPending()?.email) {
-      toast.error("Start registration again to receive a verification code.");
-      router.replace("/register");
+    const stored = readPasswordResetEmail();
+    const next = emailFromQuery || stored;
+    if (!next) {
+      toast.error("Enter your email to receive a password reset code.");
+      router.replace(forgotHref);
+      return;
     }
-  }, [emailFromQuery, router]);
+    setEmail(next);
+    savePasswordResetEmail(next);
+  }, [emailFromQuery, forgotHref, router]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -173,80 +156,58 @@ export function OtpVerificationForm() {
     return () => window.clearTimeout(timer);
   }, [resendSeconds]);
 
-  async function finalizeAccount(code: string) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!email) return;
+    if (otp.length !== OTP_LENGTH) {
+      toast.error(`Enter the ${OTP_LENGTH}-digit code from your email.`);
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await postData<AuthPayload>(
-        authApi.verifyOtp,
-        { email, code, autoRegister: true },
+      const data = await postData<{
+        message?: string;
+        token?: string;
+        success?: boolean;
+      }>(
+        authApi.verifyResetOtp,
+        { email, code: otp },
         { silent: true, skipLogoutOn401: true },
       );
 
-      if (data?.token && data?.user) {
-        dispatch(setCredentials(data));
-        clearPending();
-        toast.success(
-          (typeof data.message === "string" && data.message) ||
-            "Email verified. You’re signed in.",
-        );
-        router.replace("/");
+      if (!data?.token) {
+        showApiErrorToast("OTP verified but no reset token was returned.");
         return;
       }
 
-      if (data?.verificationToken) {
-        const registered = await postData<AuthPayload>(
-          authApi.register,
-          {
-            email: (typeof data.email === "string" && data.email) || email,
-            verificationToken: data.verificationToken,
-          },
-          { silent: true, skipLogoutOn401: true },
-        );
-
-        if (registered?.token && registered?.user) {
-          dispatch(setCredentials(registered));
-          clearPending();
-          toast.success(
-            (typeof registered.message === "string" && registered.message) ||
-              "Account created. You’re signed in.",
-          );
-          router.replace("/");
-          return;
-        }
-      }
-
-      showApiErrorToast("OTP verification response was incomplete.");
+      savePasswordResetToken(data.token, email);
+      toast.success(
+        (typeof data.message === "string" && data.message) ||
+          "OTP verified. Choose a new password.",
+      );
+      router.replace(resetHref);
     } catch (error) {
-      showApiErrorToast(error, "Invalid verification code.");
+      showApiErrorToast(error, "Invalid or expired OTP code.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (otp.length !== OTP_LENGTH) {
-      toast.error(`Enter the ${OTP_LENGTH}-digit code from your email.`);
-      return;
-    }
-    await finalizeAccount(otp);
-  }
-
   async function onResend() {
-    const draft = pending || readPending();
-    if (!draft || resendSeconds > 0) return;
+    if (!email || resendSeconds > 0) return;
     setLoading(true);
     try {
       const data = await postData<{ message?: string }>(
-        authApi.sendOtp,
-        draft,
+        authApi.forgotPassword,
+        { email },
         { silent: true, skipLogoutOn401: true },
       );
-      setPending(draft);
       setOtp("");
       setResendSeconds(60);
-      toast.success(data?.message || "A new code was sent to your email.");
+      toast.success(
+        data?.message || "Password reset OTP sent to your email",
+      );
     } catch (error) {
       showApiErrorToast(error, "Could not resend the code.");
     } finally {
@@ -254,21 +215,25 @@ export function OtpVerificationForm() {
     }
   }
 
-  const canResend = Boolean(pending || readPending());
-  const canVerify = otp.length === OTP_LENGTH && !loading;
+  const canVerify = otp.length === OTP_LENGTH && !loading && Boolean(email);
 
   return (
     <AuthShell
-      audience="customer"
-      eyebrow="Homeowners"
-      title="Verify your email"
+      audience={role}
+      eyebrow={isProvider ? "Service companies" : "Homeowners"}
+      title="Verify reset code"
       description={`Enter the ${OTP_LENGTH}-digit code we emailed you.`}
       footer={
         <>
-          Wrong email?{" "}
-          <Link href="/register" className={authLinkClass}>
-            Go back to sign up
+          Return to{" "}
+          <Link
+            href={loginHref}
+            className={authLinkClass}
+            onClick={() => clearPasswordResetSession()}
+          >
+            {isProvider ? "provider login" : "customer login"}
           </Link>
+          .
         </>
       }
     >
@@ -291,7 +256,7 @@ export function OtpVerificationForm() {
 
         <div className="rounded-2xl border border-[#e6ebf2] bg-white px-4 py-6 sm:px-6">
           <p className="mb-5 text-center text-sm font-semibold text-foreground">
-            Enter verification code
+            Enter password reset code
           </p>
           <OtpBoxes value={otp} onChange={setOtp} disabled={loading} />
         </div>
@@ -302,7 +267,7 @@ export function OtpVerificationForm() {
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={!canVerify}
         >
-          {loading ? "Verifying…" : "Verify and continue"}
+          {loading ? "Verifying…" : "Verify code"}
         </Button>
 
         <p className="text-center text-sm text-muted-foreground">
@@ -314,7 +279,7 @@ export function OtpVerificationForm() {
               "disabled:pointer-events-none disabled:opacity-50",
             )}
             onClick={onResend}
-            disabled={!canResend || loading || resendSeconds > 0}
+            disabled={loading || resendSeconds > 0 || !email}
           >
             {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend code"}
           </button>

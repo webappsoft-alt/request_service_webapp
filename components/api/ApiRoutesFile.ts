@@ -6,6 +6,7 @@ export const authApi = {
   sendOtp: "auth/send-otp",
   verifyOtp: "auth/verify-otp",
   forgotPassword: "auth/forgot-password",
+  verifyResetOtp: "auth/verify-reset-otp",
   resetPassword: "auth/reset-password",
   me: "auth/me",
 } as const;

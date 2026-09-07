@@ -6,6 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import { useDemoSession } from "@/components/auth/use-demo-session";
+import {
+  clearPasswordResetSession,
+  readPasswordResetToken,
+  savePasswordResetEmail,
+} from "@/components/auth/password-reset-session";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { PasswordInput } from "@/components/auth/password-input";
@@ -45,7 +50,7 @@ function copyFor(role: DemoRole, mode: AuthMode) {
         eyebrow: role === "provider" ? "Service companies" : "Homeowners",
         title: "Forgot password",
         description:
-          "Enter the email on the account. We’ll send a reset link you can open on the next screen.",
+          "Enter the email on your account. We’ll send a 4-digit code to verify it’s you.",
       };
     case "reset":
       return {
@@ -74,13 +79,13 @@ function AuthFormInner({
   const { signIn } = useDemoSession();
   const isProvider = role === "provider";
   const copy = copyFor(role, mode);
-  const [sent, setSent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const resetToken = searchParams.get("token")?.trim() || "";
+  const resetTokenFromQuery = searchParams.get("token")?.trim() || "";
+  const resetToken = resetTokenFromQuery || readPasswordResetToken();
 
   let canSubmit = false;
   switch (mode) {
@@ -91,7 +96,10 @@ function AuthFormInner({
       canSubmit = email.trim().length > 0;
       break;
     case "reset":
-      canSubmit = password.length > 0 && confirmPassword.length > 0;
+      canSubmit =
+        password.length > 0 &&
+        confirmPassword.length > 0 &&
+        Boolean(resetToken);
       break;
     default: {
       const _never: never = mode;
@@ -102,6 +110,9 @@ function AuthFormInner({
   const loginHref = isProvider ? "/pro/login" : "/login";
   const registerHref = isProvider ? "/pro/register" : "/register";
   const forgotHref = isProvider ? "/pro/forgot-password" : "/forgot-password";
+  const verifyForgotHref = isProvider
+    ? "/pro/verify-forgot-otp"
+    : "/verify-forgot-otp";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -162,17 +173,21 @@ function AuthFormInner({
         return;
       }
       case "forgot": {
+        const trimmedEmail = email.trim();
         setSubmitting(true);
         try {
-          const data = await postData<{ message?: string }>(
+          const data = await postData<{ message?: string; code?: string }>(
             authApi.forgotPassword,
-            { email: email.trim() },
+            { email: trimmedEmail },
             { silent: true, skipLogoutOn401: true },
           );
-          setSent(true);
+          savePasswordResetEmail(trimmedEmail);
           toast.success(
-            data?.message ||
-              "If an account exists, a reset link has been sent.",
+            data?.message || "Password reset OTP sent to your email",
+          );
+          // Dev/test environments may include `code` — never show it in production UI.
+          router.push(
+            `${verifyForgotHref}?email=${encodeURIComponent(trimmedEmail)}`,
           );
         } catch (error) {
           showApiErrorToast(error);
@@ -191,7 +206,8 @@ function AuthFormInner({
           return;
         }
         if (!resetToken) {
-          toast.error("Reset link is missing or invalid. Request a new one.");
+          toast.error("Reset session expired. Request a new code.");
+          router.replace(forgotHref);
           return;
         }
 
@@ -199,11 +215,16 @@ function AuthFormInner({
         try {
           const data = await postData<{ message?: string }>(
             authApi.resetPassword,
-            { token: resetToken, newPassword: password },
+            {
+              token: resetToken,
+              newPassword: password,
+              confirmPassword,
+            },
             { silent: true, skipLogoutOn401: true },
           );
+          clearPasswordResetSession();
           toast.success(
-            data?.message || "Password updated. Sign in to continue.",
+            data?.message || "Password updated successfully",
           );
           router.push(loginHref);
         } catch (error) {
@@ -245,15 +266,14 @@ function AuthFormInner({
         )
       }
     >
-      {mode === "forgot" && sent ? (
+      {mode === "reset" && !resetToken ? (
         <div className="flex flex-col gap-4">
           <p className="rounded-lg border border-foreground/25 bg-muted/40 px-4 py-3 text-sm leading-6">
-            If an account exists for that email, a reset link has been
-            dispatched. Check your inbox and follow the link to choose a new
-            password.
+            Your password reset session expired or is missing. Request a new
+            code to continue.
           </p>
           <Button size="xl" asChild>
-            <Link href={loginHref}>Back to login</Link>
+            <Link href={forgotHref}>Request a new code</Link>
           </Button>
         </div>
       ) : (
@@ -331,7 +351,7 @@ function AuthFormInner({
               : mode === "login"
                 ? "Sign in"
                 : mode === "forgot"
-                  ? "Send reset link"
+                  ? "Send reset code"
                   : "Update password"}
           </Button>
         </form>

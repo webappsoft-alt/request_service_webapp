@@ -1,13 +1,29 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, MapPin, ShieldCheck, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/container";
 import { proPaths } from "@/lib/pro-paths";
+import { useAppSelector } from "@/store/hooks";
+import {
+  selectAuth,
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
 
 const trades = ["Plumbing", "HVAC", "Water heaters"];
 
 export function ProHero() {
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const isProvider =
+    auth.hydrated &&
+    isAuthenticated &&
+    (user?.role === "provider" || auth.role === "provider");
+
   return (
     <section className="relative isolate overflow-hidden">
       <Image
@@ -45,20 +61,41 @@ export function ProHero() {
           </p>
 
           <div className="flex flex-col gap-2.5 sm:flex-row">
-            <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
-              <Link href={proPaths.register}>
-                Start getting jobs
-                <ArrowRight data-icon="inline-end" />
-              </Link>
-            </Button>
-            <Button
-              size="xl"
-              variant="outline"
-              className="border-white/35 bg-white/8 text-white backdrop-blur-sm hover:bg-white/16 hover:text-white"
-              asChild
-            >
-              <Link href={proPaths.login}>Log in</Link>
-            </Button>
+            {isProvider ? (
+              <>
+                <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
+                  <Link href={proPaths.dashboard}>
+                    Open dashboard
+                    <ArrowRight data-icon="inline-end" />
+                  </Link>
+                </Button>
+                <Button
+                  size="xl"
+                  variant="outline"
+                  className="border-white/35 bg-white/8 text-white backdrop-blur-sm hover:bg-white/16 hover:text-white"
+                  asChild
+                >
+                  <Link href="/pro/dashboard/profile">View profile</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
+                  <Link href={proPaths.register}>
+                    Start getting jobs
+                    <ArrowRight data-icon="inline-end" />
+                  </Link>
+                </Button>
+                <Button
+                  size="xl"
+                  variant="outline"
+                  className="border-white/35 bg-white/8 text-white backdrop-blur-sm hover:bg-white/16 hover:text-white"
+                  asChild
+                >
+                  <Link href={proPaths.login}>Log in</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-2">

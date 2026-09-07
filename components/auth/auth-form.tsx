@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
-import { useDemoSession } from "@/components/auth/use-demo-session";
 import {
   clearPasswordResetSession,
   readPasswordResetToken,
@@ -16,7 +15,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { PasswordInput } from "@/components/auth/password-input";
 import { Input } from "@/components/ui/input";
 import type { DemoRole } from "@/lib/auth/demo-session";
-import { getAllProviders } from "@/lib/data/providers";
+import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store/hooks";
 import { clearAuthError, setAuthLoading, setCredentials } from "@/store/authSlice";
@@ -76,7 +75,6 @@ function AuthFormInner({
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
-  const { signIn } = useDemoSession();
   const isProvider = role === "provider";
   const copy = copyFor(role, mode);
   const [email, setEmail] = useState("");
@@ -120,26 +118,6 @@ function AuthFormInner({
 
     switch (mode) {
       case "login": {
-        if (isProvider) {
-          const matched = getAllProviders().find(
-            (item) => item.email.toLowerCase() === email.toLowerCase(),
-          );
-          const firstName =
-            matched?.contact?.name.split(" ")[0] ||
-            email.split("@")[0] ||
-            "There";
-          signIn({
-            role,
-            firstName: firstName.charAt(0).toUpperCase() + firstName.slice(1),
-            lastName: matched?.contact?.name.split(" ").slice(1).join(" ") ?? "",
-            email,
-            companyName: matched?.companyName ?? "Your company",
-          });
-          toast.success("Signed in to your business account.");
-          router.push("/pro/dashboard");
-          return;
-        }
-
         setSubmitting(true);
         dispatch(setAuthLoading(true));
         try {
@@ -148,7 +126,7 @@ function AuthFormInner({
             {
               email: email.trim(),
               password,
-              expectedRole: "customer",
+              expectedRole: isProvider ? "provider" : "customer",
             },
             { silent: true, skipLogoutOn401: true },
           );
@@ -161,9 +139,11 @@ function AuthFormInner({
           dispatch(setCredentials(data));
           toast.success(
             (typeof data.message === "string" && data.message) ||
-              "Welcome back.",
+              (isProvider
+                ? "Signed in to your business account."
+                : "Welcome back."),
           );
-          router.push("/");
+          router.push(isProvider ? proPaths.dashboard : "/");
         } catch (error) {
           showApiErrorToast(error, "Invalid email or password.");
         } finally {

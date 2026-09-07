@@ -9,6 +9,7 @@ import { PortalNotifications } from "@/components/portal/portal-notifications";
 import { useOpenRecords } from "@/components/portal/use-open-records";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +23,9 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isDashboardPath, isPeoplePath, isWorkPath, portalNavGroups } from "@/lib/data/portal-nav";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuthUser } from "@/store/authSlice";
+import type { AuthUser } from "@/store/authSlice";
 
 function NavLinks({
   collapsed = false,
@@ -103,11 +107,21 @@ function NavLinks({
 export function PortalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { provider, session, signOut } = usePortalWorkspace();
+  const { provider, session } = usePortalWorkspace();
+  const authUser = useAppSelector(selectAuthUser);
   const { records, closeRecord } = useOpenRecords();
   const [collapsed, setCollapsed] = useState(false);
   const showPeople = isPeoplePath(pathname);
   const showWork = isWorkPath(pathname);
+
+  const menuUser: AuthUser = authUser
+    ? { ...authUser, role: authUser.role || "provider" }
+    : {
+        role: "provider",
+        firstName: session?.firstName,
+        lastName: session?.lastName,
+        email: session?.email,
+      };
 
   return (
     <div className="min-h-svh bg-[#eef1f5]">
@@ -182,16 +196,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
             <Button variant="ghost" size="icon" aria-label="Help">
               <HelpCircle />
             </Button>
-            <button
-              type="button"
-              onClick={() => {
-                signOut();
-                router.push("/pro/login");
-              }}
-              className="hidden text-xs font-medium text-muted-foreground hover:text-foreground sm:inline"
-            >
-              {session?.firstName ?? "Account"}
-            </button>
+            <UserAccountMenu user={menuUser} className="size-8 border-black/10" />
           </div>
           {showPeople ? <PeopleSubnav /> : null}
           {showWork ? <WorkSubnav /> : null}

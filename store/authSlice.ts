@@ -81,6 +81,57 @@ export function normalizeAuthUser(
   };
 }
 
+/** US state / province codes sometimes arrive in `country` from the API. */
+function looksLikeRegionCode(value: string): boolean {
+  return /^[A-Za-z]{2}$/.test(value.trim());
+}
+
+function fixMistakenCountry(
+  country: unknown,
+  state: unknown,
+): string | undefined {
+  if (typeof country !== "string" || !country.trim()) {
+    return typeof country === "string" ? country : undefined;
+  }
+  const c = country.trim();
+  const s = typeof state === "string" ? state.trim() : "";
+  if (s && c.toUpperCase() === s.toUpperCase() && looksLikeRegionCode(c)) {
+    return "US";
+  }
+  return c;
+}
+
+/**
+ * Clean login/register payloads before persist (keep token untouched).
+ * Fixes common provider country=state mistakes from the API.
+ */
+export function normalizeAuthPayload(payload: AuthPayload): AuthPayload {
+  const user = payload.user
+    ? normalizeAuthUser(payload.user as AuthUser & { _id?: string; name?: string })
+    : payload.user;
+
+  let provider = payload.provider;
+  if (provider && typeof provider === "object") {
+    const next = { ...(provider as Record<string, unknown>) };
+    next.country = fixMistakenCountry(next.country, next.state) ?? next.country;
+
+    if (next.location && typeof next.location === "object") {
+      const location = { ...(next.location as Record<string, unknown>) };
+      const state = location.state ?? next.state;
+      location.country =
+        fixMistakenCountry(location.country, state) ?? location.country;
+      next.location = location;
+    }
+    provider = next;
+  }
+
+  return {
+    ...payload,
+    user,
+    provider,
+  };
+}
+
 /** Shape of login / verify-otp payloads we encrypt into `userData`. */
 export type AuthPayload = {
   token?: string;
@@ -155,13 +206,14 @@ const authSlice = createSlice({
      * and store it as the single persisted `userData` field.
      */
     setCredentials(state, action: PayloadAction<AuthPayload>) {
-      const encrypted = encryptData(action.payload);
+      const normalized = normalizeAuthPayload(action.payload);
+      const encrypted = encryptData(normalized);
       if (!encrypted) {
         state.error = "Could not save session.";
         return;
       }
       state.userData = encrypted;
-      applyDecryptedPayload(state, action.payload);
+      applyDecryptedPayload(state, normalized);
       state.loading = false;
       state.error = null;
     },

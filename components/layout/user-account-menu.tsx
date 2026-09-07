@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getUserAvatarSrc, type AuthUser } from "@/store/authSlice";
 import { handleUserLogout } from "@/components/api/apiFuntions";
-import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 
 function initialsFor(user: AuthUser | null | undefined): string {
@@ -81,11 +80,6 @@ export function UserAccountMenu({
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {isProvider ? (
-          <DropdownMenuItem asChild>
-            <Link href={proPaths.dashboard}>Dashboard</Link>
-          </DropdownMenuItem>
-        ) : null}
         <DropdownMenuItem asChild>
           <Link href={settingsHref}>
             <Settings />

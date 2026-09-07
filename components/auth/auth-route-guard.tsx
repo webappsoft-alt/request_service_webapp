@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
+import { proPaths } from "@/lib/pro-paths";
 
 function isCustomerAuthPath(pathname: string): boolean {
   return (
@@ -16,16 +17,6 @@ function isCustomerAuthPath(pathname: string): boolean {
     pathname === "/reset-password" ||
     pathname.startsWith("/login/") ||
     pathname.startsWith("/register/")
-  );
-}
-
-function isProAuthPath(pathname: string): boolean {
-  return (
-    pathname === "/pro/login" ||
-    pathname === "/pro/register" ||
-    pathname === "/pro/forgot-password" ||
-    pathname === "/pro/verify-forgot-otp" ||
-    pathname === "/pro/reset-password"
   );
 }
 
@@ -43,7 +34,9 @@ function isCustomerProtected(pathname: string): boolean {
   return pathname === "/account" || pathname.startsWith("/account/");
 }
 
-function normalizeRole(role: string | null | undefined): "customer" | "provider" | null {
+function normalizeRole(
+  role: string | null | undefined,
+): "customer" | "provider" | null {
   if (!role) return null;
   const value = role.toLowerCase();
   if (value === "customer" || value === "consumer" || value === "user") {
@@ -57,7 +50,8 @@ function normalizeRole(role: string | null | undefined): "customer" | "provider"
 
 /**
  * Client-side RBAC after Redux Persist rehydrates.
- * Customers must never see /pro/* pages (including pro login).
+ * - Customers must never see /pro/* (including pro login).
+ * - Providers stay inside /pro/dashboard/* only.
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -74,13 +68,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
       if (isCustomerProtected(pathname)) {
         router.replace("/login");
       } else if (isProDashboard(pathname)) {
-        router.replace("/pro/login");
+        router.replace(proPaths.login);
       }
       return;
     }
 
     if (role === "customer") {
-      // Logged-in customers: never show pro marketing/auth/dashboard
       if (isProArea(pathname)) {
         router.replace("/");
         return;
@@ -92,12 +85,9 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (role === "provider") {
-      if (isProAuthPath(pathname)) {
-        router.replace("/pro/dashboard");
-        return;
-      }
-      if (isCustomerAuthPath(pathname) || isCustomerProtected(pathname)) {
-        router.replace("/pro/dashboard");
+      // Logged-in providers only use dashboard routes (and nested pages).
+      if (!isProDashboard(pathname)) {
+        router.replace(proPaths.dashboard);
       }
     }
   }, [

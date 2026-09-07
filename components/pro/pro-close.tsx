@@ -1,9 +1,17 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/container";
 import { testimonials } from "@/lib/data/content";
 import { proPaths } from "@/lib/pro-paths";
+import { useAppSelector } from "@/store/hooks";
+import {
+  selectAuth,
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
 
 const featured =
   testimonials.find((item) => item.audience === "provider") ?? testimonials[0];
@@ -15,6 +23,14 @@ const assurances = [
 ] as const;
 
 export function ProClose() {
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const isProvider =
+    auth.hydrated &&
+    isAuthenticated &&
+    (user?.role === "provider" || auth.role === "provider");
+
   return (
     <section className="pb-14 md:pb-20">
       <Container>
@@ -33,9 +49,13 @@ export function ProClose() {
 
             <div className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
-                <p className="eyebrow text-white/60">Get started</p>
+                <p className="eyebrow text-white/60">
+                  {isProvider ? "Your portal" : "Get started"}
+                </p>
                 <h2 className="text-2xl font-semibold tracking-tight text-white md:text-[2rem]">
-                  Open your account today.
+                  {isProvider
+                    ? "Continue in your business portal."
+                    : "Open your account today."}
                 </h2>
               </div>
 
@@ -49,20 +69,31 @@ export function ProClose() {
               </ul>
 
               <div className="mt-1 flex flex-col gap-2.5 sm:flex-row">
-                <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
-                  <Link href={proPaths.register}>
-                    Create your account
-                    <ArrowRight data-icon="inline-end" />
-                  </Link>
-                </Button>
-                <Button
-                  size="xl"
-                  variant="outline"
-                  className="border-white/30 bg-white/5 text-white hover:bg-white/12 hover:text-white"
-                  asChild
-                >
-                  <Link href={proPaths.login}>Log in</Link>
-                </Button>
+                {isProvider ? (
+                  <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
+                    <Link href={proPaths.dashboard}>
+                      Open dashboard
+                      <ArrowRight data-icon="inline-end" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
+                      <Link href={proPaths.register}>
+                        Create your account
+                        <ArrowRight data-icon="inline-end" />
+                      </Link>
+                    </Button>
+                    <Button
+                      size="xl"
+                      variant="outline"
+                      className="border-white/30 bg-white/5 text-white hover:bg-white/12 hover:text-white"
+                      asChild
+                    >
+                      <Link href={proPaths.login}>Log in</Link>
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
-import { useDemoSession } from "@/components/auth/use-demo-session";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -20,8 +19,13 @@ import {
   AddressAutocomplete,
   type MapboxAddress,
 } from "@/components/shared/address-autocomplete";
+import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
+import { authApi } from "@/components/api/ApiRoutesFile";
 import { serviceCategories } from "@/lib/data/services";
+import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/store/hooks";
+import { setCredentials, type AuthPayload } from "@/store/authSlice";
 
 const STEPS = ["account", "business", "services", "profile", "coverage"] as const;
 type Step = (typeof STEPS)[number];
@@ -141,10 +145,11 @@ function toggleValue(list: string[], value: string) {
 
 export function ProviderRegisterWizard() {
   const router = useRouter();
-  const { signIn } = useDemoSession();
+  const dispatch = useAppDispatch();
   const zipRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("account");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [submitting, setSubmitting] = useState(false);
   const stepIndex = STEPS.indexOf(step);
   const copy = stepCopy(step);
   const selectedCategories = serviceCategories.filter((category) =>
@@ -174,22 +179,108 @@ export function ProviderRegisterWizard() {
     setStep(next);
   }
 
-  function finish() {
+  function buildLocation() {
+    const lat = Number(draft.latitude);
+    const lng = Number(draft.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+    return {
+      type: "Point" as const,
+      coordinates: [lng, lat] as [number, number],
+      city: draft.city || undefined,
+      country:
+        draft.country ||
+        (draft.state ? "US" : undefined),
+      address: draft.street || undefined,
+      zip: draft.zip || undefined,
+      state: draft.state || undefined,
+    };
+  }
+
+  function mapEmployeeCount(value: string): string | undefined {
+    if (!value) return undefined;
+    const map: Record<string, string> = {
+      "Just me": "1",
+      "2–5": "2-5",
+      "6–10": "6-10",
+      "11–20": "11-20",
+      "21+": "21+",
+    };
+    return map[value] || value;
+  }
+
+  async function finish() {
     if (!draft.firstName || !draft.email || !draft.companyName) {
       toast.error("Add your name, email, and company name to create the account.");
       goTo(draft.companyName ? "account" : "business");
       return;
     }
+    if (!validateAccount()) {
+      goTo("account");
+      return;
+    }
 
-    signIn({
-      role: "provider",
-      firstName: draft.firstName,
-      lastName: draft.lastName,
-      email: draft.email,
-      companyName: draft.companyName,
-    });
-    toast.success("Your business account is ready. Open the dashboard to manage requests and services.");
-    router.push("/pro/dashboard");
+    const startingPrice = Number(draft.startingPrice);
+    const yearsInBusiness = Number(draft.yearsInBusiness);
+
+    const payload = {
+      user: {
+        firstName: draft.firstName.trim(),
+        lastName: draft.lastName.trim(),
+        email: draft.email.trim(),
+        phone: draft.phone.trim() || undefined,
+        password: draft.password,
+      },
+      business: {
+        companyName: draft.companyName.trim(),
+        tagline: draft.tagline.trim() || undefined,
+        street: draft.street.trim() || undefined,
+        city: draft.city.trim() || undefined,
+        state: draft.state.trim() || undefined,
+        zip: draft.zip.trim() || undefined,
+        location: buildLocation(),
+        categoryIds: draft.categoryIds.length ? draft.categoryIds : undefined,
+        offeredJobs: draft.jobs.length ? draft.jobs : undefined,
+        startingPrice: Number.isFinite(startingPrice) ? startingPrice : undefined,
+        description: draft.description.trim() || undefined,
+        yearsInBusiness: Number.isFinite(yearsInBusiness)
+          ? yearsInBusiness
+          : undefined,
+        employeeCount: mapEmployeeCount(draft.employeeCount),
+        licensed: draft.licensed,
+        insured: draft.insured,
+        website: draft.website.trim() || undefined,
+        contactRole: draft.contactRole.trim() || undefined,
+        serviceArea: draft.areaNames.length ? draft.areaNames : undefined,
+        country:
+          draft.country.trim() ||
+          (draft.state.trim() ? "US" : undefined),
+      },
+    };
+
+    setSubmitting(true);
+    try {
+      const data = await postData<AuthPayload>(
+        authApi.providerRegister,
+        payload,
+        { silent: true, skipLogoutOn401: true },
+      );
+
+      if (!data?.token || !data?.user) {
+        showApiErrorToast("Registration succeeded but session data was incomplete.");
+        return;
+      }
+
+      dispatch(setCredentials(data));
+      toast.success(
+        (typeof data.message === "string" && data.message) ||
+          "Your business account is ready.",
+      );
+      router.push(proPaths.dashboard);
+    } catch (error) {
+      showApiErrorToast(error, "Could not create your business account.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function validateAccount() {
@@ -226,7 +317,7 @@ export function ProviderRegisterWizard() {
       goTo("coverage");
       return;
     }
-    finish();
+    void finish();
   }
 
   let canContinue = true;
@@ -636,31 +727,40 @@ export function ProviderRegisterWizard() {
               </Button>
             ) : null}
             {OPTIONAL_STEPS.includes(step) ? (
-              <Button type="button" variant="ghost" size="xl" onClick={finish}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xl"
+                disabled={submitting}
+                onClick={() => void finish()}
+              >
                 Skip and finish
               </Button>
             ) : null}
           </div>
-          <Button type="submit" size="xl" disabled={!canContinue}>
-            {step === "coverage"
-              ? "Finish and go home"
-              : step === "business"
-                ? "Save and continue"
-                : "Continue"}
+          <Button type="submit" size="xl" disabled={!canContinue || submitting}>
+            {submitting
+              ? "Creating account…"
+              : step === "coverage"
+                ? "Finish and go home"
+                : step === "business"
+                  ? "Save and continue"
+                  : "Continue"}
           </Button>
         </div>
 
         {step === "business" ? (
           <button
             type="button"
+            disabled={submitting}
             onClick={() => {
               if (!draft.companyName.trim()) {
                 toast.error("Add a company name to create the account.");
                 return;
               }
-              finish();
+              void finish();
             }}
-            className="text-center text-sm text-muted-foreground hover:text-foreground"
+            className="text-center text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             Create the account now and finish the rest later
           </button>

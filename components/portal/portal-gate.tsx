@@ -2,20 +2,32 @@
 
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useDemoSession } from "@/components/auth/use-demo-session";
+import { useAppSelector } from "@/store/hooks";
+import {
+  selectAuth,
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
+import { proPaths } from "@/lib/pro-paths";
 
 export function PortalGate({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { session, ready } = useDemoSession();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const isProvider =
+    isAuthenticated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
 
   useEffect(() => {
-    if (!ready) return;
-    if (!session || session.role !== "provider") {
-      router.replace("/pro/login");
+    if (!auth.hydrated) return;
+    if (!isProvider) {
+      router.replace(proPaths.login);
     }
-  }, [ready, router, session]);
+  }, [auth.hydrated, isProvider, router]);
 
-  if (!ready || !session || session.role !== "provider") {
+  if (!auth.hydrated || !isProvider) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-[#f5f5f5] text-sm text-muted-foreground">
         Opening your business portal…

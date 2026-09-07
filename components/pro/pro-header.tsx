@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
-import { useDemoSession } from "@/components/auth/use-demo-session";
+import { handleUserLogout } from "@/components/api/apiFuntions";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -25,6 +25,13 @@ import {
 } from "@/lib/data/pro-nav";
 import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
+import {
+  selectAuth,
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
+import type { AuthUser } from "@/store/authSlice";
 
 type PanelId = "industries" | "product" | "resources";
 
@@ -32,7 +39,15 @@ const industries = getProIndustryLinks();
 
 export function ProHeader() {
   const pathname = usePathname();
-  const { session, signOut } = useDemoSession();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const providerUser =
+    auth.hydrated &&
+    isAuthenticated &&
+    (user?.role === "provider" || auth.role === "provider")
+      ? user
+      : null;
   const [open, setOpen] = useState<PanelId | null>(null);
   const closeTimer = useRef<number>(0);
 
@@ -93,7 +108,7 @@ export function ProHeader() {
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <ProActions session={session} onSignOut={signOut} />
+          <ProActions user={providerUser} onSignOut={() => handleUserLogout()} />
         </div>
 
         <Sheet>
@@ -124,7 +139,12 @@ export function ProHeader() {
                 ))}
               </MobileGroup>
               <Separator />
-              <ProActions session={session} onSignOut={signOut} stacked closeOnNavigate />
+              <ProActions
+                user={providerUser}
+                onSignOut={() => handleUserLogout()}
+                stacked
+                closeOnNavigate
+              />
             </div>
           </SheetContent>
         </Sheet>
@@ -311,12 +331,12 @@ function MobileLink({ href, label }: { href: string; label: string }) {
 }
 
 function ProActions({
-  session,
+  user,
   onSignOut,
   stacked = false,
   closeOnNavigate = false,
 }: {
-  session: ReturnType<typeof useDemoSession>["session"];
+  user: AuthUser | null;
   onSignOut: () => void;
   stacked?: boolean;
   closeOnNavigate?: boolean;
@@ -324,11 +344,11 @@ function ProActions({
   const wrap = (node: ReactElement) =>
     closeOnNavigate ? <SheetClose asChild>{node}</SheetClose> : node;
 
-  if (session?.role === "provider") {
+  if (user?.role === "provider") {
     return (
       <>
         <p className={cn("text-sm text-muted-foreground", stacked ? "px-2" : "max-w-40 truncate")}>
-          Hi, {session.firstName}
+          Hi, {String(user.firstName || "there")}
         </p>
         {wrap(
           <Button asChild>

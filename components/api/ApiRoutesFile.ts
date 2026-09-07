@@ -3,6 +3,7 @@
 export const authApi = {
   login: "auth/login",
   register: "auth/register",
+  providerRegister: "auth/provider/register",
   sendOtp: "auth/send-otp",
   verifyOtp: "auth/verify-otp",
   forgotPassword: "auth/forgot-password",

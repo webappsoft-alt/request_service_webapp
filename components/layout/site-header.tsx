@@ -1,11 +1,13 @@
 "use client";
 
+import type { ReactElement } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -66,26 +68,27 @@ export function SiteHeader() {
             <SheetHeader>
               <SheetTitle>Menu</SheetTitle>
             </SheetHeader>
-            <div className="flex flex-col gap-1 px-4 pb-6">
+            <div className="flex flex-col gap-1 overflow-y-auto px-4 pb-6">
               {[...primaryNav, ...secondaryNav].map((item) => {
                 const isActive =
                   pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={isActive ? "page" : undefined}
-                    className={cn(
-                      "rounded-md px-2 py-2 text-sm font-medium hover:bg-muted",
-                      isActive && "bg-muted text-foreground ring-1 ring-border"
-                    )}
-                  >
-                    {item.label}
-                  </Link>
+                  <SheetClose asChild key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "rounded-md px-2 py-2 text-sm font-medium hover:bg-muted",
+                        isActive && "bg-muted text-foreground ring-1 ring-border"
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  </SheetClose>
                 );
               })}
               <Separator className="my-3" />
-              <HeaderActions session={session} onSignOut={signOut} stacked />
+              <HeaderActions session={session} onSignOut={signOut} stacked closeOnNavigate />
             </div>
           </SheetContent>
         </Sheet>
@@ -98,45 +101,64 @@ function HeaderActions({
   session,
   onSignOut,
   stacked = false,
+  closeOnNavigate = false,
 }: {
   session: ReturnType<typeof useDemoSession>["session"];
   onSignOut: () => void;
   stacked?: boolean;
+  closeOnNavigate?: boolean;
 }) {
+  const wrap = (node: ReactElement) =>
+    closeOnNavigate ? <SheetClose asChild>{node}</SheetClose> : node;
+
   if (session) {
     return (
       <>
         <p className={cn("text-sm text-muted-foreground", stacked ? "px-2" : "max-w-40 truncate px-2")}>
           Hi, {session.firstName}
         </p>
-        {session.role === "provider" ? (
-          <Button asChild>
-            <Link href={proPaths.dashboard}>Dashboard</Link>
-          </Button>
+        {session.role === "provider"
+          ? wrap(
+              <Button asChild>
+                <Link href={proPaths.dashboard}>Dashboard</Link>
+              </Button>,
+            )
+          : wrap(
+              <Button asChild>
+                <Link href={proPaths.home}>Join as Pro</Link>
+              </Button>,
+            )}
+        {closeOnNavigate ? (
+          <SheetClose asChild>
+            <Button variant="ghost" onClick={onSignOut}>
+              Log out
+            </Button>
+          </SheetClose>
         ) : (
-          <Button asChild>
-            <Link href={proPaths.home}>Join as Pro</Link>
+          <Button variant="ghost" onClick={onSignOut}>
+            Log out
           </Button>
         )}
-        <Button variant="ghost" onClick={onSignOut}>
-          Log out
-        </Button>
       </>
     );
   }
 
   return (
     <>
-      <Button
-        variant="outline"
-        asChild
-        className="border-primary text-primary hover:bg-primary/5 hover:text-primary"
-      >
-        <Link href="/login">Login/ Signup</Link>
-      </Button>
-      <Button asChild>
-        <Link href={proPaths.home}>Join as Pro</Link>
-      </Button>
+      {wrap(
+        <Button
+          variant="outline"
+          asChild
+          className="border-primary text-primary hover:bg-primary/5 hover:text-primary"
+        >
+          <Link href="/login">Login/ Signup</Link>
+        </Button>,
+      )}
+      {wrap(
+        <Button asChild>
+          <Link href={proPaths.home}>Join as Pro</Link>
+        </Button>,
+      )}
     </>
   );
 }

@@ -74,9 +74,16 @@ export function AuthShell({
   const quote = panel.quote;
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-[#f5f5f5] p-3 sm:p-5 lg:p-8">
-      <div className="grid w-full max-w-[88rem] overflow-hidden rounded-2xl bg-card shadow-[0_24px_64px_rgba(4,26,54,0.12)] lg:min-h-[min(42rem,calc(100dvh-9rem))] lg:grid-cols-2">
-        <aside className="relative isolate min-h-48 overflow-hidden sm:min-h-56 lg:min-h-full">
+    <div className="flex flex-1 flex-col bg-[#f5f5f5] p-3 sm:p-5 lg:min-h-0 lg:items-center lg:justify-center lg:p-8">
+      <div
+        className={cn(
+          "grid w-full max-w-[88rem] overflow-hidden rounded-2xl bg-card shadow-[0_24px_64px_rgba(4,26,54,0.12)]",
+          // Mobile: natural card height — the page itself scrolls (reliable with/without Lenis).
+          // Desktop: fixed card height with an internal form scroller.
+          "lg:min-h-[min(42rem,calc(100dvh-9rem))] lg:max-h-[calc(100dvh-9rem)] lg:grid-cols-2",
+        )}
+      >
+        <aside className="relative isolate min-h-48 shrink-0 overflow-hidden sm:min-h-56 lg:min-h-full">
           <Image
             src={panel.src}
             alt={panel.alt}
@@ -129,16 +136,19 @@ export function AuthShell({
 
         <div
           data-lenis-prevent
+          data-lenis-prevent-wheel
+          data-lenis-prevent-touch
           className={cn(
-            "flex flex-col overflow-y-auto bg-card",
+            "flex flex-col bg-card",
+            "lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain",
             "[&_[data-slot=checkbox]]:border-foreground/40",
-            size === "lg" ? "justify-start" : "justify-center"
+            size === "lg" ? "justify-start" : "justify-start lg:justify-center",
           )}
         >
           <div
             className={cn(
               "mx-auto w-full px-6 py-8 sm:px-8 lg:px-10 lg:py-10",
-              size === "lg" ? "max-w-3xl" : "max-w-xl"
+              size === "lg" ? "max-w-3xl" : "max-w-xl",
             )}
           >
             <div className="mb-6 flex flex-col gap-2">

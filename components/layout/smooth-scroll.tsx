@@ -5,15 +5,45 @@ import { usePathname } from "next/navigation";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
 
-export function SmoothScroll() {
-  const pathname = usePathname();
-  const hasOwnScroller =
+function shouldSkipLenis(pathname: string) {
+  // Nested / page-owned scrollers — Lenis syncTouch makes touch scroll intermittent.
+  if (
     pathname === "/find-a-professional" ||
     pathname === "/get-a-quote" ||
-    /^\/services\/[^/]+$/.test(pathname);
+    /^\/services\/[^/]+$/.test(pathname)
+  ) {
+    return true;
+  }
+
+  // Auth forms must use native page scroll on mobile.
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname === "/pro/login" ||
+    pathname === "/pro/register" ||
+    pathname === "/pro/forgot-password" ||
+    pathname === "/pro/reset-password"
+  ) {
+    return true;
+  }
+
+  // Portal has its own sticky chrome; keep native scroll.
+  if (pathname.startsWith("/pro/dashboard")) {
+    return true;
+  }
+
+  return false;
+}
+
+export function SmoothScroll() {
+  const pathname = usePathname();
+  const skip = shouldSkipLenis(pathname);
 
   useEffect(() => {
-    if (hasOwnScroller) return;
+    if (skip) return;
 
     const lenis = new Lenis({
       autoRaf: true,
@@ -26,7 +56,7 @@ export function SmoothScroll() {
     });
 
     return () => lenis.destroy();
-  }, [hasOwnScroller]);
+  }, [skip]);
 
   return null;
 }

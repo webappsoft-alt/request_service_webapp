@@ -11,17 +11,24 @@ import { usePortalInbox } from "@/components/portal/use-portal-inbox";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isDashboardPath, isPeoplePath, isWorkPath, portalNavGroups } from "@/lib/data/portal-nav";
 import { cn } from "@/lib/utils";
 
 function NavLinks({
   collapsed = false,
-  onNavigate,
+  closeOnNavigate = false,
 }: {
   collapsed?: boolean;
-  onNavigate?: () => void;
+  closeOnNavigate?: boolean;
 }) {
   const pathname = usePathname();
   const inbox = usePortalInbox();
@@ -51,7 +58,6 @@ function NavLinks({
               const link = (
                 <Link
                   href={item.href}
-                  onClick={onNavigate}
                   aria-current={isActive ? "page" : undefined}
                   aria-label={collapsed ? item.label : undefined}
                   className={cn(
@@ -73,7 +79,7 @@ function NavLinks({
               if (!collapsed) {
                 return (
                   <span key={item.href} className="contents">
-                    {link}
+                    {closeOnNavigate ? <SheetClose asChild>{link}</SheetClose> : link}
                   </span>
                 );
               }
@@ -137,12 +143,12 @@ export function PortalShell({ children }: { children: ReactNode }) {
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-72 border-0 bg-[#003F7D] p-0 text-white">
+              <SheetContent side="left" className="flex w-72 flex-col border-0 bg-[#003F7D] p-0 text-white">
                 <SheetHeader className="border-b border-white/10 px-4 py-3">
                   <SheetTitle className="text-white">{provider.companyName}</SheetTitle>
                 </SheetHeader>
-                <div className="px-2 py-4">
-                  <NavLinks />
+                <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
+                  <NavLinks closeOnNavigate />
                 </div>
               </SheetContent>
             </Sheet>

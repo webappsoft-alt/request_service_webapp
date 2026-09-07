@@ -6,8 +6,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <SiteHeader />
-      <main id="main-content" className="flex min-h-0 flex-1 flex-col">
-        <PageEnter className="page-enter flex min-h-0 flex-1 flex-col">{children}</PageEnter>
+      {/* Mobile: allow main to grow so the page scrolls. Desktop: keep flex height for AuthShell centering. */}
+      <main id="main-content" className="flex flex-1 flex-col lg:min-h-0">
+        <PageEnter className="page-enter flex flex-1 flex-col lg:min-h-0">{children}</PageEnter>
       </main>
     </>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, type LucideIcon } from "lucide-react";
@@ -9,6 +9,7 @@ import { useDemoSession } from "@/components/auth/use-demo-session";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -123,7 +124,7 @@ export function ProHeader() {
                 ))}
               </MobileGroup>
               <Separator />
-              <ProActions session={session} onSignOut={signOut} stacked />
+              <ProActions session={session} onSignOut={signOut} stacked closeOnNavigate />
             </div>
           </SheetContent>
         </Sheet>
@@ -301,9 +302,11 @@ function MobileGroup({ title, children }: { title: string; children: ReactNode }
 
 function MobileLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href} className="rounded-md px-2 py-2 text-sm font-medium hover:bg-muted">
-      {label}
-    </Link>
+    <SheetClose asChild>
+      <Link href={href} className="rounded-md px-2 py-2 text-sm font-medium hover:bg-muted">
+        {label}
+      </Link>
+    </SheetClose>
   );
 }
 
@@ -311,39 +314,58 @@ function ProActions({
   session,
   onSignOut,
   stacked = false,
+  closeOnNavigate = false,
 }: {
   session: ReturnType<typeof useDemoSession>["session"];
   onSignOut: () => void;
   stacked?: boolean;
+  closeOnNavigate?: boolean;
 }) {
+  const wrap = (node: ReactElement) =>
+    closeOnNavigate ? <SheetClose asChild>{node}</SheetClose> : node;
+
   if (session?.role === "provider") {
     return (
       <>
         <p className={cn("text-sm text-muted-foreground", stacked ? "px-2" : "max-w-40 truncate")}>
           Hi, {session.firstName}
         </p>
-        <Button asChild>
-          <Link href={proPaths.dashboard}>Dashboard</Link>
-        </Button>
-        <Button variant="ghost" onClick={onSignOut}>
-          Log out
-        </Button>
+        {wrap(
+          <Button asChild>
+            <Link href={proPaths.dashboard}>Dashboard</Link>
+          </Button>,
+        )}
+        {closeOnNavigate ? (
+          <SheetClose asChild>
+            <Button variant="ghost" onClick={onSignOut}>
+              Log out
+            </Button>
+          </SheetClose>
+        ) : (
+          <Button variant="ghost" onClick={onSignOut}>
+            Log out
+          </Button>
+        )}
       </>
     );
   }
 
   return (
     <>
-      <Button
-        variant="outline"
-        asChild
-        className="border-primary text-primary hover:bg-primary/5 hover:text-primary"
-      >
-        <Link href={proPaths.login}>Log in</Link>
-      </Button>
-      <Button asChild>
-        <Link href={proPaths.register}>Sign up</Link>
-      </Button>
+      {wrap(
+        <Button
+          variant="outline"
+          asChild
+          className="border-primary text-primary hover:bg-primary/5 hover:text-primary"
+        >
+          <Link href={proPaths.login}>Log in</Link>
+        </Button>,
+      )}
+      {wrap(
+        <Button asChild>
+          <Link href={proPaths.register}>Sign up</Link>
+        </Button>,
+      )}
     </>
   );
 }

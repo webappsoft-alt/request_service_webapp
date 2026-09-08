@@ -207,15 +207,16 @@ export function AccountSettingsView() {
       const res = await putData<{
         message?: string;
         user?: AuthUser & { _id?: string; name?: string };
+        data?: AuthUser & { _id?: string; name?: string };
       }>(
         userApi.profile,
         {
           avatarUrl: uploaded,
         },
-        { silent: true, skipLogoutOn401: true },
+        { silent: true },
       );
 
-      applyProfileUser(res?.user, { avatarUrl: uploaded });
+      applyProfileUser(res?.user || res?.data, { avatarUrl: uploaded });
       setPreviewUrl(null);
       toast.success(res?.message || "Profile photo updated");
     } catch (error) {
@@ -257,12 +258,12 @@ export function AccountSettingsView() {
       const res = await putData<{
         message?: string;
         user?: AuthUser & { _id?: string; name?: string };
+        data?: AuthUser & { _id?: string; name?: string };
       }>(userApi.profile, payload, {
         silent: true,
-        skipLogoutOn401: true,
       });
 
-      applyProfileUser(res?.user, {
+      applyProfileUser(res?.user || res?.data, {
         firstName: nextFirstName,
         lastName: nextLastName,
         phone: nextPhone || undefined,
@@ -306,7 +307,7 @@ export function AccountSettingsView() {
           oldPassword,
           newPassword,
         },
-        { silent: true, skipLogoutOn401: true },
+        { silent: true },
       );
       setOldPassword("");
       setNewPassword("");
@@ -533,6 +534,7 @@ export function AccountSettingsView() {
                       <PasswordInput
                         id="settings-old-password"
                         autoComplete="current-password"
+                        placeholder="Enter your current password"
                         value={oldPassword}
                         onChange={(event) => setOldPassword(event.target.value)}
                         required
@@ -545,6 +547,7 @@ export function AccountSettingsView() {
                       <PasswordInput
                         id="settings-new-password"
                         autoComplete="new-password"
+                        placeholder="At least 8 characters"
                         value={newPassword}
                         onChange={(event) => setNewPassword(event.target.value)}
                         required
@@ -558,6 +561,7 @@ export function AccountSettingsView() {
                       <PasswordInput
                         id="settings-confirm-password"
                         autoComplete="new-password"
+                        placeholder="Re-enter your new password"
                         value={confirmPassword}
                         onChange={(event) =>
                           setConfirmPassword(event.target.value)

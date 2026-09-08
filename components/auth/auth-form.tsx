@@ -18,13 +18,18 @@ import type { DemoRole } from "@/lib/auth/demo-session";
 import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store/hooks";
-import { clearAuthError, setAuthLoading, setCredentials } from "@/store/authSlice";
+import {
+  clearAuthError,
+  setAuthLoading,
+  setCredentials,
+  toAuthCredentials,
+} from "@/store/authSlice";
 import {
   postData,
+  putData,
   showApiErrorToast,
 } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
-import type { AuthPayload } from "@/store/authSlice";
 
 type AuthMode = "login" | "forgot" | "reset";
 
@@ -121,7 +126,7 @@ function AuthFormInner({
         setSubmitting(true);
         dispatch(setAuthLoading(true));
         try {
-          const data = await postData<AuthPayload>(
+          const data = await postData(
             authApi.login,
             {
               email: email.trim(),
@@ -131,14 +136,15 @@ function AuthFormInner({
             { silent: true, skipLogoutOn401: true },
           );
 
-          if (!data?.token || !data?.user) {
+          const credentials = toAuthCredentials(data);
+          if (!credentials) {
             showApiErrorToast("Login succeeded but session data was incomplete.");
             return;
           }
 
-          dispatch(setCredentials(data));
+          dispatch(setCredentials(credentials));
           toast.success(
-            (typeof data.message === "string" && data.message) ||
+            (typeof credentials.message === "string" && credentials.message) ||
               (isProvider
                 ? "Signed in to your business account."
                 : "Welcome back."),
@@ -165,7 +171,6 @@ function AuthFormInner({
           toast.success(
             data?.message || "Password reset OTP sent to your email",
           );
-          // Dev/test environments may include `code` — never show it in production UI.
           router.push(
             `${verifyForgotHref}?email=${encodeURIComponent(trimmedEmail)}`,
           );
@@ -193,14 +198,17 @@ function AuthFormInner({
 
         setSubmitting(true);
         try {
-          const data = await postData<{ message?: string }>(
-            authApi.resetPassword,
+          const data = await putData<{ message?: string }>(
+            authApi.updatePasswordReset,
             {
-              token: resetToken,
               newPassword: password,
               confirmPassword,
             },
-            { silent: true, skipLogoutOn401: true },
+            {
+              silent: true,
+              skipLogoutOn401: true,
+              token: resetToken,
+            },
           );
           clearPasswordResetSession();
           toast.success(

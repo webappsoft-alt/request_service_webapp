@@ -22,10 +22,11 @@ import { Button } from "@/components/ui/button";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import type { DemoRole } from "@/lib/auth/demo-session";
+import { REGISTRATION_OTP_LENGTH } from "@/lib/auth/pending-registration";
 import { cn } from "@/lib/utils";
 
-/** Password-reset OTP is 4 digits (matches API / registration OTP). */
-const OTP_LENGTH = 4;
+/** Password-reset OTP is 4 digits (matches registration OTP). */
+const OTP_LENGTH = REGISTRATION_OTP_LENGTH;
 
 function OtpBoxes({
   value,
@@ -88,7 +89,7 @@ function OtpBoxes({
   }
 
   return (
-    <div className="flex items-center justify-center gap-3 sm:gap-4">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -107,7 +108,7 @@ function OtpBoxes({
           onPaste={onPaste}
           onFocus={(event) => event.currentTarget.select()}
           className={cn(
-            "h-16 w-14 rounded-2xl border-2 text-center text-2xl font-semibold text-foreground outline-none transition-all sm:h-[4.25rem] sm:w-[3.75rem]",
+            "h-12 w-10 rounded-xl border-2 text-center text-xl font-semibold text-foreground outline-none transition-all sm:h-14 sm:w-12 sm:rounded-2xl sm:text-2xl",
             digit
               ? "border-primary bg-primary/5 shadow-[0_0_0_3px_rgba(0,63,125,0.12)]"
               : "border-[#d7dee8] bg-[#f7f9fc]",
@@ -171,8 +172,8 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
         token?: string;
         success?: boolean;
       }>(
-        authApi.verifyResetOtp,
-        { email, code: otp },
+        authApi.verifyForgotOtp,
+        { code: otp },
         { silent: true, skipLogoutOn401: true },
       );
 

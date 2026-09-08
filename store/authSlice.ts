@@ -75,9 +75,47 @@ export function normalizeAuthUser(
     phone: (typeof raw.phone === "string" && raw.phone) || previous?.phone,
     zip: (typeof raw.zip === "string" && raw.zip) || previous?.zip,
     avatarUrl:
-      (typeof raw.avatarUrl === "string" && raw.avatarUrl) ||
+      (typeof raw.avatarUrl === "string" && raw.avatarUrl.trim()) ||
+      (typeof (raw as { profile?: { avatar?: string } }).profile?.avatar ===
+        "string" &&
+        (raw as { profile?: { avatar?: string } }).profile?.avatar?.trim()) ||
+      (typeof raw.avatar === "string" && raw.avatar.trim()) ||
       previous?.avatarUrl,
     role: (typeof raw.role === "string" && raw.role) || previous?.role,
+  };
+}
+
+/**
+ * Normalize login / register API envelopes into the persisted AuthPayload shape.
+ * Login returns `{ tokens: { accessToken, refreshToken } }`;
+ * register returns flat `{ token, refreshToken }`.
+ */
+export function toAuthCredentials(raw: unknown): AuthPayload | null {
+  if (!raw || typeof raw !== "object") return null;
+  const body = raw as Record<string, unknown>;
+  const tokens =
+    body.tokens && typeof body.tokens === "object"
+      ? (body.tokens as Record<string, unknown>)
+      : null;
+
+  const token =
+    (typeof body.token === "string" && body.token) ||
+    (typeof tokens?.accessToken === "string" && tokens.accessToken) ||
+    "";
+  const refreshToken =
+    (typeof body.refreshToken === "string" && body.refreshToken) ||
+    (typeof tokens?.refreshToken === "string" && tokens.refreshToken) ||
+    undefined;
+
+  const user = body.user;
+  if (!token || !user || typeof user !== "object") return null;
+
+  return {
+    ...body,
+    token,
+    refreshToken,
+    user: user as AuthUser,
+    provider: body.provider,
   };
 }
 
@@ -219,8 +257,61 @@ const authSlice = createSlice({
     },
 
     /**
+     * After refresh-token: replace access/refresh tokens in the same
+     * persisted `userData` blob. User object stays untouched.
+     */
+    updateAuthTokens(
+      state,
+      action: PayloadAction<{
+        accessToken: string;
+        refreshToken?: string;
+      }>,
+    ) {
+      const current =
+        (state.userData
+          ? decryptData<AuthPayload>(state.userData)
+          : null) ||
+        (state.token && state.user
+          ? {
+              token: state.token,
+              refreshToken: state.refreshToken || undefined,
+              user: state.user,
+            }
+          : null);
+
+      if (!current?.user || !action.payload.accessToken) {
+        state.error = "No active session to update tokens.";
+        return;
+      }
+
+      const nextPayload: AuthPayload = {
+        ...current,
+        token: action.payload.accessToken,
+        refreshToken:
+          typeof action.payload.refreshToken === "string"
+            ? action.payload.refreshToken
+            : current.refreshToken,
+        user: current.user,
+      };
+
+      const encrypted = encryptData(nextPayload);
+      if (!encrypted) {
+        state.error = "Could not save session.";
+        return;
+      }
+
+      state.userData = encrypted;
+      state.token = nextPayload.token!;
+      state.refreshToken =
+        typeof nextPayload.refreshToken === "string"
+          ? nextPayload.refreshToken
+          : null;
+      state.error = null;
+    },
+
+    /**
      * Replace only the persisted `user` (and optional `provider`) from
-     * profile update or GET /auth/me. Token / refreshToken stay as-is.
+     * profile update or GET /user/me. Token / refreshToken stay as-is.
      */
     updateAuthUser(
       state,
@@ -297,6 +388,7 @@ export const {
   hydrateAuth,
   setCredentials,
   updateAuthUser,
+  updateAuthTokens,
   setAuthLoading,
   setAuthError,
   clearAuthError,

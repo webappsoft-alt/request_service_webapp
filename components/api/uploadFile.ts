@@ -1,6 +1,6 @@
 import axios, { type AxiosResponse } from "axios";
 import { DocUpload, FileUpload, imageUpload } from "./ApiRoutesFile";
-import { getAuthToken } from "./apiFuntions";
+import { extractErrorMessage, getAuthToken } from "./apiFuntions";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -37,12 +37,18 @@ function isValidFileType(
   return type.includes(fileExtension);
 }
 
+/**
+ * Auth only — do NOT set Content-Type for FormData.
+ * The browser/axios must add multipart boundary automatically.
+ */
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const token = getAuthToken();
-  return {
-    ...extra,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const headers = { ...extra };
+  // Strip any Content-Type so multipart boundary is preserved.
+  delete headers["Content-Type"];
+  delete headers["content-type"];
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
 }
 
 export type UploadError = {
@@ -59,12 +65,14 @@ export function extractUploadedUrl(payload: unknown): string | null {
       : null;
 
   const candidates = [
+    root.image,
     root.url,
     root.path,
     root.location,
     root.imageUrl,
     root.fileUrl,
     root.avatarUrl,
+    nested?.image,
     nested?.url,
     nested?.path,
     nested?.location,
@@ -79,30 +87,31 @@ export function extractUploadedUrl(payload: unknown): string | null {
   return null;
 }
 
+function toUploadError(error: unknown, fallback: string): UploadError {
+  return { message: extractErrorMessage(error) || fallback };
+}
+
 export async function uploadFile(
   file: File,
   header2: Record<string, string> = {},
 ): Promise<AxiosResponse> {
+  const check = isValidFileType(file);
+  if (!check) {
+    throw {
+      message:
+        "Invalid file type. Please upload a valid image (jpg, jpeg, png, webp, gif, bmp, svg, ico, avif, heic, heif, tif, tiff).",
+    } satisfies UploadError;
+  }
+
+  const formData = new FormData();
+  formData.append("image", file);
+
   try {
-    const check = isValidFileType(file);
-    if (!check) {
-      const err: UploadError = {
-        message:
-          "Invalid file type. Please upload a valid image (jpg, jpeg, png, webp, gif, bmp, svg, ico, avif, heic, heif, tif, tiff).",
-      };
-      throw err;
-    }
-    const formData = new FormData();
-    formData.append("image", file);
     return await axios.post(buildUrl(imageUpload), formData, {
-      headers: authHeaders({
-        "Content-Type": "multipart/form-data",
-        ...header2,
-      }),
+      headers: authHeaders(header2),
     });
   } catch (error) {
-    console.error("Error uploading file:", error);
-    throw error;
+    throw toUploadError(error, "Failed to upload image. Try again later.");
   }
 }
 
@@ -110,18 +119,15 @@ export async function uploadDoc(
   file: File,
   header2: Record<string, string> = {},
 ): Promise<AxiosResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
   try {
-    const formData = new FormData();
-    formData.append("file", file);
     return await axios.post(buildUrl(DocUpload), formData, {
-      headers: authHeaders({
-        "Content-Type": "multipart/form-data",
-        ...header2,
-      }),
+      headers: authHeaders(header2),
     });
   } catch (error) {
-    console.error("Error uploading document:", error);
-    throw error;
+    throw toUploadError(error, "Failed to upload document. Try again later.");
   }
 }
 
@@ -129,17 +135,14 @@ export async function uploadAnyFile(
   file: File,
   header2: Record<string, string> = {},
 ): Promise<AxiosResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
   try {
-    const formData = new FormData();
-    formData.append("file", file);
     return await axios.post(buildUrl(FileUpload), formData, {
-      headers: authHeaders({
-        "Content-Type": "multipart/form-data",
-        ...header2,
-      }),
+      headers: authHeaders(header2),
     });
   } catch (error) {
-    console.error("Error uploading file:", error);
-    throw error;
+    throw toUploadError(error, "Failed to upload file. Try again later.");
   }
 }

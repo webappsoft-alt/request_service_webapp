@@ -13,13 +13,13 @@ import { getStore } from "@/store";
 import {
   clearAuth,
   logout as logoutAction,
-  setCredentials,
+  updateAuthTokens,
   updateAuthUser,
   type AuthPayload,
   type AuthUser,
 } from "@/store/authSlice";
 import { decryptData } from "./encrypted";
-import { authApi } from "./ApiRoutesFile";
+import { authApi, userApi } from "./ApiRoutesFile";
 
 export type QueryParams = Record<
   string,
@@ -31,6 +31,7 @@ export type RequestOptions = {
   multipart?: boolean;
   token?: string | null;
   config?: AxiosRequestConfig;
+  /** Skip token-refresh retry on 401 (login/register/OTP/etc.). */
   skipLogoutOn401?: boolean;
 };
 
@@ -54,6 +55,7 @@ function buildUrl(endpoint: string): string {
 
 let authMePromise: Promise<AuthUser | null> | null = null;
 let logoutInFlight = false;
+let refreshInFlight: Promise<boolean> | null = null;
 
 function clearAuthMeCache(): void {
   authMePromise = null;
@@ -76,6 +78,13 @@ export function getAuthToken(): string | null {
   const fromPersist = getPersistedAuth()?.token;
   if (fromPersist) return fromPersist;
   return getStore().getState().auth.token;
+}
+
+export function getRefreshToken(): string | null {
+  if (!isBrowser()) return null;
+  const fromPersist = getPersistedAuth()?.refreshToken;
+  if (typeof fromPersist === "string" && fromPersist) return fromPersist;
+  return getStore().getState().auth.refreshToken;
 }
 
 export function getAuthUser(): AuthUser | null {
@@ -187,6 +196,7 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
           path.startsWith("/verify-otp") ||
           path.startsWith("/pro/login") ||
           path.startsWith("/pro/register") ||
+          path.startsWith("/pro/verify-otp") ||
           path.startsWith("/forgot-password") ||
           path.startsWith("/verify-forgot-otp") ||
           path.startsWith("/reset-password") ||
@@ -218,30 +228,128 @@ function notifyRequestError(error: unknown, silent?: boolean): void {
   toast.error(extractErrorMessage(error));
 }
 
+/** Exact backend messages that mean the access token should be refreshed. */
+const TOKEN_REFRESH_MESSAGES = new Set([
+  "Session has been terminated. Please login again.",
+  "Session expired, please login again",
+]);
+
+/**
+ * True only when a 401 indicates an expired/terminated session token
+ * (not a generic unauthorized / wrong-credentials response).
+ */
+function isTokenExpiredUnauthorized(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || error.response?.status !== 401) {
+    return false;
+  }
+
+  const data = error.response?.data as
+    | {
+        message?: unknown;
+        code?: unknown;
+        name?: unknown;
+        error?: unknown;
+      }
+    | string
+    | undefined;
+
+  if (typeof data === "string") {
+    const trimmed = data.trim();
+    return (
+      TOKEN_REFRESH_MESSAGES.has(trimmed) ||
+      trimmed === "TokenExpiredError" ||
+      /TokenExpiredError/i.test(trimmed)
+    );
+  }
+
+  if (!data || typeof data !== "object") return false;
+
+  const message =
+    typeof data.message === "string" ? data.message.trim() : "";
+  if (TOKEN_REFRESH_MESSAGES.has(message)) return true;
+  if (message === "TokenExpiredError") return true;
+
+  const code = typeof data.code === "string" ? data.code.trim() : "";
+  const name = typeof data.name === "string" ? data.name.trim() : "";
+  const nestedError =
+    typeof data.error === "string"
+      ? data.error.trim()
+      : data.error &&
+          typeof data.error === "object" &&
+          typeof (data.error as { name?: unknown }).name === "string"
+        ? String((data.error as { name: string }).name).trim()
+        : "";
+
+  return (
+    code === "TokenExpiredError" ||
+    name === "TokenExpiredError" ||
+    nestedError === "TokenExpiredError"
+  );
+}
+
+/**
+ * Call refresh-token once, replace the access token in persisted auth data,
+ * and return true if the original request should be retried.
+ */
+async function attemptTokenRefresh(): Promise<boolean> {
+  if (!isBrowser()) return false;
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
+
+    try {
+      const res = await axios.post<{
+        success?: boolean;
+        tokens?: { accessToken?: string; refreshToken?: string };
+        token?: string;
+        refreshToken?: string;
+      }>(
+        buildUrl(authApi.refreshToken),
+        { refreshToken },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 30_000,
+        },
+      );
+
+      const accessToken =
+        res.data?.tokens?.accessToken ||
+        (typeof res.data?.token === "string" ? res.data.token : "");
+      const nextRefresh =
+        res.data?.tokens?.refreshToken ||
+        (typeof res.data?.refreshToken === "string"
+          ? res.data.refreshToken
+          : undefined);
+
+      if (!accessToken) return false;
+
+      getStore().dispatch(
+        updateAuthTokens({
+          accessToken,
+          refreshToken: nextRefresh,
+        }),
+      );
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
 function handleHttpError(
   error: unknown,
   options?: RequestOptions | boolean,
 ): never {
   const silent = typeof options === "boolean" ? options : options?.silent;
-  const skipLogout =
-    typeof options === "object" && Boolean(options?.skipLogoutOn401);
 
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status;
-    if (status === 401) {
-      if (!silent && isBrowser()) {
-        toast.error(
-          extractErrorMessage(error) ||
-            "Your session has expired. Please sign in again.",
-        );
-      }
-      if (!skipLogout) {
-        handleUserLogout({ silent: true });
-      }
-      throw error;
-    }
-  }
-
+  // Never auto-logout on 401 here — expired tokens are handled via refresh
+  // + retry in unwrapWithRefresh. All other 401s are normal API errors.
   notifyRequestError(error, silent);
   throw error;
 }
@@ -295,14 +403,31 @@ function resolveConfig(options: RequestOptions = {}): AxiosRequestConfig {
   };
 }
 
-async function unwrap<T>(
-  promise: Promise<AxiosResponse<T>>,
+type RequestRunner<T> = () => Promise<AxiosResponse<T>>;
+
+async function unwrapWithRefresh<T>(
+  run: RequestRunner<T>,
   options?: RequestOptions,
 ): Promise<T> {
   try {
-    const response = await promise;
+    const response = await run();
     return response.data;
   } catch (error) {
+    const skipAuth =
+      Boolean(options?.skipLogoutOn401) || options?.token === null;
+
+    if (!skipAuth && isTokenExpiredUnauthorized(error)) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        try {
+          const retry = await run();
+          return retry.data;
+        } catch (retryError) {
+          handleHttpError(retryError, options);
+        }
+      }
+    }
+
     handleHttpError(error, options);
   }
 }
@@ -312,11 +437,12 @@ export async function getData<T = unknown>(
   params?: QueryParams,
   options?: RequestOptions,
 ): Promise<T> {
-  return unwrap<T>(
-    http.get<T>(buildUrl(endpoint), {
-      ...resolveConfig(options),
-      params,
-    }),
+  return unwrapWithRefresh(
+    () =>
+      http.get<T>(buildUrl(endpoint), {
+        ...resolveConfig(options),
+        params,
+      }),
     options,
   );
 }
@@ -332,10 +458,6 @@ export async function getDataOptional<T = unknown>(
     if (axios.isAxiosError(error) && error.response?.status === 404) {
       return null;
     }
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      handleUserLogout({ silent: true });
-      throw error;
-    }
     notifyRequestError(error, options?.silent);
     throw error;
   }
@@ -346,8 +468,8 @@ export async function postData<T = unknown>(
   payload?: unknown,
   options?: RequestOptions,
 ): Promise<T> {
-  return unwrap<T>(
-    http.post<T>(buildUrl(endpoint), payload, resolveConfig(options)),
+  return unwrapWithRefresh(
+    () => http.post<T>(buildUrl(endpoint), payload, resolveConfig(options)),
     options,
   );
 }
@@ -357,8 +479,8 @@ export async function putData<T = unknown>(
   payload?: unknown,
   options?: RequestOptions,
 ): Promise<T> {
-  return unwrap<T>(
-    http.put<T>(buildUrl(endpoint), payload, resolveConfig(options)),
+  return unwrapWithRefresh(
+    () => http.put<T>(buildUrl(endpoint), payload, resolveConfig(options)),
     options,
   );
 }
@@ -368,8 +490,8 @@ export async function patchData<T = unknown>(
   payload?: unknown,
   options?: RequestOptions,
 ): Promise<T> {
-  return unwrap<T>(
-    http.patch<T>(buildUrl(endpoint), payload, resolveConfig(options)),
+  return unwrapWithRefresh(
+    () => http.patch<T>(buildUrl(endpoint), payload, resolveConfig(options)),
     options,
   );
 }
@@ -378,8 +500,8 @@ export async function deleteData<T = unknown>(
   endpoint: string,
   options?: RequestOptions,
 ): Promise<T> {
-  return unwrap<T>(
-    http.delete<T>(buildUrl(endpoint), resolveConfig(options)),
+  return unwrapWithRefresh(
+    () => http.delete<T>(buildUrl(endpoint), resolveConfig(options)),
     options,
   );
 }
@@ -405,9 +527,8 @@ export const api = {
 };
 
 /**
- * Refresh latest user via GET /auth/me when logged in.
- * Only updates the persisted `user` (and provider) — never replaces the
- * login/register token or full session blob.
+ * Refresh latest user via GET /user/me when logged in.
+ * Only updates the persisted `user` (and provider) — never replaces the token.
  */
 export async function refreshAuthMe(): Promise<AuthUser | null> {
   if (!isBrowser()) return null;
@@ -420,10 +541,11 @@ export async function refreshAuthMe(): Promise<AuthUser | null> {
     try {
       const meRes = await getData<{
         user?: AuthUser & { _id?: string; name?: string };
+        data?: AuthUser & { _id?: string; name?: string };
         provider?: unknown;
-      }>(authApi.me, undefined, { silent: true });
+      }>(userApi.me, undefined, { silent: true });
 
-      const rawUser = meRes?.user;
+      const rawUser = meRes?.data || meRes?.user;
       if (!rawUser || typeof rawUser !== "object") return null;
 
       getStore().dispatch(

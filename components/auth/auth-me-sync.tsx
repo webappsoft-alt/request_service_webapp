@@ -7,7 +7,7 @@ import { selectIsAuthenticated, selectAuth } from "@/store/authSlice";
 import { refreshAuthMe } from "@/components/api/apiFuntions";
 
 /**
- * When the user is logged in, refresh profile via GET /auth/me on route changes.
+ * When the user is logged in, refresh profile via GET /user/me on route changes.
  */
 export function AuthMeSync() {
   const pathname = usePathname();

@@ -1,15 +1,18 @@
-/** Centralized API route map — only endpoints used by this webapp */
+/** Centralized API route map — paths relative to NEXT_PUBLIC_API_BASE_URL (/api). */
 
 export const authApi = {
   login: "auth/login",
-  register: "auth/register",
+  customerRegister: "auth/customer/register",
   providerRegister: "auth/provider/register",
   sendOtp: "auth/send-otp",
   verifyOtp: "auth/verify-otp",
-  forgotPassword: "auth/forgot-password",
-  verifyResetOtp: "auth/verify-reset-otp",
-  resetPassword: "auth/reset-password",
-  me: "auth/me",
+  /** Password recovery step 1 */
+  forgotPassword: "auth/forgot-password-otp",
+  /** Password recovery step 2 — body: `{ code }` */
+  verifyForgotOtp: "auth/verify-forgot-otp",
+  /** Password recovery step 3 — PUT with Bearer reset token + `{ newPassword }` */
+  updatePasswordReset: "auth/update-password",
+  refreshToken: "auth/refresh-token",
 } as const;
 
 export const userApi = {
@@ -19,9 +22,10 @@ export const userApi = {
 } as const;
 
 export const uploadApi = {
-  image: "upload/image",
-  file: "upload/file",
-  document: "upload/document",
+  /** POST multipart field `image` → `{ image: url }` */
+  image: "upload-image",
+  file: "upload-file",
+  document: "upload-file",
 } as const;
 
 /** Aliases used by upload helpers */

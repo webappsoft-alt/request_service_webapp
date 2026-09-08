@@ -22,10 +22,11 @@ import {
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import { serviceCategories } from "@/lib/data/services";
-import { proPaths } from "@/lib/pro-paths";
+import {
+  savePendingRegistration,
+  type PendingProviderRegistration,
+} from "@/lib/auth/pending-registration";
 import { cn } from "@/lib/utils";
-import { useAppDispatch } from "@/store/hooks";
-import { setCredentials, type AuthPayload } from "@/store/authSlice";
 
 const STEPS = ["account", "business", "services", "profile", "coverage"] as const;
 type Step = (typeof STEPS)[number];
@@ -145,7 +146,6 @@ function toggleValue(list: string[], value: string) {
 
 export function ProviderRegisterWizard() {
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const zipRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("account");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -222,62 +222,54 @@ export function ProviderRegisterWizard() {
     const startingPrice = Number(draft.startingPrice);
     const yearsInBusiness = Number(draft.yearsInBusiness);
 
-    const payload = {
-      user: {
-        firstName: draft.firstName.trim(),
-        lastName: draft.lastName.trim(),
-        email: draft.email.trim(),
-        phone: draft.phone.trim() || undefined,
-        password: draft.password,
-      },
-      business: {
-        companyName: draft.companyName.trim(),
-        tagline: draft.tagline.trim() || undefined,
-        street: draft.street.trim() || undefined,
-        city: draft.city.trim() || undefined,
-        state: draft.state.trim() || undefined,
-        zip: draft.zip.trim() || undefined,
-        location: buildLocation(),
-        categoryIds: draft.categoryIds.length ? draft.categoryIds : undefined,
-        offeredJobs: draft.jobs.length ? draft.jobs : undefined,
-        startingPrice: Number.isFinite(startingPrice) ? startingPrice : undefined,
-        description: draft.description.trim() || undefined,
-        yearsInBusiness: Number.isFinite(yearsInBusiness)
-          ? yearsInBusiness
-          : undefined,
-        employeeCount: mapEmployeeCount(draft.employeeCount),
-        licensed: draft.licensed,
-        insured: draft.insured,
-        website: draft.website.trim() || undefined,
-        contactRole: draft.contactRole.trim() || undefined,
-        serviceArea: draft.areaNames.length ? draft.areaNames : undefined,
-        country:
-          draft.country.trim() ||
-          (draft.state.trim() ? "US" : undefined),
-      },
+    const pending: PendingProviderRegistration = {
+      kind: "provider",
+      firstName: draft.firstName.trim(),
+      lastName: draft.lastName.trim(),
+      email: draft.email.trim(),
+      phone: draft.phone.trim() || undefined,
+      password: draft.password,
+      companyName: draft.companyName.trim(),
+      tagline: draft.tagline.trim() || undefined,
+      street: draft.street.trim() || undefined,
+      city: draft.city.trim() || undefined,
+      state: draft.state.trim() || undefined,
+      zip: draft.zip.trim() || undefined,
+      location: buildLocation(),
+      categoryIds: draft.categoryIds.length ? draft.categoryIds : undefined,
+      offeredJobs: draft.jobs.length ? draft.jobs : undefined,
+      startingPrice: Number.isFinite(startingPrice) ? startingPrice : undefined,
+      description: draft.description.trim() || undefined,
+      yearsInBusiness: Number.isFinite(yearsInBusiness)
+        ? yearsInBusiness
+        : undefined,
+      employeeCount: mapEmployeeCount(draft.employeeCount),
+      licensed: draft.licensed,
+      insured: draft.insured,
+      website: draft.website.trim() || undefined,
+      contactRole: draft.contactRole.trim() || undefined,
+      serviceArea: draft.areaNames.length ? draft.areaNames : undefined,
+      country:
+        draft.country.trim() ||
+        (draft.state.trim() ? "US" : undefined),
     };
 
     setSubmitting(true);
     try {
-      const data = await postData<AuthPayload>(
-        authApi.providerRegister,
-        payload,
+      const data = await postData<{ message?: string }>(
+        authApi.sendOtp,
+        { email: pending.email },
         { silent: true, skipLogoutOn401: true },
       );
-
-      if (!data?.token || !data?.user) {
-        showApiErrorToast("Registration succeeded but session data was incomplete.");
-        return;
-      }
-
-      dispatch(setCredentials(data));
+      savePendingRegistration(pending);
       toast.success(
-        (typeof data.message === "string" && data.message) ||
-          "Your business account is ready.",
+        data?.message || "Check your email for a verification code.",
       );
-      router.push(proPaths.dashboard);
+      router.push(
+        `/pro/verify-otp?email=${encodeURIComponent(pending.email.toLowerCase())}`,
+      );
     } catch (error) {
-      showApiErrorToast(error, "Could not create your business account.");
+      showApiErrorToast(error, "Could not start email verification.");
     } finally {
       setSubmitting(false);
     }

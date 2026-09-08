@@ -22,9 +22,11 @@ function shouldSkipLenis(pathname: string) {
     pathname === "/signup" ||
     pathname === "/forgot-password" ||
     pathname === "/verify-forgot-otp" ||
+    pathname === "/verify-otp" ||
     pathname === "/reset-password" ||
     pathname === "/pro/login" ||
     pathname === "/pro/register" ||
+    pathname === "/pro/verify-otp" ||
     pathname === "/pro/forgot-password" ||
     pathname === "/pro/verify-forgot-otp" ||
     pathname === "/pro/reset-password"

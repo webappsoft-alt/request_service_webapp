@@ -14,33 +14,24 @@ import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/store/hooks";
-import { setCredentials, type AuthPayload } from "@/store/authSlice";
+import {
+  setCredentials,
+  toAuthCredentials,
+} from "@/store/authSlice";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
+import {
+  clearPendingRegistration,
+  readPendingRegistration,
+  REGISTRATION_OTP_LENGTH,
+  savePendingRegistration,
+  type PendingRegistration,
+} from "@/lib/auth/pending-registration";
+import type { DemoRole } from "@/lib/auth/demo-session";
+import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 
-const PENDING_KEY = "rs-pending-registration";
-const OTP_LENGTH = 4;
-
-type PendingRegistration = Record<string, unknown> & { email?: string };
-
-function readPending(): PendingRegistration | null {
-  try {
-    const raw = sessionStorage.getItem(PENDING_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as PendingRegistration;
-  } catch {
-    return null;
-  }
-}
-
-function clearPending() {
-  try {
-    sessionStorage.removeItem(PENDING_KEY);
-  } catch {
-    // ignore
-  }
-}
+const OTP_LENGTH = REGISTRATION_OTP_LENGTH;
 
 function OtpBoxes({
   value,
@@ -64,24 +55,19 @@ function OtpBoxes({
   function updateDigit(index: number, raw: string) {
     const char = raw.replace(/\D/g, "").slice(-1);
     const next = digits.map((d, i) => (i === index ? char : d));
-    const joined = next.join("").slice(0, OTP_LENGTH);
-    onChange(joined);
-    if (char && index < OTP_LENGTH - 1) {
-      focusAt(index + 1);
-    }
+    onChange(next.join("").slice(0, OTP_LENGTH));
+    if (char && index < OTP_LENGTH - 1) focusAt(index + 1);
   }
 
   function onKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Backspace") {
       event.preventDefault();
       if (digits[index]) {
-        const next = digits.map((d, i) => (i === index ? "" : d));
-        onChange(next.join(""));
+        onChange(digits.map((d, i) => (i === index ? "" : d)).join(""));
         return;
       }
       if (index > 0) {
-        const next = digits.map((d, i) => (i === index - 1 ? "" : d));
-        onChange(next.join(""));
+        onChange(digits.map((d, i) => (i === index - 1 ? "" : d)).join(""));
         focusAt(index - 1);
       }
       return;
@@ -108,7 +94,7 @@ function OtpBoxes({
   }
 
   return (
-    <div className="flex items-center justify-center gap-3 sm:gap-4">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -127,7 +113,7 @@ function OtpBoxes({
           onPaste={onPaste}
           onFocus={(event) => event.currentTarget.select()}
           className={cn(
-            "h-16 w-14 rounded-2xl border-2 text-center text-2xl font-semibold text-foreground outline-none transition-all sm:h-[4.25rem] sm:w-[3.75rem]",
+            "h-12 w-10 rounded-xl border-2 text-center text-xl font-semibold text-foreground outline-none transition-all sm:h-14 sm:w-12 sm:rounded-2xl sm:text-2xl",
             digit
               ? "border-primary bg-primary/5 shadow-[0_0_0_3px_rgba(0,63,125,0.12)]"
               : "border-[#d7dee8] bg-[#f7f9fc]",
@@ -140,10 +126,15 @@ function OtpBoxes({
   );
 }
 
-export function OtpVerificationForm() {
+export function OtpVerificationForm({
+  role = "customer",
+}: {
+  role?: DemoRole;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
+  const isProvider = role === "provider";
 
   const emailFromQuery = searchParams.get("email")?.trim() || "";
   const [pending, setPending] = useState<PendingRegistration | null>(null);
@@ -153,16 +144,24 @@ export function OtpVerificationForm() {
   const [loading, setLoading] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
 
-  useEffect(() => {
-    setPending(readPending());
-  }, []);
+  const registerHref = isProvider ? "/pro/register" : "/register";
+  const successHref = isProvider ? proPaths.dashboard : "/";
 
   useEffect(() => {
-    if (!emailFromQuery && !readPending()?.email) {
-      toast.error("Start registration again to receive a verification code.");
-      router.replace("/register");
+    const draft = readPendingRegistration();
+    if (draft && draft.kind !== (isProvider ? "provider" : "customer")) {
+      setPending(null);
+      return;
     }
-  }, [emailFromQuery, router]);
+    setPending(draft);
+  }, [isProvider]);
+
+  useEffect(() => {
+    if (!emailFromQuery && !readPendingRegistration()?.email) {
+      toast.error("Start registration again to receive a verification code.");
+      router.replace(registerHref);
+    }
+  }, [emailFromQuery, registerHref, router]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -175,48 +174,55 @@ export function OtpVerificationForm() {
 
   async function finalizeAccount(code: string) {
     if (!email) return;
+    const draft = pending || readPendingRegistration();
+    if (!draft) {
+      toast.error("Registration details expired. Start again.");
+      router.replace(registerHref);
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await postData<AuthPayload>(
+      await postData(
         authApi.verifyOtp,
-        { email, code, autoRegister: true },
+        { email, code },
         { silent: true, skipLogoutOn401: true },
       );
 
-      if (data?.token && data?.user) {
-        dispatch(setCredentials(data));
-        clearPending();
-        toast.success(
-          (typeof data.message === "string" && data.message) ||
-            "Email verified. You’re signed in.",
-        );
-        router.replace("/");
+      let registerPayload: Record<string, unknown>;
+      let endpoint: string;
+
+      if (draft.kind === "provider") {
+        endpoint = authApi.providerRegister;
+        const { kind: _kind, ...rest } = draft;
+        registerPayload = rest;
+      } else {
+        endpoint = authApi.customerRegister;
+        const { kind: _kind, ...rest } = draft;
+        registerPayload = rest;
+      }
+
+      const registered = await postData(
+        endpoint,
+        registerPayload,
+        { silent: true, skipLogoutOn401: true },
+      );
+
+      const credentials = toAuthCredentials(registered);
+      if (!credentials) {
+        showApiErrorToast("Account created but session data was incomplete.");
         return;
       }
 
-      if (data?.verificationToken) {
-        const registered = await postData<AuthPayload>(
-          authApi.register,
-          {
-            email: (typeof data.email === "string" && data.email) || email,
-            verificationToken: data.verificationToken,
-          },
-          { silent: true, skipLogoutOn401: true },
-        );
-
-        if (registered?.token && registered?.user) {
-          dispatch(setCredentials(registered));
-          clearPending();
-          toast.success(
-            (typeof registered.message === "string" && registered.message) ||
-              "Account created. You’re signed in.",
-          );
-          router.replace("/");
-          return;
-        }
-      }
-
-      showApiErrorToast("OTP verification response was incomplete.");
+      dispatch(setCredentials(credentials));
+      clearPendingRegistration();
+      toast.success(
+        (typeof credentials.message === "string" && credentials.message) ||
+          (isProvider
+            ? "Your business account is ready."
+            : "Email verified. You’re signed in."),
+      );
+      router.replace(successHref);
     } catch (error) {
       showApiErrorToast(error, "Invalid verification code.");
     } finally {
@@ -234,16 +240,19 @@ export function OtpVerificationForm() {
   }
 
   async function onResend() {
-    const draft = pending || readPending();
-    if (!draft || resendSeconds > 0) return;
+    const draft = pending || readPendingRegistration();
+    if (!email || resendSeconds > 0) return;
     setLoading(true);
     try {
       const data = await postData<{ message?: string }>(
         authApi.sendOtp,
-        draft,
+        { email },
         { silent: true, skipLogoutOn401: true },
       );
-      setPending(draft);
+      if (draft) {
+        savePendingRegistration(draft);
+        setPending(draft);
+      }
       setOtp("");
       setResendSeconds(60);
       toast.success(data?.message || "A new code was sent to your email.");
@@ -254,19 +263,18 @@ export function OtpVerificationForm() {
     }
   }
 
-  const canResend = Boolean(pending || readPending());
-  const canVerify = otp.length === OTP_LENGTH && !loading;
+  const canVerify = otp.length === OTP_LENGTH && !loading && Boolean(email);
 
   return (
     <AuthShell
-      audience="customer"
-      eyebrow="Homeowners"
+      audience={role}
+      eyebrow={isProvider ? "Service companies" : "Homeowners"}
       title="Verify your email"
       description={`Enter the ${OTP_LENGTH}-digit code we emailed you.`}
       footer={
         <>
           Wrong email?{" "}
-          <Link href="/register" className={authLinkClass}>
+          <Link href={registerHref} className={authLinkClass}>
             Go back to sign up
           </Link>
         </>
@@ -314,7 +322,7 @@ export function OtpVerificationForm() {
               "disabled:pointer-events-none disabled:opacity-50",
             )}
             onClick={onResend}
-            disabled={!canResend || loading || resendSeconds > 0}
+            disabled={loading || resendSeconds > 0 || !email}
           >
             {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend code"}
           </button>

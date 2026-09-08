@@ -15,8 +15,10 @@ import {
 } from "@/components/shared/address-autocomplete";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
-
-const PENDING_KEY = "rs-pending-registration";
+import {
+  savePendingRegistration,
+  type PendingCustomerRegistration,
+} from "@/lib/auth/pending-registration";
 
 export function CustomerRegisterForm() {
   const router = useRouter();
@@ -83,14 +85,14 @@ export function CustomerRegisterForm() {
       return;
     }
 
-    const payload = {
+    const draft: PendingCustomerRegistration = {
+      kind: "customer",
       email: email.trim(),
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       password,
       phone: phone.trim() || undefined,
       zip: zipCode.trim() || undefined,
-      role: "customer" as const,
       location: buildLocation(),
     };
 
@@ -98,19 +100,15 @@ export function CustomerRegisterForm() {
     try {
       const data = await postData<{ message?: string }>(
         authApi.sendOtp,
-        payload,
+        { email: draft.email },
         { silent: true, skipLogoutOn401: true },
       );
-      try {
-        sessionStorage.setItem(PENDING_KEY, JSON.stringify(payload));
-      } catch {
-        // ignore
-      }
+      savePendingRegistration(draft);
       toast.success(
         data?.message || "Check your email for a verification code.",
       );
       router.push(
-        `/verify-otp?email=${encodeURIComponent(email.trim().toLowerCase())}`,
+        `/verify-otp?email=${encodeURIComponent(draft.email.toLowerCase())}`,
       );
     } catch (error) {
       showApiErrorToast(error, "Could not start registration.");

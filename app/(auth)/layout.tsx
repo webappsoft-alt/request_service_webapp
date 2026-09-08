@@ -6,9 +6,11 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <SiteHeader />
-      {/* Grow with content so the document can scroll when the auth form is tall. */}
-      <main id="main-content" className="flex flex-1 flex-col">
-        <PageEnter className="page-enter flex flex-1 flex-col">{children}</PageEnter>
+      {/* min-h-0 lets AuthShell lock to the viewport; form column owns scrolling. */}
+      <main id="main-content" className="flex min-h-0 flex-1 flex-col">
+        <PageEnter className="page-enter flex min-h-0 flex-1 flex-col">
+          {children}
+        </PageEnter>
       </main>
     </>
   );

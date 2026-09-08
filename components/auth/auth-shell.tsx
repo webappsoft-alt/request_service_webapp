@@ -74,15 +74,17 @@ export function AuthShell({
   const quote = panel.quote;
 
   return (
-    <div className="flex flex-1 flex-col bg-[#f5f5f5] p-3 sm:p-5 lg:items-center lg:justify-center lg:p-8">
+    <div className="flex min-h-0 flex-1 flex-col justify-center bg-[#f5f5f5] p-3 sm:p-5 lg:p-8">
       <div
         className={cn(
-          "grid w-full max-w-[88rem] overflow-hidden rounded-2xl bg-card shadow-[0_24px_64px_rgba(4,26,54,0.12)]",
-          // Grow with form content so the page (not a trapped panel) can scroll to the submit button.
-          "lg:min-h-[min(42rem,calc(100dvh-9rem))] lg:grid-cols-2",
+          "mx-auto grid w-full max-w-[88rem] overflow-hidden rounded-2xl bg-card shadow-[0_24px_64px_rgba(4,26,54,0.12)]",
+          /* Stable shell height on every breakpoint (svh avoids mobile URL-bar jump).
+             Image stays locked; only the form column scrolls when content is long. */
+          "h-[min(42rem,calc(100svh-8.5rem))] max-h-[min(42rem,calc(100svh-8.5rem))]",
+          "grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-2 lg:grid-rows-none",
         )}
       >
-        <aside className="relative isolate min-h-48 shrink-0 overflow-hidden sm:min-h-56 lg:min-h-full">
+        <aside className="relative isolate h-48 shrink-0 overflow-hidden sm:h-56 lg:h-auto lg:min-h-0 lg:self-stretch">
           <Image
             src={panel.src}
             alt={panel.alt}
@@ -96,7 +98,7 @@ export function AuthShell({
             className="absolute inset-x-0 bottom-0 h-[72%] bg-[linear-gradient(to_top,rgba(4,26,54,0.88)_0%,rgba(4,26,54,0.42)_55%,transparent_100%)]"
             aria-hidden="true"
           />
-          <div className="relative flex h-full min-h-48 flex-col justify-between p-5 text-white sm:min-h-56 sm:p-8 lg:p-10">
+          <div className="relative flex h-full flex-col justify-between p-5 text-white sm:p-8 lg:p-10">
             <Logo inverse />
             <div className="hidden max-w-lg lg:flex lg:flex-col lg:gap-6">
               <div>
@@ -135,15 +137,15 @@ export function AuthShell({
 
         <div
           className={cn(
-            "flex flex-col bg-card",
+            /* Block + overflow (not flex) so tall content scrolls instead of flex-shrinking. */
+            "min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y bg-card no-scrollbar",
             "[&_[data-slot=checkbox]]:border-foreground/40",
-            size === "lg" ? "justify-start" : "justify-start lg:justify-center",
           )}
         >
           <div
             className={cn(
               "mx-auto w-full px-6 py-8 sm:px-8 lg:px-10 lg:py-10",
-              size === "lg" ? "max-w-3xl" : "max-w-xl",
+              size === "lg" ? "max-w-3xl" : "max-w-xl lg:flex lg:min-h-full lg:flex-col lg:justify-center",
             )}
           >
             <div className="mb-6 flex flex-col gap-2">

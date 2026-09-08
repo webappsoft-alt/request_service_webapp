@@ -21,6 +21,13 @@ export const userApi = {
   updatePassword: "user/update-password",
 } as const;
 
+export const providerApi = {
+  /** GET/PUT provider business profile */
+  profile: "provider/profile",
+  /** PUT `{ workingHours: [...] }` */
+  officeHours: "provider/settings/office-hours",
+} as const;
+
 export const uploadApi = {
   /** POST multipart field `image` → `{ image: url }` */
   image: "upload-image",

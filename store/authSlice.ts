@@ -1,5 +1,11 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { decryptData, encryptData } from "@/components/api/encrypted";
+import {
+  extractAuthProvider,
+  type AuthProviderRecord,
+} from "@/lib/auth/provider-profile";
+
+export type { AuthProviderRecord };
 
 export type AuthUser = {
   id?: string;
@@ -110,12 +116,15 @@ export function toAuthCredentials(raw: unknown): AuthPayload | null {
   const user = body.user;
   if (!token || !user || typeof user !== "object") return null;
 
+  const authUser = user as AuthUser;
   return {
     ...body,
     token,
     refreshToken,
-    user: user as AuthUser,
-    provider: body.provider,
+    user: authUser,
+    provider:
+      extractAuthProvider({ provider: body.provider, user: authUser }) ??
+      body.provider,
   };
 }
 
@@ -148,7 +157,10 @@ export function normalizeAuthPayload(payload: AuthPayload): AuthPayload {
     ? normalizeAuthUser(payload.user as AuthUser & { _id?: string; name?: string })
     : payload.user;
 
-  let provider = payload.provider;
+  let provider =
+    extractAuthProvider({ provider: payload.provider, user }) ??
+    payload.provider;
+
   if (provider && typeof provider === "object") {
     const next = { ...(provider as Record<string, unknown>) };
     next.country = fixMistakenCountry(next.country, next.state) ?? next.country;
@@ -163,6 +175,10 @@ export function normalizeAuthPayload(payload: AuthPayload): AuthPayload {
     provider = next;
   }
 
+  if (user && provider && typeof provider === "object") {
+    (user as AuthUser).providerId = provider;
+  }
+
   return {
     ...payload,
     user,
@@ -175,7 +191,7 @@ export type AuthPayload = {
   token?: string;
   refreshToken?: string;
   user?: AuthUser;
-  provider?: unknown;
+  provider?: AuthProviderRecord | unknown;
   message?: string;
   verificationToken?: string;
   email?: string;
@@ -186,6 +202,8 @@ export type AuthState = {
   /** Single encrypted blob persisted by redux-persist (key: userData). */
   userData: string | null;
   user: AuthUser | null;
+  /** Provider business record (from login/me `provider` or `user.providerId`). */
+  provider: AuthProviderRecord | null;
   token: string | null;
   refreshToken: string | null;
   role: string | null;
@@ -198,6 +216,7 @@ export type AuthState = {
 const initialState: AuthState = {
   userData: null,
   user: null,
+  provider: null,
   token: null,
   refreshToken: null,
   role: null,
@@ -210,6 +229,7 @@ const initialState: AuthState = {
 function applyDecryptedPayload(state: AuthState, payload: AuthPayload | null) {
   if (!payload?.token || !payload?.user) {
     state.user = null;
+    state.provider = null;
     state.token = null;
     state.refreshToken = null;
     state.role = null;
@@ -217,6 +237,11 @@ function applyDecryptedPayload(state: AuthState, payload: AuthPayload | null) {
     return;
   }
   state.user = payload.user;
+  state.provider =
+    extractAuthProvider({
+      provider: payload.provider,
+      user: payload.user,
+    }) ?? null;
   state.token = payload.token;
   state.refreshToken =
     typeof payload.refreshToken === "string" ? payload.refreshToken : null;
@@ -317,7 +342,7 @@ const authSlice = createSlice({
       state,
       action: PayloadAction<{
         user: AuthUser & { _id?: string; name?: string };
-        provider?: unknown;
+        provider?: AuthProviderRecord | unknown;
       }>,
     ) {
       const current =
@@ -329,6 +354,7 @@ const authSlice = createSlice({
               token: state.token,
               refreshToken: state.refreshToken || undefined,
               user: state.user,
+              provider: state.provider || undefined,
             }
           : null);
 
@@ -338,16 +364,28 @@ const authSlice = createSlice({
       }
 
       const nextUser = normalizeAuthUser(action.payload.user, current.user);
+      // Prefer explicit provider payload, else nested user.providerId from /me,
+      // else keep the previously persisted provider.
+      const nextProvider =
+        action.payload.provider !== undefined
+          ? extractAuthProvider({
+              provider: action.payload.provider,
+              user: nextUser,
+            })
+          : extractAuthProvider({ user: nextUser }) ??
+            extractAuthProvider({ provider: current.provider });
+
+      if (nextProvider) {
+        nextUser.providerId = nextProvider;
+      }
+
       const nextPayload: AuthPayload = {
         ...current,
         token: current.token,
         refreshToken: current.refreshToken,
         user: nextUser,
+        provider: nextProvider ?? current.provider,
       };
-
-      if (action.payload.provider !== undefined) {
-        nextPayload.provider = action.payload.provider;
-      }
 
       const encrypted = encryptData(nextPayload);
       if (!encrypted) {
@@ -357,6 +395,7 @@ const authSlice = createSlice({
 
       state.userData = encrypted;
       state.user = nextUser;
+      state.provider = nextProvider;
       state.role = nextUser.role || state.role;
       // token + refreshToken intentionally untouched
       state.error = null;
@@ -401,6 +440,8 @@ export const selectAuth = (state: { auth: AuthState }) => state.auth;
 export const selectIsAuthenticated = (state: { auth: AuthState }) =>
   state.auth.isAuthenticated || Boolean(state.auth.token);
 export const selectAuthUser = (state: { auth: AuthState }) => state.auth.user;
+export const selectAuthProvider = (state: { auth: AuthState }) =>
+  state.auth.provider;
 export const selectAuthToken = (state: { auth: AuthState }) => state.auth.token;
 export const selectAuthLoading = (state: { auth: AuthState }) =>
   state.auth.loading;

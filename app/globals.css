@@ -708,3 +708,148 @@
     transition: none;
   }
 }
+
+/* react-phone-input-2 — single-border field matching shadcn Input */
+.rs-phone-input {
+  width: 100%;
+}
+
+.rs-phone-input .react-tel-input,
+.rs-phone-input .rs-phone-container {
+  width: 100% !important;
+  font-family: inherit;
+  position: relative;
+}
+
+.rs-phone-input .rs-phone-field {
+  width: 100% !important;
+  height: 2.5rem !important;
+  min-height: 2.5rem !important;
+  border-radius: 0.5rem !important;
+  border: 1px solid var(--input) !important;
+  background: transparent !important;
+  color: var(--foreground) !important;
+  font-size: 1rem !important;
+  line-height: 1.5 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 3.35rem !important;
+  padding-right: 0.625rem !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (min-width: 768px) {
+  .rs-phone-input .rs-phone-field {
+    font-size: 0.875rem !important;
+  }
+}
+
+.rs-phone-input .rs-phone-field::placeholder {
+  color: color-mix(in oklab, var(--foreground) 50%, transparent) !important;
+}
+
+.rs-phone-input .rs-phone-container:focus-within .rs-phone-field,
+.rs-phone-input .rs-phone-field:focus,
+.rs-phone-input .rs-phone-field:focus-visible {
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent) !important;
+}
+
+/* Flag sits inside the input — no second border (fixes distorted look) */
+.rs-phone-input .rs-phone-button,
+.rs-phone-input .flag-dropdown {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 3rem !important;
+  border: none !important;
+  border-radius: 0.5rem 0 0 0.5rem !important;
+  background: transparent !important;
+  z-index: 2;
+}
+
+.rs-phone-input .rs-phone-button:hover,
+.rs-phone-input .rs-phone-button:focus,
+.rs-phone-input .rs-phone-button.open,
+.rs-phone-input .flag-dropdown:hover,
+.rs-phone-input .flag-dropdown.open {
+  background: transparent !important;
+}
+
+.rs-phone-input .rs-phone-button .selected-flag,
+.rs-phone-input .flag-dropdown .selected-flag {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 0 0 0.65rem !important;
+  border: none !important;
+  border-radius: 0.5rem 0 0 0.5rem !important;
+  background: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.rs-phone-input .rs-phone-button .selected-flag:hover,
+.rs-phone-input .rs-phone-button .selected-flag:focus,
+.rs-phone-input .rs-phone-button.open .selected-flag,
+.rs-phone-input .flag-dropdown .selected-flag:hover,
+.rs-phone-input .flag-dropdown .selected-flag:focus,
+.rs-phone-input .flag-dropdown.open .selected-flag {
+  background: color-mix(in oklab, var(--muted) 55%, transparent) !important;
+}
+
+.rs-phone-input .rs-phone-button .selected-flag .arrow,
+.rs-phone-input .flag-dropdown .selected-flag .arrow {
+  margin-left: 4px !important;
+  border-top-color: var(--muted-foreground) !important;
+}
+
+.rs-phone-input .rs-phone-dropdown {
+  border: 1px solid var(--border) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 12px 40px -16px rgb(15 23 42 / 25%) !important;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  margin-top: 0.35rem !important;
+  width: 18rem !important;
+  max-height: 16rem !important;
+  z-index: 60 !important;
+}
+
+.rs-phone-input .rs-phone-dropdown .country {
+  padding: 0.55rem 0.75rem !important;
+  background: transparent !important;
+}
+
+.rs-phone-input .rs-phone-dropdown .country:hover,
+.rs-phone-input .rs-phone-dropdown .country.highlight {
+  background: color-mix(in oklab, var(--primary) 10%, transparent) !important;
+}
+
+.rs-phone-input .rs-phone-dropdown .dial-code {
+  color: var(--muted-foreground) !important;
+}
+
+.rs-phone-input .rs-phone-search {
+  width: calc(100% - 1rem) !important;
+  margin: 0.5rem !important;
+  height: 2.25rem !important;
+  border-radius: 0.5rem !important;
+  border: 1px solid var(--input) !important;
+  padding: 0.35rem 0.65rem !important;
+  background: transparent !important;
+  color: var(--foreground) !important;
+}
+
+.rs-phone-input .react-tel-input .flag-dropdown.open {
+  z-index: 61 !important;
+}
+
+.rs-phone-input .react-tel-input.disabled .rs-phone-field,
+.rs-phone-input .react-tel-input.disabled .rs-phone-button {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: color-mix(in oklab, var(--input) 50%, transparent) !important;
+}

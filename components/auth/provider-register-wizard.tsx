@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { PasswordInput } from "@/components/auth/password-input";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { Input } from "@/components/ui/input";
 import {
   NativeSelect,
@@ -17,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   AddressAutocomplete,
-  type MapboxAddress,
+  type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
@@ -160,7 +161,7 @@ export function ProviderRegisterWizard() {
     setDraft((current) => ({ ...current, ...partial }));
   }
 
-  function applyAddress(address: MapboxAddress) {
+  function applyAddress(address: PlaceAddress) {
     patch({
       street: address.formattedAddress || address.streetAddress,
       city: address.city,
@@ -433,14 +434,11 @@ export function ProviderRegisterWizard() {
             </Field>
             <Field>
               <FieldLabel htmlFor="pro-phone">Phone</FieldLabel>
-              <Input
+              <AuthPhoneInput
                 id="pro-phone"
-                name="phone"
-                type="tel"
                 value={draft.phone}
-                onChange={(event) => patch({ phone: event.target.value })}
-                autoComplete="tel"
-                placeholder="Enter your phone number"
+                onChange={(value) => patch({ phone: value })}
+                placeholder="Enter phone number"
               />
               <FieldDescription>Skip if you’d rather add this on the profile later.</FieldDescription>
             </Field>
@@ -502,7 +500,7 @@ export function ProviderRegisterWizard() {
                 value={draft.street}
                 onChange={(street) => patch({ street })}
                 onSelect={applyAddress}
-                placeholder="Start typing your business address…"
+                placeholder="Start typing a street address (number + street)…"
               />
             </Field>
             <Field>

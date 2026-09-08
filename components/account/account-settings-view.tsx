@@ -3,9 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, KeyRound, Loader2, LogOut, UserRound } from "lucide-react";
+import { Camera, KeyRound, Loader2, LogOut, MapPin, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/password-input";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
   handleUserLogout,
   putData,
@@ -16,6 +17,10 @@ import {
   extractUploadedUrl,
   uploadFile,
 } from "@/components/api/uploadFile";
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -52,11 +57,57 @@ function zipFromUser(user: AuthUser): string {
   return typeof fromLocation === "string" ? fromLocation.trim() : "";
 }
 
+function addressFromUser(user: AuthUser): string {
+  const loc = user.location;
+  if (!loc || typeof loc !== "object") return "";
+  if (typeof loc.address === "string" && loc.address.trim()) return loc.address.trim();
+  return "";
+}
+
+/** Header location line — persisted user only (not live form edits). */
+function locationLabelFromUser(user: AuthUser): string {
+  const loc = user.location;
+  if (!loc || typeof loc !== "object") return "";
+
+  const address =
+    typeof loc.address === "string" ? loc.address.trim() : "";
+  const city = typeof loc.city === "string" ? loc.city.trim() : "";
+  const state = typeof loc.state === "string" ? loc.state.trim() : "";
+  const zip =
+    (typeof loc.zip === "string" && loc.zip.trim()) ||
+    (typeof user.zip === "string" && user.zip.trim()) ||
+    "";
+
+  const parts: string[] = [];
+  if (address) parts.push(address);
+  if (city && !address.toLowerCase().includes(city.toLowerCase())) {
+    parts.push(city);
+  }
+  if (state && !parts.some((part) => part.toLowerCase().includes(state.toLowerCase()))) {
+    parts.push(state);
+  }
+  if (zip && !parts.some((part) => part.includes(zip))) {
+    parts.push(zip);
+  }
+
+  return parts.join(", ");
+}
+
+function displayNameFromUser(user: AuthUser): string {
+  const first = String(user.firstName || "").trim();
+  const last = String(user.lastName || "").trim();
+  const combined = [first, last].filter(Boolean).join(" ").trim();
+  if (combined) return combined;
+  if (typeof user.name === "string" && user.name.trim()) return user.name.trim();
+  return String(user.email || "Customer");
+}
+
 export function AccountSettingsView() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const zipRef = useRef<HTMLInputElement>(null);
 
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
@@ -67,6 +118,12 @@ export function AccountSettingsView() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [zip, setZip] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [country, setCountry] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -102,6 +159,21 @@ export function AccountSettingsView() {
     setLastName(String(user.lastName || ""));
     setPhone(typeof user.phone === "string" ? user.phone : "");
     setZip(zipFromUser(user));
+    setStreetAddress(addressFromUser(user));
+    setCity(
+      typeof user.location?.city === "string" ? user.location.city : "",
+    );
+    setState(
+      typeof user.location?.state === "string" ? user.location.state : "",
+    );
+    setCountry(
+      typeof user.location?.country === "string" ? user.location.country : "",
+    );
+    const coords = user.location?.coordinates;
+    if (Array.isArray(coords) && coords.length >= 2) {
+      setLongitude(String(coords[0] ?? ""));
+      setLatitude(String(coords[1] ?? ""));
+    }
     formReadyRef.current = true;
   }, [user]);
 
@@ -110,6 +182,42 @@ export function AccountSettingsView() {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
+
+  function applyAddress(address: PlaceAddress) {
+    setStreetAddress(address.formattedAddress || address.streetAddress);
+    setCity(address.city);
+    setState(address.state);
+    setZip(address.zipCode);
+    setCountry(address.country || "");
+    setLatitude(address.latitude != null ? String(address.latitude) : "");
+    setLongitude(address.longitude != null ? String(address.longitude) : "");
+    if (!address.zipCode) {
+      window.setTimeout(() => zipRef.current?.focus(), 0);
+    }
+  }
+
+  function buildLocation() {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+    const hasText =
+      streetAddress.trim() ||
+      city.trim() ||
+      zip.trim() ||
+      country.trim();
+
+    if (!hasCoords && !hasText) return undefined;
+
+    return {
+      type: "Point" as const,
+      coordinates: (hasCoords ? [lng, lat] : [0, 0]) as [number, number],
+      city: city.trim() || undefined,
+      country: country.trim() || undefined,
+      address: streetAddress.trim() || undefined,
+      zip: zip.trim() || undefined,
+      state: state.trim() || undefined,
+    };
+  }
 
   if (!auth.hydrated) {
     return (
@@ -124,9 +232,9 @@ export function AccountSettingsView() {
   if (!user) return null;
 
   const displayAvatar = previewUrl || avatarUrl;
-  const displayName =
-    [firstName, lastName].filter(Boolean).join(" ").trim() ||
-    String(user.email || "Customer");
+  // Top summary reads persisted Redux user only — not live form edits.
+  const displayName = displayNameFromUser(user);
+  const displayLocation = locationLabelFromUser(user);
 
   function applyProfileUser(
     apiUser: (AuthUser & { _id?: string; name?: string }) | undefined,
@@ -137,7 +245,6 @@ export function AccountSettingsView() {
       ...(apiUser || {}),
     };
 
-    // Prefer values we just saved when the API only returns a combined `name`.
     if (!userPayload.firstName && fallback.firstName) {
       userPayload.firstName = fallback.firstName;
     }
@@ -152,6 +259,9 @@ export function AccountSettingsView() {
     }
     if (!userPayload.avatarUrl && fallback.avatarUrl) {
       userPayload.avatarUrl = fallback.avatarUrl;
+    }
+    if (!userPayload.location && fallback.location) {
+      userPayload.location = fallback.location;
     }
 
     dispatch(updateAuthUser({ user: userPayload }));
@@ -185,6 +295,19 @@ export function AccountSettingsView() {
     setPhone(next.phone);
     setZip(next.zip);
     if (next.avatarUrl) setAvatarUrl(next.avatarUrl);
+
+    const loc = userPayload.location;
+    if (loc && typeof loc === "object") {
+      if (typeof loc.address === "string") setStreetAddress(loc.address);
+      if (typeof loc.city === "string") setCity(loc.city);
+      if (typeof loc.state === "string") setState(loc.state);
+      if (typeof loc.country === "string") setCountry(loc.country);
+      if (typeof loc.zip === "string" && loc.zip) setZip(loc.zip);
+      if (Array.isArray(loc.coordinates) && loc.coordinates.length >= 2) {
+        setLongitude(String(loc.coordinates[0] ?? ""));
+        setLatitude(String(loc.coordinates[1] ?? ""));
+      }
+    }
   }
 
   async function onImageSelected(file: File | undefined) {
@@ -242,11 +365,13 @@ export function AccountSettingsView() {
     }
 
     // Email is read-only — never include it in the update payload.
+    const location = buildLocation();
     const payload: Record<string, unknown> = {
       firstName: nextFirstName,
       lastName: nextLastName,
       phone: nextPhone || undefined,
       zip: nextZip || undefined,
+      ...(location ? { location } : {}),
     };
 
     if (avatarUrl) {
@@ -269,6 +394,7 @@ export function AccountSettingsView() {
         phone: nextPhone || undefined,
         zip: nextZip || undefined,
         avatarUrl: avatarUrl || undefined,
+        location,
       });
       setPreviewUrl(null);
       toast.success(res?.message || "Profile updated successfully");
@@ -324,7 +450,11 @@ export function AccountSettingsView() {
     <Section tone="muted" className="relative overflow-hidden">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--brand)_18%,transparent),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--brand)_16%,transparent),transparent_68%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,color-mix(in_oklab,var(--background)_40%,transparent)_45%,var(--background)_100%)]"
       />
 
       <Container className="relative max-w-3xl">
@@ -335,14 +465,14 @@ export function AccountSettingsView() {
               Profile settings
             </h1>
             <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-              Update your customer details, photo, and password for Request
+              Update your details, photo, location, and password for Request
               Services.
             </p>
           </div>
           <Button
             type="button"
             variant="outline"
-            className="w-fit border-destructive/30 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="w-fit border-destructive/30 bg-background/80 text-destructive backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive"
             onClick={() => handleUserLogout()}
           >
             <LogOut className="size-4" />
@@ -350,11 +480,11 @@ export function AccountSettingsView() {
           </Button>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_1px_0_rgba(15,23,42,0.04),0_12px_40px_-24px_rgba(0,63,125,0.35)]">
-          <div className="border-b border-border/70 bg-linear-to-br from-primary/6 via-card to-card px-5 py-6 sm:px-8">
+        <div className="overflow-hidden rounded-2xl border border-border/80 bg-card/95 shadow-[0_1px_0_rgba(15,23,42,0.04),0_18px_48px_-28px_rgba(0,63,125,0.4)] backdrop-blur-sm">
+          <div className="border-b border-border/70 bg-linear-to-br from-primary/[0.07] via-card to-card px-5 py-7 sm:px-8">
             <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
               <div className="relative">
-                <Avatar className="size-24 border-2 border-background shadow-md ring-1 ring-border">
+                <Avatar className="size-24 border-2 border-background shadow-md ring-1 ring-border/80">
                   {displayAvatar ? (
                     <AvatarImage src={displayAvatar} alt={displayName} />
                   ) : null}
@@ -397,6 +527,12 @@ export function AccountSettingsView() {
                 <p className="mt-1 truncate text-sm text-muted-foreground">
                   {String(user.email || "")}
                 </p>
+                {displayLocation ? (
+                  <p className="mt-2 flex items-start gap-1.5 text-xs leading-5 text-muted-foreground">
+                    <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
+                    <span className="line-clamp-2">{displayLocation}</span>
+                  </p>
+                ) : null}
                 <p className="mt-3 text-xs leading-5 text-muted-foreground">
                   JPG, PNG, or WebP up to a few MB. A new photo is saved to your
                   account as soon as the upload finishes.
@@ -473,26 +609,50 @@ export function AccountSettingsView() {
                       </p>
                     </Field>
 
+                    <Field>
+                      <FieldLabel htmlFor="settings-phone">Phone</FieldLabel>
+                      <AuthPhoneInput
+                        id="settings-phone"
+                        value={phone}
+                        onChange={setPhone}
+                        placeholder="Enter phone number"
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="settings-location">
+                        Location
+                      </FieldLabel>
+                      <AddressAutocomplete
+                        id="settings-location"
+                        name="streetAddress"
+                        value={streetAddress}
+                        onChange={setStreetAddress}
+                        onSelect={applyAddress}
+                        placeholder="Start typing a street address (number + street)…"
+                      />
+                    </Field>
+
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor="settings-phone">Phone</FieldLabel>
-                        <Input
-                          id="settings-phone"
-                          type="tel"
-                          autoComplete="tel"
-                          value={phone}
-                          onChange={(event) => setPhone(event.target.value)}
-                          placeholder="(512) 555-0148"
-                        />
-                      </Field>
                       <Field>
                         <FieldLabel htmlFor="settings-zip">ZIP code</FieldLabel>
                         <Input
+                          ref={zipRef}
                           id="settings-zip"
                           autoComplete="postal-code"
                           value={zip}
                           onChange={(event) => setZip(event.target.value)}
                           placeholder="78701"
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="settings-city">City</FieldLabel>
+                        <Input
+                          id="settings-city"
+                          autoComplete="address-level2"
+                          value={city}
+                          onChange={(event) => setCity(event.target.value)}
+                          placeholder="Austin"
                         />
                       </Field>
                     </div>

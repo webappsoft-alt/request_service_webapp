@@ -8,10 +8,11 @@ import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { PasswordInput } from "@/components/auth/password-input";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { Input } from "@/components/ui/input";
 import {
   AddressAutocomplete,
-  type MapboxAddress,
+  type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
@@ -45,7 +46,7 @@ export function CustomerRegisterForm() {
     password.length > 0 &&
     confirmPassword.length > 0;
 
-  function applyAddress(address: MapboxAddress) {
+  function applyAddress(address: PlaceAddress) {
     setStreetAddress(address.formattedAddress || address.streetAddress);
     setCity(address.city);
     setState(address.state);
@@ -175,14 +176,11 @@ export function CustomerRegisterForm() {
           </Field>
           <Field>
             <FieldLabel htmlFor="phone">Phone</FieldLabel>
-            <Input
+            <AuthPhoneInput
               id="phone"
-              name="phone"
-              type="tel"
-              autoComplete="tel"
-              placeholder="Optional — (512) 555-0148"
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={setPhone}
+              placeholder="Optional phone number"
             />
           </Field>
           <Field>
@@ -193,7 +191,7 @@ export function CustomerRegisterForm() {
               value={streetAddress}
               onChange={setStreetAddress}
               onSelect={applyAddress}
-              placeholder="Start typing your street address…"
+              placeholder="Start typing a street address (number + street)…"
             />
           </Field>
           <Field>

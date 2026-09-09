@@ -12,11 +12,13 @@ import {
 import storage from "redux-persist/lib/storage";
 import authReducer from "./authSlice";
 import serviceAreasReducer from "./serviceAreasSlice";
+import categoriesReducer from "./categoriesSlice";
+import fixedServicesReducer from "./fixedServicesSlice";
 
 /**
  * Redux Persist storage key: `userData`
  * Only the encrypted `auth.userData` string is saved.
- * `serviceAreas` stays in-memory only (not persisted).
+ * List slices stay in-memory only (not persisted).
  */
 const authPersistConfig = {
   key: "userData",
@@ -27,6 +29,8 @@ const authPersistConfig = {
 const rootReducer = combineReducers({
   auth: persistReducer(authPersistConfig, authReducer),
   serviceAreas: serviceAreasReducer,
+  categories: categoriesReducer,
+  fixedServices: fixedServicesReducer,
 });
 
 export function makeStore() {
@@ -58,9 +62,11 @@ export function getStore(): AppStore {
     clientStore = makeStore();
     clientStore.__persistor = persistStore(clientStore);
   } else if (
-    // HMR can keep an older store instance before `serviceAreas` was added.
-    (clientStore.getState() as { serviceAreas?: unknown }).serviceAreas ===
-      undefined
+    // HMR can keep an older store instance before new reducers were added.
+    (clientStore.getState() as { serviceAreas?: unknown; categories?: unknown; fixedServices?: unknown })
+      .serviceAreas === undefined ||
+    (clientStore.getState() as { categories?: unknown }).categories === undefined ||
+    (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined
   ) {
     clientStore.replaceReducer(rootReducer);
   }

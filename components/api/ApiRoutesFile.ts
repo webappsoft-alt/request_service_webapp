@@ -30,6 +30,16 @@ export const providerApi = {
   serviceAreas: "provider/service-areas",
   /** GET/PUT/DELETE one service area by id */
   serviceArea: (id: string) => `provider/service-areas/${id}`,
+  /** GET list / POST create fixed-scope service packages */
+  fixedServices: "provider/fixed-services",
+  /** GET/PUT/DELETE one fixed service by id */
+  fixedService: (id: string) => `provider/fixed-services/${id}`,
+} as const;
+
+/** Public catalog endpoints (no provider auth required for reads). */
+export const publicApi = {
+  /** GET active categories; use `only_parent` / `parent_category_id` */
+  categories: "public/categories",
 } as const;
 
 export const uploadApi = {

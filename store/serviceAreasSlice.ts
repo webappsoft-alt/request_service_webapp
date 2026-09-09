@@ -62,6 +62,11 @@ type ServiceAreasState = {
   loading: boolean;
   mutating: boolean;
   error: string | null;
+  /** Accumulated areas for Fixed Service form picker (See More). */
+  pickerItems: ServiceArea[];
+  pickerPage: number;
+  pickerTotalPages: number;
+  pickerLoading: boolean;
 };
 
 const DEFAULT_LIMIT = 10;
@@ -86,6 +91,10 @@ const initialState: ServiceAreasState = {
   loading: false,
   mutating: false,
   error: null,
+  pickerItems: [],
+  pickerPage: 0,
+  pickerTotalPages: 1,
+  pickerLoading: false,
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -294,6 +303,48 @@ export const deleteServiceArea = createAsyncThunk<
   }
 });
 
+/** Load / append service areas for Fixed Service form chips (See More). */
+export const fetchServiceAreasPicker = createAsyncThunk<
+  {
+    items: ServiceArea[];
+    page: number;
+    totalPages: number;
+    append: boolean;
+  },
+  { append?: boolean } | void,
+  { state: { serviceAreas: ServiceAreasState }; rejectValue: string }
+>("serviceAreas/fetchPicker", async (params, { getState, rejectWithValue }) => {
+  const state = getState().serviceAreas;
+  const append = Boolean(params && "append" in params && params.append);
+  const nextPage = append ? state.pickerPage + 1 : 1;
+
+  if (append && state.pickerPage >= state.pickerTotalPages) {
+    return {
+      items: [],
+      page: state.pickerPage,
+      totalPages: state.pickerTotalPages,
+      append: true,
+    };
+  }
+
+  try {
+    const response = await getData(
+      providerApi.serviceAreas,
+      { page: nextPage, limit: DEFAULT_LIMIT },
+      { silent: true },
+    );
+    const parsed = extractListPayload(response);
+    return {
+      items: parsed.items,
+      page: parsed.pagination.page,
+      totalPages: Math.max(1, parsed.pagination.totalPages),
+      append,
+    };
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
 const serviceAreasSlice = createSlice({
   name: "serviceAreas",
   initialState,
@@ -399,6 +450,26 @@ const serviceAreasSlice = createSlice({
         state.mutating = false;
         state.error =
           action.payload || action.error.message || "Failed to delete service area.";
+      })
+      .addCase(fetchServiceAreasPicker.pending, (state) => {
+        state.pickerLoading = true;
+      })
+      .addCase(fetchServiceAreasPicker.fulfilled, (state, action) => {
+        state.pickerLoading = false;
+        state.pickerPage = action.payload.page;
+        state.pickerTotalPages = action.payload.totalPages;
+        if (action.payload.append) {
+          const existingIds = new Set(state.pickerItems.map((item) => item.id));
+          state.pickerItems = [
+            ...state.pickerItems,
+            ...action.payload.items.filter((item) => !existingIds.has(item.id)),
+          ];
+        } else {
+          state.pickerItems = action.payload.items;
+        }
+      })
+      .addCase(fetchServiceAreasPicker.rejected, (state) => {
+        state.pickerLoading = false;
       });
   },
 });

@@ -57,8 +57,56 @@ let authMePromise: Promise<AuthUser | null> | null = null;
 let logoutInFlight = false;
 let refreshInFlight: Promise<boolean> | null = null;
 
+/** Share identical in-flight GET requests (endpoint + params). */
+const getInFlight = new Map<string, Promise<unknown>>();
+
+/**
+ * Brief reuse of a successful GET so React Strict Mode remounts
+ * (effect runs twice) do not hit the network again for the same request.
+ * Cleared when any mutating request touches the same endpoint root.
+ */
+const getRecentSuccess = new Map<string, { at: number; data: unknown }>();
+const GET_RECENT_TTL_MS = 400;
+
 function clearAuthMeCache(): void {
   authMePromise = null;
+}
+
+function buildGetRequestKey(
+  endpoint: string,
+  params?: QueryParams,
+  options?: RequestOptions,
+): string {
+  const normalizedParams: Record<string, string> = {};
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === null || value === "") continue;
+      normalizedParams[key] = String(value);
+    }
+  }
+  const tokenScope =
+    options?.token === null
+      ? "anon"
+      : options?.token
+        ? `tok:${options.token.slice(0, 12)}`
+        : "session";
+  return `${String(endpoint || "").replace(/^\/+/, "")}?${JSON.stringify(normalizedParams)}|${tokenScope}`;
+}
+
+function endpointRoot(endpoint: string): string {
+  return String(endpoint || "")
+    .replace(/^\/+/, "")
+    .split("?")[0]
+    .replace(/\/[a-f\d]{24}$/i, "");
+}
+
+/** Drop cached GETs for this resource after POST/PUT/PATCH/DELETE. */
+function invalidateCachedGets(endpoint: string): void {
+  const root = endpointRoot(endpoint);
+  if (!root) return;
+  for (const key of Array.from(getRecentSuccess.keys())) {
+    if (key.startsWith(root)) getRecentSuccess.delete(key);
+  }
 }
 
 /** Decrypt the persisted `userData` blob from Redux. */
@@ -437,14 +485,37 @@ export async function getData<T = unknown>(
   params?: QueryParams,
   options?: RequestOptions,
 ): Promise<T> {
-  return unwrapWithRefresh(
+  const key = buildGetRequestKey(endpoint, params, options);
+
+  const inFlight = getInFlight.get(key);
+  if (inFlight) return inFlight as Promise<T>;
+
+  const recent = getRecentSuccess.get(key);
+  if (recent && Date.now() - recent.at < GET_RECENT_TTL_MS) {
+    return Promise.resolve(recent.data as T);
+  }
+
+  let request!: Promise<T>;
+  request = unwrapWithRefresh(
     () =>
       http.get<T>(buildUrl(endpoint), {
         ...resolveConfig(options),
         params,
       }),
     options,
-  );
+  )
+    .then((data) => {
+      getRecentSuccess.set(key, { at: Date.now(), data });
+      return data;
+    })
+    .finally(() => {
+      if (getInFlight.get(key) === request) {
+        getInFlight.delete(key);
+      }
+    });
+
+  getInFlight.set(key, request);
+  return request;
 }
 
 export async function getDataOptional<T = unknown>(
@@ -468,6 +539,7 @@ export async function postData<T = unknown>(
   payload?: unknown,
   options?: RequestOptions,
 ): Promise<T> {
+  invalidateCachedGets(endpoint);
   return unwrapWithRefresh(
     () => http.post<T>(buildUrl(endpoint), payload, resolveConfig(options)),
     options,
@@ -479,6 +551,7 @@ export async function putData<T = unknown>(
   payload?: unknown,
   options?: RequestOptions,
 ): Promise<T> {
+  invalidateCachedGets(endpoint);
   return unwrapWithRefresh(
     () => http.put<T>(buildUrl(endpoint), payload, resolveConfig(options)),
     options,
@@ -490,6 +563,7 @@ export async function patchData<T = unknown>(
   payload?: unknown,
   options?: RequestOptions,
 ): Promise<T> {
+  invalidateCachedGets(endpoint);
   return unwrapWithRefresh(
     () => http.patch<T>(buildUrl(endpoint), payload, resolveConfig(options)),
     options,
@@ -500,6 +574,7 @@ export async function deleteData<T = unknown>(
   endpoint: string,
   options?: RequestOptions,
 ): Promise<T> {
+  invalidateCachedGets(endpoint);
   return unwrapWithRefresh(
     () => http.delete<T>(buildUrl(endpoint), resolveConfig(options)),
     options,

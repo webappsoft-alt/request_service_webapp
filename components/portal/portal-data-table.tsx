@@ -32,6 +32,17 @@ export type PortalTableAction<T> = {
   variant?: "default" | "destructive";
 };
 
+export type PortalTableServerPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  /** Prefer backend `pagination.totalPages` when provided. */
+  totalPages?: number;
+  onPageChange: (page: number) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+};
+
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export function PortalDataTable<T>({
@@ -48,6 +59,7 @@ export function PortalDataTable<T>({
   letterValue,
   pageSize = 20,
   countLabel,
+  serverPagination,
 }: {
   rows: T[];
   rowKey: (row: T) => string;
@@ -62,8 +74,11 @@ export function PortalDataTable<T>({
   letterValue?: (row: T) => string;
   pageSize?: number;
   countLabel?: string;
+  /** When set, search + page controls are driven by the parent (API pagination). */
+  serverPagination?: PortalTableServerPagination;
 }) {
   const router = useRouter();
+  const isServer = Boolean(serverPagination);
   const [query, setQuery] = useState("");
   const [letter, setLetter] = useState("");
   const [sortId, setSortId] = useState<string | null>(null);
@@ -71,6 +86,25 @@ export function PortalDataTable<T>({
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
+    if (isServer) {
+      const next = [...rows];
+      const column = columns.find((item) => item.id === sortId);
+      if (column?.sortValue) {
+        next.sort((a, b) => {
+          const left = column.sortValue?.(a);
+          const right = column.sortValue?.(b);
+          const compared =
+            typeof left === "number" && typeof right === "number"
+              ? left - right
+              : String(left ?? "").localeCompare(String(right ?? ""), undefined, {
+                  numeric: true,
+                });
+          return sortDir === "asc" ? compared : -compared;
+        });
+      }
+      return next;
+    }
+
     const needle = query.trim().toLowerCase();
     const next = rows.filter((row) => {
       const matchesQuery = needle
@@ -94,13 +128,21 @@ export function PortalDataTable<T>({
       });
     }
     return next;
-  }, [columns, letter, letterValue, query, rows, sortDir, sortId]);
+  }, [columns, isServer, letter, letterValue, query, rows, sortDir, sortId]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const from = filtered.length ? (currentPage - 1) * pageSize + 1 : 0;
-  const to = Math.min(currentPage * pageSize, filtered.length);
+  const effectivePageSize = serverPagination?.pageSize ?? pageSize;
+  const totalCount = serverPagination?.total ?? filtered.length;
+  const pageCount = Math.max(
+    1,
+    serverPagination?.totalPages ?? Math.ceil(totalCount / effectivePageSize),
+  );
+  const currentPage = Math.min(serverPagination?.page ?? page, pageCount);
+  const pageRows = isServer
+    ? filtered
+    : filtered.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
+  const from = totalCount ? (currentPage - 1) * effectivePageSize + 1 : 0;
+  const to = Math.min(currentPage * effectivePageSize, totalCount);
+  const searchValue = serverPagination?.search ?? query;
 
   function toggleSort(id: string) {
     if (sortId === id) {
@@ -126,9 +168,17 @@ export function PortalDataTable<T>({
     URL.revokeObjectURL(url);
   }
 
+  function goToPage(nextPage: number) {
+    if (serverPagination) {
+      serverPagination.onPageChange(nextPage);
+      return;
+    }
+    setPage(nextPage);
+  }
+
   return (
     <div className="overflow-hidden border border-black/15 bg-card">
-      {letters ? (
+      {letters && !isServer ? (
         <div className="flex flex-wrap items-center gap-0.5 border-b border-black/10 px-3 py-1.5">
           <button
             type="button"
@@ -167,9 +217,14 @@ export function PortalDataTable<T>({
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              value={query}
+              value={searchValue}
               onChange={(change) => {
-                setQuery(change.target.value);
+                const next = change.target.value;
+                if (serverPagination) {
+                  serverPagination.onSearchChange(next);
+                  return;
+                }
+                setQuery(next);
                 setPage(1);
               }}
               placeholder={searchPlaceholder}
@@ -178,7 +233,7 @@ export function PortalDataTable<T>({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            {countLabel ?? filename} ({filtered.length})
+            {countLabel ?? filename} ({totalCount})
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -199,7 +254,10 @@ export function PortalDataTable<T>({
               return (
                 <TableHead
                   key={column.id}
-                  className={cn("h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase", column.className)}
+                  className={cn(
+                    "h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                    column.className,
+                  )}
                 >
                   {sortable ? (
                     <button
@@ -252,7 +310,10 @@ export function PortalDataTable<T>({
                     </TableCell>
                   ))}
                   {actions ? (
-                    <TableCell className="px-2.5 py-1.5 text-right" onClick={(event) => event.stopPropagation()}>
+                    <TableCell
+                      className="px-2.5 py-1.5 text-right"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <RowActions row={row} actions={rowActions} />
                     </TableCell>
                   ) : null}
@@ -261,7 +322,10 @@ export function PortalDataTable<T>({
             })
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length + (actions ? 1 : 0)} className="px-4 py-10 text-center text-muted-foreground">
+              <TableCell
+                colSpan={columns.length + (actions ? 1 : 0)}
+                className="px-4 py-10 text-center text-muted-foreground"
+              >
                 {empty}
               </TableCell>
             </TableRow>
@@ -271,10 +335,15 @@ export function PortalDataTable<T>({
 
       <div className="flex flex-col gap-3 border-t border-black/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
-          {filtered.length ? `Showing ${from}–${to} of ${filtered.length}` : "No results"}
+          {totalCount ? `Showing ${from}–${to} of ${totalCount}` : "No results"}
         </p>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage((current) => current - 1)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage <= 1}
+            onClick={() => goToPage(currentPage - 1)}
+          >
             Previous
           </Button>
           <span className="text-xs text-muted-foreground">
@@ -284,7 +353,7 @@ export function PortalDataTable<T>({
             variant="outline"
             size="sm"
             disabled={currentPage >= pageCount}
-            onClick={() => setPage((current) => current + 1)}
+            onClick={() => goToPage(currentPage + 1)}
           >
             Next
           </Button>
@@ -301,9 +370,13 @@ function RowActions<T>({ row, actions }: { row: T; actions: PortalTableAction<T>
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" aria-label="Row actions">
-          Options
-          <MoreHorizontal />
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="size-7"
+          aria-label="Row actions"
+        >
+          <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">

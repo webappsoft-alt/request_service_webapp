@@ -11,6 +11,7 @@ import {
   Inbox,
   LayoutDashboard,
   ListTodo,
+  MapPin,
   MessageCircle,
   Receipt,
   Settings,
@@ -74,6 +75,7 @@ export const portalNavGroups: PortalNavGroup[] = [
     label: "Office",
     items: [
       { href: "/pro/dashboard/services", label: "Fixed service", icon: Wrench },
+      { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
       { href: "/pro/dashboard/reports", label: "Reports", icon: BarChart3 },
       { href: "/pro/dashboard/profile", label: "Documents", icon: Store },
       { href: "/pro/dashboard/billing", label: "Utilities", icon: Wallet },

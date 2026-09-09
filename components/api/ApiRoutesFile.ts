@@ -26,6 +26,10 @@ export const providerApi = {
   profile: "provider/profile",
   /** PUT `{ workingHours: [...] }` */
   officeHours: "provider/settings/office-hours",
+  /** GET list / POST create provider operational service areas */
+  serviceAreas: "provider/service-areas",
+  /** GET/PUT/DELETE one service area by id */
+  serviceArea: (id: string) => `provider/service-areas/${id}`,
 } as const;
 
 export const uploadApi = {

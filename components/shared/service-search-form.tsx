@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
 import { ServiceSuggestionList } from "@/components/shared/service-suggestion-list";
 import {
-  extractZip,
   resolveSearchIntent,
   servicesHref,
   suggestServices,
@@ -16,18 +19,15 @@ import {
   type ServiceMatch,
 } from "@/lib/search";
 import { cn } from "@/lib/utils";
-
-type PlaceSuggestion = {
-  label: string;
-  city: string;
-  state?: string;
-  zip?: string;
-};
-
-function displayPlace(place: PlaceSuggestion) {
-  const city = place.city.split(",")[0]?.trim() ?? "";
-  return city && !/^\d{5}$/.test(city) ? city : place.city;
-}
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  detectCurrentLocation,
+  hasLocation,
+  hydrateLocationIfEmpty,
+  locationDisplayLabel,
+  setLocationAddress,
+  setLocationFromPlace,
+} from "@/store/locationSlice";
 
 export function ServiceSearchForm({
   defaultCategory,
@@ -45,15 +45,18 @@ export function ServiceSearchForm({
   onLocationResolved?: (location: string, zip: string) => void;
 }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const customerLocation = useAppSelector((state) => state.location);
   const rootRef = useRef<HTMLFormElement>(null);
   const [query, setQuery] = useState(defaultCategory ?? "");
-  const [location, setLocation] = useState(defaultLocation || defaultZip || "");
-  const [zip, setZip] = useState(defaultZip && /^\d{5}$/.test(defaultZip) ? defaultZip : "");
   const [error, setError] = useState("");
   const [serviceHits, setServiceHits] = useState<ServiceMatch[]>([]);
-  const [placeHits, setPlaceHits] = useState<PlaceSuggestion[]>([]);
-  const [openList, setOpenList] = useState<"service" | "place" | null>(null);
+  const [openList, setOpenList] = useState<"service" | null>(null);
   const [activeService, setActiveService] = useState(0);
+
+  const locationLabel = locationDisplayLabel(customerLocation);
+  const locationValue =
+    customerLocation.address || customerLocation.city || customerLocation.zip || "";
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -63,49 +66,48 @@ export function ServiceSearchForm({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  function applyLocation(nextLocation: string, nextZip = "") {
-    setLocation(nextLocation);
-    setZip(nextZip);
-    onLocationResolved?.(nextLocation, nextZip);
-  }
-
+  // Seed Redux from URL/page defaults only when nothing is selected yet.
   useEffect(() => {
-    if (defaultZip || defaultLocation || !navigator.geolocation) return;
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const params = new URLSearchParams({
-          lat: String(position.coords.latitude),
-          lon: String(position.coords.longitude),
-        });
-        const response = await fetch(`/api/places?${params}`);
-        if (!response.ok) return;
-        const data = (await response.json()) as { places?: PlaceSuggestion[] };
-        const place = data.places?.[0];
-        if (!place) return;
-        applyLocation(displayPlace(place), place.zip ?? "");
-      },
-      () => undefined,
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 }
-    );
-  }, [defaultLocation, defaultZip]);
-
-  useEffect(() => {
-    const q = location.trim();
-    if (q.length < 2 || openList !== "place") {
-      setPlaceHits([]);
-      return;
+    if (defaultLocation || defaultZip) {
+      dispatch(
+        hydrateLocationIfEmpty({
+          address: defaultLocation,
+          city: defaultLocation,
+          zip: defaultZip,
+        }),
+      );
     }
+  }, [defaultLocation, defaultZip, dispatch]);
 
-    const timer = window.setTimeout(async () => {
-      const response = await fetch(`/api/places?q=${encodeURIComponent(q)}`);
-      if (!response.ok) return;
-      const data = (await response.json()) as { places?: PlaceSuggestion[] };
-      setPlaceHits(data.places ?? []);
-    }, 220);
+  // Default to the user's current location once per session (in-memory Redux).
+  useEffect(() => {
+    if (customerLocation.detectAttempted || customerLocation.detecting) return;
+    if (hasLocation(customerLocation)) return;
+    void dispatch(detectCurrentLocation());
+  }, [
+    customerLocation.address,
+    customerLocation.city,
+    customerLocation.zip,
+    customerLocation.latitude,
+    customerLocation.longitude,
+    customerLocation.detectAttempted,
+    customerLocation.detecting,
+    dispatch,
+  ]);
 
-    return () => window.clearTimeout(timer);
-  }, [location, openList]);
+  function applyPlace(place: PlaceAddress) {
+    dispatch(setLocationFromPlace(place));
+    const next = {
+      address: place.formattedAddress || place.streetAddress || "",
+      zip: place.zipCode || "",
+      city: place.city || "",
+      state: place.state || "",
+      country: place.country || "",
+      latitude: place.latitude,
+      longitude: place.longitude,
+    };
+    onLocationResolved?.(locationDisplayLabel(next), next.zip);
+  }
 
   function chooseService(hit: ServiceMatch) {
     setQuery(hit.label);
@@ -148,27 +150,10 @@ export function ServiceSearchForm({
     }
   }
 
-  function choosePlace(place: PlaceSuggestion) {
-    applyLocation(displayPlace(place), place.zip ?? extractZip(place.label) ?? "");
-    setPlaceHits([]);
-    setOpenList(null);
-  }
-
-  async function resolveZip(value: string) {
-    const typedZip = extractZip(value);
-    if (typedZip) return typedZip;
-    if (zip) return zip;
-    if (value.trim().length < 2) return "";
-
-    const response = await fetch(`/api/places?q=${encodeURIComponent(value.trim())}`);
-    if (!response.ok) return "";
-    const data = (await response.json()) as { places?: PlaceSuggestion[] };
-    return data.places?.[0]?.zip ?? "";
-  }
-
   async function goToResults(match: ServiceMatch | undefined, nextQuery: string) {
-    const nextZip = await resolveZip(location);
-    if (!nextQuery.trim() && !nextZip && !location.trim()) {
+    const nextZip = customerLocation.zip;
+    const nextLocation = locationLabel || customerLocation.address || nextZip;
+    if (!nextQuery.trim() && !nextZip && !nextLocation.trim()) {
       setError("Tell us what you need or the city / ZIP.");
       return;
     }
@@ -178,7 +163,7 @@ export function ServiceSearchForm({
       query: nextQuery,
       picked: match,
       zip: nextZip,
-      location,
+      location: nextLocation,
     });
     if (onSearch) {
       await onSearch(intent);
@@ -245,46 +230,24 @@ export function ServiceSearchForm({
     <div
       className={cn(
         "relative min-w-0",
-        variant === "hero" ? "sm:w-[11.5rem] sm:shrink-0 sm:flex-none" : "sm:min-w-[15.5rem] sm:flex-[1.15]"
+        variant === "hero" ? "sm:w-[14.5rem] sm:shrink-0 sm:flex-none" : "sm:min-w-[15.5rem] sm:flex-[1.15]"
       )}
     >
-      <MapPin
-        className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-        aria-hidden="true"
-      />
-      <Input
+      <AddressAutocomplete
         id={variant === "hero" ? "hero-location" : "service-location"}
         name="location"
-        value={location}
+        value={locationValue}
+        onChange={(value) => dispatch(setLocationAddress(value))}
+        onSelect={applyPlace}
         placeholder="City / ZIP code"
         autoComplete="off"
+        hideStatus
         aria-invalid={Boolean(error)}
-        onChange={(event) => {
-          const value = event.target.value;
-          applyLocation(value, extractZip(value) ?? "");
-          setOpenList("place");
-        }}
-        onFocus={() => setOpenList("place")}
-        className={cn(
-          "border-0 bg-transparent pl-10 font-medium placeholder:font-normal focus-visible:ring-0",
+        inputClassName={cn(
+          "border-0 bg-transparent font-medium placeholder:font-normal focus-visible:ring-0",
           variant === "hero" ? "h-9" : "h-11"
         )}
       />
-      {openList === "place" && placeHits.length ? (
-        <ul className="absolute top-[calc(100%+0.4rem)] right-0 z-50 w-[min(100vw-2rem,18rem)] overflow-hidden rounded-xl border bg-card py-1 shadow-lg">
-          {placeHits.map((place) => (
-            <li key={place.label}>
-              <button
-                type="button"
-                className="flex w-full px-3 py-2 text-left text-sm hover:bg-muted"
-                onClick={() => choosePlace(place)}
-              >
-                {place.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   );
 
@@ -320,7 +283,7 @@ export function ServiceSearchForm({
           <FieldLabel htmlFor="service-query">What are you looking for?</FieldLabel>
           {serviceField}
         </Field>
-        <Field className="md:max-w-56">
+        <Field className="md:max-w-72">
           <FieldLabel htmlFor="service-location">City / ZIP code</FieldLabel>
           {locationField}
         </Field>

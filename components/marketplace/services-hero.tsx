@@ -6,19 +6,10 @@ import type { SearchIntent } from "@/lib/search";
 
 type ServicesHeroProps = {
   query: string;
-  location: string;
-  zip?: string;
-  onLocationChange: (value: string, zip?: string) => void;
   onSearch: (intent: SearchIntent) => void;
 };
 
-export function ServicesHero({
-  query,
-  location,
-  zip,
-  onLocationChange,
-  onSearch,
-}: ServicesHeroProps) {
+export function ServicesHero({ query, onSearch }: ServicesHeroProps) {
   return (
     <section className="bg-[#f5f5f5]">
       <Container className="pt-4 pb-1 md:pt-5">
@@ -35,15 +26,7 @@ export function ServicesHero({
             </p>
           </div>
           <div className="relative z-20 w-full max-w-[47rem] justify-self-center">
-            <ServiceSearchForm
-              defaultCategory={query}
-              defaultLocation={location}
-              defaultZip={zip}
-              onSearch={onSearch}
-              onLocationResolved={(nextLocation, nextZip) =>
-                onLocationChange(nextLocation, nextZip)
-              }
-            />
+            <ServiceSearchForm defaultCategory={query} onSearch={onSearch} />
           </div>
           <div className="hidden lg:block" aria-hidden="true" />
         </div>

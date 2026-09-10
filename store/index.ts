@@ -14,6 +14,7 @@ import authReducer from "./authSlice";
 import serviceAreasReducer from "./serviceAreasSlice";
 import categoriesReducer from "./categoriesSlice";
 import fixedServicesReducer from "./fixedServicesSlice";
+import locationReducer from "./locationSlice";
 
 /**
  * Redux Persist storage key: `userData`
@@ -31,6 +32,7 @@ const rootReducer = combineReducers({
   serviceAreas: serviceAreasReducer,
   categories: categoriesReducer,
   fixedServices: fixedServicesReducer,
+  location: locationReducer,
 });
 
 export function makeStore() {
@@ -63,10 +65,15 @@ export function getStore(): AppStore {
     clientStore.__persistor = persistStore(clientStore);
   } else if (
     // HMR can keep an older store instance before new reducers were added.
-    (clientStore.getState() as { serviceAreas?: unknown; categories?: unknown; fixedServices?: unknown })
-      .serviceAreas === undefined ||
+    (clientStore.getState() as {
+      serviceAreas?: unknown;
+      categories?: unknown;
+      fixedServices?: unknown;
+      location?: unknown;
+    }).serviceAreas === undefined ||
     (clientStore.getState() as { categories?: unknown }).categories === undefined ||
-    (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined
+    (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined ||
+    (clientStore.getState() as { location?: unknown }).location === undefined
   ) {
     clientStore.replaceReducer(rootReducer);
   }

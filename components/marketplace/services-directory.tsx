@@ -52,6 +52,12 @@ import {
 } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  clearLocation,
+  hydrateLocationIfEmpty,
+  locationDisplayLabel,
+} from "@/store/locationSlice";
 
 type SortKey = "price-asc" | "price-desc" | "rating";
 type ViewKey = "grid" | "list";
@@ -230,6 +236,10 @@ export function ServicesDirectory({
   initialLocation?: string;
 }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const customerLocation = useAppSelector((state) => state.location);
+  const location = locationDisplayLabel(customerLocation);
+  const zip = customerLocation.zip;
   const seed = resolveSearchIntent({
     query: initialQuery,
     service: initialCategory,
@@ -239,8 +249,6 @@ export function ServicesDirectory({
   });
   const [query, setQuery] = useState(seed.query);
   const [categories, setCategories] = useState<string[]>(seed.service ? [seed.service] : []);
-  const [location, setLocation] = useState(seed.location || seed.zip || "");
-  const [zip, setZip] = useState(seed.zip || "");
   const [minPrice, setMinPrice] = useState(priceBounds.min);
   const [maxPrice, setMaxPrice] = useState(priceBounds.max);
   const [minRating, setMinRating] = useState(0);
@@ -322,10 +330,17 @@ export function ServicesDirectory({
     skipUrlRef.current = true;
     setQuery(next.query);
     setCategories(next.service ? [next.service] : []);
-    setLocation(next.location || next.zip || "");
-    setZip(next.zip || "");
+    if (next.location || next.zip) {
+      dispatch(
+        hydrateLocationIfEmpty({
+          address: next.location,
+          city: next.location,
+          zip: next.zip,
+        }),
+      );
+    }
     setAnswers(answersFromIntent(next));
-  }, [initialCategory, initialJob, initialLocation, initialQuery, initialZip]);
+  }, [dispatch, initialCategory, initialJob, initialLocation, initialQuery, initialZip]);
 
   useEffect(() => {
     setPage(1);
@@ -354,11 +369,6 @@ export function ServicesDirectory({
   function applyIntent(intent: SearchIntent) {
     setQuery(intent.query);
     setCategories(intent.service ? [intent.service] : []);
-    if (intent.location) setLocation(intent.location);
-    if (intent.zip) {
-      setZip(intent.zip);
-      if (!intent.location) setLocation(intent.zip);
-    }
     if (intent.service && intent.job) {
       const sub = findSubServiceValue(intent.service, intent.query, intent.job);
       setAnswers((current) => (sub ? { ...current, "sub-service": sub } : current));
@@ -407,8 +417,7 @@ export function ServicesDirectory({
   function resetFilters() {
     setQuery("");
     setCategories([]);
-    setLocation("");
-    setZip("");
+    dispatch(clearLocation());
     setMinPrice(priceBounds.min);
     setMaxPrice(priceBounds.max);
     setMinRating(0);
@@ -438,7 +447,7 @@ export function ServicesDirectory({
       ? [{ key: "query", label: `“${query.trim()}”`, clear: () => setQuery("") }]
       : []),
     ...(location.trim()
-      ? [{ key: "location", label: location.trim(), clear: () => setLocation("") }]
+      ? [{ key: "location", label: location.trim(), clear: () => dispatch(clearLocation()) }]
       : []),
     ...(minRating
       ? [{ key: "rating", label: `${minRating}★ & up`, clear: () => setMinRating(0) }]
@@ -582,12 +591,6 @@ export function ServicesDirectory({
     <>
       <ServicesHero
         query={query}
-        location={location}
-        zip={zip}
-        onLocationChange={(value, nextZip) => {
-          setLocation(value);
-          setZip(nextZip || extractZip(value) || "");
-        }}
         onSearch={applyIntent}
       />
 

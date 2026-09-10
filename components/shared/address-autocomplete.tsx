@@ -28,6 +28,8 @@ type AddressAutocompleteProps = {
   disabled?: boolean;
   className?: string;
   inputClassName?: string;
+  /** Hide helper/error text (e.g. compact search bars). */
+  hideStatus?: boolean;
   "aria-invalid"?: boolean;
 };
 
@@ -43,6 +45,7 @@ export function AddressAutocomplete({
   disabled,
   className,
   inputClassName,
+  hideStatus = false,
   "aria-invalid": ariaInvalid,
 }: AddressAutocompleteProps) {
   const listId = useId();
@@ -311,7 +314,7 @@ export function AddressAutocomplete({
         </ul>
       ) : null}
 
-      {error ? (
+      {!hideStatus && error ? (
         <p className="mt-1.5 text-xs text-muted-foreground" role="status">
           {error}
         </p>

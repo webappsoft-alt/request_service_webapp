@@ -9,28 +9,69 @@ import { getProviderPresence } from "@/lib/data/service-directory";
 import { cn } from "@/lib/utils";
 import type { ServiceCategory } from "@/lib/types";
 
+/** Optional live Fixed Service fields — same card layout, API-backed values. */
+export type ServiceJobListing = {
+  id: string;
+  title: string;
+  categoryName: string;
+  categorySlug: string;
+  imageUrl?: string;
+  price: number;
+  covered?: string[];
+  companyName?: string;
+  rating?: number;
+  reviewCount?: number;
+  city?: string;
+  state?: string;
+  href?: string;
+  online?: boolean;
+  responseLabel?: string;
+};
+
 export function ServiceJobCard({
   category,
   job,
   index,
   layout = "grid",
+  listing,
 }: {
   category: ServiceCategory;
   job: string;
   index?: number;
   layout?: "grid" | "list";
+  listing?: ServiceJobListing;
 }) {
-  const price = getJobStartingPrice(category.id, job);
-  const image = getJobImage(category.id, job, index);
+  const price = listing?.price ?? getJobStartingPrice(category.id, job);
+  const image = listing?.imageUrl || getJobImage(category.id, job, index);
   const detail = getJobDetail(job);
-  const provider = getProvidersByCategoryId(category.id)[0];
-  const presence = provider ? getProviderPresence(provider.id) : null;
+  const provider = listing
+    ? null
+    : getProvidersByCategoryId(category.id)[0];
+  const presence = listing
+    ? listing.online
+      ? { online: true, responseLabel: listing.responseLabel || "Available now" }
+      : listing.responseLabel
+        ? { online: false, responseLabel: listing.responseLabel }
+        : null
+    : provider
+      ? getProviderPresence(provider.id)
+      : null;
   const isList = layout === "list";
   const review = provider?.reviews[0];
+  const companyName = listing?.companyName || provider?.companyName;
+  const ratingValue = listing?.rating ?? provider?.rating;
+  const reviewCount = listing?.reviewCount ?? provider?.reviewCount;
+  const city = listing?.city || provider?.city;
+  const state = listing?.state || provider?.state;
+  const categoryLabel = listing?.categoryName || category.shortName;
+  const title = listing?.title || job;
+  const points =
+    listing?.covered?.length ? listing.covered.slice(0, 3) : detail.points.slice(0, 3);
+  const href = listing?.href ?? getJobPath(category.slug, job);
 
   const ticks = (
     <ul className="flex flex-col gap-0.5">
-      {detail.points.slice(0, 3).map((point) => (
+      {points.map((point) => (
         <li
           key={point}
           className="flex items-start gap-1.5 text-sm leading-5 text-muted-foreground"
@@ -47,7 +88,8 @@ export function ServiceJobCard({
 
   return (
     <Link
-      href={getJobPath(category.slug, job)}
+      href={href}
+      onClick={listing ? (event) => event.preventDefault() : undefined}
       className={cn(
         "group flex h-full overflow-hidden rounded-xl border border-foreground/35 bg-card transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:border-foreground/50 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         isList
@@ -66,10 +108,11 @@ export function ServiceJobCard({
         {image ? (
           <Image
             src={image}
-            alt={job}
+            alt={title}
             fill
             sizes="(min-width: 1280px) 22vw, (min-width: 640px) 40vw, 90vw"
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.05]"
+            unoptimized={image.startsWith("http")}
           />
         ) : null}
         {isList ? null : (
@@ -79,7 +122,7 @@ export function ServiceJobCard({
           />
         )}
         <span className="absolute top-3 left-3 rounded-md bg-card/95 px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm">
-          {category.shortName}
+          {categoryLabel}
         </span>
         {presence?.online ? (
           <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-md bg-card/95 px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm">
@@ -93,30 +136,32 @@ export function ServiceJobCard({
         <div className="flex min-w-0 flex-1 flex-col gap-4 pt-4 sm:flex-row sm:items-stretch sm:gap-6 sm:pt-0">
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              {provider ? (
+              {companyName ? (
                 <p className="text-sm font-medium text-muted-foreground">
-                  {provider.companyName}
+                  {companyName}
                 </p>
               ) : null}
               <h3 className="text-xl leading-snug font-semibold tracking-tight">
-                {job}
+                {title}
               </h3>
-              {provider ? (
+              {ratingValue != null ? (
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-1 font-medium text-foreground">
                     <Star
                       className="size-3.5 fill-current text-warning"
                       aria-hidden="true"
                     />
-                    {provider.rating.toFixed(1)}
+                    {ratingValue.toFixed(1)}
                     <span className="font-normal text-muted-foreground">
-                      ({provider.reviewCount} reviews)
+                      ({reviewCount ?? 0} reviews)
                     </span>
                   </span>
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="size-3.5" aria-hidden="true" />
-                    {formatLocation(provider.city, provider.state)}
-                  </span>
+                  {city || state ? (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="size-3.5" aria-hidden="true" />
+                      {formatLocation(city || "", state || "")}
+                    </span>
+                  ) : null}
                 </span>
               ) : null}
             </div>
@@ -127,7 +172,7 @@ export function ServiceJobCard({
             ) : (
               ticks
             )}
-            {presence ? (
+            {presence?.responseLabel ? (
               <p className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
                 <Clock className="size-3.5 text-muted-foreground" aria-hidden="true" />
                 {presence.responseLabel}
@@ -156,30 +201,34 @@ export function ServiceJobCard({
           <div className="flex flex-col gap-2 p-4">
             <div className="flex flex-col gap-1">
               <h3 className="text-base leading-snug font-semibold tracking-tight">
-                {job}
+                {title}
               </h3>
 
-              {provider ? (
+              {ratingValue != null ? (
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1 font-medium text-foreground">
                     <Star
                       className="size-3.5 fill-current text-warning"
                       aria-hidden="true"
                     />
-                    {provider.rating.toFixed(1)}
+                    {ratingValue.toFixed(1)}
                   </span>
-                  <span>({provider.reviewCount} reviews)</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="size-3.5" aria-hidden="true" />
-                    {formatLocation(provider.city, provider.state)}
-                  </span>
+                  <span>({reviewCount ?? 0} reviews)</span>
+                  {city || state ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="size-3.5" aria-hidden="true" />
+                        {formatLocation(city || "", state || "")}
+                      </span>
+                    </>
+                  ) : null}
                 </span>
               ) : null}
             </div>
 
             {ticks}
-            {presence ? (
+            {presence?.responseLabel ? (
               <p className="inline-flex items-center gap-1.5 text-xs font-medium">
                 <Clock className="size-3.5 text-muted-foreground" aria-hidden="true" />
                 {presence.responseLabel}

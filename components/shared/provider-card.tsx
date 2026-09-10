@@ -82,6 +82,7 @@ export function ProviderCard({
             fill
             sizes="(max-width: 640px) 90vw, 288px"
             className="object-cover"
+            unoptimized={coverImage.startsWith("http")}
           />
           <span className="absolute top-3 left-3 rounded-md bg-card/95 px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm">
             {services[0] ?? "Pro"}

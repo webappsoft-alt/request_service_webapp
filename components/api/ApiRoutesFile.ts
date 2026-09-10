@@ -40,6 +40,8 @@ export const providerApi = {
 export const publicApi = {
   /** GET active categories; use `only_parent` / `parent_category_id` */
   categories: "public/categories",
+  /** GET public fixed-services search (customer directory) */
+  fixedServices: "public/fixed-services",
 } as const;
 
 export const uploadApi = {

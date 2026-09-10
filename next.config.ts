@@ -2,6 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["ckeditor5", "@ckeditor/ckeditor5-react"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.example.com",
+      },
+    ],
+  },
   async redirects() {
     return [
       { source: "/for-providers", destination: "/pro", permanent: true },

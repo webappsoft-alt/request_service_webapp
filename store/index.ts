@@ -21,6 +21,7 @@ import serviceAreasReducer from "./serviceAreasSlice";
 import categoriesReducer from "./categoriesSlice";
 import fixedServicesReducer from "./fixedServicesSlice";
 import locationReducer from "./locationSlice";
+import publicFixedServicesReducer from "./publicFixedServicesSlice";
 
 /**
  * Redux Persist storage key: `userData`
@@ -39,6 +40,7 @@ const rootReducer = combineReducers({
   categories: categoriesReducer,
   fixedServices: fixedServicesReducer,
   location: locationReducer,
+  publicFixedServices: publicFixedServicesReducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
@@ -90,10 +92,13 @@ export function getStore(): AppStore {
       categories?: unknown;
       fixedServices?: unknown;
       location?: unknown;
+      publicFixedServices?: unknown;
     }).serviceAreas === undefined ||
     (clientStore.getState() as { categories?: unknown }).categories === undefined ||
     (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined ||
-    (clientStore.getState() as { location?: unknown }).location === undefined
+    (clientStore.getState() as { location?: unknown }).location === undefined ||
+    (clientStore.getState() as { publicFixedServices?: unknown })
+      .publicFixedServices === undefined
   ) {
     clientStore.replaceReducer(appReducer);
   }

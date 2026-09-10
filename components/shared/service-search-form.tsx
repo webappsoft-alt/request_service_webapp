@@ -25,6 +25,7 @@ import {
   hasLocation,
   hydrateLocationIfEmpty,
   locationDisplayLabel,
+  clearLocation,
   setLocationAddress,
   setLocationFromPlace,
 } from "@/store/locationSlice";
@@ -237,7 +238,10 @@ export function ServiceSearchForm({
         id={variant === "hero" ? "hero-location" : "service-location"}
         name="location"
         value={locationValue}
-        onChange={(value) => dispatch(setLocationAddress(value))}
+        onChange={(value) => {
+          if (!value.trim()) dispatch(clearLocation());
+          else dispatch(setLocationAddress(value));
+        }}
         onSelect={applyPlace}
         placeholder="City / ZIP code"
         autoComplete="off"

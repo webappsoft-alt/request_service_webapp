@@ -159,7 +159,16 @@ const locationSlice = createSlice({
     },
     /** Keep the input controlled while the user types (before a place is selected). */
     setLocationAddress(state, action: PayloadAction<string>) {
-      state.address = action.payload;
+      const next = action.payload;
+      state.address = next;
+      // Typing/editing invalidates structured fields until a place is selected.
+      // Prevents sending a previous zip/lat/lng with a newly typed address.
+      state.zip = "";
+      state.city = "";
+      state.state = "";
+      state.country = "";
+      state.latitude = null;
+      state.longitude = null;
     },
     /** Partial hydrate from URL/search defaults when Redux is still empty. */
     hydrateLocationIfEmpty(

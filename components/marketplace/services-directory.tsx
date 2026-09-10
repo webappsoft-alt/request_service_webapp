@@ -32,9 +32,9 @@ import { Slider } from "@/components/ui/slider";
 import { ProviderCard } from "@/components/shared/provider-card";
 import { writePendingQuote } from "@/lib/booking/format-quote-answers";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
-import { getAllJobs, getJobRecord, slugifyJob } from "@/lib/data/jobs";
+import { getJobRecord, slugifyJob } from "@/lib/data/jobs";
 import { getStartingPrice } from "@/lib/data/provider-media";
-import { getAllProviders, getProvidersByCategoryId } from "@/lib/data/providers";
+import { getAllProviders } from "@/lib/data/providers";
 import {
   findSubServiceValue,
   getCommonFilters,
@@ -50,7 +50,7 @@ import {
   type SearchIntent,
 } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import type { Provider } from "@/lib/types";
+import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchParentCategories,
@@ -63,6 +63,14 @@ import {
   hydrateLocationIfEmpty,
   locationDisplayLabel,
 } from "@/store/locationSlice";
+import {
+  buildPublicFixedServicesQueryKey,
+  fetchPublicFixedServices,
+  type PublicFixedService,
+  type PublicFixedServiceSortBy,
+  type PublicFixedServicesQuery,
+} from "@/store/publicFixedServicesSlice";
+import type { ServiceJobListing } from "@/components/marketplace/service-job-card";
 
 type SortKey = "price-asc" | "price-desc" | "rating";
 type ViewKey = "grid" | "list";
@@ -166,16 +174,6 @@ function answersFromIntent(intent: SearchIntent) {
   return next;
 }
 
-function professionalsFor(categoryIds: string[], zip?: string) {
-  const pool = categoryIds.length
-    ? categoryIds.flatMap((id) => getProvidersByCategoryId(id))
-    : getAllProviders();
-  const unique = uniqueProviders(pool);
-  if (!zip) return unique;
-  const local = unique.filter((provider) => provider.zip === zip || provider.serviceArea.includes(zip));
-  return local.length ? local : unique;
-}
-
 const allProfessionals = uniqueProviders(getAllProviders());
 
 const priceBounds = allProfessionals.reduce(
@@ -192,6 +190,103 @@ const ratingFilters = [5, 4, 3, 2]
     count: allProfessionals.filter((provider) => provider.rating >= rating).length,
   }))
   .filter((option) => option.count > 0);
+
+function categoryStubFromService(service: PublicFixedService): ServiceCategory {
+  const slug = (service.category?.slug || "plumbing") as ServiceCategorySlug;
+  const existing = serviceCategories.find((item) => item.slug === slug);
+  if (existing) return existing;
+  const name = service.category?.name || "Service";
+  return {
+    id: service.category?.id || service.id,
+    slug,
+    name,
+    shortName: name,
+    tagline: "",
+    description: "",
+    longDescription: "",
+    commonServices: [],
+    benefits: [],
+    seoTitle: name,
+    seoDescription: "",
+    icon: service.category?.icon || "",
+    image: service.category?.image,
+  };
+}
+
+function listingFromService(service: PublicFixedService): ServiceJobListing {
+  return {
+    id: service.id,
+    title: service.servicesName,
+    categoryName: service.category?.name || "Service",
+    categorySlug: service.category?.slug || "",
+    imageUrl: service.images[0],
+    price: service.price,
+    covered: service.covered,
+    companyName: service.provider?.companyName,
+    rating: service.provider?.rating.average,
+    reviewCount: service.provider?.rating.totalReviews,
+    city: service.provider?.location.city,
+    state: "",
+    href: "#",
+    online: true,
+  };
+}
+
+function providerFromService(service: PublicFixedService): Provider | null {
+  const p = service.provider;
+  if (!p) return null;
+  const coords = Array.isArray(p.location?.coordinates)
+    ? p.location.coordinates
+    : [];
+  const lng = typeof coords[0] === "number" ? coords[0] : 0;
+  const lat = typeof coords[1] === "number" ? coords[1] : 0;
+  const initials = p.companyName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return {
+    id: p.id,
+    slug: p.slug || p.id,
+    companyName: p.companyName,
+    logoInitials: initials || "PR",
+    coverImage: service.images[0],
+    images: service.images,
+    startingPrice: service.price,
+    tagline: p.tagline || "",
+    description: "",
+    rating: p.rating.average,
+    reviewCount: p.rating.totalReviews,
+    yearsInBusiness: p.profile.yearsInBusiness,
+    licensed: p.profile.licensed,
+    insured: p.profile.insured,
+    categoryIds: service.category?.id ? [service.category.id] : [],
+    serviceArea: service.workingArea,
+    street: p.location.address || "",
+    city: p.location.city || "",
+    state: "",
+    zip: p.location.zip || "",
+    lat,
+    lng,
+    phone: "",
+    email: "",
+    workingHours: [],
+    gallery: service.images,
+    foundedYear: 0,
+    employeeCount: "",
+    reviews: [],
+  };
+}
+
+function sortByFromUi(sort: SortKey): PublicFixedServiceSortBy {
+  if (sort === "price-asc") return "price_asc";
+  if (sort === "price-desc") return "price_desc";
+  if (sort === "rating") return "rating";
+  return "recommended";
+}
 
 function FilterBlock({
   title,
@@ -307,7 +402,6 @@ export function ServicesDirectory({
   const [minRating, setMinRating] = useState(0);
   const [sort, setSort] = useState<SortKey>("price-asc");
   const [page, setPage] = useState(1);
-  const [servicePage, setServicePage] = useState(1);
   const [view, setView] = useState<ViewKey>("list");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -377,55 +471,130 @@ export function ServicesDirectory({
         job: selectedApiSub.slug || selectedApiSub.id,
       }
     : staticSubOption;
-  const directoryJobs = useMemo(() => {
-    if (featuredJob) return [];
-    const all = getAllJobs();
-    if (!categories.length) return all;
-    return all.filter((item) => categories.includes(item.category.slug));
-  }, [categories, featuredJob]);
 
-  const servicePageCount = Math.max(1, Math.ceil(directoryJobs.length / PAGE_SIZE));
-  const currentServicePage = Math.min(servicePage, servicePageCount);
-  const pageJobs = directoryJobs.slice(
-    (currentServicePage - 1) * PAGE_SIZE,
-    currentServicePage * PAGE_SIZE,
+  const fixedServices = useAppSelector((state) => state.publicFixedServices.items);
+  const fixedServicesTotal = useAppSelector(
+    (state) => state.publicFixedServices.total,
+  );
+  const fixedServicesLoading = useAppSelector(
+    (state) => state.publicFixedServices.loading,
+  );
+  const fixedServicesLoadingMore = useAppSelector(
+    (state) => state.publicFixedServices.loadingMore,
+  );
+  const fixedServicesHasNextPage = useAppSelector(
+    (state) => state.publicFixedServices.hasNextPage,
   );
 
-  const results = useMemo(() => {
-    const selectedIds = categories
-      .map((slug) => serviceCategories.find((item) => item.slug === slug)?.id)
+  const filterLabel = (filterId: string, value: string) => {
+    const filter = dynamicServiceFilters.find((item) => item.id === filterId);
+    return filter?.options.find((item) => item.value === value)?.label || value;
+  };
+
+  const apiQuery = useMemo((): PublicFixedServicesQuery => {
+    const categoryIds = categories
+      .map(
+        (key) =>
+          parentCategories.find((item) => item.slug === key || item.id === key)
+            ?.id,
+      )
       .filter((id): id is string => Boolean(id));
-    const pageCategoryIds = [...new Set(pageJobs.map((item) => item.category.id))];
-    const categoryIds = featuredJob
-      ? [featuredJob.category.id]
-      : selectedIds.length
-        ? selectedIds
-        : pageCategoryIds;
-    const nextZip = zip || extractZip(location);
 
-    return professionalsFor(categoryIds, nextZip)
-      .filter((provider) => {
-        const price = getStartingPrice(provider);
-        if (price < minPrice || price > maxPrice) return false;
-        if (provider.rating < minRating) return false;
-        return true;
-      })
-      .sort((a, b) => {
-        if (sort === "price-desc") return getStartingPrice(b) - getStartingPrice(a);
-        if (sort === "rating") return b.rating - a.rating;
-        return getStartingPrice(a) - getStartingPrice(b);
-      });
-  }, [categories, featuredJob, location, minPrice, maxPrice, minRating, pageJobs, sort, zip]);
+    const next: PublicFixedServicesQuery = {
+      sortBy: sortByFromUi(sort),
+      locationToken: [
+        customerLocation.address,
+        customerLocation.city,
+        customerLocation.zip,
+        customerLocation.state,
+        customerLocation.country,
+        customerLocation.latitude ?? "",
+        customerLocation.longitude ?? "",
+      ].join("|"),
+    };
+    if (query.trim()) next.search = query.trim();
 
-  const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+    // Send only the latest selected location fields from Redux.
+    if (customerLocation.zip.trim()) {
+      next.zipCode = customerLocation.zip.trim();
+    }
+    if (
+      customerLocation.latitude != null &&
+      Number.isFinite(customerLocation.latitude)
+    ) {
+      next.lat = customerLocation.latitude;
+    }
+    if (
+      customerLocation.longitude != null &&
+      Number.isFinite(customerLocation.longitude)
+    ) {
+      next.lng = customerLocation.longitude;
+    }
+
+    if (categoryIds.length) next.category = categoryIds;
+    if (answers["sub-service"]) next.subCategory = answers["sub-service"];
+    if (answers["job-type"]) {
+      next.commonServices = filterLabel("job-type", answers["job-type"]);
+    }
+    if (answers["area"]) {
+      next.workingArea = filterLabel("area", answers["area"]);
+    }
+    if (minPrice > priceBounds.min) next.minPrice = minPrice;
+    if (maxPrice < priceBounds.max) next.maxPrice = maxPrice;
+    if (minRating) next.rating = minRating;
+    return next;
+  }, [
+    answers,
+    categories,
+    customerLocation.address,
+    customerLocation.city,
+    customerLocation.country,
+    customerLocation.latitude,
+    customerLocation.longitude,
+    customerLocation.state,
+    customerLocation.zip,
+    dynamicServiceFilters,
+    maxPrice,
+    minPrice,
+    minRating,
+    parentCategories,
+    query,
+    sort,
+  ]);
+
+  const apiQueryKey = buildPublicFixedServicesQueryKey(apiQuery);
+  const apiQueryRef = useRef(apiQuery);
+  apiQueryRef.current = apiQuery;
+
+  const matchingProfessionals = useMemo(
+    () =>
+      uniqueProviders(
+        fixedServices
+          .map(providerFromService)
+          .filter((item): item is Provider => Boolean(item)),
+      ),
+    [fixedServices],
+  );
+
+  const pageCount = Math.max(1, Math.ceil(matchingProfessionals.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const pageItems = results.slice(
+  const pageItems = matchingProfessionals.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
   const selectedCategory =
     selectedParent ||
     serviceCategories.find((item) => item.slug === activeCategory);
+
+  // Depend only on apiQueryKey so parent-category pagination cannot retrigger the same fetch.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void dispatch(
+        fetchPublicFixedServices({ query: apiQueryRef.current }),
+      );
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [apiQueryKey, dispatch]);
 
   useEffect(() => {
     void dispatch(fetchParentCategories());
@@ -493,7 +662,6 @@ export function ServicesDirectory({
 
   useEffect(() => {
     setPage(1);
-    setServicePage(1);
   }, [answers, categories, location, minPrice, maxPrice, minRating, query, sort, zip]);
 
   useEffect(() => {
@@ -529,12 +697,6 @@ export function ServicesDirectory({
       });
     }
     setAsking(true);
-    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function goToServicePage(next: number) {
-    setServicePage(next);
-    setPage(1);
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -799,16 +961,14 @@ export function ServicesDirectory({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h1 className="text-xl font-semibold">
-                  {featuredJob
-                    ? `${featuredJob.job} · ${featuredJob.category.name}`
-                    : selectedCategory
-                      ? `${selectedCategory.name} services`
-                      : "Services"}
+                  {selectedCategory
+                    ? `${selectedCategory.name} services`
+                    : "Services"}
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {featuredJob
-                    ? `Exact service match, plus ${results.length} ${results.length === 1 ? "professional" : "professionals"}`
-                    : `${directoryJobs.length} ${directoryJobs.length === 1 ? "service" : "services"} · ${results.length} ${results.length === 1 ? "professional" : "professionals"}`}
+                  {fixedServicesLoading && !fixedServices.length
+                    ? "Loading services…"
+                    : `${fixedServicesTotal} ${fixedServicesTotal === 1 ? "service" : "services"} · ${matchingProfessionals.length} ${matchingProfessionals.length === 1 ? "professional" : "professionals"}`}
                 </p>
               </div>
 
@@ -924,48 +1084,58 @@ export function ServicesDirectory({
               </ul>
             ) : null}
 
-            {featuredJob || pageJobs.length || pageItems.length ? (
+            {fixedServicesLoading && !fixedServices.length ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-5 py-14 text-center shadow-sm">
+                <p className="text-base font-medium">Loading services…</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Finding fixed services for your filters and location.
+                </p>
+              </div>
+            ) : fixedServices.length || pageItems.length ? (
               <>
-                {featuredJob ? (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-sm font-medium text-muted-foreground">Matched service</p>
-                    <ServiceJobCard
-                      category={featuredJob.category}
-                      job={featuredJob.job}
-                      index={featuredJob.index}
-                      layout="list"
-                    />
-                  </div>
-                ) : pageJobs.length ? (
+                {fixedServices.length ? (
                   <div className="flex flex-col gap-3">
                     <p className="text-sm font-medium text-muted-foreground">
-                      {selectedCategory ? `${selectedCategory.name} services` : "Browse services"}
+                      {selectedCategory
+                        ? `${selectedCategory.name} services`
+                        : "Browse services"}
                     </p>
                     <ul
-                      key={`jobs-${activeCategory}-${currentServicePage}-${view}`}
+                      key={`jobs-${apiQueryKey}-${view}`}
                       className={
                         view === "grid"
                           ? "reveal-list grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
                           : "reveal-list flex flex-col gap-5"
                       }
                     >
-                      {pageJobs.map((item) => (
-                        <li key={`${item.category.slug}-${item.slug}`}>
+                      {fixedServices.map((service, index) => (
+                        <li key={service.id}>
                           <ServiceJobCard
-                            category={item.category}
-                            job={item.job}
-                            index={item.index}
+                            category={categoryStubFromService(service)}
+                            job={service.servicesName}
+                            index={index}
                             layout={view}
+                            listing={listingFromService(service)}
                           />
                         </li>
                       ))}
                     </ul>
-                    <DirectoryPagination
-                      page={currentServicePage}
-                      pageCount={servicePageCount}
-                      onPage={goToServicePage}
-                      label="Service pages"
-                    />
+                    {fixedServicesHasNextPage ? (
+                      <div className="flex justify-center pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={fixedServicesLoadingMore}
+                          onClick={() =>
+                            void dispatch(
+                              fetchPublicFixedServices({ append: true }),
+                            )
+                          }
+                        >
+                          {fixedServicesLoadingMore ? "Loading…" : "See More"}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -975,7 +1145,7 @@ export function ServicesDirectory({
                       Matching professionals
                     </p>
                     <ul
-                      key={`pros-${activeCategory}-${currentPage}-${view}`}
+                      key={`pros-${apiQueryKey}-${currentPage}-${view}`}
                       className={
                         view === "grid"
                           ? "reveal-list grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
@@ -1003,9 +1173,9 @@ export function ServicesDirectory({
               </>
             ) : (
               <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-5 py-14 text-center shadow-sm">
-                <p className="text-base font-medium">No professionals match those filters</p>
+                <p className="text-base font-medium">No services match those filters</p>
                 <p className="max-w-sm text-sm text-muted-foreground">
-                  Try a different service, or clear the category and rating filters.
+                  Try a different service, location, or clear the category and rating filters.
                 </p>
                 <Button variant="outline" size="sm" onClick={resetFilters}>
                   Reset filters

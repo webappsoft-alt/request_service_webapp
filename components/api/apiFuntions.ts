@@ -9,7 +9,7 @@ import axios, {
 } from "axios";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { getStore } from "@/store";
+import { getPersistor, getStore, resetStore } from "@/store";
 import {
   clearAuth,
   logout as logoutAction,
@@ -70,6 +70,11 @@ const GET_RECENT_TTL_MS = 400;
 
 function clearAuthMeCache(): void {
   authMePromise = null;
+}
+
+function clearRequestCaches(): void {
+  getInFlight.clear();
+  getRecentSuccess.clear();
 }
 
 function buildGetRequestKey(
@@ -224,11 +229,18 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
 
   try {
     clearAuthMeCache();
+    clearRequestCaches();
     if (isBrowser()) {
       try {
-        getStore().dispatch(logoutAction());
+        // Central reset: clears auth, location, categories, and every other slice.
+        getStore().dispatch(resetStore());
+        void getPersistor().purge();
       } catch {
-        getStore().dispatch(clearAuth());
+        try {
+          getStore().dispatch(logoutAction());
+        } catch {
+          getStore().dispatch(clearAuth());
+        }
       }
 
       if (!options.silent) {

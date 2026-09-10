@@ -1,4 +1,10 @@
-import { configureStore, combineReducers } from "@reduxjs/toolkit";
+import {
+  configureStore,
+  combineReducers,
+  createAction,
+  type Action,
+  type Reducer,
+} from "@reduxjs/toolkit";
 import {
   persistStore,
   persistReducer,
@@ -35,9 +41,24 @@ const rootReducer = combineReducers({
   location: locationReducer,
 });
 
+export type RootState = ReturnType<typeof rootReducer>;
+
+/** Clears the entire Redux tree (auth, location, categories, etc.) in one action. */
+export const resetStore = createAction("app/reset");
+
+const appReducer: Reducer<RootState> = (
+  state: RootState | undefined,
+  action: Action,
+) => {
+  if (resetStore.match(action)) {
+    return rootReducer(undefined, action);
+  }
+  return rootReducer(state, action);
+};
+
 export function makeStore() {
   return configureStore({
-    reducer: rootReducer,
+    reducer: appReducer,
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({
         serializableCheck: {
@@ -51,7 +72,6 @@ export function makeStore() {
 export type AppStore = ReturnType<typeof makeStore> & {
   __persistor?: ReturnType<typeof persistStore>;
 };
-export type RootState = ReturnType<AppStore["getState"]>;
 export type AppDispatch = AppStore["dispatch"];
 
 let clientStore: AppStore | undefined;
@@ -75,7 +95,7 @@ export function getStore(): AppStore {
     (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined ||
     (clientStore.getState() as { location?: unknown }).location === undefined
   ) {
-    clientStore.replaceReducer(rootReducer);
+    clientStore.replaceReducer(appReducer);
   }
   return clientStore;
 }

@@ -402,8 +402,14 @@ const categoriesSlice = createSlice({
       })
       .addCase(fetchSubcategories.pending, (state, action) => {
         const append = Boolean(action.meta.arg?.append);
+        const parentId = action.meta.arg?.parentId ?? "";
         if (append) state.loadingMoreSubcategories = true;
-        else state.loadingSubcategories = true;
+        else if (
+          !state.subcategoriesByParent[parentId] ||
+          !state.subMetaByParent[parentId]
+        ) {
+          state.loadingSubcategories = true;
+        }
         state.error = null;
       })
       .addCase(fetchSubcategories.fulfilled, (state, action) => {

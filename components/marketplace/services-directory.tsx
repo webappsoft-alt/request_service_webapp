@@ -32,13 +32,12 @@ import { Slider } from "@/components/ui/slider";
 import { ProviderCard } from "@/components/shared/provider-card";
 import { writePendingQuote } from "@/lib/booking/format-quote-answers";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
-import { getAllJobs, getJobRecord } from "@/lib/data/jobs";
+import { getAllJobs, getJobRecord, slugifyJob } from "@/lib/data/jobs";
 import { getStartingPrice } from "@/lib/data/provider-media";
 import { getAllProviders, getProvidersByCategoryId } from "@/lib/data/providers";
 import {
   findSubServiceValue,
   getCommonFilters,
-  getServiceFilters,
   getSubServiceOption,
   type DirectoryFilter,
 } from "@/lib/data/service-directory";
@@ -53,6 +52,12 @@ import {
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchParentCategories,
+  fetchSubcategories,
+  selectParentCategories,
+  type PublicCategory,
+} from "@/store/categoriesSlice";
 import {
   clearLocation,
   hydrateLocationIfEmpty,
@@ -120,6 +125,37 @@ const viewOptions: { value: ViewKey; label: string; icon: LucideIcon }[] = [
 
 function uniqueProviders(providers: Provider[]) {
   return [...new Map(providers.map((provider) => [provider.id, provider])).values()];
+}
+
+function stringListFilter(
+  id: string,
+  label: string,
+  items: string[],
+): DirectoryFilter | null {
+  if (!items.length) return null;
+  return {
+    id,
+    label,
+    options: items.map((item) => ({
+      value: slugifyJob(item) || item.trim().toLowerCase().replace(/\s+/g, "-"),
+      label: item,
+      match: [item.toLowerCase()],
+    })),
+  };
+}
+
+function subcategoryFilter(items: PublicCategory[]): DirectoryFilter | null {
+  if (!items.length) return null;
+  return {
+    id: "sub-service",
+    label: "Sub-service",
+    options: items.map((item) => ({
+      value: item.id,
+      label: item.name,
+      job: item.slug || item.id,
+      match: [item.name.toLowerCase()],
+    })),
+  };
 }
 
 function answersFromIntent(intent: SearchIntent) {
@@ -240,6 +276,23 @@ export function ServicesDirectory({
   const customerLocation = useAppSelector((state) => state.location);
   const location = locationDisplayLabel(customerLocation);
   const zip = customerLocation.zip;
+  const parentCategories = useAppSelector(selectParentCategories);
+  const parentsLoaded = useAppSelector((state) => state.categories.parentsLoaded);
+  const loadingParents = useAppSelector((state) => state.categories.loadingParents);
+  const parentsHasMore = useAppSelector((state) => state.categories.parentsHasMore);
+  const loadingMoreParents = useAppSelector(
+    (state) => state.categories.loadingMoreParents,
+  );
+  const subcategoriesByParent = useAppSelector(
+    (state) => state.categories.subcategoriesByParent,
+  );
+  const subMetaByParent = useAppSelector((state) => state.categories.subMetaByParent);
+  const loadingSubcategories = useAppSelector(
+    (state) => state.categories.loadingSubcategories,
+  );
+  const loadingMoreSubcategories = useAppSelector(
+    (state) => state.categories.loadingMoreSubcategories,
+  );
   const seed = resolveSearchIntent({
     query: initialQuery,
     service: initialCategory,
@@ -264,13 +317,66 @@ export function ServicesDirectory({
   const skipUrlRef = useRef(true);
 
   const activeCategory = categories.length === 1 ? categories[0] : "";
+  const selectedParent = useMemo(
+    () =>
+      parentCategories.find(
+        (item) => item.slug === activeCategory || item.id === activeCategory,
+      ),
+    [activeCategory, parentCategories],
+  );
+  const apiSubcategories = selectedParent
+    ? (subcategoriesByParent[selectedParent.id] ?? [])
+    : [];
+  const showSubcategoryLoading =
+    Boolean(selectedParent) &&
+    loadingSubcategories &&
+    !subMetaByParent[selectedParent!.id];
+
   const commonFilters = getCommonFilters();
-  const serviceFilters = getServiceFilters(activeCategory);
-  const subOption = getSubServiceOption(activeCategory, answers["sub-service"]);
+  const dynamicServiceFilters = useMemo(() => {
+    if (!selectedParent) return [] as DirectoryFilter[];
+    const filters: DirectoryFilter[] = [];
+    const sub = subcategoryFilter(apiSubcategories);
+    if (sub) filters.push(sub);
+
+    const whatNeedsWork = stringListFilter(
+      "job-type",
+      "What needs work?",
+      selectedParent.commonServices,
+    );
+    if (whatNeedsWork) filters.push(whatNeedsWork);
+
+    const whereIsWork = stringListFilter(
+      "area",
+      "Where is the work?",
+      selectedParent.workingArea,
+    );
+    if (whereIsWork) filters.push(whereIsWork);
+
+    return filters;
+  }, [apiSubcategories, selectedParent]);
+
+  const selectedApiSub = apiSubcategories.find(
+    (item) =>
+      item.id === answers["sub-service"] || item.slug === answers["sub-service"],
+  );
+  const staticSubOption = getSubServiceOption(activeCategory, answers["sub-service"]);
+  const featuredJobKey =
+    selectedApiSub?.slug ||
+    staticSubOption?.job ||
+    staticSubOption?.value ||
+    "";
   const featuredJob =
-    activeCategory && (subOption?.job || subOption?.value)
-      ? getJobRecord(activeCategory, subOption.job ?? subOption.value ?? "")
+    activeCategory && featuredJobKey
+      ? getJobRecord(activeCategory, featuredJobKey)
       : undefined;
+  const subOption = selectedApiSub
+    ? {
+        value: selectedApiSub.id,
+        label: selectedApiSub.name,
+        job: selectedApiSub.slug || selectedApiSub.id,
+      }
+    : staticSubOption;
   const directoryJobs = useMemo(() => {
     if (featuredJob) return [];
     const all = getAllJobs();
@@ -317,7 +423,50 @@ export function ServicesDirectory({
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
-  const selectedCategory = serviceCategories.find((item) => item.slug === activeCategory);
+  const selectedCategory =
+    selectedParent ||
+    serviceCategories.find((item) => item.slug === activeCategory);
+
+  useEffect(() => {
+    void dispatch(fetchParentCategories());
+  }, [dispatch]);
+
+  // Load remaining parent pages once so the Service filter is complete.
+  useEffect(() => {
+    if (!parentsLoaded || !parentsHasMore || loadingParents || loadingMoreParents) {
+      return;
+    }
+    void dispatch(fetchParentCategories({ append: true }));
+  }, [
+    dispatch,
+    loadingMoreParents,
+    loadingParents,
+    parentsHasMore,
+    parentsLoaded,
+  ]);
+
+  // Load sub-categories for the selected parent (cached in Redux).
+  useEffect(() => {
+    if (!selectedParent?.id) return;
+    void dispatch(fetchSubcategories({ parentId: selectedParent.id }));
+  }, [dispatch, selectedParent?.id]);
+
+  // Load remaining sub-category pages so the filter shows the full list.
+  useEffect(() => {
+    if (!selectedParent?.id) return;
+    const meta = subMetaByParent[selectedParent.id];
+    if (!meta?.hasMore) return;
+    if (loadingSubcategories || loadingMoreSubcategories) return;
+    void dispatch(
+      fetchSubcategories({ parentId: selectedParent.id, append: true }),
+    );
+  }, [
+    dispatch,
+    loadingMoreSubcategories,
+    loadingSubcategories,
+    selectedParent?.id,
+    subMetaByParent,
+  ]);
 
   useEffect(() => {
     const next = resolveSearchIntent({
@@ -428,11 +577,16 @@ export function ServicesDirectory({
   const activeChips = [
     ...categories.map((slug) => ({
       key: `cat-${slug}`,
-      label: serviceCategories.find((item) => item.slug === slug)?.name ?? slug,
+      label:
+        parentCategories.find((item) => item.slug === slug || item.id === slug)?.name ??
+        serviceCategories.find((item) => item.slug === slug)?.name ??
+        slug,
       clear: () => toggleCategory(slug),
     })),
     ...Object.entries(answers).flatMap(([id, value]) => {
-      const filter = [...commonFilters, ...serviceFilters].find((item) => item.id === id);
+      const filter = [...commonFilters, ...dynamicServiceFilters].find(
+        (item) => item.id === id,
+      );
       const option = filter?.options.find((item) => item.value === value);
       if (!filter || !option) return [];
       return [
@@ -482,31 +636,46 @@ export function ServicesDirectory({
             />
             All services
           </label>
-          {serviceCategories.map((category) => (
-            <label
-              key={category.id}
-              className="flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-muted"
-            >
-              <Checkbox
-                checked={categories.includes(category.slug)}
-                onCheckedChange={() => toggleCategory(category.slug)}
-              />
-              {category.name}
-            </label>
-          ))}
+          {loadingParents && !parentsLoaded ? (
+            <p className="px-1.5 py-2 text-sm text-muted-foreground">Loading categories…</p>
+          ) : (
+            parentCategories.map((category) => {
+              const key = category.slug || category.id;
+              return (
+                <label
+                  key={category.id}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 text-sm transition-colors hover:bg-muted"
+                >
+                  <Checkbox
+                    checked={categories.includes(key)}
+                    onCheckedChange={() => toggleCategory(key)}
+                  />
+                  {category.name}
+                </label>
+              );
+            })
+          )}
         </FilterBlock>
 
-        {serviceFilters
-          .filter((filter) => filter.id === "sub-service")
-          .map((filter) => (
-            <FilterBlock key={filter.id} title={filter.label} icon={Wrench}>
-              <RadioFilter
-                filter={filter}
-                value={answers[filter.id] ?? ""}
-                onChange={(value) => setAnswer(filter.id, value)}
-              />
-            </FilterBlock>
-          ))}
+        {showSubcategoryLoading ? (
+          <FilterBlock title="Sub-service" icon={Wrench}>
+            <p className="px-1.5 py-2 text-sm text-muted-foreground">
+              Loading sub-services…
+            </p>
+          </FilterBlock>
+        ) : (
+          dynamicServiceFilters
+            .filter((filter) => filter.id === "sub-service")
+            .map((filter) => (
+              <FilterBlock key={filter.id} title={filter.label} icon={Wrench}>
+                <RadioFilter
+                  filter={filter}
+                  value={answers[filter.id] ?? ""}
+                  onChange={(value) => setAnswer(filter.id, value)}
+                />
+              </FilterBlock>
+            ))
+        )}
 
         {commonFilters.map((filter) => (
           <FilterBlock key={filter.id} title={filter.label} icon={Clock}>
@@ -518,7 +687,7 @@ export function ServicesDirectory({
           </FilterBlock>
         ))}
 
-        {serviceFilters
+        {dynamicServiceFilters
           .filter((filter) => filter.id !== "sub-service")
           .map((filter) => (
             <FilterBlock key={filter.id} title={filter.label} icon={Wrench}>

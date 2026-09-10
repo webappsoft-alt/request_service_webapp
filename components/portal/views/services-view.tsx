@@ -8,7 +8,15 @@ import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
-import { CenteredSpinner } from "@/components/ui/spinner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 import { serviceUnitLabel } from "@/lib/data/portal";
 import { formatMoney, toTitleCase } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -17,7 +25,6 @@ import {
   deleteFixedService,
   fetchFixedServices,
   fixedServicesPageCacheKey,
-  selectFixedServicesShowLoader,
   setFixedServicesPage,
   setFixedServicesSearch,
   type FixedService,
@@ -51,10 +58,10 @@ export function ServicesView() {
     mutating: false,
     error: null,
   };
-  const softLoader = useAppSelector(selectFixedServicesShowLoader);
 
   const [searchInput, setSearchInput] = useState(search);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FixedService | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -81,7 +88,7 @@ export function ServicesView() {
     dispatch(clearFixedServicesError());
   }, [dispatch, error, loading, mutating]);
 
-  const showLoader = softLoader || actionLoading;
+  const tableLoading = loading || actionLoading;
 
   function onSearchChange(value: string) {
     setSearchInput(value);
@@ -100,9 +107,12 @@ export function ServicesView() {
     dispatch(setFixedServicesPage(nextPage));
   }
 
-  async function handleDelete(row: FixedService) {
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const row = deleteTarget;
     const result = await dispatch(deleteFixedService(row.id));
     if (deleteFixedService.fulfilled.match(result)) {
+      setDeleteTarget(null);
       toast.success(`${toTitleCase(row.servicesName)} removed from this catalog.`);
       void dispatch(fetchFixedServices());
       return;
@@ -125,120 +135,156 @@ export function ServicesView() {
         </Button>
       }
     >
-      {showLoader ? (
-        <CenteredSpinner label="Loading services" />
-      ) : (
-        <PortalDataTable
-          filename="services"
-          countLabel="services"
-          searchPlaceholder="Search services"
-          rows={items}
-          rowKey={(row) => row.id}
-          pageSize={limit}
-          empty={loading ? "Refreshing…" : "No fixed services yet. Add your first package."}
-          serverPagination={{
-            page,
-            pageSize: limit,
-            total,
-            totalPages,
-            onPageChange,
-            search: searchInput,
-            onSearchChange,
-          }}
-          columns={[
-            {
-              id: "name",
-              header: "Service",
-              sortValue: (row) => row.servicesName,
-              searchValue: (row) =>
-                `${row.servicesName} ${row.description} ${row.covered.join(" ")}`,
-              exportValue: (row) => row.servicesName,
-              cell: (row) => (
-                <div className="flex items-center gap-3">
-                  <span className="relative size-12 shrink-0 overflow-hidden rounded-md bg-[#003F7D]">
-                    {row.images?.[0] ? (
-                      <Image
-                        src={row.images[0]}
-                        alt=""
-                        fill
-                        sizes="48px"
-                        className="object-cover"
-                        unoptimized={row.images[0].startsWith("http")}
-                      />
-                    ) : null}
-                  </span>
-                  <div>
-                    <Link
-                      href={`/pro/dashboard/services/${row.id}/detail`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {toTitleCase(row.servicesName)}
-                    </Link>
-                    <p className="max-w-md truncate text-xs text-muted-foreground">
-                      {row.description || row.covered[0] || "No description"}
-                    </p>
-                  </div>
+      <PortalDataTable
+        filename="services"
+        countLabel="services"
+        searchPlaceholder="Search services"
+        rows={items}
+        rowKey={(row) => row.id}
+        pageSize={limit}
+        loading={tableLoading}
+        empty="No fixed services yet. Add your first package."
+        serverPagination={{
+          page,
+          pageSize: limit,
+          total,
+          totalPages,
+          onPageChange,
+          search: searchInput,
+          onSearchChange,
+        }}
+        columns={[
+          {
+            id: "name",
+            header: "Service",
+            sortValue: (row) => row.servicesName,
+            searchValue: (row) =>
+              `${row.servicesName} ${row.description} ${row.covered.join(" ")}`,
+            exportValue: (row) => row.servicesName,
+            cell: (row) => (
+              <div className="flex items-center gap-3">
+                <span className="relative size-12 shrink-0 overflow-hidden rounded-md bg-[#003F7D]">
+                  {row.images?.[0] ? (
+                    <Image
+                      src={row.images[0]}
+                      alt=""
+                      fill
+                      sizes="48px"
+                      className="object-cover"
+                      unoptimized={row.images[0].startsWith("http")}
+                    />
+                  ) : null}
+                </span>
+                <div>
+                  <Link
+                    href={`/pro/dashboard/services/${row.id}/detail`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {toTitleCase(row.servicesName)}
+                  </Link>
+                  <p className="max-w-md truncate text-xs text-muted-foreground">
+                    {row.description || row.covered[0] || "No description"}
+                  </p>
                 </div>
-              ),
+              </div>
+            ),
+          },
+          {
+            id: "category",
+            header: "Category",
+            sortValue: (row) => row.categoryName,
+            searchValue: (row) => `${row.categoryName} ${row.subcategoryName}`,
+            exportValue: (row) => row.categoryName,
+            cell: (row) =>
+              row.categoryName ? toTitleCase(row.categoryName) : "—",
+          },
+          {
+            id: "price",
+            header: "Price",
+            sortValue: (row) => row.price,
+            searchValue: (row) => `${formatMoney(row.price)} ${row.unit}`,
+            exportValue: (row) =>
+              `${formatMoney(row.price)} ${serviceUnitLabel(row.unit)}`,
+            className: "tabular-nums",
+            cell: (row) =>
+              `${formatMoney(row.price)} ${serviceUnitLabel(row.unit)}`,
+          },
+          {
+            id: "areas",
+            header: "Areas",
+            sortValue: (row) => row.serviceAreaIds.length,
+            searchValue: (row) => String(row.serviceAreaIds.length),
+            exportValue: (row) => String(row.serviceAreaIds.length),
+            cell: (row) =>
+              row.serviceAreaIds.length
+                ? `${row.serviceAreaIds.length} ${row.serviceAreaIds.length === 1 ? "area" : "areas"}`
+                : "None",
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => (row.isPublic ? "active" : "hidden"),
+            searchValue: (row) => (row.isPublic ? "Active" : "Hidden"),
+            exportValue: (row) => (row.isPublic ? "Active" : "Hidden"),
+            cell: (row) => (
+              <StatusPill
+                label={row.isPublic ? "Active" : "Hidden"}
+                tone={row.isPublic ? "success" : "neutral"}
+              />
+            ),
+          },
+        ]}
+        actions={(row) => [
+          { label: "Detail", href: `/pro/dashboard/services/${row.id}/detail` },
+          { label: "Edit", href: `/pro/dashboard/services/${row.id}` },
+          {
+            label: "Delete",
+            variant: "destructive",
+            onSelect: () => {
+              setDeleteTarget(row);
             },
-            {
-              id: "category",
-              header: "Category",
-              sortValue: (row) => row.categoryName,
-              searchValue: (row) => `${row.categoryName} ${row.subcategoryName}`,
-              exportValue: (row) => row.categoryName,
-              cell: (row) =>
-                row.categoryName ? toTitleCase(row.categoryName) : "—",
-            },
-            {
-              id: "price",
-              header: "Price",
-              sortValue: (row) => row.price,
-              searchValue: (row) => `${formatMoney(row.price)} ${row.unit}`,
-              exportValue: (row) =>
-                `${formatMoney(row.price)} ${serviceUnitLabel(row.unit)}`,
-              className: "tabular-nums",
-              cell: (row) =>
-                `${formatMoney(row.price)} ${serviceUnitLabel(row.unit)}`,
-            },
-            {
-              id: "areas",
-              header: "Areas",
-              sortValue: (row) => row.serviceAreaIds.length,
-              searchValue: (row) => String(row.serviceAreaIds.length),
-              exportValue: (row) => String(row.serviceAreaIds.length),
-              cell: (row) =>
-                row.serviceAreaIds.length
-                  ? `${row.serviceAreaIds.length} ${row.serviceAreaIds.length === 1 ? "area" : "areas"}`
-                  : "None",
-            },
-            {
-              id: "status",
-              header: "Status",
-              sortValue: (row) => (row.isPublic ? "active" : "hidden"),
-              searchValue: (row) => (row.isPublic ? "Active" : "Hidden"),
-              exportValue: (row) => (row.isPublic ? "Active" : "Hidden"),
-              cell: (row) => (
-                <StatusPill
-                  label={row.isPublic ? "Active" : "Hidden"}
-                  tone={row.isPublic ? "success" : "neutral"}
-                />
-              ),
-            },
-          ]}
-          actions={(row) => [
-            { label: "Detail", href: `/pro/dashboard/services/${row.id}/detail` },
-            { label: "Edit", href: `/pro/dashboard/services/${row.id}` },
-            {
-              label: "Delete",
-              variant: "destructive",
-              onSelect: () => {
-                void handleDelete(row);
-              },
-            },
-          ]}
-        />
-      )}
+          },
+        ]}
+      />
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !mutating) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent showCloseButton={!mutating} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete fixed service?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This will permanently remove “${toTitleCase(deleteTarget.servicesName)}” from your catalog.`
+                : "This will permanently remove this service from your catalog."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={mutating}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={mutating}
+              onClick={() => {
+                void confirmDelete();
+              }}
+            >
+              {mutating ? <Spinner size="sm" label="Deleting" /> : null}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PortalPage>
   );
 }

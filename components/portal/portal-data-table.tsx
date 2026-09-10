@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,7 @@ export function PortalDataTable<T>({
   pageSize = 20,
   countLabel,
   serverPagination,
+  loading = false,
 }: {
   rows: T[];
   rowKey: (row: T) => string;
@@ -76,6 +78,8 @@ export function PortalDataTable<T>({
   countLabel?: string;
   /** When set, search + page controls are driven by the parent (API pagination). */
   serverPagination?: PortalTableServerPagination;
+  /** Shows a spinner over the table body without hiding the toolbar. */
+  loading?: boolean;
 }) {
   const router = useRouter();
   const isServer = Boolean(serverPagination);
@@ -245,93 +249,103 @@ export function PortalDataTable<T>({
         </div>
       </div>
 
-      <Table className="text-[13px]">
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {columns.map((column) => {
-              const sortable = Boolean(column.sortValue);
-              const active = sortId === column.id;
-              return (
-                <TableHead
-                  key={column.id}
-                  className={cn(
-                    "h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
-                    column.className,
-                  )}
-                >
-                  {sortable ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(column.id)}
-                      className="inline-flex items-center gap-1 hover:text-primary"
-                    >
-                      {column.header}
-                      {active && sortDir === "asc" ? (
-                        <ArrowUp className="size-3" />
-                      ) : active && sortDir === "desc" ? (
-                        <ArrowDown className="size-3" />
-                      ) : (
-                        <ArrowUpDown className="size-3 text-muted-foreground/70" />
-                      )}
-                    </button>
-                  ) : (
-                    column.header
-                  )}
+      <div className="relative min-h-[160px]">
+        <Table className={cn("text-[13px]", loading && pageRows.length ? "opacity-40" : undefined)}>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              {columns.map((column) => {
+                const sortable = Boolean(column.sortValue);
+                const active = sortId === column.id;
+                return (
+                  <TableHead
+                    key={column.id}
+                    className={cn(
+                      "h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                      column.className,
+                    )}
+                  >
+                    {sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(column.id)}
+                        className="inline-flex items-center gap-1 hover:text-primary"
+                      >
+                        {column.header}
+                        {active && sortDir === "asc" ? (
+                          <ArrowUp className="size-3" />
+                        ) : active && sortDir === "desc" ? (
+                          <ArrowDown className="size-3" />
+                        ) : (
+                          <ArrowUpDown className="size-3 text-muted-foreground/70" />
+                        )}
+                      </button>
+                    ) : (
+                      column.header
+                    )}
+                  </TableHead>
+                );
+              })}
+              {actions ? (
+                <TableHead className="h-8 w-12 bg-[#f7f8fa] px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Options
                 </TableHead>
-              );
-            })}
-            {actions ? (
-              <TableHead className="h-8 w-12 bg-[#f7f8fa] px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Options
-              </TableHead>
-            ) : null}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {pageRows.length ? (
-            pageRows.map((row) => {
-              const rowActions = actions?.(row) ?? [];
-              const href = rowHref?.(row);
-              return (
-                <TableRow
-                  key={rowKey(row)}
-                  className={cn(href && "cursor-pointer")}
-                  onClick={
-                    href
-                      ? () => {
-                          router.push(href);
-                        }
-                      : undefined
-                  }
-                >
-                  {columns.map((column) => (
-                    <TableCell key={column.id} className={cn("px-2.5 py-1.5", column.className)}>
-                      {column.cell(row)}
-                    </TableCell>
-                  ))}
-                  {actions ? (
-                    <TableCell
-                      className="px-2.5 py-1.5 text-right"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <RowActions row={row} actions={rowActions} />
-                    </TableCell>
-                  ) : null}
-                </TableRow>
-              );
-            })
-          ) : (
-            <TableRow>
-              <TableCell
-                colSpan={columns.length + (actions ? 1 : 0)}
-                className="px-4 py-10 text-center text-muted-foreground"
-              >
-                {empty}
-              </TableCell>
+              ) : null}
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {pageRows.length ? (
+              pageRows.map((row) => {
+                const rowActions = actions?.(row) ?? [];
+                const href = rowHref?.(row);
+                return (
+                  <TableRow
+                    key={rowKey(row)}
+                    className={cn(href && "cursor-pointer")}
+                    onClick={
+                      href
+                        ? () => {
+                            router.push(href);
+                          }
+                        : undefined
+                    }
+                  >
+                    {columns.map((column) => (
+                      <TableCell key={column.id} className={cn("px-2.5 py-1.5", column.className)}>
+                        {column.cell(row)}
+                      </TableCell>
+                    ))}
+                    {actions ? (
+                      <TableCell
+                        className="px-2.5 py-1.5 text-right"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <RowActions row={row} actions={rowActions} />
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length + (actions ? 1 : 0)}
+                  className="px-4 py-10 text-center text-muted-foreground"
+                >
+                  {loading ? "\u00a0" : empty}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+        {loading ? (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center bg-card/70"
+            aria-busy="true"
+          >
+            <Spinner label="Loading" />
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-3 border-t border-black/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">

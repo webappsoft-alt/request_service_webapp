@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
+import { CenteredSpinner } from "@/components/ui/spinner";
 import { serviceUnitLabel } from "@/lib/data/portal";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, toTitleCase } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   clearFixedServicesError,
@@ -103,7 +103,7 @@ export function ServicesView() {
   async function handleDelete(row: FixedService) {
     const result = await dispatch(deleteFixedService(row.id));
     if (deleteFixedService.fulfilled.match(result)) {
-      toast.success(`${row.servicesName} removed from this catalog.`);
+      toast.success(`${toTitleCase(row.servicesName)} removed from this catalog.`);
       void dispatch(fetchFixedServices());
       return;
     }
@@ -126,9 +126,7 @@ export function ServicesView() {
       }
     >
       {showLoader ? (
-        <div className="flex min-h-48 items-center justify-center border border-black/15 bg-card">
-          <Loader2 className="size-6 animate-spin text-primary" aria-label="Loading services" />
-        </div>
+        <CenteredSpinner label="Loading services" />
       ) : (
         <PortalDataTable
           filename="services"
@@ -171,10 +169,10 @@ export function ServicesView() {
                   </span>
                   <div>
                     <Link
-                      href={`/pro/dashboard/services/${row.id}`}
+                      href={`/pro/dashboard/services/${row.id}/detail`}
                       className="font-medium text-primary hover:underline"
                     >
-                      {row.servicesName}
+                      {toTitleCase(row.servicesName)}
                     </Link>
                     <p className="max-w-md truncate text-xs text-muted-foreground">
                       {row.description || row.covered[0] || "No description"}
@@ -189,7 +187,8 @@ export function ServicesView() {
               sortValue: (row) => row.categoryName,
               searchValue: (row) => `${row.categoryName} ${row.subcategoryName}`,
               exportValue: (row) => row.categoryName,
-              cell: (row) => row.categoryName || "—",
+              cell: (row) =>
+                row.categoryName ? toTitleCase(row.categoryName) : "—",
             },
             {
               id: "price",
@@ -228,6 +227,7 @@ export function ServicesView() {
             },
           ]}
           actions={(row) => [
+            { label: "Detail", href: `/pro/dashboard/services/${row.id}/detail` },
             { label: "Edit", href: `/pro/dashboard/services/${row.id}` },
             {
               label: "Delete",
@@ -244,3 +244,4 @@ export function ServicesView() {
 }
 
 export { ServiceFormView } from "@/components/portal/service-file";
+export { ServiceDetailView } from "@/components/portal/views/service-detail-view";

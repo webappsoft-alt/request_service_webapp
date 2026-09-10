@@ -29,6 +29,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getServiceCategoryById,
@@ -85,6 +86,33 @@ function toggleValue(list: string[], value: string) {
   return list.includes(value)
     ? list.filter((item) => item !== value)
     : [...list, value];
+}
+
+/** Prefer user.phone (API /me) — provider/profile.phone is often empty. */
+function resolveProfilePhone(
+  provider: AuthProviderRecord | null | undefined,
+  user: { phone?: unknown; profile?: unknown } | null | undefined,
+) {
+  const nestedProfile =
+    user?.profile && typeof user.profile === "object"
+      ? (user.profile as { phone?: unknown })
+      : null;
+  const providerProfile =
+    provider?.profile && typeof provider.profile === "object"
+      ? (provider.profile as { phone?: unknown })
+      : null;
+
+  for (const candidate of [
+    user?.phone,
+    provider?.phone,
+    nestedProfile?.phone,
+    providerProfile?.phone,
+  ]) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return "";
 }
 
 function hydrateFromProvider(provider: AuthProviderRecord | null) {
@@ -183,43 +211,71 @@ export function ProfileView() {
     [categoryIds],
   );
 
+  const authPhone = useMemo(
+    () => resolveProfilePhone(authProvider, user),
+    [authProvider, user],
+  );
+
+  /** Prefer the longer auth number if local state was wiped to dial-only (+92). */
+  const phoneFieldValue = useMemo(() => {
+    const localDigits = phone.replace(/\D/g, "");
+    const authDigits = authPhone.replace(/\D/g, "");
+    if (authDigits && authDigits.length > localDigits.length) return authPhone;
+    if (authDigits && localDigits.length <= 3) return authPhone;
+    return phone || authPhone;
+  }, [phone, authPhone]);
+
   useEffect(() => {
     if (!user && !authProvider) {
       formReadyRef.current = false;
       return;
     }
-    if (formReadyRef.current) return;
-
-    setFirstName(String(user?.firstName || ""));
-    setLastName(String(user?.lastName || ""));
-    setAvatarUrl(getUserAvatarSrc(user));
 
     const next = hydrateFromProvider(authProvider);
-    setCompanyName(next.companyName);
-    setTagline(next.tagline);
-    setDescription(next.description);
-    setPhone(next.phone || String(user?.phone || ""));
-    setEmail(next.email || String(user?.email || ""));
-    setWebsite(next.website);
-    setContactRole(next.contactRole);
-    setStreetAddress(next.streetAddress);
-    setCity(next.city);
-    setState(next.state);
-    setZip(next.zip);
-    setCountry(next.country);
-    setLatitude(next.latitude);
-    setLongitude(next.longitude);
-    setLicensed(next.licensed);
-    setInsured(next.insured);
-    setYearsInBusiness(next.yearsInBusiness);
-    setEmployeeCount(next.employeeCount);
-    setStartingPrice(next.startingPrice);
-    setCategoryIds(next.categoryIds);
-    setJobs(next.jobs);
-    setAreaNames(next.areaNames);
-    formReadyRef.current = true;
-  }, [authProvider, user]);
+    const resolvedPhone = resolveProfilePhone(authProvider, user);
 
+    // First paint: fill the whole form once.
+    if (!formReadyRef.current) {
+      setFirstName(String(user?.firstName || ""));
+      setLastName(String(user?.lastName || ""));
+      setAvatarUrl(getUserAvatarSrc(user));
+      setCompanyName(next.companyName);
+      setTagline(next.tagline);
+      setDescription(next.description);
+      setPhone(resolvedPhone);
+      setEmail(next.email || String(user?.email || ""));
+      setWebsite(next.website);
+      setContactRole(next.contactRole);
+      setStreetAddress(next.streetAddress);
+      setCity(next.city);
+      setState(next.state);
+      setZip(next.zip);
+      setCountry(next.country);
+      setLatitude(next.latitude);
+      setLongitude(next.longitude);
+      setLicensed(next.licensed);
+      setInsured(next.insured);
+      setYearsInBusiness(next.yearsInBusiness);
+      setEmployeeCount(next.employeeCount);
+      setStartingPrice(next.startingPrice);
+      setCategoryIds(next.categoryIds);
+      setJobs(next.jobs);
+      setAreaNames(next.areaNames);
+      formReadyRef.current = true;
+      return;
+    }
+
+    // /me often arrives after first hydrate with user.phone while provider.phone is "".
+    if (resolvedPhone) {
+      setPhone((current) => {
+        const digits = current.replace(/\D/g, "");
+        const nextDigits = resolvedPhone.replace(/\D/g, "");
+        if (!digits || digits.length <= 3) return resolvedPhone;
+        if (nextDigits.length > digits.length) return resolvedPhone;
+        return current;
+      });
+    }
+  }, [authProvider, user]);
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -584,7 +640,7 @@ export function ProfileView() {
                   <FieldLabel htmlFor="phone">Phone</FieldLabel>
                   <AuthPhoneInput
                     id="phone"
-                    value={phone}
+                    value={phoneFieldValue}
                     onChange={setPhone}
                     placeholder="Enter phone number"
                   />
@@ -783,12 +839,13 @@ export function ProfileView() {
           <div className="flex justify-start">
             <Button type="submit" disabled={saving || uploadingImage}>
               {saving ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Saving…
-                </>
+                <Spinner
+                  size="sm"
+                  label="Updating"
+                  className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
+                />
               ) : (
-                "Save profile"
+                "Update profile"
               )}
             </Button>
           </div>

@@ -103,20 +103,54 @@ function toStringArray(value: unknown): string[] {
 }
 
 function idOf(value: unknown): string {
-  if (typeof value === "string") return value;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
   const record = asRecord(value);
   if (!record) return "";
-  return (
-    (typeof record.id === "string" && record.id) ||
-    (typeof record._id === "string" && record._id) ||
-    ""
-  );
+  if (typeof record.$oid === "string" && record.$oid.trim()) return record.$oid.trim();
+
+  for (const key of ["_id", "id", "Id", "ID"] as const) {
+    const raw = record[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+    const nested = asRecord(raw);
+    if (nested && typeof nested.$oid === "string" && nested.$oid.trim()) {
+      return nested.$oid.trim();
+    }
+  }
+
+  return "";
 }
 
 function nameOf(value: unknown, fallback = ""): string {
+  if (typeof value === "string" && value.trim()) {
+    // Plain ObjectId strings are ids, not display names.
+    if (/^[a-f\d]{24}$/i.test(value.trim())) return fallback;
+    return value.trim();
+  }
   const record = asRecord(value);
   if (record && typeof record.name === "string") return record.name;
+  if (record && typeof record.title === "string") return record.title;
   return fallback;
+}
+
+function firstRef(value: unknown): unknown {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
+function pickRelation(
+  record: Record<string, unknown>,
+  keys: string[],
+): { id: string; name: string } {
+  for (const key of keys) {
+    if (!(key in record)) continue;
+    const ref = firstRef(record[key]);
+    const id = idOf(ref);
+    const name = nameOf(ref);
+    if (id || name) return { id, name };
+  }
+  return { id: "", name: "" };
 }
 
 function parseUnit(value: unknown): FixedServiceUnit {
@@ -143,8 +177,21 @@ export function normalizeFixedService(raw: unknown): FixedService | null {
   const id = idOf(record);
   if (!id) return null;
 
-  const categoryRef = record.category;
-  const subcategoryRef = record.subcategory;
+  const category = pickRelation(record, [
+    "category",
+    "Category",
+    "categoryId",
+    "category_id",
+    "parentCategory",
+  ]);
+  const subcategory = pickRelation(record, [
+    "subcategory",
+    "subCategory",
+    "Subcategory",
+    "subcategoryId",
+    "subcategory_id",
+    "subCategoryId",
+  ]);
 
   return {
     id,
@@ -152,10 +199,15 @@ export function normalizeFixedService(raw: unknown): FixedService | null {
       (typeof record.servicesName === "string" && record.servicesName) ||
       (typeof record.name === "string" && record.name) ||
       "",
-    categoryId: idOf(categoryRef),
-    categoryName: nameOf(categoryRef),
-    subcategoryId: idOf(subcategoryRef),
-    subcategoryName: nameOf(subcategoryRef),
+    categoryId: category.id,
+    categoryName:
+      category.name ||
+      (typeof record.categoryName === "string" ? record.categoryName : ""),
+    subcategoryId: subcategory.id,
+    subcategoryName:
+      subcategory.name ||
+      (typeof record.subcategoryName === "string" ? record.subcategoryName : "") ||
+      (typeof record.subCategoryName === "string" ? record.subCategoryName : ""),
     price: typeof record.price === "number" ? record.price : Number(record.price) || 0,
     unit: parseUnit(record.unit),
     isPublic: Boolean(record.isPublic ?? true),
@@ -213,9 +265,22 @@ function extractList(response: unknown): {
 function extractEntity(response: unknown): FixedService | null {
   const root = asRecord(response);
   if (!root) return normalizeFixedService(response);
+
+  const data = root.data;
+  const dataRecord = asRecord(data);
+  const fromArray = Array.isArray(data) ? normalizeFixedService(data[0]) : null;
+
   return (
-    normalizeFixedService(root.data) ||
+    normalizeFixedService(data) ||
+    fromArray ||
+    (dataRecord ? normalizeFixedService(dataRecord.fixedService) : null) ||
+    (dataRecord ? normalizeFixedService(dataRecord.service) : null) ||
+    (dataRecord ? normalizeFixedService(dataRecord.result) : null) ||
+    (dataRecord ? normalizeFixedService(dataRecord.item) : null) ||
+    (dataRecord ? normalizeFixedService(dataRecord.data) : null) ||
     normalizeFixedService(root.fixedService) ||
+    normalizeFixedService(root.service) ||
+    normalizeFixedService(root.result) ||
     normalizeFixedService(root)
   );
 }

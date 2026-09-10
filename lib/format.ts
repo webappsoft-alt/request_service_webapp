@@ -101,6 +101,21 @@ export function formatStartingPrice(value: number) {
   }).format(value);
 }
 
+/** Title-case words for display (categories, company names, titles). */
+export function toTitleCase(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed
+    .toLowerCase()
+    .split(/(\s+|[-_/]+)/)
+    .map((part) => {
+      if (/^\s+$/.test(part) || /^[-_/]+$/.test(part)) return part;
+      if (!part) return part;
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join("");
+}
+
 export function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",

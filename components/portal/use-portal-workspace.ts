@@ -51,7 +51,12 @@ export function usePortalWorkspace() {
       ...workspace.provider,
       companyName,
       email: String(user?.email || authProvider?.email || workspace.provider.email),
-      phone: String(authProvider?.phone || workspace.provider.phone || ""),
+      phone: String(
+        (typeof user?.phone === "string" && user.phone) ||
+          authProvider?.phone ||
+          workspace.provider.phone ||
+          "",
+      ),
       website:
         typeof authProvider?.website === "string"
           ? authProvider.website

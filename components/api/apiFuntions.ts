@@ -618,9 +618,31 @@ export async function refreshAuthMe(): Promise<AuthUser | null> {
         user?: AuthUser & { _id?: string; name?: string };
         data?: AuthUser & { _id?: string; name?: string };
         provider?: unknown;
+        email?: string;
+        phone?: string;
+        firstName?: string;
+        [key: string]: unknown;
       }>(userApi.me, undefined, { silent: true });
 
-      const rawUser = meRes?.data || meRes?.user;
+      // API may return `{ data: user }`, `{ user }`, or the user object itself.
+      const nestedData = meRes?.data;
+      const rawUser =
+        (nestedData &&
+        typeof nestedData === "object" &&
+        ("email" in nestedData ||
+          "phone" in nestedData ||
+          "firstName" in nestedData ||
+          "_id" in nestedData ||
+          "id" in nestedData)
+          ? nestedData
+          : null) ||
+        (meRes?.user && typeof meRes.user === "object" ? meRes.user : null) ||
+        (meRes &&
+        typeof meRes === "object" &&
+        ("email" in meRes || "phone" in meRes || "firstName" in meRes)
+          ? (meRes as AuthUser & { _id?: string; name?: string })
+          : null);
+
       if (!rawUser || typeof rawUser !== "object") return null;
 
       getStore().dispatch(

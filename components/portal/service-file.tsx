@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Clock3, Loader2, MapPin, Plus, Star, Trash2, Upload } from "lucide-react";
+import { Check, Clock3, ImagePlus, MapPin, Plus, Star, Trash2 } from "lucide-react";
 import {
   extractUploadedUrl,
   uploadFile,
@@ -22,6 +22,14 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CenteredSpinner, Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
   cloneWorkingHours,
@@ -30,7 +38,12 @@ import {
   type PortalFixedService,
   type ServiceAvailabilityMode,
 } from "@/lib/data/portal";
-import { formatStartingPrice, formatHoursValue, formatWorkingDay } from "@/lib/format";
+import {
+  formatStartingPrice,
+  formatHoursValue,
+  formatWorkingDay,
+  toTitleCase,
+} from "@/lib/format";
 import type { WorkingHours } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -47,6 +60,14 @@ import {
   type FixedServiceUnit,
 } from "@/store/fixedServicesSlice";
 import { fetchServiceAreasPicker } from "@/store/serviceAreasSlice";
+
+const selectTriggerClass =
+  "h-10 w-full min-w-0 justify-between rounded-lg border border-input bg-transparent px-3 text-sm shadow-none";
+
+const selectContentClass = "z-50 rounded-lg border border-input bg-popover p-1 shadow-md";
+
+const selectItemClass =
+  "cursor-pointer rounded-md py-2 pr-8 pl-2.5 text-sm focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground";
 
 function parseAvailability(value: string): ServiceAvailabilityMode {
   if (value === "office" || value === "custom") return value;
@@ -65,7 +86,8 @@ type DraftState = {
   subcategoryId: string;
   subcategoryName: string;
   description: string;
-  price: number;
+  /** Raw price input; empty while cleared. Parsed to a non-negative number on save. */
+  price: string;
   unit: FixedServiceUnit;
   active: boolean;
   images: string[];
@@ -85,7 +107,7 @@ function emptyDraft(officeHours: WorkingHours[]): DraftState {
     subcategoryId: "",
     subcategoryName: "",
     description: "",
-    price: 149,
+    price: "",
     unit: "job",
     active: true,
     images: [],
@@ -96,6 +118,22 @@ function emptyDraft(officeHours: WorkingHours[]): DraftState {
     availabilityMode: "office",
     customHours: cloneWorkingHours(officeHours),
   };
+}
+
+function parsePriceInput(raw: string): string | null {
+  if (raw === "") return "";
+  if (!/^\d*\.?\d*$/.test(raw)) return null;
+  if (raw.startsWith("-")) return null;
+  const value = Number(raw);
+  if (raw !== "." && Number.isFinite(value) && value < 0) return null;
+  return raw;
+}
+
+function priceNumber(value: string): number | null {
+  if (value.trim() === "" || value === ".") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
 }
 
 function toggleInList(list: string[], value: string, checked: boolean) {
@@ -109,16 +147,28 @@ function ServicePreview({
   providerSlug,
   hours,
   areaLabels,
+  showBookButton = false,
+  priceUnset = false,
 }: {
   service: PortalFixedService;
   companyName: string;
   providerSlug: string;
   hours: WorkingHours[];
   areaLabels: string[];
+  /** Hidden while creating/editing; keep wired for later. */
+  showBookButton?: boolean;
+  priceUnset?: boolean;
 }) {
   const [active, setActive] = useState(0);
   const images = service.images ?? [];
   const photo = images[Math.min(active, Math.max(images.length - 1, 0))];
+  const displayName = service.name.trim()
+    ? toTitleCase(service.name)
+    : "Untitled service";
+  const displayCompany = toTitleCase(companyName);
+  const displayCategory = service.categoryName
+    ? toTitleCase(service.categoryName)
+    : "";
 
   return (
     <article className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_18px_40px_-28px_rgba(0,63,125,0.45)]">
@@ -126,7 +176,7 @@ function ServicePreview({
         {photo ? (
           <Image
             src={photo}
-            alt={service.name || "Service photo"}
+            alt={displayName}
             fill
             sizes="(min-width: 1024px) 28vw, 90vw"
             className="object-cover"
@@ -139,9 +189,9 @@ function ServicePreview({
           </div>
         )}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-black/45 to-transparent" />
-        {service.categoryName ? (
+        {displayCategory ? (
           <Badge className="absolute top-3 left-3 border-0 bg-white/95 text-[#003F7D]">
-            {service.categoryName}
+            {displayCategory}
           </Badge>
         ) : null}
       </div>
@@ -172,12 +222,10 @@ function ServicePreview({
       ) : null}
       <div className="flex flex-col gap-5 p-5">
         <div>
-          <p className="text-[11px] font-medium tracking-[0.14em] text-[#003F7D] uppercase">
-            {companyName}
+          <p className="text-[11px] font-semibold tracking-[0.08em] text-[#003F7D]">
+            {displayCompany}
           </p>
-          <h2 className="mt-1 text-xl font-semibold tracking-tight">
-            {service.name || "Untitled service"}
-          </h2>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight">{displayName}</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {service.description || "Describe what this fixed service includes for the customer."}
           </p>
@@ -188,7 +236,7 @@ function ServicePreview({
               Typical start
             </p>
             <p className="text-2xl font-semibold text-[#003F7D]">
-              {formatStartingPrice(service.price)}
+              {priceUnset ? "—" : formatStartingPrice(service.price)}
             </p>
           </div>
           <p className="text-sm text-muted-foreground">{serviceUnitLabel(service.unit)}</p>
@@ -241,13 +289,15 @@ function ServicePreview({
             <ServiceHoursSummary hours={hours} />
           </div>
         </div>
-        <Button className="w-full bg-[#003F7D] hover:bg-[#003F7D]/90" asChild>
-          <Link
-            href={`/request-service?provider=${providerSlug}&serviceId=${service.id}&intent=book`}
-          >
-            Book this service
-          </Link>
-        </Button>
+        {showBookButton ? (
+          <Button className="w-full bg-[#003F7D] hover:bg-[#003F7D]/90" asChild>
+            <Link
+              href={`/request-service?provider=${providerSlug}&serviceId=${service.id}&intent=book`}
+            >
+              Book this service
+            </Link>
+          </Button>
+        ) : null}
         <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
           <Star className="size-3 fill-current" aria-hidden="true" />
           Live customer preview
@@ -289,7 +339,7 @@ function MultiSelectChips({
                 checked={checked}
                 onCheckedChange={(value) => onToggle(option, value === true)}
               />
-              {option}
+              {toTitleCase(option)}
             </label>
           </li>
         );
@@ -340,13 +390,69 @@ export function ServiceFormView({ id }: { id?: string }) {
   const [hydrated, setHydrated] = useState(!id);
   const lastSubFetchRef = useRef<string>("");
 
-  const subcategories = draft.categoryId
-    ? subcategoriesByParent[draft.categoryId] ?? []
+  const selectedCategoryId =
+    draft.categoryId || (detail && detail.id === id ? detail.categoryId : "") || "";
+  const selectedSubcategoryId =
+    draft.subcategoryId ||
+    (detail && detail.id === id ? detail.subcategoryId : "") ||
+    "";
+
+  const subcategories = selectedCategoryId
+    ? subcategoriesByParent[selectedCategoryId] ?? []
     : [];
 
+  const categoryOptions = useMemo(() => {
+    const list = [...parents];
+    const ensure = (cid: string, cname: string) => {
+      if (!cid) return;
+      if (list.some((item) => item.id === cid)) return;
+      list.unshift({
+        id: cid,
+        name: cname || "Selected category",
+        slug: "",
+        parentCategory: null,
+        commonServices: [],
+        workingArea: [],
+      });
+    };
+    ensure(draft.categoryId, draft.categoryName);
+    if (detail && detail.id === id) {
+      ensure(detail.categoryId, detail.categoryName);
+    }
+    return list;
+  }, [parents, draft.categoryId, draft.categoryName, detail, id]);
+
+  const subcategoryOptions = useMemo(() => {
+    const list = [...subcategories];
+    const ensure = (sid: string, sname: string) => {
+      if (!sid) return;
+      if (list.some((item) => item.id === sid)) return;
+      list.unshift({
+        id: sid,
+        name: sname || "Selected sub-category",
+        slug: "",
+        parentCategory: selectedCategoryId || null,
+        commonServices: [],
+        workingArea: [],
+      });
+    };
+    ensure(draft.subcategoryId, draft.subcategoryName);
+    if (detail && detail.id === id) {
+      ensure(detail.subcategoryId, detail.subcategoryName);
+    }
+    return list;
+  }, [
+    subcategories,
+    draft.subcategoryId,
+    draft.subcategoryName,
+    selectedCategoryId,
+    detail,
+    id,
+  ]);
+
   const selectedCategory = useMemo(
-    () => parents.find((item) => item.id === draft.categoryId),
-    [parents, draft.categoryId],
+    () => categoryOptions.find((item) => item.id === selectedCategoryId),
+    [categoryOptions, selectedCategoryId],
   );
 
   const whatNeedsWorkOptions = selectedCategory?.commonServices ?? [];
@@ -369,51 +475,83 @@ export function ServiceFormView({ id }: { id?: string }) {
   }, [dispatch, id]);
 
   useEffect(() => {
-    if (!id || !detail || detail.id !== id || hydrated) return;
-    setDraft({
-      name: detail.servicesName,
-      categoryId: detail.categoryId,
-      categoryName: detail.categoryName,
-      subcategoryId: detail.subcategoryId,
-      subcategoryName: detail.subcategoryName,
-      description: detail.description,
-      price: detail.price,
-      unit: detail.unit,
-      active: detail.isPublic,
-      images: detail.images,
-      coverage: detail.covered.length ? detail.covered : [""],
-      commonServices: detail.commonServices,
-      workingArea: detail.workingArea,
-      serviceAreaIds: detail.serviceAreaIds,
-      availabilityMode:
-        detail.availabilityType === "custom" ? "custom" : "office",
-      customHours: cloneWorkingHours(officeHours),
+    if (!id || !detail || detail.id !== id) return;
+
+    setDraft((current) => {
+      const shouldReplace =
+        !hydrated ||
+        (Boolean(detail.categoryId) && !current.categoryId) ||
+        (Boolean(detail.subcategoryId) &&
+          !current.subcategoryId &&
+          (current.categoryId === detail.categoryId || !current.categoryId));
+
+      if (!shouldReplace && hydrated) return current;
+
+      if (!hydrated) {
+        return {
+          name: detail.servicesName,
+          categoryId: detail.categoryId,
+          categoryName: detail.categoryName,
+          subcategoryId: detail.subcategoryId,
+          subcategoryName: detail.subcategoryName,
+          description: detail.description,
+          price: String(detail.price),
+          unit: detail.unit,
+          active: detail.isPublic,
+          images: detail.images,
+          coverage: detail.covered.length ? detail.covered : [""],
+          commonServices: detail.commonServices,
+          workingArea: detail.workingArea,
+          serviceAreaIds: detail.serviceAreaIds,
+          availabilityMode:
+            detail.availabilityType === "custom" ? "custom" : "office",
+          customHours: cloneWorkingHours(officeHours),
+        };
+      }
+
+      return {
+        ...current,
+        categoryId: current.categoryId || detail.categoryId,
+        categoryName: current.categoryName || detail.categoryName,
+        subcategoryId: current.subcategoryId || detail.subcategoryId,
+        subcategoryName: current.subcategoryName || detail.subcategoryName,
+        commonServices: current.commonServices.length
+          ? current.commonServices
+          : detail.commonServices,
+        workingArea: current.workingArea.length
+          ? current.workingArea
+          : detail.workingArea,
+      };
     });
-    setHydrated(true);
-    if (detail.categoryId) {
-      lastSubFetchRef.current = detail.categoryId;
-      void dispatch(fetchSubcategories(detail.categoryId));
+
+    if (!hydrated) setHydrated(true);
+
+    const parentId = detail.categoryId;
+    if (parentId && lastSubFetchRef.current !== parentId) {
+      lastSubFetchRef.current = parentId;
+      void dispatch(fetchSubcategories(parentId));
     }
   }, [detail, dispatch, hydrated, id, officeHours]);
 
   useEffect(() => {
-    if (!draft.categoryId) return;
-    if (lastSubFetchRef.current === draft.categoryId) return;
-    if (subcategoriesByParent[draft.categoryId]) {
-      lastSubFetchRef.current = draft.categoryId;
+    if (!selectedCategoryId) return;
+    if (lastSubFetchRef.current === selectedCategoryId) return;
+    if (subcategoriesByParent[selectedCategoryId]) {
+      lastSubFetchRef.current = selectedCategoryId;
       return;
     }
-    lastSubFetchRef.current = draft.categoryId;
-    void dispatch(fetchSubcategories(draft.categoryId));
-  }, [dispatch, draft.categoryId, subcategoriesByParent]);
+    lastSubFetchRef.current = selectedCategoryId;
+    void dispatch(fetchSubcategories(selectedCategoryId));
+  }, [dispatch, selectedCategoryId, subcategoriesByParent]);
 
+  const previewPrice = priceNumber(draft.price);
   const previewService: PortalFixedService = {
     id: id || "svc_new",
     name: draft.name,
     categoryId: draft.categoryId,
     categoryName: draft.categoryName,
     description: draft.description,
-    price: draft.price,
+    price: previewPrice ?? 0,
     unit: draft.unit,
     active: draft.active,
     images: draft.images,
@@ -422,6 +560,7 @@ export function ServiceFormView({ id }: { id?: string }) {
     availabilityMode: draft.availabilityMode,
     customHours: draft.customHours,
   };
+  const previewPriceUnset = previewPrice === null;
 
   const previewHours = serviceHours(previewService, officeHours);
   const areaLabels = pickerItems
@@ -433,7 +572,7 @@ export function ServiceFormView({ id }: { id?: string }) {
     );
 
   const title = id
-    ? draft.name || detail?.servicesName || "Fixed service"
+    ? toTitleCase(draft.name || detail?.servicesName || "Fixed service")
     : "New fixed service";
   const pickerHasMore = pickerPage < pickerTotalPages;
 
@@ -473,20 +612,25 @@ export function ServiceFormView({ id }: { id?: string }) {
       toast.error("Add a service name.");
       return;
     }
-    if (!draft.categoryId) {
+    if (!draft.categoryId && !selectedCategoryId) {
       toast.error("Select a category.");
       return;
     }
-    if (!draft.subcategoryId) {
+    if (!draft.subcategoryId && !selectedSubcategoryId) {
       toast.error("Select a sub-category.");
+      return;
+    }
+    const price = priceNumber(draft.price);
+    if (price === null) {
+      toast.error("Add a price.");
       return;
     }
 
     const payload = {
       servicesName: draft.name.trim(),
-      category: draft.categoryId,
-      subcategory: draft.subcategoryId,
-      price: draft.price,
+      category: draft.categoryId || selectedCategoryId,
+      subcategory: draft.subcategoryId || selectedSubcategoryId,
+      price,
       unit: unitToApi(draft.unit),
       isPublic: draft.active,
       customerSee: draft.active,
@@ -532,9 +676,9 @@ export function ServiceFormView({ id }: { id?: string }) {
 
   if (id && detailLoading && !hydrated) {
     return (
-      <PortalPage eyebrow="Fixed service" title="Loading…">
-        <div className="flex min-h-48 items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-primary" />
+      <PortalPage eyebrow="Fixed service" title="Fixed service">
+        <div className="px-4 pb-8">
+          <CenteredSpinner label="Loading service" className="min-h-[22rem] border-0 bg-transparent" />
         </div>
       </PortalPage>
     );
@@ -570,8 +714,8 @@ export function ServiceFormView({ id }: { id?: string }) {
       actions={
         <div className="flex gap-2">
           <Button type="button" onClick={() => void save()} disabled={mutating || uploading}>
-            {mutating ? <Loader2 className="size-4 animate-spin" /> : null}
-            {id ? "Save service" : "Create service"}
+            {mutating ? <Spinner size="sm" label="Saving" /> : null}
+            {id ? "Update service" : "Create service"}
           </Button>
           <Button type="button" variant="outline" asChild>
             <Link href="/pro/dashboard/services">Cancel</Link>
@@ -606,11 +750,11 @@ export function ServiceFormView({ id }: { id?: string }) {
                 <NativeSelect
                   id="svc-category"
                   className="w-full"
-                  value={draft.categoryId}
-                  disabled={loadingParents}
+                  value={selectedCategoryId}
+                  disabled={loadingParents && !categoryOptions.length}
                   onChange={(event) => {
                     const nextId = event.target.value;
-                    const category = parents.find((item) => item.id === nextId);
+                    const category = categoryOptions.find((item) => item.id === nextId);
                     setDraft((current) => ({
                       ...current,
                       categoryId: nextId,
@@ -623,26 +767,28 @@ export function ServiceFormView({ id }: { id?: string }) {
                   }}
                 >
                   <NativeSelectOption value="">
-                    {loadingParents ? "Loading categories…" : "Select category"}
+                    {loadingParents && !categoryOptions.length
+                      ? "Loading categories…"
+                      : "Select category"}
                   </NativeSelectOption>
-                  {parents.map((category) => (
+                  {categoryOptions.map((category) => (
                     <NativeSelectOption key={category.id} value={category.id}>
-                      {category.name}
+                      {toTitleCase(category.name)}
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
               </Field>
-              {draft.categoryId ? (
+              {selectedCategoryId ? (
                 <Field>
                   <FieldLabel htmlFor="svc-subcategory">Sub-Category</FieldLabel>
                   <NativeSelect
                     id="svc-subcategory"
                     className="w-full"
-                    value={draft.subcategoryId}
-                    disabled={loadingSubcategories}
+                    value={selectedSubcategoryId}
+                    disabled={loadingSubcategories && !subcategoryOptions.length}
                     onChange={(event) => {
                       const nextId = event.target.value;
-                      const sub = subcategories.find((item) => item.id === nextId);
+                      const sub = subcategoryOptions.find((item) => item.id === nextId);
                       setDraft((current) => ({
                         ...current,
                         subcategoryId: nextId,
@@ -651,19 +797,19 @@ export function ServiceFormView({ id }: { id?: string }) {
                     }}
                   >
                     <NativeSelectOption value="">
-                      {loadingSubcategories
+                      {loadingSubcategories && !subcategoryOptions.length
                         ? "Loading sub-categories…"
                         : "Select sub-category"}
                     </NativeSelectOption>
-                    {subcategories.map((item) => (
+                    {subcategoryOptions.map((item) => (
                       <NativeSelectOption key={item.id} value={item.id}>
-                        {item.name}
+                        {toTitleCase(item.name)}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
                 </Field>
               ) : null}
-              {draft.categoryId ? (
+              {selectedCategoryId ? (
                 <>
                   <Field>
                     <FieldLabel>What needs work?</FieldLabel>
@@ -708,34 +854,48 @@ export function ServiceFormView({ id }: { id?: string }) {
                   <FieldLabel htmlFor="svc-price">Price</FieldLabel>
                   <Input
                     id="svc-price"
-                    type="number"
-                    min={0}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0"
                     value={draft.price}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        price: Number(event.target.value) || 0,
-                      }))
-                    }
+                    onChange={(event) => {
+                      const next = parsePriceInput(event.target.value);
+                      if (next === null) return;
+                      setDraft((current) => ({ ...current, price: next }));
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "-" || event.key === "e" || event.key === "E" || event.key === "+") {
+                        event.preventDefault();
+                      }
+                    }}
                   />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="svc-unit">Unit</FieldLabel>
-                  <NativeSelect
-                    id="svc-unit"
-                    className="w-full"
+                  <Select
                     value={draft.unit}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setDraft((current) => ({
                         ...current,
-                        unit: parseUnit(event.target.value),
+                        unit: parseUnit(value),
                       }))
                     }
                   >
-                    <NativeSelectOption value="job">Per job</NativeSelectOption>
-                    <NativeSelectOption value="visit">Per visit</NativeSelectOption>
-                    <NativeSelectOption value="hour">Per hour</NativeSelectOption>
-                  </NativeSelect>
+                    <SelectTrigger id="svc-unit" className={selectTriggerClass}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" align="start" className={selectContentClass}>
+                      <SelectItem value="job" className={selectItemClass}>
+                        Per job
+                      </SelectItem>
+                      <SelectItem value="visit" className={selectItemClass}>
+                        Per visit
+                      </SelectItem>
+                      <SelectItem value="hour" className={selectItemClass}>
+                        Per hour
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </Field>
               </div>
               <Field>
@@ -772,97 +932,130 @@ export function ServiceFormView({ id }: { id?: string }) {
             <p className="mt-1 text-xs text-muted-foreground">
               Pick photos for this job. The first selected photo is the cover.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => void onUploadPhotos(event.target.files)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={uploading}
-                onClick={() => fileRef.current?.click()}
-              >
-                {uploading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Upload className="size-4" />
-                )}
-                Upload photos
-              </Button>
-            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(event) => void onUploadPhotos(event.target.files)}
+            />
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+              className={cn(
+                "mt-3 flex w-44 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-input bg-transparent px-3 py-4 text-center transition-colors sm:w-52",
+                "hover:border-primary/40 hover:bg-muted/30",
+                "disabled:pointer-events-none disabled:opacity-60",
+              )}
+            >
+              {uploading ? (
+                <Spinner size="sm" label="Uploading photos" />
+              ) : (
+                <span className="flex size-8 items-center justify-center rounded-full border border-input bg-card">
+                  <ImagePlus className="size-3.5 text-primary" aria-hidden="true" />
+                </span>
+              )}
+              <span className="text-sm font-medium text-foreground">
+                {uploading ? "Uploading…" : "Upload photos"}
+              </span>
+              <span className="text-[11px] leading-snug text-muted-foreground">
+                PNG, JPG, or WEBP
+              </span>
+            </button>
             {draft.images.length ? (
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {draft.images.map((src, index) => {
-                  const cover = index === 0;
-                  return (
-                    <div
-                      key={`${src}-${index}`}
-                      className={cn(
-                        "relative aspect-[4/3] overflow-hidden rounded-lg border",
-                        cover
-                          ? "border-[#003F7D] ring-2 ring-[#003F7D]/25"
-                          : "border-input",
-                      )}
-                    >
-                      <Image
-                        src={src}
-                        alt=""
-                        fill
-                        sizes="160px"
-                        className="object-cover"
-                        unoptimized={src.startsWith("http")}
-                      />
-                      <span className="absolute top-1.5 left-1.5 rounded-full bg-[#003F7D] px-2 py-0.5 text-[10px] font-medium text-white">
-                        {cover ? "Cover" : "Selected"}
-                      </span>
-                      <button
+              <div className="mt-3">
+                <ul className="mt-1 flex flex-wrap gap-3">
+                  {draft.images.map((src, index) => {
+                    const cover = index === 0;
+                    return (
+                      <li
+                        key={`${src}-${index}`}
+                        className={cn(
+                          "group relative h-28 w-36 overflow-hidden rounded-xl border sm:h-32 sm:w-40",
+                          cover
+                            ? "border-primary ring-2 ring-primary/20"
+                            : "border-input",
+                        )}
+                      >
+                        <Image
+                          src={src}
+                          alt=""
+                          fill
+                          sizes="160px"
+                          className="object-cover"
+                          unoptimized={src.startsWith("http")}
+                        />
+                        <span
+                          className={cn(
+                            "absolute top-1.5 left-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white shadow-sm",
+                            cover ? "bg-primary" : "bg-black/55",
+                          )}
+                        >
+                          {cover ? "Cover" : "Selected"}
+                        </span>
+                        <button
+                          type="button"
+                          className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-600"
+                          aria-label="Remove photo"
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              images: current.images.filter((_, i) => i !== index),
+                            }))
+                          }
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                        {!cover ? (
+                          <button
+                            type="button"
+                            className="absolute inset-x-1.5 bottom-1.5 rounded-md bg-white/95 px-2 py-1 text-[11px] font-medium text-primary opacity-0 shadow-sm ring-1 ring-black/5 transition group-hover:opacity-100"
+                            onClick={() =>
+                              setDraft((current) => ({
+                                ...current,
+                                images: [
+                                  src,
+                                  ...current.images.filter((item) => item !== src),
+                                ],
+                              }))
+                            }
+                          >
+                            Use as cover
+                          </button>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {draft.images.length > 1 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {draft.images.slice(1).map((src, index) => (
+                      <Button
+                        key={`${src}-cover-${index}`}
                         type="button"
-                        className="absolute top-1.5 right-1.5 rounded-full bg-black/55 p-1 text-white"
-                        aria-label="Remove photo"
+                        size="sm"
+                        variant="outline"
                         onClick={() =>
                           setDraft((current) => ({
                             ...current,
-                            images: current.images.filter((_, i) => i !== index),
+                            images: [
+                              src,
+                              ...current.images.filter((item) => item !== src),
+                            ],
                           }))
                         }
                       >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
+                        Use {index + 2} as cover
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">No photos yet.</p>
             )}
-            {draft.images.length > 1 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {draft.images.slice(1).map((src, index) => (
-                  <Button
-                    key={`${src}-cover-${index}`}
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setDraft((current) => ({
-                        ...current,
-                        images: [
-                          src,
-                          ...current.images.filter((item) => item !== src),
-                        ],
-                      }))
-                    }
-                  >
-                    Use {index + 2} as cover
-                  </Button>
-                ))}
-              </div>
-            ) : null}
           </section>
 
           <section className="rounded-xl border border-input bg-card p-5">
@@ -963,7 +1156,7 @@ export function ServiceFormView({ id }: { id?: string }) {
             </ul>
             {pickerLoading && !pickerItems.length ? (
               <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
+                <Spinner size="sm" label="Loading service areas" />
                 Loading service areas…
               </div>
             ) : null}
@@ -976,9 +1169,7 @@ export function ServiceFormView({ id }: { id?: string }) {
                 disabled={pickerLoading}
                 onClick={() => void dispatch(fetchServiceAreasPicker({ append: true }))}
               >
-                {pickerLoading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : null}
+                {pickerLoading ? <Spinner size="sm" label="Loading more areas" /> : null}
                 See More
               </Button>
             ) : null}
@@ -1058,8 +1249,8 @@ export function ServiceFormView({ id }: { id?: string }) {
 
           <div className="flex gap-2">
             <Button type="submit" disabled={mutating || uploading}>
-              {mutating ? <Loader2 className="size-4 animate-spin" /> : null}
-              {id ? "Save service" : "Create service"}
+              {mutating ? <Spinner size="sm" label="Saving" /> : null}
+              {id ? "Update service" : "Create service"}
             </Button>
             <Button type="button" variant="outline" asChild>
               <Link href="/pro/dashboard/services">Cancel</Link>
@@ -1077,6 +1268,8 @@ export function ServiceFormView({ id }: { id?: string }) {
             providerSlug={provider.slug}
             hours={previewHours}
             areaLabels={areaLabels}
+            priceUnset={previewPriceUnset}
+            showBookButton={false}
           />
         </aside>
       </div>

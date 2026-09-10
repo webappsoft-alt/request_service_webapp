@@ -23,6 +23,8 @@ export type JobDetailContent = {
   /** Hide static “related jobs” when showing a live Fixed Service. */
   hideRelated?: boolean;
   requestHref?: string;
+  /** When set, Request this job runs this handler instead of navigating. */
+  onRequestJob?: () => void;
   compareHref?: string;
 };
 
@@ -42,6 +44,7 @@ export function JobDetail({
   const requestHref =
     content?.requestHref ??
     `/get-a-quote?service=${category.slug}&job=${record.slug}`;
+  const onRequestJob = content?.onRequestJob;
   const compareHref = content?.compareHref ?? `/services/${category.slug}`;
   const description =
     content?.description ??
@@ -158,12 +161,19 @@ export function JobDetail({
               </p>
 
               <div className="mt-5 flex flex-col gap-2.5">
-                <Button size="xl" asChild>
-                  <Link href={requestHref}>
+                {onRequestJob ? (
+                  <Button size="xl" type="button" onClick={onRequestJob}>
                     Request this job
                     <ArrowRight data-icon="inline-end" />
-                  </Link>
-                </Button>
+                  </Button>
+                ) : (
+                  <Button size="xl" asChild>
+                    <Link href={requestHref}>
+                      Request this job
+                      <ArrowRight data-icon="inline-end" />
+                    </Link>
+                  </Button>
+                )}
                 <Button size="xl" variant="outline" asChild>
                   <Link href={compareHref}>Compare local pros</Link>
                 </Button>

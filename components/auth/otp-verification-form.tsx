@@ -145,7 +145,19 @@ export function OtpVerificationForm({
   const [resendSeconds, setResendSeconds] = useState(0);
 
   const registerHref = isProvider ? "/pro/register" : "/register";
-  const successHref = isProvider ? proPaths.dashboard : "/";
+  const nextPath = searchParams.get("next")?.trim() || "";
+  const safeNext =
+    !isProvider &&
+    nextPath.startsWith("/") &&
+    !nextPath.startsWith("//")
+      ? nextPath
+      : null;
+  const successHref = isProvider
+    ? proPaths.dashboard
+    : safeNext || "/";
+  const registerHrefWithNext = safeNext
+    ? `${registerHref}?next=${encodeURIComponent(safeNext)}`
+    : registerHref;
 
   useEffect(() => {
     const draft = readPendingRegistration();
@@ -274,7 +286,7 @@ export function OtpVerificationForm({
       footer={
         <>
           Wrong email?{" "}
-          <Link href={registerHref} className={authLinkClass}>
+          <Link href={registerHrefWithNext} className={authLinkClass}>
             Go back to sign up
           </Link>
         </>

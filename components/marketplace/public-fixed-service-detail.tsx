@@ -1,10 +1,12 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Wrench } from "lucide-react";
 import { JobDetail } from "@/components/marketplace/job-detail";
 import { RelatedBrowse } from "@/components/marketplace/related-browse";
+import { FixedServiceOrderDialog } from "@/components/marketplace/fixed-service-order-dialog";
 import { Container } from "@/components/layout/container";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -15,10 +17,16 @@ import {
   setPublicFixedServiceDetail,
   type PublicFixedService,
 } from "@/store/publicFixedServicesSlice";
+import { setPendingOrderDraft } from "@/store/ordersSlice";
 import type { JobRecord } from "@/lib/data/jobs";
 import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
 import { locationDisplayLabel } from "@/store/locationSlice";
+import {
+  pendingFixedOrderMatchesService,
+  readPendingFixedOrder,
+  type PendingFixedOrder,
+} from "@/lib/booking/pending-fixed-order";
 
 function categoryFromService(service: PublicFixedService): ServiceCategory {
   const slug = (service.category?.slug || "plumbing") as ServiceCategorySlug;
@@ -150,6 +158,14 @@ export function PublicFixedServiceDetail({
   serviceSlug: string;
 }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [restoreDraft, setRestoreDraft] = useState<PendingFixedOrder | null>(
+    null,
+  );
+
   const service = useAppSelector((state) =>
     selectPublicFixedServiceBySlug(state, serviceSlug),
   );
@@ -176,6 +192,31 @@ export function PublicFixedServiceDetail({
     }
     void dispatch(fetchPublicFixedServiceBySlug(serviceSlug));
   }, [detailSlug, dispatch, service, serviceSlug]);
+
+  // After login/register (`?book=1`): restore pending checkout onto this service page.
+  useEffect(() => {
+    if (!service) return;
+    if (searchParams.get("book") !== "1") return;
+
+    const pending = readPendingFixedOrder();
+    const matches = pendingFixedOrderMatchesService(
+      pending,
+      service.id,
+      service.slug,
+    );
+    if (matches && pending) {
+      setRestoreDraft(pending);
+      dispatch(setPendingOrderDraft(pending));
+    }
+    setOrderOpen(true);
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("book");
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
+  }, [dispatch, pathname, router, searchParams, service]);
 
   const record = useMemo(
     () => (service ? jobRecordFromService(service) : null),
@@ -205,11 +246,13 @@ export function PublicFixedServiceDetail({
               service.category?.name ||
               "",
             benefits: defaultBenefits(service),
-            requestHref: `/get-a-quote?service=${service.category?.slug || categorySlug}&job=${service.slug}`,
+            onRequestJob: () => {
+              setRestoreDraft(null);
+              setOrderOpen(true);
+            },
             compareHref: categoryPath,
           }}
         />
-        {/* Keep related browse sections; will be wired to live data later. */}
         <RelatedBrowse
           category={record.category}
           currentJob={
@@ -219,11 +262,19 @@ export function PublicFixedServiceDetail({
           zip={zip || undefined}
           loc={loc || undefined}
         />
+        <FixedServiceOrderDialog
+          open={orderOpen}
+          onOpenChange={(next) => {
+            setOrderOpen(next);
+            if (!next) setRestoreDraft(null);
+          }}
+          service={service}
+          initialDraft={restoreDraft}
+        />
       </>
     );
   }
 
-  // Show spinner while fetching, and before the first effect run (no error yet).
   if (detailLoading || !detailError) {
     return (
       <CenteredSpinner

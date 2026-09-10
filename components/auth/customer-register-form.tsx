@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,13 @@ import {
 
 export function CustomerRegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next")?.trim() || "";
+  const safeNext =
+    nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : null;
+  const loginHref = safeNext
+    ? `/login?next=${encodeURIComponent(safeNext)}`
+    : "/login";
   const zipRef = useRef<HTMLInputElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -109,7 +116,9 @@ export function CustomerRegisterForm() {
         data?.message || "Check your email for a verification code.",
       );
       router.push(
-        `/verify-otp?email=${encodeURIComponent(draft.email.toLowerCase())}`,
+        `/verify-otp?email=${encodeURIComponent(draft.email.toLowerCase())}${
+          safeNext ? `&next=${encodeURIComponent(safeNext)}` : ""
+        }`,
       );
     } catch (error) {
       showApiErrorToast(error, "Could not start registration.");
@@ -127,7 +136,7 @@ export function CustomerRegisterForm() {
       footer={
         <>
           Already have an account?{" "}
-          <Link href="/login" className={authLinkClass}>
+          <Link href={loginHref} className={authLinkClass}>
             Log in
           </Link>
         </>

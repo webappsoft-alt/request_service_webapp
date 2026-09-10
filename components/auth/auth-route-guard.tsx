@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
+import { readPendingFixedOrder } from "@/lib/booking/pending-fixed-order";
 
 function isCustomerAuthPath(pathname: string): boolean {
   return (
@@ -48,6 +49,23 @@ function normalizeRole(
   return null;
 }
 
+function safeInternalPath(value: string | null | undefined): string | null {
+  const next = String(value || "").trim();
+  if (!next.startsWith("/") || next.startsWith("//")) return null;
+  return next;
+}
+
+function readNextFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return safeInternalPath(
+      new URLSearchParams(window.location.search).get("next"),
+    );
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Client-side RBAC after Redux Persist rehydrates.
  * - Customers must never see /pro/* (including pro login).
@@ -79,7 +97,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
         return;
       }
       if (isCustomerAuthPath(pathname)) {
-        router.replace("/");
+        // Prefer ?next=… (order resume), then pending order returnPath, else home.
+        const fromQuery = readNextFromLocation();
+        const fromPending = safeInternalPath(
+          readPendingFixedOrder()?.returnPath,
+        );
+        router.replace(fromQuery || fromPending || "/");
       }
       return;
     }

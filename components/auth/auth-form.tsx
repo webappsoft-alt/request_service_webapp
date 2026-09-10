@@ -116,6 +116,12 @@ function AuthFormInner({
   const verifyForgotHref = isProvider
     ? "/pro/verify-forgot-otp"
     : "/verify-forgot-otp";
+  const nextPath = searchParams.get("next")?.trim() || "";
+  const safeNext =
+    nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : null;
+  const registerHrefWithNext = safeNext
+    ? `${registerHref}?next=${encodeURIComponent(safeNext)}`
+    : registerHref;
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -149,7 +155,16 @@ function AuthFormInner({
                 ? "Signed in to your business account."
                 : "Welcome back."),
           );
-          router.push(isProvider ? proPaths.dashboard : "/");
+          const redirectNext = searchParams.get("next")?.trim() || "";
+          const safeRedirect =
+            !isProvider &&
+            redirectNext.startsWith("/") &&
+            !redirectNext.startsWith("//")
+              ? redirectNext
+              : null;
+          router.push(
+            safeRedirect || (isProvider ? proPaths.dashboard : "/"),
+          );
         } catch (error) {
           showApiErrorToast(error, "Invalid email or password.");
         } finally {
@@ -239,7 +254,7 @@ function AuthFormInner({
         mode === "login" ? (
           <>
             Don&apos;t have an account?{" "}
-            <Link href={registerHref} className={authLinkClass}>
+            <Link href={registerHrefWithNext} className={authLinkClass}>
               Sign up
             </Link>
           </>

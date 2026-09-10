@@ -21,6 +21,25 @@ export const userApi = {
   updatePassword: "user/update-password",
 } as const;
 
+/** Customer bookings & orders (Bearer JWT, role: customer). */
+export const bookingsApi = {
+  /** GET slot availability — query: serviceId, date (YYYY-MM-DD), timezone? */
+  availability: "bookings/availability",
+} as const;
+
+export const ordersApi = {
+  /** GET customer order history */
+  list: "orders",
+  /** POST instant checkout & slot lock */
+  checkout: "orders/checkout",
+  /** GET/PUT one order by id */
+  byId: (id: string) => `orders/${id}`,
+  changeOrder: (id: string) => `orders/${id}/change-order`,
+  signOff: (id: string) => `orders/${id}/sign-off`,
+  cancel: (id: string) => `orders/${id}/cancel`,
+  dispute: (id: string) => `orders/${id}/dispute`,
+} as const;
+
 export const providerApi = {
   /** GET/PUT provider business profile */
   profile: "provider/profile",

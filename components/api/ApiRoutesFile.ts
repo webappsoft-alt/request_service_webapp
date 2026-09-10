@@ -44,6 +44,8 @@ export const publicApi = {
   fixedServices: "public/fixed-services",
   /** GET one public fixed service by id or slug */
   fixedService: (idOrSlug: string) => `public/fixed-services/${idOrSlug}`,
+  /** POST contact inquiry */
+  contactUs: "public/contact-us",
 } as const;
 
 export const uploadApi = {

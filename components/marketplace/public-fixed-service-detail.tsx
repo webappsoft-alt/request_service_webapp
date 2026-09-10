@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { Wrench } from "lucide-react";
 import { JobDetail } from "@/components/marketplace/job-detail";
+import { RelatedBrowse } from "@/components/marketplace/related-browse";
 import { Container } from "@/components/layout/container";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 import type { JobRecord } from "@/lib/data/jobs";
 import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
+import { locationDisplayLabel } from "@/store/locationSlice";
 
 function categoryFromService(service: PublicFixedService): ServiceCategory {
   const slug = (service.category?.slug || "plumbing") as ServiceCategorySlug;
@@ -160,6 +162,9 @@ export function PublicFixedServiceDetail({
   const detailSlug = useAppSelector(
     (state) => state.publicFixedServices.detail?.slug,
   );
+  const customerLocation = useAppSelector((state) => state.location);
+  const loc = locationDisplayLabel(customerLocation);
+  const zip = customerLocation.zip.trim();
 
   useEffect(() => {
     if (!serviceSlug) return;
@@ -185,25 +190,36 @@ export function PublicFixedServiceDetail({
   if (service && record) {
     const categoryPath = `/services/${service.category?.slug || categorySlug}`;
     return (
-      <JobDetail
-        record={record}
-        providers={providers}
-        content={{
-          price: service.price,
-          imageUrl: service.images[0],
-          description: descriptionFromService(service),
-          points: service.covered,
-          tagline:
-            service.provider?.tagline ||
-            service.subcategory?.name ||
-            service.category?.name ||
-            "",
-          benefits: defaultBenefits(service),
-          hideRelated: true,
-          requestHref: `/get-a-quote?service=${service.category?.slug || categorySlug}&job=${service.slug}`,
-          compareHref: categoryPath,
-        }}
-      />
+      <>
+        <JobDetail
+          record={record}
+          providers={providers}
+          content={{
+            price: service.price,
+            imageUrl: service.images[0],
+            description: descriptionFromService(service),
+            points: service.covered,
+            tagline:
+              service.provider?.tagline ||
+              service.subcategory?.name ||
+              service.category?.name ||
+              "",
+            benefits: defaultBenefits(service),
+            requestHref: `/get-a-quote?service=${service.category?.slug || categorySlug}&job=${service.slug}`,
+            compareHref: categoryPath,
+          }}
+        />
+        {/* Keep related browse sections; will be wired to live data later. */}
+        <RelatedBrowse
+          category={record.category}
+          currentJob={
+            service.subcategory?.name || service.servicesName || undefined
+          }
+          basePath="/services"
+          zip={zip || undefined}
+          loc={loc || undefined}
+        />
+      </>
     );
   }
 

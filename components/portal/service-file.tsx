@@ -11,6 +11,7 @@ import {
   uploadFile,
 } from "@/components/api/uploadFile";
 import { HoursEditor, ServiceHoursSummary } from "@/components/portal/hours-editor";
+import { PaginatedCategorySelect } from "@/components/portal/paginated-category-select";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { usePortalSettings } from "@/components/portal/use-portal-settings";
@@ -20,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
@@ -359,11 +359,29 @@ export function ServiceFormView({ id }: { id?: string }) {
   const loadingParents = useAppSelector(
     (state) => state.categories?.loadingParents ?? false,
   );
+  const loadingMoreParents = useAppSelector(
+    (state) => state.categories?.loadingMoreParents ?? false,
+  );
+  const parentsHasMore = useAppSelector(
+    (state) => state.categories?.parentsHasMore ?? false,
+  );
+  const parentsPage = useAppSelector(
+    (state) => state.categories?.parentsPage ?? 0,
+  );
+  const parentsTotalPages = useAppSelector(
+    (state) => state.categories?.parentsTotalPages ?? 1,
+  );
   const loadingSubcategories = useAppSelector(
     (state) => state.categories?.loadingSubcategories ?? false,
   );
+  const loadingMoreSubcategories = useAppSelector(
+    (state) => state.categories?.loadingMoreSubcategories ?? false,
+  );
   const subcategoriesByParent = useAppSelector(
     (state) => state.categories?.subcategoriesByParent ?? {},
+  );
+  const subMetaByParent = useAppSelector(
+    (state) => state.categories?.subMetaByParent ?? {},
   );
 
   const detail = useAppSelector((state) => state.fixedServices?.detail ?? null);
@@ -400,6 +418,14 @@ export function ServiceFormView({ id }: { id?: string }) {
   const subcategories = selectedCategoryId
     ? subcategoriesByParent[selectedCategoryId] ?? []
     : [];
+  const categoryHasMore =
+    Boolean(parentsHasMore) || parentsPage < parentsTotalPages;
+  const subcategoryHasMore = Boolean(
+    selectedCategoryId &&
+      (subMetaByParent[selectedCategoryId]?.hasMore ||
+        (subMetaByParent[selectedCategoryId]?.page ?? 0) <
+          (subMetaByParent[selectedCategoryId]?.totalPages ?? 1)),
+  );
 
   const categoryOptions = useMemo(() => {
     const list = [...parents];
@@ -529,20 +555,23 @@ export function ServiceFormView({ id }: { id?: string }) {
     const parentId = detail.categoryId;
     if (parentId && lastSubFetchRef.current !== parentId) {
       lastSubFetchRef.current = parentId;
-      void dispatch(fetchSubcategories(parentId));
+      void dispatch(fetchSubcategories({ parentId }));
     }
   }, [detail, dispatch, hydrated, id, officeHours]);
 
   useEffect(() => {
     if (!selectedCategoryId) return;
     if (lastSubFetchRef.current === selectedCategoryId) return;
-    if (subcategoriesByParent[selectedCategoryId]) {
+    if (
+      subcategoriesByParent[selectedCategoryId] &&
+      subMetaByParent[selectedCategoryId]
+    ) {
       lastSubFetchRef.current = selectedCategoryId;
       return;
     }
     lastSubFetchRef.current = selectedCategoryId;
-    void dispatch(fetchSubcategories(selectedCategoryId));
-  }, [dispatch, selectedCategoryId, subcategoriesByParent]);
+    void dispatch(fetchSubcategories({ parentId: selectedCategoryId }));
+  }, [dispatch, selectedCategoryId, subcategoriesByParent, subMetaByParent]);
 
   const previewPrice = priceNumber(draft.price);
   const previewService: PortalFixedService = {
@@ -745,70 +774,76 @@ export function ServiceFormView({ id }: { id?: string }) {
                   required
                 />
               </Field>
-              <Field>
-                <FieldLabel htmlFor="svc-category">Category</FieldLabel>
-                <NativeSelect
-                  id="svc-category"
-                  className="w-full"
-                  value={selectedCategoryId}
-                  disabled={loadingParents && !categoryOptions.length}
-                  onChange={(event) => {
-                    const nextId = event.target.value;
-                    const category = categoryOptions.find((item) => item.id === nextId);
-                    setDraft((current) => ({
-                      ...current,
-                      categoryId: nextId,
-                      categoryName: category?.name ?? "",
-                      subcategoryId: "",
-                      subcategoryName: "",
-                      commonServices: [],
-                      workingArea: [],
-                    }));
-                  }}
-                >
-                  <NativeSelectOption value="">
-                    {loadingParents && !categoryOptions.length
-                      ? "Loading categories…"
-                      : "Select category"}
-                  </NativeSelectOption>
-                  {categoryOptions.map((category) => (
-                    <NativeSelectOption key={category.id} value={category.id}>
-                      {toTitleCase(category.name)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
-              {selectedCategoryId ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="svc-category">Category</FieldLabel>
+                  <PaginatedCategorySelect
+                    id="svc-category"
+                    className="w-full"
+                    value={selectedCategoryId}
+                    options={categoryOptions}
+                    disabled={loadingParents && !categoryOptions.length}
+                    loading={loadingParents}
+                    loadingMore={loadingMoreParents}
+                    hasMore={categoryHasMore}
+                    placeholder="Select category"
+                    onChange={(nextId, category) => {
+                      lastSubFetchRef.current = "";
+                      setDraft((current) => ({
+                        ...current,
+                        categoryId: nextId,
+                        categoryName: category?.name ?? "",
+                        subcategoryId: "",
+                        subcategoryName: "",
+                        commonServices: [],
+                        workingArea: [],
+                      }));
+                    }}
+                    onLoadMore={() => {
+                      void dispatch(fetchParentCategories({ append: true }));
+                    }}
+                  />
+                </Field>
                 <Field>
                   <FieldLabel htmlFor="svc-subcategory">Sub-Category</FieldLabel>
-                  <NativeSelect
+                  <PaginatedCategorySelect
                     id="svc-subcategory"
                     className="w-full"
                     value={selectedSubcategoryId}
-                    disabled={loadingSubcategories && !subcategoryOptions.length}
-                    onChange={(event) => {
-                      const nextId = event.target.value;
-                      const sub = subcategoryOptions.find((item) => item.id === nextId);
+                    options={subcategoryOptions}
+                    disabled={
+                      !selectedCategoryId ||
+                      (loadingSubcategories && !subcategoryOptions.length)
+                    }
+                    loading={loadingSubcategories}
+                    loadingMore={loadingMoreSubcategories}
+                    hasMore={subcategoryHasMore}
+                    placeholder={
+                      !selectedCategoryId
+                        ? "Select category first"
+                        : loadingSubcategories && !subcategoryOptions.length
+                          ? "Loading sub-categories…"
+                          : "Select sub-category"
+                    }
+                    onChange={(nextId, sub) => {
                       setDraft((current) => ({
                         ...current,
                         subcategoryId: nextId,
                         subcategoryName: sub?.name ?? "",
                       }));
                     }}
-                  >
-                    <NativeSelectOption value="">
-                      {loadingSubcategories && !subcategoryOptions.length
-                        ? "Loading sub-categories…"
-                        : "Select sub-category"}
-                    </NativeSelectOption>
-                    {subcategoryOptions.map((item) => (
-                      <NativeSelectOption key={item.id} value={item.id}>
-                        {toTitleCase(item.name)}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                    onLoadMore={() => {
+                      if (!selectedCategoryId) return;
+                      void dispatch(
+                        fetchSubcategories({
+                          parentId: selectedCategoryId,
+                          append: true,
+                        }),
+                      );
+                    }}
+                  />
                 </Field>
-              ) : null}
+              </div>
               {selectedCategoryId ? (
                 <>
                   <Field>

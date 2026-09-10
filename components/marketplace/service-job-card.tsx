@@ -26,6 +26,8 @@ export type ServiceJobListing = {
   href?: string;
   online?: boolean;
   responseLabel?: string;
+  /** Called before navigation so Redux can stash the listing service. */
+  onBeforeNavigate?: () => void;
 };
 
 export function ServiceJobCard({
@@ -68,6 +70,7 @@ export function ServiceJobCard({
   const points =
     listing?.covered?.length ? listing.covered.slice(0, 3) : detail.points.slice(0, 3);
   const href = listing?.href ?? getJobPath(category.slug, job);
+  const canNavigate = Boolean(href && href !== "#");
 
   const ticks = (
     <ul className="flex flex-col gap-0.5">
@@ -88,8 +91,11 @@ export function ServiceJobCard({
 
   return (
     <Link
-      href={href}
-      onClick={listing ? (event) => event.preventDefault() : undefined}
+      href={canNavigate ? href : "#"}
+      onClick={(event) => {
+        listing?.onBeforeNavigate?.();
+        if (!canNavigate) event.preventDefault();
+      }}
       className={cn(
         "group flex h-full overflow-hidden rounded-xl border border-foreground/35 bg-card transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:border-foreground/50 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         isList

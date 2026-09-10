@@ -66,6 +66,8 @@ import {
 import {
   buildPublicFixedServicesQueryKey,
   fetchPublicFixedServices,
+  publicFixedServicePath,
+  setPublicFixedServiceDetail,
   type PublicFixedService,
   type PublicFixedServiceSortBy,
   type PublicFixedServicesQuery,
@@ -213,7 +215,10 @@ function categoryStubFromService(service: PublicFixedService): ServiceCategory {
   };
 }
 
-function listingFromService(service: PublicFixedService): ServiceJobListing {
+function listingFromService(
+  service: PublicFixedService,
+  onBeforeNavigate?: () => void,
+): ServiceJobListing {
   return {
     id: service.id,
     title: service.servicesName,
@@ -227,8 +232,9 @@ function listingFromService(service: PublicFixedService): ServiceJobListing {
     reviewCount: service.provider?.rating.totalReviews,
     city: service.provider?.location.city,
     state: "",
-    href: "#",
+    href: publicFixedServicePath(service),
     online: true,
+    onBeforeNavigate,
   };
 }
 
@@ -1115,7 +1121,9 @@ export function ServicesDirectory({
                             job={service.servicesName}
                             index={index}
                             layout={view}
-                            listing={listingFromService(service)}
+                            listing={listingFromService(service, () =>
+                              dispatch(setPublicFixedServiceDetail(service)),
+                            )}
                           />
                         </li>
                       ))}

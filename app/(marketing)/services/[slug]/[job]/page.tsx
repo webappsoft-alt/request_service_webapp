@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { JobDetail } from "@/components/marketplace/job-detail";
+import { PublicFixedServiceDetail } from "@/components/marketplace/public-fixed-service-detail";
 import { RelatedBrowse } from "@/components/marketplace/related-browse";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getAllJobs, getJobRecord } from "@/lib/data/jobs";
@@ -27,10 +28,9 @@ export async function generateMetadata({
   const record = getJobRecord(slug, job);
   if (!record) {
     return buildMetadata({
-      title: "Job not found",
-      description: "That service job is not available.",
+      title: "Service details",
+      description: "View this fixed-price service offering.",
       path: `/services/${slug}/${job}`,
-      index: false,
     });
   }
 
@@ -69,7 +69,14 @@ export default async function JobDetailPage({
   const { slug, job } = await params;
   const query = await searchParams;
   const record = getJobRecord(slug, job);
-  if (!record) notFound();
+
+  // Live Fixed Service packages use the same URL shape with the service slug.
+  if (!record) {
+    if (!job?.trim()) notFound();
+    return (
+      <PublicFixedServiceDetail categorySlug={slug} serviceSlug={job} />
+    );
+  }
 
   const loc = firstSearchValue(query.loc);
   const zip = firstSearchValue(query.zip);

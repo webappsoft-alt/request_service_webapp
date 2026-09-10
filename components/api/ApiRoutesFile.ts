@@ -42,6 +42,8 @@ export const publicApi = {
   categories: "public/categories",
   /** GET public fixed-services search (customer directory) */
   fixedServices: "public/fixed-services",
+  /** GET one public fixed service by id or slug */
+  fixedService: (idOrSlug: string) => `public/fixed-services/${idOrSlug}`,
 } as const;
 
 export const uploadApi = {

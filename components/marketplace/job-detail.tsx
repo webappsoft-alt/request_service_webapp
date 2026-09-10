@@ -12,18 +12,45 @@ import { getRelatedJobs, type JobRecord } from "@/lib/data/jobs";
 import { formatStartingPrice } from "@/lib/format";
 import type { Provider } from "@/lib/types";
 
+/** Optional live Fixed Service overrides — same layout, API-backed values. */
+export type JobDetailContent = {
+  price: number;
+  imageUrl?: string;
+  description?: string;
+  points?: string[];
+  tagline?: string;
+  benefits?: string[];
+  /** Hide static “related jobs” when showing a live Fixed Service. */
+  hideRelated?: boolean;
+  requestHref?: string;
+  compareHref?: string;
+};
+
 export function JobDetail({
   record,
   providers,
+  content,
 }: {
   record: JobRecord;
   providers: Provider[];
+  content?: JobDetailContent;
 }) {
   const { category, job, index, detail } = record;
-  const price = getJobStartingPrice(category.id, job);
-  const image = getJobImage(category.id, job, index);
-  const related = getRelatedJobs(category, job);
-  const requestHref = `/get-a-quote?service=${category.slug}&job=${record.slug}`;
+  const price = content?.price ?? getJobStartingPrice(category.id, job);
+  const image = content?.imageUrl || getJobImage(category.id, job, index);
+  const related = content?.hideRelated ? [] : getRelatedJobs(category, job);
+  const requestHref =
+    content?.requestHref ??
+    `/get-a-quote?service=${category.slug}&job=${record.slug}`;
+  const compareHref = content?.compareHref ?? `/services/${category.slug}`;
+  const description =
+    content?.description ??
+    `${detail.description} This is typical ${category.name.toLowerCase()} work, not a company listing. The written estimate comes after a visit.`;
+  const points = content?.points?.length ? content.points : detail.points;
+  const tagline = content?.tagline ?? category.tagline;
+  const benefits = content?.benefits?.length
+    ? content.benefits
+    : category.benefits.slice(0, 4);
 
   return (
     <HomeMotion>
@@ -78,21 +105,21 @@ export function JobDetail({
                     sizes="(min-width: 1024px) 50vw, 90vw"
                     preload
                     className="object-cover"
+                    unoptimized={image.startsWith("http")}
                   />
                 ) : null}
               </div>
 
               <div className="flex flex-col gap-3">
                 <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-                  {detail.description} This is typical {category.name.toLowerCase()} work, not a
-                  company listing. The written estimate comes after a visit.
+                  {description}
                 </p>
               </div>
 
               <div className="flex flex-col gap-3">
                 <h2 className="text-xl font-semibold">What this job usually includes</h2>
                 <ul className="grid gap-2.5 sm:grid-cols-2">
-                  {detail.points.map((point) => (
+                  {points.map((point) => (
                     <li key={point} className="flex items-start gap-2.5 text-sm leading-6">
                       <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
                       <span>{point}</span>
@@ -121,7 +148,7 @@ export function JobDetail({
             <aside className="rounded-2xl border bg-card p-5 shadow-sm lg:sticky lg:top-24">
               <Badge variant="secondary">{category.shortName}</Badge>
               <h1 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">{job}</h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.tagline}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground capitalize">{tagline}</p>
 
               <p className="mt-5">
                 <span className="block text-[11px] text-muted-foreground">Typical starting price</span>
@@ -138,12 +165,12 @@ export function JobDetail({
                   </Link>
                 </Button>
                 <Button size="xl" variant="outline" asChild>
-                  <Link href={`/services/${category.slug}`}>Compare local pros</Link>
+                  <Link href={compareHref}>Compare local pros</Link>
                 </Button>
               </div>
 
               <ul className="mt-5 flex flex-col gap-2 border-t pt-4">
-                {category.benefits.slice(0, 4).map((benefit) => (
+                {benefits.map((benefit) => (
                   <li key={benefit} className="flex items-start gap-2 text-sm leading-5 text-muted-foreground">
                     <Check className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden="true" />
                     <span>{benefit}</span>
@@ -185,7 +212,7 @@ export function JobDetail({
                 <h2 className="text-2xl font-semibold">{category.name} professionals</h2>
               </div>
               <Link
-                href={`/services/${category.slug}`}
+                href={compareHref}
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors hover:text-foreground"
               >
                 Open {category.shortName} listings

@@ -30,6 +30,7 @@ export type PublicFixedServiceProvider = {
   companyName: string;
   slug: string;
   tagline: string;
+  description?: string;
   rating: {
     average: number;
     totalReviews: number;
@@ -104,6 +105,10 @@ type PublicFixedServicesState = {
   loadingMore: boolean;
   loaded: boolean;
   error: string | null;
+  /** Stashed / fetched service for the detail page (keyed by slug). */
+  detail: PublicFixedService | null;
+  detailLoading: boolean;
+  detailError: string | null;
 };
 
 export const PUBLIC_FIXED_SERVICES_LIMIT = 10;
@@ -126,6 +131,9 @@ const initialState: PublicFixedServicesState = {
   loadingMore: false,
   loaded: false,
   error: null,
+  detail: null,
+  detailLoading: false,
+  detailError: null,
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -186,6 +194,8 @@ function normalizeProvider(raw: unknown): PublicFixedServiceProvider | null {
       typeof record.companyName === "string" ? record.companyName : "",
     slug: typeof record.slug === "string" ? record.slug : "",
     tagline: typeof record.tagline === "string" ? record.tagline : "",
+    description:
+      typeof record.description === "string" ? record.description : undefined,
     rating: {
       average: toNumber(rating.average, 0),
       totalReviews: toNumber(rating.totalReviews, 0),
@@ -299,6 +309,36 @@ function parsePublicFixedServicesResponse(response: unknown): {
       (page < totalPages || page * limit < total));
 
   return { items, page, limit, total, totalPages, hasNextPage };
+}
+
+/** Detail payload: `{ success, data: Service }` or bare service object. */
+function extractDetailEntity(response: unknown): PublicFixedService | null {
+  const root = asRecord(response) ?? {};
+  if (root.data != null && !Array.isArray(root.data)) {
+    return normalizePublicFixedService(root.data);
+  }
+  return normalizePublicFixedService(response);
+}
+
+/** Customer detail URL: `/services/{categorySlug}/{serviceSlug}`. */
+export function publicFixedServicePath(service: PublicFixedService): string {
+  const categorySlug =
+    service.category?.slug?.trim() ||
+    service.category?.name?.trim().toLowerCase().replace(/\s+/g, "-") ||
+    "services";
+  const serviceSlug = service.slug?.trim();
+  if (!serviceSlug) return "/services";
+  return `/services/${categorySlug}/${serviceSlug}`;
+}
+
+export function selectPublicFixedServiceBySlug(
+  state: { publicFixedServices?: PublicFixedServicesState },
+  slug: string,
+): PublicFixedService | null {
+  const slice = state.publicFixedServices;
+  if (!slice || !slug) return null;
+  if (slice.detail?.slug === slug) return slice.detail;
+  return slice.items.find((item) => item.slug === slug) ?? null;
 }
 
 export function buildPublicFixedServicesQueryKey(
@@ -504,6 +544,52 @@ export const fetchPublicFixedServices = createAsyncThunk<
   },
 );
 
+/**
+ * Fallback for direct URL / refresh when listing state is unavailable.
+ * Skips the network call when detail or list items already hold this slug.
+ */
+export const fetchPublicFixedServiceBySlug = createAsyncThunk<
+  PublicFixedService,
+  string,
+  {
+    state: { publicFixedServices: PublicFixedServicesState };
+    rejectValue: string;
+  }
+>(
+  "publicFixedServices/fetchBySlug",
+  async (slug, { rejectWithValue }) => {
+    const trimmed = String(slug || "").trim();
+    if (!trimmed) {
+      return rejectWithValue("Service slug is required.");
+    }
+    try {
+      const response = await getData(
+        publicApi.fixedService(trimmed),
+        undefined,
+        { silent: true },
+      );
+      const entity = extractDetailEntity(response);
+      if (!entity) {
+        return rejectWithValue("Service not found.");
+      }
+      return entity;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+  {
+    condition: (slug, { getState }) => {
+      const trimmed = String(slug || "").trim();
+      if (!trimmed) return false;
+      const state = getState().publicFixedServices;
+      if (state.detailLoading) return false;
+      if (state.detail?.slug === trimmed) return false;
+      if (state.items.some((item) => item.slug === trimmed)) return false;
+      return true;
+    },
+  },
+);
+
 const publicFixedServicesSlice = createSlice({
   name: "publicFixedServices",
   initialState,
@@ -517,8 +603,23 @@ const publicFixedServicesSlice = createSlice({
       state.loaded = false;
       state.error = null;
     },
+    /** Stash listing card data so the detail page can render without a fetch. */
+    setPublicFixedServiceDetail(
+      state,
+      action: PayloadAction<PublicFixedService>,
+    ) {
+      state.detail = action.payload;
+      state.detailLoading = false;
+      state.detailError = null;
+    },
+    clearPublicFixedServiceDetail(state) {
+      state.detail = null;
+      state.detailLoading = false;
+      state.detailError = null;
+    },
     clearPublicFixedServicesError(state) {
       state.error = null;
+      state.detailError = null;
     },
     resetPublicFixedServices() {
       return initialState;
@@ -586,12 +687,30 @@ const publicFixedServicesSlice = createSlice({
           action.payload ||
           action.error.message ||
           "Failed to load services.";
+      })
+      .addCase(fetchPublicFixedServiceBySlug.pending, (state) => {
+        state.detailLoading = true;
+        state.detailError = null;
+      })
+      .addCase(fetchPublicFixedServiceBySlug.fulfilled, (state, action) => {
+        state.detailLoading = false;
+        state.detail = action.payload;
+        state.detailError = null;
+      })
+      .addCase(fetchPublicFixedServiceBySlug.rejected, (state, action) => {
+        state.detailLoading = false;
+        state.detailError =
+          action.payload ||
+          action.error.message ||
+          "Failed to load service.";
       });
   },
 });
 
 export const {
   setPublicFixedServicesQuery,
+  setPublicFixedServiceDetail,
+  clearPublicFixedServiceDetail,
   clearPublicFixedServicesError,
   resetPublicFixedServices,
 } = publicFixedServicesSlice.actions;

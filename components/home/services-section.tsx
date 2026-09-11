@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useHomeCategoryFilter } from "@/components/home/home-category-filter";
 import { Container, Section } from "@/components/layout/container";
 import { CardCarousel, CardCarouselItem } from "@/components/shared/card-carousel";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/store/categoriesSlice";
 
 const LANDING_CATEGORIES_LIMIT = 10;
+const CATEGORY_SKELETON_COUNT = 8;
 
 function categoryImage(slug: string, name: string, index: number): string | undefined {
   const staticCat = getServiceCategoryBySlug(slug);
@@ -44,10 +46,24 @@ function servicesDirectoryHref(serviceKey: string) {
   return query ? `/services?${query}` : "/services";
 }
 
+function CategoryCardSkeleton() {
+  return (
+    <div
+      className="flex flex-col items-center gap-1.5 text-center"
+      aria-hidden="true"
+    >
+      <Skeleton className="aspect-square w-full rounded-xl" />
+      <Skeleton className="h-4 w-3/4 max-w-28" />
+    </div>
+  );
+}
+
 export function ServicesSection() {
   const dispatch = useAppDispatch();
   const { selectedSlug } = useHomeCategoryFilter();
   const parents = useAppSelector(selectParentCategories);
+  const parentsLoaded = useAppSelector((state) => state.categories.parentsLoaded);
+  const loadingParents = useAppSelector((state) => state.categories.loadingParents);
 
   useEffect(() => {
     void dispatch(fetchParentCategories());
@@ -69,6 +85,7 @@ export function ServicesSection() {
     return list.slice(0, LANDING_CATEGORIES_LIMIT);
   }, [parents, selectedCategory?.name, selectedCategory?.slug, selectedSlug]);
 
+  const showSkeleton = !categories.length && (loadingParents || !parentsLoaded);
   const count = categories.length;
 
   return (
@@ -103,35 +120,46 @@ export function ServicesSection() {
           }
           ariaLabel={selectedCategory ? `${selectedCategory.name} services` : "Browse services"}
         >
-          {categories.map((item, index) => {
-            const image = categoryImage(item.slug, item.name, index);
-            const serviceKey = item.slug || item.id;
-
-            return (
-              <CardCarouselItem
-                key={item.id}
-                className="w-[min(9rem,40vw)] shrink-0 snap-start sm:w-40 md:w-40 lg:w-40"
-              >
-                <Link
-                  href={servicesDirectoryHref(serviceKey)}
-                  className="group flex flex-col items-center gap-1.5 text-center focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          {showSkeleton
+            ? Array.from({ length: CATEGORY_SKELETON_COUNT }, (_, index) => (
+                <CardCarouselItem
+                  key={`category-skeleton-${index}`}
+                  className="w-[min(9rem,40vw)] shrink-0 snap-start sm:w-40 md:w-40 lg:w-40"
                 >
-                  <span className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
-                    {image ? (
-                      <Image
-                        src={image}
-                        alt=""
-                        fill
-                        sizes="(min-width: 1024px) 13vw, 40vw"
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                      />
-                    ) : null}
-                  </span>
-                  <span className="text-sm font-semibold leading-5">{item.name}</span>
-                </Link>
-              </CardCarouselItem>
-            );
-          })}
+                  <CategoryCardSkeleton />
+                </CardCarouselItem>
+              ))
+            : categories.map((item, index) => {
+                const image = categoryImage(item.slug, item.name, index);
+                const serviceKey = item.slug || item.id;
+
+                return (
+                  <CardCarouselItem
+                    key={item.id}
+                    className="w-[min(9rem,40vw)] shrink-0 snap-start sm:w-40 md:w-40 lg:w-40"
+                  >
+                    <Link
+                      href={servicesDirectoryHref(serviceKey)}
+                      className="group flex flex-col items-center gap-1.5 text-center focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      <span className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
+                        {image ? (
+                          <Image
+                            src={image}
+                            alt=""
+                            fill
+                            sizes="(min-width: 1024px) 13vw, 40vw"
+                            className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                          />
+                        ) : null}
+                      </span>
+                      <span className="text-sm font-semibold leading-5">
+                        {item.name}
+                      </span>
+                    </Link>
+                  </CardCarouselItem>
+                );
+              })}
         </CardCarousel>
       </Container>
     </Section>

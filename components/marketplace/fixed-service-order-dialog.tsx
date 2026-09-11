@@ -280,16 +280,16 @@ export function FixedServiceOrderDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <div className="border-b px-5 py-4">
-          <DialogTitle className="text-lg font-semibold">
+        <div className="shrink-0 border-b px-5 py-4 pr-12 sm:px-6">
+          <DialogTitle className="text-lg font-semibold tracking-tight">
             Request this job
           </DialogTitle>
-          <DialogDescription className="mt-1 text-sm text-muted-foreground">
+          <DialogDescription className="mt-1 text-sm leading-5 text-muted-foreground">
             {service.servicesName} · {formatStartingPrice(price)}
           </DialogDescription>
         </div>
 
-        <div className="flex flex-col gap-5 overflow-y-auto px-5 py-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5 sm:gap-6 sm:px-6">
           <Field>
             <FieldLabel htmlFor="order-date">Appointment date</FieldLabel>
             <Input
@@ -302,24 +302,27 @@ export function FixedServiceOrderDialog({
             />
           </Field>
 
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">
-              Available time slots{" "}
-              <span className="font-normal text-muted-foreground">
-                (required — tap one)
-              </span>
-            </p>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm font-medium">Available time slots</p>
+              <p className="text-xs text-muted-foreground">
+                Required — select one available time
+              </p>
+            </div>
             {availabilityLoading ? (
-              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                <Spinner size="sm" label="Loading slots" />
-                Loading availability…
+              <div className="flex min-h-[5.5rem] items-center justify-center rounded-lg border border-input bg-muted/30">
+                <Spinner size="md" label="Loading slots" />
               </div>
             ) : availabilityError ? (
-              <p className="text-sm text-destructive">{availabilityError}</p>
+              <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3.5 py-3">
+                <p className="text-sm text-destructive">{availabilityError}</p>
+              </div>
             ) : !slots.length ? (
-              <p className="text-sm text-muted-foreground">
-                No slots for this date. Try another day.
-              </p>
+              <div className="rounded-lg border border-input bg-muted/30 px-3.5 py-3">
+                <p className="text-sm text-muted-foreground">
+                  No slots for this date. Try another day.
+                </p>
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {slots.map((slot) => {
@@ -331,12 +334,12 @@ export function FixedServiceOrderDialog({
                       disabled={!slot.isAvailable || checkoutLoading}
                       onClick={() => setSelectedSlot(slot)}
                       className={cn(
-                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        "flex min-h-11 flex-col items-center justify-center rounded-lg border px-3 py-2.5 text-center text-sm transition-colors",
                         slot.isAvailable
                           ? selected
                             ? "border-primary bg-primary text-primary-foreground"
-                            : "border-input bg-card hover:border-primary/40"
-                          : "cursor-not-allowed border-muted bg-muted/60 text-muted-foreground",
+                            : "border-input bg-card hover:border-primary/40 hover:bg-muted/40"
+                          : "cursor-not-allowed border-muted bg-muted/50 text-muted-foreground",
                       )}
                       title={
                         slot.isAvailable
@@ -344,11 +347,11 @@ export function FixedServiceOrderDialog({
                           : slot.disabledReason || "Booked"
                       }
                     >
-                      <span className="block font-medium">
+                      <span className="font-medium leading-none">
                         {formatSlotLabel(slot.startTime)}
                       </span>
                       {!slot.isAvailable ? (
-                        <span className="mt-0.5 block text-[11px]">
+                        <span className="mt-1 text-[11px] leading-none opacity-80">
                           {slot.disabledReason || "Booked"}
                         </span>
                       ) : null}
@@ -362,7 +365,7 @@ export function FixedServiceOrderDialog({
             slots.some((slot) => slot.isAvailable) &&
             !selectedSlot ? (
               <p className="text-xs text-muted-foreground">
-                Choose a time slot above to enable booking.
+                Select a time slot to continue.
               </p>
             ) : null}
           </div>
@@ -453,11 +456,12 @@ export function FixedServiceOrderDialog({
               onChange={(event) => setCustomerNotes(event.target.value)}
               placeholder="Anything the technician should know before arrival"
               disabled={checkoutLoading}
+              className="min-h-[5.5rem] resize-none"
             />
           </Field>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t px-5 py-4">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-5 py-4 sm:px-6">
           <Button
             type="button"
             variant="outline"
@@ -470,12 +474,10 @@ export function FixedServiceOrderDialog({
             type="button"
             onClick={() => void onConfirm()}
             disabled={checkoutLoading}
+            className="min-w-[9.5rem]"
           >
             {checkoutLoading ? (
-              <>
-                <Spinner size="sm" label="Placing order" />
-                Placing order…
-              </>
+              <Spinner size="sm" label="Placing order" />
             ) : (
               "Confirm booking"
             )}

@@ -303,6 +303,56 @@ export function buildPublicProfessionalsQueryKey(
   return JSON.stringify(normalized);
 }
 
+type LiveLocationFields = {
+  zip: string;
+  city: string;
+  state: string;
+  country: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+/** Merge UI filters with live Redux location for a request (non-append). */
+export function resolvePublicProfessionalsQuery(
+  incoming: PublicProfessionalsQuery | undefined,
+  location: LiveLocationFields,
+): { query: PublicProfessionalsQuery; committed: boolean } {
+  const hasZip = Boolean(location.zip.trim());
+  const hasCoords =
+    location.latitude != null &&
+    Number.isFinite(location.latitude) &&
+    location.longitude != null &&
+    Number.isFinite(location.longitude);
+  const committed =
+    hasZip || hasCoords || Boolean(location.city.trim());
+
+  const query: PublicProfessionalsQuery = {
+    sortBy: "recommended",
+    ...incoming,
+    zipCode: hasZip ? location.zip.trim() : undefined,
+    lat: hasCoords ? location.latitude! : undefined,
+    lng: hasCoords ? location.longitude! : undefined,
+    locationToken: committed
+      ? [
+          location.zip,
+          location.city,
+          location.state,
+          location.country,
+          location.latitude ?? "",
+          location.longitude ?? "",
+        ].join("|")
+      : "",
+  };
+
+  if (!query.zipCode?.trim()) delete query.zipCode;
+  if (query.lat == null || !Number.isFinite(query.lat)) delete query.lat;
+  if (query.lng == null || !Number.isFinite(query.lng)) delete query.lng;
+  if (query.minRating == null || query.minRating <= 0) delete query.minRating;
+  if (!query.locationToken) delete query.locationToken;
+
+  return { query, committed };
+}
+
 function toRequestParams(
   query: PublicProfessionalsQuery,
   page: number,
@@ -456,58 +506,40 @@ export const fetchPublicProfessionals = createAsyncThunk<
     const append = Boolean(arg?.append);
     const incoming = arg?.query;
 
-    const hasZip = Boolean(location.zip.trim());
-    const hasCoords =
-      location.latitude != null &&
-      Number.isFinite(location.latitude) &&
-      location.longitude != null &&
-      Number.isFinite(location.longitude);
-    const committed =
-      hasZip ||
-      hasCoords ||
-      Boolean(location.city.trim());
-
-    // Never call the directory without a committed location (selected place / geo).
-    if (!append && !committed) {
-      return rejectWithValue("Location is required.");
-    }
-
+    const resolved = append
+      ? null
+      : resolvePublicProfessionalsQuery(incoming, location);
     const nextQuery: PublicProfessionalsQuery = append
       ? {
           ...state.query,
           ...incoming,
         }
-      : {
-          sortBy: "recommended",
-          ...incoming,
-          // Always prefer live Redux location — do not keep a prior zip via undefined merges.
-          zipCode: hasZip ? location.zip.trim() : undefined,
-          lat: hasCoords ? location.latitude! : undefined,
-          lng: hasCoords ? location.longitude! : undefined,
-          locationToken: committed
-            ? [
-                location.zip,
-                location.city,
-                location.state,
-                location.country,
-                location.latitude ?? "",
-                location.longitude ?? "",
-              ].join("|")
-            : "",
-        };
+      : resolved!.query;
 
-    if (!nextQuery.zipCode?.trim()) delete nextQuery.zipCode;
-    if (nextQuery.lat == null || !Number.isFinite(nextQuery.lat)) {
-      delete nextQuery.lat;
+    // Never call the directory without a committed location (selected place / geo).
+    if (!append && !resolved!.committed) {
+      return rejectWithValue("Location is required.");
     }
-    if (nextQuery.lng == null || !Number.isFinite(nextQuery.lng)) {
-      delete nextQuery.lng;
+
+    // Reuse cached page when the exact query is already loaded (Landing ↔ Find a Pro).
+    if (
+      !append &&
+      state.loaded &&
+      state.items.length &&
+      state.queryKey === buildPublicProfessionalsQueryKey(nextQuery)
+    ) {
+      return {
+        items: state.items,
+        page: state.page,
+        limit: state.limit,
+        total: state.total,
+        totalPages: state.totalPages,
+        hasNextPage: state.hasNextPage,
+        append: false,
+        query: nextQuery,
+        queryKey: state.queryKey,
+      };
     }
-    // Only send minRating when the user picked a Rating filter value.
-    if (nextQuery.minRating == null || nextQuery.minRating <= 0) {
-      delete nextQuery.minRating;
-    }
-    if (!nextQuery.locationToken) delete nextQuery.locationToken;
 
     const queryKey = buildPublicProfessionalsQueryKey(nextQuery);
     const page = append ? state.page + 1 : 1;
@@ -542,14 +574,19 @@ export const fetchPublicProfessionals = createAsyncThunk<
       if (arg?.append) {
         return !state.loading && !state.loadingMore && state.hasNextPage;
       }
-      const committed =
-        Boolean(location.zip.trim()) ||
-        Boolean(location.city.trim()) ||
-        (location.latitude != null &&
-          location.longitude != null &&
-          Number.isFinite(location.latitude) &&
-          Number.isFinite(location.longitude));
+      if (state.loading) return false;
+      const incoming =
+        arg && typeof arg === "object" ? arg.query : undefined;
+      const { query, committed } = resolvePublicProfessionalsQuery(
+        incoming,
+        location,
+      );
       if (!committed) return false;
+      const queryKey = buildPublicProfessionalsQueryKey(query);
+      // Same data already in store — skip network (shared with Landing Page).
+      if (state.loaded && state.items.length && state.queryKey === queryKey) {
+        return false;
+      }
       return true;
     },
   },

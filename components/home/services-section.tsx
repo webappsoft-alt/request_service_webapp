@@ -1,22 +1,75 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useHomeCategoryFilter } from "@/components/home/home-category-filter";
 import { Container, Section } from "@/components/layout/container";
 import { CardCarousel, CardCarouselItem } from "@/components/shared/card-carousel";
-import { getAllJobs, getJobPath } from "@/lib/data/jobs";
-import { getJobImage } from "@/lib/data/provider-media";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchParentCategories,
+  selectParentCategories,
+} from "@/store/categoriesSlice";
 
-const allJobs = getAllJobs();
+const LANDING_CATEGORIES_LIMIT = 10;
+
+function categoryImage(slug: string, name: string, index: number): string | undefined {
+  const staticCat = getServiceCategoryBySlug(slug);
+  if (staticCat?.image) return staticCat.image;
+  const byName = getServiceCategoryBySlug(
+    name.toLowerCase().replace(/\s+/g, "-"),
+  );
+  if (byName?.image) return byName.image;
+  const fallbacks = [
+    "/images/services/service-plumbing.jpg",
+    "/images/services/service-hvac.jpg",
+    "/images/services/service-electrical.jpg",
+    "/images/services/service-handyman.jpg",
+    "/images/services/service-cleaning.jpg",
+    "/images/services/service-roofing.jpg",
+    "/images/services/service-landscaping.jpg",
+    "/images/services/service-painting.jpg",
+    "/images/services/service-bathroom.jpg",
+    "/images/services/service-pest.jpg",
+  ];
+  return fallbacks[index % fallbacks.length];
+}
+
+function servicesDirectoryHref(serviceKey: string) {
+  const params = new URLSearchParams();
+  if (serviceKey) params.set("service", serviceKey);
+  const query = params.toString();
+  return query ? `/services?${query}` : "/services";
+}
 
 export function ServicesSection() {
+  const dispatch = useAppDispatch();
   const { selectedSlug } = useHomeCategoryFilter();
-  const selectedCategory = selectedSlug ? getServiceCategoryBySlug(selectedSlug) : undefined;
-  const jobs = selectedSlug
-    ? allJobs.filter((item) => item.category.slug === selectedSlug)
-    : allJobs;
+  const parents = useAppSelector(selectParentCategories);
+
+  useEffect(() => {
+    void dispatch(fetchParentCategories());
+  }, [dispatch]);
+
+  const selectedCategory = selectedSlug
+    ? getServiceCategoryBySlug(selectedSlug)
+    : undefined;
+
+  const categories = useMemo(() => {
+    const list = selectedSlug
+      ? parents.filter(
+          (item) =>
+            item.slug === selectedSlug ||
+            item.slug === selectedCategory?.slug ||
+            item.name.toLowerCase() === selectedCategory?.name.toLowerCase(),
+        )
+      : parents;
+    return list.slice(0, LANDING_CATEGORIES_LIMIT);
+  }, [parents, selectedCategory?.name, selectedCategory?.slug, selectedSlug]);
+
+  const count = categories.length;
 
   return (
     <Section id="browse-by-job" density="tight" className="scroll-mt-52">
@@ -37,20 +90,30 @@ export function ServicesSection() {
 
         <CardCarousel
           key={selectedSlug ?? "all"}
-          countLabel={`${jobs.length} ${jobs.length === 1 ? "service" : "services"}`}
-          seeAllHref={selectedCategory ? `/services/${selectedCategory.slug}` : "/services"}
-          seeAllLabel={selectedCategory ? `See all ${selectedCategory.shortName}` : "See all services"}
+          countLabel={`${count} ${count === 1 ? "service" : "services"}`}
+          seeAllHref={
+            selectedCategory
+              ? servicesDirectoryHref(selectedCategory.slug)
+              : "/services"
+          }
+          seeAllLabel={
+            selectedCategory
+              ? `See all ${selectedCategory.shortName}`
+              : "See all services"
+          }
           ariaLabel={selectedCategory ? `${selectedCategory.name} services` : "Browse services"}
         >
-          {jobs.map((item) => {
-            const image = getJobImage(item.category.id, item.job, item.index);
+          {categories.map((item, index) => {
+            const image = categoryImage(item.slug, item.name, index);
+            const serviceKey = item.slug || item.id;
+
             return (
               <CardCarouselItem
-                key={`${item.category.slug}-${item.slug}`}
+                key={item.id}
                 className="w-[min(9rem,40vw)] shrink-0 snap-start sm:w-40 md:w-40 lg:w-40"
               >
                 <Link
-                  href={getJobPath(item.category.slug, item.job)}
+                  href={servicesDirectoryHref(serviceKey)}
                   className="group flex flex-col items-center gap-1.5 text-center focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <span className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
@@ -64,12 +127,7 @@ export function ServicesSection() {
                       />
                     ) : null}
                   </span>
-                  <span className="flex flex-col">
-                    <span className="text-sm font-semibold leading-5">{item.job}</span>
-                    <span className="text-xs leading-4 text-muted-foreground">
-                      {item.category.shortName}
-                    </span>
-                  </span>
+                  <span className="text-sm font-semibold leading-5">{item.name}</span>
                 </Link>
               </CardCarouselItem>
             );

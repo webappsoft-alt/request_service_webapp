@@ -697,7 +697,14 @@ export function ServicesDirectory({
     });
     skipUrlRef.current = true;
     setQuery(next.query);
-    setCategories(next.service ? [next.service] : []);
+    // Prefer the explicit URL/service param so landing → /services?service=… auto-selects.
+    setCategories(
+      next.service
+        ? [next.service]
+        : initialCategory.trim()
+          ? [initialCategory.trim()]
+          : [],
+    );
     if (next.location || next.zip) {
       dispatch(
         hydrateLocationIfEmpty({
@@ -709,6 +716,23 @@ export function ServicesDirectory({
     }
     setAnswers(answersFromIntent(next));
   }, [dispatch, initialCategory, initialJob, initialLocation, initialQuery, initialZip]);
+
+  // Once API parents load, normalize the selected key to the checkbox slug/id.
+  useEffect(() => {
+    if (!categories.length || !parentCategories.length) return;
+    const current = categories[0];
+    const match = parentCategories.find(
+      (item) =>
+        item.slug === current ||
+        item.id === current ||
+        item.name.toLowerCase() === current.toLowerCase(),
+    );
+    if (!match) return;
+    const key = match.slug || match.id;
+    if (key !== current) {
+      setCategories([key]);
+    }
+  }, [categories, parentCategories]);
 
   useEffect(() => {
     setPage(1);

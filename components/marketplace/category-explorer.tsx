@@ -380,7 +380,9 @@ export function CategoryExplorer({
     const timer = window.setTimeout(() => {
       void dispatch(
         fetchPublicProfessionals({ query: liveQueryRef.current }),
-      );
+      ).finally(() => {
+        setPendingRefresh(false);
+      });
     }, 220);
     return () => window.clearTimeout(timer);
   }, [dispatch, liveQueryKey, locationCommitted, locationReady, useLive]);

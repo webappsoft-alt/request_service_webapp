@@ -168,7 +168,9 @@ export function resolveSearchIntent(input: {
     };
   }
 
-  const service = input.service && getServiceCategoryBySlug(input.service) ? input.service : undefined;
+  const service = input.service?.trim()
+    ? getServiceCategoryBySlug(input.service)?.slug ?? input.service.trim()
+    : undefined;
   if (service && input.job) {
     return { confidence: "exact-job", query, service, job: input.job, zip, location };
   }

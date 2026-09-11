@@ -244,7 +244,9 @@ export const fetchParentCategories = createAsyncThunk<
         if (state.parentsPage >= state.parentsTotalPages) return false;
         return true;
       }
+      // Reuse cached parents across Landing + Find a Professional (no duplicate fetch).
       if (state.loadingParents) return false;
+      if (state.parentsLoaded && state.parents.length) return false;
       return true;
     },
   },

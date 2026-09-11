@@ -63,6 +63,18 @@ export function locationDisplayLabel(location: CustomerLocation): string {
   return "";
 }
 
+/** True when location is a selected/hydrated place (not mid-typing draft). */
+export function isCommittedLocation(location: CustomerLocation): boolean {
+  const hasZip = Boolean(location.zip.trim());
+  const hasCity = Boolean(location.city.trim());
+  const hasCoords =
+    location.latitude != null &&
+    location.longitude != null &&
+    Number.isFinite(location.latitude) &&
+    Number.isFinite(location.longitude);
+  return hasZip || hasCity || hasCoords;
+}
+
 export function hasLocation(location: CustomerLocation): boolean {
   return Boolean(
     location.address.trim() ||

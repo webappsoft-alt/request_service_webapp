@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/native-select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
+import { CenteredSpinner, Spinner } from "@/components/ui/spinner";
 import { ProviderCard } from "@/components/shared/provider-card";
 import { writePendingQuote } from "@/lib/booking/format-quote-answers";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
@@ -61,6 +62,7 @@ import {
 import {
   clearLocation,
   hydrateLocationIfEmpty,
+  isCommittedLocation,
   locationDisplayLabel,
 } from "@/store/locationSlice";
 import {
@@ -485,6 +487,12 @@ export function ServicesDirectory({
   const fixedServicesLoading = useAppSelector(
     (state) => state.publicFixedServices.loading,
   );
+  const fixedServicesLoaded = useAppSelector(
+    (state) => state.publicFixedServices.loaded,
+  );
+  const fixedServicesError = useAppSelector(
+    (state) => state.publicFixedServices.error,
+  );
   const fixedServicesLoadingMore = useAppSelector(
     (state) => state.publicFixedServices.loadingMore,
   );
@@ -506,21 +514,23 @@ export function ServicesDirectory({
       )
       .filter((id): id is string => Boolean(id));
 
+    const committed = isCommittedLocation(customerLocation);
     const next: PublicFixedServicesQuery = {
       sortBy: sortByFromUi(sort),
-      locationToken: [
-        customerLocation.address,
-        customerLocation.city,
-        customerLocation.zip,
-        customerLocation.state,
-        customerLocation.country,
-        customerLocation.latitude ?? "",
-        customerLocation.longitude ?? "",
-      ].join("|"),
+      locationToken: committed
+        ? [
+            customerLocation.zip,
+            customerLocation.city,
+            customerLocation.state,
+            customerLocation.country,
+            customerLocation.latitude ?? "",
+            customerLocation.longitude ?? "",
+          ].join("|")
+        : "",
     };
     if (query.trim()) next.search = query.trim();
 
-    // Send only the latest selected location fields from Redux.
+    // Send only committed location fields (selected place / geo), not mid-typing address.
     if (customerLocation.zip.trim()) {
       next.zipCode = customerLocation.zip.trim();
     }
@@ -552,7 +562,6 @@ export function ServicesDirectory({
   }, [
     answers,
     categories,
-    customerLocation.address,
     customerLocation.city,
     customerLocation.country,
     customerLocation.latitude,
@@ -571,6 +580,24 @@ export function ServicesDirectory({
   const apiQueryKey = buildPublicFixedServicesQueryKey(apiQuery);
   const apiQueryRef = useRef(apiQuery);
   apiQueryRef.current = apiQuery;
+  const prevApiQueryKeyRef = useRef(apiQueryKey);
+  const fixedServicesCountRef = useRef(fixedServices.length);
+  fixedServicesCountRef.current = fixedServices.length;
+  const [pendingRefresh, setPendingRefresh] = useState(false);
+
+  const locationReady =
+    customerLocation.detectAttempted && !customerLocation.detecting;
+  const locationCommitted = isCommittedLocation(customerLocation);
+  const showInitialServicesSpinner =
+    !fixedServices.length &&
+    (!locationReady ||
+      (locationCommitted &&
+        (fixedServicesLoading ||
+          pendingRefresh ||
+          (!fixedServicesLoaded && !fixedServicesError))));
+  const showRefreshOverlay =
+    fixedServices.length > 0 &&
+    (fixedServicesLoading || pendingRefresh);
 
   const matchingProfessionals = useMemo(
     () =>
@@ -592,15 +619,32 @@ export function ServicesDirectory({
     selectedParent ||
     serviceCategories.find((item) => item.slug === activeCategory);
 
-  // Depend only on apiQueryKey so parent-category pagination cannot retrigger the same fetch.
+  // Wait for location bootstrap, then fetch only with a committed location (never while typing).
   useEffect(() => {
+    if (!locationReady || !locationCommitted) {
+      setPendingRefresh(false);
+      prevApiQueryKeyRef.current = apiQueryKey;
+      return;
+    }
+
+    const queryChanged = prevApiQueryKeyRef.current !== apiQueryKey;
+    prevApiQueryKeyRef.current = apiQueryKey;
+    // Show overlay immediately so the 220ms debounce does not cause a layout jerk.
+    if (queryChanged && fixedServicesCountRef.current > 0) {
+      setPendingRefresh(true);
+    }
+
     const timer = window.setTimeout(() => {
       void dispatch(
         fetchPublicFixedServices({ query: apiQueryRef.current }),
       );
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [apiQueryKey, dispatch]);
+  }, [apiQueryKey, dispatch, locationCommitted, locationReady]);
+
+  useEffect(() => {
+    if (!fixedServicesLoading) setPendingRefresh(false);
+  }, [fixedServicesLoading]);
 
   useEffect(() => {
     void dispatch(fetchParentCategories());
@@ -734,7 +778,6 @@ export function ServicesDirectory({
   function resetFilters() {
     setQuery("");
     setCategories([]);
-    dispatch(clearLocation());
     setMinPrice(priceBounds.min);
     setMaxPrice(priceBounds.max);
     setMinRating(0);
@@ -768,7 +811,7 @@ export function ServicesDirectory({
     ...(query.trim()
       ? [{ key: "query", label: `“${query.trim()}”`, clear: () => setQuery("") }]
       : []),
-    ...(location.trim()
+    ...(isCommittedLocation(customerLocation) && location.trim()
       ? [{ key: "location", label: location.trim(), clear: () => dispatch(clearLocation()) }]
       : []),
     ...(minRating
@@ -972,8 +1015,8 @@ export function ServicesDirectory({
                     : "Services"}
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {fixedServicesLoading && !fixedServices.length
-                    ? "Loading services…"
+                  {showInitialServicesSpinner
+                    ? "\u00a0"
                     : `${fixedServicesTotal} ${fixedServicesTotal === 1 ? "service" : "services"} · ${matchingProfessionals.length} ${matchingProfessionals.length === 1 ? "professional" : "professionals"}`}
                 </p>
               </div>
@@ -1090,95 +1133,111 @@ export function ServicesDirectory({
               </ul>
             ) : null}
 
-            {fixedServicesLoading && !fixedServices.length ? (
-              <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-5 py-14 text-center shadow-sm">
-                <p className="text-base font-medium">Loading services…</p>
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  Finding fixed services for your filters and location.
-                </p>
-              </div>
+            {showInitialServicesSpinner ? (
+              <CenteredSpinner
+                label="Loading services"
+                className="min-h-64"
+              />
             ) : fixedServices.length || pageItems.length ? (
-              <>
-                {fixedServices.length ? (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-sm font-medium text-muted-foreground">
-                      {selectedCategory
-                        ? `${selectedCategory.name} services`
-                        : "Browse services"}
-                    </p>
-                    <ul
-                      key={`jobs-${apiQueryKey}-${view}`}
-                      className={
-                        view === "grid"
-                          ? "reveal-list grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
-                          : "reveal-list flex flex-col gap-5"
-                      }
-                    >
-                      {fixedServices.map((service, index) => (
-                        <li key={service.id}>
-                          <ServiceJobCard
-                            category={categoryStubFromService(service)}
-                            job={service.servicesName}
-                            index={index}
-                            layout={view}
-                            listing={listingFromService(service, () =>
-                              dispatch(setPublicFixedServiceDetail(service)),
-                            )}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                    {fixedServicesHasNextPage ? (
-                      <div className="flex justify-center pt-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={fixedServicesLoadingMore}
-                          onClick={() =>
-                            void dispatch(
-                              fetchPublicFixedServices({ append: true }),
-                            )
-                          }
-                        >
-                          {fixedServicesLoadingMore ? "Loading…" : "See More"}
-                        </Button>
-                      </div>
-                    ) : null}
+              <div className="relative">
+                {showRefreshOverlay ? (
+                  <div
+                    className="absolute inset-0 z-30 flex items-center justify-center bg-background/40"
+                    aria-busy="true"
+                    aria-live="polite"
+                  >
+                    <Spinner size="lg" label="Loading services" />
                   </div>
                 ) : null}
+                <div
+                  className={cn(
+                    "flex flex-col gap-5",
+                    showRefreshOverlay && "pointer-events-none opacity-55",
+                  )}
+                >
+                  {fixedServices.length ? (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {selectedCategory
+                          ? `${selectedCategory.name} services`
+                          : "Browse services"}
+                      </p>
+                      <ul
+                        className={cn(
+                          view === "grid"
+                            ? "grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+                            : "flex flex-col gap-5",
+                          !showRefreshOverlay && "reveal-list",
+                        )}
+                      >
+                        {fixedServices.map((service, index) => (
+                          <li key={service.id}>
+                            <ServiceJobCard
+                              category={categoryStubFromService(service)}
+                              job={service.servicesName}
+                              index={index}
+                              layout={view}
+                              listing={listingFromService(service, () =>
+                                dispatch(setPublicFixedServiceDetail(service)),
+                              )}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                      {fixedServicesHasNextPage ? (
+                        <div className="flex justify-center pt-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={
+                              fixedServicesLoadingMore || fixedServicesLoading
+                            }
+                            onClick={() =>
+                              void dispatch(
+                                fetchPublicFixedServices({ append: true }),
+                              )
+                            }
+                          >
+                            {fixedServicesLoadingMore ? "Loading…" : "See More"}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                {pageItems.length ? (
-                  <div className="flex flex-col gap-3" ref={professionalsRef}>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Matching professionals
-                    </p>
-                    <ul
-                      key={`pros-${apiQueryKey}-${currentPage}-${view}`}
-                      className={
-                        view === "grid"
-                          ? "reveal-list grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
-                          : "reveal-list flex flex-col gap-5"
-                      }
-                    >
-                      {pageItems.map((provider) => (
-                        <li key={provider.id}>
-                          <ProviderCard
-                            provider={provider}
-                            visual={view === "grid"}
-                            place={parsePlaceInput(location || zip)}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                    <DirectoryPagination
-                      page={currentPage}
-                      pageCount={pageCount}
-                      onPage={goToPage}
-                      label="Professional pages"
-                    />
-                  </div>
-                ) : null}
-              </>
+                  {pageItems.length ? (
+                    <div className="flex flex-col gap-3" ref={professionalsRef}>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Matching professionals
+                      </p>
+                      <ul
+                        className={cn(
+                          view === "grid"
+                            ? "grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+                            : "flex flex-col gap-5",
+                          !showRefreshOverlay && "reveal-list",
+                        )}
+                      >
+                        {pageItems.map((provider) => (
+                          <li key={provider.id}>
+                            <ProviderCard
+                              provider={provider}
+                              visual={view === "grid"}
+                              place={parsePlaceInput(location || zip)}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                      <DirectoryPagination
+                        page={currentPage}
+                        pageCount={pageCount}
+                        onPage={goToPage}
+                        label="Professional pages"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-5 py-14 text-center shadow-sm">
                 <p className="text-base font-medium">No services match those filters</p>

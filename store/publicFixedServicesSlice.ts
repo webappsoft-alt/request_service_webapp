@@ -430,37 +430,41 @@ function resolveQueryWithLiveLocation(
   location: LiveLocationState,
   fallbackSortBy?: PublicFixedServiceSortBy,
 ): PublicFixedServicesQuery {
+  const hasZip = Boolean(location.zip.trim());
+  const hasCity = Boolean(location.city.trim());
+  const hasCoords =
+    location.latitude != null &&
+    Number.isFinite(location.latitude) &&
+    location.longitude != null &&
+    Number.isFinite(location.longitude);
+  // Ignore mid-typing address-only state so keystrokes do not change the query key.
+  const committed = hasZip || hasCity || hasCoords;
+
   const nextQuery: PublicFixedServicesQuery = {
     sortBy: incoming?.sortBy || fallbackSortBy || "recommended",
     ...incoming,
-    zipCode: location.zip.trim() || undefined,
-    lat:
-      location.latitude != null && Number.isFinite(location.latitude)
-        ? location.latitude
-        : undefined,
-    lng:
-      location.longitude != null && Number.isFinite(location.longitude)
-        ? location.longitude
-        : undefined,
-    locationToken: [
-      location.address,
-      location.city,
-      location.zip,
-      location.state,
-      location.country,
-      location.latitude ?? "",
-      location.longitude ?? "",
-    ].join("|"),
+    zipCode: hasZip ? location.zip.trim() : undefined,
+    lat: hasCoords ? location.latitude! : undefined,
+    lng: hasCoords ? location.longitude! : undefined,
+    locationToken: committed
+      ? [
+          location.zip,
+          location.city,
+          location.state,
+          location.country,
+          location.latitude ?? "",
+          location.longitude ?? "",
+        ].join("|")
+      : "",
   };
 
-  // Cleared location must not keep a previous zip/geo via undefined merges.
-  if (!location.zip.trim()) delete nextQuery.zipCode;
-  if (location.latitude == null || !Number.isFinite(location.latitude)) {
+  // Cleared / typing location must not keep a previous zip/geo via undefined merges.
+  if (!hasZip) delete nextQuery.zipCode;
+  if (!hasCoords) {
     delete nextQuery.lat;
-  }
-  if (location.longitude == null || !Number.isFinite(location.longitude)) {
     delete nextQuery.lng;
   }
+  if (!committed) delete nextQuery.locationToken;
 
   return nextQuery;
 }
@@ -646,10 +650,12 @@ const publicFixedServicesSlice = createSlice({
             : { ...state.query };
           state.requestKey = buildPublicFixedServicesQueryKey(nextQuery);
           state.loading = true;
-          state.items = [];
-          state.total = 0;
-          state.page = 0;
-          state.hasNextPage = false;
+          // Keep previous items visible while refreshing (overlay loading in UI).
+          if (!state.items.length) {
+            state.total = 0;
+            state.page = 0;
+            state.hasNextPage = false;
+          }
         }
         state.error = null;
       })

@@ -238,6 +238,7 @@ export function PublicFixedServiceDetail({
           content={{
             price: service.price,
             imageUrl: service.images[0],
+            imageUrls: service.images,
             description: descriptionFromService(service),
             points: service.covered,
             tagline:

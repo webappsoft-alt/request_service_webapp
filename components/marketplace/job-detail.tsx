@@ -1,9 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { HomeMotion } from "@/components/home/home-motion";
 import { Container, Section } from "@/components/layout/container";
 import { ServiceJobCard } from "@/components/marketplace/service-job-card";
+import { ImageGallerySlider } from "@/components/shared/image-gallery-slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderCard } from "@/components/shared/provider-card";
@@ -16,6 +16,8 @@ import type { Provider } from "@/lib/types";
 export type JobDetailContent = {
   price: number;
   imageUrl?: string;
+  /** When multiple images exist, the gallery slider is used. */
+  imageUrls?: string[];
   description?: string;
   points?: string[];
   tagline?: string;
@@ -39,7 +41,13 @@ export function JobDetail({
 }) {
   const { category, job, index, detail } = record;
   const price = content?.price ?? getJobStartingPrice(category.id, job);
-  const image = content?.imageUrl || getJobImage(category.id, job, index);
+  const fallbackImage = content?.imageUrl || getJobImage(category.id, job, index);
+  const galleryImages =
+    content?.imageUrls?.filter(Boolean).length
+      ? content.imageUrls.filter(Boolean)
+      : fallbackImage
+        ? [fallbackImage]
+        : [];
   const related = content?.hideRelated ? [] : getRelatedJobs(category, job);
   const requestHref =
     content?.requestHref ??
@@ -99,19 +107,11 @@ export function JobDetail({
 
           <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,22rem)] lg:gap-12">
             <div className="flex flex-col gap-6">
-              <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border bg-muted">
-                {image ? (
-                  <Image
-                    src={image}
-                    alt={job}
-                    fill
-                    sizes="(min-width: 1024px) 50vw, 90vw"
-                    preload
-                    className="object-cover"
-                    unoptimized={image.startsWith("http")}
-                  />
-                ) : null}
-              </div>
+              <ImageGallerySlider
+                images={galleryImages}
+                alt={job}
+                priority
+              />
 
               <div className="flex flex-col gap-3">
                 <p className="max-w-2xl text-base leading-7 text-muted-foreground">

@@ -115,3 +115,135 @@ export interface OrderCheckoutResult {
   booking?: OrderCheckoutBooking;
   message: string;
 }
+
+/** Nested service summary on list/detail payloads. */
+export interface CustomerOrderServiceSummary {
+  id?: string;
+  title: string;
+  category?: string;
+  subcategory?: string;
+  unit?: string;
+  quantity?: number | string;
+  slug?: string;
+  images?: string[];
+  covered?: string[];
+  basePrice?: number;
+}
+
+/** Nested provider summary on list/detail payloads. */
+export interface CustomerOrderProviderSummary {
+  id?: string;
+  companyName: string;
+  phone?: string;
+  email?: string;
+  slug?: string;
+  website?: string;
+  avatarUrl?: string;
+}
+
+/** Nested booking window on list/detail payloads. */
+export interface CustomerOrderBookingSummary {
+  id?: string;
+  startTime: string;
+  endTime: string;
+  bufferEndTime?: string;
+  status?: BookingStatus | string;
+  duration?: number;
+}
+
+export interface ChangeOrderItem {
+  id: string;
+  description: string;
+  additionalAmount: number;
+  evidenceImages: string[];
+  status: "PENDING" | "APPROVED" | "REJECTED" | string;
+  requestedAt?: string;
+  respondedAt?: string | null;
+  customerNote?: string;
+}
+
+export interface LifecycleAuditEntry {
+  fromStatus: string | null;
+  toStatus: string;
+  timestamp: string;
+  triggeredBy?: string;
+  notes?: string;
+}
+
+export interface CustomerSignOff {
+  confirmed: boolean;
+  signedAt?: string | null;
+  signatureUrl?: string | null;
+  rating?: number | null;
+  review?: string;
+}
+
+export interface CompletionDetails {
+  completedAt?: string | null;
+  proofOfWorkImages: string[];
+  proofOfWorkVideos?: string[];
+  notes?: string;
+  customerSignOff?: CustomerSignOff;
+}
+
+/** List card shape from `GET /api/orders`. */
+export interface CustomerOrderListItem {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus | string;
+  pricing: {
+    totalAmount: number;
+    currency: string;
+    basePrice?: number;
+    subtotal?: number;
+  };
+  service: CustomerOrderServiceSummary | null;
+  provider: CustomerOrderProviderSummary | null;
+  booking: CustomerOrderBookingSummary | null;
+  address?: Partial<OrderAddress> | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OrdersPagination {
+  page: number;
+  limit: number;
+  totalDocs: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+export interface CustomerOrdersListResult {
+  orders: CustomerOrderListItem[];
+  pagination: OrdersPagination;
+}
+
+/** Detail shape from `GET /api/orders/:id` (populated fields when API returns them). */
+export interface CustomerOrderDetail {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus | string;
+  bookingId?: string;
+  customerId?: string;
+  providerId?: string;
+  serviceId?: string;
+  pricing: Partial<OrderPricing> & {
+    totalAmount: number;
+    currency: string;
+  };
+  payment?: {
+    status?: PaymentStatus | string;
+    authorizationHoldId?: string;
+  };
+  address?: Partial<OrderAddress> | null;
+  customerNotes?: string;
+  service: CustomerOrderServiceSummary | null;
+  provider: CustomerOrderProviderSummary | null;
+  booking: CustomerOrderBookingSummary | null;
+  changeOrders: ChangeOrderItem[];
+  lifecycleAudit: LifecycleAuditEntry[];
+  completionDetails?: CompletionDetails | null;
+  createdAt?: string;
+  updatedAt?: string;
+}

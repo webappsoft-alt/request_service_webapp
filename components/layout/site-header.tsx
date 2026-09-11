@@ -174,7 +174,11 @@ function HeaderActions({
                   <Link href={proPaths.dashboard}>Dashboard</Link>
                 </Button>,
               )
-            : null}
+            : wrap(
+                <Button variant="outline" asChild>
+                  <Link href="/account/orders">My orders</Link>
+                </Button>,
+              )}
           {wrap(
             <Button variant="outline" asChild>
               <Link href={settingsHref}>Settings</Link>

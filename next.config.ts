@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "cdn.example.com",
+        hostname: "storage.googleapis.com",
       },
     ],
   },

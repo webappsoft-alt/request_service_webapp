@@ -26,7 +26,6 @@ import {
   hydrateLocationIfEmpty,
   locationDisplayLabel,
   clearLocation,
-  setLocationAddress,
   setLocationFromPlace,
 } from "@/store/locationSlice";
 
@@ -58,6 +57,9 @@ export function ServiceSearchForm({
   const locationLabel = locationDisplayLabel(customerLocation);
   const locationValue =
     customerLocation.address || customerLocation.city || customerLocation.zip || "";
+  // Local draft while typing — do not write keystrokes into Redux (avoids Fixed Services refetches).
+  const [locationDraft, setLocationDraft] = useState<string | null>(null);
+  const locationInputValue = locationDraft ?? locationValue;
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -97,6 +99,7 @@ export function ServiceSearchForm({
   ]);
 
   function applyPlace(place: PlaceAddress) {
+    setLocationDraft(null);
     dispatch(setLocationFromPlace(place));
     const next = {
       address: place.formattedAddress || place.streetAddress || "",
@@ -237,10 +240,14 @@ export function ServiceSearchForm({
       <AddressAutocomplete
         id={variant === "hero" ? "hero-location" : "service-location"}
         name="location"
-        value={locationValue}
+        value={locationInputValue}
         onChange={(value) => {
-          if (!value.trim()) dispatch(clearLocation());
-          else dispatch(setLocationAddress(value));
+          if (!value.trim()) {
+            setLocationDraft(null);
+            dispatch(clearLocation());
+            return;
+          }
+          setLocationDraft(value);
         }}
         onSelect={applyPlace}
         placeholder="City / ZIP code"

@@ -84,7 +84,10 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
 
     if (!loggedIn) {
       if (isCustomerProtected(pathname)) {
-        router.replace("/login");
+        const search =
+          typeof window !== "undefined" ? window.location.search : "";
+        const next = encodeURIComponent(`${pathname}${search}`);
+        router.replace(`/login?next=${next}`);
       } else if (isProDashboard(pathname)) {
         router.replace(proPaths.login);
       }

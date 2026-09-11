@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Package, Settings } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,6 +80,14 @@ export function UserAccountMenu({
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {!isProvider ? (
+          <DropdownMenuItem asChild>
+            <Link href="/account/orders">
+              <Package />
+              My orders
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem asChild>
           <Link href={settingsHref}>
             <Settings />

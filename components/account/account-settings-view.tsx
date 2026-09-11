@@ -139,7 +139,9 @@ export function AccountSettingsView() {
   useEffect(() => {
     if (!auth.hydrated) return;
     if (!isAuthenticated || !user) {
-      router.replace("/login");
+      router.replace(
+        `/login?next=${encodeURIComponent("/account/settings")}`,
+      );
     }
   }, [auth.hydrated, isAuthenticated, user, router]);
 

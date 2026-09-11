@@ -75,6 +75,20 @@ export function isCommittedLocation(location: CustomerLocation): boolean {
   return hasZip || hasCity || hasCoords;
 }
 
+/**
+ * Location is usable for Fixed Services / directory API calls.
+ * Require zip or lat/lng — city-only must not trigger a fetch (avoids a second call once coords arrive).
+ */
+export function hasServiceGeoLocation(location: CustomerLocation): boolean {
+  const hasZip = Boolean(location.zip.trim());
+  const hasCoords =
+    location.latitude != null &&
+    location.longitude != null &&
+    Number.isFinite(location.latitude) &&
+    Number.isFinite(location.longitude);
+  return hasZip || hasCoords;
+}
+
 export function hasLocation(location: CustomerLocation): boolean {
   return Boolean(
     location.address.trim() ||

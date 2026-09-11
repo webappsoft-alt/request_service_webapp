@@ -53,7 +53,9 @@ export default async function ServicesPage({ searchParams }: PageParams) {
   const params = await searchParams;
   const selectedSlug =
     firstSearchValue(params.service) || firstSearchValue(params.category);
-  const selectedCategory = selectedSlug ? getServiceCategoryBySlug(selectedSlug) : undefined;
+  const selectedCategory = selectedSlug
+    ? getServiceCategoryBySlug(selectedSlug)
+    : undefined;
   const loc = firstSearchValue(params.loc);
   const zip = firstSearchValue(params.zip);
   const job = firstSearchValue(params.job);
@@ -71,7 +73,7 @@ export default async function ServicesPage({ searchParams }: PageParams) {
       />
       <ServicesDirectory
         initialQuery={firstSearchValue(params.q)}
-        initialCategory={selectedCategory?.slug ?? ""}
+        initialCategory={selectedSlug || ""}
         initialJob={job}
         initialZip={zip}
         initialLocation={loc}

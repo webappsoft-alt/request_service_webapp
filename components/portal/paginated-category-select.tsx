@@ -136,7 +136,7 @@ export function PaginatedCategorySelect({
   }, [open, options.length, hasMore, loadingMore]);
 
   return (
-    <div ref={rootRef} className={cn("relative w-full", className)}>
+    <div ref={rootRef} className={cn("relative z-[1200] w-full", className)}>
       <button
         id={id}
         type="button"
@@ -171,7 +171,7 @@ export function PaginatedCategorySelect({
           role="listbox"
           aria-labelledby={id}
           ref={listRef}
-          className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
+          className="absolute z-[1300] mt-1 max-h-60 w-full overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
         >
           <button
             type="button"

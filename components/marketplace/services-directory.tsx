@@ -56,11 +56,14 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchParentCategories,
   fetchSubcategories,
+  invalidateSubcategories,
   selectParentCategories,
   type PublicCategory,
 } from "@/store/categoriesSlice";
 import {
   clearLocation,
+  detectCurrentLocation,
+  hasServiceGeoLocation,
   hydrateLocationIfEmpty,
   isCommittedLocation,
   locationDisplayLabel,
@@ -514,10 +517,10 @@ export function ServicesDirectory({
       )
       .filter((id): id is string => Boolean(id));
 
-    const committed = isCommittedLocation(customerLocation);
+    const usable = hasServiceGeoLocation(customerLocation);
     const next: PublicFixedServicesQuery = {
       sortBy: sortByFromUi(sort),
-      locationToken: committed
+      locationToken: usable
         ? [
             customerLocation.zip,
             customerLocation.city,
@@ -530,17 +533,19 @@ export function ServicesDirectory({
     };
     if (query.trim()) next.search = query.trim();
 
-    // Send only committed location fields (selected place / geo), not mid-typing address.
+    // Only attach zip/coords when usable for the API (never city-only).
     if (customerLocation.zip.trim()) {
       next.zipCode = customerLocation.zip.trim();
     }
     if (
+      usable &&
       customerLocation.latitude != null &&
       Number.isFinite(customerLocation.latitude)
     ) {
       next.lat = customerLocation.latitude;
     }
     if (
+      usable &&
       customerLocation.longitude != null &&
       Number.isFinite(customerLocation.longitude)
     ) {
@@ -585,13 +590,14 @@ export function ServicesDirectory({
   fixedServicesCountRef.current = fixedServices.length;
   const [pendingRefresh, setPendingRefresh] = useState(false);
 
-  const locationReady =
-    customerLocation.detectAttempted && !customerLocation.detecting;
-  const locationCommitted = isCommittedLocation(customerLocation);
+  const locationUsable = hasServiceGeoLocation(customerLocation);
+  const awaitingGeo =
+    customerLocation.detecting ||
+    (!locationUsable && !customerLocation.detectAttempted);
   const showInitialServicesSpinner =
     !fixedServices.length &&
-    (!locationReady ||
-      (locationCommitted &&
+    (awaitingGeo ||
+      (locationUsable &&
         (fixedServicesLoading ||
           pendingRefresh ||
           (!fixedServicesLoaded && !fixedServicesError))));
@@ -619,9 +625,21 @@ export function ServicesDirectory({
     selectedParent ||
     serviceCategories.find((item) => item.slug === activeCategory);
 
-  // Wait for location bootstrap, then fetch only with a committed location (never while typing).
+  // City-only is not enough for the API — detect browser geo so the first call includes lat/lng.
   useEffect(() => {
-    if (!locationReady || !locationCommitted) {
+    if (locationUsable) return;
+    if (customerLocation.detectAttempted || customerLocation.detecting) return;
+    void dispatch(detectCurrentLocation());
+  }, [
+    customerLocation.detectAttempted,
+    customerLocation.detecting,
+    dispatch,
+    locationUsable,
+  ]);
+
+  // Only call Fixed Services when zip or lat/lng are present (never city-only).
+  useEffect(() => {
+    if (customerLocation.detecting || !locationUsable) {
       setPendingRefresh(false);
       prevApiQueryKeyRef.current = apiQueryKey;
       return;
@@ -637,10 +655,15 @@ export function ServicesDirectory({
     const timer = window.setTimeout(() => {
       void dispatch(
         fetchPublicFixedServices({ query: apiQueryRef.current }),
-      );
+      ).finally(() => setPendingRefresh(false));
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [apiQueryKey, dispatch, locationCommitted, locationReady]);
+  }, [
+    apiQueryKey,
+    customerLocation.detecting,
+    dispatch,
+    locationUsable,
+  ]);
 
   useEffect(() => {
     if (!fixedServicesLoading) setPendingRefresh(false);
@@ -664,13 +687,14 @@ export function ServicesDirectory({
     parentsLoaded,
   ]);
 
-  // Load sub-categories for the selected parent (cached in Redux).
+  // Load sub-categories for the selected parent (always refresh for this parent id).
   useEffect(() => {
     if (!selectedParent?.id) return;
+    dispatch(invalidateSubcategories(selectedParent.id));
     void dispatch(fetchSubcategories({ parentId: selectedParent.id }));
   }, [dispatch, selectedParent?.id]);
 
-  // Load remaining sub-category pages so the filter shows the full list.
+  // Load remaining sub-category pages (limit 10) until the API reports no more.
   useEffect(() => {
     if (!selectedParent?.id) return;
     const meta = subMetaByParent[selectedParent.id];
@@ -684,7 +708,8 @@ export function ServicesDirectory({
     loadingMoreSubcategories,
     loadingSubcategories,
     selectedParent?.id,
-    subMetaByParent,
+    subMetaByParent[selectedParent?.id ?? ""]?.hasMore,
+    subMetaByParent[selectedParent?.id ?? ""]?.page,
   ]);
 
   useEffect(() => {
@@ -697,7 +722,14 @@ export function ServicesDirectory({
     });
     skipUrlRef.current = true;
     setQuery(next.query);
-    setCategories(next.service ? [next.service] : []);
+    // Prefer the explicit URL/service param so landing → /services?service=… auto-selects.
+    setCategories(
+      next.service
+        ? [next.service]
+        : initialCategory.trim()
+          ? [initialCategory.trim()]
+          : [],
+    );
     if (next.location || next.zip) {
       dispatch(
         hydrateLocationIfEmpty({
@@ -709,6 +741,23 @@ export function ServicesDirectory({
     }
     setAnswers(answersFromIntent(next));
   }, [dispatch, initialCategory, initialJob, initialLocation, initialQuery, initialZip]);
+
+  // Once API parents load, normalize the selected key to the checkbox slug/id.
+  useEffect(() => {
+    if (!categories.length || !parentCategories.length) return;
+    const current = categories[0];
+    const match = parentCategories.find(
+      (item) =>
+        item.slug === current ||
+        item.id === current ||
+        item.name.toLowerCase() === current.toLowerCase(),
+    );
+    if (!match) return;
+    const key = match.slug || match.id;
+    if (key !== current) {
+      setCategories([key]);
+    }
+  }, [categories, parentCategories]);
 
   useEffect(() => {
     setPage(1);

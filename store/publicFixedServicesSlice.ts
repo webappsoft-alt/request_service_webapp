@@ -425,20 +425,29 @@ type LiveLocationState = {
  * Build the Fixed Services query from the latest Redux location at request time.
  * Never inherits prior zip/lat/lng from the slice's cached query.
  */
+function hasUsableFixedServicesLocation(location: LiveLocationState): boolean {
+  const hasZip = Boolean(location.zip.trim());
+  const hasCoords =
+    location.latitude != null &&
+    Number.isFinite(location.latitude) &&
+    location.longitude != null &&
+    Number.isFinite(location.longitude);
+  return hasZip || hasCoords;
+}
+
 function resolveQueryWithLiveLocation(
   incoming: PublicFixedServicesQuery | undefined,
   location: LiveLocationState,
   fallbackSortBy?: PublicFixedServiceSortBy,
 ): PublicFixedServicesQuery {
   const hasZip = Boolean(location.zip.trim());
-  const hasCity = Boolean(location.city.trim());
   const hasCoords =
     location.latitude != null &&
     Number.isFinite(location.latitude) &&
     location.longitude != null &&
     Number.isFinite(location.longitude);
-  // Ignore mid-typing address-only state so keystrokes do not change the query key.
-  const committed = hasZip || hasCity || hasCoords;
+  // Only zip or coords count — city-only must not produce a fetchable query.
+  const usable = hasZip || hasCoords;
 
   const nextQuery: PublicFixedServicesQuery = {
     sortBy: incoming?.sortBy || fallbackSortBy || "recommended",
@@ -446,7 +455,7 @@ function resolveQueryWithLiveLocation(
     zipCode: hasZip ? location.zip.trim() : undefined,
     lat: hasCoords ? location.latitude! : undefined,
     lng: hasCoords ? location.longitude! : undefined,
-    locationToken: committed
+    locationToken: usable
       ? [
           location.zip,
           location.city,
@@ -464,7 +473,7 @@ function resolveQueryWithLiveLocation(
     delete nextQuery.lat;
     delete nextQuery.lng;
   }
-  if (!committed) delete nextQuery.locationToken;
+  if (!usable) delete nextQuery.locationToken;
 
   return nextQuery;
 }
@@ -533,6 +542,8 @@ export const fetchPublicFixedServices = createAsyncThunk<
         if (!state.hasNextPage) return false;
         return true;
       }
+      // Block the city-only / no-geo call that used to fire before lat/lng arrived.
+      if (!hasUsableFixedServicesLocation(root.location)) return false;
       const incoming =
         arg && typeof arg === "object" ? arg.query : undefined;
       const nextQuery = resolveQueryWithLiveLocation(

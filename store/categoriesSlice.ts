@@ -244,7 +244,9 @@ export const fetchParentCategories = createAsyncThunk<
         if (state.parentsPage >= state.parentsTotalPages) return false;
         return true;
       }
+      // Reuse cached parents across Landing + Find a Professional (no duplicate fetch).
       if (state.loadingParents) return false;
+      if (state.parentsLoaded && state.parents.length) return false;
       return true;
     },
   },
@@ -291,13 +293,16 @@ export const fetchSubcategories = createAsyncThunk<
 
       const items = extractCategoryList(response);
       const pagination = extractPagination(response);
+      // Keep paging while a full page is returned (limit 10) or API says hasNextPage.
+      const hasMore =
+        pagination.hasNextPage || items.length >= SUBS_PAGE_SIZE;
 
       return {
         parentId,
         items,
         page: pagination.page,
         totalPages: pagination.totalPages,
-        hasMore: pagination.hasNextPage,
+        hasMore,
         append,
       };
     } catch (error) {
@@ -313,8 +318,8 @@ export const fetchSubcategories = createAsyncThunk<
           return false;
         }
         const meta = state.subMetaByParent[parentId];
+        // Trust hasMore from the last response (do not block on totalPages alone).
         if (!meta?.hasMore) return false;
-        if (meta.page >= meta.totalPages) return false;
         return true;
       }
       if (state.loadingSubcategories) return false;

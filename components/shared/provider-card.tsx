@@ -51,13 +51,19 @@ export function ProviderCard({
   const categories = provider.categoryIds
     .map((id) => getServiceCategoryById(id))
     .filter((category): category is NonNullable<typeof category> => Boolean(category));
-  const services = categories.map((category) => category.name);
+  const services = (
+    provider.serviceLabels?.length
+      ? provider.serviceLabels
+      : categories.map((category) => category.name)
+  ).slice(0, 2);
   const photos = getProviderPhotos(provider);
   const coverImage = photos[0]?.src;
-  const showCover = visual && Boolean(coverImage);
+  // Visual marketplace cards always keep the photo header layout (previous design).
+  const showCover = visual;
   const showListPhoto = !visual && Boolean(coverImage);
   const startingPrice = getStartingPrice(provider);
   const hasCredentials = provider.licensed || provider.insured;
+  const hasRating = provider.rating > 0;
   const presence = getProviderPresence(provider.id);
   const profileHref = professionalHref(provider.slug, place);
 
@@ -103,13 +109,15 @@ export function ProviderCard({
               </h3>
               <p className="line-clamp-1 text-sm text-muted-foreground">{provider.tagline}</p>
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                  <Star className="size-3.5 fill-current text-warning" aria-hidden="true" />
-                  {provider.rating.toFixed(1)}
-                  <span className="font-normal text-muted-foreground">
-                    ({provider.reviewCount} reviews)
+                {hasRating ? (
+                  <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                    <Star className="size-3.5 fill-current text-warning" aria-hidden="true" />
+                    {provider.rating.toFixed(1)}
+                    <span className="font-normal text-muted-foreground">
+                      ({provider.reviewCount} reviews)
+                    </span>
                   </span>
-                </span>
+                ) : null}
                 <span className="inline-flex items-center gap-1">
                   <MapPin className="size-3.5" aria-hidden="true" />
                   {formatLocation(provider.city, provider.state)}
@@ -170,26 +178,31 @@ export function ProviderCard({
         className,
       )}
     >
-      {showCover && coverImage ? (
-        <div className="relative aspect-[4/3] overflow-hidden">
-          <Image
-            src={coverImage}
-            alt={photos[0]?.alt ?? provider.companyName}
-            fill
-            sizes="(max-width: 768px) 82vw, 25vw"
-            className="object-cover"
-          />
+      {showCover ? (
+        <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+          {coverImage ? (
+            <Image
+              src={coverImage}
+              alt={photos[0]?.alt ?? provider.companyName}
+              fill
+              sizes="(max-width: 768px) 82vw, 25vw"
+              className="object-cover"
+              unoptimized={coverImage.startsWith("http")}
+            />
+          ) : null}
           <span
             className="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-black/25"
             aria-hidden="true"
           />
-          <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 rounded-md bg-black/40 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-md">
-            <Star className="size-3 fill-warning text-warning" aria-hidden="true" />
-            {provider.rating.toFixed(1)}
-            <span className="text-white/75">
-              ({provider.reviewCount.toLocaleString("en-US")})
+          {hasRating ? (
+            <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 rounded-md bg-black/40 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-md">
+              <Star className="size-3 fill-warning text-warning" aria-hidden="true" />
+              {provider.rating.toFixed(1)}
+              <span className="text-white/75">
+                ({provider.reviewCount.toLocaleString("en-US")})
+              </span>
             </span>
-          </span>
+          ) : null}
           {!hideCredentials && hasCredentials ? (
             <CredentialMark
               licensed={provider.licensed}
@@ -206,15 +219,18 @@ export function ProviderCard({
         </div>
       ) : null}
 
-      <div className={cn("flex min-h-0 flex-1 flex-col gap-3 px-4 pt-4 pb-2", !showCover && "pt-0")}>
+      <div className={cn("flex min-h-0 flex-1 flex-col gap-3 px-3 pt-3 pb-3 sm:px-4", !showCover && "pt-0")}>
         <div className="flex shrink-0 items-start gap-3">
           {showCover ? null : <ProviderLogo provider={provider} size="xl" />}
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <h3 className="min-w-0 truncate text-lg leading-tight font-semibold">
-                {provider.companyName}
+            <div className="flex items-start justify-between gap-2">
+              <h3
+                className="min-w-0 flex-1 capitalize text-sm leading-snug font-semibold sm:text-[0.95rem]"
+                title={provider.companyName}
+              >
+                <span className="line-clamp-2 break-words">{provider.companyName}</span>
               </h3>
-              <span className="shrink-0 text-lg leading-tight font-semibold tabular-nums text-brand">
+              <span className="shrink-0 pt-0.5 text-sm leading-snug font-semibold tabular-nums text-brand sm:text-[0.95rem]">
                 {formatStartingPrice(startingPrice)}
               </span>
             </div>
@@ -230,7 +246,9 @@ export function ProviderCard({
 
         {showCover ? null : (
           <div className="flex flex-wrap items-center gap-2">
-            <Rating value={provider.rating} count={provider.reviewCount} />
+            {hasRating ? (
+              <Rating value={provider.rating} count={provider.reviewCount} />
+            ) : null}
             {hasCredentials ? (
               <CredentialMark licensed={provider.licensed} insured={provider.insured} />
             ) : null}
@@ -243,13 +261,15 @@ export function ProviderCard({
           </p>
         )}
 
-        <div className="flex shrink-0 flex-wrap gap-1.5">
-          {services.map((service) => (
-            <Badge key={service} variant="secondary">
-              {service}
-            </Badge>
-          ))}
-        </div>
+        {services.length ? (
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            {services.map((service) => (
+              <Badge key={service} variant="secondary">
+                {service}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
 
         {visual ? null : (
           <p className="text-sm leading-5 text-muted-foreground">
@@ -257,21 +277,28 @@ export function ProviderCard({
           </p>
         )}
 
-        <div className="mt-auto flex shrink-0 flex-wrap items-center gap-2">
-          <Button asChild size="sm">
-            <Link
-              href={profileHref}
-              onClick={(event) => event.stopPropagation()}
-            >
-              View profile
-            </Link>
-          </Button>
-          <Button variant="outline" asChild size="sm">
+        <div className="mt-auto flex w-full flex-col gap-2 sm:flex-row">
+          <Button
+            variant="outline"
+            asChild
+            size="sm"
+            className="h-8 w-full sm:min-w-0 sm:flex-1"
+          >
             <Link
               href={`/request-service?provider=${provider.slug}`}
               onClick={(event) => event.stopPropagation()}
+              className="justify-center whitespace-nowrap"
             >
               Request service
+            </Link>
+          </Button>
+          <Button asChild size="sm" className="h-8 w-full sm:min-w-0 sm:flex-1">
+            <Link
+              href={profileHref}
+              onClick={(event) => event.stopPropagation()}
+              className="justify-center whitespace-nowrap"
+            >
+              View profile
             </Link>
           </Button>
         </div>

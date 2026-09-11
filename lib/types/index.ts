@@ -373,6 +373,8 @@ export interface Provider {
   licensed: boolean;
   insured: boolean;
   categoryIds: string[];
+  /** Fallback badge labels when categoryIds are not in the static catalog (API pros). */
+  serviceLabels?: string[];
   serviceArea: string[];
   street: string;
   city: string;

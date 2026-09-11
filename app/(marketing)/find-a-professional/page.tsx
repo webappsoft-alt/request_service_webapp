@@ -6,7 +6,6 @@ import { getJobRecord } from "@/lib/data/jobs";
 import { getLocalKeywordPhrases, getLocalPageCopy, readPlaceFromSearch } from "@/lib/data/local-keywords";
 import { firstSearchValue, getExplorePlaceLabel } from "@/lib/data/markets";
 import { directoryHref } from "@/lib/data/related-categories";
-import { getAllProviders } from "@/lib/data/providers";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
 import { breadcrumbJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
@@ -72,7 +71,7 @@ export default async function FindProfessionalPage({ searchParams }: PageParams)
         zip={zip}
         location={loc}
         job={job}
-        providers={getAllProviders()}
+        liveProfessionals
       />
       <WhyHireSection
         ctaHref={directoryHref("/request-service", {

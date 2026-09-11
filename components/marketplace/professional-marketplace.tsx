@@ -17,7 +17,8 @@ export function ProfessionalMarketplace({
   ask = false,
   eyebrow = "Find a professional",
   plain = false,
-  providers,
+  providers = [],
+  liveProfessionals = false,
 }: {
   category?: ServiceCategory;
   zip?: string;
@@ -26,7 +27,9 @@ export function ProfessionalMarketplace({
   ask?: boolean;
   eyebrow?: string;
   plain?: boolean;
-  providers: Provider[];
+  providers?: Provider[];
+  /** Enable GET /api/public/professionals (Find a Professional). */
+  liveProfessionals?: boolean;
 }) {
   const [answers, setAnswers] = useState<IntakeAnswers | null>(null);
   const [asking, setAsking] = useState(ask);
@@ -101,6 +104,7 @@ export function ProfessionalMarketplace({
   return (
     <CategoryExplorer
       marketplace
+      liveProfessionals={liveProfessionals}
       category={matchedCategory}
       providers={providers}
       initialAddress={answers?.zip || location || zip}

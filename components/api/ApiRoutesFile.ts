@@ -59,6 +59,10 @@ export const providerApi = {
 export const publicApi = {
   /** GET active categories; use `only_parent` / `parent_category_id` */
   categories: "public/categories",
+  /** GET public professionals directory (Find a Professional) */
+  professionals: "public/professionals",
+  /** GET related professionals for a pro or fixed service */
+  professionalsRelated: "public/professionals/related",
   /** GET public fixed-services search (customer directory) */
   fixedServices: "public/fixed-services",
   /** GET one public fixed service by id or slug */

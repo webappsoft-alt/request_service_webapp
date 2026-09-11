@@ -7,14 +7,39 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { CenteredSpinner, Spinner } from "@/components/ui/spinner";
 import { ProviderCard } from "@/components/shared/provider-card";
+import {
+  PaginatedCategorySelect,
+  type CategoryOption,
+} from "@/components/portal/paginated-category-select";
 import { findMarketCity, stateLabel } from "@/lib/data/markets";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
 import { extractZip } from "@/lib/search";
 import { getSubServices } from "@/lib/data/service-directory";
 import { serviceCategories } from "@/lib/data/services";
 import { formatLocation, formatStartingPrice } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Provider, ServiceCategory } from "@/lib/types";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchParentCategories,
+  selectParentCategories,
+} from "@/store/categoriesSlice";
+import {
+  detectCurrentLocation,
+  hasLocation,
+  hydrateLocationIfEmpty,
+  isCommittedLocation,
+  locationDisplayLabel,
+} from "@/store/locationSlice";
+import {
+  buildPublicProfessionalsQueryKey,
+  fetchPublicProfessionals,
+  publicProfessionalToProvider,
+  type PublicProfessionalSortBy,
+  type PublicProfessionalsQuery,
+} from "@/store/publicProfessionalsSlice";
 
 export type ExplorerMatch = {
   job: string;
@@ -52,12 +77,20 @@ function majorityLocation(providers: Provider[]) {
   return [...counts.values()].sort((a, b) => b.count - a.count)[0]?.label ?? "";
 }
 
+function sortByFromUi(sort: SortKey): PublicProfessionalSortBy {
+  if (sort === "reviews") return "completed_jobs";
+  if (sort === "years") return "experience";
+  return "rating";
+}
+
 export function CategoryExplorer({
   category,
   providers,
   initialAddress = "",
   initialJob = "",
   marketplace = false,
+  /** Live GET /api/public/professionals — Find a Professional only. */
+  liveProfessionals = false,
   match,
 }: {
   category?: ServiceCategory;
@@ -65,34 +98,86 @@ export function CategoryExplorer({
   initialAddress?: string;
   initialJob?: string;
   marketplace?: boolean;
+  liveProfessionals?: boolean;
   match?: ExplorerMatch;
 }) {
   const router = useRouter();
-  const startingAddress = initialAddress || majorityLocation(providers);
+  const dispatch = useAppDispatch();
+  const customerLocation = useAppSelector((state) => state.location);
+  const parentCategories = useAppSelector(selectParentCategories);
+  const parentsLoaded = useAppSelector((state) => state.categories.parentsLoaded);
+  const loadingParents = useAppSelector((state) => state.categories.loadingParents);
+  const parentsHasMore = useAppSelector((state) => state.categories.parentsHasMore);
+  const loadingMoreParents = useAppSelector(
+    (state) => state.categories.loadingMoreParents,
+  );
+
+  const liveItems = useAppSelector((state) => state.publicProfessionals.items);
+  const liveTotal = useAppSelector((state) => state.publicProfessionals.total);
+  const liveLoading = useAppSelector((state) => state.publicProfessionals.loading);
+  const liveLoadingMore = useAppSelector(
+    (state) => state.publicProfessionals.loadingMore,
+  );
+  const liveHasNextPage = useAppSelector(
+    (state) => state.publicProfessionals.hasNextPage,
+  );
+  const liveLoaded = useAppSelector((state) => state.publicProfessionals.loaded);
+  const liveError = useAppSelector((state) => state.publicProfessionals.error);
+
+  const locationLabel = locationDisplayLabel(customerLocation);
+  const startingAddress =
+    initialAddress ||
+    (liveProfessionals ? locationLabel : "") ||
+    majorityLocation(providers);
   const [address, setAddress] = useState(startingAddress);
   const [serviceSlug, setServiceSlug] = useState(category?.slug ?? "all");
+  const [categoryId, setCategoryId] = useState("");
   const [subService, setSubService] = useState(initialJob);
   const [minRating, setMinRating] = useState(0);
   const [licensedOnly, setLicensedOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("rating");
-  const [selectedId, setSelectedId] = useState<string | null>(providers[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    providers[0]?.id ?? null,
+  );
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [fitToken, setFitToken] = useState(0);
+  const [pendingRefresh, setPendingRefresh] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
+  const prevLiveQueryKeyRef = useRef("");
+
+  const useLive = Boolean(marketplace && liveProfessionals);
 
   const activeCategory =
     serviceSlug === "all"
       ? undefined
       : serviceCategories.find((item) => item.slug === serviceSlug);
-  const subServices = activeCategory ? getSubServices(activeCategory.slug) : undefined;
+  const selectedParent = useMemo(
+    () =>
+      parentCategories.find(
+        (item) => item.id === categoryId || item.slug === serviceSlug,
+      ),
+    [categoryId, parentCategories, serviceSlug],
+  );
+  const subServices = !useLive && activeCategory
+    ? getSubServices(activeCategory.slug)
+    : undefined;
   const selectedSub =
     subServices?.options.find((option) => option.value === subService || option.job === subService);
+
+  const liveProviders = useMemo(
+    () => liveItems.map(publicProfessionalToProvider),
+    [liveItems],
+  );
+
   const scopedProviders = useMemo(() => {
+    if (useLive) return liveProviders;
     if (!activeCategory || !marketplace) return providers;
     return providers.filter((provider) => provider.categoryIds.includes(activeCategory.id));
-  }, [activeCategory, marketplace, providers]);
+  }, [activeCategory, liveProviders, marketplace, providers, useLive]);
 
   const results = useMemo(() => {
+    if (useLive) return scopedProviders;
+
     const query = address.trim().toLowerCase();
     const place = parsePlaceInput(address);
     const market = findMarketCity(place.city, place.state);
@@ -124,20 +209,183 @@ export function CategoryExplorer({
       return b.rating - a.rating;
     });
     return next;
-  }, [address, licensedOnly, minRating, scopedProviders, sort]);
+  }, [address, licensedOnly, minRating, scopedProviders, sort, useLive]);
+
+  const liveQuery = useMemo((): PublicProfessionalsQuery => {
+    const zipFromAddress = extractZip(address.trim());
+    const next: PublicProfessionalsQuery = {
+      sortBy: sortByFromUi(sort),
+      sortOrder: "desc",
+    };
+    if (minRating > 0) next.minRating = minRating;
+    if (licensedOnly) next.isIdentityVerified = true;
+    if (categoryId) next.category = categoryId;
+
+    if (customerLocation.zip.trim()) {
+      next.zipCode = customerLocation.zip.trim();
+    } else if (zipFromAddress) {
+      next.zipCode = zipFromAddress;
+    }
+
+    if (
+      customerLocation.latitude != null &&
+      Number.isFinite(customerLocation.latitude)
+    ) {
+      next.lat = customerLocation.latitude;
+    }
+    if (
+      customerLocation.longitude != null &&
+      Number.isFinite(customerLocation.longitude)
+    ) {
+      next.lng = customerLocation.longitude;
+    }
+
+    next.locationToken = [
+      customerLocation.zip,
+      customerLocation.city,
+      customerLocation.state,
+      customerLocation.country,
+      customerLocation.latitude ?? "",
+      customerLocation.longitude ?? "",
+      next.zipCode || "",
+    ].join("|");
+
+    return next;
+  }, [
+    address,
+    categoryId,
+    customerLocation.city,
+    customerLocation.country,
+    customerLocation.latitude,
+    customerLocation.longitude,
+    customerLocation.state,
+    customerLocation.zip,
+    licensedOnly,
+    minRating,
+    sort,
+  ]);
+
+  const liveQueryKey = buildPublicProfessionalsQueryKey(liveQuery);
+  const liveQueryRef = useRef(liveQuery);
+  liveQueryRef.current = liveQuery;
+  const resultsCountRef = useRef(0);
+  resultsCountRef.current = results.length;
+
+  const locationReady =
+    customerLocation.detectAttempted && !customerLocation.detecting;
+  const showRefreshOverlay =
+    useLive &&
+    results.length > 0 &&
+    (liveLoading || pendingRefresh);
+  const showInitialSpinner =
+    useLive &&
+    !results.length &&
+    (!locationReady ||
+      liveLoading ||
+      pendingRefresh ||
+      (!liveLoaded && !liveError));
+
+  useEffect(() => {
+    if (!useLive) return;
+    if (initialAddress || customerLocation.zip) {
+      dispatch(
+        hydrateLocationIfEmpty({
+          address: initialAddress,
+          city: initialAddress,
+          zip: extractZip(initialAddress) || undefined,
+        }),
+      );
+    }
+  }, [customerLocation.zip, dispatch, initialAddress, useLive]);
+
+  useEffect(() => {
+    if (!useLive) return;
+    if (customerLocation.detectAttempted || customerLocation.detecting) return;
+    if (hasLocation(customerLocation)) return;
+    void dispatch(detectCurrentLocation());
+  }, [
+    customerLocation.address,
+    customerLocation.city,
+    customerLocation.detectAttempted,
+    customerLocation.detecting,
+    customerLocation.latitude,
+    customerLocation.longitude,
+    customerLocation.zip,
+    dispatch,
+    useLive,
+  ]);
+
+  useEffect(() => {
+    if (!useLive) return;
+    void dispatch(fetchParentCategories());
+  }, [dispatch, useLive]);
+
+  useEffect(() => {
+    if (!useLive) return;
+    if (!parentsLoaded || !parentsHasMore || loadingParents || loadingMoreParents) {
+      return;
+    }
+    void dispatch(fetchParentCategories({ append: true }));
+  }, [
+    dispatch,
+    loadingMoreParents,
+    loadingParents,
+    parentsHasMore,
+    parentsLoaded,
+    useLive,
+  ]);
+
+  // Sync initial static category slug → API category id once parents load.
+  useEffect(() => {
+    if (!useLive || categoryId) return;
+    if (!category?.slug && serviceSlug === "all") return;
+    const slug = category?.slug || (serviceSlug !== "all" ? serviceSlug : "");
+    if (!slug) return;
+    const matchParent = parentCategories.find((item) => item.slug === slug);
+    if (matchParent) {
+      setCategoryId(matchParent.id);
+      setServiceSlug(matchParent.slug);
+    }
+  }, [category?.slug, categoryId, parentCategories, serviceSlug, useLive]);
+
+  useEffect(() => {
+    if (!useLive) return;
+    if (!locationReady) return;
+
+    const queryChanged = prevLiveQueryKeyRef.current !== liveQueryKey;
+    if (queryChanged && resultsCountRef.current > 0) {
+      setPendingRefresh(true);
+    }
+    prevLiveQueryKeyRef.current = liveQueryKey;
+
+    const timer = window.setTimeout(() => {
+      void dispatch(
+        fetchPublicProfessionals({ query: liveQueryRef.current }),
+      );
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [dispatch, liveQueryKey, locationReady, useLive]);
+
+  useEffect(() => {
+    if (!liveLoading) setPendingRefresh(false);
+  }, [liveLoading]);
 
   useEffect(() => {
     setServiceSlug(category?.slug ?? "all");
     setSubService(initialJob);
+    if (!category) {
+      setCategoryId("");
+    }
   }, [category?.slug, initialJob]);
 
   useEffect(() => {
+    if (useLive) return;
     if (!subService) return;
     const options = getSubServices(activeCategory?.slug)?.options ?? [];
     if (!options.some((option) => option.value === subService || option.job === subService)) {
       setSubService("");
     }
-  }, [activeCategory?.slug, subService]);
+  }, [activeCategory?.slug, subService, useLive]);
 
   useEffect(() => {
     if (!results.some((provider) => provider.id === selectedId)) {
@@ -181,6 +429,23 @@ export function CategoryExplorer({
     syncMarketplaceUrl(slug);
   }
 
+  function onLiveCategoryChange(id: string, _option?: CategoryOption) {
+    if (!id) {
+      setCategoryId("");
+      setServiceSlug("all");
+      setSubService("");
+      setFitToken((value) => value + 1);
+      syncMarketplaceUrl("all");
+      return;
+    }
+    const parent = parentCategories.find((item) => item.id === id);
+    setCategoryId(id);
+    setServiceSlug(parent?.slug || id);
+    setSubService("");
+    setFitToken((value) => value + 1);
+    syncMarketplaceUrl(parent?.slug || "all");
+  }
+
   function onSubServiceChange(value: string) {
     setSubService(value);
     setFitToken((value) => value + 1);
@@ -198,20 +463,36 @@ export function CategoryExplorer({
       : searchedPlace.state
         ? stateLabel(searchedPlace.state)
         : results[0]
-          ? `${results[0].city}, ${results[0].state}`
-          : address.trim() || activeCategory?.name || "your area";
-  const heading = selectedSub
-    ? `${selectedSub.label} in ${cityLabel}`
-    : activeCategory
-      ? `${activeCategory.name} in ${cityLabel}`
-      : `Professionals in ${cityLabel}`;
+          ? `${results[0].city}${results[0].state ? `, ${results[0].state}` : ""}`
+          : address.trim() ||
+            (useLive && isCommittedLocation(customerLocation)
+              ? locationLabel
+              : "") ||
+            selectedParent?.name ||
+            activeCategory?.name ||
+            "your area";
+  const heading = useLive
+    ? selectedParent
+      ? `${selectedParent.name} in ${cityLabel}`
+      : `Professionals in ${cityLabel}`
+    : selectedSub
+      ? `${selectedSub.label} in ${cityLabel}`
+      : activeCategory
+        ? `${activeCategory.name} in ${cityLabel}`
+        : `Professionals in ${cityLabel}`;
+
+  const mapCountTotal = useLive ? liveTotal : scopedProviders.length;
+  const parentOptions: CategoryOption[] = parentCategories.map((item) => ({
+    id: item.id,
+    name: item.name,
+  }));
 
   return (
-    <div className="container-site flex h-[calc(100dvh-4.25rem)] flex-col overflow-hidden bg-background">
-      <div className="z-20 shrink-0 border-b bg-background">
+    <div className="container-site flex flex-col bg-background lg:h-[calc(100dvh-4.25rem)]">
+      <div className="relative z-[1200] shrink-0 overflow-visible border-b bg-background">
         <form
           onSubmit={recenter}
-          className="flex flex-col gap-2 py-3 lg:flex-row lg:items-center lg:gap-3"
+          className="relative z-[1200] flex flex-col gap-2 overflow-visible py-3 lg:flex-row lg:items-center lg:gap-3"
         >
           <div className="relative min-w-0 w-full max-w-56">
             <Search
@@ -240,24 +521,41 @@ export function CategoryExplorer({
             ) : null}
           </div>
 
-          <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-1 sm:flex-wrap sm:items-center">
-            <NativeSelect
-              value={marketplace ? serviceSlug : (category?.slug ?? "all")}
-              onChange={(event) => onServiceChange(event.target.value)}
-              className="w-full min-w-0 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:border-primary [&>select]:bg-card [&>select]:text-primary sm:[&>select]:min-w-36"
-              aria-label="Service"
-            >
-              {marketplace ? (
-                <NativeSelectOption value="all">All services</NativeSelectOption>
-              ) : null}
-              {serviceCategories.map((item) => (
-                <NativeSelectOption key={item.id} value={item.slug}>
-                  {item.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+          <div className="relative z-[1200] grid min-w-0 grid-cols-2 gap-2 overflow-visible sm:flex sm:flex-1 sm:flex-wrap sm:items-center">
+            {useLive ? (
+              <PaginatedCategorySelect
+                value={categoryId}
+                options={parentOptions}
+                placeholder="All services"
+                loading={loadingParents && !parentOptions.length}
+                loadingMore={loadingMoreParents}
+                hasMore={parentsHasMore}
+                onChange={onLiveCategoryChange}
+                onLoadMore={() => {
+                  if (!parentsHasMore || loadingMoreParents) return;
+                  void dispatch(fetchParentCategories({ append: true }));
+                }}
+                className="w-full min-w-0 sm:w-fit sm:min-w-36 [&_button]:border-primary [&_button]:bg-card [&_button]:text-primary"
+              />
+            ) : (
+              <NativeSelect
+                value={marketplace ? serviceSlug : (category?.slug ?? "all")}
+                onChange={(event) => onServiceChange(event.target.value)}
+                className="w-full min-w-0 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:border-primary [&>select]:bg-card [&>select]:text-primary sm:[&>select]:min-w-36"
+                aria-label="Service"
+              >
+                {marketplace ? (
+                  <NativeSelectOption value="all">All services</NativeSelectOption>
+                ) : null}
+                {serviceCategories.map((item) => (
+                  <NativeSelectOption key={item.id} value={item.slug}>
+                    {item.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            )}
 
-            {subServices ? (
+            {!useLive && subServices ? (
               <NativeSelect
                 value={subService}
                 onChange={(event) => onSubServiceChange(event.target.value)}
@@ -274,17 +572,21 @@ export function CategoryExplorer({
             ) : null}
 
             <NativeSelect
-              value={String(minRating)}
+              value={minRating > 0 ? String(minRating) : ""}
               onChange={(event) => {
-                setMinRating(Number(event.target.value));
+                const next = Number(event.target.value);
+                setMinRating(Number.isFinite(next) && next > 0 ? next : 0);
                 setFitToken((value) => value + 1);
               }}
-              className="w-full min-w-0 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:bg-card sm:[&>select]:min-w-28"
+              className="relative z-[1300] w-full min-w-0 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:bg-card sm:[&>select]:min-w-28"
               aria-label="Rating"
             >
-              <NativeSelectOption value="0">Rating</NativeSelectOption>
-              <NativeSelectOption value="4.5">4.5+</NativeSelectOption>
-              <NativeSelectOption value="4.8">4.8+</NativeSelectOption>
+              <NativeSelectOption value="">Rating</NativeSelectOption>
+              <NativeSelectOption value="1">1+</NativeSelectOption>
+              <NativeSelectOption value="2">2+</NativeSelectOption>
+              <NativeSelectOption value="3">3+</NativeSelectOption>
+              <NativeSelectOption value="4">4+</NativeSelectOption>
+              <NativeSelectOption value="5">5</NativeSelectOption>
             </NativeSelect>
 
             <NativeSelect
@@ -330,10 +632,23 @@ export function CategoryExplorer({
         ) : null}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="relative z-0 flex flex-col lg:min-h-0 lg:flex-1 lg:flex-row lg:overflow-hidden">
+        {showRefreshOverlay ? (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center bg-background/40"
+            aria-busy="true"
+            aria-live="polite"
+          >
+            <Spinner size="lg" label="Loading professionals" />
+          </div>
+        ) : null}
+
         <div
           data-lenis-prevent
-          className="relative h-[32vh] min-h-52 shrink-0 overflow-hidden border-b sm:h-[36vh] lg:h-auto lg:min-h-0 lg:w-[60%] lg:flex-none lg:border-r lg:border-b-0"
+          className={cn(
+            "relative h-[32vh] min-h-52 shrink-0 overflow-hidden border-b sm:h-[36vh] lg:h-auto lg:min-h-[24rem] lg:w-[48%] lg:flex-none lg:border-r lg:border-b-0",
+            showRefreshOverlay && "pointer-events-none opacity-55",
+          )}
         >
           <ProviderMap
             providers={results}
@@ -345,7 +660,7 @@ export function CategoryExplorer({
           />
           <div className="pointer-events-none absolute top-3 left-3 z-[1100]">
             <span className="rounded-md bg-black/70 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-md">
-              {results.length} of {scopedProviders.length} professionals
+              {results.length} of {mapCountTotal} professionals
             </span>
           </div>
           <Button
@@ -358,12 +673,19 @@ export function CategoryExplorer({
           </Button>
         </div>
 
-        <aside className="flex min-h-0 w-full flex-1 flex-col bg-background lg:w-[40%] lg:flex-none">
+        <aside
+          className={cn(
+            "flex w-full flex-col bg-background lg:min-h-0 lg:w-[52%] lg:flex-none",
+            showRefreshOverlay && "pointer-events-none opacity-55",
+          )}
+        >
           <div className="flex shrink-0 flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:px-5 sm:py-3.5">
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold">{heading}</h1>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {results.length} {results.length === 1 ? "result" : "results"}
+                {useLive
+                  ? `${liveTotal} ${liveTotal === 1 ? "result" : "results"}`
+                  : `${results.length} ${results.length === 1 ? "result" : "results"}`}
               </p>
             </div>
             <NativeSelect
@@ -378,31 +700,55 @@ export function CategoryExplorer({
             </NativeSelect>
           </div>
 
-          {results.length ? (
-            <ul
-              key={`${serviceSlug}-${subService}-${sort}-${minRating}-${licensedOnly}-${address}`}
-              ref={listRef}
-              data-lenis-prevent
-              className="reveal-list grid min-h-0 flex-1 content-start grid-cols-1 gap-4 overflow-y-auto overscroll-contain p-3 sm:p-4 md:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2"
-            >
-              {results.map((provider) => {
-                const active = provider.id === selectedId || provider.id === hoveredId;
+          {showInitialSpinner ? (
+            <CenteredSpinner label="Loading professionals" className="min-h-64" />
+          ) : results.length ? (
+            <>
+              <ul
+                ref={listRef}
+                data-lenis-prevent
+                className={cn(
+                  "grid content-start grid-cols-1 gap-4 p-3 sm:p-4",
+                  "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain",
+                  !useLive && "md:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2",
+                  useLive && "xl:grid-cols-2",
+                  !showRefreshOverlay && "reveal-list",
+                )}
+              >
+                {results.map((provider) => {
+                  const active = provider.id === selectedId || provider.id === hoveredId;
 
-                return (
-                  <li key={provider.id} data-provider={provider.id}>
-                    <ProviderCard
-                      provider={provider}
-                      visual
-                      active={active}
-                      place={parsePlaceInput(address)}
-                      onClick={() => setSelectedId(provider.id)}
-                      onMouseEnter={() => setHoveredId(provider.id)}
-                      onMouseLeave={() => setHoveredId(null)}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
+                  return (
+                    <li key={provider.id} data-provider={provider.id}>
+                      <ProviderCard
+                        provider={provider}
+                        visual
+                        active={active}
+                        place={parsePlaceInput(address)}
+                        onClick={() => setSelectedId(provider.id)}
+                        onMouseEnter={() => setHoveredId(provider.id)}
+                        onMouseLeave={() => setHoveredId(null)}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+              {useLive && liveHasNextPage ? (
+                <div className="shrink-0 border-t px-4 py-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={liveLoadingMore || liveLoading}
+                    onClick={() =>
+                      void dispatch(fetchPublicProfessionals({ append: true }))
+                    }
+                  >
+                    {liveLoadingMore ? "Loading…" : "See more"}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
               <p className="font-medium">No professionals match that search</p>

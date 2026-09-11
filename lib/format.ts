@@ -85,7 +85,12 @@ export function getTodayWeekday(): WorkingHours["day"] {
 }
 
 export function formatLocation(city: string, state: string, zip?: string) {
-  return zip ? `${city}, ${state} ${zip}` : `${city}, ${state}`;
+  const place = [city, state]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
+  if (!place) return zip?.trim() || "";
+  return zip?.trim() ? `${place} ${zip.trim()}` : place;
 }
 
 export function formatAddress(street: string | undefined, city: string, state: string, zip?: string) {

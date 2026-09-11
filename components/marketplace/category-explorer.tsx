@@ -10,6 +10,10 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { CenteredSpinner, Spinner } from "@/components/ui/spinner";
 import { ProviderCard } from "@/components/shared/provider-card";
 import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
+import {
   PaginatedCategorySelect,
   type CategoryOption,
 } from "@/components/portal/paginated-category-select";
@@ -27,16 +31,19 @@ import {
   selectParentCategories,
 } from "@/store/categoriesSlice";
 import {
+  clearLocation,
   detectCurrentLocation,
   hasLocation,
   hydrateLocationIfEmpty,
   isCommittedLocation,
   locationDisplayLabel,
+  setLocationFromPlace,
 } from "@/store/locationSlice";
 import {
   buildPublicProfessionalsQueryKey,
   fetchPublicProfessionals,
   publicProfessionalToProvider,
+  resetPublicProfessionals,
   type PublicProfessionalSortBy,
   type PublicProfessionalsQuery,
 } from "@/store/publicProfessionalsSlice";
@@ -125,6 +132,14 @@ export function CategoryExplorer({
   const liveError = useAppSelector((state) => state.publicProfessionals.error);
 
   const locationLabel = locationDisplayLabel(customerLocation);
+  const locationValue =
+    customerLocation.address ||
+    customerLocation.city ||
+    customerLocation.zip ||
+    "";
+  // Local draft while typing — do not write keystrokes into Redux (avoids API refetches).
+  const [locationDraft, setLocationDraft] = useState<string | null>(null);
+  const locationInputValue = locationDraft ?? locationValue;
   const startingAddress =
     initialAddress ||
     (liveProfessionals ? locationLabel : "") ||
@@ -212,21 +227,29 @@ export function CategoryExplorer({
   }, [address, licensedOnly, minRating, scopedProviders, sort, useLive]);
 
   const liveQuery = useMemo((): PublicProfessionalsQuery => {
-    const zipFromAddress = extractZip(address.trim());
+    const committed = isCommittedLocation(customerLocation);
     const next: PublicProfessionalsQuery = {
       sortBy: sortByFromUi(sort),
       sortOrder: "desc",
+      locationToken: committed
+        ? [
+            customerLocation.zip,
+            customerLocation.city,
+            customerLocation.state,
+            customerLocation.country,
+            customerLocation.latitude ?? "",
+            customerLocation.longitude ?? "",
+          ].join("|")
+        : "",
     };
     if (minRating > 0) next.minRating = minRating;
     if (licensedOnly) next.isIdentityVerified = true;
     if (categoryId) next.category = categoryId;
 
+    // Send only committed location fields (selected place / geo), not mid-typing address.
     if (customerLocation.zip.trim()) {
       next.zipCode = customerLocation.zip.trim();
-    } else if (zipFromAddress) {
-      next.zipCode = zipFromAddress;
     }
-
     if (
       customerLocation.latitude != null &&
       Number.isFinite(customerLocation.latitude)
@@ -240,19 +263,8 @@ export function CategoryExplorer({
       next.lng = customerLocation.longitude;
     }
 
-    next.locationToken = [
-      customerLocation.zip,
-      customerLocation.city,
-      customerLocation.state,
-      customerLocation.country,
-      customerLocation.latitude ?? "",
-      customerLocation.longitude ?? "",
-      next.zipCode || "",
-    ].join("|");
-
     return next;
   }, [
-    address,
     categoryId,
     customerLocation.city,
     customerLocation.country,
@@ -273,6 +285,7 @@ export function CategoryExplorer({
 
   const locationReady =
     customerLocation.detectAttempted && !customerLocation.detecting;
+  const locationCommitted = isCommittedLocation(customerLocation);
   const showRefreshOverlay =
     useLive &&
     results.length > 0 &&
@@ -281,9 +294,10 @@ export function CategoryExplorer({
     useLive &&
     !results.length &&
     (!locationReady ||
-      liveLoading ||
-      pendingRefresh ||
-      (!liveLoaded && !liveError));
+      (locationCommitted &&
+        (liveLoading ||
+          pendingRefresh ||
+          (!liveLoaded && !liveError))));
 
   useEffect(() => {
     if (!useLive) return;
@@ -348,9 +362,14 @@ export function CategoryExplorer({
     }
   }, [category?.slug, categoryId, parentCategories, serviceSlug, useLive]);
 
+  // Wait for location bootstrap, then fetch only with a committed location (never while typing).
   useEffect(() => {
     if (!useLive) return;
-    if (!locationReady) return;
+    if (!locationReady || !locationCommitted) {
+      setPendingRefresh(false);
+      prevLiveQueryKeyRef.current = liveQueryKey;
+      return;
+    }
 
     const queryChanged = prevLiveQueryKeyRef.current !== liveQueryKey;
     if (queryChanged && resultsCountRef.current > 0) {
@@ -364,7 +383,15 @@ export function CategoryExplorer({
       );
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [dispatch, liveQueryKey, locationReady, useLive]);
+  }, [dispatch, liveQueryKey, locationCommitted, locationReady, useLive]);
+
+  // Clear stale results when location is cleared (same idea as Fixed Services gate).
+  useEffect(() => {
+    if (!useLive) return;
+    if (locationReady && !locationCommitted) {
+      dispatch(resetPublicProfessionals());
+    }
+  }, [dispatch, locationCommitted, locationReady, useLive]);
 
   useEffect(() => {
     if (!liveLoading) setPendingRefresh(false);
@@ -409,12 +436,39 @@ export function CategoryExplorer({
     const params = new URLSearchParams();
     if (slug !== "all") params.set("service", slug);
     if (slug !== "all" && job) params.set("job", job);
-    const trimmed = address.trim();
-    const zip = extractZip(trimmed);
-    if (zip) params.set("zip", zip);
-    if (trimmed && trimmed !== zip) params.set("loc", trimmed);
+    if (useLive) {
+      const zip = customerLocation.zip.trim();
+      const loc = locationLabel.trim();
+      if (zip) params.set("zip", zip);
+      if (loc && loc !== zip) params.set("loc", loc);
+    } else {
+      const trimmed = address.trim();
+      const zip = extractZip(trimmed);
+      if (zip) params.set("zip", zip);
+      if (trimmed && trimmed !== zip) params.set("loc", trimmed);
+    }
     const query = params.toString();
     router.replace(query ? `/find-a-professional?${query}` : "/find-a-professional");
+  }
+
+  function applyLivePlace(place: PlaceAddress) {
+    setLocationDraft(null);
+    dispatch(setLocationFromPlace(place));
+    setFitToken((value) => value + 1);
+    if (marketplace) {
+      // URL sync after Redux updates on next paint — use place fields directly.
+      const params = new URLSearchParams();
+      if (serviceSlug !== "all") params.set("service", serviceSlug);
+      const zip = place.zipCode?.trim() || "";
+      const loc =
+        place.formattedAddress?.trim() ||
+        [place.city, place.state].filter(Boolean).join(", ") ||
+        zip;
+      if (zip) params.set("zip", zip);
+      if (loc && loc !== zip) params.set("loc", loc);
+      const query = params.toString();
+      router.replace(query ? `/find-a-professional?${query}` : "/find-a-professional");
+    }
   }
 
   function onServiceChange(slug: string) {
@@ -452,7 +506,9 @@ export function CategoryExplorer({
     if (marketplace) syncMarketplaceUrl(serviceSlug, value);
   }
 
-  const searchedPlace = parsePlaceInput(address);
+  const searchedPlace = parsePlaceInput(
+    useLive ? locationInputValue || locationLabel : address,
+  );
   const searchedMarket = findMarketCity(searchedPlace.city, searchedPlace.state);
   const cityLabel = searchedMarket
     ? `${searchedMarket.city}, ${searchedMarket.state}`
@@ -494,31 +550,52 @@ export function CategoryExplorer({
           onSubmit={recenter}
           className="relative z-[1200] flex flex-col gap-2 overflow-visible py-3 lg:flex-row lg:items-center lg:gap-3"
         >
-          <div className="relative min-w-0 w-full max-w-56">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
-              onBlur={() => {
-                if (marketplace) syncMarketplaceUrl(serviceSlug, subService);
-              }}
-              placeholder="City, state, or ZIP"
-              className="h-10 rounded-lg bg-card pr-9 pl-9"
-              aria-label="Address"
-            />
-            {address ? (
-              <button
-                type="button"
-                onClick={() => setAddress("")}
-                className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                aria-label="Clear address"
-              >
-                <X className="size-4" />
-              </button>
-            ) : null}
+          <div className="relative z-[1300] min-w-0 w-full max-w-56">
+            {useLive ? (
+              <AddressAutocomplete
+                value={locationInputValue}
+                onChange={(value) => {
+                  if (!value.trim()) {
+                    setLocationDraft(null);
+                    dispatch(clearLocation());
+                    return;
+                  }
+                  setLocationDraft(value);
+                }}
+                onSelect={applyLivePlace}
+                placeholder="City, state, or ZIP"
+                autoComplete="off"
+                hideStatus
+                inputClassName="h-10 rounded-lg bg-card"
+              />
+            ) : (
+              <>
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  value={address}
+                  onChange={(event) => setAddress(event.target.value)}
+                  onBlur={() => {
+                    if (marketplace) syncMarketplaceUrl(serviceSlug, subService);
+                  }}
+                  placeholder="City, state, or ZIP"
+                  className="h-10 rounded-lg bg-card pr-9 pl-9"
+                  aria-label="Address"
+                />
+                {address ? (
+                  <button
+                    type="button"
+                    onClick={() => setAddress("")}
+                    className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear address"
+                  >
+                    <X className="size-4" />
+                  </button>
+                ) : null}
+              </>
+            )}
           </div>
 
           <div className="relative z-[1200] grid min-w-0 grid-cols-2 gap-2 overflow-visible sm:flex sm:flex-1 sm:flex-wrap sm:items-center">
@@ -724,7 +801,11 @@ export function CategoryExplorer({
                         provider={provider}
                         visual
                         active={active}
-                        place={parsePlaceInput(address)}
+                        place={parsePlaceInput(
+                          useLive
+                            ? locationInputValue || locationLabel
+                            : address,
+                        )}
                         onClick={() => setSelectedId(provider.id)}
                         onMouseEnter={() => setHoveredId(provider.id)}
                         onMouseLeave={() => setHoveredId(null)}

@@ -467,33 +467,34 @@ export const fetchPublicProfessionals = createAsyncThunk<
       hasCoords ||
       Boolean(location.city.trim());
 
-    const nextQuery: PublicProfessionalsQuery = {
-      sortBy: "recommended",
-      ...incoming,
-      zipCode: hasZip
-        ? location.zip.trim()
-        : incoming?.zipCode?.trim() || undefined,
-      lat: hasCoords
-        ? location.latitude!
-        : incoming?.lat != null && Number.isFinite(incoming.lat)
-          ? incoming.lat
-          : undefined,
-      lng: hasCoords
-        ? location.longitude!
-        : incoming?.lng != null && Number.isFinite(incoming.lng)
-          ? incoming.lng
-          : undefined,
-      locationToken: committed
-        ? [
-            location.zip,
-            location.city,
-            location.state,
-            location.country,
-            location.latitude ?? "",
-            location.longitude ?? "",
-          ].join("|")
-        : incoming?.locationToken || "",
-    };
+    // Never call the directory without a committed location (selected place / geo).
+    if (!append && !committed) {
+      return rejectWithValue("Location is required.");
+    }
+
+    const nextQuery: PublicProfessionalsQuery = append
+      ? {
+          ...state.query,
+          ...incoming,
+        }
+      : {
+          sortBy: "recommended",
+          ...incoming,
+          // Always prefer live Redux location — do not keep a prior zip via undefined merges.
+          zipCode: hasZip ? location.zip.trim() : undefined,
+          lat: hasCoords ? location.latitude! : undefined,
+          lng: hasCoords ? location.longitude! : undefined,
+          locationToken: committed
+            ? [
+                location.zip,
+                location.city,
+                location.state,
+                location.country,
+                location.latitude ?? "",
+                location.longitude ?? "",
+              ].join("|")
+            : "",
+        };
 
     if (!nextQuery.zipCode?.trim()) delete nextQuery.zipCode;
     if (nextQuery.lat == null || !Number.isFinite(nextQuery.lat)) {
@@ -537,9 +538,18 @@ export const fetchPublicProfessionals = createAsyncThunk<
   {
     condition: (arg, { getState }) => {
       const state = getState().publicProfessionals;
+      const location = getState().location;
       if (arg?.append) {
         return !state.loading && !state.loadingMore && state.hasNextPage;
       }
+      const committed =
+        Boolean(location.zip.trim()) ||
+        Boolean(location.city.trim()) ||
+        (location.latitude != null &&
+          location.longitude != null &&
+          Number.isFinite(location.latitude) &&
+          Number.isFinite(location.longitude));
+      if (!committed) return false;
       return true;
     },
   },

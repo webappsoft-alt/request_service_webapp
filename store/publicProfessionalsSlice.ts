@@ -1,6 +1,7 @@
 import {
   createAsyncThunk,
   createSlice,
+  type PayloadAction,
 } from "@reduxjs/toolkit";
 import {
   extractErrorMessage,
@@ -100,6 +101,10 @@ type PublicProfessionalsState = {
   loadingMore: boolean;
   loaded: boolean;
   error: string | null;
+  /** Stashed / fetched professional for the profile page (keyed by slug). */
+  detail: PublicProfessional | null;
+  detailLoading: boolean;
+  detailError: string | null;
 };
 
 export const PUBLIC_PROFESSIONALS_LIMIT = 10;
@@ -122,6 +127,9 @@ const initialState: PublicProfessionalsState = {
   loadingMore: false,
   loaded: false,
   error: null,
+  detail: null,
+  detailLoading: false,
+  detailError: null,
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -290,6 +298,25 @@ function parsePublicProfessionalsResponse(response: unknown): {
   return { items, page, limit, total, totalPages, hasNextPage };
 }
 
+/** Detail payload: `{ success, data: Professional }` or bare professional object. */
+function extractDetailEntity(response: unknown): PublicProfessional | null {
+  const root = asRecord(response) ?? {};
+  if (root.data != null && !Array.isArray(root.data)) {
+    return normalizePublicProfessional(root.data);
+  }
+  return normalizePublicProfessional(response);
+}
+
+export function selectPublicProfessionalBySlug(
+  state: { publicProfessionals?: PublicProfessionalsState },
+  slug: string,
+): PublicProfessional | null {
+  const slice = state.publicProfessionals;
+  if (!slice || !slug) return null;
+  if (slice.detail?.slug === slug) return slice.detail;
+  return slice.items.find((item) => item.slug === slug) ?? null;
+}
+
 export function buildPublicProfessionalsQueryKey(
   query: PublicProfessionalsQuery,
 ): string {
@@ -419,6 +446,35 @@ export function publicProfessionalToProvider(
           "",
       ].filter(Boolean).slice(0, 2);
 
+  const tradeLabel =
+    professional.tradeDetails.tradeTitle?.trim() ||
+    professional.tagline?.trim() ||
+    serviceLabels[0] ||
+    "Home services";
+  const city = professional.location.city.trim();
+  const specialtyPreview = professional.tradeDetails.specialties
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const aboutParts = [
+    city ? `${tradeLabel} for ${city} homes.` : `${tradeLabel}.`,
+    specialtyPreview.length
+      ? `Specialties include ${specialtyPreview.join(", ")}.`
+      : "",
+    professional.activeOfferings.startingPriceDisplay?.trim() || "",
+  ].filter(Boolean);
+
+  let yearsInBusiness = 0;
+  let foundedYear = 0;
+  if (professional.createdAt) {
+    const created = new Date(professional.createdAt);
+    if (!Number.isNaN(created.getTime())) {
+      foundedYear = created.getFullYear();
+      const years = new Date().getFullYear() - foundedYear;
+      yearsInBusiness = Math.max(0, years);
+    }
+  }
+
   return {
     id: professional.id,
     slug: professional.slug || professional.id,
@@ -435,13 +491,10 @@ export function publicProfessionalToProvider(
       professional.tradeDetails.tradeTitle ||
       professional.activeOfferings.startingPriceDisplay ||
       "",
-    description:
-      professional.tagline ||
-      professional.activeOfferings.startingPriceDisplay ||
-      "",
+    description: aboutParts.join(" "),
     rating: professional.performanceMetrics.rating.average,
     reviewCount: professional.performanceMetrics.rating.totalReviews,
-    yearsInBusiness: 0,
+    yearsInBusiness,
     licensed: professional.verificationBadge.licensed,
     insured: professional.verificationBadge.insured,
     categoryIds,
@@ -457,9 +510,12 @@ export function publicProfessionalToProvider(
     email: "",
     workingHours: [],
     gallery: [],
-    foundedYear: 0,
+    foundedYear,
     employeeCount: "",
     reviews: [],
+    contact: professional.fullName.trim()
+      ? { name: professional.fullName.trim(), role: "Business owner" }
+      : undefined,
   };
 }
 
@@ -592,12 +648,73 @@ export const fetchPublicProfessionals = createAsyncThunk<
   },
 );
 
+/**
+ * Fallback for direct URL / refresh when listing state is unavailable.
+ * Skips the network call when detail or list items already hold this slug.
+ */
+export const fetchPublicProfessionalBySlug = createAsyncThunk<
+  PublicProfessional,
+  string,
+  {
+    state: { publicProfessionals: PublicProfessionalsState };
+    rejectValue: string;
+  }
+>(
+  "publicProfessionals/fetchBySlug",
+  async (slug, { rejectWithValue }) => {
+    const trimmed = String(slug || "").trim();
+    if (!trimmed) {
+      return rejectWithValue("Professional slug is required.");
+    }
+    try {
+      const response = await getData(
+        publicApi.professional(trimmed),
+        undefined,
+        { silent: true },
+      );
+      const entity = extractDetailEntity(response);
+      if (!entity) {
+        return rejectWithValue("Professional not found.");
+      }
+      return entity;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+  {
+    condition: (slug, { getState }) => {
+      const trimmed = String(slug || "").trim();
+      if (!trimmed) return false;
+      const state = getState().publicProfessionals;
+      if (state.detailLoading) return false;
+      if (state.detail?.slug === trimmed) return false;
+      if (state.items.some((item) => item.slug === trimmed)) return false;
+      return true;
+    },
+  },
+);
+
 const publicProfessionalsSlice = createSlice({
   name: "publicProfessionals",
   initialState,
   reducers: {
+    /** Stash listing card data so the profile page can render without a fetch. */
+    setPublicProfessionalDetail(
+      state,
+      action: PayloadAction<PublicProfessional>,
+    ) {
+      state.detail = action.payload;
+      state.detailLoading = false;
+      state.detailError = null;
+    },
+    clearPublicProfessionalDetail(state) {
+      state.detail = null;
+      state.detailLoading = false;
+      state.detailError = null;
+    },
     clearPublicProfessionalsError(state) {
       state.error = null;
+      state.detailError = null;
     },
     resetPublicProfessionals() {
       return initialState;
@@ -665,11 +782,29 @@ const publicProfessionalsSlice = createSlice({
           action.payload ||
           action.error.message ||
           "Failed to load professionals.";
+      })
+      .addCase(fetchPublicProfessionalBySlug.pending, (state) => {
+        state.detailLoading = true;
+        state.detailError = null;
+      })
+      .addCase(fetchPublicProfessionalBySlug.fulfilled, (state, action) => {
+        state.detailLoading = false;
+        state.detail = action.payload;
+        state.detailError = null;
+      })
+      .addCase(fetchPublicProfessionalBySlug.rejected, (state, action) => {
+        state.detailLoading = false;
+        state.detailError =
+          action.payload ||
+          action.error.message ||
+          "Failed to load professional.";
       });
   },
 });
 
 export const {
+  setPublicProfessionalDetail,
+  clearPublicProfessionalDetail,
   clearPublicProfessionalsError,
   resetPublicProfessionals,
 } = publicProfessionalsSlice.actions;

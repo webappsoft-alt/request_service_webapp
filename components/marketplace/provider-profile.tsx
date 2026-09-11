@@ -100,9 +100,11 @@ export function ProviderProfile({
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <Rating value={provider.rating} count={provider.reviewCount} size="md" />
                     <CredentialMark licensed={provider.licensed} insured={provider.insured} />
-                    <span className="text-sm text-muted-foreground">
-                      {provider.yearsInBusiness} years in business
-                    </span>
+                    {provider.yearsInBusiness > 0 ? (
+                      <span className="text-sm text-muted-foreground">
+                        {provider.yearsInBusiness} years in business
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -171,22 +173,26 @@ export function ProviderProfile({
                   <p>{contact.name}</p>
                   <p className="mt-0.5 font-normal text-muted-foreground">{contact.role}</p>
                 </BusinessInfoItem>
-                <BusinessInfoItem icon={Phone} label="Phone">
-                  <a href={`tel:${provider.phone}`} className="hover:text-primary">
-                    {provider.phone}
-                  </a>
-                </BusinessInfoItem>
-                <BusinessInfoItem icon={Mail} label="Email">
-                  <a
-                    href={`mailto:${provider.email}`}
-                    className="block break-words hover:text-primary"
-                  >
-                    {provider.email}
-                  </a>
-                </BusinessInfoItem>
+                {provider.phone?.trim() ? (
+                  <BusinessInfoItem icon={Phone} label="Phone">
+                    <a href={`tel:${provider.phone}`} className="hover:text-primary">
+                      {provider.phone}
+                    </a>
+                  </BusinessInfoItem>
+                ) : null}
+                {provider.email?.trim() ? (
+                  <BusinessInfoItem icon={Mail} label="Email">
+                    <a
+                      href={`mailto:${provider.email}`}
+                      className="block break-words hover:text-primary"
+                    >
+                      {provider.email}
+                    </a>
+                  </BusinessInfoItem>
+                ) : null}
                 <BusinessInfoItem icon={MapPin} label="Address">
-                  <p>{provider.street}</p>
-                  <p className="mt-0.5 font-normal text-muted-foreground">
+                  {provider.street?.trim() ? <p>{provider.street}</p> : null}
+                  <p className={cn("font-normal text-muted-foreground", provider.street?.trim() && "mt-0.5")}>
                     {formatLocation(provider.city, provider.state, provider.zip)}
                   </p>
                 </BusinessInfoItem>
@@ -200,17 +206,21 @@ export function ProviderProfile({
                     {displayWebsite(website)}
                   </a>
                 </BusinessInfoItem>
-                <BusinessInfoItem icon={CalendarDays} label="Founded">
-                  <p>{provider.foundedYear}</p>
-                  <p className="mt-0.5 font-normal text-muted-foreground">
-                    {provider.yearsInBusiness}{" "}
-                    {provider.yearsInBusiness === 1 ? "year" : "years"} ago
-                  </p>
-                </BusinessInfoItem>
-                <BusinessInfoItem icon={Users} label="Team">
-                  <p>{provider.employeeCount}</p>
-                  <p className="mt-0.5 font-normal text-muted-foreground">people</p>
-                </BusinessInfoItem>
+                {provider.foundedYear > 0 ? (
+                  <BusinessInfoItem icon={CalendarDays} label="Founded">
+                    <p>{provider.foundedYear}</p>
+                    <p className="mt-0.5 font-normal text-muted-foreground">
+                      {provider.yearsInBusiness}{" "}
+                      {provider.yearsInBusiness === 1 ? "year" : "years"} ago
+                    </p>
+                  </BusinessInfoItem>
+                ) : null}
+                {provider.employeeCount?.trim() ? (
+                  <BusinessInfoItem icon={Users} label="Team">
+                    <p>{provider.employeeCount}</p>
+                    <p className="mt-0.5 font-normal text-muted-foreground">people</p>
+                  </BusinessInfoItem>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -266,25 +276,27 @@ export function ProviderProfile({
               </CardContent>
             </Card>
 
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle>Working hours</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-1.5 text-sm">
-                {provider.workingHours.map((hours) => (
-                  <p
-                    key={hours.day}
-                    className={cn(
-                      "flex items-baseline justify-between gap-3",
-                      hours.day === today && "text-foreground"
-                    )}
-                  >
-                    <span className="text-muted-foreground">{formatWorkingDay(hours.day)}</span>
-                    <span className="font-medium tabular-nums">{formatHoursValue(hours)}</span>
-                  </p>
-                ))}
-              </CardContent>
-            </Card>
+            {provider.workingHours.length ? (
+              <Card size="sm">
+                <CardHeader>
+                  <CardTitle>Working hours</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-1.5 text-sm">
+                  {provider.workingHours.map((hours) => (
+                    <p
+                      key={hours.day}
+                      className={cn(
+                        "flex items-baseline justify-between gap-3",
+                        hours.day === today && "text-foreground"
+                      )}
+                    >
+                      <span className="text-muted-foreground">{formatWorkingDay(hours.day)}</span>
+                      <span className="font-medium tabular-nums">{formatHoursValue(hours)}</span>
+                    </p>
+                  ))}
+                </CardContent>
+              </Card>
+            ) : null}
           </aside>
           </div>
         </BookServiceProvider>

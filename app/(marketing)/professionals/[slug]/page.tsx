@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
 import { ProviderProfile } from "@/components/marketplace/provider-profile";
+import { PublicProfessionalDetail } from "@/components/marketplace/public-professional-detail";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getLocalKeywordPhrases } from "@/lib/data/local-keywords";
 import { getStartingPrice } from "@/lib/data/provider-media";
@@ -19,10 +19,9 @@ export async function generateMetadata({ params }: PageParams<{ slug: string }>)
   const provider = getProviderBySlug(slug);
   if (!provider) {
     return buildMetadata({
-      title: "Provider not found",
-      description: "That professional profile is not available.",
+      title: "Professional profile",
+      description: "View this professional’s profile and request a quote.",
       path: `/professionals/${slug}`,
-      index: false,
     });
   }
   return buildMetadata({
@@ -60,12 +59,6 @@ export default async function ProviderProfilePage({
 }: PageParams<{ slug: string }>) {
   const { slug } = await params;
   const query = await searchParams;
-  const provider = getProviderBySlug(slug);
-  if (!provider) notFound();
-
-  const categories = provider.categoryIds
-    .map((id) => getServiceCategoryById(id))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
   const place = {
     zip: firstQuery(query.zip),
     city: firstQuery(query.city),
@@ -73,22 +66,31 @@ export default async function ProviderProfilePage({
     location: firstQuery(query.location),
   };
 
-  return (
-    <>
-      <JsonLd
-        data={[
-          {
-            ...providerJsonLd(provider, categories),
-            priceRange: formatStartingPrice(getStartingPrice(provider)),
-          },
-          breadcrumbJsonLd([
-            { name: "Home", path: "/" },
-            { name: "Find a Professional", path: "/find-a-professional" },
-            { name: provider.companyName, path: `/professionals/${provider.slug}` },
-          ]),
-        ]}
-      />
-      <ProviderProfile provider={provider} categories={categories} place={place} />
-    </>
-  );
+  const provider = getProviderBySlug(slug);
+  if (provider) {
+    const categories = provider.categoryIds
+      .map((id) => getServiceCategoryById(id))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    return (
+      <>
+        <JsonLd
+          data={[
+            {
+              ...providerJsonLd(provider, categories),
+              priceRange: formatStartingPrice(getStartingPrice(provider)),
+            },
+            breadcrumbJsonLd([
+              { name: "Home", path: "/" },
+              { name: "Find a Professional", path: "/find-a-professional" },
+              { name: provider.companyName, path: `/professionals/${provider.slug}` },
+            ]),
+          ]}
+        />
+        <ProviderProfile provider={provider} categories={categories} place={place} />
+      </>
+    );
+  }
+
+  return <PublicProfessionalDetail slug={slug} place={place} />;
 }

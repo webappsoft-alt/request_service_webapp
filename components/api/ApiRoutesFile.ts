@@ -55,6 +55,29 @@ export const providerApi = {
   fixedService: (id: string) => `provider/fixed-services/${id}`,
 } as const;
 
+export const providerOrdersApi = {
+  /** GET list of provider assigned operational work orders */
+  list: "provider/orders",
+  /** GET one operational order details by id */
+  byId: (id: string) => `provider/orders/${id}`,
+  /** PUT accept booking request */
+  accept: (id: string) => `provider/orders/${id}/accept`,
+  /** PUT reject booking request */
+  reject: (id: string) => `provider/orders/${id}/reject`,
+  /** PUT depart / start transit */
+  transit: (id: string) => `provider/orders/${id}/transit`,
+  /** PUT arrive on site with geofence verification */
+  arrive: (id: string) => `provider/orders/${id}/arrive`,
+  /** PUT start physical work */
+  startWork: (id: string) => `provider/orders/${id}/start-work`,
+  /** POST propose in-app change order */
+  changeOrder: (id: string) => `provider/orders/${id}/change-order`,
+  /** PUT submit work completion with evidence */
+  complete: (id: string) => `provider/orders/${id}/complete`,
+  /** PUT provider emergency cancellation */
+  cancel: (id: string) => `provider/orders/${id}/cancel`,
+} as const;
+
 /** Public catalog endpoints (no provider auth required for reads). */
 export const publicApi = {
   /** GET active categories; use `only_parent` / `parent_category_id` */

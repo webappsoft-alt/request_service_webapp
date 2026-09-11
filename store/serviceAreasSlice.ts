@@ -283,6 +283,7 @@ export const updateServiceArea = createAsyncThunk<
     const updated = extractEntity(response) ?? {
       id,
       ...payload,
+      isActive: true,
     };
     return updated;
   } catch (error) {

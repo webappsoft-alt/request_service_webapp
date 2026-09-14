@@ -52,6 +52,12 @@ export function categoryNameToSlug(name?: string): string {
   return match?.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
+export function extractFirstImageUrl(content?: string): string | undefined {
+  if (!content || typeof content !== "string") return undefined;
+  const match = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return match && match[1] ? match[1].trim() : undefined;
+}
+
 function getBaseUrl(): string {
   return String(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(
     /\/+$/,
@@ -115,13 +121,43 @@ export async function fetchPublicBlogs(
 
     const result = (await response.json()) as PublicBlogsResponse;
     if (result && Array.isArray(result.data)) {
+      // Enrich blog items: if image is missing, extract from CKEditor content
+      const enriched = await Promise.all(
+        result.data.map(async (item) => {
+          let image = item.image || item.coverImage || item.thumbnail;
+          let content = item.content;
+
+          if (!image) {
+            if (content) {
+              image = extractFirstImageUrl(content);
+            } else if (item.slug) {
+              try {
+                const detail = await fetchPublicBlogBySlug(item.slug);
+                if (detail?.content) {
+                  content = detail.content;
+                  image = extractFirstImageUrl(detail.content);
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+
+          return {
+            ...item,
+            image: image || item.image,
+            content: content || item.content,
+          };
+        }),
+      );
+
       return {
-        data: result.data,
+        data: enriched,
         pagination: result.pagination || {
-          total: result.data.length,
+          total: enriched.length,
           page,
           limit,
-          totalPages: Math.ceil(result.data.length / limit) || 1,
+          totalPages: Math.ceil(enriched.length / limit) || 1,
         },
       };
     }
@@ -159,6 +195,10 @@ export async function fetchPublicBlogBySlug(
     // Response might be wrapped in `{ data: ... }` or directly the blog object
     const blog: PublicBlogItem = "data" in data && data.data ? data.data : data;
     if (!blog._id && !blog.slug && !blog.title) return null;
+
+    if (!blog.image && blog.content) {
+      blog.image = extractFirstImageUrl(blog.content);
+    }
 
     return blog;
   } catch (err) {

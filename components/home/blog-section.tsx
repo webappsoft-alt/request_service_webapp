@@ -3,27 +3,23 @@ import { ArrowRight } from "lucide-react";
 import { Container, Section } from "@/components/layout/container";
 import { BlogCard } from "@/components/shared/blog-card";
 import { fetchPublicBlogs } from "@/lib/data/public-blogs";
-import { blogPosts } from "@/lib/data/blog";
-import type { BlogPost, PublicBlogItem } from "@/lib/types";
+import type { PublicBlogItem } from "@/lib/types";
 
 export async function BlogSection() {
-  let displayPosts: (BlogPost | PublicBlogItem)[] = [];
+  let displayPosts: PublicBlogItem[] = [];
 
   try {
     const res = await fetchPublicBlogs({ limit: 4 });
     if (res.data && res.data.length > 0) {
       displayPosts = res.data;
-      // If fewer than 4 live posts, backfill from fallback
-      if (displayPosts.length < 4) {
-        const remaining = 4 - displayPosts.length;
-        const extra = blogPosts.filter((p) => p.image).slice(0, remaining);
-        displayPosts = [...displayPosts, ...extra];
-      }
-    } else {
-      displayPosts = blogPosts.filter((post) => post.image).slice(0, 4);
     }
   } catch {
-    displayPosts = blogPosts.filter((post) => post.image).slice(0, 4);
+    displayPosts = [];
+  }
+
+  // If no blog posts exist in the API, do not display static data
+  if (displayPosts.length === 0) {
+    return null;
   }
 
   return (
@@ -52,7 +48,7 @@ export async function BlogSection() {
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {displayPosts.map((post) => (
             <BlogCard
-              key={"_id" in post ? post._id : post.id}
+              key={post._id || post.slug}
               post={post}
             />
           ))}

@@ -1,22 +1,29 @@
-import { blogPosts } from "@/lib/data/blog";
-import { getBlogAuthorById } from "@/lib/data/blog";
+import { fetchPublicBlogs } from "@/lib/data/public-blogs";
 import { siteConfig, absoluteUrl } from "@/lib/site";
 
 export async function GET() {
-  const items = blogPosts
-    .map((post) => {
-      const author = getBlogAuthorById(post.authorId);
-      return `
+  let items = "";
+  try {
+    const res = await fetchPublicBlogs({ limit: 50 });
+    if (res.data) {
+      items = res.data
+        .map((post) => {
+          const author = post.authorName || siteConfig.name;
+          return `
         <item>
           <title><![CDATA[${post.title}]]></title>
           <link>${absoluteUrl(`/blog/${post.slug}`)}</link>
           <guid>${absoluteUrl(`/blog/${post.slug}`)}</guid>
-          <pubDate>${new Date(`${post.publishedAt}T00:00:00Z`).toUTCString()}</pubDate>
-          <description><![CDATA[${post.description}]]></description>
-          <author>${author?.name ?? siteConfig.name}</author>
+          <pubDate>${post.publishedAt ? new Date(post.publishedAt).toUTCString() : new Date().toUTCString()}</pubDate>
+          <description><![CDATA[${post.description || ""}]]></description>
+          <author>${author}</author>
         </item>`;
-    })
-    .join("");
+        })
+        .join("");
+    }
+  } catch {
+    items = "";
+  }
 
   const xml = `<?xml version="1.0" encoding="UTF-8" ?>
   <rss version="2.0">

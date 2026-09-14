@@ -9,7 +9,6 @@ import {
   fetchPublicBlogs,
   slugToCategoryName,
 } from "@/lib/data/public-blogs";
-import { blogPosts } from "@/lib/data/blog";
 import type { PublicBlogItem } from "@/lib/types";
 
 interface BlogIndexProps {
@@ -53,45 +52,30 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
       limit: PAGE_LIMIT,
       category: category || undefined,
       search: searchTerm || undefined,
-    }).then((res) => {
-      if (cancelled) return;
+    })
+      .then((res) => {
+        if (cancelled) return;
 
-      if (res.data && res.data.length > 0) {
-        setBlogs(res.data);
-        setTotalCount(res.pagination.total);
-        setTotalPages(res.pagination.totalPages);
-      } else if (!searchTerm && (!category || category === "All")) {
-        // Fallback to static blog posts if backend has 0 published articles
-        const fallbackMapped: PublicBlogItem[] = blogPosts.map((bp) => ({
-          _id: bp.id,
-          title: bp.title,
-          slug: bp.slug,
-          description: bp.description,
-          category:
-            bp.categoryId === "blog_homeowners"
-              ? "For Homeowners"
-              : bp.categoryId === "blog_business"
-                ? "For Service Businesses"
-                : bp.categoryId === "blog_maintenance"
-                  ? "Home Maintenance"
-                  : "Platform News",
-          publishedAt: bp.publishedAt,
-          updatedAt: bp.updatedAt,
-          readTimeMinutes: bp.readTimeMinutes,
-          image: bp.image,
-          content: bp.content.join("\n\n"),
-        }));
-        setBlogs(fallbackMapped);
-        setTotalCount(fallbackMapped.length);
-        setTotalPages(Math.ceil(fallbackMapped.length / PAGE_LIMIT));
-      } else {
+        if (res.data && res.data.length > 0) {
+          setBlogs(res.data);
+          setTotalCount(res.pagination?.total ?? res.data.length);
+          setTotalPages(res.pagination?.totalPages ?? 1);
+        } else {
+          setBlogs([]);
+          setTotalCount(res.pagination?.total ?? 0);
+          setTotalPages(res.pagination?.totalPages ?? 1);
+        }
+
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Failed to fetch public blogs:", err);
         setBlogs([]);
-        setTotalCount(res.pagination.total || 0);
-        setTotalPages(res.pagination.totalPages || 1);
-      }
-
-      setLoading(false);
-    });
+        setTotalCount(0);
+        setTotalPages(1);
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;
@@ -289,7 +273,9 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
           <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
             {searchTerm
               ? `No articles match "${searchTerm}". Try another search term or remove filters.`
-              : "No articles found in this category at the moment."}
+              : category
+                ? `No articles found in "${category}".`
+                : "No articles published yet. Check back soon for guides and industry updates."}
           </p>
           {(searchTerm || category) && (
             <Button

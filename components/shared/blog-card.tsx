@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, MessageSquare } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { getBlogAuthorById, getBlogCategoryById } from "@/lib/data/blog";
+import { extractFirstImageUrl } from "@/lib/data/public-blogs";
 import { formatDate } from "@/lib/format";
 import type { BlogPost, PublicBlogItem } from "@/lib/types";
 
@@ -10,19 +10,21 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
   const categoryName =
     "category" in post && typeof post.category === "string" && post.category
       ? post.category
-      : "categoryId" in post && post.categoryId
-        ? getBlogCategoryById(post.categoryId)?.name ?? "Journal"
-        : "Journal";
+      : "Journal";
 
   const authorName =
     "authorName" in post && post.authorName
       ? post.authorName
-      : "authorId" in post && post.authorId
-        ? getBlogAuthorById(post.authorId)?.name ?? "Request Services Editorial"
-        : "Request Services Editorial";
+      : "Request Services Editorial";
+
+  const extractedFromContent =
+    "content" in post && typeof post.content === "string"
+      ? extractFirstImageUrl(post.content)
+      : undefined;
 
   const imageSrc =
     post.image ||
+    extractedFromContent ||
     ("coverImage" in post && post.coverImage ? post.coverImage : undefined) ||
     ("thumbnail" in post && post.thumbnail ? post.thumbnail : undefined);
 
@@ -84,10 +86,6 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
           <div className="flex items-center justify-between text-xs">
             <p className="eyebrow text-primary">
               {categoryName}
-              <span className="mx-2 text-primary/40" aria-hidden="true">
-                ·
-              </span>
-              {readTime} min read
             </p>
             {commentCount > 0 && (
               <span className="inline-flex items-center gap-1 font-medium text-muted-foreground">
@@ -104,10 +102,11 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
             {post.description}
           </p>
 
-          <p className="mt-auto text-xs text-muted-foreground">
-            {authorName}
-            {post.publishedAt ? ` · ${formatDate(post.publishedAt)}` : ""}
-          </p>
+          {post.publishedAt ? (
+            <p className="mt-auto text-xs text-muted-foreground">
+              {formatDate(post.publishedAt)}
+            </p>
+          ) : null}
 
           <span className="inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors group-hover:text-foreground">
             Continue reading

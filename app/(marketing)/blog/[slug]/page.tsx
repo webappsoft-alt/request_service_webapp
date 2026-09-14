@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -9,25 +8,20 @@ import { BlogCard } from "@/components/shared/blog-card";
 import { BlogComments } from "@/components/blog/blog-comments";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
-  blogPosts,
-  getBlogAuthorById,
-  getBlogCategoryById,
-  getBlogPostBySlug,
-  getRelatedPosts,
-} from "@/lib/data/blog";
-import {
   categoryNameToSlug,
   fetchPublicBlogBySlug,
+  fetchPublicBlogs,
 } from "@/lib/data/public-blogs";
 import { formatDate } from "@/lib/format";
 import { articleJsonLd, breadcrumbJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
+import type { PublicBlogItem } from "@/lib/types";
 
 export const dynamicParams = true;
 
 export function generateStaticParams() {
-  return blogPosts.map((post) => ({ slug: post.slug }));
+  return [];
 }
 
 export async function generateMetadata({
@@ -35,9 +29,8 @@ export async function generateMetadata({
 }: PageParams<{ slug: string }>) {
   const { slug } = await params;
   const apiPost = await fetchPublicBlogBySlug(slug);
-  const staticPost = !apiPost ? getBlogPostBySlug(slug) : null;
 
-  if (!apiPost && !staticPost) {
+  if (!apiPost) {
     return buildMetadata({
       title: "Article not found",
       description: "That article is not available.",
@@ -46,18 +39,12 @@ export async function generateMetadata({
     });
   }
 
-  const title = apiPost?.meta?.title || apiPost?.title || staticPost?.title || "";
+  const title = apiPost.meta?.title || apiPost.title || "";
   const description =
-    apiPost?.meta?.description ||
-    apiPost?.description ||
-    staticPost?.description ||
-    "";
-  const publishedTime = apiPost?.publishedAt || staticPost?.publishedAt;
-  const modifiedTime = apiPost?.updatedAt || staticPost?.updatedAt;
-  const authorName =
-    apiPost?.authorName ||
-    (staticPost ? getBlogAuthorById(staticPost.authorId)?.name : null) ||
-    "Request Services Editorial";
+    apiPost.meta?.description || apiPost.description || "";
+  const publishedTime = apiPost.publishedAt;
+  const modifiedTime = apiPost.updatedAt;
+  const authorName = apiPost.authorName || "Request Services Editorial";
 
   return buildMetadata({
     title,
@@ -75,42 +62,38 @@ export default async function BlogArticlePage({
 }: PageParams<{ slug: string }>) {
   const { slug } = await params;
   const apiPost = await fetchPublicBlogBySlug(slug);
-  const staticPost = !apiPost ? getBlogPostBySlug(slug) : null;
 
-  if (!apiPost && !staticPost) notFound();
+  if (!apiPost) notFound();
 
-  // Normalize data between API response and static post
-  const title = apiPost ? apiPost.title : staticPost!.title;
-  const description = apiPost ? apiPost.description : staticPost!.description;
-  const publishedAt = apiPost ? apiPost.publishedAt : staticPost!.publishedAt;
-  const image =
-    apiPost?.image || apiPost?.coverImage || staticPost?.image || null;
-  const isExternalImage = Boolean(image?.startsWith("http"));
+  const title = apiPost.title;
+  const description = apiPost.description;
+  const publishedAt = apiPost.publishedAt;
+  const image = apiPost.image || apiPost.coverImage || null;
 
-  const categoryName = apiPost
-    ? apiPost.category
-    : getBlogCategoryById(staticPost!.categoryId)?.name ?? "Article";
-  const categorySlug = apiPost
-    ? categoryNameToSlug(apiPost.category)
-    : getBlogCategoryById(staticPost!.categoryId)?.slug ?? "homeowners";
+  const categoryName = apiPost.category || "Article";
+  const categorySlug = categoryNameToSlug(apiPost.category);
 
-  const authorName = apiPost
-    ? apiPost.authorName || "Request Services Editorial"
-    : getBlogAuthorById(staticPost!.authorId)?.name ??
-      "Request Services Editorial";
-  const authorRole = apiPost ? "Editorial Team" : getBlogAuthorById(staticPost!.authorId)?.role ?? "Editorial Team";
+  const authorName = apiPost.authorName || "Request Services Editorial";
+  const authorRole = "Editorial Team";
 
-  const rawContent = apiPost ? apiPost.content : staticPost!.content;
-  const readTimeMinutes = apiPost
-    ? apiPost.readTimeMinutes || 5
-    : staticPost!.readTimeMinutes;
+  const rawContent = apiPost.content;
+  const readTimeMinutes = apiPost.readTimeMinutes || 5;
 
-  const comments = apiPost?.comments || [];
+  const comments = apiPost.comments || [];
 
-  // Related posts from static or current pool
-  const related = staticPost
-    ? getRelatedPosts(staticPost)
-    : blogPosts.slice(0, 3);
+  // Related posts from live API in same category
+  let related: PublicBlogItem[] = [];
+  try {
+    const res = await fetchPublicBlogs({
+      limit: 4,
+      category: apiPost.category || undefined,
+    });
+    if (res.data) {
+      related = res.data.filter((p) => p.slug !== slug).slice(0, 3);
+    }
+  } catch {
+    related = [];
+  }
 
   // Determine if content is HTML or plain text
   const isHtml =
@@ -122,7 +105,7 @@ export default async function BlogArticlePage({
         data={[
           articleJsonLd(
             {
-              id: apiPost?._id || staticPost?.id || slug,
+              id: apiPost._id || slug,
               slug,
               title,
               description,
@@ -133,7 +116,7 @@ export default async function BlogArticlePage({
               authorId: "author_editorial",
               publishedAt: publishedAt || new Date().toISOString(),
               updatedAt:
-                apiPost?.updatedAt || publishedAt || new Date().toISOString(),
+                apiPost.updatedAt || publishedAt || new Date().toISOString(),
               readTimeMinutes,
               imageAlt: title,
               image: image || undefined,
@@ -198,38 +181,16 @@ export default async function BlogArticlePage({
               <p className="max-w-2xl text-base text-muted-foreground md:text-lg">
                 {description}
               </p>
-              <p className="text-sm text-muted-foreground">
-                {authorName}
-                {publishedAt ? (
-                  <>
-                    <span aria-hidden="true"> · </span>
-                    {formatDate(publishedAt)}
-                  </>
-                ) : null}
-                <span aria-hidden="true"> · </span>
-                {readTimeMinutes} min read
-              </p>
+              {publishedAt ? (
+                <p className="text-sm text-muted-foreground">
+                  {formatDate(publishedAt)}
+                </p>
+              ) : null}
             </div>
           </Container>
         </section>
 
-        {image ? (
-          <div className="border-b bg-muted/40">
-            <Container className="py-6 md:py-8">
-              <div className="relative aspect-[16/7] overflow-hidden rounded-2xl bg-muted">
-                <Image
-                  src={image}
-                  alt={title}
-                  fill
-                  priority
-                  unoptimized={isExternalImage}
-                  sizes="(min-width: 1280px) 1120px, 92vw"
-                  className="object-cover"
-                />
-              </div>
-            </Container>
-          </div>
-        ) : null}
+
 
         <div className="section-space">
           <Container className="grid gap-10 lg:grid-cols-[minmax(0,42rem)_minmax(0,16rem)] lg:justify-between">
@@ -237,7 +198,7 @@ export default async function BlogArticlePage({
               {/* Render Content */}
               {isHtml ? (
                 <div
-                  className="prose prose-neutral max-w-none dark:prose-invert"
+                  className="ck-content blog-content prose prose-neutral max-w-none dark:prose-invert"
                   dangerouslySetInnerHTML={{ __html: String(rawContent) }}
                 />
               ) : Array.isArray(rawContent) ? (
@@ -268,15 +229,7 @@ export default async function BlogArticlePage({
             <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
               <p className="text-sm font-medium">Article Details</p>
               <dl className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
-                <div className="flex flex-col gap-1">
-                  <dt className="text-xs text-muted-foreground">Written by</dt>
-                  <dd className="font-medium">{authorName}</dd>
-                  {authorRole ? (
-                    <dd className="text-xs text-muted-foreground">
-                      {authorRole}
-                    </dd>
-                  ) : null}
-                </div>
+
                 {publishedAt ? (
                   <div className="flex flex-col gap-1">
                     <dt className="text-xs text-muted-foreground">Published</dt>
@@ -306,7 +259,7 @@ export default async function BlogArticlePage({
             <h2 className="text-2xl font-semibold">Related articles</h2>
             <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
               {related.map((item) => (
-                <BlogCard key={item.id} post={item} />
+                <BlogCard key={item._id || item.slug} post={item} />
               ))}
             </div>
           </Container>

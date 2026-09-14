@@ -19,7 +19,8 @@ export function getProviderContact(provider: Provider) {
 }
 
 export function getProviderWebsite(provider: Provider) {
-  return provider.website ?? `https://${provider.slug.replace(/-/g, "")}.example`;
+  if (typeof provider.website === "string") return provider.website.trim();
+  return `https://${provider.slug.replace(/-/g, "")}.example`;
 }
 
 export function displayWebsite(url: string) {

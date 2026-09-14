@@ -33,6 +33,7 @@ export type PortfolioLinkedService = {
 
 export type PortfolioProject = {
   id: string;
+  slug: string;
   title: string;
   description: string;
   media: PortfolioMedia[];
@@ -246,6 +247,10 @@ export function normalizePortfolioProject(raw: unknown): PortfolioProject | null
 
   return {
     id,
+    slug:
+      typeof record.slug === "string" && record.slug.trim()
+        ? record.slug.trim()
+        : id,
     title: typeof record.title === "string" ? record.title : "",
     description: typeof record.description === "string" ? record.description : "",
     media,
@@ -424,6 +429,7 @@ export const updatePortfolio = createAsyncThunk<
     if (!entity) {
       return {
         id,
+        slug: id,
         title: payload.title,
         description: payload.description,
         media: (payload.media || []).map((item, index) => ({

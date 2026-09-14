@@ -134,14 +134,40 @@ export function getProviderPhotos(provider: Provider) {
 }
 
 export function getServiceAreaPoints(provider: Provider) {
-  return provider.serviceArea.map((zip, index) => {
-    const angle = (index / Math.max(provider.serviceArea.length, 1)) * Math.PI * 2;
-    const radius = 0.016 + (index % 3) * 0.007;
-    return {
-      zip,
-      name: getAreaName(zip),
-      lat: provider.lat + Math.sin(angle) * radius,
-      lng: provider.lng + Math.cos(angle) * radius,
-    };
-  });
+  if (provider.coveragePoints?.length) {
+    const seen = new Set<string>();
+    return provider.coveragePoints
+      .map((point, index) => ({
+        id: `${point.zip || point.name || "area"}-${point.lat}-${point.lng}-${index}`,
+        zip: point.zip || point.name,
+        name: point.name || getAreaName(point.zip) || point.zip,
+        lat: point.lat,
+        lng: point.lng,
+      }))
+      .filter((point) => {
+        const key = `${point.zip}|${point.name}|${point.lat}|${point.lng}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  const seenZips = new Set<string>();
+  return provider.serviceArea
+    .map((zip, index) => {
+      const angle = (index / Math.max(provider.serviceArea.length, 1)) * Math.PI * 2;
+      const radius = 0.016 + (index % 3) * 0.007;
+      return {
+        id: `${zip}-${index}`,
+        zip,
+        name: getAreaName(zip),
+        lat: provider.lat + Math.sin(angle) * radius,
+        lng: provider.lng + Math.cos(angle) * radius,
+      };
+    })
+    .filter((point) => {
+      if (!point.zip || seenZips.has(point.zip)) return false;
+      seenZips.add(point.zip);
+      return true;
+    });
 }

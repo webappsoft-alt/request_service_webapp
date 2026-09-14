@@ -44,6 +44,7 @@ import {
   fetchPublicProfessionals,
   publicProfessionalToProvider,
   resetPublicProfessionals,
+  setPublicProfessionalDetail,
   type PublicProfessionalSortBy,
   type PublicProfessionalsQuery,
 } from "@/store/publicProfessionalsSlice";
@@ -811,6 +812,18 @@ export function CategoryExplorer({
                         onClick={() => setSelectedId(provider.id)}
                         onMouseEnter={() => setHoveredId(provider.id)}
                         onMouseLeave={() => setHoveredId(null)}
+                        onBeforeNavigate={
+                          useLive
+                            ? () => {
+                                const match = liveItems.find(
+                                  (item) => item.id === provider.id,
+                                );
+                                if (match) {
+                                  dispatch(setPublicProfessionalDetail(match));
+                                }
+                              }
+                            : undefined
+                        }
                       />
                     </li>
                   );

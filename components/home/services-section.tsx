@@ -17,28 +17,6 @@ import {
 const LANDING_CATEGORIES_LIMIT = 10;
 const CATEGORY_SKELETON_COUNT = 8;
 
-function categoryImage(slug: string, name: string, index: number): string | undefined {
-  const staticCat = getServiceCategoryBySlug(slug);
-  if (staticCat?.image) return staticCat.image;
-  const byName = getServiceCategoryBySlug(
-    name.toLowerCase().replace(/\s+/g, "-"),
-  );
-  if (byName?.image) return byName.image;
-  const fallbacks = [
-    "/images/services/service-plumbing.jpg",
-    "/images/services/service-hvac.jpg",
-    "/images/services/service-electrical.jpg",
-    "/images/services/service-handyman.jpg",
-    "/images/services/service-cleaning.jpg",
-    "/images/services/service-roofing.jpg",
-    "/images/services/service-landscaping.jpg",
-    "/images/services/service-painting.jpg",
-    "/images/services/service-bathroom.jpg",
-    "/images/services/service-pest.jpg",
-  ];
-  return fallbacks[index % fallbacks.length];
-}
-
 function servicesDirectoryHref(serviceKey: string) {
   const params = new URLSearchParams();
   if (serviceKey) params.set("service", serviceKey);
@@ -129,8 +107,8 @@ export function ServicesSection() {
                   <CategoryCardSkeleton />
                 </CardCarouselItem>
               ))
-            : categories.map((item, index) => {
-                const image = categoryImage(item.slug, item.name, index);
+            : categories.map((item) => {
+                const image = item.images[0]?.trim() || "";
                 const serviceKey = item.slug || item.id;
 
                 return (
@@ -150,8 +128,11 @@ export function ServicesSection() {
                             fill
                             sizes="(min-width: 1024px) 13vw, 40vw"
                             className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                            unoptimized={image.startsWith("http")}
                           />
-                        ) : null}
+                        ) : (
+                          <Skeleton className="absolute inset-0 rounded-xl" />
+                        )}
                       </span>
                       <span className="text-sm font-semibold leading-5">
                         {item.name}

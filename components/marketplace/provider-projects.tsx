@@ -51,11 +51,14 @@ export function ProviderProjectCard({
 export function ProviderProjects({
   provider,
   projects,
+  keepVisible = false,
 }: {
   provider: Provider;
   projects: ProviderProject[];
+  /** Keep the Portfolio section shell visible even when there are no projects. */
+  keepVisible?: boolean;
 }) {
-  if (!projects.length) return null;
+  if (!projects.length && !keepVisible) return null;
 
   return (
     <section className="flex flex-col gap-4">
@@ -67,11 +70,17 @@ export function ProviderProjects({
           written scope.
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {projects.map((project) => (
-          <ProviderProjectCard key={project.slug} provider={provider} project={project} />
-        ))}
-      </div>
+      {projects.length ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {projects.map((project) => (
+            <ProviderProjectCard key={project.slug} provider={provider} project={project} />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-8 text-sm text-muted-foreground">
+          Portfolio projects will appear here when this company adds completed work.
+        </p>
+      )}
     </section>
   );
 }

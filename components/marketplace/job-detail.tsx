@@ -2,11 +2,15 @@ import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { HomeMotion } from "@/components/home/home-motion";
 import { Container, Section } from "@/components/layout/container";
-import { ServiceJobCard } from "@/components/marketplace/service-job-card";
+import {
+  ServiceJobCard,
+  type ServiceJobListing,
+} from "@/components/marketplace/service-job-card";
 import { ImageGallerySlider } from "@/components/shared/image-gallery-slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderCard } from "@/components/shared/provider-card";
+import { CenteredSpinner } from "@/components/ui/spinner";
 import { getJobImage, getJobStartingPrice } from "@/lib/data/provider-media";
 import { getRelatedJobs, type JobRecord } from "@/lib/data/jobs";
 import { formatStartingPrice } from "@/lib/format";
@@ -34,10 +38,19 @@ export function JobDetail({
   record,
   providers,
   content,
+  relatedListings,
+  relatedLoading = false,
+  providersLoading = false,
 }: {
   record: JobRecord;
   providers: Provider[];
   content?: JobDetailContent;
+  /** Live related fixed services from `GET /public/fixed-services/related`. */
+  relatedListings?: ServiceJobListing[];
+  /** Show Related jobs section spinner while related APIs load. */
+  relatedLoading?: boolean;
+  /** Show Companies section spinner while professionals APIs load. */
+  providersLoading?: boolean;
 }) {
   const { category, job, index, detail } = record;
   const price = content?.price ?? getJobStartingPrice(category.id, job);
@@ -48,7 +61,10 @@ export function JobDetail({
       : fallbackImage
         ? [fallbackImage]
         : [];
-  const related = content?.hideRelated ? [] : getRelatedJobs(category, job);
+  const staticRelated =
+    relatedListings || relatedLoading || content?.hideRelated
+      ? []
+      : getRelatedJobs(category, job);
   const requestHref =
     content?.requestHref ??
     `/get-a-quote?service=${category.slug}&job=${record.slug}`;
@@ -62,6 +78,11 @@ export function JobDetail({
   const benefits = content?.benefits?.length
     ? content.benefits
     : category.benefits.slice(0, 4);
+  const showRelatedListings = Boolean(relatedListings?.length);
+  const showStaticRelated = !relatedListings && !relatedLoading && staticRelated.length > 0;
+  const showRelatedSection =
+    relatedLoading || showRelatedListings || showStaticRelated;
+  const showProvidersSection = providersLoading || providers.length > 0;
 
   return (
     <HomeMotion>
@@ -192,28 +213,47 @@ export function JobDetail({
         </Container>
       </section>
 
-      {related.length ? (
+      {showRelatedSection ? (
         <Section tone="muted" density="tight">
           <Container className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
               <p className="eyebrow text-muted-foreground">{category.name}</p>
               <h2 className="text-2xl font-semibold">Related jobs</h2>
             </div>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-              {related.map((item, relatedIndex) => (
-                <ServiceJobCard
-                  key={item}
-                  category={category}
-                  job={item}
-                  index={relatedIndex}
-                />
-              ))}
-            </div>
+            {relatedLoading ? (
+              <CenteredSpinner
+                label="Loading related jobs"
+                className="min-h-48 border-0 bg-transparent"
+              />
+            ) : showRelatedListings ? (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                {relatedListings!.map((listing, relatedIndex) => (
+                  <ServiceJobCard
+                    key={listing.id}
+                    category={category}
+                    job={listing.title}
+                    index={relatedIndex}
+                    listing={listing}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                {staticRelated.map((item, relatedIndex) => (
+                  <ServiceJobCard
+                    key={item}
+                    category={category}
+                    job={item}
+                    index={relatedIndex}
+                  />
+                ))}
+              </div>
+            )}
           </Container>
         </Section>
       ) : null}
 
-      {providers.length ? (
+      {showProvidersSection ? (
         <Section density="tight">
           <Container className="flex flex-col gap-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -229,11 +269,18 @@ export function JobDetail({
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-              {providers.map((provider) => (
-                <ProviderCard key={provider.id} provider={provider} visual />
-              ))}
-            </div>
+            {providersLoading ? (
+              <CenteredSpinner
+                label="Loading professionals"
+                className="min-h-48 border-0 bg-transparent"
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                {providers.map((provider) => (
+                  <ProviderCard key={provider.id} provider={provider} visual />
+                ))}
+              </div>
+            )}
           </Container>
         </Section>
       ) : null}

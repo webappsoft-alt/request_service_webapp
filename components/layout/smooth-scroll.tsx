@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
@@ -45,9 +45,60 @@ function shouldSkipLenis(pathname: string) {
 export function SmoothScroll() {
   const pathname = usePathname();
   const skip = shouldSkipLenis(pathname);
+  const lenisRef = useRef<Lenis | null>(null);
 
+  // Global scroll restoration and reload handling
   useEffect(() => {
-    if (skip) return;
+    if (typeof window === "undefined") return;
+
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
+    const resetToTop = () => {
+      window.scrollTo(0, 0);
+      if (lenisRef.current) {
+        lenisRef.current.scrollTo(0, { immediate: true });
+      }
+    };
+
+    // Scroll to top immediately on mount
+    resetToTop();
+
+    // Before unload (reload / navigate away), force position to top
+    const handleBeforeUnload = () => {
+      window.scrollTo(0, 0);
+    };
+
+    const handlePageShow = () => {
+      resetToTop();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("load", resetToTop);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("load", resetToTop);
+    };
+  }, []);
+
+  // Whenever route changes, scroll immediately to top
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true });
+    }
+  }, [pathname]);
+
+  // Initialize Lenis
+  useEffect(() => {
+    if (skip) {
+      lenisRef.current = null;
+      return;
+    }
 
     const lenis = new Lenis({
       autoRaf: true,
@@ -59,7 +110,15 @@ export function SmoothScroll() {
       allowNestedScroll: true,
     });
 
-    return () => lenis.destroy();
+    lenisRef.current = lenis;
+
+    // Scroll to top upon Lenis initialization
+    lenis.scrollTo(0, { immediate: true });
+
+    return () => {
+      lenis.destroy();
+      lenisRef.current = null;
+    };
   }, [skip]);
 
   return null;

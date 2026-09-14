@@ -70,7 +70,11 @@ export function ServiceAreaMap({ provider }: { provider: Provider }) {
           </Popup>
         </Marker>
         {points.map((point) => (
-          <Marker key={point.zip} position={[point.lat, point.lng]} icon={areaIcon(point.name)}>
+          <Marker
+            key={point.id || `${point.zip}-${point.lat}-${point.lng}`}
+            position={[point.lat, point.lng]}
+            icon={areaIcon(point.name)}
+          >
             <Popup>
               <p className="text-sm font-medium">Serves {point.name}</p>
             </Popup>

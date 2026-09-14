@@ -1,6 +1,13 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -171,7 +178,19 @@ function statusTone(status: PortfolioStatus | DraftState["status"]) {
   return "neutral" as const;
 }
 
-export function PortfolioFormView({ id }: { id?: string }) {
+type PortfolioFormViewProps = {
+  id?: string;
+  embedded?: boolean;
+  deferSubmit?: boolean;
+  submitRef?: MutableRefObject<(() => Promise<boolean>) | null>;
+};
+
+export function PortfolioFormView({
+  id,
+  embedded = false,
+  deferSubmit = false,
+  submitRef,
+}: PortfolioFormViewProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -391,20 +410,7 @@ export function PortfolioFormView({ id }: { id?: string }) {
     }));
   }
 
-  async function save() {
-    if (!draft.title.trim()) {
-      toast.error("Add a project title.");
-      return;
-    }
-    if (!draft.description.trim()) {
-      toast.error("Add a project description.");
-      return;
-    }
-    if (!draft.media.length || !draft.media.some((item) => item.url.trim())) {
-      toast.error("Upload at least one photo.");
-      return;
-    }
-
+  function buildPayload() {
     const cost = costNumber(draft.cost);
     const tags = parseTags(draft.tagsInput);
     const media = draft.media
@@ -418,7 +424,7 @@ export function PortfolioFormView({ id }: { id?: string }) {
         isCover: item.isCover || (index === 0 && !list.some((m) => m.isCover)),
       }));
 
-    const payload = {
+    return {
       title: draft.title.trim(),
       description: draft.description.trim(),
       media,
@@ -431,6 +437,73 @@ export function PortfolioFormView({ id }: { id?: string }) {
       isFeatured: draft.isFeatured,
       status: draft.status === "ARCHIVED" ? ("ARCHIVED" as const) : draft.status,
     };
+  }
+
+  function validateDraft(options?: { allowEmpty?: boolean }): boolean {
+    const hasTitle = Boolean(draft.title.trim());
+    const hasMedia =
+      draft.media.length > 0 && draft.media.some((item) => item.url.trim());
+
+    if (options?.allowEmpty && !hasTitle && !hasMedia) {
+      return true;
+    }
+
+    if (!hasTitle) {
+      toast.error("Add a project title.");
+      return false;
+    }
+    if (!draft.description.trim()) {
+      toast.error("Add a project description.");
+      return false;
+    }
+    if (!hasMedia) {
+      toast.error("Upload at least one photo.");
+      return false;
+    }
+    return true;
+  }
+
+  async function saveDeferred(): Promise<boolean> {
+    const hasTitle = Boolean(draft.title.trim());
+    const hasMedia =
+      draft.media.length > 0 && draft.media.some((item) => item.url.trim());
+
+    // Empty draft — skip without error.
+    if (!hasTitle && !hasMedia) {
+      return true;
+    }
+
+    if (!validateDraft()) return false;
+
+    const payload = buildPayload();
+    const createPayload = {
+      ...payload,
+      status:
+        draft.status === "ARCHIVED"
+          ? ("HIDDEN" as const)
+          : (draft.status as "ACTIVE" | "HIDDEN"),
+    };
+    const result = await dispatch(createPortfolio(createPayload));
+    if (createPortfolio.fulfilled.match(result)) {
+      return true;
+    }
+    toast.error(
+      typeof result.payload === "string"
+        ? result.payload
+        : "Could not create portfolio project.",
+    );
+    return false;
+  }
+
+  if (deferSubmit && submitRef) {
+    submitRef.current = saveDeferred;
+  }
+
+  async function save() {
+    if (deferSubmit) return;
+    if (!validateDraft()) return;
+
+    const payload = buildPayload();
 
     if (id) {
       const result = await dispatch(updatePortfolio({ id, ...payload }));
@@ -467,7 +540,326 @@ export function PortfolioFormView({ id }: { id?: string }) {
     }
   }
 
+  const formFields = (
+    <FieldGroup>
+      <Field>
+        <FieldLabel htmlFor="pf-title">Project title</FieldLabel>
+        <Input
+          id="pf-title"
+          value={draft.title}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              title: event.target.value,
+            }))
+          }
+          placeholder="Full bathroom plumbing overhaul"
+          required={!deferSubmit}
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="pf-description">Description</FieldLabel>
+        <Textarea
+          id="pf-description"
+          rows={4}
+          value={draft.description}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              description: event.target.value,
+            }))
+          }
+          placeholder="What work was done and the outcome for the customer."
+          required={!deferSubmit}
+        />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="pf-category">Category</FieldLabel>
+          <PaginatedCategorySelect
+            id="pf-category"
+            className="w-full"
+            value={draft.categoryId}
+            options={categoryOptions}
+            disabled={loadingParents && !categoryOptions.length}
+            loading={loadingParents}
+            loadingMore={loadingMoreParents}
+            hasMore={categoryHasMore}
+            placeholder="Select category"
+            onChange={(nextId, category) => {
+              setDraft((current) => ({
+                ...current,
+                categoryId: nextId,
+                categoryName: category?.name ?? "",
+              }));
+            }}
+            onLoadMore={() => {
+              void dispatch(fetchParentCategories({ append: true }));
+            }}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="pf-services">Fixed services</FieldLabel>
+          <PaginatedMultiSelect
+            id="pf-services"
+            className="w-full"
+            values={draft.fixedServiceIds}
+            options={serviceOptions}
+            disabled={loadingServices && !serviceOptions.length}
+            loading={loadingServices}
+            loadingMore={loadingMoreServices}
+            hasMore={servicesHasMore}
+            placeholder="Select fixed services"
+            emptyLabel="No fixed services yet. Add packages under Fixed service first."
+            onChange={(ids) =>
+              setDraft((current) => ({
+                ...current,
+                fixedServiceIds: ids,
+              }))
+            }
+            onLoadMore={() => {
+              if (loadingMoreServices || !servicesHasMore) return;
+              void loadFixedServicesPage(servicesPage + 1, true);
+            }}
+          />
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="pf-date">Project date</FieldLabel>
+          <Input
+            id="pf-date"
+            type="date"
+            value={draft.projectDate}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                projectDate: event.target.value,
+              }))
+            }
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="pf-duration">Duration</FieldLabel>
+          <Input
+            id="pf-duration"
+            value={draft.duration}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                duration: event.target.value,
+              }))
+            }
+            placeholder="3 days"
+          />
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="pf-cost">Cost</FieldLabel>
+          <Input
+            id="pf-cost"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={draft.cost}
+            onChange={(event) => {
+              const next = parseCostInput(event.target.value);
+              if (next === null) return;
+              setDraft((current) => ({ ...current, cost: next }));
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === "-" ||
+                event.key === "e" ||
+                event.key === "E" ||
+                event.key === "+"
+              ) {
+                event.preventDefault();
+              }
+            }}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="pf-tags">Tags</FieldLabel>
+          <Input
+            id="pf-tags"
+            value={draft.tagsInput}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                tagsInput: event.target.value,
+              }))
+            }
+            placeholder="bathroom, remodel, plumbing"
+          />
+        </Field>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={draft.isFeatured}
+          onCheckedChange={(checked) =>
+            setDraft((current) => ({
+              ...current,
+              isFeatured: checked === true,
+            }))
+          }
+        />
+        Feature this project on the public profile
+      </label>
+    </FieldGroup>
+  );
+
+  const photosSection = (
+    <>
+      <p className="text-sm font-semibold">Project photos</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Upload media assets. Mark cover, before, and after as needed.
+        {deferSubmit
+          ? " Optional — leave empty to skip adding a project on Submit."
+          : ""}
+      </p>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(event) => void onUploadPhotos(event.target.files)}
+      />
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => fileRef.current?.click()}
+        className={cn(
+          "mt-3 flex w-44 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-input bg-transparent px-3 py-4 text-center transition-colors sm:w-52",
+          "hover:border-primary/40 hover:bg-muted/30",
+          "disabled:pointer-events-none disabled:opacity-60",
+        )}
+      >
+        {uploading ? (
+          <Spinner size="sm" label="Uploading photos" />
+        ) : (
+          <span className="flex size-8 items-center justify-center rounded-full border border-input bg-card">
+            <ImagePlus
+              className="size-3.5 text-primary"
+              aria-hidden="true"
+            />
+          </span>
+        )}
+        <span className="text-sm font-medium text-foreground">
+          {uploading ? "Uploading…" : "Upload photos"}
+        </span>
+        <span className="text-[11px] leading-snug text-muted-foreground">
+          PNG, JPG, or WEBP
+        </span>
+      </button>
+
+      {draft.media.length ? (
+        <ul className="mt-4 flex flex-col gap-3">
+          {draft.media.map((item, index) => (
+            <li
+              key={`${item.url}-${index}`}
+              className={cn(
+                "flex flex-col gap-3 rounded-xl border p-3 sm:flex-row",
+                item.isCover
+                  ? "border-primary ring-2 ring-primary/20"
+                  : "border-input",
+              )}
+            >
+              <div className="relative h-28 w-full overflow-hidden rounded-lg sm:h-32 sm:w-40 shrink-0">
+                <Image
+                  src={item.url}
+                  alt=""
+                  fill
+                  sizes="160px"
+                  className="object-cover"
+                  unoptimized={item.url.startsWith("http")}
+                />
+                <button
+                  type="button"
+                  className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-600"
+                  aria-label="Remove photo"
+                  onClick={() =>
+                    setDraft((current) => {
+                      const next = current.media.filter((_, i) => i !== index);
+                      if (
+                        next.length &&
+                        !next.some((media) => media.isCover)
+                      ) {
+                        next[0] = { ...next[0], isCover: true };
+                      }
+                      return { ...current, media: next };
+                    })
+                  }
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Input
+                  value={item.caption}
+                  placeholder="Caption"
+                  onChange={(event) =>
+                    updateMedia(index, { caption: event.target.value })
+                  }
+                />
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <label className="flex items-center gap-2">
+                    <Checkbox
+                      checked={item.isCover}
+                      onCheckedChange={(checked) =>
+                        updateMedia(index, {
+                          isCover: checked === true,
+                        })
+                      }
+                    />
+                    Cover
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <Checkbox
+                      checked={item.isBefore}
+                      onCheckedChange={(checked) =>
+                        updateMedia(index, {
+                          isBefore: checked === true,
+                        })
+                      }
+                    />
+                    Before
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <Checkbox
+                      checked={item.isAfter}
+                      onCheckedChange={(checked) =>
+                        updateMedia(index, {
+                          isAfter: checked === true,
+                        })
+                      }
+                    />
+                    After
+                  </label>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">No photos yet.</p>
+      )}
+    </>
+  );
+
   if (id && detailLoading && !hydrated) {
+    if (embedded) {
+      return (
+        <div className="rounded-xl border border-input bg-card p-5">
+          <CenteredSpinner
+            label="Loading project"
+            className="min-h-[12rem] border-0 bg-transparent"
+          />
+        </div>
+      );
+    }
     return (
       <PortalPage eyebrow="Portfolio" title="Portfolio project">
         <div className="px-4 pb-8">
@@ -481,6 +873,16 @@ export function PortfolioFormView({ id }: { id?: string }) {
   }
 
   if (id && hydrated && !detail && !detailLoading) {
+    if (embedded) {
+      return (
+        <div className="rounded-xl border border-input bg-card p-5">
+          <p className="text-sm font-semibold">Project not found</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            This portfolio item is no longer on this account.
+          </p>
+        </div>
+      );
+    }
     return (
       <PortalPage
         eyebrow="Portfolio"
@@ -493,6 +895,27 @@ export function PortfolioFormView({ id }: { id?: string }) {
           </Button>
         </div>
       </PortalPage>
+    );
+  }
+
+  if (embedded) {
+    return (
+      <section className="rounded-xl border border-input bg-card p-5">
+        <p className="text-sm font-semibold">Add portfolio project</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Optional — showcase a completed job. Leave blank to skip on Submit.
+        </p>
+        <form
+          className="mt-4 flex flex-col gap-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!deferSubmit) void save();
+          }}
+        >
+          {formFields}
+          <div>{photosSection}</div>
+        </form>
+      </section>
     );
   }
 
@@ -509,14 +932,16 @@ export function PortfolioFormView({ id }: { id?: string }) {
       }
       actions={
         <div className="flex gap-2">
-          <Button
-            type="button"
-            onClick={() => void save()}
-            disabled={mutating || uploading}
-          >
-            {mutating ? <Spinner size="sm" label="Saving" /> : null}
-            {id ? "Update project" : "Create project"}
-          </Button>
+          {!deferSubmit ? (
+            <Button
+              type="button"
+              onClick={() => void save()}
+              disabled={mutating || uploading}
+            >
+              {mutating ? <Spinner size="sm" label="Saving" /> : null}
+              {id ? "Update project" : "Create project"}
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" asChild>
             <Link href="/pro/dashboard/portfolio">Cancel</Link>
           </Button>
@@ -528,313 +953,15 @@ export function PortfolioFormView({ id }: { id?: string }) {
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            void save();
+            if (!deferSubmit) void save();
           }}
         >
           <section className="rounded-xl border border-input bg-card p-5">
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="pf-title">Project title</FieldLabel>
-                <Input
-                  id="pf-title"
-                  value={draft.title}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="Full bathroom plumbing overhaul"
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="pf-description">Description</FieldLabel>
-                <Textarea
-                  id="pf-description"
-                  rows={4}
-                  value={draft.description}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      description: event.target.value,
-                    }))
-                  }
-                  placeholder="What work was done and the outcome for the customer."
-                  required
-                />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="pf-category">Category</FieldLabel>
-                  <PaginatedCategorySelect
-                    id="pf-category"
-                    className="w-full"
-                    value={draft.categoryId}
-                    options={categoryOptions}
-                    disabled={loadingParents && !categoryOptions.length}
-                    loading={loadingParents}
-                    loadingMore={loadingMoreParents}
-                    hasMore={categoryHasMore}
-                    placeholder="Select category"
-                    onChange={(nextId, category) => {
-                      setDraft((current) => ({
-                        ...current,
-                        categoryId: nextId,
-                        categoryName: category?.name ?? "",
-                      }));
-                    }}
-                    onLoadMore={() => {
-                      void dispatch(fetchParentCategories({ append: true }));
-                    }}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="pf-services">Fixed services</FieldLabel>
-                  <PaginatedMultiSelect
-                    id="pf-services"
-                    className="w-full"
-                    values={draft.fixedServiceIds}
-                    options={serviceOptions}
-                    disabled={loadingServices && !serviceOptions.length}
-                    loading={loadingServices}
-                    loadingMore={loadingMoreServices}
-                    hasMore={servicesHasMore}
-                    placeholder="Select fixed services"
-                    emptyLabel="No fixed services yet. Add packages under Fixed service first."
-                    onChange={(ids) =>
-                      setDraft((current) => ({
-                        ...current,
-                        fixedServiceIds: ids,
-                      }))
-                    }
-                    onLoadMore={() => {
-                      if (loadingMoreServices || !servicesHasMore) return;
-                      void loadFixedServicesPage(servicesPage + 1, true);
-                    }}
-                  />
-                </Field>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="pf-date">Project date</FieldLabel>
-                  <Input
-                    id="pf-date"
-                    type="date"
-                    value={draft.projectDate}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        projectDate: event.target.value,
-                      }))
-                    }
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="pf-duration">Duration</FieldLabel>
-                  <Input
-                    id="pf-duration"
-                    value={draft.duration}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        duration: event.target.value,
-                      }))
-                    }
-                    placeholder="3 days"
-                  />
-                </Field>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="pf-cost">Cost</FieldLabel>
-                  <Input
-                    id="pf-cost"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={draft.cost}
-                    onChange={(event) => {
-                      const next = parseCostInput(event.target.value);
-                      if (next === null) return;
-                      setDraft((current) => ({ ...current, cost: next }));
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "-" ||
-                        event.key === "e" ||
-                        event.key === "E" ||
-                        event.key === "+"
-                      ) {
-                        event.preventDefault();
-                      }
-                    }}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="pf-tags">Tags</FieldLabel>
-                  <Input
-                    id="pf-tags"
-                    value={draft.tagsInput}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        tagsInput: event.target.value,
-                      }))
-                    }
-                    placeholder="bathroom, remodel, plumbing"
-                  />
-                </Field>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={draft.isFeatured}
-                  onCheckedChange={(checked) =>
-                    setDraft((current) => ({
-                      ...current,
-                      isFeatured: checked === true,
-                    }))
-                  }
-                />
-                Feature this project on the public profile
-              </label>
-            </FieldGroup>
+            {formFields}
           </section>
 
           <section className="rounded-xl border border-input bg-card p-5">
-            <p className="text-sm font-semibold">Project photos</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Upload media assets. Mark cover, before, and after as needed.
-            </p>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(event) => void onUploadPhotos(event.target.files)}
-            />
-            <button
-              type="button"
-              disabled={uploading}
-              onClick={() => fileRef.current?.click()}
-              className={cn(
-                "mt-3 flex w-44 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-input bg-transparent px-3 py-4 text-center transition-colors sm:w-52",
-                "hover:border-primary/40 hover:bg-muted/30",
-                "disabled:pointer-events-none disabled:opacity-60",
-              )}
-            >
-              {uploading ? (
-                <Spinner size="sm" label="Uploading photos" />
-              ) : (
-                <span className="flex size-8 items-center justify-center rounded-full border border-input bg-card">
-                  <ImagePlus
-                    className="size-3.5 text-primary"
-                    aria-hidden="true"
-                  />
-                </span>
-              )}
-              <span className="text-sm font-medium text-foreground">
-                {uploading ? "Uploading…" : "Upload photos"}
-              </span>
-              <span className="text-[11px] leading-snug text-muted-foreground">
-                PNG, JPG, or WEBP
-              </span>
-            </button>
-
-            {draft.media.length ? (
-              <ul className="mt-4 flex flex-col gap-3">
-                {draft.media.map((item, index) => (
-                  <li
-                    key={`${item.url}-${index}`}
-                    className={cn(
-                      "flex flex-col gap-3 rounded-xl border p-3 sm:flex-row",
-                      item.isCover
-                        ? "border-primary ring-2 ring-primary/20"
-                        : "border-input",
-                    )}
-                  >
-                    <div className="relative h-28 w-full overflow-hidden rounded-lg sm:h-32 sm:w-40 shrink-0">
-                      <Image
-                        src={item.url}
-                        alt=""
-                        fill
-                        sizes="160px"
-                        className="object-cover"
-                        unoptimized={item.url.startsWith("http")}
-                      />
-                      <button
-                        type="button"
-                        className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-600"
-                        aria-label="Remove photo"
-                        onClick={() =>
-                          setDraft((current) => {
-                            const next = current.media.filter(
-                              (_, i) => i !== index,
-                            );
-                            if (
-                              next.length &&
-                              !next.some((media) => media.isCover)
-                            ) {
-                              next[0] = { ...next[0], isCover: true };
-                            }
-                            return { ...current, media: next };
-                          })
-                        }
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <Input
-                        value={item.caption}
-                        placeholder="Caption"
-                        onChange={(event) =>
-                          updateMedia(index, { caption: event.target.value })
-                        }
-                      />
-                      <div className="flex flex-wrap gap-3 text-xs">
-                        <label className="flex items-center gap-2">
-                          <Checkbox
-                            checked={item.isCover}
-                            onCheckedChange={(checked) =>
-                              updateMedia(index, {
-                                isCover: checked === true,
-                              })
-                            }
-                          />
-                          Cover
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <Checkbox
-                            checked={item.isBefore}
-                            onCheckedChange={(checked) =>
-                              updateMedia(index, {
-                                isBefore: checked === true,
-                              })
-                            }
-                          />
-                          Before
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <Checkbox
-                            checked={item.isAfter}
-                            onCheckedChange={(checked) =>
-                              updateMedia(index, {
-                                isAfter: checked === true,
-                              })
-                            }
-                          />
-                          After
-                        </label>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm text-muted-foreground">No photos yet.</p>
-            )}
+            {photosSection}
           </section>
         </form>
 

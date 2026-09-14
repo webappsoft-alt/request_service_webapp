@@ -19,6 +19,33 @@ export type PublicProfessionalSortBy =
   | "distance"
   | "newest";
 
+export type PublicProfessionalCategory = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type PublicProfessionalCoverageNeighborhood = {
+  id: string;
+  title: string;
+  city: string;
+  zip: string;
+  address: string;
+  coordinates: number[];
+};
+
+export type PublicProfessionalActiveService = {
+  id: string;
+  servicesName: string;
+  slug: string;
+  price: number;
+  unit: string;
+  images: string[];
+  category: PublicProfessionalCategory | null;
+  commonServices: string[];
+  workingArea: string[];
+};
+
 export type PublicProfessional = {
   id: string;
   userId: string;
@@ -26,11 +53,6 @@ export type PublicProfessional = {
   companyName: string;
   slug: string;
   tagline: string;
-  description: string;
-  phone: string;
-  email: string;
-  website: string;
-  contactRole: string;
   avatarUrl: string;
   verificationBadge: {
     isVerified: boolean;
@@ -38,18 +60,8 @@ export type PublicProfessional = {
     licensed: boolean;
     insured: boolean;
   };
-  profile: {
-    yearsInBusiness: number;
-    employeeCount: string;
-    licensed: boolean;
-    insured: boolean;
-  };
   tradeDetails: {
-    primaryCategory: {
-      id: string;
-      name: string;
-      slug: string;
-    } | null;
+    primaryCategory: PublicProfessionalCategory | null;
     categoryIds: string[];
     tradeTitle: string;
     specialties: string[];
@@ -76,26 +88,49 @@ export type PublicProfessional = {
     startingPrice: number;
     startingPriceDisplay: string;
   };
-  workingHours: WorkingHours[];
-  activeServices: Array<{
-    id: string;
-    servicesName: string;
-    slug: string;
-    price: number;
-    unit: string;
-    images: string[];
-    category: {
-      id: string;
-      name: string;
-      slug: string;
-    } | null;
-    commonServices: string[];
-    workingArea: string[];
-  }>;
-  reviews: Review[];
+  description?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  contactRole?: string;
+  profile?: {
+    yearsInBusiness: number;
+    employeeCount: string;
+    licensed: boolean;
+    insured: boolean;
+  };
+  coverage?: {
+    neighborhoods: PublicProfessionalCoverageNeighborhood[];
+  };
+  workingHours?: WorkingHours[];
+  activeServices?: PublicProfessionalActiveService[];
+  reviews?: Review[];
   createdAt?: string;
   updatedAt?: string;
 };
+
+const WEEKDAYS: WorkingHours["day"][] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+/** Detail responses include hours/coverage/services even when empty. */
+export function hasProfessionalDetailFields(
+  professional: PublicProfessional | null | undefined,
+): boolean {
+  if (!professional) return false;
+  return (
+    professional.workingHours !== undefined ||
+    professional.coverage !== undefined ||
+    professional.activeServices !== undefined ||
+    professional.description !== undefined
+  );
+}
 
 export type PublicProfessionalsQuery = {
   search?: string;
@@ -179,94 +214,9 @@ function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function normalizeWorkingHours(value: unknown): WorkingHours[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => {
-      const record = asRecord(entry);
-      if (!record) return null;
-      const day = typeof record.day === "string" ? record.day : "";
-      if (
-        day !== "monday" &&
-        day !== "tuesday" &&
-        day !== "wednesday" &&
-        day !== "thursday" &&
-        day !== "friday" &&
-        day !== "saturday" &&
-        day !== "sunday"
-      ) {
-        return null;
-      }
-      return {
-        day,
-        open: typeof record.open === "string" ? record.open : null,
-        close: typeof record.close === "string" ? record.close : null,
-        closed: Boolean(record.closed),
-      } satisfies WorkingHours;
-    })
-    .filter((item): item is WorkingHours => Boolean(item));
-}
-
-function normalizeReview(raw: unknown, providerId: string): Review | null {
-  const record = asRecord(raw);
-  if (!record) return null;
-  const rating = Math.max(1, Math.min(5, toNumber(record.rating, 0)));
-  const body = typeof record.review === "string" ? record.review.trim() : "";
-  if (!rating || !body) return null;
-  return {
-    id:
-      (typeof record.orderId === "string" && record.orderId) ||
-      (typeof record.orderNumber === "string" && record.orderNumber) ||
-      `${providerId}-${Math.random().toString(36).slice(2, 10)}`,
-    providerId,
-    customerName:
-      typeof record.customerName === "string" && record.customerName.trim()
-        ? record.customerName
-        : "Customer",
-    rating,
-    body,
-    serviceName: undefined,
-    createdAt:
-      typeof record.completedAt === "string" ? record.completedAt : new Date().toISOString(),
-    isDemo: false,
-  };
-}
-
-function normalizeActiveService(raw: unknown): PublicProfessional["activeServices"][number] | null {
-  const record = asRecord(raw);
-  if (!record) return null;
-  const id =
-    (typeof record.id === "string" && record.id) ||
-    (typeof record._id === "string" && record._id) ||
-    "";
-  const category = asRecord(record.category);
-  const slug = typeof record.slug === "string" ? record.slug : "";
-  if (!id && !slug) return null;
-  return {
-    id,
-    servicesName: typeof record.servicesName === "string" ? record.servicesName : "",
-    slug,
-    price: toNumber(record.price, 0),
-    unit: typeof record.unit === "string" ? record.unit : "",
-    images: toStringArray(record.images),
-    category: category
-      ? {
-          id:
-            (typeof category.id === "string" && category.id) ||
-            (typeof category._id === "string" && category._id) ||
-            "",
-          name: typeof category.name === "string" ? category.name : "",
-          slug: typeof category.slug === "string" ? category.slug : "",
-        }
-      : null,
-    commonServices: toStringArray(record.commonServices),
-    workingArea: toStringArray(record.workingArea),
-  };
-}
-
 function normalizePrimaryCategory(
   raw: unknown,
-): PublicProfessional["tradeDetails"]["primaryCategory"] {
+): PublicProfessionalCategory | null {
   if (typeof raw === "string" && raw.trim()) {
     const id = raw.trim();
     return { id, name: "", slug: id };
@@ -287,6 +237,145 @@ function normalizePrimaryCategory(
   };
 }
 
+function normalizeWorkingHours(raw: unknown): WorkingHours[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) return [];
+
+  const byDay = new Map<string, WorkingHours>();
+  for (const entry of raw) {
+    const record = asRecord(entry);
+    if (!record) continue;
+    const dayRaw = typeof record.day === "string" ? record.day.toLowerCase() : "";
+    if (!WEEKDAYS.includes(dayRaw as WorkingHours["day"])) continue;
+    const day = dayRaw as WorkingHours["day"];
+    const open =
+      typeof record.open === "string" && record.open.trim()
+        ? record.open.trim()
+        : null;
+    const close =
+      typeof record.close === "string" && record.close.trim()
+        ? record.close.trim()
+        : null;
+    const closed = Boolean(record.closed) || (!open && !close);
+    byDay.set(day, {
+      day,
+      open: closed ? null : open,
+      close: closed ? null : close,
+      closed,
+    });
+  }
+
+  return WEEKDAYS.map((day) => {
+    const found = byDay.get(day);
+    if (found) return found;
+    return { day, open: null, close: null, closed: true };
+  });
+}
+
+function normalizeCoverage(
+  raw: unknown,
+): PublicProfessional["coverage"] | undefined {
+  if (raw === undefined) return undefined;
+  const record = asRecord(raw);
+  const neighborhoodsRaw = Array.isArray(record?.neighborhoods)
+    ? record.neighborhoods
+    : Array.isArray(raw)
+      ? raw
+      : [];
+
+  const neighborhoods = neighborhoodsRaw
+    .map((item): PublicProfessionalCoverageNeighborhood | null => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const id =
+        (typeof row.id === "string" && row.id) ||
+        (typeof row._id === "string" && row._id) ||
+        "";
+      const coordinates = Array.isArray(row.coordinates)
+        ? row.coordinates.filter((value): value is number => typeof value === "number")
+        : [];
+      return {
+        id,
+        title: typeof row.title === "string" ? row.title : "",
+        city: typeof row.city === "string" ? row.city : "",
+        zip: typeof row.zip === "string" ? row.zip : "",
+        address: typeof row.address === "string" ? row.address : "",
+        coordinates,
+      };
+    })
+    .filter((item): item is PublicProfessionalCoverageNeighborhood => Boolean(item));
+
+  return { neighborhoods };
+}
+
+function normalizeActiveService(
+  raw: unknown,
+): PublicProfessionalActiveService | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const slug = typeof record.slug === "string" ? record.slug : "";
+  const id =
+    (typeof record.id === "string" && record.id) ||
+    (typeof record._id === "string" && record._id) ||
+    slug;
+  if (!id) return null;
+  const images = Array.isArray(record.images)
+    ? record.images.filter((item): item is string => typeof item === "string")
+    : [];
+  return {
+    id,
+    servicesName:
+      typeof record.servicesName === "string" ? record.servicesName : "",
+    slug,
+    price: toNumber(record.price, 0),
+    unit: typeof record.unit === "string" ? record.unit : "job",
+    images,
+    category: normalizePrimaryCategory(record.category),
+    commonServices: toStringArray(record.commonServices),
+    workingArea: toStringArray(record.workingArea),
+  };
+}
+
+function normalizeReviews(
+  raw: unknown,
+  providerId: string,
+): Review[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item, index): Review | null => {
+      const record = asRecord(item);
+      if (!record) return null;
+      const rating = Math.max(1, Math.min(5, toNumber(record.rating, 0)));
+      const body = typeof record.review === "string" ? record.review.trim() : "";
+      if (!rating || !body) return null;
+      const id =
+        (typeof record.id === "string" && record.id) ||
+        (typeof record.orderId === "string" && record.orderId) ||
+        (typeof record.orderNumber === "string" && record.orderNumber) ||
+        `${providerId}-${index + 1}`;
+      return {
+        id,
+        providerId,
+        customerName:
+          typeof record.customerName === "string" && record.customerName.trim()
+            ? record.customerName.trim()
+            : "Customer",
+        rating,
+        body,
+        serviceName: undefined,
+        createdAt:
+          typeof record.completedAt === "string"
+            ? record.completedAt
+            : typeof record.createdAt === "string"
+              ? record.createdAt
+              : "",
+        isDemo: false,
+      };
+    })
+    .filter((item): item is Review => Boolean(item));
+}
+
 export function normalizePublicProfessional(
   raw: unknown,
 ): PublicProfessional | null {
@@ -304,12 +393,27 @@ export function normalizePublicProfessional(
   const rating = asRecord(metrics.rating) ?? {};
   const location = asRecord(record.location) ?? {};
   const offerings = asRecord(record.activeOfferings) ?? {};
-  const profile = asRecord(record.profile) ?? {};
+  const profileRecord = "profile" in record ? asRecord(record.profile) : null;
   const coordinates = Array.isArray(location.coordinates)
-    ? (location.coordinates as number[])
+    ? location.coordinates.filter((value): value is number => typeof value === "number")
     : [];
 
-  return {
+  const categoryIdsRaw = Array.isArray(trade.categoryIds)
+    ? trade.categoryIds
+    : [];
+  const categoryIds = categoryIdsRaw
+    .map((item) => {
+      if (typeof item === "string" && item.trim()) return item.trim();
+      return normalizePrimaryCategory(item)?.id || "";
+    })
+    .filter(Boolean);
+
+  const primaryCategory = normalizePrimaryCategory(trade.primaryCategory);
+  if (primaryCategory?.id && !categoryIds.includes(primaryCategory.id)) {
+    categoryIds.unshift(primaryCategory.id);
+  }
+
+  const professional: PublicProfessional = {
     id,
     userId: typeof record.userId === "string" ? record.userId : "",
     fullName: typeof record.fullName === "string" ? record.fullName : "",
@@ -317,27 +421,19 @@ export function normalizePublicProfessional(
       typeof record.companyName === "string" ? record.companyName : "",
     slug: typeof record.slug === "string" ? record.slug : "",
     tagline: typeof record.tagline === "string" ? record.tagline : "",
-    description: typeof record.description === "string" ? record.description : "",
-    phone: typeof record.phone === "string" ? record.phone : "",
-    email: typeof record.email === "string" ? record.email : "",
-    website: typeof record.website === "string" ? record.website : "",
-    contactRole: typeof record.contactRole === "string" ? record.contactRole : "",
-    avatarUrl: typeof record.avatarUrl === "string" ? record.avatarUrl : "",
+    avatarUrl:
+      (typeof record.avatarUrl === "string" && record.avatarUrl) ||
+      (typeof record.avatar === "string" && record.avatar) ||
+      "",
     verificationBadge: {
       isVerified: Boolean(badge.isVerified),
       status: typeof badge.status === "string" ? badge.status : "",
-      licensed: Boolean(badge.licensed),
-      insured: Boolean(badge.insured),
-    },
-    profile: {
-      yearsInBusiness: toNumber(profile.yearsInBusiness, 0),
-      employeeCount: typeof profile.employeeCount === "string" ? profile.employeeCount : "",
-      licensed: Boolean(profile.licensed),
-      insured: Boolean(profile.insured),
+      licensed: Boolean(badge.licensed ?? badge.isLicensed),
+      insured: Boolean(badge.insured ?? badge.isInsured),
     },
     tradeDetails: {
-      primaryCategory: normalizePrimaryCategory(trade.primaryCategory),
-      categoryIds: toStringArray(trade.categoryIds),
+      primaryCategory,
+      categoryIds,
       tradeTitle: typeof trade.tradeTitle === "string" ? trade.tradeTitle : "",
       specialties: toStringArray(trade.specialties),
     },
@@ -369,20 +465,61 @@ export function normalizePublicProfessional(
           ? offerings.startingPriceDisplay
           : "",
     },
-    workingHours: normalizeWorkingHours(record.workingHours),
-    activeServices: (Array.isArray(record.activeServices) ? record.activeServices : [])
-      .map(normalizeActiveService)
-      .filter(
-        (item): item is PublicProfessional["activeServices"][number] => Boolean(item),
-      ),
-    reviews: (Array.isArray(record.reviews) ? record.reviews : [])
-      .map((item) => normalizeReview(item, id))
-      .filter((item): item is Review => Boolean(item)),
     createdAt:
       typeof record.createdAt === "string" ? record.createdAt : undefined,
     updatedAt:
       typeof record.updatedAt === "string" ? record.updatedAt : undefined,
   };
+
+  if ("description" in record) {
+    professional.description =
+      typeof record.description === "string" ? record.description : "";
+  }
+  if ("phone" in record) {
+    professional.phone = typeof record.phone === "string" ? record.phone : "";
+  }
+  if ("email" in record) {
+    professional.email = typeof record.email === "string" ? record.email : "";
+  }
+  if ("website" in record) {
+    professional.website =
+      typeof record.website === "string" ? record.website : "";
+  }
+  if ("contactRole" in record) {
+    professional.contactRole =
+      typeof record.contactRole === "string" ? record.contactRole : "Owner";
+  }
+  if (profileRecord || "profile" in record) {
+    professional.profile = {
+      yearsInBusiness: toNumber(profileRecord?.yearsInBusiness, 0),
+      employeeCount:
+        typeof profileRecord?.employeeCount === "string"
+          ? profileRecord.employeeCount
+          : profileRecord?.employeeCount != null
+            ? String(profileRecord.employeeCount)
+            : "",
+      licensed: Boolean(profileRecord?.licensed),
+      insured: Boolean(profileRecord?.insured),
+    };
+  }
+  if ("coverage" in record) {
+    professional.coverage = normalizeCoverage(record.coverage);
+  }
+  if ("workingHours" in record) {
+    professional.workingHours = normalizeWorkingHours(record.workingHours) ?? [];
+  }
+  if ("activeServices" in record) {
+    professional.activeServices = Array.isArray(record.activeServices)
+      ? record.activeServices
+          .map(normalizeActiveService)
+          .filter((item): item is PublicProfessionalActiveService => Boolean(item))
+      : [];
+  }
+  if ("reviews" in record) {
+    professional.reviews = normalizeReviews(record.reviews, id) ?? [];
+  }
+
+  return professional;
 }
 
 function parsePublicProfessionalsResponse(response: unknown): {
@@ -451,9 +588,168 @@ export function selectPublicProfessionalBySlug(
   slug: string,
 ): PublicProfessional | null {
   const slice = state.publicProfessionals;
-  if (!slice || !slug) return null;
-  if (slice.detail?.slug === slug) return slice.detail;
-  return slice.items.find((item) => item.slug === slug) ?? null;
+  const key = String(slug || "").trim();
+  if (!slice || !key) return null;
+  if (slice.detail?.slug === key || slice.detail?.id === key) {
+    return slice.detail;
+  }
+  return (
+    slice.items.find((item) => item.slug === key || item.id === key) ?? null
+  );
+}
+
+/** Map API professional → existing Provider shape for map + cards. */
+export function publicProfessionalToProvider(
+  professional: PublicProfessional,
+): Provider {
+  const coords = Array.isArray(professional.location.coordinates)
+    ? professional.location.coordinates
+    : [];
+  const lng = toNumber(coords[0], 0);
+  const lat = toNumber(coords[1], 0);
+  const primary = professional.tradeDetails.primaryCategory;
+  const categoryIds = professional.tradeDetails.categoryIds.length
+    ? professional.tradeDetails.categoryIds
+    : primary?.id
+      ? [primary.id]
+      : [];
+  const resolvedCategoryNames = categoryIds
+    .map((id) => getServiceCategoryById(id)?.name)
+    .filter((name): name is string => Boolean(name));
+  const serviceLabels = resolvedCategoryNames.length
+    ? resolvedCategoryNames.slice(0, 2)
+    : [
+        primary?.name?.trim() ||
+          professional.tradeDetails.tradeTitle?.trim() ||
+          professional.tagline?.trim() ||
+          "",
+      ]
+        .filter(Boolean)
+        .slice(0, 2);
+
+  const tradeLabel =
+    professional.tradeDetails.tradeTitle?.trim() ||
+    professional.tagline?.trim() ||
+    serviceLabels[0] ||
+    "Home services";
+  const city = professional.location.city.trim();
+  const specialtyPreview = professional.tradeDetails.specialties
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+
+  const apiDescription = professional.description?.trim() || "";
+  const aboutParts = apiDescription
+    ? [apiDescription]
+    : [
+        city ? `${tradeLabel} for ${city} homes.` : `${tradeLabel}.`,
+        specialtyPreview.length
+          ? `Specialties include ${specialtyPreview.join(", ")}.`
+          : "",
+        professional.activeOfferings.startingPriceDisplay?.trim() || "",
+      ].filter(Boolean);
+
+  let yearsInBusiness = toNumber(professional.profile?.yearsInBusiness, 0);
+  let foundedYear = 0;
+  if (yearsInBusiness > 0) {
+    foundedYear = new Date().getFullYear() - yearsInBusiness;
+  } else if (professional.createdAt) {
+    const created = new Date(professional.createdAt);
+    if (!Number.isNaN(created.getTime())) {
+      foundedYear = created.getFullYear();
+      yearsInBusiness = Math.max(0, new Date().getFullYear() - foundedYear);
+    }
+  }
+
+  const coverageNeighborhoods = professional.coverage?.neighborhoods ?? [];
+  const coveragePoints = coverageNeighborhoods
+    .map((neighborhood) => {
+      const nCoords = Array.isArray(neighborhood.coordinates)
+        ? neighborhood.coordinates
+        : [];
+      const nLng = toNumber(nCoords[0], NaN);
+      const nLat = toNumber(nCoords[1], NaN);
+      if (!Number.isFinite(nLat) || !Number.isFinite(nLng)) return null;
+      if (nLat === 0 && nLng === 0) return null;
+      return {
+        zip: neighborhood.zip || neighborhood.title,
+        name: neighborhood.title || neighborhood.city || neighborhood.zip || "Area",
+        lat: nLat,
+        lng: nLng,
+      };
+    })
+    .filter(
+      (
+        point,
+      ): point is { zip: string; name: string; lat: number; lng: number } =>
+        Boolean(point),
+    );
+
+  const serviceArea = [
+    ...new Set([
+      ...professional.location.coveredZipCodes,
+      ...coverageNeighborhoods.map((item) => item.zip).filter(Boolean),
+    ]),
+  ];
+
+  const galleryFromServices = (professional.activeServices ?? [])
+    .flatMap((service) => service.images)
+    .filter(Boolean);
+
+  return {
+    id: professional.id,
+    slug: professional.slug || professional.id,
+    companyName: professional.companyName || professional.fullName || "Professional",
+    logoInitials: logoInitials(
+      professional.companyName || professional.fullName || "P",
+    ),
+    logoUrl: professional.avatarUrl || undefined,
+    coverImage: undefined,
+    images: galleryFromServices.length ? galleryFromServices : undefined,
+    startingPrice: professional.activeOfferings.startingPrice || undefined,
+    tagline:
+      professional.tagline ||
+      professional.tradeDetails.tradeTitle ||
+      professional.activeOfferings.startingPriceDisplay ||
+      "",
+    description: aboutParts.join(" "),
+    rating: professional.performanceMetrics.rating.average,
+    reviewCount: professional.performanceMetrics.rating.totalReviews,
+    yearsInBusiness,
+    licensed:
+      professional.verificationBadge.licensed ||
+      Boolean(professional.profile?.licensed),
+    insured:
+      professional.verificationBadge.insured ||
+      Boolean(professional.profile?.insured),
+    categoryIds,
+    serviceLabels: serviceLabels.length ? serviceLabels : undefined,
+    serviceArea,
+    coveragePoints: coveragePoints.length ? coveragePoints : undefined,
+    street: professional.location.address,
+    city: professional.location.city,
+    state: "",
+    zip: professional.location.zip,
+    lat,
+    lng,
+    phone: professional.phone?.trim() || "",
+    email: professional.email?.trim() || "",
+    website:
+      professional.website !== undefined
+        ? professional.website.trim()
+        : undefined,
+    workingHours: professional.workingHours ?? [],
+    gallery: galleryFromServices,
+    foundedYear,
+    employeeCount: professional.profile?.employeeCount?.trim() || "",
+    reviews: professional.reviews ?? [],
+    contact: professional.fullName.trim()
+      ? {
+          name: professional.fullName.trim(),
+          role: professional.contactRole?.trim() || "Business owner",
+        }
+      : undefined,
+  };
 }
 
 export function buildPublicProfessionalsQueryKey(
@@ -496,8 +792,8 @@ export function resolvePublicProfessionalsQuery(
     sortBy: "recommended",
     ...incoming,
     zipCode: hasZip ? location.zip.trim() : undefined,
-    lat: hasCoords ? location.latitude! : undefined,
-    lng: hasCoords ? location.longitude! : undefined,
+    lat: hasCoords ? location.latitude : undefined,
+    lng: hasCoords ? location.longitude : undefined,
     locationToken: committed
       ? [
           location.zip,
@@ -561,114 +857,6 @@ function logoInitials(name: string): string {
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
-/** Map API professional → existing Provider shape for map + cards. */
-export function publicProfessionalToProvider(
-  professional: PublicProfessional,
-): Provider {
-  const coords = Array.isArray(professional.location.coordinates)
-    ? professional.location.coordinates
-    : [];
-  const lng = toNumber(coords[0], 0);
-  const lat = toNumber(coords[1], 0);
-  const primary = professional.tradeDetails.primaryCategory;
-  const categoryIds = professional.tradeDetails.categoryIds.length
-    ? professional.tradeDetails.categoryIds
-    : primary?.id
-      ? [primary.id]
-      : [];
-  const resolvedCategoryNames = categoryIds
-    .map((id) => getServiceCategoryById(id)?.name)
-    .filter((name): name is string => Boolean(name));
-  // Prefer catalog category names (e.g. Plumbing). Never dump specialties onto the card.
-  const serviceLabels = resolvedCategoryNames.length
-    ? resolvedCategoryNames.slice(0, 2)
-    : [
-        primary?.name?.trim() ||
-          professional.tradeDetails.tradeTitle?.trim() ||
-          professional.tagline?.trim() ||
-          "",
-      ].filter(Boolean).slice(0, 2);
-
-  const tradeLabel =
-    professional.tradeDetails.tradeTitle?.trim() ||
-    professional.tagline?.trim() ||
-    serviceLabels[0] ||
-    "Home services";
-  const city = professional.location.city.trim();
-  const specialtyPreview = professional.tradeDetails.specialties
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-  const aboutParts = [
-    city ? `${tradeLabel} for ${city} homes.` : `${tradeLabel}.`,
-    specialtyPreview.length
-      ? `Specialties include ${specialtyPreview.join(", ")}.`
-      : "",
-    professional.activeOfferings.startingPriceDisplay?.trim() || "",
-  ].filter(Boolean);
-
-  let yearsInBusiness = 0;
-  let foundedYear = 0;
-  if (professional.profile.yearsInBusiness > 0) {
-    yearsInBusiness = professional.profile.yearsInBusiness;
-    foundedYear = new Date().getFullYear() - professional.profile.yearsInBusiness;
-  } else if (professional.createdAt) {
-    const created = new Date(professional.createdAt);
-    if (!Number.isNaN(created.getTime())) {
-      foundedYear = created.getFullYear();
-      const years = new Date().getFullYear() - foundedYear;
-      yearsInBusiness = Math.max(0, years);
-    }
-  }
-
-  return {
-    id: professional.id,
-    slug: professional.slug || professional.id,
-    companyName: professional.companyName || professional.fullName || "Professional",
-    logoInitials: logoInitials(
-      professional.companyName || professional.fullName || "P",
-    ),
-    logoUrl: professional.avatarUrl || undefined,
-    // Keep cover separate from avatar so cards use category/service photos like before.
-    coverImage: undefined,
-    startingPrice: professional.activeOfferings.startingPrice || undefined,
-    tagline:
-      professional.tagline ||
-      professional.tradeDetails.tradeTitle ||
-      professional.activeOfferings.startingPriceDisplay ||
-      "",
-    description: professional.description || aboutParts.join(" "),
-    rating: professional.performanceMetrics.rating.average,
-    reviewCount: professional.performanceMetrics.rating.totalReviews,
-    yearsInBusiness,
-    licensed: professional.profile.licensed || professional.verificationBadge.licensed,
-    insured: professional.profile.insured || professional.verificationBadge.insured,
-    categoryIds,
-    serviceLabels: serviceLabels.length ? serviceLabels : undefined,
-    serviceArea: professional.location.coveredZipCodes,
-    street: professional.location.address,
-    city: professional.location.city,
-    state: "",
-    zip: professional.location.zip,
-    lat,
-    lng,
-    phone: professional.phone,
-    email: professional.email,
-    website: professional.website || undefined,
-    contact: professional.fullName.trim()
-      ? {
-          name: professional.fullName.trim(),
-          role: professional.contactRole || "Business owner",
-        }
-      : undefined,
-    workingHours: professional.workingHours,
-    gallery: [],
-    foundedYear,
-    employeeCount: professional.profile.employeeCount,
-    reviews: professional.reviews,
-  };
-}
-
 export type FetchPublicProfessionalsArg = {
   query?: PublicProfessionalsQuery;
   append?: boolean;
@@ -722,12 +910,10 @@ export const fetchPublicProfessionals = createAsyncThunk<
         }
       : resolved!.query;
 
-    // Never call the directory without a committed location (selected place / geo).
     if (!append && !resolved!.committed) {
       return rejectWithValue("Location is required.");
     }
 
-    // Reuse cached page when the exact query is already loaded (Landing ↔ Find a Pro).
     if (
       !append &&
       state.loaded &&
@@ -789,7 +975,6 @@ export const fetchPublicProfessionals = createAsyncThunk<
       );
       if (!committed) return false;
       const queryKey = buildPublicProfessionalsQueryKey(query);
-      // Same data already in store — skip network (shared with Landing Page).
       if (state.loaded && state.items.length && state.queryKey === queryKey) {
         return false;
       }
@@ -837,7 +1022,16 @@ export const fetchPublicProfessionalBySlug = createAsyncThunk<
       if (!trimmed) return false;
       const state = getState().publicProfessionals;
       if (state.detailLoading) return false;
-      if (state.detail?.slug === trimmed) return false;
+      const candidate =
+        (state.detail &&
+        (state.detail.slug === trimmed || state.detail.id === trimmed)
+          ? state.detail
+          : null) ||
+        state.items.find(
+          (item) => item.slug === trimmed || item.id === trimmed,
+        ) ||
+        null;
+      if (candidate && hasProfessionalDetailFields(candidate)) return false;
       return true;
     },
   },

@@ -37,6 +37,7 @@ export function ProviderCard({
   onClick,
   onMouseEnter,
   onMouseLeave,
+  onBeforeNavigate,
 }: {
   provider: Provider;
   visual?: boolean;
@@ -47,6 +48,8 @@ export function ProviderCard({
   onClick?: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  /** Stash list/detail data before navigating to the profile (Fixed Services pattern). */
+  onBeforeNavigate?: () => void;
 }) {
   const categories = provider.categoryIds
     .map((id) => getServiceCategoryById(id))
@@ -66,6 +69,11 @@ export function ProviderCard({
   const hasRating = provider.rating > 0;
   const presence = getProviderPresence(provider.id);
   const profileHref = professionalHref(provider.slug, place);
+
+  function handleProfileClick(event: React.MouseEvent<HTMLAnchorElement>) {
+    event.stopPropagation();
+    onBeforeNavigate?.();
+  }
 
   if (showListPhoto && coverImage) {
     return (
@@ -149,10 +157,7 @@ export function ProviderCard({
               </span>
             </span>
             <Button asChild size="sm">
-              <Link
-                href={profileHref}
-                onClick={(event) => event.stopPropagation()}
-              >
+              <Link href={profileHref} onClick={handleProfileClick}>
                 View profile
                 <ArrowRight data-icon="inline-end" />
               </Link>
@@ -295,7 +300,7 @@ export function ProviderCard({
           <Button asChild size="sm" className="h-8 w-full sm:min-w-0 sm:flex-1">
             <Link
               href={profileHref}
-              onClick={(event) => event.stopPropagation()}
+              onClick={handleProfileClick}
               className="justify-center whitespace-nowrap"
             >
               View profile

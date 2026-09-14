@@ -377,6 +377,13 @@ export interface Provider {
   /** Fallback badge labels when categoryIds are not in the static catalog (API pros). */
   serviceLabels?: string[];
   serviceArea: string[];
+  /** Optional real map pins from API coverage neighborhoods. */
+  coveragePoints?: {
+    zip: string;
+    name: string;
+    lat: number;
+    lng: number;
+  }[];
   street: string;
   city: string;
   state: string;
@@ -450,6 +457,53 @@ export interface BlogPost {
   imageAlt: string;
   image?: string;
   featured?: boolean;
+}
+
+export interface PublicBlogComment {
+  _id?: string;
+  authorName: string;
+  authorEmail?: string;
+  comment: string;
+  isDisabled?: boolean;
+  createdAt?: string;
+}
+
+export interface PublicBlogItem {
+  _id: string;
+  title: string;
+  slug: string;
+  description: string;
+  category: string;
+  content?: string;
+  image?: string;
+  coverImage?: string;
+  thumbnail?: string;
+  meta?: {
+    title?: string;
+    description?: string;
+    keywords?: string[];
+  };
+  status?: string;
+  publishedAt?: string;
+  isPin?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  commentCount?: number;
+  comments?: PublicBlogComment[];
+  authorName?: string;
+  readTimeMinutes?: number;
+}
+
+export interface BlogsPagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PublicBlogsResponse {
+  data: PublicBlogItem[];
+  pagination: BlogsPagination;
 }
 
 export interface FaqItem {

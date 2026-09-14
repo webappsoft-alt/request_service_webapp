@@ -16,7 +16,6 @@ import {
   MapPin,
   MessageCircle,
   Receipt,
-  Settings,
   Store,
   UserRound,
   Users,
@@ -81,9 +80,8 @@ export const portalNavGroups: PortalNavGroup[] = [
       { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
       { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images },
       { href: "/pro/dashboard/reports", label: "Reports", icon: BarChart3 },
-      { href: "/pro/dashboard/profile", label: "Documents", icon: Store },
       { href: "/pro/dashboard/billing", label: "Utilities", icon: Wallet },
-      { href: "/pro/dashboard/settings", label: "Settings", icon: Settings },
+      { href: "/pro/dashboard/settings", label: "Business Profile", icon: Store },
     ],
   },
 ];
@@ -119,7 +117,7 @@ export const workSubnav: { href: string; label: string }[] = [
 ];
 
 export const portalAccountNav: PortalNavItem[] = [
-  { href: "/pro/dashboard/profile", label: "Profile", icon: UserRound },
+  { href: "/pro/dashboard/settings", label: "Business Profile", icon: Store },
 ];
 
 export function isPeoplePath(pathname: string) {

@@ -451,6 +451,7 @@ export function ServiceFormView({ id }: { id?: string }) {
         parentCategory: null,
         commonServices: [],
         workingArea: [],
+        images: [],
       });
     };
     ensure(draft.categoryId, draft.categoryName);
@@ -472,6 +473,7 @@ export function ServiceFormView({ id }: { id?: string }) {
         parentCategory: selectedCategoryId || null,
         commonServices: [],
         workingArea: [],
+        images: [],
       });
     };
     ensure(draft.subcategoryId, draft.subcategoryName);
@@ -1277,7 +1279,7 @@ export function ServiceFormView({ id }: { id?: string }) {
                   ))}
                 </ul>
                 <Button type="button" variant="outline" size="sm" className="mt-3" asChild>
-                  <Link href="/pro/dashboard/settings#office-hours">
+                  <Link href="/pro/dashboard/profile?step=hours">
                     Edit office hours in Settings
                   </Link>
                 </Button>

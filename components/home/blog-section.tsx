@@ -2,11 +2,26 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Container, Section } from "@/components/layout/container";
 import { BlogCard } from "@/components/shared/blog-card";
-import { blogPosts } from "@/lib/data/blog";
+import { fetchPublicBlogs } from "@/lib/data/public-blogs";
+import type { PublicBlogItem } from "@/lib/types";
 
-const journal = blogPosts.filter((post) => post.image).slice(0, 4);
+export async function BlogSection() {
+  let displayPosts: PublicBlogItem[] = [];
 
-export function BlogSection() {
+  try {
+    const res = await fetchPublicBlogs({ limit: 4 });
+    if (res.data && res.data.length > 0) {
+      displayPosts = res.data;
+    }
+  } catch {
+    displayPosts = [];
+  }
+
+  // If no blog posts exist in the API, do not display static data
+  if (displayPosts.length === 0) {
+    return null;
+  }
+
   return (
     <Section>
       <Container className="flex flex-col gap-8">
@@ -31,8 +46,11 @@ export function BlogSection() {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {journal.map((post) => (
-            <BlogCard key={post.id} post={post} />
+          {displayPosts.map((post) => (
+            <BlogCard
+              key={post._id || post.slug}
+              post={post}
+            />
           ))}
         </div>
       </Container>

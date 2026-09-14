@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/container";
 import { BlogCard } from "@/components/shared/blog-card";
+import { BlogComments } from "@/components/blog/blog-comments";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
   blogPosts,
@@ -14,19 +15,29 @@ import {
   getBlogPostBySlug,
   getRelatedPosts,
 } from "@/lib/data/blog";
+import {
+  categoryNameToSlug,
+  fetchPublicBlogBySlug,
+} from "@/lib/data/public-blogs";
 import { formatDate } from "@/lib/format";
 import { articleJsonLd, breadcrumbJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
+export const dynamicParams = true;
+
 export function generateStaticParams() {
   return blogPosts.map((post) => ({ slug: post.slug }));
 }
 
-export async function generateMetadata({ params }: PageParams<{ slug: string }>) {
+export async function generateMetadata({
+  params,
+}: PageParams<{ slug: string }>) {
   const { slug } = await params;
-  const post = getBlogPostBySlug(slug);
-  if (!post) {
+  const apiPost = await fetchPublicBlogBySlug(slug);
+  const staticPost = !apiPost ? getBlogPostBySlug(slug) : null;
+
+  if (!apiPost && !staticPost) {
     return buildMetadata({
       title: "Article not found",
       description: "That article is not available.",
@@ -34,36 +45,105 @@ export async function generateMetadata({ params }: PageParams<{ slug: string }>)
       index: false,
     });
   }
-  const author = getBlogAuthorById(post.authorId);
+
+  const title = apiPost?.meta?.title || apiPost?.title || staticPost?.title || "";
+  const description =
+    apiPost?.meta?.description ||
+    apiPost?.description ||
+    staticPost?.description ||
+    "";
+  const publishedTime = apiPost?.publishedAt || staticPost?.publishedAt;
+  const modifiedTime = apiPost?.updatedAt || staticPost?.updatedAt;
+  const authorName =
+    apiPost?.authorName ||
+    (staticPost ? getBlogAuthorById(staticPost.authorId)?.name : null) ||
+    "Request Services Editorial";
+
   return buildMetadata({
-    title: post.title,
-    description: post.description,
-    path: `/blog/${post.slug}`,
+    title,
+    description,
+    path: `/blog/${slug}`,
     ogType: "article",
-    publishedTime: post.publishedAt,
-    modifiedTime: post.updatedAt,
-    authors: author ? [author.name] : undefined,
+    publishedTime,
+    modifiedTime,
+    authors: [authorName],
   });
 }
 
-export default async function BlogArticlePage({ params }: PageParams<{ slug: string }>) {
+export default async function BlogArticlePage({
+  params,
+}: PageParams<{ slug: string }>) {
   const { slug } = await params;
-  const post = getBlogPostBySlug(slug);
-  if (!post) notFound();
+  const apiPost = await fetchPublicBlogBySlug(slug);
+  const staticPost = !apiPost ? getBlogPostBySlug(slug) : null;
 
-  const category = getBlogCategoryById(post.categoryId);
-  const author = getBlogAuthorById(post.authorId);
-  const related = getRelatedPosts(post);
+  if (!apiPost && !staticPost) notFound();
+
+  // Normalize data between API response and static post
+  const title = apiPost ? apiPost.title : staticPost!.title;
+  const description = apiPost ? apiPost.description : staticPost!.description;
+  const publishedAt = apiPost ? apiPost.publishedAt : staticPost!.publishedAt;
+  const image =
+    apiPost?.image || apiPost?.coverImage || staticPost?.image || null;
+  const isExternalImage = Boolean(image?.startsWith("http"));
+
+  const categoryName = apiPost
+    ? apiPost.category
+    : getBlogCategoryById(staticPost!.categoryId)?.name ?? "Article";
+  const categorySlug = apiPost
+    ? categoryNameToSlug(apiPost.category)
+    : getBlogCategoryById(staticPost!.categoryId)?.slug ?? "homeowners";
+
+  const authorName = apiPost
+    ? apiPost.authorName || "Request Services Editorial"
+    : getBlogAuthorById(staticPost!.authorId)?.name ??
+      "Request Services Editorial";
+  const authorRole = apiPost ? "Editorial Team" : getBlogAuthorById(staticPost!.authorId)?.role ?? "Editorial Team";
+
+  const rawContent = apiPost ? apiPost.content : staticPost!.content;
+  const readTimeMinutes = apiPost
+    ? apiPost.readTimeMinutes || 5
+    : staticPost!.readTimeMinutes;
+
+  const comments = apiPost?.comments || [];
+
+  // Related posts from static or current pool
+  const related = staticPost
+    ? getRelatedPosts(staticPost)
+    : blogPosts.slice(0, 3);
+
+  // Determine if content is HTML or plain text
+  const isHtml =
+    typeof rawContent === "string" && /<[a-z][\s\S]*>/i.test(rawContent);
 
   return (
     <>
       <JsonLd
         data={[
-          articleJsonLd(post, author?.name ?? "Request Services Editorial"),
+          articleJsonLd(
+            {
+              id: apiPost?._id || staticPost?.id || slug,
+              slug,
+              title,
+              description,
+              content: Array.isArray(rawContent)
+                ? rawContent
+                : [String(rawContent || "")],
+              categoryId: categorySlug,
+              authorId: "author_editorial",
+              publishedAt: publishedAt || new Date().toISOString(),
+              updatedAt:
+                apiPost?.updatedAt || publishedAt || new Date().toISOString(),
+              readTimeMinutes,
+              imageAlt: title,
+              image: image || undefined,
+            },
+            authorName,
+          ),
           breadcrumbJsonLd([
             { name: "Home", path: "/" },
             { name: "Blog", path: "/blog" },
-            { name: post.title, path: `/blog/${post.slug}` },
+            { name: title, path: `/blog/${slug}` },
           ]),
         ]}
       />
@@ -83,55 +163,66 @@ export default async function BlogArticlePage({ params }: PageParams<{ slug: str
             <nav aria-label="Breadcrumb">
               <ol className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <li>
-                  <Link href="/" className="transition-colors hover:text-primary">
+                  <Link
+                    href="/"
+                    className="transition-colors hover:text-primary"
+                  >
                     Home
                   </Link>
                 </li>
                 <li aria-hidden="true">/</li>
                 <li>
-                  <Link href="/blog" className="transition-colors hover:text-primary">
+                  <Link
+                    href="/blog"
+                    className="transition-colors hover:text-primary"
+                  >
                     Blog
                   </Link>
                 </li>
                 <li aria-hidden="true">/</li>
                 <li className="font-medium text-foreground" aria-current="page">
-                  {category?.name ?? "Article"}
+                  {categoryName}
                 </li>
               </ol>
             </nav>
 
             <div className="flex max-w-3xl flex-col gap-4">
-              {category ? (
-                <Badge variant="secondary" className="w-fit" asChild>
-                  <Link href={`/blog/category/${category.slug}`}>{category.name}</Link>
-                </Badge>
-              ) : null}
+              <Badge variant="secondary" className="w-fit" asChild>
+                <Link href={`/blog/category/${categorySlug}`}>
+                  {categoryName}
+                </Link>
+              </Badge>
               <h1 className="text-3xl font-semibold text-pretty md:text-[2.5rem]">
-                {post.title}
+                {title}
               </h1>
               <p className="max-w-2xl text-base text-muted-foreground md:text-lg">
-                {post.description}
+                {description}
               </p>
               <p className="text-sm text-muted-foreground">
-                {author?.name}
+                {authorName}
+                {publishedAt ? (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    {formatDate(publishedAt)}
+                  </>
+                ) : null}
                 <span aria-hidden="true"> · </span>
-                {formatDate(post.publishedAt)}
-                <span aria-hidden="true"> · </span>
-                {post.readTimeMinutes} min read
+                {readTimeMinutes} min read
               </p>
             </div>
           </Container>
         </section>
 
-        {post.image ? (
+        {image ? (
           <div className="border-b bg-muted/40">
             <Container className="py-6 md:py-8">
               <div className="relative aspect-[16/7] overflow-hidden rounded-2xl bg-muted">
                 <Image
-                  src={post.image}
-                  alt={post.imageAlt}
+                  src={image}
+                  alt={title}
                   fill
                   priority
+                  unoptimized={isExternalImage}
                   sizes="(min-width: 1280px) 1120px, 92vw"
                   className="object-cover"
                 />
@@ -143,10 +234,23 @@ export default async function BlogArticlePage({ params }: PageParams<{ slug: str
         <div className="section-space">
           <Container className="grid gap-10 lg:grid-cols-[minmax(0,42rem)_minmax(0,16rem)] lg:justify-between">
             <div className="flex flex-col gap-5 text-base leading-7 text-muted-foreground">
-              {post.content.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
+              {/* Render Content */}
+              {isHtml ? (
+                <div
+                  className="prose prose-neutral max-w-none dark:prose-invert"
+                  dangerouslySetInnerHTML={{ __html: String(rawContent) }}
+                />
+              ) : Array.isArray(rawContent) ? (
+                rawContent.map((paragraph, idx) => (
+                  <p key={idx}>{paragraph}</p>
+                ))
+              ) : typeof rawContent === "string" ? (
+                rawContent
+                  .split(/\n\n+/)
+                  .map((paragraph, idx) => <p key={idx}>{paragraph}</p>)
+              ) : null}
 
+              {/* Navigation Back */}
               <div className="mt-4 border-t pt-6">
                 <Button variant="outline" asChild>
                   <Link href="/blog">
@@ -155,35 +259,41 @@ export default async function BlogArticlePage({ params }: PageParams<{ slug: str
                   </Link>
                 </Button>
               </div>
+
+              {/* Interactive Comments & Submission Form */}
+              <BlogComments slug={slug} initialComments={comments} />
             </div>
 
+            {/* Sticky Sidebar */}
             <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
-              <p className="text-sm font-medium">Article</p>
+              <p className="text-sm font-medium">Article Details</p>
               <dl className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
                 <div className="flex flex-col gap-1">
                   <dt className="text-xs text-muted-foreground">Written by</dt>
-                  <dd className="font-medium">{author?.name}</dd>
-                  {author?.role ? (
-                    <dd className="text-xs text-muted-foreground">{author.role}</dd>
+                  <dd className="font-medium">{authorName}</dd>
+                  {authorRole ? (
+                    <dd className="text-xs text-muted-foreground">
+                      {authorRole}
+                    </dd>
                   ) : null}
                 </div>
-                <div className="flex flex-col gap-1">
-                  <dt className="text-xs text-muted-foreground">Published</dt>
-                  <dd>{formatDate(post.publishedAt)}</dd>
-                </div>
-                {category ? (
+                {publishedAt ? (
                   <div className="flex flex-col gap-1">
-                    <dt className="text-xs text-muted-foreground">Category</dt>
-                    <dd>
-                      <Link
-                        href={`/blog/category/${category.slug}`}
-                        className="font-medium text-brand hover:text-foreground"
-                      >
-                        {category.name}
-                      </Link>
-                    </dd>
+                    <dt className="text-xs text-muted-foreground">Published</dt>
+                    <dd>{formatDate(publishedAt)}</dd>
                   </div>
                 ) : null}
+                <div className="flex flex-col gap-1">
+                  <dt className="text-xs text-muted-foreground">Category</dt>
+                  <dd>
+                    <Link
+                      href={`/blog/category/${categorySlug}`}
+                      className="font-medium text-brand hover:text-foreground"
+                    >
+                      {categoryName}
+                    </Link>
+                  </dd>
+                </div>
               </dl>
             </aside>
           </Container>

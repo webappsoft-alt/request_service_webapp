@@ -102,6 +102,12 @@ export const publicApi = {
   fixedService: (idOrSlug: string) => `public/fixed-services/${idOrSlug}`,
   /** POST contact inquiry */
   contactUs: "public/contact-us",
+  /** GET public blogs — query: page, limit, search, category */
+  blogs: "public/blogs",
+  /** GET one public blog by slug */
+  blog: (slug: string) => `public/blogs/${slug}`,
+  /** POST comment to a public blog by slug */
+  blogComments: (slug: string) => `public/blogs/${slug}/comments`,
 } as const;
 
 export const uploadApi = {

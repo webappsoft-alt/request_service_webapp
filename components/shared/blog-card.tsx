@@ -1,53 +1,114 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, MessageSquare } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { getBlogAuthorById, getBlogCategoryById } from "@/lib/data/blog";
 import { formatDate } from "@/lib/format";
-import type { BlogPost } from "@/lib/types";
+import type { BlogPost, PublicBlogItem } from "@/lib/types";
 
-export function BlogCard({ post }: { post: BlogPost }) {
-  const category = getBlogCategoryById(post.categoryId);
-  const author = getBlogAuthorById(post.authorId);
+export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
+  const categoryName =
+    "category" in post && typeof post.category === "string" && post.category
+      ? post.category
+      : "categoryId" in post && post.categoryId
+        ? getBlogCategoryById(post.categoryId)?.name ?? "Journal"
+        : "Journal";
+
+  const authorName =
+    "authorName" in post && post.authorName
+      ? post.authorName
+      : "authorId" in post && post.authorId
+        ? getBlogAuthorById(post.authorId)?.name ?? "Request Services Editorial"
+        : "Request Services Editorial";
+
+  const imageSrc =
+    post.image ||
+    ("coverImage" in post && post.coverImage ? post.coverImage : undefined) ||
+    ("thumbnail" in post && post.thumbnail ? post.thumbnail : undefined);
+
+  const imageAlt =
+    "imageAlt" in post && post.imageAlt ? post.imageAlt : post.title;
+
+  const readTime =
+    post.readTimeMinutes ||
+    (post.content
+      ? Math.max(
+          3,
+          Math.ceil(
+            (typeof post.content === "string"
+              ? post.content.split(/\s+/).length
+              : post.content.join(" ").split(/\s+/).length) / 200,
+          ),
+        )
+      : 5);
+
+  const commentCount =
+    "commentCount" in post && typeof post.commentCount === "number"
+      ? post.commentCount
+      : "comments" in post && Array.isArray(post.comments)
+        ? post.comments.length
+        : 0;
+
+  const isExternalImage = Boolean(imageSrc?.startsWith("http"));
 
   return (
     <Card className="h-full gap-0 border-black/15 pt-0 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:elevate">
       <Link href={`/blog/${post.slug}`} className="group flex h-full flex-col">
         <div className="relative aspect-[16/10] overflow-hidden bg-primary">
-          {post.image ? (
+          {imageSrc ? (
             <Image
-              src={post.image}
-              alt={post.imageAlt}
+              src={imageSrc}
+              alt={imageAlt}
               fill
+              unoptimized={isExternalImage}
               sizes="(min-width: 1024px) 20vw, (min-width: 640px) 40vw, 100vw"
               className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
             />
           ) : (
-            <span className="absolute inset-0 flex items-end p-5">
-              <span
+            <div className="relative flex size-full flex-col justify-between bg-gradient-to-br from-primary via-primary/90 to-neutral-900 p-5 text-white">
+              <div
                 className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_12%,color-mix(in_oklab,white_16%,transparent),transparent_46%)]"
                 aria-hidden="true"
               />
-              <span className="relative text-sm font-medium text-primary-foreground/80">
-                {category?.name ?? "Journal"}
+              <span className="relative z-10 w-fit rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white/90 backdrop-blur-sm">
+                {categoryName}
               </span>
-            </span>
+              <span className="relative z-10 text-sm font-medium text-white/80">
+                Request Services Journal
+              </span>
+            </div>
           )}
         </div>
 
         <div className="flex flex-1 flex-col gap-3 px-4 pt-4 pb-4">
-          <p className="eyebrow text-primary">
-            {category?.name ?? "Journal"}
-            <span className="mx-2 text-primary/40" aria-hidden="true">
-              ·
-            </span>
-            {post.readTimeMinutes} min
+          <div className="flex items-center justify-between text-xs">
+            <p className="eyebrow text-primary">
+              {categoryName}
+              <span className="mx-2 text-primary/40" aria-hidden="true">
+                ·
+              </span>
+              {readTime} min read
+            </p>
+            {commentCount > 0 && (
+              <span className="inline-flex items-center gap-1 font-medium text-muted-foreground">
+                <MessageSquare className="size-3.5" aria-hidden="true" />
+                {commentCount}
+              </span>
+            )}
+          </div>
+
+          <h3 className="text-lg font-semibold tracking-tight text-balance">
+            {post.title}
+          </h3>
+          <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
+            {post.description}
           </p>
-          <h3 className="text-lg font-semibold tracking-tight text-balance">{post.title}</h3>
-          <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">{post.description}</p>
+
           <p className="mt-auto text-xs text-muted-foreground">
-            {author?.name} · {formatDate(post.publishedAt)}
+            {authorName}
+            {post.publishedAt ? ` · ${formatDate(post.publishedAt)}` : ""}
           </p>
+
           <span className="inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors group-hover:text-foreground">
             Continue reading
             <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -57,3 +118,4 @@ export function BlogCard({ post }: { post: BlogPost }) {
     </Card>
   );
 }
+

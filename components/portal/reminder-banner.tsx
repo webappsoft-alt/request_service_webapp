@@ -23,10 +23,11 @@ import { cn } from "@/lib/utils";
 export function useReminderLookups() {
   const { customers, contractors, vendors } = useCrmDirectory();
   const { employees } = usePortalCrew();
-  const { estimates, jobs, requests, provider } = usePortalWorkspace();
+  const { estimates, jobs, invoices, requests, provider } = usePortalWorkspace();
   const records = usePortalRecords();
   const allEstimates = records.mergeEstimates(estimates);
   const allJobs = records.mergeJobs(jobs);
+  const allInvoices = records.mergeInvoices(invoices);
 
   const label = useCallback(
     (kind: ReminderSubjectKind, id: string) => {
@@ -55,13 +56,16 @@ export function useReminderLookups() {
         case "job": {
           return allJobs.find((item) => item.id === id)?.number ?? "Job";
         }
+        case "invoice": {
+          return allInvoices.find((item) => item.id === id)?.number ?? "Invoice";
+        }
         default: {
           const _never: never = kind;
           return _never;
         }
       }
     },
-    [allEstimates, allJobs, contractors, customers, employees, provider, requests, vendors],
+    [allEstimates, allInvoices, allJobs, contractors, customers, employees, provider, requests, vendors],
   );
 
   const options = useCallback(
@@ -81,13 +85,15 @@ export function useReminderLookups() {
           return requests.map((item) => ({ id: item.id, label: `${item.number} · ${item.serviceName}` }));
         case "job":
           return allJobs.map((item) => ({ id: item.id, label: item.number }));
+        case "invoice":
+          return allInvoices.map((item) => ({ id: item.id, label: item.number }));
         default: {
           const _never: never = kind;
           return _never;
         }
       }
     },
-    [allEstimates, allJobs, contractors, customers, employees, requests, vendors],
+    [allEstimates, allInvoices, allJobs, contractors, customers, employees, requests, vendors],
   );
 
   return { label, options };

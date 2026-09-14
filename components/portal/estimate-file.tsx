@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useJobFile, type EstimateSettingsDraft } from "@/components/portal/use-job-file";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { estimateAsJob } from "@/components/portal/work-builders";
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { ESTIMATE_STATUSES, estimateStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation } from "@/lib/format";
@@ -101,10 +103,12 @@ export function EstimateSettingsTab({
   service: string;
 }) {
   const { customers } = useCrmDirectory();
+  const crm = useCrmApiData();
   const records = usePortalRecords();
   const asJob = estimateAsJob(estimate);
   const file = useJobFile(asJob, estimate, undefined, "");
   const selected = customers.find((item) => item.id === estimate.customerId);
+  const apiReady = crm.enabled && crm.ready;
   const [draft, setDraft] = useState<EstimateSettingsDraft>(() => ({
     name: service,
     customerId: estimate.customerId,
@@ -129,10 +133,34 @@ export function EstimateSettingsTab({
         <h2 className="text-sm font-semibold">Estimate settings</h2>
         <Button
           size="sm"
-          onClick={() => {
-            file.saveEstimateSettings(draft);
-            records.setStatus("estimate", estimate.id, draft.status);
-            toast.success("Estimate settings saved.");
+          onClick={async () => {
+            try {
+              file.saveEstimateSettings(draft);
+              if (apiReady) {
+                await updateEstimateApi(estimate.id, {
+                  ...estimate,
+                  customerId: draft.customerId,
+                  propertyAddress: {
+                    ...estimate.propertyAddress,
+                    street: draft.street,
+                    city: draft.city,
+                    state: draft.state,
+                    zip: draft.zip,
+                  },
+                  issuedAt: draft.issuedAt || estimate.issuedAt,
+                  expiresAt: draft.expiresAt || undefined,
+                  status: draft.status,
+                  notes: draft.notes || undefined,
+                  terms: draft.terms || undefined,
+                });
+                await crm.refresh();
+              } else {
+                records.setStatus("estimate", estimate.id, draft.status);
+              }
+              toast.success("Estimate settings saved.");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
+            }
           }}
         >
           Save settings

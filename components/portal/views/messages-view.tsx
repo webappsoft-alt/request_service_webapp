@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ChatPanel } from "@/components/shared/chat-panel";
 import { PortalPage } from "@/components/portal/portal-page";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
+import { useRealtime } from "@/components/realtime/realtime-provider";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,11 +15,18 @@ export function MessagesView() {
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("thread") ?? "";
   const { threads, send, markRead } = useChatThreads();
+  const { joinThread, leaveThread, setTyping, connected } = useRealtime();
   const selected = threads.find((item) => item.id === selectedId) ?? threads[0];
 
   useEffect(() => {
     if (selected?.unreadForProvider) markRead(selected.id);
   }, [markRead, selected]);
+
+  useEffect(() => {
+    if (!selected?.id) return;
+    joinThread(selected.id);
+    return () => leaveThread(selected.id);
+  }, [joinThread, leaveThread, selected?.id]);
 
   return (
     <PortalPage
@@ -48,7 +56,8 @@ export function MessagesView() {
                       ) : null}
                     </span>
                     <span className="line-clamp-2 text-xs text-muted-foreground">
-                      {last?.text || (last?.attachments.length ? last.attachments[0]?.name : "No messages yet")}
+                      {last?.text ||
+                        (last?.attachments.length ? last.attachments[0]?.name : "No messages yet")}
                     </span>
                   </Link>
                 </li>
@@ -60,7 +69,10 @@ export function MessagesView() {
               <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
                 <div>
                   <p className="font-semibold">{selected.customerName}</p>
-                  <p className="text-xs text-muted-foreground">{selected.customerEmail}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selected.customerEmail}
+                    {connected ? " · live" : ""}
+                  </p>
                 </div>
                 {selected.requestId ? (
                   <Button size="sm" variant="outline" asChild>
@@ -76,15 +88,18 @@ export function MessagesView() {
                 onSend={(text, attachments) => {
                   send(selected.id, "provider", text, attachments);
                 }}
+                onTypingChange={(isTyping) => setTyping(selected.id, isTyping)}
                 footer="The customer sees this on the public profile chat."
               />
             </div>
           ) : null}
         </div>
       ) : (
-        <div className="rounded-xl border border-input bg-card p-6 text-sm text-muted-foreground">
-          No website chats yet. When a customer requests a quote or messages your profile, the thread
-          appears here.
+        <div className="rounded-xl border border-dashed border-input bg-card px-6 py-12 text-center">
+          <p className="text-sm text-muted-foreground">
+            No chats yet. When a customer messages from a profile or sends a quote request, it shows
+            here.
+          </p>
         </div>
       )}
     </PortalPage>

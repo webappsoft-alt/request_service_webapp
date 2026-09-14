@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 export function RequestIntake({
   onComplete,
 }: {
-  onComplete: (answers: IntakeAnswers) => void;
+  onComplete: (answers: IntakeAnswers) => void | Promise<void>;
 }) {
   const searchParams = useSearchParams();
   const startingService = searchParams.get("service") ?? "";

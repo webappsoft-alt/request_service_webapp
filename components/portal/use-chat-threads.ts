@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import {
+  markProviderChatRead,
+  sendProviderChatMessage,
+} from "@/lib/api/chat-client";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import {
   appendChatMessage,
@@ -27,31 +32,47 @@ function snapshotFor(email: string) {
 
 export function useChatThreads() {
   const { session, provider } = usePortalWorkspace();
+  const crm = useCrmApiData();
   const email = session?.email || provider.email;
+  const apiReady = crm.enabled && crm.ready;
   const threads = useSyncExternalStore(
     subscribeChat,
     () => snapshotFor(email),
     () => EMPTY,
   );
+  const resolvedThreads = apiReady ? crm.chats : threads;
 
   const unread = useMemo(
-    () => threads.reduce((sum, item) => sum + item.unreadForProvider, 0),
-    [threads],
+    () => resolvedThreads.reduce((sum, item) => sum + item.unreadForProvider, 0),
+    [resolvedThreads],
   );
 
   const send = useCallback(
     (threadId: string, from: ChatRole, text: string, attachments?: ChatAttachment[]) => {
+      if (apiReady) {
+        if (from !== "provider") return Promise.resolve();
+        return (async () => {
+          await sendProviderChatMessage(threadId, text, attachments);
+          await crm.refresh();
+        })();
+      }
       return appendChatMessage({ providerEmail: email, threadId, from, text, attachments });
     },
-    [email],
+    [apiReady, crm, email],
   );
 
   const markRead = useCallback(
     (threadId: string) => {
+      if (apiReady) {
+        return (async () => {
+          await markProviderChatRead(threadId);
+          await crm.refresh({ silent: true });
+        })();
+      }
       markChatRead(email, threadId, "provider");
     },
-    [email],
+    [apiReady, crm, email],
   );
 
-  return { email, threads, unread, send, markRead };
+  return { email, threads: resolvedThreads, unread, send, markRead };
 }

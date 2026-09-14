@@ -38,23 +38,40 @@ export function ChatPanel({
   onSend,
   placeholder = "Write a message or attach a photo / PDF…",
   footer,
+  onTypingChange,
 }: {
   messages: ChatMessage[];
   self: ChatRole;
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<void>;
   placeholder?: string;
   footer?: string;
+  onTypingChange?: (isTyping: boolean) => void;
 }) {
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<{ id: string; file: File; url: string }[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const typingTimer = useRef<number | null>(null);
 
   useEffect(() => {
     const node = listRef.current;
     if (!node) return;
     node.scrollTop = node.scrollHeight;
   }, [messages, pending]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimer.current) window.clearTimeout(typingTimer.current);
+      onTypingChange?.(false);
+    };
+  }, [onTypingChange]);
+
+  function signalTyping() {
+    if (!onTypingChange) return;
+    onTypingChange(true);
+    if (typingTimer.current) window.clearTimeout(typingTimer.current);
+    typingTimer.current = window.setTimeout(() => onTypingChange(false), 1200);
+  }
 
   function addFiles(list: FileList | null) {
     if (!list?.length) return;
@@ -197,7 +214,10 @@ export function ChatPanel({
           </Button>
           <Textarea
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              signalTyping();
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();

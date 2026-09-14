@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -12,7 +12,10 @@ import {
   NativeSelectOption,
 } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { appendChatMessage, ensureChatThread, writeChatGuest } from "@/lib/booking/chat-store";
+import { writeChatGuest } from "@/lib/booking/chat-store";
+import { openPublicChatThread } from "@/lib/api/chat-client";
+import { getData } from "@/components/api/apiFuntions";
+import { publicApi } from "@/components/api/ApiRoutesFile";
 import { createFixedServiceBooking } from "@/lib/booking/create-fixed-booking";
 import { createMarketplaceQuote } from "@/lib/booking/create-marketplace-quote";
 import { createWebsiteLead } from "@/lib/booking/create-website-lead";
@@ -23,6 +26,28 @@ import { getProviderBySlug } from "@/lib/data/providers";
 import { serviceCategories } from "@/lib/data/services";
 import { serviceUnitLabel } from "@/lib/data/portal";
 import { formatStartingPrice, formatTime, isValidZip } from "@/lib/format";
+
+const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+async function resolveLiveFixedServicePath(serviceId: string) {
+  const response = await getData(publicApi.fixedService(serviceId), undefined, {
+    token: null,
+    silent: true,
+    skipLogoutOn401: true,
+  });
+  const root = asRecord(response) ?? {};
+  const data = asRecord(root.data) ?? root;
+  const slug = typeof data.slug === "string" ? data.slug.trim() : "";
+  const category = asRecord(data.category);
+  const categorySlug = typeof category?.slug === "string" ? category.slug.trim() : "";
+  if (!slug || !categorySlug) return null;
+  return `/services/${categorySlug}/${slug}`;
+}
 
 export function RequestServiceForm({
   initial = {},
@@ -37,6 +62,7 @@ export function RequestServiceForm({
     time?: string;
   };
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const defaultService = searchParams.get("service") || initial.service || "";
   const defaultJob = searchParams.get("job") || initial.job || "";
@@ -82,9 +108,26 @@ export function RequestServiceForm({
     return "Submit a marketplace request";
   }, [fixedService, intent, jobRecord, provider]);
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isFixedBooking && provider && fixedService) {
+      // Live Mongo-backed services must use orders checkout, not localStorage demo jobs.
+      if (OBJECT_ID_REGEX.test(fixedService.id) || OBJECT_ID_REGEX.test(serviceId)) {
+        try {
+          const path = await resolveLiveFixedServicePath(fixedService.id || serviceId);
+          if (path) {
+            const next = new URLSearchParams({ book: "1" });
+            if (preferredDate) next.set("date", preferredDate);
+            if (preferredTime) next.set("time", preferredTime);
+            router.push(`${path}?${next.toString()}`);
+            return;
+          }
+        } catch {
+          // fall through to error toast
+        }
+        toast.error("Open this service from the provider profile to complete live checkout.");
+        return;
+      }
       if (!name.trim() || !email.trim()) {
         toast.error("Add your name and email.");
         return;
@@ -132,59 +175,80 @@ export function RequestServiceForm({
     const requestDetails = formatted?.details || details;
     const answers = formatted?.answers;
     if (!provider) {
-      const result = createMarketplaceQuote({
+      try {
+        const result = await createMarketplaceQuote({
+          name,
+          email,
+          phone,
+          zip,
+          serviceSlug: service,
+          serviceName,
+          details: requestDetails,
+          answers,
+          preferredDate,
+          preferredTime: preferredTime || formatted?.preferredTime,
+        });
+        if (!result.requests.length) {
+          toast.error("No matching companies for that ZIP yet. Try another area or pick a professional.");
+          return;
+        }
+        const requestNumber = result.requestNumber || result.requests[0]?.number || "";
+        const providerCount = result.count || result.requests.length;
+        clearPendingQuote();
+        setConfirmation({
+          kind: "marketplace",
+          requestNumber,
+          serviceName,
+          count: providerCount,
+        });
+        toast.success(`${requestNumber} was sent to ${providerCount} matching ${providerCount === 1 ? "company" : "companies"}.`);
+        return;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to send the quote request.");
+        return;
+      }
+    }
+    let request;
+    try {
+      const result = await createWebsiteLead({
+        provider,
         name,
         email,
         phone,
         zip,
+        details: requestDetails,
         serviceSlug: service,
         serviceName,
-        details: requestDetails,
-        answers,
         preferredDate,
         preferredTime: preferredTime || formatted?.preferredTime,
+        answers,
       });
-      if (!result.requests.length) {
-        toast.error("No matching companies for that ZIP yet. Try another area or pick a professional.");
-        return;
-      }
-      clearPendingQuote();
-      setConfirmation({
-        kind: "marketplace",
-        requestNumber: result.requests[0]?.number ?? "",
-        serviceName,
-        count: result.requests.length,
-      });
-      toast.success(`${result.requests[0]?.number} was sent to ${result.requests.length} matching companies.`);
+      request = result.request;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send the request.");
       return;
     }
-    const { request } = createWebsiteLead({
-      provider,
-      name,
-      email,
-      phone,
-      zip,
-      details: requestDetails,
-      serviceSlug: service,
-      serviceName,
-      preferredDate,
-      preferredTime: preferredTime || formatted?.preferredTime,
-      answers,
-    });
     writeChatGuest({ name: name.trim(), email: email.trim() });
-    const thread = ensureChatThread({
-      providerEmail: provider.email,
-      providerId: provider.id,
-      customerName: name.trim(),
-      customerEmail: email.trim(),
-      requestId: request.id,
-    });
-    appendChatMessage({
-      providerEmail: provider.email,
-      threadId: thread.id,
-      from: "customer",
-      text: details.trim() || `Requested ${request.serviceName}.`,
-    });
+    try {
+      const liveProviderId = OBJECT_ID_REGEX.test(request.providerId ?? "")
+        ? request.providerId
+        : undefined;
+      await openPublicChatThread({
+        providerId: liveProviderId,
+        providerSlug: provider.slug,
+        customerName: name.trim(),
+        customerEmail: email.trim(),
+        phone: phone.trim(),
+        zip: zip.trim(),
+        city: provider.city,
+        state: provider.state,
+        street: street.trim(),
+        requestId: request.id,
+        text: details.trim() || `Requested ${request.serviceName}.`,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The request was sent, but the chat thread could not be opened.");
+    }
     clearPendingQuote();
     setConfirmation({ kind: "lead", requestNumber: request.number, serviceName: request.serviceName });
     toast.success(`${request.number} is in the ${provider.companyName} inbox. They can send a written estimate.`);

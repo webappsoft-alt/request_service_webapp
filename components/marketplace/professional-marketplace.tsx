@@ -78,19 +78,26 @@ export function ProfessionalMarketplace({
                 <p className="eyebrow text-muted-foreground">{eyebrow}</p>
               )}
               <RequestIntake
-                onComplete={(next) => {
-                  const result = createQuoteFromIntake(next);
+                onComplete={async (next) => {
                   setAnswers(next);
                   setAsking(false);
-                  if (!result.requests.length) {
-                    toast.error("Add a ZIP we can match, then send the request again.");
+                  try {
+                    const result = await createQuoteFromIntake(next);
+                    if (!result.requests.length) {
+                      toast.error("Add a ZIP we can match, then send the request again.");
+                      setAsking(true);
+                      return;
+                    }
+                    const requestNumber = result.requestNumber || result.requests[0]?.number || "";
+                    const providerCount = result.count || result.requests.length;
+                    setSent({ number: requestNumber, count: providerCount });
+                    toast.success(
+                      `${requestNumber} is in ${providerCount} matching ${providerCount === 1 ? "inbox" : "inboxes"}. They can send a written estimate.`,
+                    );
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Unable to send the quote request.");
                     setAsking(true);
-                    return;
                   }
-                  setSent({ number: result.requests[0]?.number ?? "", count: result.requests.length });
-                  toast.success(
-                    `${result.requests[0]?.number} is in ${result.requests.length} matching ${result.requests.length === 1 ? "inbox" : "inboxes"}. They can send a written estimate.`,
-                  );
                 }}
               />
             </div>

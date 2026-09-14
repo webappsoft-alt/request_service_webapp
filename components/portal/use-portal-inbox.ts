@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 
@@ -9,6 +10,7 @@ export function usePortalInbox() {
   const { requests } = usePortalWorkspace();
   const records = usePortalRecords();
   const chat = useChatThreads();
+  const crm = useCrmApiData();
   const leads = records.listed("request", records.mergeRequests(requests), false);
   const newLeads = useMemo(
     () => leads.filter((item) => item.status === "new"),
@@ -35,10 +37,17 @@ export function usePortalInbox() {
     return [...chatItems, ...leadItems];
   }, [chat.threads, newLeads]);
 
+  const newLeadCount =
+    crm.enabled && crm.ready ? crm.inboxSummary.newLeads : newLeads.length;
+  const unreadChats =
+    crm.enabled && crm.ready ? crm.inboxSummary.unreadChats : chat.unread;
+
   return {
-    newLeads: newLeads.length,
-    unreadChats: chat.unread,
-    total: newLeads.length + chat.unread,
+    newLeads: newLeadCount,
+    unreadChats,
+    pendingOrders:
+      crm.enabled && crm.ready ? crm.inboxSummary.pendingOrders : 0,
+    total: newLeadCount + unreadChats,
     items,
   };
 }

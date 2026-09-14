@@ -14,6 +14,7 @@ import { EstimateFileChrome, EstimateSettingsTab } from "@/components/portal/est
 import { EstimatePipeline, EstimateSiteVisitTab, EstimateStageBanner } from "@/components/portal/estimate-flow";
 import { EstimateShareTab } from "@/components/portal/share-estimate-panel";
 import { SendApprovalDialog } from "@/components/portal/send-approval-dialog";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useEstimateShare } from "@/components/portal/use-estimate-share";
 import { ApplyPaymentButton, InvoiceFileChrome, InvoicePaymentsTab, InvoiceSummaryTab } from "@/components/portal/invoice-file";
 import { PaymentFileChrome, PaymentSummaryTab } from "@/components/portal/payment-file";
@@ -43,6 +44,7 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { estimateAsJob, invoiceAsJob, buildInvoice, buildJob, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
+import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,13 +67,16 @@ import {
   paymentStatusTone,
   jobStatusLabel,
   jobStatusTone,
+  minutesForWindow,
+  type PortalCalendarEvent,
 } from "@/lib/data/portal";
 
 export function EstimateDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const crm = useCrmApiData();
   const { session, estimates, provider, jobs } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
-  const { events, employees, assign, employeeLabel } = usePortalCrew();
+  const { events, employees, assign } = usePortalCrew();
   const records = usePortalRecords();
   const settings = useEstimateSettings(id);
   const siteVisit = useEstimateSiteVisit(id);
@@ -95,6 +100,7 @@ export function EstimateDetailView({ id }: { id: string }) {
       : "Customer";
 
   const approval = share.approvalOf(id);
+  const apiReady = crm.enabled && crm.ready;
 
   if (!estimate) return <Missing title="Estimate not found" href="/pro/dashboard/estimates" />;
 
@@ -105,6 +111,34 @@ export function EstimateDetailView({ id }: { id: string }) {
   const canShare = estimateCanShare(estimate.status);
   const canConvert = estimateCanConvert(estimate.status, signed);
   const visitLocked = estimate.status === "finalized" || estimate.status === "sent" || estimate.status === "accepted" || Boolean(job);
+  const visitWindow = minutesForWindow("morning");
+  const visitDate = (siteVisit?.visitedAt || estimate.issuedAt).slice(0, 10);
+  const estimateAssignmentEvent: PortalCalendarEvent = event ?? {
+    id: `cal_${estimate.id}`,
+    kind: "estimate",
+    recordId: estimate.id,
+    title: estimate.number,
+    detail: `${service} · site visit`,
+    customerName: customerLabel,
+    date: visitDate,
+    endDate: visitDate,
+    timeWindow: "morning",
+    startMinutes: visitWindow.startMinutes,
+    endMinutes: visitWindow.endMinutes,
+    employeeId: employees.find((item) => item.active)?.id,
+    href: `/pro/dashboard/estimates/${estimate.id}`,
+    status: estimate.status,
+  };
+
+  async function setEstimateStatus(status: (typeof quote)["status"], message: string) {
+    if (apiReady) {
+      await updateEstimateApi(quote.id, { ...quote, status });
+      await crm.refresh();
+    } else {
+      records.setStatus("estimate", quote.id, status);
+    }
+    toast.success(message);
+  }
 
   function openApproval() {
     if (!canShare) {
@@ -114,53 +148,71 @@ export function EstimateDetailView({ id }: { id: string }) {
     setApprovalOpen(true);
   }
 
-  function markInspected() {
-    const visit = siteVisit;
-    if (!visit?.findings && !visit?.photos.length) {
-      toast.error("Add findings or photos on the Site visit tab first.");
-      return;
+  async function markInspected() {
+    try {
+      const visit = siteVisit;
+      if (!visit?.findings && !visit?.photos.length) {
+        toast.error("Add findings or photos on the Site visit tab first.");
+        return;
+      }
+      await setEstimateStatus("inspected", "Inspection saved. Price the quote in the office, then finalize.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
     }
-    records.setStatus("estimate", quote.id, "inspected");
-    toast.success("Inspection saved. Price the quote in the office, then finalize.");
   }
 
-  function finalizeEstimate() {
-    if (quote.status === "site_visit") {
-      toast.error("Mark the site visit inspected before you finalize.");
-      return;
+  async function finalizeEstimate() {
+    try {
+      if (quote.status === "site_visit") {
+        toast.error("Mark the site visit inspected before you finalize.");
+        return;
+      }
+      await setEstimateStatus("finalized", "Estimate finalized. Share it so the customer can sign.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not finalize this estimate.");
     }
-    records.setStatus("estimate", quote.id, "finalized");
-    toast.success("Estimate finalized. Share it so the customer can sign.");
   }
 
-  function convertToJob() {
-    if (job) {
-      router.push(`/pro/dashboard/jobs/${job.id}`);
-      return;
+  async function convertToJob() {
+    try {
+      if (job) {
+        router.push(`/pro/dashboard/jobs/${job.id}`);
+        return;
+      }
+      if (!canConvert) {
+        toast.error("The customer must sign before this becomes a job.");
+        return;
+      }
+      if (apiReady) {
+        const created = await convertEstimateToJobApi(quote.id);
+        if (!created?.id) throw new Error("The CRM did not return the new job.");
+        await crm.refresh();
+        toast.success(`${created.number || "Job"} started from the signed estimate.`);
+        router.push(`/pro/dashboard/jobs/${created.id}`);
+        return;
+      }
+      const lines = readCostLines(session?.email, asJob);
+      const created = buildJob({
+        number: nextRecordNumber("JOB", allJobs.map((item) => item.number)),
+        providerId: provider.id,
+        customerId: quote.customerId,
+        estimateId: quote.id,
+        address: quote.propertyAddress,
+        assignedTo: siteVisit?.technician,
+        scheduledAt: todayISO(),
+        notes: [quote.notes, siteVisit?.recommendations].filter(Boolean).join("\n\n"),
+        status: "scheduled",
+        lines,
+      });
+      records.addJob(created);
+      records.linkRecords("estimate", quote.id, created.id);
+      records.setStatus("estimate", quote.id, "accepted");
+      writeCostLines(session?.email, created.id, lines);
+      toast.success(`${created.number} started from the signed estimate.`);
+      router.push(`/pro/dashboard/jobs/${created.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not convert this estimate.");
     }
-    if (!canConvert) {
-      toast.error("The customer must sign before this becomes a job.");
-      return;
-    }
-    const lines = readCostLines(session?.email, asJob);
-    const created = buildJob({
-      number: nextRecordNumber("JOB", allJobs.map((item) => item.number)),
-      providerId: provider.id,
-      customerId: quote.customerId,
-      estimateId: quote.id,
-      address: quote.propertyAddress,
-      assignedTo: siteVisit?.technician,
-      scheduledAt: todayISO(),
-      notes: [quote.notes, siteVisit?.recommendations].filter(Boolean).join("\n\n"),
-      status: "scheduled",
-      lines,
-    });
-    records.addJob(created);
-    records.linkRecords("estimate", quote.id, created.id);
-    records.setStatus("estimate", quote.id, "accepted");
-    writeCostLines(session?.email, created.id, lines);
-    toast.success(`${created.number} started from the signed estimate.`);
-    router.push(`/pro/dashboard/jobs/${created.id}`);
   }
 
   return (
@@ -233,7 +285,16 @@ export function EstimateDetailView({ id }: { id: string }) {
                     asJob={asJob}
                     locked={visitLocked}
                     onSave={() => {
-                      if (estimate.status === "draft") records.setStatus("estimate", estimate.id, "site_visit");
+                      if (estimate.status !== "draft") return;
+                      if (apiReady) {
+                        void updateEstimateApi(estimate.id, { ...estimate, status: "site_visit" })
+                          .then(() => crm.refresh())
+                          .catch((error) => {
+                            toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
+                          });
+                        return;
+                      }
+                      records.setStatus("estimate", estimate.id, "site_visit");
                     }}
                   />
                 );
@@ -245,7 +306,9 @@ export function EstimateDetailView({ id }: { id: string }) {
                     estimate={estimate}
                     customer={customer}
                     customerLabel={customerLabel}
-                    onSent={() => records.setStatus("estimate", estimate.id, "sent")}
+                    onSent={(result) => {
+                      if (!result?.viaApi) records.setStatus("estimate", estimate.id, "sent");
+                    }}
                   />
                 );
               case "logs":
@@ -295,11 +358,11 @@ export function EstimateDetailView({ id }: { id: string }) {
       <AssignEventDialog
         open={assignOpen}
         onOpenChange={setAssignOpen}
-        event={event}
-        events={events}
+        event={estimateAssignmentEvent}
+        events={[estimateAssignmentEvent]}
         employees={employees}
-        onSave={(assignment) => {
-          assign(assignment);
+        onSave={async (assignment) => {
+          await assign(assignment);
           toast.success(`${calendarEventKindLabel(assignment.kind)} placed on the calendar.`);
         }}
       />
@@ -309,7 +372,9 @@ export function EstimateDetailView({ id }: { id: string }) {
         estimate={estimate}
         customer={customer}
         customerLabel={customerLabel}
-        onSent={() => records.setStatus("estimate", estimate.id, "sent")}
+        onSent={({ viaApi }) => {
+          if (!viaApi) records.setStatus("estimate", estimate.id, "sent");
+        }}
       />
     </>
   );
@@ -317,6 +382,7 @@ export function EstimateDetailView({ id }: { id: string }) {
 
 export function JobDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const crm = useCrmApiData();
   const { session, jobs, estimates, invoices, requests, provider } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { events, employees, assign, employeeLabel } = usePortalCrew();
@@ -342,17 +408,45 @@ export function JobDetailView({ id }: { id: string }) {
     : job
       ? getPortalCustomerName(provider, job.customerId)
       : "Customer";
+  const apiReady = crm.enabled && crm.ready;
 
   if (!job) return <Missing title="Job not found" href="/pro/dashboard/jobs" />;
 
   const currentJob = job;
   const technician = settings?.assignedTo || (event ? employeeLabel(event.employeeId) : currentJob.assignedTo ?? "");
   const service = settings?.name || jobServiceLabel(job, allEstimates, requests);
+  const jobWindow = minutesForWindow("morning");
+  const jobStartDate = (start || todayISO()).slice(0, 10);
+  const jobEndDate = (due || start || todayISO()).slice(0, 10);
+  const jobAssignmentEvent: PortalCalendarEvent = event ?? {
+    id: `cal_${job.id}`,
+    kind: "job",
+    recordId: job.id,
+    title: job.number,
+    detail: service,
+    customerName: customerLabel,
+    date: jobStartDate,
+    endDate: jobEndDate,
+    timeWindow: "morning",
+    startMinutes: jobWindow.startMinutes,
+    endMinutes: jobWindow.endMinutes,
+    employeeId: settings?.employeeId || employees.find((item) => item.active)?.id,
+    href: `/pro/dashboard/jobs/${job.id}`,
+    status: job.status,
+  };
 
-  function convertToInvoice() {
+  async function convertToInvoice() {
     try {
       if (invoice) {
         router.push(`/pro/dashboard/invoices/${invoice.id}`);
+        return;
+      }
+      if (apiReady) {
+        const created = await convertJobToInvoiceApi(currentJob.id);
+        if (!created?.id) throw new Error("The CRM did not return the new invoice.");
+        await crm.refresh();
+        toast.success(`${created.number || "Invoice"} drafted from ${currentJob.number}.`);
+        router.push(`/pro/dashboard/invoices/${created.id}`);
         return;
       }
       const lines = readCostLines(session?.email, currentJob);
@@ -476,11 +570,11 @@ export function JobDetailView({ id }: { id: string }) {
       <AssignEventDialog
         open={assignOpen}
         onOpenChange={setAssignOpen}
-        event={event}
-        events={events}
+        event={jobAssignmentEvent}
+        events={[jobAssignmentEvent]}
         employees={employees}
-        onSave={(assignment) => {
-          assign(assignment);
+        onSave={async (assignment) => {
+          await assign(assignment);
           toast.success(`${calendarEventKindLabel(assignment.kind)} assigned on the calendar.`);
         }}
       />

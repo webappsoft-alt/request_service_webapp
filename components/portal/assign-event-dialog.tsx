@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +35,7 @@ export function AssignEventDialog({
   events: PortalCalendarEvent[];
   employees: PortalEmployee[];
   defaultDate?: string;
-  onSave: (assignment: PortalAssignment) => void;
+  onSave: (assignment: PortalAssignment) => void | Promise<void>;
 }) {
   const { contractors } = useCrmDirectory();
   const [recordKey, setRecordKey] = useState("");
@@ -42,30 +43,41 @@ export function AssignEventDialog({
   const [endDate, setEndDate] = useState("");
   const [timeWindow, setTimeWindow] = useState<PortalTimeWindow>("morning");
   const [employeeId, setEmployeeId] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const next = event ?? events[0];
-    setRecordKey(next ? `${next.kind}:${next.recordId}` : "");
-    setDate(event?.date ?? defaultDate ?? next?.date ?? "");
-    setEndDate(event?.endDate ?? event?.date ?? defaultDate ?? next?.endDate ?? "");
-    setTimeWindow(event?.timeWindow ?? "morning");
-    setEmployeeId(event?.employeeId ?? employees.find((item) => item.active)?.id ?? "");
+    const frame = window.requestAnimationFrame(() => {
+      setRecordKey(next ? `${next.kind}:${next.recordId}` : "");
+      setDate(event?.date ?? defaultDate ?? next?.date ?? "");
+      setEndDate(event?.endDate ?? event?.date ?? defaultDate ?? next?.endDate ?? "");
+      setTimeWindow(event?.timeWindow ?? "morning");
+      setEmployeeId(event?.employeeId ?? employees.find((item) => item.active)?.id ?? "");
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [defaultDate, employees, event, events, open]);
 
   const selected = event ?? events.find((item) => `${item.kind}:${item.recordId}` === recordKey);
 
-  function handleSave() {
+  async function handleSave() {
     if (!selected || !date || !employeeId) return;
-    onSave({
-      kind: selected.kind,
-      recordId: selected.recordId,
-      date,
-      endDate: endDate && endDate > date ? endDate : undefined,
-      timeWindow,
-      employeeId,
-    });
-    onOpenChange(false);
+    setSaving(true);
+    try {
+      await onSave({
+        kind: selected.kind,
+        recordId: selected.recordId,
+        date,
+        endDate: endDate && endDate > date ? endDate : undefined,
+        timeWindow,
+        employeeId,
+      });
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this assignment.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -162,8 +174,8 @@ export function AssignEventDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!selected || !date || !employeeId}>
-            Save assignment
+          <Button onClick={() => void handleSave()} disabled={!selected || !date || !employeeId || saving}>
+            {saving ? "Saving..." : "Save assignment"}
           </Button>
         </DialogFooter>
       </DialogContent>

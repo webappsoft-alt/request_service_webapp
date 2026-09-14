@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { SmoothScroll } from "@/components/layout/smooth-scroll";
 import { AuthMeSync } from "@/components/auth/auth-me-sync";
 import { AuthRouteGuard } from "@/components/auth/auth-route-guard";
+import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { ReduxProvider } from "@/store/redux-provider";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
@@ -13,7 +14,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <TooltipProvider>
         <SmoothScroll />
         <AuthMeSync />
-        <AuthRouteGuard>{children}</AuthRouteGuard>
+        <RealtimeProvider>
+          <AuthRouteGuard>{children}</AuthRouteGuard>
+        </RealtimeProvider>
         <Toaster />
       </TooltipProvider>
     </ReduxProvider>

@@ -150,6 +150,11 @@ export function EstimateStageBanner({
         return { title: "Customer declined", body: "This estimate was rejected. Archive it or start a new quote." };
       case "expired":
         return { title: "Estimate expired", body: "Re-issue a new quote or restore this one with a new expiry." };
+      case "converted_to_job":
+        return {
+          title: "Converted to job",
+          body: "This estimate was converted. Open the linked job to continue the work.",
+        };
       default: {
         const _never: never = status;
         return _never;

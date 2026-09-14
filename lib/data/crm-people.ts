@@ -83,7 +83,8 @@ export type ReminderSubjectKind =
   | "vendor"
   | "estimate"
   | "request"
-  | "job";
+  | "job"
+  | "invoice";
 
 export const REMINDER_SUBJECT_KINDS: ReminderSubjectKind[] = [
   "customer",
@@ -93,6 +94,7 @@ export const REMINDER_SUBJECT_KINDS: ReminderSubjectKind[] = [
   "estimate",
   "request",
   "job",
+  "invoice",
 ];
 
 export type PortalReminder = {
@@ -475,6 +477,8 @@ export function reminderSubjectKindLabel(kind: ReminderSubjectKind) {
       return "Lead";
     case "job":
       return "Job";
+    case "invoice":
+      return "Invoice";
     default: {
       const _never: never = kind;
       return _never;
@@ -498,6 +502,8 @@ export function reminderSubjectHref(kind: ReminderSubjectKind, id: string) {
       return `/pro/dashboard/requests/${id}`;
     case "job":
       return `/pro/dashboard/jobs/${id}`;
+    case "invoice":
+      return `/pro/dashboard/invoices/${id}`;
     default: {
       const _never: never = kind;
       return _never;

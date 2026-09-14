@@ -1,6 +1,15 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import {
+  createEstimate as createEstimateApi,
+  createInvoice as createInvoiceApi,
+  createJob as createJobApi,
+  createRequest as createRequestApi,
+  recordInvoicePayment,
+  updateRequestStatus,
+} from "@/lib/api/crm-client";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import type { PortalFixedService, PortalRequest } from "@/lib/data/portal";
 import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
@@ -124,12 +133,14 @@ function subscribe(onStoreChange: () => void) {
 
 export function usePortalRecords() {
   const { session } = usePortalWorkspace();
+  const crm = useCrmApiData();
   const key = storageKey(session?.email);
   const store = useSyncExternalStore(
     subscribe,
     () => readStore(key),
     () => EMPTY,
   );
+  const apiReady = crm.enabled && crm.ready;
 
   const isDeleted = useCallback(
     (kind: PortalRecordKind, id: string) => store.deleted.includes(recordKey(kind, id)),
@@ -149,13 +160,23 @@ export function usePortalRecords() {
 
   const setStatus = useCallback(
     (kind: PortalRecordKind, id: string, status: string) => {
+      if (apiReady && kind === "request") {
+        return (async () => {
+          const updated = await updateRequestStatus(
+            id,
+            status as PortalRequest["status"],
+          );
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, {
         ...current,
         status: { ...current.status, [recordKey(kind, id)]: status },
       });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const remove = useCallback(
@@ -206,52 +227,84 @@ export function usePortalRecords() {
   );
 
   const mergeEstimates = useCallback(
-    (seeded: Estimate[]) => keep("estimate", [...seeded, ...store.estimates]),
-    [keep, store.estimates],
+    (seeded: Estimate[]) =>
+      keep("estimate", apiReady ? crm.estimates : [...seeded, ...store.estimates]).map(
+        (item) => ({
+          ...item,
+          status: statusOf("estimate", item.id, item.status),
+        }),
+      ),
+    [apiReady, crm.estimates, keep, statusOf, store.estimates],
   );
 
   const mergeJobs = useCallback(
-    (seeded: Job[]) => keep("job", [...seeded, ...store.jobs]),
-    [keep, store.jobs],
+    (seeded: Job[]) =>
+      keep("job", apiReady ? crm.jobs : [...seeded, ...store.jobs]).map((item) => ({
+        ...item,
+        status: statusOf("job", item.id, item.status),
+      })),
+    [apiReady, crm.jobs, keep, statusOf, store.jobs],
   );
 
   const mergeInvoices = useCallback(
     (seeded: Invoice[]) =>
-      keep("invoice", [...seeded, ...store.invoices]).map((item) => ({
+      keep("invoice", apiReady ? crm.invoices : [...seeded, ...store.invoices]).map((item) => ({
         ...item,
         ...store.invoicePatches[item.id],
         status: statusOf("invoice", item.id, store.invoicePatches[item.id]?.status ?? item.status),
       })),
-    [keep, statusOf, store.invoicePatches, store.invoices],
+    [apiReady, crm.invoices, keep, statusOf, store.invoicePatches, store.invoices],
   );
 
   const mergePayments = useCallback(
-    (seeded: Payment[]) => keep("payment", [...seeded, ...store.payments]),
-    [keep, store.payments],
+    (seeded: Payment[]) =>
+      keep("payment", apiReady ? crm.payments : [...seeded, ...store.payments]),
+    [apiReady, crm.payments, keep, store.payments],
   );
 
   const addEstimate = useCallback(
     (estimate: Estimate) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createEstimateApi(estimate);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, estimates: [...current.estimates, estimate] });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const addJob = useCallback(
     (job: Job) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createJobApi(job, crm.employees);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, jobs: [...current.jobs, job] });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const addInvoice = useCallback(
     (invoice: Invoice) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createInvoiceApi(invoice);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, invoices: [...current.invoices, invoice] });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const patchInvoice = useCallback(
@@ -273,28 +326,42 @@ export function usePortalRecords() {
 
   const addPayment = useCallback(
     (payment: Payment) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await recordInvoicePayment(payment.invoiceId, payment);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, payments: [...current.payments, payment] });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const mergeRequests = useCallback(
     (seeded: PortalRequest[]) =>
-      keep("request", [...seeded, ...store.requests]).map((item) => ({
+      keep("request", apiReady ? crm.requests : [...seeded, ...store.requests]).map((item) => ({
         ...item,
         ...store.requestPatches[item.id],
         status: statusOf("request", item.id, item.status),
       })),
-    [keep, statusOf, store.requestPatches, store.requests],
+    [apiReady, crm.requests, keep, statusOf, store.requestPatches, store.requests],
   );
 
   const addRequest = useCallback(
     (request: PortalRequest) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createRequestApi(request);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, requests: [...current.requests, request] });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const updateRequest = useCallback(

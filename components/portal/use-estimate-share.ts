@@ -86,6 +86,7 @@ export function shareUrlFor(token: string) {
 export function buildEstimateSnapshot(
   estimate: Estimate,
   extras: {
+    token?: string;
     email?: string;
     companyName: string;
     companyEmail: string;
@@ -106,7 +107,7 @@ export function buildEstimateSnapshot(
     companySignatureDataUrl?: string;
   },
 ): EstimateShareSnapshot {
-  const token = shareTokenFor(estimate.id);
+  const token = extras.token || shareTokenFor(estimate.id);
   const stored = readCostLines(extras.email, estimateAsJob(estimate));
   const lines = stored.length
     ? stored
@@ -218,6 +219,13 @@ export function useEstimateShare() {
   const store = useSyncExternalStore(subscribe, readStore, () => EMPTY);
 
   const snapshotOf = useCallback((token: string) => store.snapshots[token], [store.snapshots]);
+  const snapshotForEstimate = useCallback(
+    (estimateId: string) =>
+      Object.values(store.snapshots)
+        .filter((snapshot) => snapshot.estimateId === estimateId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0],
+    [store.snapshots],
+  );
 
   const approvalOf = useCallback(
     (estimateId: string) => store.approvals[estimateId],
@@ -226,9 +234,12 @@ export function useEstimateShare() {
 
   const saveSnapshot = useCallback((snapshot: EstimateShareSnapshot) => {
     const current = readStore();
+    const snapshotsForOtherEstimates = Object.fromEntries(
+      Object.entries(current.snapshots).filter(([, existing]) => existing.estimateId !== snapshot.estimateId),
+    );
     writeStore({
       ...current,
-      snapshots: { ...current.snapshots, [snapshot.token]: snapshot },
+      snapshots: { ...snapshotsForOtherEstimates, [snapshot.token]: snapshot },
     });
   }, []);
 
@@ -248,5 +259,5 @@ export function useEstimateShare() {
     return approval;
   }, []);
 
-  return { snapshotOf, approvalOf, saveSnapshot, approve };
+  return { snapshotOf, snapshotForEstimate, approvalOf, saveSnapshot, approve };
 }

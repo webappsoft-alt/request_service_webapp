@@ -38,15 +38,18 @@ import { getServiceAreaNames } from "@/lib/data/service-areas";
 import { formatHoursValue, formatLocation, formatWorkingDay, getTodayWeekday } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Provider, ServiceCategory } from "@/lib/types";
+import type { PublicProfessional } from "@/store/publicProfessionalsSlice";
 
 export function ProviderProfile({
   provider,
   categories,
   place,
+  liveFixedServices = [],
 }: {
   provider: Provider;
   categories: ServiceCategory[];
   place?: ExplorePlace;
+  liveFixedServices?: PublicProfessional["activeServices"];
 }) {
   const photos = getProviderPhotos(provider);
   const projects = getProviderProjects(provider);
@@ -128,7 +131,7 @@ export function ProviderProfile({
               </div>
             </section>
 
-            <FixedServiceCatalog provider={provider} />
+            <FixedServiceCatalog provider={provider} liveServices={liveFixedServices} />
 
             <section className="flex flex-col gap-4">
               <div>

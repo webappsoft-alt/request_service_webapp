@@ -1,21 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { CheckCircle2, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { EstimatePdfDocument } from "@/components/estimate/estimate-pdf";
-import { SendApprovalDialog } from "@/components/portal/send-approval-dialog";
+import { SendApprovalDialog, type SendApprovalResult } from "@/components/portal/send-approval-dialog";
 import {
   buildEstimateSnapshot,
-  sharePath,
-  shareTokenFor,
   shareUrlFor,
   useEstimateShare,
 } from "@/components/portal/use-estimate-share";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { shareEstimate as shareEstimateApi } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { estimateCanShare } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
@@ -33,22 +32,37 @@ export function EstimateShareTab({
   estimate: Estimate;
   customer?: PortalCustomerCrm;
   customerLabel: string;
-  onSent: () => void;
+  onSent: (result?: SendApprovalResult) => void;
 }) {
   const { session, provider } = usePortalWorkspace();
+  const crm = useCrmApiData();
   const share = useEstimateShare();
-  const token = shareTokenFor(estimate.id);
-  const snapshot = share.snapshotOf(token);
+  const snapshot = share.snapshotForEstimate(estimate.id);
   const approval = share.approvalOf(estimate.id);
   const [url, setUrl] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const ready = estimateCanShare(estimate.status);
+  const apiReady = crm.enabled && crm.ready;
 
-  function publish() {
-    if (!estimateCanShare(estimate.status)) {
+  async function publish() {
+    if (!ready) {
       toast.error("Finalize the estimate in the office before sending it to the customer.");
       return "";
     }
+    let token = snapshot?.token;
+    let href = snapshot ? shareUrlFor(snapshot.token) : "";
+    if (apiReady) {
+      const shared = await shareEstimateApi(estimate.id);
+      token = shared.shareToken || token;
+      href = shared.shareUrl
+        ? new URL(shared.shareUrl, window.location.origin).toString()
+        : shared.shareToken
+          ? shareUrlFor(shared.shareToken)
+          : href;
+      await crm.refresh();
+    }
     const next = buildEstimateSnapshot(estimate, {
+      token,
       email: session?.email,
       companyName: provider.companyName,
       companyEmail: provider.email,
@@ -66,19 +80,28 @@ export function EstimateShareTab({
       customerPhone: customer?.phone,
     });
     share.saveSnapshot(next);
-    onSent();
-    const href = shareUrlFor(next.token);
-    setUrl(href);
-    return href;
+    const nextHref = href || shareUrlFor(next.token);
+    setUrl(nextHref);
+    onSent({
+      viaApi: apiReady,
+      token: next.token,
+      url: nextHref,
+      href: nextHref,
+    });
+    return nextHref;
   }
 
-  const ready = estimateCanShare(estimate.status);
-
-  function copy() {
-    const href = url || publish();
+  async function copy() {
+    const href = url || (await publish());
     if (!href) return;
     void navigator.clipboard.writeText(href);
     toast.success("Customer link copied. Send it so they can review and sign.");
+  }
+
+  async function openCustomerView() {
+    const href = url || (snapshot ? shareUrlFor(snapshot.token) : await publish());
+    if (!href) return;
+    window.open(href, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -92,20 +115,18 @@ export function EstimateShareTab({
           <p className="mt-3 text-sm text-amber-900">Finalize this estimate before creating a customer link.</p>
         )}
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <Input readOnly value={url || (snapshot ? shareUrlFor(token) : "Create the link, then copy it")} />
+          <Input readOnly value={url || (snapshot ? shareUrlFor(snapshot.token) : "Create the link, then copy it")} />
           <Button onClick={() => setPreviewOpen(true)} disabled={!ready}>
             Send for approval
           </Button>
-          <Button variant="outline" onClick={copy} disabled={!ready}>
+          <Button variant="outline" onClick={() => void copy()} disabled={!ready}>
             <Copy />
             Copy link
           </Button>
           {ready ? (
-            <Button variant="outline" asChild>
-              <Link href={sharePath(token)} target="_blank" onClick={() => publish()}>
-                <ExternalLink />
-                Open customer view
-              </Link>
+            <Button variant="outline" onClick={() => void openCustomerView()}>
+              <ExternalLink />
+              Open customer view
             </Button>
           ) : (
             <Button variant="outline" disabled>
@@ -137,9 +158,9 @@ export function EstimateShareTab({
         estimate={estimate}
         customer={customer}
         customerLabel={customerLabel}
-        onSent={() => {
-          onSent();
-          setUrl(shareUrlFor(shareTokenFor(estimate.id)));
+        onSent={({ href, viaApi, token, url }) => {
+          setUrl(href || url);
+          onSent({ viaApi, token, url: href || url, href: href || url });
         }}
       />
     </div>

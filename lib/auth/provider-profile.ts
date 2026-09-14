@@ -89,12 +89,26 @@ export function workingHoursFromProvider(
 ): WorkingHours[] {
   const raw = provider?.settings?.workingHours;
   if (!Array.isArray(raw)) return [];
+  const days = new Set<WorkingHours["day"]>([
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ]);
   return raw
     .filter((entry) => entry && typeof entry === "object" && typeof entry.day === "string")
-    .map((entry) => ({
-      day: entry.day,
-      open: entry.open ?? null,
-      close: entry.close ?? null,
-      closed: Boolean(entry.closed),
-    }));
+    .map((entry) => {
+      const day = String(entry.day).trim().toLowerCase();
+      if (!days.has(day as WorkingHours["day"])) return null;
+      return {
+        day: day as WorkingHours["day"],
+        open: entry.open ?? null,
+        close: entry.close ?? null,
+        closed: Boolean(entry.closed),
+      } satisfies WorkingHours;
+    })
+    .filter((item): item is WorkingHours => Boolean(item));
 }

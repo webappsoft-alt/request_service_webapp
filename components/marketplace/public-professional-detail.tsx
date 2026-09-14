@@ -6,13 +6,11 @@ import { Container } from "@/components/layout/container";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import type { ExplorePlace } from "@/lib/data/profile-explore";
 import { getServiceCategoryById, getServiceCategoryBySlug } from "@/lib/data/services";
-import type { ServiceCategory, ServiceCategorySlug } from "@/lib/types";
+import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchPublicProfessionalBySlug,
   publicProfessionalToProvider,
-  selectPublicProfessionalBySlug,
-  setPublicProfessionalDetail,
 } from "@/store/publicProfessionalsSlice";
 
 function categoriesFromProfessional(
@@ -81,17 +79,23 @@ function categoriesFromProfessional(
 export function PublicProfessionalDetail({
   slug,
   place,
+  fallbackProvider,
+  fallbackCategories = [],
 }: {
   slug: string;
   place?: ExplorePlace;
+  fallbackProvider?: Provider | null;
+  fallbackCategories?: ServiceCategory[];
 }) {
   const dispatch = useAppDispatch();
   const professionalSlug = String(slug || "").trim();
-  const professional = useAppSelector((state) =>
-    selectPublicProfessionalBySlug(state, professionalSlug),
+  const detailProfessional = useAppSelector((state) =>
+    state.publicProfessionals.detail?.slug === professionalSlug
+      ? state.publicProfessionals.detail
+      : null,
   );
-  const detailSlug = useAppSelector(
-    (state) => state.publicProfessionals.detail?.slug ?? null,
+  const listedProfessional = useAppSelector((state) =>
+    state.publicProfessionals.items.find((item) => item.slug === professionalSlug) ?? null,
   );
   const detailLoading = useAppSelector(
     (state) => state.publicProfessionals.detailLoading,
@@ -102,18 +106,17 @@ export function PublicProfessionalDetail({
 
   useEffect(() => {
     if (!professionalSlug) return;
-    if (professional) {
-      if (detailSlug !== professional.slug) {
-        dispatch(setPublicProfessionalDetail(professional));
-      }
+    if (detailProfessional?.slug === professionalSlug) {
       return;
     }
     void dispatch(fetchPublicProfessionalBySlug(professionalSlug));
-  }, [detailSlug, dispatch, professional, professionalSlug]);
+  }, [detailProfessional?.slug, dispatch, professionalSlug]);
+
+  const professional = detailProfessional ?? listedProfessional;
 
   const provider = useMemo(
-    () => (professional ? publicProfessionalToProvider(professional) : null),
-    [professional],
+    () => (professional ? publicProfessionalToProvider(professional) : (fallbackProvider ?? null)),
+    [fallbackProvider, professional],
   );
 
   const categories = useMemo(() => {
@@ -125,12 +128,20 @@ export function PublicProfessionalDetail({
     );
   }, [professional, provider]);
 
-  if (provider && professional) {
+  const liveFixedServices = useMemo(
+    () => professional?.activeServices ?? [],
+    [professional],
+  );
+
+  const resolvedCategories = categories.length ? categories : fallbackCategories;
+
+  if (provider) {
     return (
       <ProviderProfile
         provider={provider}
-        categories={categories}
+        categories={resolvedCategories}
         place={place}
+        liveFixedServices={liveFixedServices}
       />
     );
   }

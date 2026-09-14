@@ -2,9 +2,11 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { assignSchedule as assignScheduleApi, updateSchedule as updateScheduleApi } from "@/lib/api/crm-client";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
-import { employeeName } from "@/lib/data/portal";
+import { employeeName, minutesForWindow } from "@/lib/data/portal";
 
 const CREW_EVENT = "rs-portal-crew";
 
@@ -16,6 +18,19 @@ type CrewStore = {
 };
 
 const EMPTY: CrewStore = { extras: [], assignments: [], removedIds: [], patches: {} };
+
+function normalizeScheduleStatus(value?: string) {
+  switch (value) {
+    case "scheduled":
+    case "confirmed":
+    case "in_progress":
+    case "completed":
+    case "cancelled":
+      return value;
+    default:
+      return "scheduled";
+  }
+}
 
 function storageKey(email?: string) {
   return `rs-portal-crew:${email ?? "guest"}`;
@@ -64,12 +79,14 @@ function subscribe(onStoreChange: () => void) {
 export function usePortalCrew() {
   const workspace = usePortalWorkspace();
   const { tasks, contractors } = useCrmDirectory();
+  const crm = useCrmApiData();
   const key = storageKey(workspace.session?.email);
   const store = useSyncExternalStore(
     subscribe,
     () => readStore(key),
     () => EMPTY,
   );
+  const apiReady = crm.enabled && crm.ready;
 
   const employees = useMemo(() => {
     const seeded = workspace.employees.filter((item) => !store.removedIds.includes(item.id));
@@ -113,7 +130,161 @@ export function usePortalCrew() {
   }, [store.assignments, tasks, workspace.calendarEvents, workspace.customers]);
 
   const assign = useCallback(
-    (assignment: PortalAssignment) => {
+    async (assignment: PortalAssignment) => {
+      if (apiReady) {
+        const fallbackWindow = minutesForWindow(assignment.timeWindow);
+        const sourceEvent =
+          events.find((item) => item.kind === assignment.kind && item.recordId === assignment.recordId) ??
+          workspace.calendarEvents.find((item) => item.kind === assignment.kind && item.recordId === assignment.recordId) ??
+          (() => {
+            switch (assignment.kind) {
+              case "job": {
+                const job = workspace.jobs.find((item) => item.id === assignment.recordId);
+                return job
+                  ? {
+                      id: `cal_${job.id}`,
+                      kind: "job",
+                      recordId: job.id,
+                      title: job.number,
+                      detail: job.notes || job.address.city,
+                      customerName: undefined,
+                      date: assignment.date,
+                      endDate: assignment.endDate,
+                      timeWindow: assignment.timeWindow,
+                      startMinutes: fallbackWindow.startMinutes,
+                      endMinutes: fallbackWindow.endMinutes,
+                      employeeId: assignment.employeeId,
+                      href: `/pro/dashboard/jobs/${job.id}`,
+                      status: job.status,
+                    }
+                  : undefined;
+              }
+              case "estimate": {
+                const estimate = workspace.estimates.find((item) => item.id === assignment.recordId);
+                return estimate
+                  ? {
+                      id: `cal_${estimate.id}`,
+                      kind: "estimate",
+                      recordId: estimate.id,
+                      title: estimate.number,
+                      detail: "Estimate visit",
+                      customerName: undefined,
+                      date: assignment.date,
+                      endDate: assignment.endDate,
+                      timeWindow: assignment.timeWindow,
+                      startMinutes: fallbackWindow.startMinutes,
+                      endMinutes: fallbackWindow.endMinutes,
+                      employeeId: assignment.employeeId,
+                      href: `/pro/dashboard/estimates/${estimate.id}`,
+                      status: estimate.status,
+                    }
+                  : undefined;
+              }
+              case "request": {
+                const request = workspace.requests.find((item) => item.id === assignment.recordId);
+                return request
+                  ? {
+                      id: `cal_${request.id}`,
+                      kind: "request",
+                      recordId: request.id,
+                      title: request.number,
+                      detail: request.serviceName,
+                      customerName: request.customerName,
+                      date: assignment.date,
+                      endDate: assignment.endDate,
+                      timeWindow: assignment.timeWindow,
+                      startMinutes: fallbackWindow.startMinutes,
+                      endMinutes: fallbackWindow.endMinutes,
+                      employeeId: assignment.employeeId,
+                      href: `/pro/dashboard/requests/${request.id}`,
+                      status: request.status,
+                    }
+                  : undefined;
+              }
+              case "invoice": {
+                const invoice = workspace.invoices.find((item) => item.id === assignment.recordId);
+                return invoice
+                  ? {
+                      id: `cal_${invoice.id}`,
+                      kind: "invoice",
+                      recordId: invoice.id,
+                      title: invoice.number,
+                      detail: "Invoice follow-up",
+                      customerName: undefined,
+                      date: assignment.date,
+                      endDate: assignment.endDate,
+                      timeWindow: assignment.timeWindow,
+                      startMinutes: fallbackWindow.startMinutes,
+                      endMinutes: fallbackWindow.endMinutes,
+                      employeeId: assignment.employeeId,
+                      href: `/pro/dashboard/invoices/${invoice.id}`,
+                      status: invoice.status,
+                    }
+                  : undefined;
+              }
+              case "task": {
+                const task = tasks.find((item) => item.id === assignment.recordId);
+                return task
+                  ? {
+                      id: `cal_${task.id}`,
+                      kind: "task",
+                      recordId: task.id,
+                      title: task.number,
+                      detail: task.title,
+                      customerName: undefined,
+                      date: assignment.date,
+                      endDate: assignment.endDate,
+                      timeWindow: assignment.timeWindow,
+                      startMinutes: fallbackWindow.startMinutes,
+                      endMinutes: fallbackWindow.endMinutes,
+                      employeeId: assignment.employeeId,
+                      href: `/pro/dashboard/tasks/${task.id}`,
+                      status: task.status,
+                    }
+                  : undefined;
+              }
+              default: {
+                const _never: never = assignment.kind;
+                return _never;
+              }
+            }
+          })();
+        if (!sourceEvent) {
+          throw new Error("Could not find the calendar item to assign.");
+        }
+
+        const existingSchedule = workspace.calendarEvents.find(
+          (item) => item.kind === assignment.kind && item.recordId === assignment.recordId,
+        );
+        const contractor = contractors.find((item) => item.id === assignment.employeeId);
+        const startMinutes = assignment.startMinutes ?? sourceEvent.startMinutes ?? fallbackWindow.startMinutes;
+        const endMinutes = assignment.endMinutes ?? sourceEvent.endMinutes ?? fallbackWindow.endMinutes;
+        const payload = {
+          title: sourceEvent.title,
+          date: assignment.date,
+          endDate: assignment.endDate ?? null,
+          startMinutes,
+          endMinutes,
+          timeWindow: assignment.timeWindow,
+          employeeId: contractor ? null : assignment.employeeId,
+          contractorId: contractor ? assignment.employeeId : null,
+          status: normalizeScheduleStatus(sourceEvent.status),
+        } as const;
+
+        if (existingSchedule) {
+          await updateScheduleApi(existingSchedule.id, payload);
+        } else {
+          await assignScheduleApi({
+            recordId: assignment.recordId,
+            kind: assignment.kind,
+            ...payload,
+          });
+        }
+
+        await crm.refresh();
+        return;
+      }
+
       const current = readStore(key);
       writeStore(key, {
         ...current,
@@ -125,7 +296,7 @@ export function usePortalCrew() {
         ],
       });
     },
-    [key],
+    [apiReady, contractors, crm, events, key, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
   );
 
   const addEmployee = useCallback(
@@ -158,7 +329,8 @@ export function usePortalCrew() {
     (id: string) => {
       const current = readStore(key);
       const seeded = workspace.employees.some((item) => item.id === id);
-      const { [id]: _removed, ...patches } = current.patches;
+      const patches = { ...current.patches };
+      delete patches[id];
       writeStore(key, {
         extras: current.extras.filter((item) => item.id !== id),
         assignments: current.assignments.filter((item) => item.employeeId !== id),

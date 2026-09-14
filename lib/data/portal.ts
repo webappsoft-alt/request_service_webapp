@@ -202,6 +202,7 @@ export const ESTIMATE_STATUSES: EstimateStatus[] = [
   "rejected",
   "expired",
   "changes_requested",
+  "converted_to_job",
 ];
 
 export const ESTIMATE_STATUS_FILTERS = [
@@ -1052,6 +1053,8 @@ export function estimateStatusLabel(status: EstimateStatus) {
       return "Expired";
     case "changes_requested":
       return "Changes requested";
+    case "converted_to_job":
+      return "Converted to job";
     default: {
       const _never: never = status;
       return _never;
@@ -1079,6 +1082,8 @@ export function estimateStatusTone(status: EstimateStatus) {
       return "bg-orange-50 text-orange-800";
     case "changes_requested":
       return "bg-amber-50 text-amber-900";
+    case "converted_to_job":
+      return "bg-emerald-50 text-emerald-900";
     default: {
       const _never: never = status;
       return _never;
@@ -1098,6 +1103,7 @@ export function estimateCanShare(status: EstimateStatus) {
     case "draft":
     case "rejected":
     case "expired":
+    case "converted_to_job":
       return false;
     default: {
       const _never: never = status;
@@ -1107,6 +1113,7 @@ export function estimateCanShare(status: EstimateStatus) {
 }
 
 export function estimateCanConvert(status: EstimateStatus, signed: boolean) {
+  if (status === "converted_to_job") return false;
   return signed || status === "accepted";
 }
 

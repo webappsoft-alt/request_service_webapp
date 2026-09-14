@@ -84,6 +84,49 @@ export const providerOrdersApi = {
   cancel: (id: string) => `provider/orders/${id}/cancel`,
 } as const;
 
+/** Provider CRM / FSM endpoints (Bearer JWT, role: provider). */
+export const providerCrmApi = {
+  customers: "provider/customers",
+  customer: (id: string) => `provider/customers/${id}`,
+  team: "provider/team",
+  teamMember: (id: string) => `provider/team/${id}`,
+  contractors: "provider/contractors",
+  contractor: (id: string) => `provider/contractors/${id}`,
+  vendors: "provider/vendors",
+  vendor: (id: string) => `provider/vendors/${id}`,
+  requests: "provider/requests",
+  request: (id: string) => `provider/requests/${id}`,
+  requestStatus: (id: string) => `provider/requests/${id}/status`,
+  estimates: "provider/estimates",
+  estimate: (id: string) => `provider/estimates/${id}`,
+  estimateShare: (id: string) => `provider/estimates/${id}/share`,
+  estimateConvertToJob: (id: string) => `provider/estimates/${id}/convert-to-job`,
+  jobs: "provider/jobs",
+  job: (id: string) => `provider/jobs/${id}`,
+  jobStatus: (id: string) => `provider/jobs/${id}/status`,
+  jobConvertToInvoice: (id: string) => `provider/jobs/${id}/convert-to-invoice`,
+  tasks: "provider/tasks",
+  task: (id: string) => `provider/tasks/${id}`,
+  taskStatus: (id: string) => `provider/tasks/${id}/status`,
+  schedule: "provider/schedule",
+  scheduleAssign: "provider/schedule/assign",
+  scheduleItem: (id: string) => `provider/schedule/${id}`,
+  reminders: "provider/reminders",
+  reminder: (id: string) => `provider/reminders/${id}`,
+  reminderStatus: (id: string) => `provider/reminders/${id}/status`,
+  invoices: "provider/invoices",
+  invoice: (id: string) => `provider/invoices/${id}`,
+  invoiceSend: (id: string) => `provider/invoices/${id}/send`,
+  invoicePayments: (id: string) => `provider/invoices/${id}/payments`,
+  payments: "provider/payments",
+  payment: (id: string) => `provider/payments/${id}`,
+  chats: "provider/chats",
+  chat: (id: string) => `provider/chats/${id}`,
+  chatMessages: (id: string) => `provider/chats/${id}/messages`,
+  chatRead: (id: string) => `provider/chats/${id}/read`,
+  inboxSummary: "provider/chats/inbox-summary",
+} as const;
+
 /** Public catalog endpoints (no provider auth required for reads). */
 export const publicApi = {
   /** GET active categories; use `only_parent` / `parent_category_id` */
@@ -100,6 +143,25 @@ export const publicApi = {
   fixedService: (idOrSlug: string) => `public/fixed-services/${idOrSlug}`,
   /** POST contact inquiry */
   contactUs: "public/contact-us",
+  /** GET public estimate by share token */
+  estimate: (token: string) => `public/estimates/${token}`,
+  /** POST customer digital approval */
+  estimateApprove: (token: string) => `public/estimates/${token}/approve`,
+} as const;
+
+export const publicQuoteApi = {
+  requests: "public/quote-requests",
+} as const;
+
+export const chatApi = {
+  publicThreads: "public/chats",
+  publicMessages: (id: string) => `public/chats/${id}/messages`,
+  publicRead: (id: string) => `public/chats/${id}/read`,
+  providerThreads: providerCrmApi.chats,
+  providerThread: providerCrmApi.chat,
+  providerMessages: providerCrmApi.chatMessages,
+  providerRead: providerCrmApi.chatRead,
+  providerInboxSummary: providerCrmApi.inboxSummary,
 } as const;
 
 export const uploadApi = {

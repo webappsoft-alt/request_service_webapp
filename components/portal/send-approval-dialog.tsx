@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { EstimatePdfDocument, SignaturePadField, typedSignature, useSignPad } from "@/components/estimate/estimate-pdf";
 import { buildEstimateSnapshot, shareUrlFor, useEstimateShare } from "@/components/portal/use-estimate-share";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,9 +15,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { shareEstimate } from "@/lib/api/crm-client";
 import { estimateCanShare } from "@/lib/data/portal";
 import type { PortalCustomerCrm } from "@/lib/data/crm-people";
 import type { Estimate } from "@/lib/types";
+
+export type SendApprovalResult = {
+  viaApi: boolean;
+  token: string;
+  url: string;
+  href: string;
+};
 
 export function SendApprovalDialog({
   open,
@@ -31,11 +40,13 @@ export function SendApprovalDialog({
   estimate: Estimate;
   customer?: PortalCustomerCrm;
   customerLabel: string;
-  onSent: () => void;
+  onSent: (result: SendApprovalResult) => void;
 }) {
+  const crm = useCrmApiData();
   const { session, provider } = usePortalWorkspace();
   const share = useEstimateShare();
   const ready = estimateCanShare(estimate.status);
+  const apiReady = crm.enabled && crm.ready;
 
   const snapshot = useMemo(
     () =>
@@ -71,15 +82,35 @@ export function SendApprovalDialog({
         {open ? (
           <ApprovalPreview
             snapshot={snapshot}
-            defaultSigner={[session?.firstName, session?.lastName].filter(Boolean).join(" ") || provider.contact?.name || provider.companyName}
+            defaultSigner={
+              [session?.firstName, session?.lastName].filter(Boolean).join(" ") ||
+              provider.contact?.name ||
+              provider.companyName
+            }
             ready={ready}
+            busyLabel={apiReady ? "Sending…" : undefined}
             onCancel={() => onOpenChange(false)}
-            onSend={(signed) => {
-              share.saveSnapshot(signed);
-              onSent();
-              void navigator.clipboard.writeText(shareUrlFor(signed.token));
-              toast.success("Estimate sent for approval. Customer link copied.");
-              onOpenChange(false);
+            onSend={async (signed) => {
+              try {
+                let token = signed.token;
+                let viaApi = false;
+                if (apiReady) {
+                  const shared = await shareEstimate(estimate.id);
+                  if (!shared.shareToken) throw new Error("The CRM did not return a share link.");
+                  token = shared.shareToken;
+                  viaApi = true;
+                  await crm.refresh();
+                }
+                const next = { ...signed, token };
+                share.saveSnapshot(next);
+                const url = shareUrlFor(token);
+                onSent({ viaApi, token, url, href: url });
+                void navigator.clipboard.writeText(url);
+                toast.success("Estimate sent for approval. Customer link copied.");
+                onOpenChange(false);
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Could not send this estimate.");
+              }
             }}
           />
         ) : null}
@@ -92,17 +123,20 @@ function ApprovalPreview({
   snapshot,
   defaultSigner,
   ready,
+  busyLabel,
   onCancel,
   onSend,
 }: {
   snapshot: ReturnType<typeof buildEstimateSnapshot>;
   defaultSigner: string;
   ready: boolean;
+  busyLabel?: string;
   onCancel: () => void;
-  onSend: (snapshot: ReturnType<typeof buildEstimateSnapshot>) => void;
+  onSend: (snapshot: ReturnType<typeof buildEstimateSnapshot>) => void | Promise<void>;
 }) {
   const companyPad = useSignPad();
   const [signer, setSigner] = useState(defaultSigner);
+  const [busy, setBusy] = useState(false);
 
   return (
     <>
@@ -114,12 +148,12 @@ function ApprovalPreview({
       </div>
       <DialogFooter className="m-0 rounded-none">
         {!ready ? <p className="mr-auto self-center text-sm text-amber-900">Finalize this estimate before sending.</p> : null}
-        <Button variant="outline" onClick={onCancel}>
+        <Button variant="outline" onClick={onCancel} disabled={busy}>
           Cancel
         </Button>
         <Button
           data-action="confirm-send-approval"
-          disabled={!ready}
+          disabled={!ready || busy}
           onClick={() => {
             if (!signer.trim()) {
               toast.error("Enter the company signer name.");
@@ -130,15 +164,18 @@ function ApprovalPreview({
               toast.error("Add the company signature on page 2.");
               return;
             }
-            onSend({
-              ...snapshot,
-              companySignedBy: signer.trim(),
-              companySignedAt: new Date().toISOString(),
-              companySignatureDataUrl: image,
-            });
+            setBusy(true);
+            void Promise.resolve(
+              onSend({
+                ...snapshot,
+                companySignedBy: signer.trim(),
+                companySignedAt: new Date().toISOString(),
+                companySignatureDataUrl: image,
+              }),
+            ).finally(() => setBusy(false));
           }}
         >
-          Send for approval
+          {busy && busyLabel ? busyLabel : "Send for approval"}
         </Button>
       </DialogFooter>
     </>

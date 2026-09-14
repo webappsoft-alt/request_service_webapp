@@ -17,25 +17,32 @@ export function ScheduleView() {
   const [scheduling, setScheduling] = useState(false);
 
   function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
-    assign({
-      kind: event.kind,
-      recordId: event.recordId,
-      date: move.date,
-      endDate: move.endDate,
-      startMinutes: move.startMinutes,
-      endMinutes: move.endMinutes,
-      timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
-      employeeId: event.employeeId ?? employees.find((item) => item.active)?.id ?? "",
-    });
-    if (move.date) {
-      const time =
-        move.startMinutes != null && move.endMinutes != null
-          ? ` ${formatClock(move.startMinutes)}–${formatClock(move.endMinutes)}`
-          : "";
-      toast.success(
-        `${calendarEventKindLabel(event.kind)} ${event.title} moved to ${formatDate(move.date)}${move.endDate && move.endDate !== move.date ? `–${formatDate(move.endDate)}` : ""}${time}.`,
-      );
-    }
+    void Promise.resolve(
+      assign({
+        kind: event.kind,
+        recordId: event.recordId,
+        date: move.date,
+        endDate: move.endDate,
+        startMinutes: move.startMinutes,
+        endMinutes: move.endMinutes,
+        timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
+        employeeId: event.employeeId ?? employees.find((item) => item.active)?.id ?? "",
+      }),
+    )
+      .then(() => {
+        if (move.date) {
+          const time =
+            move.startMinutes != null && move.endMinutes != null
+              ? ` ${formatClock(move.startMinutes)}–${formatClock(move.endMinutes)}`
+              : "";
+          toast.success(
+            `${calendarEventKindLabel(event.kind)} ${event.title} moved to ${formatDate(move.date)}${move.endDate && move.endDate !== move.date ? `–${formatDate(move.endDate)}` : ""}${time}.`,
+          );
+        }
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Could not move this calendar item.");
+      });
   }
 
   return (
@@ -74,8 +81,8 @@ export function ScheduleView() {
         event={editing}
         events={events}
         employees={employees}
-        onSave={(assignment) => {
-          assign(assignment);
+        onSave={async (assignment) => {
+          await assign(assignment);
           const employee = employees.find((item) => item.id === assignment.employeeId);
           toast.success(
             `${calendarEventKindLabel(assignment.kind)} assigned to ${employee ? `${employee.firstName} ${employee.lastName}` : "the crew"} on ${formatDate(assignment.date)}.`,

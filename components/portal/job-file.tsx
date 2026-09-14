@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown, Eye, FileText, ImageIcon, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type CostingNoun } from "@/components/portal/job-costing";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
@@ -29,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
@@ -301,10 +303,12 @@ export function JobSettingsTab({
   employeeId?: string;
 }) {
   const { customers, contractors } = useCrmDirectory();
+  const crm = useCrmApiData();
   const { employees, assign, events } = usePortalCrew();
   const records = usePortalRecords();
   const file = useJobFile(job, estimate, invoice, technician);
   const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
+  const apiReady = crm.enabled && crm.ready;
   const defaults: JobSettingsDraft = file.settings ?? {
     name: service,
     customerId: job.customerId,
@@ -326,28 +330,37 @@ export function JobSettingsTab({
     setDraft((current) => ({ ...current, ...next }));
   }
 
-  function save() {
+  async function save() {
     const tech = employees.find((item) => item.id === draft.employeeId);
     const contractor = contractors.find((item) => item.id === draft.employeeId);
     const next = {
       ...draft,
       assignedTo: tech ? employeeName(tech) : contractor ? contractor.companyName : draft.assignedTo,
     };
-    file.saveSettings(next);
-    records.setStatus("job", job.id, next.status);
-    if (next.start && next.employeeId) {
-      assign({
-        recordId: job.id,
-        kind: "job",
-        date: next.start,
-        endDate: next.due || next.start,
-        timeWindow: event?.timeWindow ?? "morning",
-        startMinutes: event?.startMinutes,
-        endMinutes: event?.endMinutes,
-        employeeId: next.employeeId,
-      });
+    try {
+      file.saveSettings(next);
+      if (apiReady) {
+        await updateJobStatusApi(job.id, next.status, next.notes);
+        await crm.refresh();
+      } else {
+        records.setStatus("job", job.id, next.status);
+      }
+      if (next.start && next.employeeId) {
+        await assign({
+          recordId: job.id,
+          kind: "job",
+          date: next.start,
+          endDate: next.due || next.start,
+          timeWindow: event?.timeWindow ?? "morning",
+          startMinutes: event?.startMinutes,
+          endMinutes: event?.endMinutes,
+          employeeId: next.employeeId,
+        });
+      }
+      toast.success("Job settings saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this job.");
     }
-    toast.success("Job settings saved.");
   }
 
   return (
@@ -357,7 +370,7 @@ export function JobSettingsTab({
           <h2 className="text-base font-semibold">Job settings</h2>
           <p className="mt-1 text-sm text-muted-foreground">Everything on this job can be changed here.</p>
         </div>
-        <Button size="sm" onClick={save}>
+        <Button size="sm" onClick={() => void save()}>
           Save changes
         </Button>
       </div>
@@ -742,8 +755,11 @@ function ActivityDialog({
 
   useEffect(() => {
     if (!open) return;
-    setTitle(activity?.title ?? "");
-    setHtml(activity?.html ?? "");
+    const frame = window.requestAnimationFrame(() => {
+      setTitle(activity?.title ?? "");
+      setHtml(activity?.html ?? "");
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [activity, open]);
 
   function reset() {

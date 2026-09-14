@@ -1,6 +1,23 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
+import {
+  archiveCustomer,
+  createContractor as createContractorApi,
+  createCustomer as createCustomerApi,
+  createReminder as createReminderApi,
+  createTask as createTaskApi,
+  createVendor as createVendorApi,
+  deleteContractor as deleteContractorApi,
+  deleteReminder as deleteReminderApi,
+  deleteTask as deleteTaskApi,
+  deleteVendor as deleteVendorApi,
+  updateContractor as updateContractorApi,
+  updateReminderStatus as updateReminderStatusApi,
+  updateTaskStatus as updateTaskStatusApi,
+  updateVendor as updateVendorApi,
+} from "@/lib/api/crm-client";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import {
   getCrmCustomers,
@@ -94,12 +111,14 @@ function subscribe(onStoreChange: () => void) {
 
 export function useCrmDirectory() {
   const { session, provider, employees } = usePortalWorkspace();
+  const crm = useCrmApiData();
   const key = storageKey(session?.email);
   const store = useSyncExternalStore(
     subscribe,
     () => readStore(key),
     () => EMPTY,
   );
+  const apiReady = crm.enabled && crm.ready;
 
   const seedCustomers = useMemo(() => getCrmCustomers(provider), [provider]);
   const seedContractors = useMemo(() => getPortalContractors(provider), [provider]);
@@ -110,80 +129,140 @@ export function useCrmDirectory() {
 
   const customers = useMemo(
     () =>
-      [...seedCustomers, ...store.customers].filter((item) => !store.deleted.includes(`customer:${item.id}`)),
-    [seedCustomers, store.customers, store.deleted],
+      apiReady
+        ? crm.customers
+        : [...seedCustomers, ...store.customers].filter(
+            (item) => !store.deleted.includes(`customer:${item.id}`),
+          ),
+    [apiReady, crm.customers, seedCustomers, store.customers, store.deleted],
   );
   const contractors = useMemo(
     () =>
-      [...seedContractors, ...store.contractors]
-        .filter((item) => !store.deleted.includes(`contractor:${item.id}`))
-        .map((item) => ({ ...item, ...store.contractorPatches[item.id] })),
-    [seedContractors, store.contractorPatches, store.contractors, store.deleted],
+      apiReady
+        ? crm.contractors
+        : [...seedContractors, ...store.contractors]
+            .filter((item) => !store.deleted.includes(`contractor:${item.id}`))
+            .map((item) => ({ ...item, ...store.contractorPatches[item.id] })),
+    [
+      apiReady,
+      crm.contractors,
+      seedContractors,
+      store.contractorPatches,
+      store.contractors,
+      store.deleted,
+    ],
   );
   const vendors = useMemo(
     () =>
-      [...seedVendors, ...store.vendors]
-        .filter((item) => !store.deleted.includes(`vendor:${item.id}`))
-        .map((item) => ({ ...item, ...store.vendorPatches[item.id] })),
-    [seedVendors, store.vendorPatches, store.vendors, store.deleted],
+      apiReady
+        ? crm.vendors
+        : [...seedVendors, ...store.vendors]
+            .filter((item) => !store.deleted.includes(`vendor:${item.id}`))
+            .map((item) => ({ ...item, ...store.vendorPatches[item.id] })),
+    [apiReady, crm.vendors, seedVendors, store.vendorPatches, store.vendors, store.deleted],
   );
   const reminders = useMemo(
     () =>
-      [...seedReminders, ...store.reminders].filter((item) => !store.deleted.includes(`reminder:${item.id}`)),
-    [seedReminders, store.reminders, store.deleted],
+      apiReady
+        ? crm.reminders
+        : [...seedReminders, ...store.reminders].filter(
+            (item) => !store.deleted.includes(`reminder:${item.id}`),
+          ),
+    [apiReady, crm.reminders, seedReminders, store.reminders, store.deleted],
   );
   const tasks = useMemo(
-    () => [...seedTasks, ...store.tasks].filter((item) => !store.deleted.includes(`task:${item.id}`)),
-    [seedTasks, store.tasks, store.deleted],
+    () =>
+      apiReady
+        ? crm.tasks
+        : [...seedTasks, ...store.tasks].filter((item) => !store.deleted.includes(`task:${item.id}`)),
+    [apiReady, crm.tasks, seedTasks, store.tasks, store.deleted],
   );
   const notes = useMemo(
-    () => [...seedNotes, ...store.notes].filter((item) => !store.deleted.includes(`note:${item.id}`)),
-    [seedNotes, store.notes, store.deleted],
+    () =>
+      (apiReady ? store.notes : [...seedNotes, ...store.notes]).filter(
+        (item) => !store.deleted.includes(`note:${item.id}`),
+      ),
+    [apiReady, seedNotes, store.notes, store.deleted],
   );
 
   const addCustomer = useCallback(
     (customer: PortalCustomerCrm) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createCustomerApi(customer);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, customers: [...current.customers, customer] });
       return customer;
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const addContractor = useCallback(
     (contractor: PortalContractor) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createContractorApi(contractor);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, contractors: [...current.contractors, contractor] });
       return contractor;
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const addVendor = useCallback(
     (vendor: PortalVendor) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createVendorApi(vendor);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, vendors: [...current.vendors, vendor] });
       return vendor;
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const addReminder = useCallback(
     (reminder: PortalReminder) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createReminderApi(reminder);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, reminders: [...current.reminders, reminder] });
       return reminder;
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const addTask = useCallback(
     (task: PortalTask) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createTaskApi(task);
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, tasks: [...current.tasks, task] });
       return task;
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const addNote = useCallback(
@@ -209,6 +288,45 @@ export function useCrmDirectory() {
 
   const remove = useCallback(
     (kind: "customer" | "contractor" | "vendor" | "reminder" | "task" | "note", id: string) => {
+      if (apiReady) {
+        return (async () => {
+          switch (kind) {
+            case "customer":
+              await archiveCustomer(id);
+              break;
+            case "contractor":
+              await deleteContractorApi(id);
+              break;
+            case "vendor":
+              await deleteVendorApi(id);
+              break;
+            case "reminder":
+              await deleteReminderApi(id);
+              break;
+            case "task":
+              await deleteTaskApi(id);
+              break;
+            case "note":
+              break;
+            default: {
+              const _never: never = kind;
+              return _never;
+            }
+          }
+          if (kind !== "note") {
+            await crm.refresh();
+            return;
+          }
+          const current = readStore(key);
+          const nextKey = `${kind}:${id}`;
+          writeStore(key, {
+            ...current,
+            deleted: current.deleted.includes(nextKey)
+              ? current.deleted
+              : [...current.deleted, nextKey],
+          });
+        })();
+      }
       const current = readStore(key);
       const nextKey = `${kind}:${id}`;
       writeStore(key, {
@@ -216,11 +334,18 @@ export function useCrmDirectory() {
         deleted: current.deleted.includes(nextKey) ? current.deleted : [...current.deleted, nextKey],
       });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const updateContractor = useCallback(
     (id: string, patch: Partial<PortalContractor>) => {
+      if (apiReady) {
+        return (async () => {
+          const updated = await updateContractorApi(id, patch);
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const extra = current.contractors.find((item) => item.id === id);
       writeStore(key, {
@@ -233,11 +358,18 @@ export function useCrmDirectory() {
           : { ...current.contractorPatches, [id]: { ...current.contractorPatches[id], ...patch } },
       });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const updateVendor = useCallback(
     (id: string, patch: Partial<PortalVendor>) => {
+      if (apiReady) {
+        return (async () => {
+          const updated = await updateVendorApi(id, patch);
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const extra = current.vendors.find((item) => item.id === id);
       writeStore(key, {
@@ -250,11 +382,18 @@ export function useCrmDirectory() {
           : { ...current.vendorPatches, [id]: { ...current.vendorPatches[id], ...patch } },
       });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const setReminderStatus = useCallback(
     (id: string, status: PortalReminder["status"]) => {
+      if (apiReady) {
+        return (async () => {
+          const updated = await updateReminderStatusApi(id, status);
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const inStore = current.reminders.some((item) => item.id === id);
       const nextReminders = inStore
@@ -262,11 +401,18 @@ export function useCrmDirectory() {
         : [...current.reminders, ...seedReminders.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
       writeStore(key, { ...current, reminders: nextReminders });
     },
-    [key, seedReminders],
+    [apiReady, crm, key, seedReminders],
   );
 
   const setTaskStatus = useCallback(
     (id: string, status: PortalTask["status"]) => {
+      if (apiReady) {
+        return (async () => {
+          const updated = await updateTaskStatusApi(id, status);
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const inStore = current.tasks.some((item) => item.id === id);
       const nextTasks = inStore
@@ -274,7 +420,7 @@ export function useCrmDirectory() {
         : [...current.tasks, ...seedTasks.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
       writeStore(key, { ...current, tasks: nextTasks });
     },
-    [key, seedTasks],
+    [apiReady, crm, key, seedTasks],
   );
 
   return {

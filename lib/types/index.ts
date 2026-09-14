@@ -115,7 +115,8 @@ export type EstimateStatus =
   | "accepted"
   | "rejected"
   | "expired"
-  | "changes_requested";
+  | "changes_requested"
+  | "converted_to_job";
 
 export type EstimateItemType = "labor" | "materials" | "services" | "miscellaneous";
 

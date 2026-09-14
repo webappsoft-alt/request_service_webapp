@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Container } from "@/components/layout/container";
@@ -6,12 +7,15 @@ import { RequestServiceForm } from "@/components/marketplace/request-service-for
 import { RequestServiceHero } from "@/components/marketplace/request-service-hero";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getJobRecord } from "@/lib/data/jobs";
+import { fetchPublicFixedServiceForSeo } from "@/lib/data/public-fixed-service-seo";
 import { getPortalServices } from "@/lib/data/portal";
 import { getProviderBySlug } from "@/lib/data/providers";
 import { getServiceCategoryById, getServiceCategoryBySlug } from "@/lib/data/services";
 import { breadcrumbJsonLd } from "@/lib/json-ld";
 import type { PageParams } from "@/lib/page-props";
 import { buildMetadata } from "@/lib/seo";
+
+const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
 
 export const metadata = buildMetadata({
   title: "Request Home Service",
@@ -37,6 +41,18 @@ export default async function RequestServicePage({ searchParams }: PageParams) {
   const fixedService = provider && serviceId
     ? getPortalServices(provider).find((item) => item.id === serviceId)
     : undefined;
+  // Live Mongo service IDs must use the public checkout page, never the demo booking form.
+  if (intent === "book" && serviceId && OBJECT_ID_REGEX.test(serviceId)) {
+    const liveService = await fetchPublicFixedServiceForSeo(serviceId);
+    if (liveService?.slug && liveService.categorySlug) {
+      const next = new URLSearchParams();
+      next.set("book", "1");
+      if (typeof params.date === "string" && params.date) next.set("date", params.date);
+      if (typeof params.time === "string" && params.time) next.set("time", params.time);
+      const query = next.toString();
+      redirect(`/services/${liveService.categorySlug}/${liveService.slug}${query ? `?${query}` : ""}`);
+    }
+  }
   const fixedCategory = fixedService
     ? getServiceCategoryById(fixedService.categoryId)
     : undefined;

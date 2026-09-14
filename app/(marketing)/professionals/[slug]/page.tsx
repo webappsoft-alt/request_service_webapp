@@ -1,7 +1,7 @@
-import { ProviderProfile } from "@/components/marketplace/provider-profile";
 import { PublicProfessionalDetail } from "@/components/marketplace/public-professional-detail";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getLocalKeywordPhrases } from "@/lib/data/local-keywords";
+import { fetchPublicProfessionalForSeo } from "@/lib/data/public-professional-seo";
 import { getStartingPrice } from "@/lib/data/provider-media";
 import { getAllProviders, getProviderBySlug } from "@/lib/data/providers";
 import { getServiceCategoryById } from "@/lib/data/services";
@@ -16,7 +16,43 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageParams<{ slug: string }>) {
   const { slug } = await params;
-  const provider = getProviderBySlug(slug);
+  const liveProfessional = await fetchPublicProfessionalForSeo(slug);
+  const seededProvider = getProviderBySlug(slug);
+  const provider = seededProvider;
+
+  if (!liveProfessional && !provider) {
+    return buildMetadata({
+      title: "Professional profile",
+      description: "View this professional’s profile and request a quote.",
+      path: `/professionals/${slug}`,
+    });
+  }
+
+  if (liveProfessional) {
+    const liveCategoryNames = liveProfessional.categoryIds
+      .map((id) => getServiceCategoryById(id)?.name)
+      .filter((item): item is string => Boolean(item));
+    const city = liveProfessional.city || provider?.city || "";
+    const state = liveProfessional.state || provider?.state || "";
+    const locationLabel = [city, state].filter(Boolean).join(", ");
+    return buildMetadata({
+      title: locationLabel
+        ? `${liveProfessional.companyName} | ${locationLabel}`
+        : liveProfessional.companyName,
+      description:
+        liveProfessional.description ||
+        provider?.description ||
+        "View this professional’s profile and request a quote.",
+      path: `/professionals/${liveProfessional.slug || slug}`,
+      keywords: [
+        liveProfessional.companyName,
+        city ? `${city} home services` : "",
+        city ? `${city}${state ? `, ${state}` : ""}` : "",
+        ...liveCategoryNames,
+      ].filter(Boolean),
+    });
+  }
+
   if (!provider) {
     return buildMetadata({
       title: "Professional profile",
@@ -24,6 +60,7 @@ export async function generateMetadata({ params }: PageParams<{ slug: string }>)
       path: `/professionals/${slug}`,
     });
   }
+
   return buildMetadata({
     title: `${provider.companyName} | ${provider.city}, ${provider.state}`,
     description: provider.description,
@@ -67,13 +104,15 @@ export default async function ProviderProfilePage({
   };
 
   const provider = getProviderBySlug(slug);
-  if (provider) {
-    const categories = provider.categoryIds
-      .map((id) => getServiceCategoryById(id))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const categories = provider
+    ? provider.categoryIds
+        .map((id) => getServiceCategoryById(id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    : [];
 
-    return (
-      <>
+  return (
+    <>
+      {provider ? (
         <JsonLd
           data={[
             {
@@ -87,10 +126,13 @@ export default async function ProviderProfilePage({
             ]),
           ]}
         />
-        <ProviderProfile provider={provider} categories={categories} place={place} />
-      </>
-    );
-  }
-
-  return <PublicProfessionalDetail slug={slug} place={place} />;
+      ) : null}
+      <PublicProfessionalDetail
+        slug={slug}
+        place={place}
+        fallbackProvider={provider ?? null}
+        fallbackCategories={categories}
+      />
+    </>
+  );
 }

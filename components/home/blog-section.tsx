@@ -2,11 +2,30 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Container, Section } from "@/components/layout/container";
 import { BlogCard } from "@/components/shared/blog-card";
+import { fetchPublicBlogs } from "@/lib/data/public-blogs";
 import { blogPosts } from "@/lib/data/blog";
+import type { BlogPost, PublicBlogItem } from "@/lib/types";
 
-const journal = blogPosts.filter((post) => post.image).slice(0, 4);
+export async function BlogSection() {
+  let displayPosts: (BlogPost | PublicBlogItem)[] = [];
 
-export function BlogSection() {
+  try {
+    const res = await fetchPublicBlogs({ limit: 4 });
+    if (res.data && res.data.length > 0) {
+      displayPosts = res.data;
+      // If fewer than 4 live posts, backfill from fallback
+      if (displayPosts.length < 4) {
+        const remaining = 4 - displayPosts.length;
+        const extra = blogPosts.filter((p) => p.image).slice(0, remaining);
+        displayPosts = [...displayPosts, ...extra];
+      }
+    } else {
+      displayPosts = blogPosts.filter((post) => post.image).slice(0, 4);
+    }
+  } catch {
+    displayPosts = blogPosts.filter((post) => post.image).slice(0, 4);
+  }
+
   return (
     <Section>
       <Container className="flex flex-col gap-8">
@@ -31,8 +50,11 @@ export function BlogSection() {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {journal.map((post) => (
-            <BlogCard key={post.id} post={post} />
+          {displayPosts.map((post) => (
+            <BlogCard
+              key={"_id" in post ? post._id : post.id}
+              post={post}
+            />
           ))}
         </div>
       </Container>

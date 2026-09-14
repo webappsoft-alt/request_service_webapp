@@ -218,7 +218,7 @@ export function ProviderCard({
           />
         </div>
       ) : null}
-
+{/*  */}
       <div className={cn("flex min-h-0 flex-1 flex-col gap-3 px-3 pt-3 pb-3 sm:px-4", !showCover && "pt-0")}>
         <div className="flex shrink-0 items-start gap-3">
           {showCover ? null : <ProviderLogo provider={provider} size="xl" />}

@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { HelpCircle, Menu, Search, Settings, X } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 import { PeopleSubnav, WorkSubnav } from "@/components/portal/people-subnav";
 import { PortalNotifications } from "@/components/portal/portal-notifications";
 import { useOpenRecords } from "@/components/portal/use-open-records";
@@ -187,16 +187,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search records…" className="h-8 bg-[#f7f8fa] pl-8 text-sm" aria-label="Search records" />
             </div>
-            <PortalNotifications />
-            <Button asChild variant="ghost" size="icon" aria-label="Settings">
-              <Link href="/pro/dashboard/settings">
-                <Settings />
-              </Link>
-            </Button>
-            <Button variant="ghost" size="icon" aria-label="Help">
-              <HelpCircle />
-            </Button>
-            <UserAccountMenu user={menuUser} className="size-8 border-black/10" />
+            <div className="ml-auto flex items-center gap-1 lg:ml-0">
+              <PortalNotifications />
+              <UserAccountMenu user={menuUser} className="size-8 border-black/10" />
+            </div>
           </div>
           {showPeople ? <PeopleSubnav /> : null}
           {showWork ? <WorkSubnav /> : null}

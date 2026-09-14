@@ -24,7 +24,6 @@ import {
   clearFixedServicesError,
   deleteFixedService,
   fetchFixedServices,
-  fixedServicesPageCacheKey,
   setFixedServicesPage,
   setFixedServicesSearch,
   type FixedService,
@@ -37,7 +36,6 @@ export function ServicesView() {
   const slice = useAppSelector((state) => state.fixedServices);
   const {
     items,
-    pagesCache,
     page,
     limit,
     total,
@@ -48,7 +46,6 @@ export function ServicesView() {
     error,
   } = slice ?? {
     items: [],
-    pagesCache: {},
     page: 1,
     limit: 10,
     total: 0,
@@ -60,6 +57,7 @@ export function ServicesView() {
   };
 
   const [searchInput, setSearchInput] = useState(search);
+  /** Soft overlay for search / pagination — not for background refresh when rows already exist. */
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FixedService | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -88,7 +86,10 @@ export function ServicesView() {
     dispatch(clearFixedServicesError());
   }, [dispatch, error, loading, mutating]);
 
-  const tableLoading = loading || actionLoading;
+  // First visit / empty slice → blocking table loader.
+  // Remount with cached rows → refresh silently (no loader).
+  // Search & pagination → soft overlay via actionLoading.
+  const tableLoading = actionLoading || (loading && items.length === 0);
 
   function onSearchChange(value: string) {
     setSearchInput(value);
@@ -101,9 +102,7 @@ export function ServicesView() {
 
   function onPageChange(nextPage: number) {
     if (nextPage === page) return;
-    const cacheKey = fixedServicesPageCacheKey(search, nextPage, limit);
-    const hasCache = Boolean(pagesCache?.[cacheKey]?.length);
-    if (!hasCache) setActionLoading(true);
+    setActionLoading(true);
     dispatch(setFixedServicesPage(nextPage));
   }
 
@@ -143,7 +142,11 @@ export function ServicesView() {
         rowKey={(row) => row.id}
         pageSize={limit}
         loading={tableLoading}
-        empty="No fixed services yet. Add your first package."
+        empty={
+          search.trim()
+            ? "No services match this search."
+            : "No fixed services yet. Add your first package."
+        }
         serverPagination={{
           page,
           pageSize: limit,

@@ -426,8 +426,9 @@ const fixedServicesSlice = createSlice({
     setFixedServicesPage(state, action: PayloadAction<number>) {
       state.page = Math.max(1, action.payload);
       const key = fixedServicesPageCacheKey(state.search, state.page, state.limit);
-      const cached = state.pagesCache[key];
-      if (cached?.length) state.items = cached;
+      if (key in state.pagesCache) {
+        state.items = state.pagesCache[key];
+      }
     },
     clearFixedServiceDetail(state) {
       state.detail = null;

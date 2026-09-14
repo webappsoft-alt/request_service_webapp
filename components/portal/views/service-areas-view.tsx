@@ -8,13 +8,21 @@ import { PortalPage } from "@/components/portal/portal-page";
 import { ServiceAreaFormDialog } from "@/components/portal/service-area-form-dialog";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   clearServiceAreasError,
   deleteServiceArea,
   fetchServiceAreas,
   selectServiceAreasShowLoader,
-  serviceAreasPageCacheKey,
   setServiceAreasPage,
   setServiceAreasSearch,
   type ServiceArea,
@@ -27,7 +35,6 @@ export function ServiceAreasView() {
   const serviceAreas = useAppSelector((state) => state.serviceAreas);
   const {
     items,
-    pagesCache,
     page,
     limit,
     total,
@@ -38,7 +45,6 @@ export function ServiceAreasView() {
     error,
   } = serviceAreas ?? {
     items: [],
-    pagesCache: {},
     page: 1,
     limit: 10,
     total: 0,
@@ -51,10 +57,11 @@ export function ServiceAreasView() {
   const softLoader = useAppSelector(selectServiceAreasShowLoader);
 
   const [searchInput, setSearchInput] = useState(search);
-  /** Full loader for search, or first visit to a page that is not cached yet. */
+  /** Soft overlay for search / pagination — not for background refresh when rows already exist. */
   const [actionLoading, setActionLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ServiceArea | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ServiceArea | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -81,7 +88,18 @@ export function ServiceAreasView() {
     dispatch(clearServiceAreasError());
   }, [dispatch, error, loading, mutating]);
 
-  const showLoader = softLoader || actionLoading;
+  // First visit / empty slice → blocking loader.
+  // Remount with cached rows → refresh silently.
+  // Search & pagination → soft table overlay.
+  const tableLoading = actionLoading || (loading && items.length === 0);
+  const showBlockingLoader = softLoader && !actionLoading;
+  const isTrulyEmpty =
+    !showBlockingLoader &&
+    !tableLoading &&
+    total === 0 &&
+    items.length === 0 &&
+    !search.trim() &&
+    !searchInput.trim();
 
   function refreshList() {
     void dispatch(fetchServiceAreas());
@@ -97,9 +115,12 @@ export function ServiceAreasView() {
     setDialogOpen(true);
   }
 
-  async function handleDelete(area: ServiceArea) {
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const area = deleteTarget;
     const result = await dispatch(deleteServiceArea(area.id));
     if (deleteServiceArea.fulfilled.match(result)) {
+      setDeleteTarget(null);
       toast.success(`${area.title} removed.`);
       void dispatch(fetchServiceAreas());
       return;
@@ -120,11 +141,7 @@ export function ServiceAreasView() {
 
   function onPageChange(nextPage: number) {
     if (nextPage === page) return;
-    const cacheKey = serviceAreasPageCacheKey(search, nextPage, limit);
-    const hasCache = Boolean(pagesCache?.[cacheKey]?.length);
-    // Cached page → show slice data immediately; API still refreshes in the background.
-    // Uncached page → show the same full loader used for search.
-    if (!hasCache) setActionLoading(true);
+    setActionLoading(true);
     dispatch(setServiceAreasPage(nextPage));
   }
 
@@ -139,9 +156,15 @@ export function ServiceAreasView() {
         </Button>
       }
     >
-      {showLoader ? (
+      {showBlockingLoader ? (
         <div className="flex min-h-48 items-center justify-center border border-black/15 bg-card">
           <Loader2 className="size-6 animate-spin text-primary" aria-label="Loading service areas" />
+        </div>
+      ) : isTrulyEmpty ? (
+        <div className="flex min-h-[50vh] items-center justify-center border border-black/15 bg-card px-6 py-16 text-center">
+          <p className="max-w-md text-base text-muted-foreground">
+            No service areas yet. Add your first coverage zone.
+          </p>
         </div>
       ) : (
         <PortalDataTable
@@ -151,7 +174,12 @@ export function ServiceAreasView() {
           rows={items}
           rowKey={(row) => row.id}
           pageSize={limit}
-          empty={loading ? "Refreshing…" : "No service areas yet. Add your first coverage zone."}
+          loading={tableLoading}
+          empty={
+            search.trim()
+              ? "No service areas match this search."
+              : "No service areas yet. Add your first coverage zone."
+          }
           serverPagination={{
             page,
             pageSize: limit,
@@ -233,7 +261,7 @@ export function ServiceAreasView() {
               label: "Delete",
               variant: "destructive",
               onSelect: () => {
-                void handleDelete(row);
+                setDeleteTarget(row);
               },
             },
           ]}
@@ -246,6 +274,45 @@ export function ServiceAreasView() {
         area={editing}
         onSaved={refreshList}
       />
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !mutating) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent showCloseButton={!mutating} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete service area?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This will permanently remove “${deleteTarget.title}” from your service areas.`
+                : "This will permanently remove this service area."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={mutating}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={mutating}
+              onClick={() => {
+                void confirmDelete();
+              }}
+            >
+              {mutating ? <Spinner size="sm" label="Deleting" /> : null}
+              Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PortalPage>
   );
 }

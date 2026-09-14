@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Check, Clock3, MapPin, Pencil } from "lucide-react";
@@ -18,6 +18,7 @@ import {
   type PortalFixedService,
 } from "@/lib/data/portal";
 import { formatMoney, formatStartingPrice, toTitleCase } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   clearFixedServiceDetail,
@@ -88,6 +89,21 @@ export function ServiceDetailView({ id }: { id: string }) {
       );
   }, [detail, pickerItems]);
 
+  const photos = service?.images ?? [];
+  const [activePhoto, setActivePhoto] = useState(0);
+
+  useEffect(() => {
+    setActivePhoto(0);
+  }, [service?.id, photos.length]);
+
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const timer = window.setInterval(() => {
+      setActivePhoto((current) => (current + 1) % photos.length);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [photos.length, service?.id, activePhoto]);
+
   if (detailLoading && !service) {
     return (
       <PortalPage eyebrow="Fixed service" title="Fixed service">
@@ -118,7 +134,8 @@ export function ServiceDetailView({ id }: { id: string }) {
   }
 
   const hours = serviceHours(service, officeHours);
-  const cover = service.images[0];
+  const cover =
+    photos[Math.min(activePhoto, Math.max(photos.length - 1, 0))] || undefined;
   const title = toTitleCase(service.name) || "Untitled service";
 
   return (
@@ -165,12 +182,21 @@ export function ServiceDetailView({ id }: { id: string }) {
                 </div>
               )}
             </div>
-            {service.images.length > 1 ? (
+            {photos.length > 1 ? (
               <div className="flex gap-2 overflow-x-auto p-3">
-                {service.images.map((src, index) => (
-                  <span
+                {photos.map((src, index) => (
+                  <button
                     key={`${src}-${index}`}
-                    className="relative size-16 shrink-0 overflow-hidden rounded-lg border border-black/10"
+                    type="button"
+                    onClick={() => setActivePhoto(index)}
+                    className={cn(
+                      "relative size-16 shrink-0 overflow-hidden rounded-lg border transition",
+                      index === activePhoto
+                        ? "border-[#003F7D] ring-2 ring-[#003F7D]/30"
+                        : "border-black/10 hover:border-[#003F7D]/40",
+                    )}
+                    aria-label={`Show photo ${index + 1}`}
+                    aria-pressed={index === activePhoto}
                   >
                     <Image
                       src={src}
@@ -180,7 +206,7 @@ export function ServiceDetailView({ id }: { id: string }) {
                       className="object-cover"
                       unoptimized={src.startsWith("http")}
                     />
-                  </span>
+                  </button>
                 ))}
               </div>
             ) : null}

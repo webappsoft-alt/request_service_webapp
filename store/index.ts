@@ -20,6 +20,7 @@ import authReducer from "./authSlice";
 import serviceAreasReducer from "./serviceAreasSlice";
 import categoriesReducer from "./categoriesSlice";
 import fixedServicesReducer from "./fixedServicesSlice";
+import portfolioReducer from "./portfolioSlice";
 import locationReducer from "./locationSlice";
 import publicFixedServicesReducer from "./publicFixedServicesSlice";
 import publicProfessionalsReducer from "./publicProfessionalsSlice";
@@ -43,6 +44,7 @@ const rootReducer = combineReducers({
   serviceAreas: serviceAreasReducer,
   categories: categoriesReducer,
   fixedServices: fixedServicesReducer,
+  portfolio: portfolioReducer,
   location: locationReducer,
   publicFixedServices: publicFixedServicesReducer,
   publicProfessionals: publicProfessionalsReducer,
@@ -99,6 +101,7 @@ export function getStore(): AppStore {
       serviceAreas?: unknown;
       categories?: unknown;
       fixedServices?: unknown;
+      portfolio?: unknown;
       location?: unknown;
       publicFixedServices?: unknown;
       publicProfessionals?: unknown;
@@ -107,6 +110,7 @@ export function getStore(): AppStore {
     }).serviceAreas === undefined ||
     (clientStore.getState() as { categories?: unknown }).categories === undefined ||
     (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined ||
+    (clientStore.getState() as { portfolio?: unknown }).portfolio === undefined ||
     (clientStore.getState() as { location?: unknown }).location === undefined ||
     (clientStore.getState() as { publicFixedServices?: unknown })
       .publicFixedServices === undefined ||

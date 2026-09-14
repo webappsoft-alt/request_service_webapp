@@ -376,6 +376,13 @@ export interface Provider {
   /** Fallback badge labels when categoryIds are not in the static catalog (API pros). */
   serviceLabels?: string[];
   serviceArea: string[];
+  /** Optional real map pins from API coverage neighborhoods. */
+  coveragePoints?: {
+    zip: string;
+    name: string;
+    lat: number;
+    lng: number;
+  }[];
   street: string;
   city: string;
   state: string;

@@ -94,12 +94,17 @@ export const publicApi = {
   professional: (slug: string) => `public/professionals/${slug}`,
   /** GET related professionals for a pro or fixed service */
   professionalsRelated: "public/professionals/related",
+  /** GET public portfolio showcase for a professional by id or slug */
+  professionalPortfolio: (idOrSlug: string) =>
+    `public/professionals/${idOrSlug}/portfolio`,
   /** GET public fixed-services search (customer directory) */
   fixedServices: "public/fixed-services",
   /** GET related fixed services for a pro or fixed service */
   fixedServicesRelated: "public/fixed-services/related",
   /** GET one public fixed service by id or slug */
   fixedService: (idOrSlug: string) => `public/fixed-services/${idOrSlug}`,
+  /** GET one public portfolio project by id or slug */
+  portfolio: (idOrSlug: string) => `public/portfolio/${idOrSlug}`,
   /** POST contact inquiry */
   contactUs: "public/contact-us",
   /** GET public blogs — query: page, limit, search, category */

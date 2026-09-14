@@ -23,6 +23,7 @@ import { ProviderLogo } from "@/components/shared/provider-logo";
 import { Rating } from "@/components/shared/rating";
 import { ServiceOfferCard } from "@/components/shared/service-card";
 import { ServiceAreaMapLazy } from "@/components/marketplace/service-area-map-lazy";
+import { CenteredSpinner } from "@/components/ui/spinner";
 import {
   displayWebsite,
   getProviderContact,
@@ -32,32 +33,54 @@ import { getProviderPhotos } from "@/lib/data/provider-media";
 import { getProviderSocials } from "@/lib/data/provider-socials";
 import { getProfileExplore, type ExplorePlace } from "@/lib/data/profile-explore";
 import { getProviderProjects } from "@/lib/data/provider-projects";
-import { getPortalServices } from "@/lib/data/portal";
+import { getPortalServices, type PortalFixedService } from "@/lib/data/portal";
 import { getRelatedProviders } from "@/lib/data/providers";
 import { getServiceAreaNames } from "@/lib/data/service-areas";
 import { formatHoursValue, formatLocation, formatWorkingDay, getTodayWeekday } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { Provider, ServiceCategory } from "@/lib/types";
+import type { Provider, ProviderProject, ServiceCategory } from "@/lib/types";
+
+export type ProviderProfileLiveData = {
+  photos?: { src: string; alt: string }[];
+  projects?: ProviderProject[];
+  relatedProviders?: Provider[];
+  fixedServices?: PortalFixedService[];
+  areaLabels?: string[];
+  portfolioLoading?: boolean;
+  relatedLoading?: boolean;
+  onRelatedBeforeNavigate?: (provider: Provider) => void;
+};
 
 export function ProviderProfile({
   provider,
   categories,
   place,
+  live,
 }: {
   provider: Provider;
   categories: ServiceCategory[];
   place?: ExplorePlace;
+  /** When set, use API-backed section data instead of static mock helpers. */
+  live?: ProviderProfileLiveData;
 }) {
-  const photos = getProviderPhotos(provider);
-  const projects = getProviderProjects(provider);
-  const relatedProviders = getRelatedProviders(provider);
+  const isLive = Boolean(live);
+  const photos = live?.photos ?? getProviderPhotos(provider);
+  const projects = live?.projects ?? getProviderProjects(provider);
+  const relatedProviders = live?.relatedProviders ?? getRelatedProviders(provider);
   const explore = getProfileExplore(provider, categories, place);
-  const areas = getServiceAreaNames(provider.serviceArea);
+  const areas =
+    live?.areaLabels?.length
+      ? live.areaLabels
+      : getServiceAreaNames(provider.serviceArea);
   const today = getTodayWeekday();
   const socials = getProviderSocials(provider);
   const contact = getProviderContact(provider);
   const website = getProviderWebsite(provider);
-  const fixedServices = getPortalServices(provider).filter((item) => item.active);
+  const fixedServices =
+    live?.fixedServices ??
+    getPortalServices(provider).filter((item) => item.active);
+  const showHours = isLive || provider.workingHours.length > 0;
+  const showRelated = isLive || relatedProviders.length > 0;
 
   return (
     <HomeMotion>
@@ -89,7 +112,17 @@ export function ProviderProfile({
         <BookServiceProvider slug={provider.slug} workingHours={provider.workingHours} services={fixedServices}>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="flex flex-col gap-8">
-            <PortfolioGallery photos={photos} companyName={provider.companyName} />
+            {live?.portfolioLoading && !photos.length ? (
+              <div className="flex h-[min(22rem,50svh)] items-center justify-center rounded-xl border border-black/15 bg-card md:h-[min(28rem,48svh)]">
+                <CenteredSpinner label="Loading portfolio" />
+              </div>
+            ) : photos.length ? (
+              <PortfolioGallery photos={photos} companyName={provider.companyName} />
+            ) : isLive ? (
+              <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-16 text-center text-sm text-muted-foreground">
+                Featured work photos will appear here when this company adds portfolio media.
+              </p>
+            ) : null}
 
             <div className="flex flex-col gap-4">
               <div className="flex items-start gap-4">
@@ -128,7 +161,10 @@ export function ProviderProfile({
               </div>
             </section>
 
-            <FixedServiceCatalog provider={provider} />
+            <FixedServiceCatalog
+              provider={provider}
+              services={live ? fixedServices : undefined}
+            />
 
             <section className="flex flex-col gap-4">
               <div>
@@ -140,15 +176,25 @@ export function ProviderProfile({
               </p>
               <ServiceAreaMapLazy provider={provider} />
               <div className="flex flex-wrap gap-2">
-                {areas.map((area) => (
-                  <Badge key={area} variant="outline">
-                    {area}
-                  </Badge>
-                ))}
+                {areas.length ? (
+                  areas.map((area) => (
+                    <Badge key={area} variant="outline">
+                      {area}
+                    </Badge>
+                  ))
+                ) : isLive ? (
+                  <p className="text-sm text-muted-foreground">
+                    Service area details will appear when coverage is published.
+                  </p>
+                ) : null}
               </div>
             </section>
 
-            <ProviderProjects provider={provider} projects={projects} />
+            <ProviderProjects
+              provider={provider}
+              projects={projects}
+              keepVisible={isLive}
+            />
 
             <section className="flex flex-col gap-4">
               <div>
@@ -179,6 +225,10 @@ export function ProviderProfile({
                       {provider.phone}
                     </a>
                   </BusinessInfoItem>
+                ) : isLive ? (
+                  <BusinessInfoItem icon={Phone} label="Phone">
+                    <p className="text-muted-foreground">Not listed</p>
+                  </BusinessInfoItem>
                 ) : null}
                 {provider.email?.trim() ? (
                   <BusinessInfoItem icon={Mail} label="Email">
@@ -189,6 +239,10 @@ export function ProviderProfile({
                       {provider.email}
                     </a>
                   </BusinessInfoItem>
+                ) : isLive ? (
+                  <BusinessInfoItem icon={Mail} label="Email">
+                    <p className="text-muted-foreground">Not listed</p>
+                  </BusinessInfoItem>
                 ) : null}
                 <BusinessInfoItem icon={MapPin} label="Address">
                   {provider.street?.trim() ? <p>{provider.street}</p> : null}
@@ -197,14 +251,18 @@ export function ProviderProfile({
                   </p>
                 </BusinessInfoItem>
                 <BusinessInfoItem icon={Globe} label="Website">
-                  <a
-                    href={website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block truncate hover:text-primary"
-                  >
-                    {displayWebsite(website)}
-                  </a>
+                  {website ? (
+                    <a
+                      href={website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate hover:text-primary"
+                    >
+                      {displayWebsite(website)}
+                    </a>
+                  ) : (
+                    <p className="text-muted-foreground">Not listed</p>
+                  )}
                 </BusinessInfoItem>
                 {provider.foundedYear > 0 ? (
                   <BusinessInfoItem icon={CalendarDays} label="Founded">
@@ -259,8 +317,7 @@ export function ProviderProfile({
                         className="flex size-10 items-center justify-center rounded-lg border border-input bg-card transition-colors hover:border-primary/40 hover:bg-muted"
                       >
                         <span
-                          aria-hidden="true"
-                          className="size-4 bg-primary"
+                          className="size-4 bg-foreground"
                           style={{
                             maskImage: `url(${item.icon})`,
                             WebkitMaskImage: `url(${item.icon})`,
@@ -276,24 +333,28 @@ export function ProviderProfile({
               </CardContent>
             </Card>
 
-            {provider.workingHours.length ? (
+            {showHours ? (
               <Card size="sm">
                 <CardHeader>
                   <CardTitle>Working hours</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-1.5 text-sm">
-                  {provider.workingHours.map((hours) => (
-                    <p
-                      key={hours.day}
-                      className={cn(
-                        "flex items-baseline justify-between gap-3",
-                        hours.day === today && "text-foreground"
-                      )}
-                    >
-                      <span className="text-muted-foreground">{formatWorkingDay(hours.day)}</span>
-                      <span className="font-medium tabular-nums">{formatHoursValue(hours)}</span>
-                    </p>
-                  ))}
+                  {provider.workingHours.length ? (
+                    provider.workingHours.map((hours) => (
+                      <p
+                        key={hours.day}
+                        className={cn(
+                          "flex items-baseline justify-between gap-3",
+                          hours.day === today && "text-foreground"
+                        )}
+                      >
+                        <span className="text-muted-foreground">{formatWorkingDay(hours.day)}</span>
+                        <span className="font-medium tabular-nums">{formatHoursValue(hours)}</span>
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">Hours not listed yet.</p>
+                  )}
                 </CardContent>
               </Card>
             ) : null}
@@ -303,18 +364,32 @@ export function ProviderProfile({
         </Container>
       </section>
 
-      {relatedProviders.length ? (
+      {showRelated ? (
         <section className="pb-10 md:pb-14">
           <Container className="flex flex-col gap-4">
             <div>
               <p className="eyebrow text-muted-foreground">More professionals</p>
               <h2 className="mt-1 text-2xl font-semibold">Relevant service providers</h2>
             </div>
-            <div data-stagger className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-              {relatedProviders.map((related) => (
-                <ProviderCard key={related.id} provider={related} visual place={place} />
-              ))}
-            </div>
+            {live?.relatedLoading ? (
+              <CenteredSpinner label="Loading related professionals" className="min-h-48" />
+            ) : relatedProviders.length ? (
+              <div data-stagger className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                {relatedProviders.map((related) => (
+                  <ProviderCard
+                    key={related.id}
+                    provider={related}
+                    visual
+                    place={place}
+                    onBeforeNavigate={() => live?.onRelatedBeforeNavigate?.(related)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-8 text-sm text-muted-foreground">
+                Related professionals will appear here when matches are available.
+              </p>
+            )}
           </Container>
         </section>
       ) : null}
@@ -342,7 +417,7 @@ function BusinessInfoItem({
         <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
           {label}
         </p>
-        <div className="mt-0.5 text-sm font-medium leading-5">{children}</div>
+        <div className="mt-0.5 text-sm font-medium">{children}</div>
       </div>
     </div>
   );

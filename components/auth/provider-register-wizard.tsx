@@ -7,7 +7,13 @@ import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { PasswordInput } from "@/components/auth/password-input";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { Input } from "@/components/ui/input";
@@ -20,8 +26,13 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
-import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
+import {
+  extractErrorMessage,
+  postData,
+  showApiErrorToast,
+} from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
+import { Spinner } from "@/components/ui/spinner";
 import { serviceCategories } from "@/lib/data/services";
 import {
   savePendingRegistration,
@@ -148,9 +159,12 @@ function toggleValue(list: string[], value: string) {
 export function ProviderRegisterWizard() {
   const router = useRouter();
   const zipRef = useRef<HTMLInputElement>(null);
+  const emailCheckRequestId = useRef(0);
   const [step, setStep] = useState<Step>("account");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [submitting, setSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailChecking, setEmailChecking] = useState(false);
   const stepIndex = STEPS.indexOf(step);
   const copy = stepCopy(step);
   const selectedCategories = serviceCategories.filter((category) =>
@@ -159,6 +173,46 @@ export function ProviderRegisterWizard() {
 
   function patch(partial: Partial<Draft>) {
     setDraft((current) => ({ ...current, ...partial }));
+  }
+
+  /** Early email check via the same send-otp API used at finish. */
+  async function checkEmailRegistered(rawEmail: string) {
+    const email = rawEmail.trim();
+    if (!email) {
+      setEmailError(null);
+      return true;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return true;
+    }
+
+    const requestId = ++emailCheckRequestId.current;
+    setEmailChecking(true);
+    try {
+      await postData<{ message?: string }>(
+        authApi.sendOtp,
+        { email },
+        { silent: true, skipLogoutOn401: true },
+      );
+      if (requestId !== emailCheckRequestId.current) return true;
+      setEmailError(null);
+      return true;
+    } catch (error) {
+      if (requestId !== emailCheckRequestId.current) return false;
+      const message = extractErrorMessage(error);
+      if (/email already registered/i.test(message)) {
+        setEmailError("Email already registered");
+        patch({ email: "" });
+        return false;
+      }
+      // Other send-otp errors stay for finish(); do not block typing here.
+      setEmailError(null);
+      return true;
+    } finally {
+      if (requestId === emailCheckRequestId.current) {
+        setEmailChecking(false);
+      }
+    }
   }
 
   function applyAddress(address: PlaceAddress) {
@@ -277,6 +331,12 @@ export function ProviderRegisterWizard() {
   }
 
   function validateAccount() {
+    if (emailError) {
+      return false;
+    }
+    if (!draft.email.trim()) {
+      return false;
+    }
     if (draft.password.length < 8) {
       toast.error("Use at least 8 characters for your password.");
       return false;
@@ -290,6 +350,7 @@ export function ProviderRegisterWizard() {
 
   function onContinue() {
     if (step === "account") {
+      if (emailChecking) return;
       if (!validateAccount()) return;
       goTo("business");
       return;
@@ -320,6 +381,8 @@ export function ProviderRegisterWizard() {
         draft.firstName.trim().length > 0 &&
         draft.lastName.trim().length > 0 &&
         draft.email.trim().length > 0 &&
+        !emailError &&
+        !emailChecking &&
         draft.password.length > 0 &&
         draft.confirmPassword.length > 0;
       break;
@@ -419,18 +482,34 @@ export function ProviderRegisterWizard() {
                 />
               </Field>
             </div>
-            <Field>
+            <Field data-invalid={emailError ? true : undefined}>
               <FieldLabel htmlFor="pro-email">Work email</FieldLabel>
-              <Input
-                id="pro-email"
-                name="email"
-                type="email"
-                value={draft.email}
-                onChange={(event) => patch({ email: event.target.value })}
-                autoComplete="email"
-                placeholder="Enter your work email"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="pro-email"
+                  name="email"
+                  type="email"
+                  value={draft.email}
+                  aria-invalid={emailError ? true : undefined}
+                  className={emailChecking ? "pr-10" : undefined}
+                  onChange={(event) => {
+                    setEmailError(null);
+                    patch({ email: event.target.value });
+                  }}
+                  onBlur={() => {
+                    void checkEmailRegistered(draft.email);
+                  }}
+                  autoComplete="email"
+                  placeholder="Enter your work email"
+                  required
+                />
+                {emailChecking ? (
+                  <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 opacity-70">
+                    <Spinner size="sm" label="Checking email" />
+                  </span>
+                ) : null}
+              </div>
+              {emailError ? <FieldError>{emailError}</FieldError> : null}
             </Field>
             <Field>
               <FieldLabel htmlFor="pro-phone">Phone</FieldLabel>

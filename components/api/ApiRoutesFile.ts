@@ -53,6 +53,12 @@ export const providerApi = {
   fixedServices: "provider/fixed-services",
   /** GET/PUT/DELETE one fixed service by id */
   fixedService: (id: string) => `provider/fixed-services/${id}`,
+  /** GET list / POST create portfolio showcase projects */
+  portfolio: "provider/portfolio",
+  /** GET/PUT/DELETE one portfolio project by id */
+  portfolioItem: (id: string) => `provider/portfolio/${id}`,
+  /** PATCH toggle featured flag (no body) */
+  portfolioFeature: (id: string) => `provider/portfolio/${id}/feature`,
 } as const;
 
 export const providerOrdersApi = {

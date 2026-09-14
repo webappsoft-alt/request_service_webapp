@@ -170,6 +170,18 @@ function ServicePreview({
     ? toTitleCase(service.categoryName)
     : "";
 
+  useEffect(() => {
+    setActive(0);
+  }, [service.id, images.length]);
+
+  useEffect(() => {
+    if (images.length < 2) return;
+    const timer = window.setInterval(() => {
+      setActive((current) => (current + 1) % images.length);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [images.length, service.id, active]);
+
   return (
     <article className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_18px_40px_-28px_rgba(0,63,125,0.45)]">
       <div className="relative aspect-[16/10] bg-[#003F7D]">

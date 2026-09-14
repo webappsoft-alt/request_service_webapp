@@ -5,6 +5,7 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  ClipboardList,
   CreditCard,
   FileText,
   Handshake,
@@ -54,6 +55,7 @@ export const portalNavGroups: PortalNavGroup[] = [
     id: "work",
     label: "Work",
     items: [
+      { href: "/pro/dashboard/orders", label: "Orders", icon: ClipboardList },
       { href: "/pro/dashboard/requests", label: "Leads", icon: Inbox },
       { href: "/pro/dashboard/messages", label: "Messages", icon: MessageCircle },
       { href: "/pro/dashboard/estimates", label: "Estimates", icon: FileText },
@@ -105,6 +107,7 @@ export const peopleSubnav: { href: string; label: string }[] = [
 ];
 
 export const workSubnav: { href: string; label: string }[] = [
+  { href: "/pro/dashboard/orders", label: "Orders" },
   { href: "/pro/dashboard/requests", label: "Leads" },
   { href: "/pro/dashboard/messages", label: "Messages" },
   { href: "/pro/dashboard/estimates", label: "Estimates" },

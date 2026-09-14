@@ -10,12 +10,24 @@ const dayLabels: Record<WorkingHours["day"], string> = {
   sunday: "Sunday",
 };
 
-export function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
+export function formatDate(value?: string | Date | null) {
+  if (!value) return "—";
+  try {
+    const d =
+      typeof value === "string"
+        ? value.includes("T")
+          ? new Date(value)
+          : new Date(`${value}T00:00:00`)
+        : new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    return new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(d);
+  } catch {
+    return String(value || "—");
+  }
 }
 
 export function formatTime(value: string) {

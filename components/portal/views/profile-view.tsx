@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
@@ -17,9 +19,10 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { HoursEditor } from "@/components/portal/hours-editor";
+import { PortfolioFormView } from "@/components/portal/portfolio-file";
 import { PortalPage } from "@/components/portal/portal-page";
 import { usePortalSettings } from "@/components/portal/use-portal-settings";
-import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,11 +38,11 @@ import {
   getServiceCategoryById,
   serviceCategories,
 } from "@/lib/data/services";
+import { cloneWorkingHours } from "@/lib/data/portal";
 import {
   asAuthProvider,
   type AuthProviderRecord,
 } from "@/lib/auth/provider-profile";
-import { formatWorkingDay, formatHoursValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -49,7 +52,6 @@ import {
   updateAuthUser,
   type AuthUser,
 } from "@/store/authSlice";
-import Link from "next/link";
 
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
 
@@ -81,6 +83,43 @@ const API_TO_EMPLOYEE: Record<string, string> = {
   "11-20": "11–20",
   "21+": "21+",
 };
+
+const STEPS = [
+  "account",
+  "business",
+  "profile",
+  "hours",
+  "categories",
+  "subservices",
+  "portfolio",
+] as const;
+type Step = (typeof STEPS)[number];
+
+const STEP_LABELS: Record<Step, string> = {
+  account: "Account",
+  business: "Business",
+  profile: "Profile",
+  hours: "Hours",
+  categories: "Services",
+  subservices: "Sub-services",
+  portfolio: "Portfolio",
+};
+
+const LEGACY_STEP_MAP: Record<string, Step> = {
+  basic: "account",
+  services: "categories",
+};
+
+function parseStep(value: string | null): Step {
+  if (!value) return "account";
+  if ((STEPS as readonly string[]).includes(value)) {
+    return value as Step;
+  }
+  if (value in LEGACY_STEP_MAP) {
+    return LEGACY_STEP_MAP[value];
+  }
+  return "account";
+}
 
 function toggleValue(list: string[], value: string) {
   return list.includes(value)
@@ -163,14 +202,21 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
 
 export function ProfileView() {
   const dispatch = useAppDispatch();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const portfolioSubmitRef = useRef<(() => Promise<boolean>) | null>(null);
   const user = useAppSelector(selectAuthUser);
   const authProvider = useAppSelector(selectAuthProvider);
-  const { provider } = usePortalWorkspace();
-  const { officeHours } = usePortalSettings();
+  const { officeHours, saveOfficeHours } = usePortalSettings();
   const zipRef = useRef<HTMLInputElement>(null);
   const formReadyRef = useRef(false);
+  const hoursSynced = useRef(false);
+
+  const step = parseStep(searchParams.get("step"));
+  const stepIndex = STEPS.indexOf(step);
+  const isLastStep = stepIndex === STEPS.length - 1;
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -200,6 +246,7 @@ export function ProfileView() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [hours, setHours] = useState(() => cloneWorkingHours(officeHours));
 
   const selectedCategories = useMemo(
     () =>
@@ -224,6 +271,14 @@ export function ProfileView() {
     if (authDigits && localDigits.length <= 3) return authPhone;
     return phone || authPhone;
   }, [phone, authPhone]);
+
+  function goTo(next: Step) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("step", next);
+    router.replace(`/pro/dashboard/profile?${params.toString()}`, {
+      scroll: false,
+    });
+  }
 
   useEffect(() => {
     if (!user && !authProvider) {
@@ -276,6 +331,13 @@ export function ProfileView() {
       });
     }
   }, [authProvider, user]);
+
+  useEffect(() => {
+    if (hoursSynced.current && officeHours.length === 0) return;
+    hoursSynced.current = true;
+    setHours(cloneWorkingHours(officeHours));
+  }, [officeHours]);
+
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -338,24 +400,8 @@ export function ProfileView() {
         throw new Error("Upload succeeded but no image URL was returned.");
       }
       setAvatarUrl(uploaded);
-      const res = await putData<{
-        message?: string;
-        user?: AuthUser;
-        data?: AuthUser;
-      }>(userApi.profile, { avatarUrl: uploaded }, { silent: true });
-
-      dispatch(
-        updateAuthUser({
-          user: {
-            ...user,
-            ...(res?.user || res?.data || {}),
-            avatarUrl: uploaded,
-          },
-          provider: authProvider || undefined,
-        }),
-      );
       setPreviewUrl(null);
-      toast.success(res?.message || "Profile photo updated");
+      toast.success("Photo uploaded. It will save when you Submit.");
     } catch (error) {
       setPreviewUrl(null);
       showApiErrorToast(error, "Could not upload profile photo.");
@@ -365,18 +411,18 @@ export function ProfileView() {
     }
   }
 
-  async function onSaveProfile(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function saveProfile(): Promise<boolean> {
     const nextFirst = firstName.trim();
     const nextLast = lastName.trim();
     if (!nextFirst || !nextLast) {
       toast.error("First and last name are required.");
-      return;
+      goTo("account");
+      return false;
     }
     if (!companyName.trim()) {
       toast.error("Company name is required.");
-      return;
+      goTo("business");
+      return false;
     }
 
     const years = Number(yearsInBusiness);
@@ -419,7 +465,6 @@ export function ProfileView() {
       nextPhone !== String(user?.phone || "").trim() ||
       (avatarUrl && avatarUrl !== getUserAvatarSrc(user));
 
-    setSaving(true);
     try {
       const providerRes = await putData<AuthProviderRecord>(
         providerApi.profile,
@@ -529,11 +574,88 @@ export function ProfileView() {
         }),
       );
 
-      toast.success("Business profile updated successfully");
+      return true;
     } catch (error) {
       showApiErrorToast(error, "Could not update your business profile.");
+      return false;
+    }
+  }
+
+  async function persistOfficeHours(): Promise<boolean> {
+    const workingHours = cloneWorkingHours(hours).map((entry) => ({
+      day: entry.day,
+      open: entry.closed ? null : entry.open,
+      close: entry.closed ? null : entry.close,
+      closed: entry.closed,
+    }));
+
+    try {
+      const res = await putData<{
+        message?: string;
+        workingHours?: typeof workingHours;
+      }>(providerApi.officeHours, { workingHours }, { silent: true });
+
+      const nextHours = Array.isArray(res?.workingHours)
+        ? res.workingHours
+        : workingHours;
+      saveOfficeHours(nextHours);
+
+      const nextProvider = {
+        ...(authProvider || {}),
+        settings: {
+          ...(authProvider?.settings || {}),
+          workingHours: nextHours,
+        },
+      };
+
+      if (user) {
+        dispatch(
+          updateAuthUser({
+            user: { ...user, providerId: nextProvider },
+            provider: nextProvider,
+          }),
+        );
+      }
+
+      return true;
+    } catch (error) {
+      showApiErrorToast(error, "Could not save office hours.");
+      return false;
+    }
+  }
+
+  async function onFinalSubmit() {
+    setSaving(true);
+    try {
+      const profileOk = await saveProfile();
+      if (!profileOk) return;
+
+      const hoursOk = await persistOfficeHours();
+      if (!hoursOk) return;
+
+      if (portfolioSubmitRef.current) {
+        const portfolioOk = await portfolioSubmitRef.current();
+        if (!portfolioOk) return;
+      }
+
+      toast.success("Business profile updated successfully");
+      router.push("/pro/dashboard/settings");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function onBack() {
+    if (stepIndex <= 0) {
+      router.push("/pro/dashboard/settings");
+      return;
+    }
+    goTo(STEPS[stepIndex - 1]);
+  }
+
+  function onNext() {
+    if (stepIndex < STEPS.length - 1) {
+      goTo(STEPS[stepIndex + 1]);
     }
   }
 
@@ -545,25 +667,46 @@ export function ProfileView() {
     `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() ||
     displayName.charAt(0).toUpperCase();
 
+  const busy = saving || uploadingImage;
+
   return (
     <PortalPage
       eyebrow="Public listing"
-      title="Business profile"
-      description="Same sections as Pro registration — account, business, services, profile, and coverage."
+      title="Edit business profile"
+      description="Update your company details across 7 steps: Account, Business, Profile, Hours, Services, Sub-services, and Portfolio."
       actions={
-        provider.slug ? (
-          <Button asChild variant="outline">
-            <Link href={`/pro/dashboard/settings`}>Back</Link>
-          </Button>
-        ) : null
+        <Button asChild variant="outline">
+          <Link href="/pro/dashboard/settings">Back</Link>
+        </Button>
       }
     >
-      <form
-        className="grid gap-4 lg:grid-cols-[1.3fr_1fr]"
-        onSubmit={(event) => void onSaveProfile(event)}
-      >
-        <div className="flex flex-col gap-4">
-          {/* Account */}
+      <div className="flex w-full flex-col gap-5">
+        <ol className="grid grid-cols-7 gap-2">
+          {STEPS.map((item, index) => {
+            const current = item === step;
+            const done = index < stepIndex;
+            return (
+              <li key={item} className="flex flex-col gap-1.5">
+                <span
+                  className={cn(
+                    "h-1.5 rounded-full",
+                    current || done ? "bg-primary" : "bg-border",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "hidden text-[11px] font-medium sm:block",
+                    current ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {STEP_LABELS[item]}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
+        {step === "account" ? (
           <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">Account</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -610,7 +753,7 @@ export function ProfileView() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">Profile photo</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    JPG, PNG, or WebP. Saves as soon as the upload finishes.
+                    JPG, PNG, or WebP. Uploads now; saves with Submit.
                   </p>
                 </div>
               </div>
@@ -657,72 +800,97 @@ export function ProfileView() {
               </div>
             </FieldGroup>
           </section>
+        ) : null}
 
-          {/* Business */}
-          <section className="rounded-xl border border-input bg-card p-5">
-            <p className="text-sm font-semibold">Business</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Company name and service location.
-            </p>
-            <FieldGroup className="mt-4">
-              <Field>
-                <FieldLabel htmlFor="company">Company name</FieldLabel>
-                <Input
-                  id="company"
-                  value={companyName}
-                  onChange={(event) => setCompanyName(event.target.value)}
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="tagline">Tagline</FieldLabel>
-                <Input
-                  id="tagline"
-                  value={tagline}
-                  onChange={(event) => setTagline(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="street">Street address</FieldLabel>
-                <AddressAutocomplete
-                  id="street"
-                  value={streetAddress}
-                  onChange={setStreetAddress}
-                  onSelect={applyAddress}
-                  placeholder="Start typing a street address…"
-                />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-3">
+        {step === "business" ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="rounded-xl border border-input bg-card p-5">
+              <p className="text-sm font-semibold">Business</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Company name and service location.
+              </p>
+              <FieldGroup className="mt-4">
                 <Field>
-                  <FieldLabel htmlFor="city">City</FieldLabel>
+                  <FieldLabel htmlFor="company">Company name</FieldLabel>
                   <Input
-                    id="city"
-                    value={city}
-                    onChange={(event) => setCity(event.target.value)}
+                    id="company"
+                    value={companyName}
+                    onChange={(event) => setCompanyName(event.target.value)}
+                    required
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="state">State</FieldLabel>
+                  <FieldLabel htmlFor="tagline">Tagline</FieldLabel>
                   <Input
-                    id="state"
-                    value={state}
-                    onChange={(event) => setState(event.target.value)}
+                    id="tagline"
+                    value={tagline}
+                    onChange={(event) => setTagline(event.target.value)}
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="zip">ZIP</FieldLabel>
-                  <Input
-                    ref={zipRef}
-                    id="zip"
-                    value={zip}
-                    onChange={(event) => setZip(event.target.value)}
+                  <FieldLabel htmlFor="street">Street address</FieldLabel>
+                  <AddressAutocomplete
+                    id="street"
+                    value={streetAddress}
+                    onChange={setStreetAddress}
+                    onSelect={applyAddress}
+                    placeholder="Start typing a street address…"
                   />
                 </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="city">City</FieldLabel>
+                    <Input
+                      id="city"
+                      value={city}
+                      onChange={(event) => setCity(event.target.value)}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="zip">ZIP</FieldLabel>
+                    <Input
+                      ref={zipRef}
+                      id="zip"
+                      value={zip}
+                      onChange={(event) => setZip(event.target.value)}
+                    />
+                  </Field>
+                </div>
+              </FieldGroup>
+            </section>
+
+            <section className="rounded-xl border border-input bg-card p-5">
+              <p className="text-sm font-semibold">Coverage</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Neighborhoods you serve (same as registration).
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {SERVICE_AREAS.map((area) => {
+                  const checked = areaNames.includes(area);
+                  return (
+                    <button
+                      key={area}
+                      type="button"
+                      onClick={() =>
+                        setAreaNames((current) => toggleValue(current, area))
+                      }
+                      className={cn(
+                        "rounded-lg border px-3 py-1.5 text-sm",
+                        checked
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "bg-card hover:border-foreground/20",
+                      )}
+                    >
+                      {area}
+                    </button>
+                  );
+                })}
               </div>
-            </FieldGroup>
-          </section>
+            </section>
+          </div>
+        ) : null}
 
-          {/* Profile details */}
+        {step === "profile" ? (
           <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">Profile</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -746,7 +914,9 @@ export function ProfileView() {
                     id="years"
                     inputMode="numeric"
                     value={yearsInBusiness}
-                    onChange={(event) => setYearsInBusiness(event.target.value)}
+                    onChange={(event) =>
+                      setYearsInBusiness(event.target.value)
+                    }
                     placeholder="Optional — 8"
                   />
                 </Field>
@@ -805,61 +975,28 @@ export function ProfileView() {
               </div>
             </FieldGroup>
           </section>
+        ) : null}
 
-          {/* Coverage */}
+        {step === "hours" ? (
           <section className="rounded-xl border border-input bg-card p-5">
-            <p className="text-sm font-semibold">Coverage</p>
+            <p className="text-sm font-semibold">Working hours</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Neighborhoods you serve (same as registration).
+              Set when customers can expect you to be available. Saved on Submit.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {SERVICE_AREAS.map((area) => {
-                const checked = areaNames.includes(area);
-                return (
-                  <button
-                    key={area}
-                    type="button"
-                    onClick={() =>
-                      setAreaNames((current) => toggleValue(current, area))
-                    }
-                    className={cn(
-                      "rounded-lg border px-3 py-1.5 text-sm",
-                      checked
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "bg-card hover:border-foreground/20",
-                    )}
-                  >
-                    {area}
-                  </button>
-                );
-              })}
+            <div className="mt-4">
+              <HoursEditor hours={hours} onChange={setHours} />
             </div>
           </section>
+        ) : null}
 
-          <div className="flex justify-start">
-            <Button type="submit" disabled={saving || uploadingImage}>
-              {saving ? (
-                <Spinner
-                  size="sm"
-                  label="Updating"
-                  className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
-                />
-              ) : (
-                "Update profile"
-              )}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          {/* Services — same as register */}
+        {step === "categories" ? (
           <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">Services you offer</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Choose categories, then the fixed catalog jobs for your profile.
+              Choose the categories that appear on your public profile.
             </p>
             <FieldGroup className="mt-4">
-              <div className="grid gap-3">
+              <div className="grid gap-3 lg:grid-cols-2">
                 {serviceCategories.map((category) => {
                   const checked = categoryIds.includes(category.id);
                   return (
@@ -888,7 +1025,17 @@ export function ProfileView() {
                   );
                 })}
               </div>
+            </FieldGroup>
+          </section>
+        ) : null}
 
+        {step === "subservices" ? (
+          <section className="rounded-xl border border-input bg-card p-5">
+            <p className="text-sm font-semibold">Sub-services</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Fixed catalog jobs for your selected categories, plus starting price.
+            </p>
+            <FieldGroup className="mt-4">
               {selectedCategories.length ? (
                 <div className="flex flex-col gap-4 rounded-xl border bg-muted/30 p-4">
                   <p className="text-sm font-medium">Fixed catalog services</p>
@@ -901,7 +1048,7 @@ export function ProfileView() {
                       <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                         {category.name}
                       </p>
-                      <div className="grid gap-2">
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         {category.commonServices.map((job) => (
                           <label
                             key={job}
@@ -922,7 +1069,8 @@ export function ProfileView() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Choose at least one category to pick fixed catalog services.
+                  No categories selected yet. Go back to Services to choose at
+                  least one category.
                 </p>
               )}
 
@@ -941,33 +1089,44 @@ export function ProfileView() {
               </Field>
             </FieldGroup>
           </section>
+        ) : null}
 
-          {/* Hours summary */}
-          <section className="rounded-xl border border-input bg-card p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold">Working hours</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Edit hours in Settings.
-                </p>
-              </div>
-              <Button asChild type="button" variant="outline" size="sm">
-                <a href="/pro/dashboard/settings#office-hours">Edit hours</a>
-              </Button>
-            </div>
-            <ul className="mt-3 flex flex-col gap-1.5 text-sm">
-              {officeHours.map((hours) => (
-                <li key={hours.day} className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">
-                    {formatWorkingDay(hours.day)}
-                  </span>
-                  <span className="tabular-nums">{formatHoursValue(hours)}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
+        {step === "portfolio" ? (
+          <PortfolioFormView
+            embedded
+            deferSubmit
+            submitRef={portfolioSubmitRef}
+          />
+        ) : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button type="button" variant="outline" onClick={onBack} disabled={busy}>
+            Back
+          </Button>
+
+          {isLastStep ? (
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => void onFinalSubmit()}
+            >
+              {saving ? (
+                <Spinner
+                  size="sm"
+                  label="Submitting"
+                  className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
+                />
+              ) : (
+                "Submit"
+              )}
+            </Button>
+          ) : (
+            <Button type="button" disabled={busy} onClick={onNext}>
+              Next
+            </Button>
+          )}
         </div>
-      </form>
+      </div>
     </PortalPage>
   );
 }

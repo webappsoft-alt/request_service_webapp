@@ -44,7 +44,7 @@ function statusLabel(status: PortfolioProject["status"]) {
   return "Hidden";
 }
 
-export function PortfolioView() {
+export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
   const dispatch = useAppDispatch();
   const slice = useAppSelector((state) => state.portfolio);
   const {
@@ -153,6 +153,198 @@ export function PortfolioView() {
     );
   }
 
+  const table = (
+    <PortalDataTable
+      filename="portfolio"
+      countLabel="projects"
+      searchPlaceholder="Search portfolio"
+      rows={items}
+      rowKey={(row) => row.id}
+      pageSize={limit}
+      loading={tableLoading}
+      empty={
+        search.trim()
+          ? "No projects match this search."
+          : "No portfolio projects yet. Add your first showcase."
+      }
+      serverPagination={{
+        page,
+        pageSize: limit,
+        total,
+        totalPages,
+        onPageChange,
+        search: searchInput,
+        onSearchChange,
+      }}
+      columns={[
+        {
+          id: "title",
+          header: "Project",
+          sortValue: (row) => row.title,
+          searchValue: (row) =>
+            `${row.title} ${row.description} ${row.tags.join(" ")}`,
+          exportValue: (row) => row.title,
+          cell: (row) => {
+            const cover = portfolioCoverUrl(row);
+            return (
+              <div className="flex items-center gap-3">
+                <span className="relative size-12 shrink-0 overflow-hidden rounded-md bg-[#003F7D]">
+                  {cover ? (
+                    <Image
+                      src={cover}
+                      alt=""
+                      fill
+                      sizes="48px"
+                      className="object-cover"
+                      unoptimized={cover.startsWith("http")}
+                    />
+                  ) : null}
+                </span>
+                <div>
+                  <Link
+                    href={`/pro/dashboard/portfolio/${row.id}/detail`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {toTitleCase(row.title)}
+                  </Link>
+                  <p className="max-w-md truncate text-xs text-muted-foreground">
+                    {row.description || row.tags[0] || "No description"}
+                  </p>
+                </div>
+              </div>
+            );
+          },
+        },
+        {
+          id: "category",
+          header: "Category",
+          sortValue: (row) => row.categoryName,
+          searchValue: (row) => row.categoryName,
+          exportValue: (row) => row.categoryName,
+          cell: (row) =>
+            row.categoryName ? toTitleCase(row.categoryName) : "—",
+        },
+        {
+          id: "cost",
+          header: "Cost",
+          sortValue: (row) => row.cost,
+          searchValue: (row) => String(row.cost),
+          exportValue: (row) => (row.cost ? formatMoney(row.cost) : ""),
+          className: "tabular-nums",
+          cell: (row) => (row.cost ? formatMoney(row.cost) : "—"),
+        },
+        {
+          id: "featured",
+          header: "Featured",
+          sortValue: (row) => (row.isFeatured ? 1 : 0),
+          searchValue: (row) => (row.isFeatured ? "Featured" : ""),
+          exportValue: (row) => (row.isFeatured ? "Yes" : "No"),
+          cell: (row) => (
+            <Button
+              type="button"
+              size="sm"
+              variant={row.isFeatured ? "outline" : "default"}
+              disabled={featuringId === row.id || mutating}
+              onClick={() => {
+                void onToggleFeature(row);
+              }}
+            >
+              {featuringId === row.id ? (
+                <Spinner size="sm" label="Updating featured" />
+              ) : null}
+              {row.isFeatured ? "Unfeature" : "Feature"}
+            </Button>
+          ),
+        },
+        {
+          id: "status",
+          header: "Status",
+          sortValue: (row) => row.status,
+          searchValue: (row) => statusLabel(row.status),
+          exportValue: (row) => statusLabel(row.status),
+          cell: (row) => (
+            <StatusPill
+              label={statusLabel(row.status)}
+              tone={statusTone(row.status)}
+            />
+          ),
+        },
+      ]}
+      actions={(row) => [
+        { label: "Detail", href: `/pro/dashboard/portfolio/${row.id}/detail` },
+        { label: "Edit", href: `/pro/dashboard/portfolio/${row.id}` },
+        {
+          label: "Delete",
+          variant: "destructive",
+          onSelect: () => {
+            setDeleteTarget(row);
+          },
+        },
+      ]}
+    />
+  );
+
+  const deleteDialog = (
+    <Dialog
+      open={Boolean(deleteTarget)}
+      onOpenChange={(open) => {
+        if (!open && !mutating) setDeleteTarget(null);
+      }}
+    >
+      <DialogContent showCloseButton={!mutating} className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete portfolio project?</DialogTitle>
+          <DialogDescription>
+            {deleteTarget
+              ? `This will permanently remove “${toTitleCase(deleteTarget.title)}” from your portfolio.`
+              : "This will permanently remove this project from your portfolio."}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={mutating}
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={mutating}
+            onClick={() => {
+              void confirmDelete();
+            }}
+          >
+            {mutating ? <Spinner size="sm" label="Deleting" /> : null}
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (embedded) {
+    return (
+      <div className="rounded-xl border border-input bg-card p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Portfolio</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Before/after projects customers see on your public profile.
+            </p>
+          </div>
+          <Button asChild size="sm">
+            <Link href="/pro/dashboard/portfolio/new">Add project</Link>
+          </Button>
+        </div>
+        {table}
+        {deleteDialog}
+      </div>
+    );
+  }
+
   return (
     <PortalPage
       eyebrow="Showcase"
@@ -164,173 +356,8 @@ export function PortfolioView() {
         </Button>
       }
     >
-      <PortalDataTable
-        filename="portfolio"
-        countLabel="projects"
-        searchPlaceholder="Search portfolio"
-        rows={items}
-        rowKey={(row) => row.id}
-        pageSize={limit}
-        loading={tableLoading}
-        empty={
-          search.trim()
-            ? "No projects match this search."
-            : "No portfolio projects yet. Add your first showcase."
-        }
-        serverPagination={{
-          page,
-          pageSize: limit,
-          total,
-          totalPages,
-          onPageChange,
-          search: searchInput,
-          onSearchChange,
-        }}
-        columns={[
-          {
-            id: "title",
-            header: "Project",
-            sortValue: (row) => row.title,
-            searchValue: (row) =>
-              `${row.title} ${row.description} ${row.tags.join(" ")}`,
-            exportValue: (row) => row.title,
-            cell: (row) => {
-              const cover = portfolioCoverUrl(row);
-              return (
-                <div className="flex items-center gap-3">
-                  <span className="relative size-12 shrink-0 overflow-hidden rounded-md bg-[#003F7D]">
-                    {cover ? (
-                      <Image
-                        src={cover}
-                        alt=""
-                        fill
-                        sizes="48px"
-                        className="object-cover"
-                        unoptimized={cover.startsWith("http")}
-                      />
-                    ) : null}
-                  </span>
-                  <div>
-                    <Link
-                      href={`/pro/dashboard/portfolio/${row.id}/detail`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {toTitleCase(row.title)}
-                    </Link>
-                    <p className="max-w-md truncate text-xs text-muted-foreground">
-                      {row.description || row.tags[0] || "No description"}
-                    </p>
-                  </div>
-                </div>
-              );
-            },
-          },
-          {
-            id: "category",
-            header: "Category",
-            sortValue: (row) => row.categoryName,
-            searchValue: (row) => row.categoryName,
-            exportValue: (row) => row.categoryName,
-            cell: (row) =>
-              row.categoryName ? toTitleCase(row.categoryName) : "—",
-          },
-          {
-            id: "cost",
-            header: "Cost",
-            sortValue: (row) => row.cost,
-            searchValue: (row) => String(row.cost),
-            exportValue: (row) => (row.cost ? formatMoney(row.cost) : ""),
-            className: "tabular-nums",
-            cell: (row) => (row.cost ? formatMoney(row.cost) : "—"),
-          },
-          {
-            id: "featured",
-            header: "Featured",
-            sortValue: (row) => (row.isFeatured ? 1 : 0),
-            searchValue: (row) => (row.isFeatured ? "Featured" : ""),
-            exportValue: (row) => (row.isFeatured ? "Yes" : "No"),
-            cell: (row) => (
-              <Button
-                type="button"
-                size="sm"
-                variant={row.isFeatured ? "outline" : "default"}
-                disabled={featuringId === row.id || mutating}
-                onClick={() => {
-                  void onToggleFeature(row);
-                }}
-              >
-                {featuringId === row.id ? (
-                  <Spinner size="sm" label="Updating featured" />
-                ) : null}
-                {row.isFeatured ? "Unfeature" : "Feature"}
-              </Button>
-            ),
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortValue: (row) => row.status,
-            searchValue: (row) => statusLabel(row.status),
-            exportValue: (row) => statusLabel(row.status),
-            cell: (row) => (
-              <StatusPill
-                label={statusLabel(row.status)}
-                tone={statusTone(row.status)}
-              />
-            ),
-          },
-        ]}
-        actions={(row) => [
-          { label: "Detail", href: `/pro/dashboard/portfolio/${row.id}/detail` },
-          { label: "Edit", href: `/pro/dashboard/portfolio/${row.id}` },
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => {
-              setDeleteTarget(row);
-            },
-          },
-        ]}
-      />
-
-      <Dialog
-        open={Boolean(deleteTarget)}
-        onOpenChange={(open) => {
-          if (!open && !mutating) setDeleteTarget(null);
-        }}
-      >
-        <DialogContent showCloseButton={!mutating} className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete portfolio project?</DialogTitle>
-            <DialogDescription>
-              {deleteTarget
-                ? `This will permanently remove “${toTitleCase(deleteTarget.title)}” from your portfolio.`
-                : "This will permanently remove this project from your portfolio."}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={mutating}
-              onClick={() => setDeleteTarget(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={mutating}
-              onClick={() => {
-                void confirmDelete();
-              }}
-            >
-              {mutating ? <Spinner size="sm" label="Deleting" /> : null}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {table}
+      {deleteDialog}
     </PortalPage>
   );
 }

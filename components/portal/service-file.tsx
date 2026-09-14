@@ -1279,7 +1279,7 @@ export function ServiceFormView({ id }: { id?: string }) {
                   ))}
                 </ul>
                 <Button type="button" variant="outline" size="sm" className="mt-3" asChild>
-                  <Link href="/pro/dashboard/settings#office-hours">
+                  <Link href="/pro/dashboard/profile?step=hours">
                     Edit office hours in Settings
                   </Link>
                 </Button>

@@ -1,12 +1,12 @@
-import { SettingsView } from "@/components/portal/views/billing-settings-view";
+import { BusinessProfileDetailView } from "@/components/portal/views/business-profile-detail-view";
 import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
-  "Settings",
-  "Account email, notifications, and company office hours.",
+  "Business Profile",
+  "Review your public company details and edit them step by step.",
   "/pro/dashboard/settings",
 );
 
 export default function SettingsPage() {
-  return <SettingsView />;
+  return <BusinessProfileDetailView />;
 }

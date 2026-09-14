@@ -1,12 +1,17 @@
+import { PortalSuspense } from "@/components/portal/portal-suspense";
 import { ProfileView } from "@/components/portal/views/profile-view";
 import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
-  "Business profile",
-  "Edit the company details shown on your public marketplace page.",
+  "Edit business profile",
+  "Update your company details step by step: basic data, hours, services, and portfolio.",
   "/pro/dashboard/profile",
 );
 
 export default function ProfilePage() {
-  return <ProfileView />;
+  return (
+    <PortalSuspense>
+      <ProfileView />
+    </PortalSuspense>
+  );
 }

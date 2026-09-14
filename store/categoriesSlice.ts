@@ -18,6 +18,8 @@ export type PublicCategory = {
   status?: string;
   commonServices: string[];
   workingArea: string[];
+  /** Public category photos from API (`images` array). */
+  images: string[];
   sortOrder?: number;
 };
 
@@ -132,6 +134,14 @@ export function normalizePublicCategory(raw: unknown): PublicCategory | null {
     status: typeof record.status === "string" ? record.status : undefined,
     commonServices: toStringArray(record.commonServices),
     workingArea: toStringArray(record.workingArea),
+    images: (() => {
+      const fromArray = toStringArray(record.images);
+      if (fromArray.length) return fromArray;
+      if (typeof record.image === "string" && record.image.trim()) {
+        return [record.image.trim()];
+      }
+      return [];
+    })(),
     sortOrder:
       typeof record.sortOrder === "number" ? record.sortOrder : undefined,
   };

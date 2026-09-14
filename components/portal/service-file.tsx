@@ -451,6 +451,7 @@ export function ServiceFormView({ id }: { id?: string }) {
         parentCategory: null,
         commonServices: [],
         workingArea: [],
+        images: [],
       });
     };
     ensure(draft.categoryId, draft.categoryName);
@@ -472,6 +473,7 @@ export function ServiceFormView({ id }: { id?: string }) {
         parentCategory: selectedCategoryId || null,
         commonServices: [],
         workingArea: [],
+        images: [],
       });
     };
     ensure(draft.subcategoryId, draft.subcategoryName);

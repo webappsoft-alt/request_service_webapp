@@ -4,6 +4,10 @@ import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, Eye, FileText, ImageIcon, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
 import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type CostingNoun } from "@/components/portal/job-costing";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
@@ -447,14 +451,26 @@ export function JobSettingsTab({
             <Input readOnly value={selected.email} />
           </Field>
         ) : null}
-        <Field label="Job address">
-          <Input value={draft.street} onChange={(event) => patch({ street: event.target.value })} />
-        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Job address">
+            <AddressAutocomplete
+              id="job-settings-address"
+              value={draft.street}
+              onChange={(value) => patch({ street: value })}
+              onSelect={(address: PlaceAddress) =>
+                patch({
+                  street: address.formattedAddress || address.streetAddress,
+                  city: address.city || "",
+                  state: address.state || "",
+                  zip: address.zipCode || "",
+                })
+              }
+              placeholder="Start typing a street address…"
+            />
+          </Field>
+        </div>
         <Field label="City">
           <Input value={draft.city} onChange={(event) => patch({ city: event.target.value })} />
-        </Field>
-        <Field label="State">
-          <Input value={draft.state} onChange={(event) => patch({ state: event.target.value })} />
         </Field>
         <Field label="ZIP">
           <Input value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />

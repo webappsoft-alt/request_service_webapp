@@ -610,7 +610,11 @@ export function PortfolioFormView({
             loadingMore={loadingMoreServices}
             hasMore={servicesHasMore}
             placeholder="Select fixed services"
-            emptyLabel="No fixed services yet. Add packages under Fixed service first."
+            emptyLabel="No fixed services yet"
+            emptyAction={{
+              label: "Add fixed service",
+              href: "/pro/dashboard/services/new",
+            }}
             onChange={(ids) =>
               setDraft((current) => ({
                 ...current,

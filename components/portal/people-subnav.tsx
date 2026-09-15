@@ -24,7 +24,9 @@ export function ModuleSubnav({ items }: { items: { href: string; label: string; 
           >
             {item.label}
             {item.badge ? (
-              <span className="rounded-full bg-[#003F7D] px-1.5 text-[10px] font-semibold text-white">{item.badge}</span>
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#003F7D] px-1.5 text-[10px] font-semibold leading-none text-white">
+                {item.badge > 99 ? "99+" : item.badge}
+              </span>
             ) : null}
           </Link>
         );

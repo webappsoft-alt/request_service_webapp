@@ -1,6 +1,6 @@
 /** Leaflet tile config from `.env` (no hardcoded credentials). */
 export function getMapTileLayerProps() {
-  const apiKey = process.env.NEXT_PUBLIC_MAPS_API_KEY || "";
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || "";
   const tileUrl =
     process.env.NEXT_PUBLIC_MAPS_TILE_URL ||
     "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";

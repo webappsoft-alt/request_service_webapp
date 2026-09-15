@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Check, ChevronDownIcon } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronDownIcon, Plus } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { toTitleCase } from "@/lib/format";
@@ -24,6 +25,10 @@ type PaginatedMultiSelectProps = {
   onLoadMore: () => void;
   className?: string;
   emptyLabel?: string;
+  emptyAction?: {
+    label: string;
+    href: string;
+  };
 };
 
 function isNearBottom(el: HTMLElement, threshold = 72) {
@@ -46,6 +51,7 @@ export function PaginatedMultiSelect({
   onLoadMore,
   className,
   emptyLabel = "No options found.",
+  emptyAction,
 }: PaginatedMultiSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -76,9 +82,10 @@ export function PaginatedMultiSelect({
   function toggle(idValue: string) {
     if (values.includes(idValue)) {
       onChange(values.filter((item) => item !== idValue));
-      return;
+    } else {
+      onChange([...values, idValue]);
     }
-    onChange([...values, idValue]);
+    setOpen(false);
   }
 
   useEffect(() => {
@@ -181,7 +188,10 @@ export function PaginatedMultiSelect({
             <button
               type="button"
               className="flex w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/60"
-              onClick={() => onChange([])}
+              onClick={() => {
+                onChange([]);
+                setOpen(false);
+              }}
             >
               Clear selection
             </button>
@@ -227,9 +237,25 @@ export function PaginatedMultiSelect({
           ) : null}
 
           {!loading && !options.length ? (
-            <div className="px-3 py-3 text-sm text-muted-foreground">
-              {emptyLabel}
-            </div>
+            emptyAction ? (
+              <div className="p-1">
+                <p className="px-2.5 py-1.5 text-xs text-muted-foreground">
+                  {emptyLabel}
+                </p>
+                <Link
+                  href={emptyAction.href}
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium text-primary hover:bg-muted/60"
+                >
+                  <Plus className="size-4 shrink-0" aria-hidden />
+                  {emptyAction.label}
+                </Link>
+              </div>
+            ) : (
+              <div className="px-3 py-3 text-sm text-muted-foreground">
+                {emptyLabel}
+              </div>
+            )
           ) : null}
         </div>
       ) : null}

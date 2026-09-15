@@ -60,22 +60,36 @@ function NavLinks({
                 item.href === "/pro/dashboard"
                   ? isDashboardPath(pathname)
                   : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const count = badgeFor(item.href);
               const link = (
                 <Link
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
-                  aria-label={collapsed ? item.label : undefined}
+                  aria-label={
+                    collapsed
+                      ? count
+                        ? `${item.label}, ${count}`
+                        : item.label
+                      : undefined
+                  }
                   className={cn(
-                    "flex items-center gap-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                    "relative flex items-center gap-2.5 py-1.5 text-[13px] font-medium transition-colors",
                     collapsed ? "justify-center px-0" : "px-3",
                     isActive ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
                   )}
                 >
-                  <Icon className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="relative shrink-0">
+                    <Icon className="size-4" aria-hidden="true" />
+                    {collapsed && count > 0 ? (
+                      <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]">
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    ) : null}
+                  </span>
                   {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
-                  {!collapsed && badgeFor(item.href) ? (
-                    <span className="ml-auto rounded-full bg-white/20 px-1.5 text-[10px] font-semibold">
-                      {badgeFor(item.href)}
+                  {!collapsed && count > 0 ? (
+                    <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]">
+                      {count > 99 ? "99+" : count}
                     </span>
                   ) : null}
                 </Link>

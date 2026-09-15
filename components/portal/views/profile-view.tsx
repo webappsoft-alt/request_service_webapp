@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Camera, Check, Loader2 } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
@@ -22,6 +22,7 @@ import {
 import { BusinessGalleryEditor } from "@/components/portal/business-gallery-editor";
 import { HoursEditor } from "@/components/portal/hours-editor";
 import { PortalPage } from "@/components/portal/portal-page";
+import { PortfolioFormView } from "@/components/portal/portfolio-file";
 import { usePortalSettings } from "@/components/portal/use-portal-settings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -87,27 +88,27 @@ const STEPS = [
   "account",
   "business",
   "profile",
-  "gallery",
   "hours",
   "categories",
   "subservices",
+  "portfolio",
 ] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
   account: "Account",
-  business: "Company",
-  profile: "About",
-  gallery: "Gallery",
+  business: "Business",
+  profile: "Profile",
   hours: "Hours",
   categories: "Services",
-  subservices: "Jobs",
+  subservices: "Sub-services",
+  portfolio: "Portfolio",
 };
 
 const LEGACY_STEP_MAP: Record<string, Step> = {
   basic: "account",
   services: "categories",
-  portfolio: "gallery",
+  gallery: "profile",
 };
 
 function parseStep(value: string | null): Step {
@@ -209,6 +210,7 @@ export function ProfileView() {
   const zipRef = useRef<HTMLInputElement>(null);
   const formReadyRef = useRef(false);
   const hoursSynced = useRef(false);
+  const portfolioSubmitRef = useRef<(() => Promise<boolean>) | null>(null);
 
   const step = parseStep(searchParams.get("step"));
   const stepIndex = STEPS.indexOf(step);
@@ -659,6 +661,13 @@ export function ProfileView() {
   }
 
   async function onFinalSubmit() {
+    if (!validateStep("account") || !validateStep("business")) return;
+    if (!galleryIsReady(gallery)) {
+      toast.error("Add 3–7 gallery photos and choose a main banner on the Profile step.");
+      goTo("profile");
+      return;
+    }
+
     setSaving(true);
     try {
       const profileOk = await saveProfile();
@@ -667,10 +676,9 @@ export function ProfileView() {
       const hoursOk = await persistOfficeHours();
       if (!hoursOk) return;
 
-      if (!galleryIsReady(gallery)) {
-        toast.error("Add 3–7 gallery photos and choose a main banner.");
-        goTo("gallery");
-        return;
+      if (portfolioSubmitRef.current) {
+        const portfolioOk = await portfolioSubmitRef.current();
+        if (!portfolioOk) return;
       }
 
       toast.success("Business profile updated successfully");
@@ -697,28 +705,17 @@ export function ProfileView() {
       toast.error("Company name is required.");
       return false;
     }
-    if (current === "gallery" && !galleryIsReady(gallery)) {
-      toast.error("Add at least 3 photos and choose a main banner.");
+    if (current === "profile" && !galleryIsReady(gallery)) {
+      toast.error("Add at least 3 gallery photos and choose a main banner.");
       return false;
     }
     return true;
   }
 
-  async function onNext() {
+  function onNext() {
     if (!validateStep(step)) return;
-    setSaving(true);
-    try {
-      const profileOk = await saveProfile();
-      if (!profileOk) return;
-      if (step === "hours") {
-        const hoursOk = await persistOfficeHours();
-        if (!hoursOk) return;
-      }
-      if (stepIndex < STEPS.length - 1) {
-        goTo(STEPS[stepIndex + 1]);
-      }
-    } finally {
-      setSaving(false);
+    if (stepIndex < STEPS.length - 1) {
+      goTo(STEPS[stepIndex + 1]);
     }
   }
 
@@ -736,7 +733,7 @@ export function ProfileView() {
     <PortalPage
       eyebrow="Public listing"
       title="Edit business profile"
-      description="Finish each step so customers can find you. Click any step to jump there."
+      description="One section at a time. Changes stay on this page until you Submit on the last step."
       actions={
         <Button asChild variant="outline">
           <Link href="/pro/dashboard/settings">Back</Link>
@@ -744,43 +741,26 @@ export function ProfileView() {
       }
     >
       <div className="flex w-full flex-col gap-5">
-        <ol className="flex flex-wrap gap-2">
+        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
           {STEPS.map((item, index) => {
             const current = item === step;
             const done = index < stepIndex;
             return (
-              <li key={item}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void saveProfile();
-                    goTo(item);
-                  }}
+              <li key={item} className="flex flex-col gap-1.5">
+                <span
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-xs transition",
-                    current
-                      ? "border-primary bg-primary/5 font-medium shadow-sm"
-                      : done
-                        ? "border-input bg-card text-muted-foreground hover:border-primary/40"
-                        : "border-dashed border-input bg-muted/20 text-muted-foreground hover:bg-card",
+                    "h-1.5 rounded-full",
+                    current || done ? "bg-primary" : "bg-border",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "text-[11px] font-medium",
+                    current ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
-                  {done ? (
-                    <Check className="size-3.5 text-emerald-600" />
-                  ) : (
-                    <span
-                      className={cn(
-                        "inline-flex size-3.5 items-center justify-center rounded-full text-[9px] font-semibold",
-                        current
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {index + 1}
-                    </span>
-                  )}
                   {STEP_LABELS[item]}
-                </button>
+                </span>
               </li>
             );
           })}
@@ -874,7 +854,8 @@ export function ProfileView() {
                     id="email"
                     type="email"
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    disabled
+                    readOnly
                   />
                 </Field>
               </div>
@@ -1092,6 +1073,15 @@ export function ProfileView() {
                 </Field>
               </div>
             </FieldGroup>
+            <div className="mt-6 border-t border-border pt-5">
+              <p className="text-sm font-semibold">Main business gallery</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Upload 3–7 photos. Set one as the main banner for your public profile.
+              </p>
+              <div className="mt-4">
+                <BusinessGalleryEditor images={gallery} onChange={setGallery} />
+              </div>
+            </div>
           </section>
         ) : null}
 
@@ -1220,17 +1210,12 @@ export function ProfileView() {
           </section>
         ) : null}
 
-        {step === "gallery" ? (
-          <section className="rounded-xl border border-input bg-card p-5">
-            <p className="text-sm font-semibold">Main business gallery</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Upload 3–7 photos of your company. Set one as the main banner — that image
-              leads your public profile, and the rest appear in the photo swiper.
-            </p>
-            <div className="mt-4">
-              <BusinessGalleryEditor images={gallery} onChange={setGallery} />
-            </div>
-          </section>
+        {step === "portfolio" ? (
+          <PortfolioFormView
+            embedded
+            deferSubmit
+            submitRef={portfolioSubmitRef}
+          />
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1251,7 +1236,7 @@ export function ProfileView() {
                   className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
                 />
               ) : (
-                "Save and finish"
+                "Submit"
               )}
             </Button>
           ) : (

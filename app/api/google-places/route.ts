@@ -10,7 +10,7 @@ type AddressComponent = {
 function googlePlacesKey(): string {
   // Server-only. Do not read NEXT_PUBLIC_* here — Next inlines those at
   // build time and Netlify redacts the value in uploaded functions.
-  return process.env.GOOGLE_PLACES_API_KEY?.trim() || "";
+  return process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() || "";
 }
 
 function componentName(

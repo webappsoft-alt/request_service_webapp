@@ -310,6 +310,7 @@ function notifyRequestError(error: unknown, silent?: boolean): void {
 const TOKEN_REFRESH_MESSAGES = new Set([
   "Session has been terminated. Please login again.",
   "Session expired, please login again",
+  "Invalid or expired token",
 ]);
 
 /**
@@ -426,8 +427,8 @@ function handleHttpError(
 ): never {
   const silent = typeof options === "boolean" ? options : options?.silent;
 
-  // Never auto-logout on 401 here — expired tokens are handled via refresh
-  // + retry in unwrapWithRefresh. All other 401s are normal API errors.
+  // Expired/invalid session tokens are refreshed + retried in unwrapWithRefresh.
+  // If refresh fails there, the user is logged out before this runs.
   notifyRequestError(error, silent);
   throw error;
 }
@@ -511,9 +512,14 @@ async function unwrapWithRefresh<T>(
           const retry = await run();
           return retry.data;
         } catch (retryError) {
+          // New access token still rejected — end the session.
+          handleUserLogout({ silent: true });
           handleHttpError(retryError, options);
         }
       }
+
+      // Access token expired/invalid and refresh failed — force re-login.
+      handleUserLogout({ silent: true });
     }
 
     handleHttpError(error, options);
@@ -650,7 +656,9 @@ export const api = {
 
 /**
  * Refresh latest user via GET /user/me when logged in.
- * Only updates the persisted `user` (and provider) — never replaces the token.
+ * Always hits the network (no GET cache). Only updates the persisted `user`
+ * (and provider) — never replaces the token unless refresh-token runs first
+ * because the access token expired.
  */
 export async function refreshAuthMe(): Promise<AuthUser | null> {
   if (!isBrowser()) return null;
@@ -661,6 +669,9 @@ export async function refreshAuthMe(): Promise<AuthUser | null> {
 
   authMePromise = (async () => {
     try {
+      // Drop any short-lived cached /me so navigation always revalidates.
+      invalidateCachedGets(userApi.me);
+
       const meRes = await getData<{
         user?: AuthUser & { _id?: string; name?: string };
         data?: AuthUser & { _id?: string; name?: string };
@@ -669,7 +680,7 @@ export async function refreshAuthMe(): Promise<AuthUser | null> {
         phone?: string;
         firstName?: string;
         [key: string]: unknown;
-      }>(userApi.me, undefined, { silent: true });
+      }>(userApi.me, undefined, { silent: true, force: true });
 
       // API may return `{ data: user }`, `{ user }`, or the user object itself.
       const nestedData = meRes?.data;

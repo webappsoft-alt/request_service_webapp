@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -120,6 +124,13 @@ export function CreateEstimateDialog({
       setState(nextAddress.state);
       setZip(nextAddress.zip);
     }
+  }
+
+  function applyJobAddress(address: PlaceAddress) {
+    setStreet(address.formattedAddress || address.streetAddress);
+    setCity(address.city || "");
+    setState(address.state || "");
+    setZip(address.zipCode || "");
   }
 
   async function create() {
@@ -273,14 +284,17 @@ export function CreateEstimateDialog({
             <Field label="Expires">
               <Input type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
             </Field>
-            <Field label="Job address">
-              <Input value={street} onChange={(event) => setStreet(event.target.value)} />
+            <Field label="Job address" className="sm:col-span-2">
+              <AddressAutocomplete
+                id="estimate-job-address"
+                value={street}
+                onChange={setStreet}
+                onSelect={applyJobAddress}
+                placeholder="Start typing a street address…"
+              />
             </Field>
             <Field label="City">
               <Input value={city} onChange={(event) => setCity(event.target.value)} />
-            </Field>
-            <Field label="State">
-              <Input value={state} onChange={(event) => setState(event.target.value)} />
             </Field>
             <Field label="ZIP">
               <Input value={zip} onChange={(event) => setZip(event.target.value)} />

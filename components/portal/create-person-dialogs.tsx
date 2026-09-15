@@ -42,6 +42,7 @@ import {
   REMINDER_SUBJECT_KINDS,
   reminderSubjectKindLabel,
 } from "@/lib/data/crm-people";
+import { todayISO } from "@/components/portal/work-builders";
 
 const SOURCES: CrmPersonSource[] = ["external", "phone", "referral", "walk_in", "website"];
 const TYPES: CrmCustomerType[] = ["residential", "commercial", "property_manager"];
@@ -580,7 +581,16 @@ export function CreateReminderDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="rem-due">Due</FieldLabel>
-              <Input id="rem-due" type="date" value={dueAt} onChange={(change) => setDueAt(change.target.value)} />
+              <Input
+                id="rem-due"
+                type="date"
+                min={todayISO()}
+                value={dueAt}
+                onChange={(change) => {
+                  const next = change.target.value;
+                  setDueAt(next && next < todayISO() ? todayISO() : next);
+                }}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="rem-emp">Assigned</FieldLabel>
@@ -791,7 +801,16 @@ export function CreateTaskDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="task-due">Due</FieldLabel>
-            <Input id="task-due" type="date" value={dueAt} onChange={(change) => setDueAt(change.target.value)} />
+            <Input
+              id="task-due"
+              type="date"
+              min={todayISO()}
+              value={dueAt}
+              onChange={(change) => {
+                const next = change.target.value;
+                setDueAt(next && next < todayISO() ? todayISO() : next);
+              }}
+            />
           </Field>
         </FieldGroup>
         <DialogFooter>

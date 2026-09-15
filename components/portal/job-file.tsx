@@ -134,8 +134,6 @@ function Detail({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-const MAX_FILE = 2 * 1024 * 1024;
-
 function stamp(value: string) {
   const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
   return new Intl.DateTimeFormat("en-US", {
@@ -531,10 +529,6 @@ export function JobAttachmentsTab({
 
   function readFiles(list: FileList | File[]) {
     for (const file of Array.from(list)) {
-      if (file.size > MAX_FILE) {
-        toast.error(`${file.name} is over 2 MB.`);
-        continue;
-      }
       const reader = new FileReader();
       reader.onload = () => {
         addAttachments([
@@ -584,7 +578,7 @@ export function JobAttachmentsTab({
       >
         <Upload className="size-6 text-primary" />
         <p className="text-sm font-medium">Drop files here or browse</p>
-        <p className="text-xs text-muted-foreground">PDF, images, and documents up to 2 MB</p>
+        <p className="text-xs text-muted-foreground">PDF, images, and documents</p>
         <input
           className="sr-only"
           type="file"

@@ -28,6 +28,7 @@ import {
   normalizePublicProfessional,
   publicProfessionalToProvider,
   selectPublicProfessionalBySlug,
+  setPublicPortfolioProjects,
   setPublicProfessionalDetail,
   type PublicProfessional,
   type PublicProfessionalActiveService,
@@ -571,6 +572,16 @@ export function PublicProfessionalDetail({
     });
   }, [portfolioProjects, provider]);
 
+  useEffect(() => {
+    if (!professionalSlug || !portfolioProjects.length) return;
+    dispatch(
+      setPublicPortfolioProjects({
+        providerSlug: professionalSlug,
+        projects: portfolioProjects,
+      }),
+    );
+  }, [dispatch, portfolioProjects, professionalSlug]);
+
   const liveFixedServices = useMemo(
     () => activeServicesToPortal(professional?.activeServices),
     [professional?.activeServices],
@@ -597,6 +608,14 @@ export function PublicProfessionalDetail({
                 areaLabels,
                 portfolioLoading,
                 relatedLoading,
+                onProjectBeforeNavigate: () => {
+                  dispatch(
+                    setPublicPortfolioProjects({
+                      providerSlug: provider.slug,
+                      projects: portfolioProjects,
+                    }),
+                  );
+                },
                 onRelatedBeforeNavigate: (related) => {
                   if (related.slug) {
                     dispatch(setPublicProfessionalDetail(stashRelatedProfessional(related)));

@@ -29,6 +29,10 @@ export type PortfolioStatus = "ACTIVE" | "HIDDEN" | "ARCHIVED";
 export type PortfolioLinkedService = {
   id: string;
   name: string;
+  slug?: string;
+  price?: number;
+  unit?: string;
+  images?: string[];
 };
 
 export type PortfolioProject = {
@@ -198,12 +202,29 @@ function normalizeStatus(value: unknown): PortfolioStatus {
 function normalizeLinkedService(raw: unknown): PortfolioLinkedService | null {
   const id = idOf(raw);
   if (!id) return null;
+  const record = asRecord(raw);
+  const imagesRaw = Array.isArray(record?.images) ? record.images : [];
+  const images = imagesRaw
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+  const priceRaw = record?.price;
+  const price =
+    typeof priceRaw === "number"
+      ? priceRaw
+      : Number(priceRaw);
   return {
     id,
     name:
       nameOf(raw) ||
-      (asRecord(raw)?.servicesName as string) ||
+      (typeof record?.servicesName === "string" && record.servicesName) ||
       "Fixed service",
+    slug:
+      typeof record?.slug === "string" && record.slug.trim()
+        ? record.slug.trim()
+        : undefined,
+    price: Number.isFinite(price) ? price : undefined,
+    unit: typeof record?.unit === "string" ? record.unit : undefined,
+    images: images.length ? images : undefined,
   };
 }
 

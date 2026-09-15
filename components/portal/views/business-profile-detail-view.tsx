@@ -1,22 +1,45 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { CalendarDays, Globe, MapPin, Phone, ShieldCheck, Users } from "lucide-react";
+import Image from "next/image";
+import { PortfolioView } from "@/components/portal/views/portfolio-view";
 import { PortalPage } from "@/components/portal/portal-page";
+import {
+  galleryBanner,
+  galleryRest,
+  normalizeBusinessGallery,
+} from "@/lib/business-gallery";
 import { usePortalSettings } from "@/components/portal/use-portal-settings";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { coverageNeighborhoodLabels } from "@/lib/coverage-areas";
 import { getServiceCategoryById } from "@/lib/data/services";
 import { formatHoursValue, formatLocation, formatWorkingDay } from "@/lib/format";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   getUserAvatarSrc,
   selectAuthProvider,
   selectAuthUser,
 } from "@/store/authSlice";
+import { fetchServiceAreasPicker } from "@/store/serviceAreasSlice";
+import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
+import {
+  getProfileSetupItems,
+  profileSetupProgress,
+} from "@/lib/business-profile-setup";
+
+function SectionEdit({ href }: { href: string }) {
+  return (
+    <Button asChild size="sm" variant="outline">
+      <Link href={href}>Edit</Link>
+    </Button>
+  );
+}
 
 function DetailRow({
   label,
@@ -36,10 +59,27 @@ function DetailRow({
 }
 
 export function BusinessProfileDetailView() {
+  const dispatch = useAppDispatch();
   const user = useAppSelector(selectAuthUser);
   const authProvider = useAppSelector(selectAuthProvider);
+  const pickerItems = useAppSelector(
+    (state) => state.serviceAreas?.pickerItems ?? [],
+  );
+  const listItems = useAppSelector((state) => state.serviceAreas?.items ?? []);
   const { provider } = usePortalWorkspace();
   const { officeHours } = usePortalSettings();
+
+  useEffect(() => {
+    void dispatch(fetchServiceAreasPicker());
+  }, [dispatch]);
+
+  const areasById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const area of [...listItems, ...pickerItems]) {
+      if (area?.id && area.title) map.set(area.id, area.title);
+    }
+    return map;
+  }, [listItems, pickerItems]);
 
   const firstName = String(user?.firstName || "").trim();
   const lastName = String(user?.lastName || "").trim();
@@ -62,11 +102,10 @@ export function BusinessProfileDetailView() {
   const categories = categoryIds
     .map((id) => getServiceCategoryById(id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  const neighborhoods = Array.isArray(authProvider?.coverage?.neighborhoods)
-    ? authProvider.coverage.neighborhoods.filter(
-        (area): area is string => typeof area === "string",
-      )
-    : [];
+  const neighborhoods = coverageNeighborhoodLabels(
+    authProvider?.coverage?.neighborhoods,
+    areasById,
+  );
   const startingPrice =
     typeof authProvider?.services?.startingPrice === "number"
       ? authProvider.services.startingPrice
@@ -82,22 +121,51 @@ export function BusinessProfileDetailView() {
   const email = String(provider.email || user?.email || "").trim();
   const about = String(authProvider?.description || provider.description || "").trim();
   const tagline = String(authProvider?.tagline || provider.tagline || "").trim();
+  const gallery = normalizeBusinessGallery(authProvider?.businessGallery);
+  const banner = galleryBanner(gallery);
+  const otherPhotos = galleryRest(gallery);
+  const setupItems = getProfileSetupItems(user, authProvider, officeHours);
+  const setup = profileSetupProgress(setupItems);
 
   return (
     <PortalPage
       eyebrow="Public listing"
       title="Business Profile"
-      description="Review your public company details. Use Edit to update them step by step."
+      description="Review your public company details. Edit any section to finish what’s left."
       actions={
         <Button asChild>
-          <Link href="/pro/dashboard/profile">Edit</Link>
+          <Link href={setup.next?.href || "/pro/dashboard/profile"}>
+            {setup.percent < 100 ? "Continue setup" : "Edit profile"}
+          </Link>
         </Button>
       }
     >
+      {setup.percent < 100 ? (
+        <Card className="border-primary/20 bg-primary/[0.03]">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base">Set up your business profile</CardTitle>
+              <ProfileSetupSummary
+                done={setup.done}
+                total={setup.total}
+                percent={setup.percent}
+                nextLabel={setup.next?.label}
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-3 h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${setup.percent}%` }} />
+            </div>
+            <ProfileSetupChips items={setupItems} />
+          </CardContent>
+        </Card>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader className="border-b">
+              <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex flex-wrap items-center gap-4">
                 <Avatar className="size-16 border border-border">
                   {avatar ? <AvatarImage src={avatar} alt={displayName} /> : null}
@@ -114,6 +182,8 @@ export function BusinessProfileDetailView() {
                   ) : null}
                   <p className="mt-1 text-sm text-muted-foreground">{displayName}</p>
                 </div>
+              </div>
+              <SectionEdit href="/pro/dashboard/profile?step=account" />
               </div>
             </CardHeader>
             <CardContent className="pt-1">
@@ -165,8 +235,9 @@ export function BusinessProfileDetailView() {
           </Card>
 
           <Card>
-            <CardHeader className="border-b">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
               <CardTitle>About the company</CardTitle>
+              <SectionEdit href="/pro/dashboard/profile?step=profile" />
             </CardHeader>
             <CardContent className="pt-4">
               <p className="text-sm leading-6 text-foreground">
@@ -206,8 +277,9 @@ export function BusinessProfileDetailView() {
           </Card>
 
           <Card>
-            <CardHeader className="border-b">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
               <CardTitle>Coverage areas</CardTitle>
+              <SectionEdit href="/pro/dashboard/profile?step=business" />
             </CardHeader>
             <CardContent className="pt-4">
               {neighborhoods.length ? (
@@ -229,8 +301,9 @@ export function BusinessProfileDetailView() {
 
         <div className="flex flex-col gap-4">
           <Card>
-            <CardHeader className="border-b">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
               <CardTitle>Services</CardTitle>
+              <SectionEdit href="/pro/dashboard/profile?step=categories" />
             </CardHeader>
             <CardContent className="flex flex-col gap-4 pt-4">
               {categories.length ? (
@@ -246,16 +319,6 @@ export function BusinessProfileDetailView() {
                   No service categories selected yet.
                 </p>
               )}
-              {offeredJobs.length ? (
-                <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                  {offeredJobs.slice(0, 8).map((job) => (
-                    <li key={job}>• {job}</li>
-                  ))}
-                  {offeredJobs.length > 8 ? (
-                    <li>+{offeredJobs.length - 8} more</li>
-                  ) : null}
-                </ul>
-              ) : null}
               {startingPrice != null ? (
                 <p className="text-sm">
                   Starting from{" "}
@@ -266,8 +329,32 @@ export function BusinessProfileDetailView() {
           </Card>
 
           <Card>
-            <CardHeader className="border-b">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+              <CardTitle>Jobs you offer</CardTitle>
+              <SectionEdit href="/pro/dashboard/profile?step=subservices" />
+            </CardHeader>
+            <CardContent className="pt-4">
+              {offeredJobs.length ? (
+                <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                  {offeredJobs.slice(0, 8).map((job) => (
+                    <li key={job}>• {job}</li>
+                  ))}
+                  {offeredJobs.length > 8 ? (
+                    <li>+{offeredJobs.length - 8} more</li>
+                  ) : null}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No jobs selected yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
               <CardTitle>Working hours</CardTitle>
+              <SectionEdit href="/pro/dashboard/profile?step=hours" />
             </CardHeader>
             <CardContent className="pt-4">
               {officeHours.length ? (
@@ -290,24 +377,48 @@ export function BusinessProfileDetailView() {
           </Card>
 
           <Card>
-            <CardHeader className="border-b">
-              <CardTitle>Portfolio</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+              <CardTitle>Main business gallery</CardTitle>
+              <SectionEdit href="/pro/dashboard/profile?step=gallery" />
             </CardHeader>
-            <CardContent className="flex flex-col gap-3 pt-4">
-              <p className="text-sm text-muted-foreground">
-                Manage showcase projects from the edit flow or the Portfolio page.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/pro/dashboard/profile?step=portfolio">Manage in Edit</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/pro/dashboard/portfolio">Open Portfolio</Link>
-                </Button>
-              </div>
+            <CardContent className="pt-4">
+              {banner ? (
+                <div className="flex flex-col gap-3">
+                  <div className="relative aspect-[16/8] overflow-hidden rounded-lg border">
+                    <Image
+                      src={banner.url}
+                      alt="Main banner"
+                      fill
+                      unoptimized
+                      className="object-cover"
+                      sizes="360px"
+                    />
+                  </div>
+                  {otherPhotos.length ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {otherPhotos.map((photo) => (
+                        <div key={photo.url} className="relative aspect-square overflow-hidden rounded-md border">
+                          <Image src={photo.url} alt="" fill unoptimized className="object-cover" sizes="120px" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">
+                    {gallery.length} of 7 photos · banner shows first on your public profile
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Add 3–7 photos and choose a main banner for your public profile.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <PortfolioView embedded />
       </div>
     </PortalPage>
   );

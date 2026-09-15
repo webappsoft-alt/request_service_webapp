@@ -1,22 +1,43 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChatPanel } from "@/components/shared/chat-panel";
+import { NoData } from "@/components/shared/no-data";
 import { PortalPage } from "@/components/portal/portal-page";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
 import { useRealtime } from "@/components/realtime/realtime-provider";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export function MessagesView() {
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("thread") ?? "";
+  const [query, setQuery] = useState("");
   const { threads, send, markRead } = useChatThreads();
   const { joinThread, leaveThread, setTyping, connected } = useRealtime();
-  const selected = threads.find((item) => item.id === selectedId) ?? threads[0];
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return threads;
+    return threads.filter((thread) => {
+      const haystack = [
+        thread.customerName,
+        thread.customerEmail,
+        thread.messages.at(-1)?.text,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [query, threads]);
+  const selected =
+    filtered.find((item) => item.id === selectedId) ??
+    threads.find((item) => item.id === selectedId) ??
+    filtered[0];
 
   useEffect(() => {
     if (selected?.unreadForProvider) markRead(selected.id);
@@ -36,34 +57,53 @@ export function MessagesView() {
     >
       {threads.length ? (
         <div className="grid min-h-[32rem] overflow-hidden rounded-xl border border-input bg-card lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <ul className="divide-y divide-black/8 border-b border-black/8 lg:border-r lg:border-b-0">
-            {threads.map((thread) => {
-              const active = selected?.id === thread.id;
-              const last = thread.messages.at(-1);
-              return (
-                <li key={thread.id}>
-                  <Link
-                    href={`/pro/dashboard/messages?thread=${thread.id}`}
-                    className={cn(
-                      "flex flex-col gap-1 px-4 py-3 text-sm",
-                      active ? "bg-[#003F7D]/8" : "hover:bg-[#eef1f5]",
-                    )}
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{thread.customerName}</span>
-                      {thread.unreadForProvider ? (
-                        <StatusPill label={`${thread.unreadForProvider} new`} tone="warning" />
-                      ) : null}
-                    </span>
-                    <span className="line-clamp-2 text-xs text-muted-foreground">
-                      {last?.text ||
-                        (last?.attachments.length ? last.attachments[0]?.name : "No messages yet")}
-                    </span>
-                  </Link>
+          <div className="flex min-h-0 flex-col border-b border-black/8 lg:border-r lg:border-b-0">
+            <div className="border-b border-black/8 p-3">
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search chats…"
+                aria-label="Search chats"
+                className="h-8"
+              />
+            </div>
+            <ul className="divide-y divide-black/8 overflow-y-auto">
+              {filtered.length ? (
+                filtered.map((thread) => {
+                  const active = selected?.id === thread.id;
+                  const last = thread.messages.at(-1);
+                  return (
+                    <li key={thread.id}>
+                      <Link
+                        href={`/pro/dashboard/messages?thread=${thread.id}`}
+                        className={cn(
+                          "flex flex-col gap-1 px-4 py-3 text-sm",
+                          active ? "bg-[#003F7D]/8" : "hover:bg-[#eef1f5]",
+                        )}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{thread.customerName}</span>
+                          {thread.unreadForProvider ? (
+                            <StatusPill label={`${thread.unreadForProvider} new`} tone="warning" />
+                          ) : null}
+                        </span>
+                        <span className="line-clamp-2 text-xs text-muted-foreground">
+                          {last?.text ||
+                            (last?.attachments.length
+                              ? last.attachments[0]?.name
+                              : "No messages yet")}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })
+              ) : (
+                <li className="px-4 py-6 text-sm text-muted-foreground">
+                  No chats match that search.
                 </li>
-              );
-            })}
-          </ul>
+              )}
+            </ul>
+          </div>
           {selected ? (
             <div className="flex min-h-0 flex-col">
               <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
@@ -92,15 +132,17 @@ export function MessagesView() {
                 footer="The customer sees this on the public profile chat."
               />
             </div>
-          ) : null}
+          ) : (
+            <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+              Select a conversation
+            </div>
+          )}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-input bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted-foreground">
-            No chats yet. When a customer messages from a profile or sends a quote request, it shows
-            here.
-          </p>
-        </div>
+        <NoData
+          title="No messages yet"
+          description="When a customer chats from your public profile or quote request, threads appear here."
+        />
       )}
     </PortalPage>
   );

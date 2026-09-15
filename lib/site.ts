@@ -1,10 +1,10 @@
 export const siteConfig = {
-  name: "Request Services",
+  name: "Request Service",
   shortName: "Request",
-  legalName: "Request Services, Inc.",
+  legalName: "Request Service, Inc.",
   tagline: "The professional marketplace for home services.",
   description:
-    "Request Services connects homeowners with trusted local professionals for plumbing, HVAC, electrical, and more — and gives service businesses the tools to manage estimates, jobs, invoices, and payments.",
+    "Request Service connects homeowners with trusted local professionals for plumbing, HVAC, electrical, and more — and gives service businesses the tools to manage estimates, jobs, invoices, and payments.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.requestservices.com",
   locale: "en_US",
   language: "en-US",
@@ -26,7 +26,7 @@ export const siteConfig = {
     facebook: "https://www.facebook.com/requestservices",
     instagram: "https://www.instagram.com/requestservices",
   },
-  founder: "Request Services",
+  founder: "Request Service",
 } as const;
 
 export type SiteConfig = typeof siteConfig;

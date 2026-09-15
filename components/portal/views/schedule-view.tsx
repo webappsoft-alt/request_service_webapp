@@ -12,7 +12,7 @@ import { calendarEventKindLabel, formatClock, windowFromMinutes } from "@/lib/da
 import { formatDate } from "@/lib/format";
 
 export function ScheduleView() {
-  const { events, employees, assign, employeeLabel } = usePortalCrew();
+  const { events, employees, assign, employeeLabel, removeSchedule } = usePortalCrew();
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const [scheduling, setScheduling] = useState(false);
 
@@ -51,15 +51,37 @@ export function ScheduleView() {
       title="Schedule"
       description="Day, week, and month views. Drag a job to any time, or pull the edge to extend it."
       actions={
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing(null);
-            setScheduling(true);
-          }}
-        >
-          Assign work
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {editing ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void Promise.resolve(removeSchedule(editing.id))
+                  .then(() => {
+                    toast.success(`${editing.title} removed from the schedule.`);
+                    setEditing(null);
+                  })
+                  .catch((error) => {
+                    toast.error(
+                      error instanceof Error ? error.message : "Could not remove this schedule item.",
+                    );
+                  });
+              }}
+            >
+              Remove from calendar
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setScheduling(true);
+            }}
+          >
+            Assign work
+          </Button>
+        </div>
       }
     >
       <EventCalendar

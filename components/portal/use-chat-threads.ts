@@ -35,12 +35,14 @@ export function useChatThreads() {
   const crm = useCrmApiData();
   const email = session?.email || provider.email;
   const apiReady = crm.enabled && crm.ready;
+  const liveOnly = Boolean(session) || crm.enabled;
   const threads = useSyncExternalStore(
     subscribeChat,
     () => snapshotFor(email),
     () => EMPTY,
   );
-  const resolvedThreads = apiReady ? crm.chats : threads;
+  // Authenticated / CRM sessions never fall back to local demo chat threads.
+  const resolvedThreads = apiReady ? crm.chats : liveOnly ? EMPTY : threads;
 
   const unread = useMemo(
     () => resolvedThreads.reduce((sum, item) => sum + item.unreadForProvider, 0),

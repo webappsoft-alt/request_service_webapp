@@ -43,8 +43,10 @@ const initialState: LocationState = {
 };
 
 export function locationFromPlace(place: PlaceAddress): CustomerLocation {
+  const cityLabel = [place.city, place.state].filter(Boolean).join(", ").trim();
   return {
-    address: place.formattedAddress || place.streetAddress || "",
+    // Keep structured street in address for booking; city search UIs use locationDisplayLabel.
+    address: place.formattedAddress || place.streetAddress || cityLabel || "",
     zip: place.zipCode || "",
     city: place.city || "",
     state: place.state || "",
@@ -54,13 +56,39 @@ export function locationFromPlace(place: PlaceAddress): CustomerLocation {
   };
 }
 
-/** Preferred label for search UI / filter chips. */
+/** Preferred label for city/ZIP search UI — never a full street address. */
 export function locationDisplayLabel(location: CustomerLocation): string {
   const city = location.city.split(",")[0]?.trim() ?? "";
-  if (city && !/^\d{5}$/.test(city)) return city;
-  if (location.address.trim()) return location.address.trim();
+  const state = location.state.trim();
+  if (city && !/^\d{5}$/.test(city)) {
+    return state ? `${city}, ${state}` : city;
+  }
   if (location.zip.trim()) return location.zip.trim();
+
+  // Fallback: city-like address (no leading street number).
+  const address = location.address.trim();
+  if (address && !/^\d/.test(address)) {
+    const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+    if (parts.length >= 2) return `${parts[0]}, ${parts[1]}`;
+    return parts[0] || "";
+  }
   return "";
+}
+
+/** City/ZIP label from a resolved place (main search / geo detect). */
+export function placeCityLabel(place: PlaceAddress): string {
+  const city = place.city.trim();
+  const state = place.state.trim();
+  if (city && state) return `${city}, ${state}`;
+  if (city) return city;
+  if (place.zipCode.trim()) return place.zipCode.trim();
+  const formatted = place.formattedAddress.trim();
+  if (formatted && !/^\d/.test(formatted)) {
+    const parts = formatted.split(",").map((part) => part.trim()).filter(Boolean);
+    if (parts.length >= 2) return `${parts[0]}, ${parts[1]}`;
+    return parts[0] || "";
+  }
+  return place.zipCode.trim() || "";
 }
 
 /** True when location is a selected/hydrated place (not mid-typing draft). */
@@ -220,6 +248,9 @@ const locationSlice = createSlice({
       state.latitude = null;
       state.longitude = null;
       state.detectError = null;
+      // User cleared the search — do not auto-detect again; show unfiltered results.
+      state.detectAttempted = true;
+      state.detecting = false;
     },
   },
   extraReducers: (builder) => {

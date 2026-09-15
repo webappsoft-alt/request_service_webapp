@@ -23,7 +23,8 @@ import { ProviderLogo } from "@/components/shared/provider-logo";
 import { Rating } from "@/components/shared/rating";
 import { ServiceOfferCard } from "@/components/shared/service-card";
 import { ServiceAreaMapLazy } from "@/components/marketplace/service-area-map-lazy";
-import { CenteredSpinner } from "@/components/ui/spinner";
+import { ProviderCardSkeleton } from "@/components/shared/loading-skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   displayWebsite,
   getProviderContact,
@@ -65,8 +66,10 @@ export function ProviderProfile({
 }) {
   const isLive = Boolean(live);
   const photos = live?.photos ?? getProviderPhotos(provider);
-  const projects = live?.projects ?? getProviderProjects(provider);
-  const relatedProviders = live?.relatedProviders ?? getRelatedProviders(provider);
+  const projects = live ? (live.projects ?? []) : getProviderProjects(provider);
+  const relatedProviders = live
+    ? (live.relatedProviders ?? [])
+    : getRelatedProviders(provider);
   const explore = getProfileExplore(provider, categories, place);
   const areas =
     live?.areaLabels?.length
@@ -76,9 +79,9 @@ export function ProviderProfile({
   const socials = getProviderSocials(provider);
   const contact = getProviderContact(provider);
   const website = getProviderWebsite(provider);
-  const fixedServices =
-    live?.fixedServices ??
-    getPortalServices(provider).filter((item) => item.active);
+  const fixedServices = live
+    ? (live.fixedServices ?? [])
+    : getPortalServices(provider).filter((item) => item.active);
   const showHours = isLive || provider.workingHours.length > 0;
   const showRelated = isLive || relatedProviders.length > 0;
 
@@ -105,22 +108,22 @@ export function ProviderProfile({
         </nav>
 
         <div className="mb-4">
-          <p className="eyebrow text-muted-foreground">Featured work</p>
-          <h2 className="mt-1 text-2xl font-semibold">Recent photos</h2>
+          <p className="eyebrow text-muted-foreground">Main business gallery</p>
+          <h2 className="mt-1 text-2xl font-semibold">Photos</h2>
         </div>
 
         <BookServiceProvider slug={provider.slug} workingHours={provider.workingHours} services={fixedServices}>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="flex flex-col gap-8">
             {live?.portfolioLoading && !photos.length ? (
-              <div className="flex h-[min(22rem,50svh)] items-center justify-center rounded-xl border border-black/15 bg-card md:h-[min(28rem,48svh)]">
-                <CenteredSpinner label="Loading portfolio" />
+              <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
+                <Skeleton className="h-[min(22rem,50svh)] w-full rounded-none md:h-[min(28rem,48svh)]" />
               </div>
             ) : photos.length ? (
               <PortfolioGallery photos={photos} companyName={provider.companyName} />
             ) : isLive ? (
               <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-16 text-center text-sm text-muted-foreground">
-                Featured work photos will appear here when this company adds portfolio media.
+                Photos will appear here when this company adds a business gallery.
               </p>
             ) : null}
 
@@ -372,7 +375,15 @@ export function ProviderProfile({
               <h2 className="mt-1 text-2xl font-semibold">Relevant service providers</h2>
             </div>
             {live?.relatedLoading ? (
-              <CenteredSpinner label="Loading related professionals" className="min-h-48" />
+              <div
+                className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
+                aria-busy="true"
+                aria-label="Loading related professionals"
+              >
+                {Array.from({ length: 4 }, (_, i) => (
+                  <ProviderCardSkeleton key={`related-sk-${i}`} />
+                ))}
+              </div>
             ) : relatedProviders.length ? (
               <div data-stagger className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
                 {relatedProviders.map((related) => (

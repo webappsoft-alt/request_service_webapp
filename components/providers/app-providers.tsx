@@ -6,6 +6,7 @@ import { SmoothScroll } from "@/components/layout/smooth-scroll";
 import { AuthMeSync } from "@/components/auth/auth-me-sync";
 import { AuthRouteGuard } from "@/components/auth/auth-route-guard";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
+import { PublicDataSync } from "@/components/realtime/public-data-sync";
 import { ReduxProvider } from "@/store/redux-provider";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         <SmoothScroll />
         <AuthMeSync />
         <RealtimeProvider>
+          <PublicDataSync />
           <AuthRouteGuard>{children}</AuthRouteGuard>
         </RealtimeProvider>
         <Toaster />

@@ -32,6 +32,7 @@ import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
 import { FileNotices } from "@/components/portal/task-banner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
@@ -148,6 +149,7 @@ export function RequestDetailView({ id }: { id: string }) {
   const [assignOpen, setAssignOpen] = useState(false);
   const allRequests = records.mergeRequests(requests);
   const request = allRequests.find((item) => item.id === id);
+  const pending = useCrmRecordPending();
   const allEstimates = records.mergeEstimates(estimates);
   const allJobs = records.mergeJobs(jobs);
   const relatedEstimates = allEstimates.filter((item) => item.requestId === id);
@@ -190,10 +192,12 @@ export function RequestDetailView({ id }: { id: string }) {
   if (!request) {
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">Lead not found</h1>
-        <Button asChild className="mt-4" size="sm">
-          <Link href="/pro/dashboard/requests">Back to leads</Link>
-        </Button>
+        <h1 className="text-lg font-semibold">{pending ? "Loading lead…" : "Lead not found"}</h1>
+        {!pending ? (
+          <Button asChild className="mt-4" size="sm">
+            <Link href="/pro/dashboard/requests">Back to leads</Link>
+          </Button>
+        ) : null}
       </div>
     );
   }

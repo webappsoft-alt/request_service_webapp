@@ -100,6 +100,26 @@ export function SendApprovalDialog({
                   token = shared.shareToken;
                   viaApi = true;
                   await crm.refresh();
+                  const next = { ...signed, token };
+                  share.saveSnapshot(next);
+                  const url = shared.absoluteShareUrl || shareUrlFor(token);
+                  onSent({ viaApi, token, url, href: url });
+                  void navigator.clipboard.writeText(url);
+                  if (shared.emailSent) {
+                    toast.success(
+                      shared.emailTo
+                        ? `Estimate emailed to ${shared.emailTo}. Link also copied.`
+                        : "Estimate emailed to the customer. Link also copied.",
+                    );
+                  } else if (shared.emailSkippedReason) {
+                    toast.success("Share link ready (copied). Email skipped — customer email missing.");
+                  } else if (shared.emailError) {
+                    toast.success("Share link ready (copied). Email could not be sent — check mail settings.");
+                  } else {
+                    toast.success("Estimate sent for approval. Customer link copied.");
+                  }
+                  onOpenChange(false);
+                  return;
                 }
                 const next = { ...signed, token };
                 share.saveSnapshot(next);

@@ -55,8 +55,7 @@ export function ServiceSearchForm({
   const [activeService, setActiveService] = useState(0);
 
   const locationLabel = locationDisplayLabel(customerLocation);
-  const locationValue =
-    customerLocation.address || customerLocation.city || customerLocation.zip || "";
+  const locationValue = locationLabel || customerLocation.zip || "";
   // Local draft while typing — do not write keystrokes into Redux (avoids Fixed Services refetches).
   const [locationDraft, setLocationDraft] = useState<string | null>(null);
   const locationInputValue = locationDraft ?? locationValue;
@@ -252,6 +251,7 @@ export function ServiceSearchForm({
         onSelect={applyPlace}
         placeholder="City / ZIP code"
         autoComplete="off"
+        preferCityDisplay
         hideStatus
         aria-invalid={Boolean(error)}
         inputClassName={cn(

@@ -126,6 +126,21 @@ function toIsoString(value: unknown): string {
   return "";
 }
 
+/** Calendar day key as YYYY-MM-DD (local-safe from ISO timestamps). */
+function toDateOnly(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedValue)) return trimmedValue;
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(trimmedValue);
+    if (match) return match[1];
+  }
+  const iso = toIsoString(value);
+  if (!iso) return "";
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
+  return match?.[1] ?? "";
+}
+
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -515,10 +530,16 @@ function mapApprovalSignature(value: unknown): Estimate["signature"] | undefined
   const signedAt = toIsoString(record.signedAt);
   const signedBy = trimmed(record.signedBy);
   if (!signedAt && !signedBy) return undefined;
+  const imageBase64 =
+    trimmed(record.signatureImageBase64) ||
+    trimmed(record.imageBase64) ||
+    trimmed(record.dataUrl) ||
+    undefined;
   return {
     signedBy,
     signedAt,
     ipAddress: trimmed(record.ipAddress) || undefined,
+    imageBase64,
   };
 }
 
@@ -907,8 +928,8 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     title: trimmed(record.title) || "Scheduled item",
     detail: trimmed(record.detail) || trimmed(record.title),
     customerName: trimmed(record.customerName) || undefined,
-    date: toIsoString(record.date) || undefined,
-    endDate: toIsoString(record.endDate) || undefined,
+    date: toDateOnly(record.date) || undefined,
+    endDate: toDateOnly(record.endDate) || undefined,
     timeWindow: mapEventTimeWindow(record.timeWindow),
     startMinutes: numberValue(record.startMinutes, 0) || undefined,
     endMinutes: numberValue(record.endMinutes, 0) || undefined,

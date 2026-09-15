@@ -38,6 +38,8 @@ import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
@@ -87,7 +89,8 @@ const TABS = [
 
 export function CustomerDetailView({ id }: { id: string }) {
   const { estimates, jobs, invoices, payments, requests, provider } = usePortalWorkspace();
-  const { customers, reminders, employees, tasks, notes, setReminderStatus } = useCrmDirectory();
+  const { customers, reminders, employees, tasks, notes, setReminderStatus, updateCustomer } = useCrmDirectory();
+  const crm = useCrmApiData();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -98,8 +101,16 @@ export function CustomerDetailView({ id }: { id: string }) {
   const [jobFilter, setJobFilter] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState("");
   const customer = customers.find((item) => item.id === id);
+  const pending = useCrmRecordPending();
 
   if (!customer) {
+    if (pending) {
+      return (
+        <div className="border border-black/15 bg-card p-6">
+          <h1 className="text-lg font-semibold">Loading customer…</h1>
+        </div>
+      );
+    }
     return (
       <div className="border border-black/15 bg-card p-6">
         <h1 className="text-lg font-semibold">Customer not found</h1>
@@ -174,7 +185,16 @@ export function CustomerDetailView({ id }: { id: string }) {
             <Button asChild variant="outline" size="sm">
               <Link href="/pro/dashboard/customers">Close</Link>
             </Button>
-            <Button size="sm" onClick={() => toast.success("Customer file saved on this board.")}>
+            <Button
+              size="sm"
+              onClick={() => {
+                void Promise.resolve(updateCustomer(customer.id, customer))
+                  .then(() => toast.success("Customer file saved."))
+                  .catch((error) =>
+                    toast.error(error instanceof Error ? error.message : "Could not save this customer."),
+                  );
+              }}
+            >
               Save
             </Button>
             <SetTaskButton subjectKind="customer" subjectId={customer.id} />

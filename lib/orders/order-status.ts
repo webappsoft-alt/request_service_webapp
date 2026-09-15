@@ -68,3 +68,49 @@ export function orderStatusBadgeVariant(
       return "outline";
   }
 }
+
+/** Booked / in-flight — not settled or cancelled. Blocks re-booking the same fixed service. */
+const OPEN_ORDER_STATUSES = new Set([
+  "BOOKING_REQUESTED",
+  "CONFIRMED",
+  "IN_TRANSIT",
+  "ARRIVED",
+  "IN_PROGRESS",
+  "CHANGE_ORDER_PENDING",
+  "WORK_COMPLETED",
+  "DISPUTED",
+]);
+
+export function isOpenCustomerOrderStatus(
+  status: OrderStatus | string | undefined,
+): boolean {
+  const key = String(status || "").trim().toUpperCase();
+  return OPEN_ORDER_STATUSES.has(key);
+}
+
+/** Newest open order for a fixed service id, if any. */
+export function findOpenOrderForService<
+  T extends {
+    id: string;
+    status: OrderStatus | string;
+    service?: { id?: string } | null;
+    serviceId?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  },
+>(orders: T[], serviceId: string): T | null {
+  const target = String(serviceId || "").trim();
+  if (!target) return null;
+  const matches = orders.filter((order) => {
+    if (!isOpenCustomerOrderStatus(order.status)) return false;
+    const orderServiceId =
+      String(order.service?.id || order.serviceId || "").trim();
+    return orderServiceId === target;
+  });
+  if (!matches.length) return null;
+  return [...matches].sort((a, b) => {
+    const aAt = String(a.updatedAt || a.createdAt || "");
+    const bAt = String(b.updatedAt || b.createdAt || "");
+    return bAt.localeCompare(aAt);
+  })[0];
+}

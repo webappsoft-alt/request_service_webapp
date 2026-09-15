@@ -17,7 +17,7 @@ export const blogCategories: BlogCategory[] = [
     id: "blog_platform",
     slug: "platform",
     name: "Platform",
-    description: "How Request Services works for customers and providers.",
+    description: "How Request Service works for customers and providers.",
   },
   {
     id: "blog_maintenance",
@@ -30,7 +30,7 @@ export const blogCategories: BlogCategory[] = [
 export const blogAuthors: BlogAuthor[] = [
   {
     id: "author_editorial",
-    name: "Request Services Editorial",
+    name: "Request Service Editorial",
     role: "Editorial Team",
     initials: "RS",
   },

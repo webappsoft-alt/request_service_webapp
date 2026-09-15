@@ -582,8 +582,8 @@ export function OrdersView() {
 
   return (
     <PortalPage
-      eyebrow="Work / Orders"
-      title={`Orders (${total})`}
+      eyebrow="Work / Fixed service orders"
+      title={`Fixed service orders (${total})`}
       description="Operational job orders assigned to you. Track status, navigation, arrival, and work execution."
       actions={
         <Button

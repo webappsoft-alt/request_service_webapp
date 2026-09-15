@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -14,10 +14,15 @@ import {
   MapPin,
   Phone,
 } from "lucide-react";
+import { toast } from "sonner";
+import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
+import { ordersApi } from "@/components/api/ApiRoutesFile";
 import { Container, Section } from "@/components/layout/container";
 import { ImageGallerySlider } from "@/components/shared/image-gallery-slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ServiceDetailSkeleton } from "@/components/shared/loading-skeletons";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
@@ -97,6 +102,141 @@ function normalizeWebsiteUrl(raw: string): string {
   return `https://${value}`;
 }
 
+function CustomerOrderActions({
+  orderId,
+  status,
+  onDone,
+}: {
+  orderId: string;
+  status: string;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [disputeReason, setDisputeReason] = useState("");
+  const [rating, setRating] = useState("5");
+  const [review, setReview] = useState("");
+  const upper = String(status || "").toUpperCase();
+  const canCancel = ["PENDING", "CONFIRMED", "IN_TRANSIT"].includes(upper);
+  const canDispute = ["IN_PROGRESS", "WORK_COMPLETED", "ON_HOLD"].includes(upper);
+  const canSignOff = upper === "WORK_COMPLETED";
+
+  if (!canCancel && !canDispute && !canSignOff) return null;
+
+  async function run(action: () => Promise<unknown>, success: string) {
+    setBusy(true);
+    try {
+      await action();
+      toast.success(success);
+      onDone();
+    } catch (error) {
+      showApiErrorToast(error, "Could not update this order.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SideCard title="Actions">
+      {canSignOff ? (
+        <div className="space-y-2 border-b border-border pb-3">
+          <p className="text-sm font-medium">Confirm completion</p>
+          <Input
+            type="number"
+            min={1}
+            max={5}
+            value={rating}
+            onChange={(event) => setRating(event.target.value)}
+            aria-label="Rating"
+            placeholder="Rating 1-5"
+          />
+          <Input
+            value={review}
+            onChange={(event) => setReview(event.target.value)}
+            aria-label="Review"
+            placeholder="Optional review"
+          />
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={busy}
+            onClick={() =>
+              void run(
+                () =>
+                  postData(ordersApi.signOff(orderId), {
+                    rating: Number(rating) || 5,
+                    review: review.trim(),
+                    tip: 0,
+                  }),
+                "Thanks — work signed off.",
+              )
+            }
+          >
+            <Check className="size-3.5" />
+            Sign off
+          </Button>
+        </div>
+      ) : null}
+      {canCancel ? (
+        <div className="space-y-2 border-b border-border pb-3">
+          <p className="text-sm font-medium">Cancel order</p>
+          <Input
+            value={cancelReason}
+            onChange={(event) => setCancelReason(event.target.value)}
+            placeholder="Reason (required)"
+            aria-label="Cancel reason"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            disabled={busy || cancelReason.trim().length < 3}
+            onClick={() =>
+              void run(
+                () =>
+                  postData(ordersApi.cancel(orderId), {
+                    reason: cancelReason.trim(),
+                  }),
+                "Order cancelled.",
+              )
+            }
+          >
+            Cancel order
+          </Button>
+        </div>
+      ) : null}
+      {canDispute ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Dispute</p>
+          <Input
+            value={disputeReason}
+            onChange={(event) => setDisputeReason(event.target.value)}
+            placeholder="Describe the issue"
+            aria-label="Dispute reason"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            disabled={busy || disputeReason.trim().length < 5}
+            onClick={() =>
+              void run(
+                () =>
+                  postData(ordersApi.dispute(orderId), {
+                    reason: disputeReason.trim(),
+                  }),
+                "Dispute submitted.",
+              )
+            }
+          >
+            Open dispute
+          </Button>
+        </div>
+      ) : null}
+    </SideCard>
+  );
+}
+
 export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -152,8 +292,8 @@ export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
   if (loading && !activeOrder) {
     return (
       <Section tone="muted">
-        <Container className="max-w-6xl">
-          <CenteredSpinner label="Loading order" className="min-h-72" />
+        <Container className="max-w-6xl py-4">
+          <ServiceDetailSkeleton />
         </Container>
       </Section>
     );
@@ -492,6 +632,12 @@ export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
                 </div>
               </SideCard>
             ) : null}
+
+            <CustomerOrderActions
+              orderId={activeOrder.id}
+              status={activeOrder.status}
+              onDone={() => void dispatch(fetchCustomerOrderById(orderId))}
+            />
           </aside>
         </div>
       </Container>

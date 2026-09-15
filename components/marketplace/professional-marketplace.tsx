@@ -114,7 +114,13 @@ export function ProfessionalMarketplace({
       liveProfessionals={liveProfessionals}
       category={matchedCategory}
       providers={providers}
-      initialAddress={answers?.zip || location || zip}
+      initialAddress={
+        [location, answers?.zip || zip].filter(Boolean).join(", ") ||
+        answers?.zip ||
+        zip ||
+        location ||
+        ""
+      }
       initialJob={job}
       match={
         estimate

@@ -28,6 +28,7 @@ import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import {
   defaultVendorInventory,
   inventoryNeedsReorder,
@@ -107,14 +108,17 @@ export function ContractorDetailView({ id }: { id: string }) {
   const contractor = contractors.find((item) => item.id === id);
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const pending = useCrmRecordPending();
 
   if (!contractor) {
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">Contractor not found</h1>
-        <Button asChild className="mt-4" size="sm">
-          <Link href="/pro/dashboard/contractors">Back to contractors</Link>
-        </Button>
+        <h1 className="text-lg font-semibold">{pending ? "Loading contractor…" : "Contractor not found"}</h1>
+        {!pending ? (
+          <Button asChild className="mt-4" size="sm">
+            <Link href="/pro/dashboard/contractors">Back to contractors</Link>
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -296,14 +300,17 @@ export function VendorDetailView({ id }: { id: string }) {
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const vendor = vendors.find((item) => item.id === id);
+  const pending = useCrmRecordPending();
 
   if (!vendor) {
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">Vendor not found</h1>
-        <Button asChild className="mt-4" size="sm">
-          <Link href="/pro/dashboard/vendors">Back to vendors</Link>
-        </Button>
+        <h1 className="text-lg font-semibold">{pending ? "Loading vendor…" : "Vendor not found"}</h1>
+        {!pending ? (
+          <Button asChild className="mt-4" size="sm">
+            <Link href="/pro/dashboard/vendors">Back to vendors</Link>
+          </Button>
+        ) : null}
       </div>
     );
   }

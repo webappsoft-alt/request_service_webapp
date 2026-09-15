@@ -3,8 +3,8 @@ import { OrdersView } from "@/components/portal/views/orders-view";
 import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
-  "Operational Orders",
-  "Manage provider assigned operational service orders, transit, and execution.",
+  "Fixed service orders",
+  "Manage provider assigned fixed service orders, transit, and execution.",
   "/pro/dashboard/orders",
 );
 

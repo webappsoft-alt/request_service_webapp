@@ -13,7 +13,7 @@ import { getProviderPresence } from "@/lib/data/service-directory";
 import { getProviderPhotos, getStartingPrice } from "@/lib/data/provider-media";
 import { getServiceCategoryById } from "@/lib/data/services";
 import type { ExplorePlace } from "@/lib/data/profile-explore";
-import { formatLocation, formatStartingPrice } from "@/lib/format";
+import { formatProviderCardLocation, formatStartingPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
 
@@ -25,6 +25,30 @@ function professionalHref(slug: string, place?: ExplorePlace) {
   if (place?.location && !place.city && !place.zip) params.set("location", place.location);
   const query = params.toString();
   return query ? `/professionals/${slug}?${query}` : `/professionals/${slug}`;
+}
+
+function ProviderCardLocation({
+  city,
+  state,
+  className,
+}: {
+  city?: string | null;
+  state?: string | null;
+  className?: string;
+}) {
+  const label = formatProviderCardLocation(city, state);
+  return (
+    <span
+      className={cn(
+        "flex min-w-0 items-center gap-1 text-sm text-muted-foreground",
+        className,
+      )}
+      title={label}
+    >
+      <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 truncate">{label}</span>
+    </span>
+  );
 }
 
 export function ProviderCard({
@@ -126,10 +150,7 @@ export function ProviderCard({
                     </span>
                   </span>
                 ) : null}
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="size-3.5" aria-hidden="true" />
-                  {formatLocation(provider.city, provider.state)}
-                </span>
+                <ProviderCardLocation city={provider.city} state={provider.state} />
                 {!hideCredentials && hasCredentials ? (
                   <span className="text-sm text-muted-foreground">
                     {credentialLabel(provider.licensed, provider.insured)}
@@ -242,10 +263,11 @@ export function ProviderCard({
             <p className="line-clamp-1 text-sm leading-5 text-muted-foreground">
               {provider.tagline}
             </p>
-            <p className="flex items-center gap-1.5 text-sm leading-5 text-muted-foreground">
-              <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-              {formatLocation(provider.city, provider.state)}
-            </p>
+            <ProviderCardLocation
+              city={provider.city}
+              state={provider.state}
+              className="leading-5"
+            />
           </div>
         </div>
 

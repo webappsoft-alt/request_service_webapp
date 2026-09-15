@@ -31,6 +31,8 @@ export type FixedService = {
   commonServices: string[];
   workingArea: string[];
   serviceAreaIds: string[];
+  /** Display titles from populated serviceAreas when API includes them. */
+  serviceAreaNames: string[];
   availabilityType: "company_office_hours" | "custom";
   customHours?: unknown;
 };
@@ -225,6 +227,11 @@ export function normalizeFixedService(raw: unknown): FixedService | null {
     serviceAreaIds: Array.isArray(record.serviceAreas)
       ? record.serviceAreas.map(idOf).filter(Boolean)
       : [],
+    serviceAreaNames: Array.isArray(record.serviceAreas)
+      ? record.serviceAreas
+          .map((item) => nameOf(item))
+          .filter((title): title is string => Boolean(title))
+      : [],
     availabilityType:
       String(record.availabilityType || "") === "custom"
         ? "custom"
@@ -389,6 +396,7 @@ export const updateFixedService = createAsyncThunk<
         commonServices: payload.commonServices,
         workingArea: payload.workingArea,
         serviceAreaIds: payload.serviceAreas,
+        serviceAreaNames: [],
         availabilityType:
           payload.availabilityType === "custom"
             ? "custom"

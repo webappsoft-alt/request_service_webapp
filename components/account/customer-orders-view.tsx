@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
@@ -14,7 +14,11 @@ import { Container, Section } from "@/components/layout/container";
 import { ImageGallerySlider } from "@/components/shared/image-gallery-slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { CustomerOrderCardSkeleton } from "@/components/shared/loading-skeletons";
 import { CenteredSpinner } from "@/components/ui/spinner";
+import { NoData } from "@/components/shared/no-data";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
 import {
@@ -210,6 +214,8 @@ export function CustomerOrdersView() {
   const loading = useAppSelector(selectCustomerOrdersLoading);
   const error = useAppSelector(selectCustomerOrdersError);
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -219,15 +225,16 @@ export function CustomerOrdersView() {
   }, [auth.hydrated, isAuthenticated, router]);
 
   const loadOrders = useCallback(
-    (nextPage: number) => {
+    (nextPage: number, status = statusFilter) => {
       void dispatch(
         fetchCustomerOrders({
           page: nextPage,
           limit: CUSTOMER_ORDERS_PAGE_LIMIT,
+          status: status || undefined,
         }),
       );
     },
-    [dispatch],
+    [dispatch, statusFilter],
   );
 
   useEffect(() => {
@@ -241,6 +248,24 @@ export function CustomerOrdersView() {
     },
     [dispatch],
   );
+
+  const filteredOrders = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return orders;
+    return orders.filter((order) => {
+      const haystack = [
+        order.orderNumber,
+        order.id,
+        orderServiceTitle(order),
+        order.service?.category,
+        formatOrderStatus(order.status),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [orders, search]);
 
   if (!auth.hydrated || !isAuthenticated) {
     return (
@@ -271,8 +296,47 @@ export function CustomerOrdersView() {
           </p>
         </div>
 
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search orders…"
+            aria-label="Search orders"
+            className="sm:max-w-xs"
+          />
+          <NativeSelect
+            className="sm:w-48"
+            value={statusFilter}
+            onChange={(event) => {
+              const next = event.target.value;
+              setStatusFilter(next);
+              setPage(1);
+              loadOrders(1, next);
+            }}
+            aria-label="Filter by status"
+          >
+            <NativeSelectOption value="">All statuses</NativeSelectOption>
+            <NativeSelectOption value="PENDING">Pending</NativeSelectOption>
+            <NativeSelectOption value="CONFIRMED">Confirmed</NativeSelectOption>
+            <NativeSelectOption value="IN_TRANSIT">In transit</NativeSelectOption>
+            <NativeSelectOption value="IN_PROGRESS">In progress</NativeSelectOption>
+            <NativeSelectOption value="WORK_COMPLETED">Work completed</NativeSelectOption>
+            <NativeSelectOption value="COMPLETED">Completed</NativeSelectOption>
+            <NativeSelectOption value="CANCELLED">Cancelled</NativeSelectOption>
+            <NativeSelectOption value="DISPUTED">Disputed</NativeSelectOption>
+          </NativeSelect>
+        </div>
+
         {showInitialLoading ? (
-          <CenteredSpinner label="Loading orders" className="min-h-64" />
+          <div
+            className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3"
+            aria-busy="true"
+            aria-label="Loading orders"
+          >
+            {Array.from({ length: 6 }, (_, i) => (
+              <CustomerOrderCardSkeleton key={`order-sk-${i}`} />
+            ))}
+          </div>
         ) : error && !orders.length ? (
           <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
             <p className="text-base font-medium text-foreground">
@@ -285,24 +349,22 @@ export function CustomerOrdersView() {
               Try again
             </Button>
           </div>
-        ) : !orders.length ? (
-          <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-14 text-center">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Package className="size-5" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-base font-medium text-foreground">
-                No orders yet
-              </p>
-              <p className="mx-auto max-w-md text-sm text-muted-foreground">
-                When you book a fixed-price service, it will show up here with
-                live status updates.
-              </p>
-            </div>
-            <Button asChild>
-              <Link href="/services">Browse services</Link>
-            </Button>
-          </div>
+        ) : !filteredOrders.length ? (
+          <NoData
+            title={orders.length ? "No matching orders" : "No orders yet"}
+            description={
+              orders.length
+                ? "Try a different search or status filter."
+                : "When you book a fixed-price service, it will show up here with live status updates."
+            }
+            action={
+              orders.length ? undefined : (
+                <Button asChild>
+                  <Link href="/services">Browse services</Link>
+                </Button>
+              )
+            }
+          />
         ) : (
           <div className="space-y-4">
             {error ? (
@@ -319,7 +381,7 @@ export function CustomerOrdersView() {
             ) : null}
 
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {orders.map((order) => (
+              {filteredOrders.map((order) => (
                 <li key={order.id}>
                   <OrderCard order={order} onOpen={openOrder} />
                 </li>

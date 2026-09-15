@@ -8,7 +8,7 @@ export async function generateMetadata({
   const { id } = await params;
   return buildMetadata({
     title: "Order details",
-    description: "Private order details for your Request Services account.",
+    description: "Private order details for your Request Service account.",
     path: `/account/orders/${id}`,
     index: false,
     follow: false,

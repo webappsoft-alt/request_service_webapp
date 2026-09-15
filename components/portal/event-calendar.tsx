@@ -43,7 +43,9 @@ export function toIso(date: Date) {
 }
 
 export function parseIso(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
+  const dayKey = value.slice(0, 10);
+  const [year, month, day] = dayKey.split("-").map(Number);
+  if (!year || !month || !day) return new Date(NaN);
   return new Date(year, month - 1, day);
 }
 
@@ -73,12 +75,14 @@ function monthLabel(year: number, month: number) {
 }
 
 function dayHeading(iso: string) {
+  const date = parseIso(iso);
+  if (Number.isNaN(date.getTime())) return iso || "Schedule";
   return new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
-  }).format(parseIso(iso));
+  }).format(date);
 }
 
 function weekHeading(iso: string) {

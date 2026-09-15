@@ -330,14 +330,19 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
       <div className="rounded-xl border border-input bg-card p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold">Portfolio</p>
+            <p className="text-sm font-semibold">Project portfolio</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Before/after projects customers see on your public profile.
+              Before/after jobs on your public profile. You can also open this from Office → Portfolio.
             </p>
           </div>
-          <Button asChild size="sm">
-            <Link href="/pro/dashboard/portfolio/new">Add project</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/pro/dashboard/portfolio">Open portfolio</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href="/pro/dashboard/portfolio/new">Add project</Link>
+            </Button>
+          </div>
         </div>
         {table}
         {deleteDialog}

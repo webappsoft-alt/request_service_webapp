@@ -48,7 +48,9 @@ export function WorkSubnav() {
             ? inbox.newLeads
             : item.href === "/pro/dashboard/messages"
               ? inbox.unreadChats
-              : undefined,
+              : item.href === "/pro/dashboard/orders"
+                ? inbox.pendingOrders
+                : undefined,
       }))}
     />
   );

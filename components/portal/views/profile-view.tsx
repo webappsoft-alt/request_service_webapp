@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Camera, Loader2 } from "lucide-react";
+import { Camera, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
@@ -19,8 +19,8 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { BusinessGalleryEditor } from "@/components/portal/business-gallery-editor";
 import { HoursEditor } from "@/components/portal/hours-editor";
-import { PortfolioFormView } from "@/components/portal/portfolio-file";
 import { PortalPage } from "@/components/portal/portal-page";
 import { usePortalSettings } from "@/components/portal/use-portal-settings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -43,6 +43,14 @@ import {
   asAuthProvider,
   type AuthProviderRecord,
 } from "@/lib/auth/provider-profile";
+import {
+  coverageNeighborhoodIds,
+} from "@/lib/coverage-areas";
+import {
+  galleryIsReady,
+  normalizeBusinessGallery,
+  type BusinessGalleryImage,
+} from "@/lib/business-gallery";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -52,21 +60,12 @@ import {
   updateAuthUser,
   type AuthUser,
 } from "@/store/authSlice";
+import {
+  fetchServiceAreasPicker,
+  type ServiceArea,
+} from "@/store/serviceAreasSlice";
 
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
-
-const SERVICE_AREAS = [
-  "Downtown",
-  "East Austin",
-  "Clarksville",
-  "Zilker",
-  "West Campus",
-  "Northwest Hills",
-  "South Austin",
-  "West Lake Hills",
-  "Crestview",
-  "Arboretum",
-] as const;
 
 const EMPLOYEE_TO_API: Record<string, string> = {
   "Just me": "1",
@@ -88,26 +87,27 @@ const STEPS = [
   "account",
   "business",
   "profile",
+  "gallery",
   "hours",
   "categories",
   "subservices",
-  "portfolio",
 ] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
   account: "Account",
-  business: "Business",
-  profile: "Profile",
+  business: "Company",
+  profile: "About",
+  gallery: "Gallery",
   hours: "Hours",
   categories: "Services",
-  subservices: "Sub-services",
-  portfolio: "Portfolio",
+  subservices: "Jobs",
 };
 
 const LEGACY_STEP_MAP: Record<string, Step> = {
   basic: "account",
   services: "categories",
+  portfolio: "gallery",
 };
 
 function parseStep(value: string | null): Step {
@@ -192,11 +192,8 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
           (job): job is string => typeof job === "string",
         )
       : [],
-    areaNames: Array.isArray(provider?.coverage?.neighborhoods)
-      ? provider.coverage.neighborhoods.filter(
-          (area): area is string => typeof area === "string",
-        )
-      : [],
+    areaIds: coverageNeighborhoodIds(provider?.coverage?.neighborhoods),
+    gallery: normalizeBusinessGallery(provider?.businessGallery),
   };
 }
 
@@ -206,7 +203,6 @@ export function ProfileView() {
   const searchParams = useSearchParams();
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const portfolioSubmitRef = useRef<(() => Promise<boolean>) | null>(null);
   const user = useAppSelector(selectAuthUser);
   const authProvider = useAppSelector(selectAuthProvider);
   const { officeHours, saveOfficeHours } = usePortalSettings();
@@ -241,12 +237,45 @@ export function ProfileView() {
   const [startingPrice, setStartingPrice] = useState("");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [jobs, setJobs] = useState<string[]>([]);
-  const [areaNames, setAreaNames] = useState<string[]>([]);
+  const [areaIds, setAreaIds] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [hours, setHours] = useState(() => cloneWorkingHours(officeHours));
+  const [gallery, setGallery] = useState<BusinessGalleryImage[]>([]);
+
+  const pickerItems = useAppSelector(
+    (state) => state.serviceAreas?.pickerItems ?? [],
+  );
+  const listItems = useAppSelector((state) => state.serviceAreas?.items ?? []);
+  const pickerPage = useAppSelector(
+    (state) => state.serviceAreas?.pickerPage ?? 0,
+  );
+  const pickerTotalPages = useAppSelector(
+    (state) => state.serviceAreas?.pickerTotalPages ?? 1,
+  );
+  const pickerLoading = useAppSelector(
+    (state) => state.serviceAreas?.pickerLoading ?? false,
+  );
+
+  const coverageAreas = useMemo(() => {
+    const byId = new Map<string, ServiceArea>();
+    for (const area of [...listItems, ...pickerItems]) {
+      if (area?.id) byId.set(area.id, area);
+    }
+    return Array.from(byId.values()).sort((a, b) =>
+      a.title.localeCompare(b.title),
+    );
+  }, [listItems, pickerItems]);
+
+  const areasById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const area of coverageAreas) {
+      if (area.id && area.title) map.set(area.id, area.title);
+    }
+    return map;
+  }, [coverageAreas]);
 
   const selectedCategories = useMemo(
     () =>
@@ -279,6 +308,10 @@ export function ProfileView() {
       scroll: false,
     });
   }
+
+  useEffect(() => {
+    void dispatch(fetchServiceAreasPicker());
+  }, [dispatch]);
 
   useEffect(() => {
     if (!user && !authProvider) {
@@ -315,7 +348,8 @@ export function ProfileView() {
       setStartingPrice(next.startingPrice);
       setCategoryIds(next.categoryIds);
       setJobs(next.jobs);
-      setAreaNames(next.areaNames);
+      setAreaIds(next.areaIds);
+      setGallery(next.gallery);
       formReadyRef.current = true;
       return;
     }
@@ -443,13 +477,14 @@ export function ProfileView() {
       categoryIds,
       offeredJobs: jobs,
       ...(Number.isFinite(price) ? { startingPrice: price } : {}),
-      neighborhoods: areaNames,
-      serviceArea: areaNames,
+      neighborhoods: areaIds,
+      serviceArea: areaIds,
       yearsInBusiness: Number.isFinite(years) ? years : undefined,
       employeeCount:
         EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
       licensed,
       insured,
+      businessGallery: gallery,
       profile: {
         ...(Number.isFinite(years) ? { yearsInBusiness: years } : {}),
         employeeCount:
@@ -505,36 +540,39 @@ export function ProfileView() {
         };
       }
 
-      const nextProvider =
-        asAuthProvider(providerRes) ||
-        ({
-          ...(authProvider || {}),
-          companyName: companyName.trim(),
-          tagline: tagline.trim(),
-          description: description.trim(),
-          phone: nextPhone,
-          email: email.trim(),
-          website: website.trim(),
-          contactRole: contactRole.trim(),
-          location: location || authProvider?.location,
-          services: {
-            categoryIds,
-            offeredJobs: jobs,
-            ...(Number.isFinite(price) ? { startingPrice: price } : {}),
-          },
-          profile: {
-            ...(Number.isFinite(years) ? { yearsInBusiness: years } : {}),
-            employeeCount:
-              EMPLOYEE_TO_API[employeeCount] ||
-              employeeCount.trim() ||
-              undefined,
-            licensed,
-            insured,
-          },
-          coverage: {
-            neighborhoods: areaNames,
-          },
-        } as AuthProviderRecord);
+      const fromApi = asAuthProvider(providerRes);
+      const nextProvider = {
+        ...(authProvider || {}),
+        ...(fromApi || {}),
+        companyName: companyName.trim(),
+        tagline: tagline.trim(),
+        description: description.trim(),
+        phone: nextPhone,
+        email: email.trim(),
+        website: website.trim(),
+        contactRole: contactRole.trim(),
+        location: location || fromApi?.location || authProvider?.location,
+        services: fromApi?.services || {
+          categoryIds,
+          offeredJobs: jobs,
+          ...(Number.isFinite(price) ? { startingPrice: price } : {}),
+        },
+        profile: fromApi?.profile || {
+          ...(Number.isFinite(years) ? { yearsInBusiness: years } : {}),
+          employeeCount:
+            EMPLOYEE_TO_API[employeeCount] ||
+            employeeCount.trim() ||
+            undefined,
+          licensed,
+          insured,
+        },
+        coverage: fromApi?.coverage || {
+          neighborhoods: areaIds,
+        },
+        businessGallery: Array.isArray(fromApi?.businessGallery)
+          ? fromApi.businessGallery
+          : gallery,
+      } as AuthProviderRecord;
 
       // Prefer API nested shape when present; otherwise keep what we just saved.
       const savedServices = asAuthProvider(providerRes)?.services;
@@ -557,11 +595,7 @@ export function ProfileView() {
         }
       }
       if (savedCoverage && Array.isArray(savedCoverage.neighborhoods)) {
-        setAreaNames(
-          savedCoverage.neighborhoods.filter(
-            (area): area is string => typeof area === "string",
-          ),
-        );
+        setAreaIds(coverageNeighborhoodIds(savedCoverage.neighborhoods));
       }
 
       dispatch(
@@ -633,9 +667,10 @@ export function ProfileView() {
       const hoursOk = await persistOfficeHours();
       if (!hoursOk) return;
 
-      if (portfolioSubmitRef.current) {
-        const portfolioOk = await portfolioSubmitRef.current();
-        if (!portfolioOk) return;
+      if (!galleryIsReady(gallery)) {
+        toast.error("Add 3–7 gallery photos and choose a main banner.");
+        goTo("gallery");
+        return;
       }
 
       toast.success("Business profile updated successfully");
@@ -653,9 +688,37 @@ export function ProfileView() {
     goTo(STEPS[stepIndex - 1]);
   }
 
-  function onNext() {
-    if (stepIndex < STEPS.length - 1) {
-      goTo(STEPS[stepIndex + 1]);
+  function validateStep(current: Step): boolean {
+    if (current === "account" && (!firstName.trim() || !lastName.trim())) {
+      toast.error("First and last name are required.");
+      return false;
+    }
+    if (current === "business" && !companyName.trim()) {
+      toast.error("Company name is required.");
+      return false;
+    }
+    if (current === "gallery" && !galleryIsReady(gallery)) {
+      toast.error("Add at least 3 photos and choose a main banner.");
+      return false;
+    }
+    return true;
+  }
+
+  async function onNext() {
+    if (!validateStep(step)) return;
+    setSaving(true);
+    try {
+      const profileOk = await saveProfile();
+      if (!profileOk) return;
+      if (step === "hours") {
+        const hoursOk = await persistOfficeHours();
+        if (!hoursOk) return;
+      }
+      if (stepIndex < STEPS.length - 1) {
+        goTo(STEPS[stepIndex + 1]);
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -673,7 +736,7 @@ export function ProfileView() {
     <PortalPage
       eyebrow="Public listing"
       title="Edit business profile"
-      description="Update your company details across 7 steps: Account, Business, Profile, Hours, Services, Sub-services, and Portfolio."
+      description="Finish each step so customers can find you. Click any step to jump there."
       actions={
         <Button asChild variant="outline">
           <Link href="/pro/dashboard/settings">Back</Link>
@@ -681,26 +744,43 @@ export function ProfileView() {
       }
     >
       <div className="flex w-full flex-col gap-5">
-        <ol className="grid grid-cols-7 gap-2">
+        <ol className="flex flex-wrap gap-2">
           {STEPS.map((item, index) => {
             const current = item === step;
             const done = index < stepIndex;
             return (
-              <li key={item} className="flex flex-col gap-1.5">
-                <span
+              <li key={item}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void saveProfile();
+                    goTo(item);
+                  }}
                   className={cn(
-                    "h-1.5 rounded-full",
-                    current || done ? "bg-primary" : "bg-border",
-                  )}
-                />
-                <span
-                  className={cn(
-                    "hidden text-[11px] font-medium sm:block",
-                    current ? "text-foreground" : "text-muted-foreground",
+                    "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-xs transition",
+                    current
+                      ? "border-primary bg-primary/5 font-medium shadow-sm"
+                      : done
+                        ? "border-input bg-card text-muted-foreground hover:border-primary/40"
+                        : "border-dashed border-input bg-muted/20 text-muted-foreground hover:bg-card",
                   )}
                 >
+                  {done ? (
+                    <Check className="size-3.5 text-emerald-600" />
+                  ) : (
+                    <span
+                      className={cn(
+                        "inline-flex size-3.5 items-center justify-center rounded-full text-[9px] font-semibold",
+                        current
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {index + 1}
+                    </span>
+                  )}
                   {STEP_LABELS[item]}
-                </span>
+                </button>
               </li>
             );
           })}
@@ -862,30 +942,68 @@ export function ProfileView() {
             <section className="rounded-xl border border-input bg-card p-5">
               <p className="text-sm font-semibold">Coverage</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Neighborhoods you serve (same as registration).
+                Select from your service areas. Manage zones on the Service Areas
+                page.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {SERVICE_AREAS.map((area) => {
-                  const checked = areaNames.includes(area);
-                  return (
-                    <button
-                      key={area}
-                      type="button"
-                      onClick={() =>
-                        setAreaNames((current) => toggleValue(current, area))
-                      }
-                      className={cn(
-                        "rounded-lg border px-3 py-1.5 text-sm",
-                        checked
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "bg-card hover:border-foreground/20",
-                      )}
-                    >
-                      {area}
-                    </button>
-                  );
-                })}
+              {coverageAreas.length ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {coverageAreas.map((area) => {
+                    const checked = areaIds.includes(area.id);
+                    return (
+                      <button
+                        key={area.id}
+                        type="button"
+                        onClick={() =>
+                          setAreaIds((current) => toggleValue(current, area.id))
+                        }
+                        className={cn(
+                          "rounded-lg border px-3 py-1.5 text-sm",
+                          checked
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "bg-card hover:border-foreground/20",
+                        )}
+                      >
+                        {area.title || "Untitled area"}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {pickerLoading
+                    ? "Loading service areas…"
+                    : "No service areas yet. Add coverage zones first."}
+                </p>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                {pickerPage < pickerTotalPages ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pickerLoading}
+                    onClick={() =>
+                      void dispatch(fetchServiceAreasPicker({ append: true }))
+                    }
+                  >
+                    {pickerLoading ? (
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    ) : null}
+                    Load more areas
+                  </Button>
+                ) : null}
+                <Button asChild variant="link" size="sm" className="h-auto px-0">
+                  <Link href="/pro/dashboard/service-areas">
+                    Manage service areas
+                  </Link>
+                </Button>
               </div>
+              {areaIds.length > 0 &&
+              areaIds.some((id) => !areasById.has(id)) ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Some selected areas are still loading names…
+                </p>
+              ) : null}
             </section>
           </div>
         ) : null}
@@ -1031,50 +1149,12 @@ export function ProfileView() {
 
         {step === "subservices" ? (
           <section className="rounded-xl border border-input bg-card p-5">
-            <p className="text-sm font-semibold">Sub-services</p>
+            <p className="text-sm font-semibold">Jobs you offer</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Fixed catalog jobs for your selected categories, plus starting price.
+              Pick the catalog jobs customers should see under each service.
             </p>
             <FieldGroup className="mt-4">
-              {selectedCategories.length ? (
-                <div className="flex flex-col gap-4 rounded-xl border bg-muted/30 p-4">
-                  <p className="text-sm font-medium">Fixed catalog services</p>
-                  <p className="text-sm text-muted-foreground">
-                    These are the standard jobs we already list. Check the ones
-                    you want on your profile.
-                  </p>
-                  {selectedCategories.map((category) => (
-                    <div key={category.id} className="flex flex-col gap-2">
-                      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                        {category.name}
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {category.commonServices.map((job) => (
-                          <label
-                            key={job}
-                            className="flex items-start gap-2 text-sm"
-                          >
-                            <Checkbox
-                              checked={jobs.includes(job)}
-                              onCheckedChange={() =>
-                                setJobs((current) => toggleValue(current, job))
-                              }
-                            />
-                            <span>{job}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No categories selected yet. Go back to Services to choose at
-                  least one category.
-                </p>
-              )}
-
-              <Field>
+              <Field className="max-w-xs">
                 <FieldLabel htmlFor="starting-price">Starting price</FieldLabel>
                 <Input
                   id="starting-price"
@@ -1087,16 +1167,70 @@ export function ProfileView() {
                   Shown as “Starting from” on your public profile.
                 </FieldDescription>
               </Field>
+
+              {selectedCategories.length ? (
+                <div className="flex flex-col gap-5">
+                  {selectedCategories.map((category) => {
+                    const selectedCount = category.commonServices.filter((job) =>
+                      jobs.includes(job),
+                    ).length;
+                    return (
+                      <div key={category.id} className="flex flex-col gap-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <p className="text-sm font-semibold">{category.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {selectedCount} of {category.commonServices.length} selected
+                          </p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {category.commonServices.map((job) => {
+                            const checked = jobs.includes(job);
+                            return (
+                              <label
+                                key={job}
+                                className={cn(
+                                  "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                                  checked
+                                    ? "border-primary bg-primary/5 font-medium"
+                                    : "border-input bg-card hover:border-foreground/30",
+                                )}
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={() =>
+                                    setJobs((current) => toggleValue(current, job))
+                                  }
+                                />
+                                <span className="leading-5">{job}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No categories selected yet. Go back to Services to choose at
+                  least one category.
+                </p>
+              )}
             </FieldGroup>
           </section>
         ) : null}
 
-        {step === "portfolio" ? (
-          <PortfolioFormView
-            embedded
-            deferSubmit
-            submitRef={portfolioSubmitRef}
-          />
+        {step === "gallery" ? (
+          <section className="rounded-xl border border-input bg-card p-5">
+            <p className="text-sm font-semibold">Main business gallery</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Upload 3–7 photos of your company. Set one as the main banner — that image
+              leads your public profile, and the rest appear in the photo swiper.
+            </p>
+            <div className="mt-4">
+              <BusinessGalleryEditor images={gallery} onChange={setGallery} />
+            </div>
+          </section>
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1117,7 +1251,7 @@ export function ProfileView() {
                   className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
                 />
               ) : (
-                "Submit"
+                "Save and finish"
               )}
             </Button>
           ) : (

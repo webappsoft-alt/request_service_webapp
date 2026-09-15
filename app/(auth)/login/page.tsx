@@ -3,7 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Customer Login",
-  description: "Sign in to your Request Services customer account to review estimates, approvals, and jobs.",
+  description: "Sign in to your Request Service customer account to review estimates, approvals, and jobs.",
   path: "/login",
   index: false,
   follow: false,

@@ -64,7 +64,7 @@ export function CreateEstimateDialog({
   const first = customers[0];
   const [tab, setTab] = useState<EstimateTab>("customer");
   const [path, setPath] = useState<EstimatePath>("site_visit");
-  const [name, setName] = useState("Service visit");
+  const [name, setName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(customerId ?? first?.id ?? "");
   const customer = customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = customer?.addresses[0];
@@ -80,6 +80,8 @@ export function CreateEstimateDialog({
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("Valid for 30 days. Materials may change after site inspection.");
   const [lines, setLines] = useState<JobCostLine[]>(() => defaultWorkLines("Service visit"));
+  const [saving, setSaving] = useState(false);
+  const hasEstimateName = Boolean(name.trim());
   const technician = employees.find((item) => item.id === employeeId);
   const nextTab = (current: EstimateTab): EstimateTab => {
     if (current === "customer") return path === "site_visit" ? "visit" : "scope";
@@ -96,10 +98,9 @@ export function CreateEstimateDialog({
       setTab("customer");
       return;
     }
-    if (requestName) {
-      setName(requestName);
-      setLines(defaultWorkLines(requestName));
-    }
+    setName("");
+    setSaving(false);
+    setLines(defaultWorkLines(requestName || "Service visit"));
     if (requestNotes) setNotes(requestNotes);
     if (customerId) pickCustomer(customerId);
   }, [customerId, open, requestName, requestNotes]);
@@ -121,51 +122,62 @@ export function CreateEstimateDialog({
     }
   }
 
-  function create() {
+  async function create() {
     const customerIdValue = selectedCustomer || customers[0]?.id || "";
-    if (!customerIdValue || !name.trim()) {
-      toast.error("Customer and estimate name are required.");
-      setTab("customer");
+    if (!customerIdValue || !name.trim() || saving) {
+      if (!customerIdValue || !name.trim()) {
+        toast.error("Customer and estimate name are required.");
+        setTab("customer");
+      }
       return;
     }
-    const estimate = buildEstimate({
-      number: nextRecordNumber("EST", all.map((item) => item.number)),
-      providerId: provider.id,
-      customerId: customerIdValue,
-      requestId,
-      address: addressFrom(street, city, state, zip),
-      status: path === "site_visit" ? "site_visit" : "draft",
-      issuedAt,
-      expiresAt: expiresAt || undefined,
-      notes,
-      terms,
-      lines: lines.length ? lines : defaultWorkLines(name),
-    });
-    records.addEstimate(estimate);
-    if (requestId) records.setStatus("request", requestId, "estimate_sent");
-    writeCostLines(session?.email, estimate.id, estimate.items.map((item) => ({
-      id: item.id,
-      description: item.description,
-      kind: item.type === "labor" ? "labor" : "materials",
-      quantity: item.quantity,
-      unit: item.unit,
-      unitPrice: item.unitPrice,
-    })));
-    if (path === "site_visit") {
-      writeSiteVisit(session?.email, estimate.id, {
-        employeeId,
-        technician: technician ? employeeName(technician) : "",
-        visitedAt,
-        accessNotes,
-        findings: "",
-        recommendations: "",
-        measurements: "",
-        photos: [],
+    setSaving(true);
+    try {
+      const estimate = buildEstimate({
+        number: nextRecordNumber("EST", all.map((item) => item.number)),
+        providerId: provider.id,
+        customerId: customerIdValue,
+        requestId,
+        address: addressFrom(street, city, state, zip),
+        status: path === "site_visit" ? "site_visit" : "draft",
+        issuedAt,
+        expiresAt: expiresAt || undefined,
+        notes,
+        terms,
+        lines: lines.length ? lines : defaultWorkLines(name),
       });
+      const created = await records.addEstimate(estimate);
+      const saved = created ?? estimate;
+      if (!saved?.id) throw new Error("Could not create this estimate.");
+      if (requestId) records.setStatus("request", requestId, "estimate_sent");
+      writeCostLines(session?.email, saved.id, saved.items.map((item) => ({
+        id: item.id,
+        description: item.description,
+        kind: item.type === "labor" ? "labor" : "materials",
+        quantity: item.quantity,
+        unit: item.unit,
+        unitPrice: item.unitPrice,
+      })));
+      if (path === "site_visit") {
+        writeSiteVisit(session?.email, saved.id, {
+          employeeId,
+          technician: technician ? employeeName(technician) : "",
+          visitedAt,
+          accessNotes,
+          findings: "",
+          recommendations: "",
+          measurements: "",
+          photos: [],
+        });
+      }
+      onOpenChange(false);
+      toast.success(`${saved.number} created.`);
+      router.push(`/pro/dashboard/estimates/${saved.id}?tab=visit`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create this estimate.");
+    } finally {
+      setSaving(false);
     }
-    onOpenChange(false);
-    toast.success(`${estimate.number} created.`);
-    router.push(`/pro/dashboard/estimates/${estimate.id}`);
   }
 
   return (
@@ -241,6 +253,8 @@ export function CreateEstimateDialog({
             <Field label="Estimate name">
               <Input
                 value={name}
+                placeholder="Enter estimate name"
+                required
                 onChange={(event) => {
                   setName(event.target.value);
                   setLines((current) =>
@@ -326,11 +340,13 @@ export function CreateEstimateDialog({
             </Button>
           )}
           {tab === "review" ? (
-            <Button data-action="submit-estimate" onClick={create}>
-              Create estimate
+            <Button data-action="submit-estimate" disabled={!hasEstimateName || saving} onClick={create}>
+              {saving ? "Creating…" : "Create estimate"}
             </Button>
           ) : (
-            <Button onClick={() => setTab(nextTab(tab))}>Continue</Button>
+            <Button disabled={!hasEstimateName} onClick={() => setTab(nextTab(tab))}>
+              Continue
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

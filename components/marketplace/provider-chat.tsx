@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ChatPanel } from "@/components/shared/chat-panel";
@@ -19,6 +19,7 @@ import {
 import {
   readChatGuest,
   writeChatGuest,
+  type ChatGuest,
   type ChatThread,
 } from "@/lib/booking/chat-store";
 import {
@@ -29,6 +30,11 @@ import {
 } from "@/lib/api/chat-client";
 import { connectRealtime, onRealtime } from "@/lib/realtime/socket";
 import type { Provider } from "@/lib/types";
+import { useAppSelector } from "@/store/hooks";
+import {
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
 
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
 
@@ -49,11 +55,32 @@ function requireThread(thread: ChatThread | null | undefined, action: string): C
   return thread;
 }
 
+function guestFromAuth(user: {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+} | null): ChatGuest | null {
+  const email = String(user?.email || "").trim();
+  if (!email) return null;
+  const name =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    email.split("@")[0] ||
+    "Customer";
+  return { name, email };
+}
+
 export function ProviderChat({ provider }: { provider: Provider }) {
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const authUser = useAppSelector(selectAuthUser);
+  const authGuest = useMemo(
+    () => (isAuthenticated ? guestFromAuth(authUser) : null),
+    [authUser, isAuthenticated],
+  );
+
   const [open, setOpen] = useState(false);
-  const [guest, setGuest] = useState(readChatGuest);
-  const [name, setName] = useState(() => readChatGuest()?.name ?? "");
-  const [email, setEmail] = useState(() => readChatGuest()?.email ?? "");
+  const [guest, setGuest] = useState<ChatGuest | null>(() => authGuest ?? readChatGuest());
+  const [name, setName] = useState(() => authGuest?.name ?? readChatGuest()?.name ?? "");
+  const [email, setEmail] = useState(() => authGuest?.email ?? readChatGuest()?.email ?? "");
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [thread, setThread] = useState<ChatThread | undefined>(undefined);
   const [resolvedProviderIds, setResolvedProviderIds] = useState<Record<string, string>>({});
@@ -61,6 +88,15 @@ export function ProviderChat({ provider }: { provider: Provider }) {
   const activeProviderId =
     resolvedProviderIds[provider.slug] ||
     (OBJECT_ID_REGEX.test(provider.id) ? provider.id : "");
+
+  // Logged-in customers skip the guest form — use account name/email.
+  useEffect(() => {
+    if (!authGuest) return;
+    writeChatGuest(authGuest);
+    setGuest(authGuest);
+    setName(authGuest.name);
+    setEmail(authGuest.email);
+  }, [authGuest]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,21 +196,34 @@ export function ProviderChat({ provider }: { provider: Provider }) {
     return latest;
   }
 
+  const unreadForCustomer = thread?.unreadForCustomer ?? 0;
+  const showGuestForm = !guest;
+
   return (
     <>
       <Button type="button" variant="outline" size="xl" onClick={() => setOpen(true)}>
         <MessageCircle data-icon="inline-start" />
         Chat with this pro
+        {unreadForCustomer > 0 ? (
+          <span className="ml-2 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+            {unreadForCustomer > 9 ? "9+" : unreadForCustomer}
+          </span>
+        ) : null}
       </Button>
 
       <Button
         type="button"
         size="icon-lg"
-        className="fixed right-5 bottom-5 z-40 rounded-full shadow-lg"
+        className="relative fixed right-5 bottom-5 z-40 rounded-full shadow-lg"
         aria-label={`Chat with ${provider.companyName}`}
         onClick={() => setOpen(true)}
       >
         <MessageCircle />
+        {unreadForCustomer > 0 ? (
+          <span className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-semibold text-white">
+            {unreadForCustomer > 9 ? "9+" : unreadForCustomer}
+          </span>
+        ) : null}
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
@@ -192,7 +241,7 @@ export function ProviderChat({ provider }: { provider: Provider }) {
             </div>
           </SheetHeader>
 
-          {!guest ? (
+          {showGuestForm ? (
             <div className="flex flex-col gap-4 p-4">
               <p className="text-sm text-muted-foreground">
                 Add your name and email so {provider.companyName} can reply and keep this conversation.
@@ -241,8 +290,8 @@ export function ProviderChat({ provider }: { provider: Provider }) {
                   const current = requireThread(
                     thread ??
                       (await begin(
-                        guest.name,
-                        guest.email,
+                        guest!.name,
+                        guest!.email,
                         text || "Sent a note from the website.",
                         attachments,
                       )),
@@ -250,12 +299,12 @@ export function ProviderChat({ provider }: { provider: Provider }) {
                   );
                   const updated = thread
                     ? requireThread(
-                        await sendPublicChatMessage(current.id, guest.email, text, attachments),
+                        await sendPublicChatMessage(current.id, guest!.email, text, attachments),
                         "send the message",
                       )
                     : current;
                   const readThread = requireThread(
-                    await markPublicChatRead(updated.id, guest.email),
+                    await markPublicChatRead(updated.id, guest!.email),
                     "mark the chat as read",
                   );
                   const nextThreads = [

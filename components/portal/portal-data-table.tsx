@@ -83,7 +83,14 @@ export function PortalDataTable<T>({
 }) {
   const router = useRouter();
   const isServer = Boolean(serverPagination);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return new URLSearchParams(window.location.search).get("q") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [letter, setLetter] = useState("");
   const [sortId, setSortId] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");

@@ -27,6 +27,7 @@ import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { useEmployeeFile, weekdayLabel, type EmployeeDayHours } from "@/components/portal/use-employee-file";
 import type { JobAttachment } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
@@ -63,14 +64,17 @@ export function TeamMemberView({ id }: { id: string }) {
   const records = usePortalRecords();
   const employee = employees.find((item) => item.id === id);
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
+  const pending = useCrmRecordPending();
 
   if (!employee) {
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">Employee not found</h1>
-        <Button asChild className="mt-4" size="sm">
-          <Link href="/pro/dashboard/team">Back to employees</Link>
-        </Button>
+        <h1 className="text-lg font-semibold">{pending ? "Loading employee…" : "Employee not found"}</h1>
+        {!pending ? (
+          <Button asChild className="mt-4" size="sm">
+            <Link href="/pro/dashboard/team">Back to employees</Link>
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -140,8 +144,11 @@ export function TeamMemberView({ id }: { id: string }) {
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  removeEmployee(employee.id);
-                  toast.success(`${name} removed from the crew list.`);
+                  void Promise.resolve(removeEmployee(employee.id))
+                    .then(() => toast.success(`${name} removed from the crew list.`))
+                    .catch((error) =>
+                      toast.error(error instanceof Error ? error.message : "Could not remove this employee."),
+                    );
                 }}
               >
                 Remove
@@ -328,7 +335,7 @@ function EmployeeSettingsTab({
   onSave,
 }: {
   employee: PortalEmployee;
-  onSave: (id: string, patch: Partial<PortalEmployee>) => void;
+  onSave: (id: string, patch: Partial<PortalEmployee>) => void | Promise<unknown>;
 }) {
   const [draft, setDraft] = useState(employee);
 
@@ -342,8 +349,11 @@ function EmployeeSettingsTab({
         <Button
           size="sm"
           onClick={() => {
-            onSave(employee.id, draft);
-            toast.success("Employee settings saved.");
+            void Promise.resolve(onSave(employee.id, draft))
+              .then(() => toast.success("Employee settings saved."))
+              .catch((error) =>
+                toast.error(error instanceof Error ? error.message : "Could not save employee settings."),
+              );
           }}
         >
           Save settings
@@ -491,7 +501,7 @@ export function EmployeePayTab({
   onSave,
 }: {
   employee: PortalEmployee;
-  onSave: (id: string, patch: Partial<PortalEmployee>) => void;
+  onSave: (id: string, patch: Partial<PortalEmployee>) => void | Promise<unknown>;
 }) {
   const file = useEmployeeFile(employee);
   const [pay, setPay] = useState(file.pay);
@@ -515,8 +525,11 @@ export function EmployeePayTab({
           size="sm"
           onClick={() => {
             file.savePay(pay);
-            onSave(employee.id, pay);
-            toast.success("Pay rate saved.");
+            void Promise.resolve(onSave(employee.id, pay))
+              .then(() => toast.success("Pay rate saved."))
+              .catch((error) =>
+                toast.error(error instanceof Error ? error.message : "Could not save pay rates."),
+              );
           }}
         >
           Save rates

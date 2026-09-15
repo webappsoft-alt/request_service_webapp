@@ -38,9 +38,17 @@ export function usePortalInbox() {
   }, [chat.threads, newLeads]);
 
   const newLeadCount =
-    crm.enabled && crm.ready ? crm.inboxSummary.newLeads : newLeads.length;
+    crm.enabled && crm.ready
+      ? crm.inboxSummary.newLeads
+      : crm.enabled
+        ? 0
+        : newLeads.length;
   const unreadChats =
-    crm.enabled && crm.ready ? crm.inboxSummary.unreadChats : chat.unread;
+    crm.enabled && crm.ready
+      ? crm.inboxSummary.unreadChats
+      : crm.enabled
+        ? 0
+        : chat.unread;
 
   return {
     newLeads: newLeadCount,

@@ -46,6 +46,12 @@ export type RealtimeEvents = {
   INBOX_SUMMARY_INVALIDATE: {
     reason?: string;
   };
+  ESTIMATE_ACCEPTED: {
+    estimateId?: string;
+    number?: string;
+    href?: string;
+    customerName?: string;
+  };
   ORDER_UPDATED: Record<string, unknown>;
 };
 

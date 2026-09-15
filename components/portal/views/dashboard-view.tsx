@@ -19,6 +19,11 @@ import {
 import { CreateEstimateDialog, CreateJobDialog, CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { CreateTaskDialog } from "@/components/portal/create-person-dialogs";
 import { PortalPage } from "@/components/portal/portal-page";
+import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
+import { getProfileSetupItems, profileSetupProgress } from "@/lib/business-profile-setup";
+import { selectAuthProvider, selectAuthUser } from "@/store/authSlice";
+import { useAppSelector } from "@/store/hooks";
+import { usePortalSettings } from "@/components/portal/use-portal-settings";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
@@ -91,6 +96,11 @@ function countBy(rows: { label: string }[]) {
 }
 
 export function DashboardView() {
+  const user = useAppSelector(selectAuthUser);
+  const authProvider = useAppSelector(selectAuthProvider);
+  const { officeHours } = usePortalSettings();
+  const setupItems = getProfileSetupItems(user, authProvider, officeHours);
+  const setup = profileSetupProgress(setupItems);
   const { provider, stats, activity, revenue, requests, jobs, estimates, invoices, payments } = usePortalWorkspace();
   const { customers, contractors, vendors, tasks, reminders, employees } = useCrmDirectory();
   const { events, employeeLabel } = usePortalCrew();
@@ -191,6 +201,32 @@ export function DashboardView() {
       description={`${formatLongDate(today)} · ${provider.companyName} · ${provider.city}, ${provider.state}`}
       actions={<DashboardSwitcher />}
     >
+      {setup.percent < 100 ? (
+        <Card className="border-primary/20 bg-primary/[0.03]">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base">Set up your business profile</CardTitle>
+              <ProfileSetupSummary
+                done={setup.done}
+                total={setup.total}
+                percent={setup.percent}
+                nextLabel={setup.next?.label}
+              />
+            </div>
+            <Button asChild>
+              <Link href={setup.next?.href || "/pro/dashboard/profile"}>
+                Complete setup
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-3 h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${setup.percent}%` }} />
+            </div>
+            <ProfileSetupChips items={setupItems} />
+          </CardContent>
+        </Card>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCell
           label="Overdue invoices"

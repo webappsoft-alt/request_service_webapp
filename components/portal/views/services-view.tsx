@@ -215,13 +215,25 @@ export function ServicesView() {
           {
             id: "areas",
             header: "Areas",
-            sortValue: (row) => row.serviceAreaIds.length,
-            searchValue: (row) => String(row.serviceAreaIds.length),
-            exportValue: (row) => String(row.serviceAreaIds.length),
+            sortValue: (row) =>
+              row.serviceAreaNames.join(", ") || String(row.serviceAreaIds.length),
+            searchValue: (row) =>
+              row.serviceAreaNames.join(" ") || String(row.serviceAreaIds.length),
+            exportValue: (row) =>
+              row.serviceAreaNames.length
+                ? row.serviceAreaNames.join(", ")
+                : row.serviceAreaIds.length
+                  ? `${row.serviceAreaIds.length} areas`
+                  : "None",
             cell: (row) =>
-              row.serviceAreaIds.length
-                ? `${row.serviceAreaIds.length} ${row.serviceAreaIds.length === 1 ? "area" : "areas"}`
-                : "None",
+              row.serviceAreaNames.length
+                ? row.serviceAreaNames.slice(0, 2).join(", ") +
+                  (row.serviceAreaNames.length > 2
+                    ? ` +${row.serviceAreaNames.length - 2}`
+                    : "")
+                : row.serviceAreaIds.length
+                  ? `${row.serviceAreaIds.length} ${row.serviceAreaIds.length === 1 ? "area" : "areas"}`
+                  : "None",
           },
           {
             id: "status",

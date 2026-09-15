@@ -7,7 +7,11 @@ import {
   createJob as createJobApi,
   createRequest as createRequestApi,
   recordInvoicePayment,
+  updateEstimate as updateEstimateApi,
+  updateInvoice as updateInvoiceApi,
+  updateJobStatus as updateJobStatusApi,
   updateRequestStatus,
+  archiveCustomer as archiveCustomerApi,
 } from "@/lib/api/crm-client";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
@@ -122,6 +126,11 @@ function writeStore(key: string, next: RecordsStore) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+function upsertById<T extends { id: string }>(primary: T[], extra: T[]) {
+  const seen = new Set(primary.map((item) => item.id));
+  return [...primary, ...extra.filter((item) => item.id && !seen.has(item.id))];
+}
+
 function subscribe(onStoreChange: () => void) {
   window.addEventListener(EVENT, onStoreChange);
   window.addEventListener("storage", onStoreChange);
@@ -141,6 +150,7 @@ export function usePortalRecords() {
     () => EMPTY,
   );
   const apiReady = crm.enabled && crm.ready;
+  const suppressSeedData = Boolean(session) || (crm.enabled && !crm.ready);
 
   const isDeleted = useCallback(
     (kind: PortalRecordKind, id: string) => store.deleted.includes(recordKey(kind, id)),
@@ -170,17 +180,58 @@ export function usePortalRecords() {
           return updated;
         })();
       }
+      if (apiReady && kind === "estimate") {
+        return (async () => {
+          const currentEstimate =
+            crm.estimates.find((item) => item.id === id) ??
+            store.estimates.find((item) => item.id === id);
+          if (!currentEstimate) throw new Error("Estimate not found");
+          const updated = await updateEstimateApi(id, {
+            ...currentEstimate,
+            status: status as Estimate["status"],
+          });
+          await crm.refresh();
+          return updated;
+        })();
+      }
+      if (apiReady && kind === "job") {
+        return (async () => {
+          const updated = await updateJobStatusApi(id, status as Job["status"]);
+          await crm.refresh();
+          return updated;
+        })();
+      }
+      if (apiReady && kind === "invoice") {
+        return (async () => {
+          const currentInvoice =
+            crm.invoices.find((item) => item.id === id) ??
+            store.invoices.find((item) => item.id === id);
+          if (!currentInvoice) throw new Error("Invoice not found");
+          const updated = await updateInvoiceApi(id, {
+            ...currentInvoice,
+            status: status as Invoice["status"],
+          });
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, {
         ...current,
         status: { ...current.status, [recordKey(kind, id)]: status },
       });
     },
-    [apiReady, crm, key],
+    [apiReady, crm, key, store.estimates, store.invoices],
   );
 
   const remove = useCallback(
     (kind: PortalRecordKind, id: string) => {
+      if (apiReady && kind === "customer") {
+        return (async () => {
+          await archiveCustomerApi(id);
+          await crm.refresh();
+        })();
+      }
       const current = readStore(key);
       const nextKey = recordKey(kind, id);
       writeStore(key, {
@@ -188,7 +239,7 @@ export function usePortalRecords() {
         deleted: current.deleted.includes(nextKey) ? current.deleted : [...current.deleted, nextKey],
       });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const keep = useCallback(
@@ -199,6 +250,12 @@ export function usePortalRecords() {
 
   const archive = useCallback(
     (kind: PortalRecordKind, id: string) => {
+      if (apiReady && kind === "customer") {
+        return (async () => {
+          await archiveCustomerApi(id);
+          await crm.refresh();
+        })();
+      }
       const current = readStore(key);
       const nextKey = recordKey(kind, id);
       writeStore(key, {
@@ -206,7 +263,7 @@ export function usePortalRecords() {
         archived: current.archived.includes(nextKey) ? current.archived : [...current.archived, nextKey],
       });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const unarchive = useCallback(
@@ -228,53 +285,79 @@ export function usePortalRecords() {
 
   const mergeEstimates = useCallback(
     (seeded: Estimate[]) =>
-      keep("estimate", apiReady ? crm.estimates : [...seeded, ...store.estimates]).map(
-        (item) => ({
-          ...item,
-          status: statusOf("estimate", item.id, item.status),
-        }),
-      ),
-    [apiReady, crm.estimates, keep, statusOf, store.estimates],
+      keep(
+        "estimate",
+        apiReady
+          ? upsertById(crm.estimates, store.estimates)
+          : suppressSeedData
+            ? store.estimates
+            : [...seeded, ...store.estimates],
+      ).map((item) => ({
+        ...item,
+        status: statusOf("estimate", item.id, item.status),
+      })),
+    [apiReady, crm.estimates, keep, statusOf, store.estimates, suppressSeedData],
   );
 
   const mergeJobs = useCallback(
     (seeded: Job[]) =>
-      keep("job", apiReady ? crm.jobs : [...seeded, ...store.jobs]).map((item) => ({
-        ...item,
-        status: statusOf("job", item.id, item.status),
-      })),
-    [apiReady, crm.jobs, keep, statusOf, store.jobs],
+      keep("job", apiReady ? crm.jobs : suppressSeedData ? [] : [...seeded, ...store.jobs]).map(
+        (item) => ({
+          ...item,
+          status: statusOf("job", item.id, item.status),
+        }),
+      ),
+    [apiReady, crm.jobs, keep, statusOf, store.jobs, suppressSeedData],
   );
 
   const mergeInvoices = useCallback(
     (seeded: Invoice[]) =>
-      keep("invoice", apiReady ? crm.invoices : [...seeded, ...store.invoices]).map((item) => ({
+      keep(
+        "invoice",
+        apiReady ? crm.invoices : suppressSeedData ? [] : [...seeded, ...store.invoices],
+      ).map((item) => ({
         ...item,
         ...store.invoicePatches[item.id],
         status: statusOf("invoice", item.id, store.invoicePatches[item.id]?.status ?? item.status),
       })),
-    [apiReady, crm.invoices, keep, statusOf, store.invoicePatches, store.invoices],
+    [apiReady, crm.invoices, keep, statusOf, store.invoicePatches, store.invoices, suppressSeedData],
   );
 
   const mergePayments = useCallback(
     (seeded: Payment[]) =>
-      keep("payment", apiReady ? crm.payments : [...seeded, ...store.payments]),
-    [apiReady, crm.payments, keep, store.payments],
+      keep(
+        "payment",
+        apiReady ? crm.payments : suppressSeedData ? [] : [...seeded, ...store.payments],
+      ),
+    [apiReady, crm.payments, keep, store.payments, suppressSeedData],
+  );
+
+  const persistEstimate = useCallback(
+    (estimate: Estimate, dropIds: string[] = []) => {
+      const current = readStore(key);
+      const skip = new Set(dropIds.filter(Boolean));
+      writeStore(key, {
+        ...current,
+        estimates: [estimate, ...current.estimates.filter((item) => item.id !== estimate.id && !skip.has(item.id))],
+      });
+    },
+    [key],
   );
 
   const addEstimate = useCallback(
     (estimate: Estimate) => {
+      persistEstimate(estimate);
       if (apiReady) {
         return (async () => {
           const created = await createEstimateApi(estimate);
+          const saved = created ?? estimate;
+          persistEstimate(saved, created && created.id !== estimate.id ? [estimate.id] : []);
           await crm.refresh();
-          return created;
+          return saved;
         })();
       }
-      const current = readStore(key);
-      writeStore(key, { ...current, estimates: [...current.estimates, estimate] });
     },
-    [apiReady, crm, key],
+    [apiReady, crm, persistEstimate],
   );
 
   const addJob = useCallback(
@@ -309,6 +392,17 @@ export function usePortalRecords() {
 
   const patchInvoice = useCallback(
     (id: string, patch: Partial<Invoice>) => {
+      if (apiReady) {
+        return (async () => {
+          const currentInvoice =
+            crm.invoices.find((item) => item.id === id) ??
+            store.invoices.find((item) => item.id === id);
+          if (!currentInvoice) throw new Error("Invoice not found");
+          const updated = await updateInvoiceApi(id, { ...currentInvoice, ...patch });
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const extra = current.invoices.find((item) => item.id === id);
       writeStore(key, {
@@ -321,7 +415,7 @@ export function usePortalRecords() {
           : { ...current.invoicePatches, [id]: { ...current.invoicePatches[id], ...patch } },
       });
     },
-    [key],
+    [apiReady, crm, key, store.invoices],
   );
 
   const addPayment = useCallback(
@@ -341,12 +435,15 @@ export function usePortalRecords() {
 
   const mergeRequests = useCallback(
     (seeded: PortalRequest[]) =>
-      keep("request", apiReady ? crm.requests : [...seeded, ...store.requests]).map((item) => ({
+      keep(
+        "request",
+        apiReady ? crm.requests : suppressSeedData ? [] : [...seeded, ...store.requests],
+      ).map((item) => ({
         ...item,
         ...store.requestPatches[item.id],
         status: statusOf("request", item.id, item.status),
       })),
-    [apiReady, crm.requests, keep, statusOf, store.requestPatches, store.requests],
+    [apiReady, crm.requests, keep, statusOf, store.requestPatches, store.requests, suppressSeedData],
   );
 
   const addRequest = useCallback(
@@ -383,7 +480,10 @@ export function usePortalRecords() {
 
   const mergeServices = useCallback(
     (seeded: PortalFixedService[]) =>
-      keep("service", [...seeded, ...store.services]).map((item) => {
+      keep(
+        "service",
+        suppressSeedData ? store.services : [...seeded, ...store.services],
+      ).map((item) => {
         const patched = { ...item, ...store.servicePatches[item.id] };
         return {
           ...patched,
@@ -395,7 +495,7 @@ export function usePortalRecords() {
           active: statusOf("service", item.id, patched.active ? "active" : "hidden") === "active",
         };
       }),
-    [keep, statusOf, store.servicePatches, store.services],
+    [keep, statusOf, store.servicePatches, store.services, suppressSeedData],
   );
 
   const addService = useCallback(

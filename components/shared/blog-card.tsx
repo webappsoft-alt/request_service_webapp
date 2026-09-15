@@ -15,7 +15,7 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
   const authorName =
     "authorName" in post && post.authorName
       ? post.authorName
-      : "Request Services Editorial";
+      : "Request Service Editorial";
 
   const extractedFromContent =
     "content" in post && typeof post.content === "string"
@@ -76,7 +76,7 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
                 {categoryName}
               </span>
               <span className="relative z-10 text-sm font-medium text-white/80">
-                Request Services Journal
+                Request Service Journal
               </span>
             </div>
           )}

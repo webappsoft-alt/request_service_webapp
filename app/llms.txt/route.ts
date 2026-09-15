@@ -19,7 +19,7 @@ ${siteConfig.description}
 - [Contact](${siteConfig.url}/contact)
 
 ## Notes for crawlers
-Request Services is a USA-focused home services marketplace. Customers request or book local professionals. Service providers subscribe to a business portal. Pricing shown on the public site is placeholder data.
+Request Service is a USA-focused home services marketplace. Customers request or book local professionals. Service providers subscribe to a business portal. Pricing shown on the public site is placeholder data.
 `;
 
   return new Response(body, {

@@ -165,24 +165,47 @@ export function initials(name: string) {
     .toUpperCase();
 }
 
-export function DateStamp({ value }: { value?: string }) {
-  if (!value) {
-    return (
-      <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-muted text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-        TBD
-      </span>
-    );
+function parseDateStamp(value?: string): Date | null {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  const dateOnly = trimmed.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+  const date = trimmed.includes("T") || trimmed.includes(" ")
+    ? new Date(trimmed)
+    : new Date(`${dateOnly || trimmed}T00:00:00`);
+  if (Number.isNaN(date.getTime()) && dateOnly) {
+    const fallback = new Date(`${dateOnly}T00:00:00`);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
   }
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-  const date = new Date(`${value}T00:00:00`);
+function DateStampFallback() {
   return (
-    <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-secondary text-primary">
-      <span className="text-[9px] font-medium tracking-[0.12em] uppercase">
-        {date.toLocaleString("en-US", { month: "short" })}
-      </span>
-      <span className="text-sm leading-none font-semibold tabular-nums">{date.getDate()}</span>
+    <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-muted text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+      TBD
     </span>
   );
+}
+
+export function DateStamp({ value }: { value?: string }) {
+  const date = parseDateStamp(value);
+  if (!date) return <DateStampFallback />;
+
+  try {
+    const month = date.toLocaleString("en-US", { month: "short" });
+    const day = date.getDate();
+    if (!month || Number.isNaN(day)) return <DateStampFallback />;
+    return (
+      <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-secondary text-primary">
+        <span className="text-[9px] font-medium tracking-[0.12em] uppercase">
+          {month}
+        </span>
+        <span className="text-sm leading-none font-semibold tabular-nums">{day}</span>
+      </span>
+    );
+  } catch {
+    return <DateStampFallback />;
+  }
 }
 
 export function activityDot(title: string) {

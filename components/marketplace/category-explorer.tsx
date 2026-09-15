@@ -7,7 +7,8 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { CenteredSpinner, Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
+import { ProviderCardSkeletonGrid } from "@/components/shared/loading-skeletons";
 import { ProviderCard } from "@/components/shared/provider-card";
 import {
   AddressAutocomplete,
@@ -28,6 +29,8 @@ import type { Provider, ServiceCategory } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchParentCategories,
+  fetchSubcategories,
+  invalidateSubcategories,
   selectParentCategories,
 } from "@/store/categoriesSlice";
 import {
@@ -43,7 +46,6 @@ import {
   buildPublicProfessionalsQueryKey,
   fetchPublicProfessionals,
   publicProfessionalToProvider,
-  resetPublicProfessionals,
   setPublicProfessionalDetail,
   type PublicProfessionalSortBy,
   type PublicProfessionalsQuery,
@@ -119,6 +121,16 @@ export function CategoryExplorer({
   const loadingMoreParents = useAppSelector(
     (state) => state.categories.loadingMoreParents,
   );
+  const subcategoriesByParent = useAppSelector(
+    (state) => state.categories.subcategoriesByParent,
+  );
+  const subMetaByParent = useAppSelector((state) => state.categories.subMetaByParent);
+  const loadingSubcategories = useAppSelector(
+    (state) => state.categories.loadingSubcategories,
+  );
+  const loadingMoreSubcategories = useAppSelector(
+    (state) => state.categories.loadingMoreSubcategories,
+  );
 
   const liveItems = useAppSelector((state) => state.publicProfessionals.items);
   const liveTotal = useAppSelector((state) => state.publicProfessionals.total);
@@ -133,11 +145,7 @@ export function CategoryExplorer({
   const liveError = useAppSelector((state) => state.publicProfessionals.error);
 
   const locationLabel = locationDisplayLabel(customerLocation);
-  const locationValue =
-    customerLocation.address ||
-    customerLocation.city ||
-    customerLocation.zip ||
-    "";
+  const locationValue = locationLabel || customerLocation.zip || "";
   // Local draft while typing — do not write keystrokes into Redux (avoids API refetches).
   const [locationDraft, setLocationDraft] = useState<string | null>(null);
   const locationInputValue = locationDraft ?? locationValue;
@@ -174,11 +182,20 @@ export function CategoryExplorer({
       ),
     [categoryId, parentCategories, serviceSlug],
   );
+  const apiSubcategories = selectedParent
+    ? (subcategoriesByParent[selectedParent.id] ?? [])
+    : [];
   const subServices = !useLive && activeCategory
     ? getSubServices(activeCategory.slug)
     : undefined;
   const selectedSub =
     subServices?.options.find((option) => option.value === subService || option.job === subService);
+  const selectedLiveSub = apiSubcategories.find(
+    (item) =>
+      item.id === subService ||
+      item.slug === subService ||
+      item.name.toLowerCase() === subService.trim().toLowerCase(),
+  );
 
   const liveProviders = useMemo(
     () => liveItems.map(publicProfessionalToProvider),
@@ -232,6 +249,7 @@ export function CategoryExplorer({
     const next: PublicProfessionalsQuery = {
       sortBy: sortByFromUi(sort),
       sortOrder: "desc",
+      radius: 50,
       locationToken: committed
         ? [
             customerLocation.zip,
@@ -241,27 +259,38 @@ export function CategoryExplorer({
             customerLocation.latitude ?? "",
             customerLocation.longitude ?? "",
           ].join("|")
-        : "",
+        : "all",
     };
     if (minRating > 0) next.minRating = minRating;
     if (licensedOnly) next.isIdentityVerified = true;
     if (categoryId) next.category = categoryId;
+    // Live API matches subcategory by name/slug; prefer those over ObjectId until
+    // backend ObjectId matching is deployed. Fall back to id only if needed.
+    if (selectedLiveSub) {
+      next.subCategory =
+        selectedLiveSub.slug?.trim() ||
+        selectedLiveSub.name?.trim() ||
+        selectedLiveSub.id;
+    } else if (
+      subService.trim() &&
+      !/^[0-9a-fA-F]{24}$/.test(subService.trim())
+    ) {
+      next.subCategory = subService.trim();
+    }
 
-    // Send only committed location fields (selected place / geo), not mid-typing address.
-    if (customerLocation.zip.trim()) {
+    // ZIP-only when no coords — city/place picks use radius instead.
+    const hasCoords =
+      customerLocation.latitude != null &&
+      Number.isFinite(customerLocation.latitude) &&
+      customerLocation.longitude != null &&
+      Number.isFinite(customerLocation.longitude);
+
+    if (customerLocation.zip.trim() && !hasCoords) {
       next.zipCode = customerLocation.zip.trim();
     }
-    if (
-      customerLocation.latitude != null &&
-      Number.isFinite(customerLocation.latitude)
-    ) {
-      next.lat = customerLocation.latitude;
-    }
-    if (
-      customerLocation.longitude != null &&
-      Number.isFinite(customerLocation.longitude)
-    ) {
-      next.lng = customerLocation.longitude;
+    if (hasCoords) {
+      next.lat = customerLocation.latitude!;
+      next.lng = customerLocation.longitude!;
     }
 
     return next;
@@ -275,7 +304,9 @@ export function CategoryExplorer({
     customerLocation.zip,
     licensedOnly,
     minRating,
+    selectedLiveSub,
     sort,
+    subService,
   ]);
 
   const liveQueryKey = buildPublicProfessionalsQueryKey(liveQuery);
@@ -284,9 +315,6 @@ export function CategoryExplorer({
   const resultsCountRef = useRef(0);
   resultsCountRef.current = results.length;
 
-  const locationReady =
-    customerLocation.detectAttempted && !customerLocation.detecting;
-  const locationCommitted = isCommittedLocation(customerLocation);
   const showRefreshOverlay =
     useLive &&
     results.length > 0 &&
@@ -294,20 +322,20 @@ export function CategoryExplorer({
   const showInitialSpinner =
     useLive &&
     !results.length &&
-    (!locationReady ||
-      (locationCommitted &&
-        (liveLoading ||
-          pendingRefresh ||
-          (!liveLoaded && !liveError))));
+    (customerLocation.detecting ||
+      liveLoading ||
+      pendingRefresh ||
+      (!liveLoaded && !liveError));
 
   useEffect(() => {
     if (!useLive) return;
-    if (initialAddress || customerLocation.zip) {
+    const zipFromAddress = extractZip(initialAddress);
+    if (initialAddress || customerLocation.zip || zipFromAddress) {
       dispatch(
         hydrateLocationIfEmpty({
           address: initialAddress,
           city: initialAddress,
-          zip: extractZip(initialAddress) || undefined,
+          zip: zipFromAddress || undefined,
         }),
       );
     }
@@ -363,12 +391,43 @@ export function CategoryExplorer({
     }
   }, [category?.slug, categoryId, parentCategories, serviceSlug, useLive]);
 
-  // Wait for location bootstrap, then fetch only with a committed location (never while typing).
+  // Load sub-categories for the selected live parent.
+  useEffect(() => {
+    if (!useLive || !selectedParent?.id) return;
+    dispatch(invalidateSubcategories(selectedParent.id));
+    void dispatch(fetchSubcategories({ parentId: selectedParent.id }));
+  }, [dispatch, selectedParent?.id, useLive]);
+
+  useEffect(() => {
+    if (!useLive || !selectedParent?.id) return;
+    const meta = subMetaByParent[selectedParent.id];
+    if (!meta?.hasMore) return;
+    if (loadingSubcategories || loadingMoreSubcategories) return;
+    void dispatch(
+      fetchSubcategories({ parentId: selectedParent.id, append: true }),
+    );
+  }, [
+    dispatch,
+    loadingMoreSubcategories,
+    loadingSubcategories,
+    selectedParent?.id,
+    subMetaByParent,
+    useLive,
+  ]);
+
+  // Normalize URL job → API subcategory ObjectId once children load.
+  useEffect(() => {
+    if (!useLive || !subService || !apiSubcategories.length) return;
+    if (selectedLiveSub && selectedLiveSub.id !== subService) {
+      setSubService(selectedLiveSub.id);
+    }
+  }, [apiSubcategories.length, selectedLiveSub, subService, useLive]);
+
+  // Fetch with location when set; without it when address is cleared (full catalog).
   useEffect(() => {
     if (!useLive) return;
-    if (!locationReady || !locationCommitted) {
+    if (customerLocation.detecting) {
       setPendingRefresh(false);
-      prevLiveQueryKeyRef.current = liveQueryKey;
       return;
     }
 
@@ -386,15 +445,7 @@ export function CategoryExplorer({
       });
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [dispatch, liveQueryKey, locationCommitted, locationReady, useLive]);
-
-  // Clear stale results when location is cleared (same idea as Fixed Services gate).
-  useEffect(() => {
-    if (!useLive) return;
-    if (locationReady && !locationCommitted) {
-      dispatch(resetPublicProfessionals());
-    }
-  }, [dispatch, locationCommitted, locationReady, useLive]);
+  }, [customerLocation.detecting, dispatch, liveQueryKey, useLive]);
 
   useEffect(() => {
     if (!liveLoading) setPendingRefresh(false);
@@ -409,13 +460,26 @@ export function CategoryExplorer({
   }, [category?.slug, initialJob]);
 
   useEffect(() => {
-    if (useLive) return;
     if (!subService) return;
+    if (useLive) {
+      if (!apiSubcategories.length) return;
+      if (
+        !apiSubcategories.some(
+          (item) =>
+            item.id === subService ||
+            item.slug === subService ||
+            item.name.toLowerCase() === subService.trim().toLowerCase(),
+        )
+      ) {
+        setSubService("");
+      }
+      return;
+    }
     const options = getSubServices(activeCategory?.slug)?.options ?? [];
     if (!options.some((option) => option.value === subService || option.job === subService)) {
       setSubService("");
     }
-  }, [activeCategory?.slug, subService, useLive]);
+  }, [activeCategory?.slug, apiSubcategories, subService, useLive]);
 
   useEffect(() => {
     if (!results.some((provider) => provider.id === selectedId)) {
@@ -462,6 +526,7 @@ export function CategoryExplorer({
       // URL sync after Redux updates on next paint — use place fields directly.
       const params = new URLSearchParams();
       if (serviceSlug !== "all") params.set("service", serviceSlug);
+      if (serviceSlug !== "all" && subService) params.set("job", subService);
       const zip = place.zipCode?.trim() || "";
       const loc =
         place.formattedAddress?.trim() ||
@@ -531,9 +596,11 @@ export function CategoryExplorer({
             activeCategory?.name ||
             "your area";
   const heading = useLive
-    ? selectedParent
-      ? `${selectedParent.name} in ${cityLabel}`
-      : `Professionals in ${cityLabel}`
+    ? selectedLiveSub
+      ? `${selectedLiveSub.name} in ${cityLabel}`
+      : selectedParent
+        ? `${selectedParent.name} in ${cityLabel}`
+        : `Professionals in ${cityLabel}`
     : selectedSub
       ? `${selectedSub.label} in ${cityLabel}`
       : activeCategory
@@ -568,6 +635,7 @@ export function CategoryExplorer({
                 onSelect={applyLivePlace}
                 placeholder="City, state, or ZIP"
                 autoComplete="off"
+                preferCityDisplay
                 hideStatus
                 inputClassName="h-10 rounded-lg bg-card"
               />
@@ -646,6 +714,25 @@ export function CategoryExplorer({
                 {subServices.options.map((option) => (
                   <NativeSelectOption key={option.value} value={option.value}>
                     {option.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            ) : null}
+
+            {useLive && selectedParent ? (
+              <NativeSelect
+                value={selectedLiveSub?.id || subService}
+                onChange={(event) => onSubServiceChange(event.target.value)}
+                disabled={loadingSubcategories && !apiSubcategories.length}
+                className="w-full min-w-0 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:bg-card sm:[&>select]:min-w-44 sm:[&>select]:max-w-64"
+                aria-label="Sub-service"
+              >
+                <NativeSelectOption value="">
+                  All {selectedParent.name} jobs
+                </NativeSelectOption>
+                {apiSubcategories.map((item) => (
+                  <NativeSelectOption key={item.id} value={item.id}>
+                    {item.name}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
@@ -781,7 +868,12 @@ export function CategoryExplorer({
           </div>
 
           {showInitialSpinner ? (
-            <CenteredSpinner label="Loading professionals" className="min-h-64" />
+            <div className="p-3 sm:p-4">
+              <ProviderCardSkeletonGrid
+                count={6}
+                className="lg:min-h-0 xl:grid-cols-2"
+              />
+            </div>
           ) : results.length ? (
             <>
               <ul

@@ -16,6 +16,7 @@ import {
   updateReminderStatus as updateReminderStatusApi,
   updateTaskStatus as updateTaskStatusApi,
   updateVendor as updateVendorApi,
+  updateCustomer as updateCustomerApi,
 } from "@/lib/api/crm-client";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
@@ -119,30 +120,56 @@ export function useCrmDirectory() {
     () => EMPTY,
   );
   const apiReady = crm.enabled && crm.ready;
+  // Authenticated providers: never merge seed/demo people data.
+  const suppressSeedData = Boolean(session) || (crm.enabled && !crm.ready);
 
-  const seedCustomers = useMemo(() => getCrmCustomers(provider), [provider]);
-  const seedContractors = useMemo(() => getPortalContractors(provider), [provider]);
-  const seedVendors = useMemo(() => getPortalVendors(provider), [provider]);
-  const seedReminders = useMemo(() => getPortalReminders(provider), [provider]);
-  const seedTasks = useMemo(() => getPortalTasks(provider), [provider]);
-  const seedNotes = useMemo(() => getPortalNotes(provider), [provider]);
+  const seedCustomers = useMemo(
+    () => (suppressSeedData ? [] : getCrmCustomers(provider)),
+    [provider, suppressSeedData],
+  );
+  const seedContractors = useMemo(
+    () => (suppressSeedData ? [] : getPortalContractors(provider)),
+    [provider, suppressSeedData],
+  );
+  const seedVendors = useMemo(
+    () => (suppressSeedData ? [] : getPortalVendors(provider)),
+    [provider, suppressSeedData],
+  );
+  const seedReminders = useMemo(
+    () => (suppressSeedData ? [] : getPortalReminders(provider)),
+    [provider, suppressSeedData],
+  );
+  const seedTasks = useMemo(
+    () => (suppressSeedData ? [] : getPortalTasks(provider)),
+    [provider, suppressSeedData],
+  );
+  const seedNotes = useMemo(
+    () => (suppressSeedData ? [] : getPortalNotes(provider)),
+    [provider, suppressSeedData],
+  );
 
   const customers = useMemo(
     () =>
       apiReady
         ? crm.customers
-        : [...seedCustomers, ...store.customers].filter(
-            (item) => !store.deleted.includes(`customer:${item.id}`),
-          ),
-    [apiReady, crm.customers, seedCustomers, store.customers, store.deleted],
+        : suppressSeedData
+          ? store.customers.filter((item) => !store.deleted.includes(`customer:${item.id}`))
+          : [...seedCustomers, ...store.customers].filter(
+              (item) => !store.deleted.includes(`customer:${item.id}`),
+            ),
+    [apiReady, crm.customers, seedCustomers, store.customers, store.deleted, suppressSeedData],
   );
   const contractors = useMemo(
     () =>
       apiReady
         ? crm.contractors
-        : [...seedContractors, ...store.contractors]
-            .filter((item) => !store.deleted.includes(`contractor:${item.id}`))
-            .map((item) => ({ ...item, ...store.contractorPatches[item.id] })),
+        : suppressSeedData
+          ? store.contractors
+              .filter((item) => !store.deleted.includes(`contractor:${item.id}`))
+              .map((item) => ({ ...item, ...store.contractorPatches[item.id] }))
+          : [...seedContractors, ...store.contractors]
+              .filter((item) => !store.deleted.includes(`contractor:${item.id}`))
+              .map((item) => ({ ...item, ...store.contractorPatches[item.id] })),
     [
       apiReady,
       crm.contractors,
@@ -150,39 +177,57 @@ export function useCrmDirectory() {
       store.contractorPatches,
       store.contractors,
       store.deleted,
+      suppressSeedData,
     ],
   );
   const vendors = useMemo(
     () =>
       apiReady
         ? crm.vendors
-        : [...seedVendors, ...store.vendors]
-            .filter((item) => !store.deleted.includes(`vendor:${item.id}`))
-            .map((item) => ({ ...item, ...store.vendorPatches[item.id] })),
-    [apiReady, crm.vendors, seedVendors, store.vendorPatches, store.vendors, store.deleted],
+        : suppressSeedData
+          ? store.vendors
+              .filter((item) => !store.deleted.includes(`vendor:${item.id}`))
+              .map((item) => ({ ...item, ...store.vendorPatches[item.id] }))
+          : [...seedVendors, ...store.vendors]
+              .filter((item) => !store.deleted.includes(`vendor:${item.id}`))
+              .map((item) => ({ ...item, ...store.vendorPatches[item.id] })),
+    [
+      apiReady,
+      crm.vendors,
+      seedVendors,
+      store.vendorPatches,
+      store.vendors,
+      store.deleted,
+      suppressSeedData,
+    ],
   );
   const reminders = useMemo(
     () =>
       apiReady
         ? crm.reminders
-        : [...seedReminders, ...store.reminders].filter(
-            (item) => !store.deleted.includes(`reminder:${item.id}`),
-          ),
-    [apiReady, crm.reminders, seedReminders, store.reminders, store.deleted],
+        : suppressSeedData
+          ? store.reminders.filter((item) => !store.deleted.includes(`reminder:${item.id}`))
+          : [...seedReminders, ...store.reminders].filter(
+              (item) => !store.deleted.includes(`reminder:${item.id}`),
+            ),
+    [apiReady, crm.reminders, seedReminders, store.reminders, store.deleted, suppressSeedData],
   );
   const tasks = useMemo(
     () =>
       apiReady
         ? crm.tasks
-        : [...seedTasks, ...store.tasks].filter((item) => !store.deleted.includes(`task:${item.id}`)),
-    [apiReady, crm.tasks, seedTasks, store.tasks, store.deleted],
+        : suppressSeedData
+          ? store.tasks.filter((item) => !store.deleted.includes(`task:${item.id}`))
+          : [...seedTasks, ...store.tasks].filter((item) => !store.deleted.includes(`task:${item.id}`)),
+    [apiReady, crm.tasks, seedTasks, store.tasks, store.deleted, suppressSeedData],
   );
   const notes = useMemo(
     () =>
-      (apiReady ? store.notes : [...seedNotes, ...store.notes]).filter(
-        (item) => !store.deleted.includes(`note:${item.id}`),
-      ),
-    [apiReady, seedNotes, store.notes, store.deleted],
+      (suppressSeedData || apiReady
+        ? store.notes
+        : [...seedNotes, ...store.notes]
+      ).filter((item) => !store.deleted.includes(`note:${item.id}`)),
+    [apiReady, seedNotes, store.notes, store.deleted, suppressSeedData],
   );
 
   const addCustomer = useCallback(
@@ -199,6 +244,29 @@ export function useCrmDirectory() {
       return customer;
     },
     [apiReady, crm, key],
+  );
+
+  const updateCustomer = useCallback(
+    (id: string, patch: Partial<PortalCustomerCrm>) => {
+      if (apiReady) {
+        return (async () => {
+          const currentCustomer = customers.find((item) => item.id === id);
+          if (!currentCustomer) throw new Error("Customer not found");
+          const updated = await updateCustomerApi(id, { ...currentCustomer, ...patch });
+          await crm.refresh();
+          return updated;
+        })();
+      }
+      const current = readStore(key);
+      const extra = current.customers.find((item) => item.id === id);
+      writeStore(key, {
+        ...current,
+        customers: extra
+          ? current.customers.map((item) => (item.id === id ? { ...item, ...patch } : item))
+          : current.customers,
+      });
+    },
+    [apiReady, crm, customers, key],
   );
 
   const addContractor = useCallback(
@@ -267,11 +335,30 @@ export function useCrmDirectory() {
 
   const addNote = useCallback(
     (note: PortalNote) => {
+      if (apiReady && note.subjectKind === "customer" && note.subjectId) {
+        const subjectId = note.subjectId;
+        return (async () => {
+          const customer =
+            crm.customers.find((item) => item.id === subjectId) ??
+            store.customers.find((item) => item.id === subjectId);
+          const line = [note.title, note.body].filter(Boolean).join(": ").trim();
+          const nextNotes = [customer?.notes?.trim(), line].filter(Boolean).join("\n\n");
+          if (customer) {
+            await updateCustomerApi(subjectId, { ...customer, notes: nextNotes });
+          } else {
+            await updateCustomerApi(subjectId, { notes: nextNotes });
+          }
+          const current = readStore(key);
+          writeStore(key, { ...current, notes: [...current.notes, note] });
+          await crm.refresh();
+          return note;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, { ...current, notes: [...current.notes, note] });
       return note;
     },
-    [key],
+    [apiReady, crm, key, store.customers],
   );
 
   const updateNote = useCallback(
@@ -433,6 +520,7 @@ export function useCrmDirectory() {
     employees,
     provider,
     addCustomer,
+    updateCustomer,
     addContractor,
     addVendor,
     addReminder,

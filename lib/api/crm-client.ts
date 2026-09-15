@@ -78,7 +78,12 @@ export type CrmEstimateShareResult = {
   estimateId: string;
   shareToken: string;
   shareUrl: string;
+  absoluteShareUrl?: string;
   status: string;
+  emailSent?: boolean;
+  emailTo?: string | null;
+  emailSkippedReason?: string | null;
+  emailError?: string | null;
 };
 
 const DEFAULT_LIST_LIMIT = 100;
@@ -344,12 +349,71 @@ export async function createCustomer(customer: PortalCustomerCrm) {
   return mapCrmEntity(response, mapPortalCustomerCrm);
 }
 
+export async function updateCustomer(id: string, customer: PortalCustomerCrm | Partial<PortalCustomerCrm>) {
+  const full = customer as PortalCustomerCrm;
+  const hasAddresses = Array.isArray(full.addresses);
+  const payload: Record<string, unknown> = {};
+  if (full.entityKind !== undefined) payload.entityKind = full.entityKind;
+  if (full.customerType !== undefined) payload.customerType = full.customerType;
+  if (full.firstName !== undefined) payload.firstName = full.firstName;
+  if (full.lastName !== undefined) payload.lastName = full.lastName;
+  if (full.companyName !== undefined) payload.companyName = full.companyName || "";
+  if (full.email !== undefined) payload.email = full.email;
+  if (full.phone !== undefined) payload.phone = full.phone || "";
+  if (full.altPhone !== undefined) payload.altPhone = full.altPhone || "";
+  if (full.source !== undefined) payload.source = full.source;
+  if (full.creditLimit !== undefined) payload.creditLimit = full.creditLimit;
+  if (full.onStop !== undefined) payload.onStop = full.onStop;
+  if (full.membership !== undefined) payload.membership = full.membership;
+  if (full.taxCode !== undefined) payload.taxCode = full.taxCode;
+  if (full.notes !== undefined) payload.notes = full.notes;
+  if (hasAddresses) {
+    payload.serviceAddresses = full.addresses
+      .map((address) => mapAddressForApi(address))
+      .filter(Boolean);
+  }
+  const response = await putData(providerCrmApi.customer(id), payload);
+  return mapCrmEntity(response, mapPortalCustomerCrm);
+}
+
 export async function archiveCustomer(id: string) {
   return deleteData(providerCrmApi.customer(id), { silent: false });
 }
 
+function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
+  return {
+    firstName: employee.firstName || "",
+    lastName: employee.lastName || "",
+    email: employee.email || "",
+    phone: employee.phone || "",
+    role: employee.role || "technician",
+    trade: employee.trade || "",
+    active: employee.active ?? true,
+    hourlyRate: employee.hourlyRate ?? 0,
+    overtimeRate: employee.overtimeRate ?? 0,
+    travelRate: employee.travelRate ?? 0,
+    hireDate: employee.hireDate || undefined,
+    emergencyName: employee.emergencyName || "",
+    emergencyPhone: employee.emergencyPhone || "",
+  };
+}
+
 export async function listEmployees(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.team, mapPortalEmployee, options);
+}
+
+export async function createEmployee(employee: PortalEmployee | Parameters<typeof employeePayload>[0]) {
+  const response = await postData(providerCrmApi.team, employeePayload(employee));
+  return mapCrmEntity(response, mapPortalEmployee);
+}
+
+export async function updateEmployee(id: string, employee: Partial<PortalEmployee>) {
+  const response = await putData(providerCrmApi.teamMember(id), employeePayload(employee));
+  return mapCrmEntity(response, mapPortalEmployee);
+}
+
+export async function deleteEmployee(id: string) {
+  return deleteData(providerCrmApi.teamMember(id), { silent: false });
 }
 
 export async function listContractors(options?: CrmRequestOptions) {
@@ -408,6 +472,15 @@ export async function listEstimates(options?: CrmRequestOptions) {
 
 export async function createEstimate(estimate: Estimate) {
   const response = await postData(providerCrmApi.estimates, estimatePayload(estimate));
+  const mapped = mapCrmEntity(response, mapEstimate);
+  if (mapped) return mapped;
+  const payload = (response as { data?: unknown })?.data ?? response;
+  const id = crmIdOf(payload);
+  return id ? { ...estimate, id } : null;
+}
+
+export async function getEstimate(id: string) {
+  const response = await getData(providerCrmApi.estimate(id), undefined, { silent: true, force: true });
   return mapCrmEntity(response, mapEstimate);
 }
 
@@ -423,7 +496,16 @@ export async function shareEstimate(id: string) {
     estimateId: String(payload.estimateId ?? id),
     shareToken: String(payload.shareToken ?? ""),
     shareUrl: String(payload.shareUrl ?? ""),
+    absoluteShareUrl: payload.absoluteShareUrl
+      ? String(payload.absoluteShareUrl)
+      : undefined,
     status: String(payload.status ?? ""),
+    emailSent: Boolean(payload.emailSent),
+    emailTo: payload.emailTo == null ? null : String(payload.emailTo),
+    emailSkippedReason: payload.emailSkippedReason
+      ? String(payload.emailSkippedReason)
+      : null,
+    emailError: payload.emailError ? String(payload.emailError) : null,
   } satisfies CrmEstimateShareResult;
 }
 
@@ -581,6 +663,10 @@ export async function updateSchedule(id: string, schedule: Partial<CrmScheduleAs
   if (schedule.status !== undefined) payload.status = schedule.status;
   const response = await putData(providerCrmApi.scheduleItem(id), payload, { silent: false });
   return mapCrmEntity(response, mapScheduleEvent);
+}
+
+export async function deleteSchedule(id: string) {
+  return deleteData(providerCrmApi.scheduleItem(id), { silent: false });
 }
 
 export async function listChats(options?: CrmRequestOptions) {

@@ -30,7 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
+import { updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
@@ -340,6 +340,26 @@ export function JobSettingsTab({
     try {
       file.saveSettings(next);
       if (apiReady) {
+        await updateJobApi(
+          job.id,
+          {
+            ...job,
+            customerId: next.customerId || job.customerId,
+            status: next.status,
+            notes: next.notes,
+            scheduledAt: next.start || job.scheduledAt,
+            dueAt: next.due || job.dueAt,
+            assignedTo: next.assignedTo || job.assignedTo,
+            address: {
+              ...job.address,
+              street: next.street || job.address.street,
+              city: next.city || job.address.city,
+              state: next.state || job.address.state,
+              zip: next.zip || job.address.zip,
+            },
+          },
+          employees,
+        );
         await updateJobStatusApi(job.id, next.status, next.notes);
         await crm.refresh();
       } else {

@@ -10,6 +10,7 @@ import {
   type PlaceAddress,
   type PlaceSuggestion,
 } from "@/lib/google-places";
+import { placeCityLabel } from "@/store/locationSlice";
 import { cn } from "@/lib/utils";
 
 export type { PlaceAddress };
@@ -30,6 +31,11 @@ type AddressAutocompleteProps = {
   inputClassName?: string;
   /** Hide helper/error text (e.g. compact search bars). */
   hideStatus?: boolean;
+  /**
+   * City / ZIP search fields: fill the input with "City, ST" (or ZIP),
+   * not the full street address from geolocation / place details.
+   */
+  preferCityDisplay?: boolean;
   "aria-invalid"?: boolean;
 };
 
@@ -46,6 +52,7 @@ export function AddressAutocomplete({
   className,
   inputClassName,
   hideStatus = false,
+  preferCityDisplay = false,
   "aria-invalid": ariaInvalid,
 }: AddressAutocompleteProps) {
   const listId = useId();
@@ -78,13 +85,6 @@ export function AddressAutocomplete({
       setOpen(false);
       setLoading(false);
       setError(null);
-      return;
-    }
-
-    if (!process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY?.trim()) {
-      setError("Address search is unavailable. Enter your address manually.");
-      setSuggestions([]);
-      setOpen(false);
       return;
     }
 
@@ -145,10 +145,12 @@ export function AddressAutocomplete({
   }
 
   function applyResolvedAddress(address: PlaceAddress, source: string) {
-    // Temporary debug — inspect Google Places / Geocoder payload shape.
-    console.log(`[AddressAutocomplete] ${source} location object:`, address);
+    void source;
     closeSuggestions();
-    onChange(address.formattedAddress || address.streetAddress);
+    const display = preferCityDisplay
+      ? placeCityLabel(address) || address.formattedAddress || address.streetAddress
+      : address.formattedAddress || address.streetAddress;
+    onChange(display);
     onSelect(address);
     setError(
       address.zipCode

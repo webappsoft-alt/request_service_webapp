@@ -125,8 +125,9 @@ export function TeamView() {
                   label: "Remove",
                   variant: "destructive" as const,
                   onSelect: () => {
-                    removeEmployee(row.id);
-                    toast.success(`${row.firstName} removed from the crew list.`);
+                    void Promise.resolve(removeEmployee(row.id)).then(() => {
+                      toast.success(`${row.firstName} removed from the crew list.`);
+                    });
                   },
                 },
               ]),
@@ -137,8 +138,10 @@ export function TeamView() {
         open={open}
         onOpenChange={setOpen}
         onSave={(input) => {
-          const employee = addEmployee(input);
-          toast.success(`${employee.firstName} ${employee.lastName} added. Assign them from Schedule.`);
+          void Promise.resolve(addEmployee(input)).then((employee) => {
+            if (!employee) return;
+            toast.success(`${employee.firstName} ${employee.lastName} added. Assign them from Schedule.`);
+          });
         }}
       />
 

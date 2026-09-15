@@ -105,6 +105,39 @@ export function formatLocation(city: string, state: string, zip?: string) {
   return zip?.trim() ? `${place} ${zip.trim()}` : place;
 }
 
+/** City + state for provider cards; "Not Set" when both are empty. */
+export function formatProviderCardLocation(
+  city?: string | null,
+  state?: string | null,
+): string {
+  const place = formatLocation(String(city || ""), String(state || ""));
+  return place || "Not Set";
+}
+
+/**
+ * When API/state is missing, derive province/state from address strings like
+ * "Faisalabad, Punjab, Pakistan" or "Austin, TX 78701".
+ */
+export function inferStateFromAddress(city: string, address: string): string {
+  const parts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return "";
+
+  const cityNorm = city.trim().toLowerCase();
+  let statePart = "";
+  if (cityNorm && parts[0].toLowerCase() === cityNorm) {
+    statePart = parts[1] || "";
+  } else if (parts.length >= 3) {
+    statePart = parts[parts.length - 2] || "";
+  } else {
+    statePart = parts[1] || "";
+  }
+
+  return statePart.replace(/\s+\d{5}(-\d{4})?$/i, "").trim();
+}
+
 export function formatAddress(street: string | undefined, city: string, state: string, zip?: string) {
   const cityLine = formatLocation(city, state, zip);
   return street?.trim() ? `${street.trim()}, ${cityLine}` : cityLine;

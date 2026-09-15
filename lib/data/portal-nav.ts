@@ -9,10 +9,10 @@ import {
   CreditCard,
   FileText,
   Handshake,
+  Images,
   Inbox,
   LayoutDashboard,
   ListTodo,
-  Images,
   MapPin,
   MessageCircle,
   Receipt,
@@ -55,13 +55,13 @@ export const portalNavGroups: PortalNavGroup[] = [
     id: "work",
     label: "Work",
     items: [
-      { href: "/pro/dashboard/orders", label: "Orders", icon: ClipboardList },
       { href: "/pro/dashboard/requests", label: "Leads", icon: Inbox },
       { href: "/pro/dashboard/messages", label: "Messages", icon: MessageCircle },
       { href: "/pro/dashboard/estimates", label: "Estimates", icon: FileText },
       { href: "/pro/dashboard/jobs", label: "Jobs", icon: Briefcase },
       { href: "/pro/dashboard/tasks", label: "Tasks", icon: ListTodo },
       { href: "/pro/dashboard/schedule", label: "Schedules", icon: CalendarDays },
+      { href: "/pro/dashboard/orders", label: "Fixed service orders", icon: ClipboardList },
     ],
   },
   {
@@ -76,12 +76,12 @@ export const portalNavGroups: PortalNavGroup[] = [
     id: "setup",
     label: "Office",
     items: [
-      { href: "/pro/dashboard/services", label: "Fixed service", icon: Wrench },
-      { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
-      { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images },
-      { href: "/pro/dashboard/reports", label: "Reports", icon: BarChart3 },
-      { href: "/pro/dashboard/billing", label: "Utilities", icon: Wallet },
       { href: "/pro/dashboard/settings", label: "Business Profile", icon: Store },
+      { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images },
+      { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
+      { href: "/pro/dashboard/services", label: "Fixed services", icon: Wrench },
+      { href: "/pro/dashboard/billing", label: "Utilities", icon: Wallet },
+      { href: "/pro/dashboard/reports", label: "Reports", icon: BarChart3 },
     ],
   },
 ];
@@ -107,13 +107,13 @@ export const peopleSubnav: { href: string; label: string }[] = [
 ];
 
 export const workSubnav: { href: string; label: string }[] = [
-  { href: "/pro/dashboard/orders", label: "Orders" },
   { href: "/pro/dashboard/requests", label: "Leads" },
   { href: "/pro/dashboard/messages", label: "Messages" },
   { href: "/pro/dashboard/estimates", label: "Estimates" },
   { href: "/pro/dashboard/jobs", label: "Jobs" },
   { href: "/pro/dashboard/tasks", label: "Tasks" },
   { href: "/pro/dashboard/schedule", label: "Schedules" },
+  { href: "/pro/dashboard/orders", label: "Fixed service orders" },
 ];
 
 export const portalAccountNav: PortalNavItem[] = [

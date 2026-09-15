@@ -403,9 +403,36 @@ function parseOrderListItem(raw: unknown): CustomerOrderListItem | null {
   const id = pickId(record);
   if (!id) return null;
   const pricing = asRecord(record.pricing) ?? {};
-  const service =
-    parseServiceSummary(record.serviceSnapshot) ||
-    parseServiceSummary(record.service);
+  // Live list populates `serviceId` as the FixedService doc; snapshot has no id.
+  const serviceFromId = parseServiceSummary(record.serviceId);
+  const serviceFromSnapshot = parseServiceSummary(record.serviceSnapshot);
+  const serviceFromNested = parseServiceSummary(record.service);
+  const serviceIdRaw = record.serviceId;
+  const serviceId =
+    typeof serviceIdRaw === "string"
+      ? serviceIdRaw
+      : pickId(asRecord(serviceIdRaw) ?? {}) ||
+        serviceFromId?.id ||
+        serviceFromNested?.id ||
+        undefined;
+  const service = serviceFromId
+    ? {
+        ...serviceFromSnapshot,
+        ...serviceFromId,
+        id: serviceFromId.id || serviceId,
+        title:
+          serviceFromId.title ||
+          serviceFromSnapshot?.title ||
+          serviceFromNested?.title ||
+          "Service",
+      }
+    : serviceFromSnapshot
+      ? { ...serviceFromSnapshot, id: serviceFromSnapshot.id || serviceId }
+      : serviceFromNested
+        ? { ...serviceFromNested, id: serviceFromNested.id || serviceId }
+        : serviceId
+          ? { id: serviceId, title: "Service" }
+          : null;
   const provider =
     parseProviderSummary(record.provider) ||
     parseProviderSummary(record.providerId);
@@ -419,6 +446,7 @@ function parseOrderListItem(raw: unknown): CustomerOrderListItem | null {
       typeof record.orderNumber === "string" ? record.orderNumber : "",
     status:
       (typeof record.status === "string" && record.status) || "BOOKING_REQUESTED",
+    serviceId,
     pricing: {
       totalAmount: toNumber(pricing.totalAmount, 0),
       currency: typeof pricing.currency === "string" ? pricing.currency : "USD",

@@ -29,7 +29,8 @@ import {
 } from "@/components/ui/native-select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
-import { CenteredSpinner, Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
+import { ServiceJobCardSkeletonList } from "@/components/shared/loading-skeletons";
 import { ProviderCard } from "@/components/shared/provider-card";
 import { writePendingQuote } from "@/lib/booking/format-quote-answers";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
@@ -175,9 +176,12 @@ function subcategoryFilter(items: PublicCategory[]): DirectoryFilter | null {
 
 function answersFromIntent(intent: SearchIntent) {
   const next: Record<string, string> = {};
-  if (!intent.service || !intent.job) return next;
-  const sub = findSubServiceValue(intent.service, intent.query, intent.job);
-  if (sub) next["sub-service"] = sub;
+  if (!intent.job) return next;
+  // Prefer the URL/API job (id or slug). Seed lookup is only a fallback.
+  const seed = intent.service
+    ? findSubServiceValue(intent.service, intent.query, intent.job)
+    : "";
+  next["sub-service"] = intent.job.trim() || seed;
   return next;
 }
 
@@ -236,7 +240,7 @@ function listingFromService(
     rating: service.provider?.rating.average,
     reviewCount: service.provider?.rating.totalReviews,
     city: service.provider?.location.city,
-    state: "",
+    state: service.provider?.location.state,
     href: publicFixedServicePath(service),
     online: true,
     onBeforeNavigate,
@@ -278,7 +282,7 @@ function providerFromService(service: PublicFixedService): Provider | null {
     serviceArea: service.workingArea,
     street: p.location.address || "",
     city: p.location.city || "",
-    state: "",
+    state: p.location.state || "",
     zip: p.location.zip || "",
     lat,
     lng,
@@ -529,31 +533,30 @@ export function ServicesDirectory({
             customerLocation.latitude ?? "",
             customerLocation.longitude ?? "",
           ].join("|")
-        : "",
+        : "all",
     };
     if (query.trim()) next.search = query.trim();
 
-    // Only attach zip/coords when usable for the API (never city-only).
-    if (customerLocation.zip.trim()) {
-      next.zipCode = customerLocation.zip.trim();
-    }
-    if (
+    // Only attach zip when we don't have coords (ZIP-only search).
+    // City/place autocomplete sets both — sending ZIP AND radius empties nearby results.
+    const hasCoords =
       usable &&
       customerLocation.latitude != null &&
-      Number.isFinite(customerLocation.latitude)
-    ) {
-      next.lat = customerLocation.latitude;
-    }
-    if (
-      usable &&
+      Number.isFinite(customerLocation.latitude) &&
       customerLocation.longitude != null &&
-      Number.isFinite(customerLocation.longitude)
-    ) {
-      next.lng = customerLocation.longitude;
+      Number.isFinite(customerLocation.longitude);
+
+    if (customerLocation.zip.trim() && !hasCoords) {
+      next.zipCode = customerLocation.zip.trim();
+    }
+    if (hasCoords) {
+      next.lat = customerLocation.latitude!;
+      next.lng = customerLocation.longitude!;
     }
 
     if (categoryIds.length) next.category = categoryIds;
-    if (answers["sub-service"]) next.subCategory = answers["sub-service"];
+    // Only send a resolved subcategory — unresolved URL/job strings return empty from API.
+    if (selectedApiSub?.id) next.subCategory = selectedApiSub.id;
     if (answers["job-type"]) {
       next.commonServices = filterLabel("job-type", answers["job-type"]);
     }
@@ -563,6 +566,7 @@ export function ServicesDirectory({
     if (minPrice > priceBounds.min) next.minPrice = minPrice;
     if (maxPrice < priceBounds.max) next.maxPrice = maxPrice;
     if (minRating) next.rating = minRating;
+    next.radius = 50;
     return next;
   }, [
     answers,
@@ -579,6 +583,7 @@ export function ServicesDirectory({
     minRating,
     parentCategories,
     query,
+    selectedApiSub?.id,
     sort,
   ]);
 
@@ -591,16 +596,13 @@ export function ServicesDirectory({
   const [pendingRefresh, setPendingRefresh] = useState(false);
 
   const locationUsable = hasServiceGeoLocation(customerLocation);
-  const awaitingGeo =
-    customerLocation.detecting ||
-    (!locationUsable && !customerLocation.detectAttempted);
+  const awaitingGeo = customerLocation.detecting;
   const showInitialServicesSpinner =
     !fixedServices.length &&
     (awaitingGeo ||
-      (locationUsable &&
-        (fixedServicesLoading ||
-          pendingRefresh ||
-          (!fixedServicesLoaded && !fixedServicesError))));
+      fixedServicesLoading ||
+      pendingRefresh ||
+      (!fixedServicesLoaded && !fixedServicesError));
   const showRefreshOverlay =
     fixedServices.length > 0 &&
     (fixedServicesLoading || pendingRefresh);
@@ -625,7 +627,8 @@ export function ServicesDirectory({
     selectedParent ||
     serviceCategories.find((item) => item.slug === activeCategory);
 
-  // City-only is not enough for the API — detect browser geo so the first call includes lat/lng.
+  // Auto-detect once on first visit when empty. Clearing location sets detectAttempted
+  // so we do not re-detect — that path loads the full paginated catalog instead.
   useEffect(() => {
     if (locationUsable) return;
     if (customerLocation.detectAttempted || customerLocation.detecting) return;
@@ -637,17 +640,15 @@ export function ServicesDirectory({
     locationUsable,
   ]);
 
-  // Only call Fixed Services when zip or lat/lng are present (never city-only).
+  // Fetch with location filters when set; without them when address is cleared.
   useEffect(() => {
-    if (customerLocation.detecting || !locationUsable) {
+    if (customerLocation.detecting) {
       setPendingRefresh(false);
-      prevApiQueryKeyRef.current = apiQueryKey;
       return;
     }
 
     const queryChanged = prevApiQueryKeyRef.current !== apiQueryKey;
     prevApiQueryKeyRef.current = apiQueryKey;
-    // Show overlay immediately so the 220ms debounce does not cause a layout jerk.
     if (queryChanged && fixedServicesCountRef.current > 0) {
       setPendingRefresh(true);
     }
@@ -662,7 +663,6 @@ export function ServicesDirectory({
     apiQueryKey,
     customerLocation.detecting,
     dispatch,
-    locationUsable,
   ]);
 
   useEffect(() => {
@@ -759,6 +759,20 @@ export function ServicesDirectory({
     }
   }, [categories, parentCategories]);
 
+  // Once API subcategories load, normalize URL/job → subcategory ObjectId.
+  useEffect(() => {
+    const current = answers["sub-service"];
+    if (!current || !apiSubcategories.length) return;
+    const match = apiSubcategories.find(
+      (item) =>
+        item.id === current ||
+        item.slug === current ||
+        item.name.toLowerCase() === current.toLowerCase(),
+    );
+    if (!match || match.id === current) return;
+    setAnswers((prev) => ({ ...prev, "sub-service": match.id }));
+  }, [answers["sub-service"], apiSubcategories]);
+
   useEffect(() => {
     setPage(1);
   }, [answers, categories, location, minPrice, maxPrice, minRating, query, sort, zip]);
@@ -785,7 +799,12 @@ export function ServicesDirectory({
   function applyIntent(intent: SearchIntent) {
     setQuery(intent.query);
     setCategories(intent.service ? [intent.service] : []);
-    if (intent.service && intent.job) {
+    if (intent.job?.trim()) {
+      setAnswers((current) => ({
+        ...current,
+        "sub-service": intent.job!.trim(),
+      }));
+    } else if (intent.service) {
       const sub = findSubServiceValue(intent.service, intent.query, intent.job);
       setAnswers((current) => (sub ? { ...current, "sub-service": sub } : current));
     } else {
@@ -1183,10 +1202,7 @@ export function ServicesDirectory({
             ) : null}
 
             {showInitialServicesSpinner ? (
-              <CenteredSpinner
-                label="Loading services"
-                className="min-h-64"
-              />
+              <ServiceJobCardSkeletonList count={6} layout={view} />
             ) : fixedServices.length || pageItems.length ? (
               <div className="relative">
                 {showRefreshOverlay ? (

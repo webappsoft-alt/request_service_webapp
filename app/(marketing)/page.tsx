@@ -14,7 +14,7 @@ import { buildMetadata, defaultKeywords } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Find Trusted Local Home Service Professionals",
   description:
-    "Request Services connects homeowners with licensed local professionals and gives service businesses a complete platform for estimates, jobs, invoices, and payments.",
+    "Request Service connects homeowners with licensed local professionals and gives service businesses a complete platform for estimates, jobs, invoices, and payments.",
   path: "/",
   keywords: defaultKeywords,
 });

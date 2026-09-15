@@ -8,7 +8,14 @@ import {
   getData,
 } from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
+import { inferStateFromAddress } from "@/lib/format";
 import { getServiceCategoryById } from "@/lib/data/services";
+import {
+  galleryBanner,
+  galleryRest,
+  normalizeBusinessGallery,
+  type BusinessGalleryImage,
+} from "@/lib/business-gallery";
 import type { Provider, Review, WorkingHours } from "@/lib/types";
 
 export type PublicProfessionalSortBy =
@@ -75,6 +82,7 @@ export type PublicProfessional = {
   };
   location: {
     city: string;
+    state: string;
     country: string;
     zip: string;
     address: string;
@@ -88,6 +96,7 @@ export type PublicProfessional = {
     startingPrice: number;
     startingPriceDisplay: string;
   };
+  businessGallery?: BusinessGalleryImage[];
   description?: string;
   phone?: string;
   email?: string;
@@ -446,6 +455,12 @@ export function normalizePublicProfessional(
     },
     location: {
       city: typeof location.city === "string" ? location.city : "",
+      state:
+        (typeof location.state === "string" && location.state) ||
+        inferStateFromAddress(
+          typeof location.city === "string" ? location.city : "",
+          typeof location.address === "string" ? location.address : "",
+        ),
       country: typeof location.country === "string" ? location.country : "",
       zip: typeof location.zip === "string" ? location.zip : "",
       address: typeof location.address === "string" ? location.address : "",
@@ -471,6 +486,9 @@ export function normalizePublicProfessional(
       typeof record.updatedAt === "string" ? record.updatedAt : undefined,
   };
 
+  if ("businessGallery" in record) {
+    professional.businessGallery = normalizeBusinessGallery(record.businessGallery);
+  }
   if ("description" in record) {
     professional.description =
       typeof record.description === "string" ? record.description : "";
@@ -692,9 +710,14 @@ export function publicProfessionalToProvider(
     ]),
   ];
 
+  const gallery = normalizeBusinessGallery(professional.businessGallery);
+  const banner = galleryBanner(gallery);
   const galleryFromServices = (professional.activeServices ?? [])
     .flatMap((service) => service.images)
     .filter(Boolean);
+  const galleryUrls = gallery.length
+    ? galleryRest(gallery).map((item) => item.url)
+    : galleryFromServices;
 
   return {
     id: professional.id,
@@ -704,8 +727,8 @@ export function publicProfessionalToProvider(
       professional.companyName || professional.fullName || "P",
     ),
     logoUrl: professional.avatarUrl || undefined,
-    coverImage: undefined,
-    images: galleryFromServices.length ? galleryFromServices : undefined,
+    coverImage: banner?.url,
+    images: galleryUrls.length ? galleryUrls : undefined,
     startingPrice: professional.activeOfferings.startingPrice || undefined,
     tagline:
       professional.tagline ||
@@ -728,7 +751,12 @@ export function publicProfessionalToProvider(
     coveragePoints: coveragePoints.length ? coveragePoints : undefined,
     street: professional.location.address,
     city: professional.location.city,
-    state: "",
+    state:
+      professional.location.state ||
+      inferStateFromAddress(
+        professional.location.city,
+        professional.location.address,
+      ),
     zip: professional.location.zip,
     lat,
     lng,
@@ -785,16 +813,15 @@ export function resolvePublicProfessionalsQuery(
     Number.isFinite(location.latitude) &&
     location.longitude != null &&
     Number.isFinite(location.longitude);
-  const committed =
-    hasZip || hasCoords || Boolean(location.city.trim());
 
   const query: PublicProfessionalsQuery = {
     sortBy: "recommended",
     ...incoming,
-    zipCode: hasZip ? location.zip.trim() : undefined,
+    // City/place picks include a center ZIP — don't AND it with radius or results empty.
+    zipCode: hasZip && !hasCoords ? location.zip.trim() : undefined,
     lat: hasCoords ? location.latitude : undefined,
     lng: hasCoords ? location.longitude : undefined,
-    locationToken: committed
+    locationToken: hasZip || hasCoords || Boolean(location.city.trim())
       ? [
           location.zip,
           location.city,
@@ -803,16 +830,16 @@ export function resolvePublicProfessionalsQuery(
           location.latitude ?? "",
           location.longitude ?? "",
         ].join("|")
-      : "",
+      : "all",
   };
 
-  if (!query.zipCode?.trim()) delete query.zipCode;
+  if (!(hasZip && !hasCoords)) delete query.zipCode;
   if (query.lat == null || !Number.isFinite(query.lat)) delete query.lat;
   if (query.lng == null || !Number.isFinite(query.lng)) delete query.lng;
   if (query.minRating == null || query.minRating <= 0) delete query.minRating;
-  if (!query.locationToken) delete query.locationToken;
 
-  return { query, committed };
+  // Location is optional — empty means unfiltered catalog (pagination still applies).
+  return { query, committed: true };
 }
 
 function toRequestParams(
@@ -830,10 +857,11 @@ function toRequestParams(
       query.lat != null && Number.isFinite(query.lat) ? query.lat : undefined,
     lng:
       query.lng != null && Number.isFinite(query.lng) ? query.lng : undefined,
+    // Backend Joi default is 25; customer marketplace uses 50 miles.
     radius:
       query.radius != null && Number.isFinite(query.radius)
         ? query.radius
-        : undefined,
+        : 50,
     category: query.category?.trim() || undefined,
     subCategory: query.subCategory?.trim() || undefined,
     commonServices: query.commonServices?.trim() || undefined,
@@ -910,10 +938,6 @@ export const fetchPublicProfessionals = createAsyncThunk<
         }
       : resolved!.query;
 
-    if (!append && !resolved!.committed) {
-      return rejectWithValue("Location is required.");
-    }
-
     if (
       !append &&
       state.loaded &&
@@ -969,11 +993,10 @@ export const fetchPublicProfessionals = createAsyncThunk<
       if (state.loading) return false;
       const incoming =
         arg && typeof arg === "object" ? arg.query : undefined;
-      const { query, committed } = resolvePublicProfessionalsQuery(
+      const { query } = resolvePublicProfessionalsQuery(
         incoming,
         location,
       );
-      if (!committed) return false;
       const queryKey = buildPublicProfessionalsQueryKey(query);
       if (state.loaded && state.items.length && state.queryKey === queryKey) {
         return false;
@@ -1058,6 +1081,12 @@ const publicProfessionalsSlice = createSlice({
     clearPublicProfessionalsError(state) {
       state.error = null;
       state.detailError = null;
+    },
+    /** Keep list visible; force the next fetch for the same filters. */
+    markPublicProfessionalsStale(state) {
+      state.loaded = false;
+      state.queryKey = "";
+      state.requestKey = "";
     },
     resetPublicProfessionals() {
       return initialState;
@@ -1149,6 +1178,7 @@ export const {
   setPublicProfessionalDetail,
   clearPublicProfessionalDetail,
   clearPublicProfessionalsError,
+  markPublicProfessionalsStale,
   resetPublicProfessionals,
 } = publicProfessionalsSlice.actions;
 

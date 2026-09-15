@@ -18,6 +18,14 @@ export function AuthMeSync() {
   useEffect(() => {
     if (!auth.hydrated) return;
     if (!isAuthenticated) return;
+
+    // One refresh after login/hydrate is enough. Re-hitting /me on every
+    // sidebar click remounts portal state and can lock the CRM.
+    const inPortal = pathname === "/pro" || pathname.startsWith("/pro/");
+    if (inPortal && lastPath.current?.startsWith("/pro")) {
+      lastPath.current = pathname;
+      return;
+    }
     if (lastPath.current === pathname) return;
     lastPath.current = pathname;
 

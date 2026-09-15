@@ -11,7 +11,7 @@ export const faqs: FaqItem[] = [
   {
     id: "faq_c_2",
     category: "customers",
-    question: "Is Request Services available nationwide?",
+    question: "Is Request Service available nationwide?",
     answer:
       "The public website is built for a USA-focused marketplace. Matching depends on providers who serve your ZIP code. Coverage expands as local businesses join the platform.",
   },
@@ -32,7 +32,7 @@ export const faqs: FaqItem[] = [
   {
     id: "faq_p_2",
     category: "providers",
-    question: "Do customers subscribe to Request Services?",
+    question: "Do customers subscribe to Request Service?",
     answer:
       "No. Only service providers subscribe to the business portal. Customers use the marketplace to find and request professionals.",
   },

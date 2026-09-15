@@ -108,23 +108,20 @@ function toState(snapshot: CrmSnapshot): CrmDataState {
   };
 }
 
-function broadcast(detail: { enabled: boolean; ready: boolean; error: string | null }) {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent(EVENT_NAME, {
-      detail: {
-        ...detail,
-        at: Date.now(),
-      },
-    }),
-  );
-}
-
 export function CrmDataProvider({ children }: PropsWithChildren) {
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const mountedRef = useRef(true);
+  const inFlightRef = useRef(false);
+  const queuedSilentRef = useRef(false);
+  const waitersRef = useRef<Array<() => void>>([]);
   const [state, setState] = useState<CrmDataState>(EMPTY_VALUE);
+
+  const flushWaiters = useCallback(() => {
+    const waiters = waitersRef.current;
+    waitersRef.current = [];
+    waiters.forEach((resolve) => resolve());
+  }, []);
 
   const enabled =
     auth.hydrated &&
@@ -134,7 +131,15 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
   const refresh = useCallback(
     async (options?: { silent?: boolean }) => {
       if (!enabled) return;
+      if (inFlightRef.current) {
+        queuedSilentRef.current = true;
+        await new Promise<void>((resolve) => {
+          waitersRef.current.push(resolve);
+        });
+        return;
+      }
 
+      inFlightRef.current = true;
       setState((current) => ({
         ...current,
         loading: !current.ready && !options?.silent,
@@ -145,9 +150,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       try {
         const snapshot = await loadCrmSnapshot();
         if (!mountedRef.current) return;
-        const next = toState(snapshot);
-        setState(next);
-        broadcast({ enabled: true, ready: true, error: null });
+        setState(toState(snapshot));
       } catch (error) {
         if (!mountedRef.current) return;
         const message =
@@ -161,10 +164,21 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
           error: message,
           ready: current.ready,
         }));
-        broadcast({ enabled: true, ready: false, error: message });
+      } finally {
+        inFlightRef.current = false;
+        if (queuedSilentRef.current && mountedRef.current && enabled) {
+          queuedSilentRef.current = false;
+          try {
+            await refresh({ silent: true });
+          } finally {
+            flushWaiters();
+          }
+          return;
+        }
+        flushWaiters();
       }
     },
-    [enabled],
+    [enabled, flushWaiters],
   );
 
   useEffect(() => {
@@ -177,11 +191,13 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!enabled) {
       setState(EMPTY_VALUE);
-      broadcast({ enabled: false, ready: false, error: null });
+      inFlightRef.current = false;
+      queuedSilentRef.current = false;
+      flushWaiters();
       return;
     }
     void refresh();
-  }, [enabled, refresh]);
+  }, [enabled, flushWaiters, refresh]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -193,14 +209,19 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!enabled) return;
-    const onRealtimeRefresh = () => {
-      void refresh({ silent: true });
+    let debounceId = 0;
+    const onExternalRefresh = () => {
+      window.clearTimeout(debounceId);
+      debounceId = window.setTimeout(() => {
+        void refresh({ silent: true });
+      }, 300);
     };
-    window.addEventListener(EVENT_NAME, onRealtimeRefresh);
-    window.addEventListener("rs-realtime", onRealtimeRefresh);
+    window.addEventListener(EVENT_NAME, onExternalRefresh);
+    window.addEventListener("rs-realtime", onExternalRefresh);
     return () => {
-      window.removeEventListener(EVENT_NAME, onRealtimeRefresh);
-      window.removeEventListener("rs-realtime", onRealtimeRefresh);
+      window.clearTimeout(debounceId);
+      window.removeEventListener(EVENT_NAME, onExternalRefresh);
+      window.removeEventListener("rs-realtime", onExternalRefresh);
     };
   }, [enabled, refresh]);
 

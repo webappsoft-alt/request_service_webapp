@@ -33,6 +33,10 @@ export type RequestOptions = {
   config?: AxiosRequestConfig;
   /** Skip token-refresh retry on 401 (login/register/OTP/etc.). */
   skipLogoutOn401?: boolean;
+  /** Bypass the short-lived successful-GET cache (force a network round-trip). */
+  force?: boolean;
+  /** Override default GET reuse window for this request only. */
+  cacheTtlMs?: number;
 };
 
 export type LogoutOptions = {
@@ -61,12 +65,11 @@ let refreshInFlight: Promise<boolean> | null = null;
 const getInFlight = new Map<string, Promise<unknown>>();
 
 /**
- * Brief reuse of a successful GET so React Strict Mode remounts
- * (effect runs twice) do not hit the network again for the same request.
- * Cleared when any mutating request touches the same endpoint root.
+ * Reuse successful GETs across navigations / remounts so marketplace pages
+ * feel instant. Cleared on mutations, realtime invalidation, or focus refresh.
  */
 const getRecentSuccess = new Map<string, { at: number; data: unknown }>();
-const GET_RECENT_TTL_MS = 400;
+const GET_RECENT_TTL_MS = 45_000;
 
 function clearAuthMeCache(): void {
   authMePromise = null;
@@ -74,6 +77,19 @@ function clearAuthMeCache(): void {
 
 function clearRequestCaches(): void {
   getInFlight.clear();
+  getRecentSuccess.clear();
+}
+
+/** Drop all short-lived GET results (or those matching an endpoint root). */
+export function invalidateGetCache(endpointOrRoot?: string): void {
+  if (!endpointOrRoot) {
+    getRecentSuccess.clear();
+    return;
+  }
+  invalidateCachedGets(endpointOrRoot);
+}
+
+export function clearGetCache(): void {
   getRecentSuccess.clear();
 }
 
@@ -148,7 +164,9 @@ export function getAuthUser(): AuthUser | null {
 }
 
 function getBearerToken(override?: string | null): string | null {
-  if (override !== undefined && override !== null) return override;
+  // `token: null` means anonymous — do not fall back to the session JWT.
+  if (override === null) return null;
+  if (typeof override === "string" && override) return override;
   return getAuthToken();
 }
 
@@ -429,7 +447,12 @@ function createApiClient(): AxiosInstance {
       headers.set("Content-Type", "application/json");
     }
 
-    if (!headers.has("Authorization") && isBrowser()) {
+    const anon =
+      headers.get("X-Skip-Auth") === "1" || headers.get("X-Skip-Auth") === "true";
+    if (anon) {
+      headers.delete("X-Skip-Auth");
+      headers.delete("Authorization");
+    } else if (!headers.has("Authorization") && isBrowser()) {
       const token = getAuthToken();
       if (token) {
         headers.set("Authorization", `Bearer ${token}`);
@@ -451,8 +474,13 @@ const http = createApiClient();
 
 function resolveConfig(options: RequestOptions = {}): AxiosRequestConfig {
   const headers: Record<string, string> = {};
-  const token = getBearerToken(options.token);
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (options.token === null) {
+    // Public/anonymous calls — block the request interceptor from attaching a session JWT.
+    headers["X-Skip-Auth"] = "1";
+  } else {
+    const token = getBearerToken(options.token);
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
 
   return {
     ...options.config,
@@ -502,9 +530,16 @@ export async function getData<T = unknown>(
   const inFlight = getInFlight.get(key);
   if (inFlight) return inFlight as Promise<T>;
 
-  const recent = getRecentSuccess.get(key);
-  if (recent && Date.now() - recent.at < GET_RECENT_TTL_MS) {
-    return Promise.resolve(recent.data as T);
+  const ttl =
+    typeof options?.cacheTtlMs === "number" && Number.isFinite(options.cacheTtlMs)
+      ? Math.max(0, options.cacheTtlMs)
+      : GET_RECENT_TTL_MS;
+
+  if (!options?.force) {
+    const recent = getRecentSuccess.get(key);
+    if (recent && Date.now() - recent.at < ttl) {
+      return Promise.resolve(recent.data as T);
+    }
   }
 
   let request!: Promise<T>;

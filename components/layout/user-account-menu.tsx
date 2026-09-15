@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LogOut, Package, Settings } from "lucide-react";
+import { ChevronDown, LogOut, MessageCircle, Package, Settings, Store } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { listPublicChatThreads } from "@/lib/api/chat-client";
+import { readChatGuest } from "@/lib/booking/chat-store";
 import { getUserAvatarSrc, type AuthUser } from "@/store/authSlice";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { cn } from "@/lib/utils";
@@ -31,6 +34,12 @@ function displayName(user: AuthUser | null | undefined): string {
   return name || String(user?.email || "Account");
 }
 
+function listingEmailFor(user: AuthUser) {
+  const fromAuth = String(user.email || "").trim();
+  if (fromAuth) return fromAuth;
+  return String(readChatGuest()?.email || "").trim();
+}
+
 export function UserAccountMenu({
   user,
   className,
@@ -45,6 +54,125 @@ export function UserAccountMenu({
     ? "/pro/dashboard/settings"
     : "/account/settings";
   const avatarUrl = getUserAvatarSrc(user);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    if (isProvider) return;
+    const email = listingEmailFor(user);
+    if (!email) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const threads = await listPublicChatThreads(email, { silent: true });
+        if (cancelled) return;
+        const total = threads.reduce(
+          (sum, thread) => sum + (thread.unreadForCustomer || 0),
+          0,
+        );
+        setUnreadMessages(total);
+      } catch {
+        if (!cancelled) setUnreadMessages(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isProvider, user.email]);
+
+  const avatarButton = (
+    <Avatar size="sm" className="size-8">
+      {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+      <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+        {initialsFor(user)}
+      </AvatarFallback>
+    </Avatar>
+  );
+
+  const menu = (
+    <DropdownMenuContent align={align} className="min-w-56">
+      <DropdownMenuLabel className="font-normal">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-semibold text-foreground">
+            {displayName(user)}
+          </span>
+          {user.email ? (
+            <span className="truncate text-xs text-muted-foreground">
+              {String(user.email)}
+            </span>
+          ) : null}
+        </div>
+      </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {!isProvider ? (
+        <>
+          <DropdownMenuItem asChild>
+            <Link href="/account/orders">
+              <Package />
+              My orders
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/account/messages">
+              <MessageCircle />
+              <span className="flex-1">Messages</span>
+              {unreadMessages > 0 ? (
+                <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                  {unreadMessages > 9 ? "9+" : unreadMessages}
+                </span>
+              ) : null}
+            </Link>
+          </DropdownMenuItem>
+        </>
+      ) : null}
+      <DropdownMenuItem asChild>
+        <Link href={settingsHref}>
+          {isProvider ? <Store /> : <Settings />}
+          {isProvider ? "Business Profile" : "Settings"}
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        variant="destructive"
+        onSelect={() => handleUserLogout()}
+      >
+        <LogOut />
+        Log out
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+
+  if (isProvider) {
+    return (
+      <div className="flex items-center">
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "relative size-9 rounded-full border border-border p-0 hover:bg-muted",
+            className,
+          )}
+        >
+          <Link href={settingsHref} aria-label="Business Profile">
+            {avatarButton}
+          </Link>
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-muted-foreground hover:text-foreground"
+              aria-label="Open account menu"
+            >
+              <ChevronDown className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          {menu}
+        </DropdownMenu>
+      </div>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -58,51 +186,15 @@ export function UserAccountMenu({
           )}
           aria-label="Open account menu"
         >
-          <Avatar size="sm" className="size-8">
-            {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-              {initialsFor(user)}
-            </AvatarFallback>
-          </Avatar>
+          {avatarButton}
+          {unreadMessages > 0 ? (
+            <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              {unreadMessages > 9 ? "9+" : unreadMessages}
+            </span>
+          ) : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className="min-w-56">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-semibold text-foreground">
-              {displayName(user)}
-            </span>
-            {user.email ? (
-              <span className="truncate text-xs text-muted-foreground">
-                {String(user.email)}
-              </span>
-            ) : null}
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {!isProvider ? (
-          <DropdownMenuItem asChild>
-            <Link href="/account/orders">
-              <Package />
-              My orders
-            </Link>
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem asChild>
-          <Link href={settingsHref}>
-            <Settings />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onSelect={() => handleUserLogout()}
-        >
-          <LogOut />
-          Log out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
+      {menu}
     </DropdownMenu>
   );
 }

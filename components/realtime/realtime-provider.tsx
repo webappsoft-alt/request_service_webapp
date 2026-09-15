@@ -98,6 +98,10 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
             : "A customer requested a quote.",
         });
       }),
+      onRealtime("ESTIMATE_ACCEPTED", (payload) => {
+        broadcastRealtime({ type: "ESTIMATE_ACCEPTED", payload });
+        window.dispatchEvent(new Event("rs-crm-api"));
+      }),
       onRealtime("INBOX_SUMMARY_INVALIDATE", (payload) => {
         broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload });
         window.dispatchEvent(new Event("rs-crm-api"));

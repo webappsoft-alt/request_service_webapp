@@ -40,6 +40,7 @@ function NavLinks({
   function badgeFor(href: string) {
     if (href === "/pro/dashboard/requests") return inbox.newLeads;
     if (href === "/pro/dashboard/messages") return inbox.unreadChats;
+    if (href === "/pro/dashboard/orders") return inbox.pendingOrders;
     return 0;
   }
 
@@ -111,6 +112,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const authUser = useAppSelector(selectAuthUser);
   const { records, closeRecord } = useOpenRecords();
   const [collapsed, setCollapsed] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState("");
   const showPeople = isPeoplePath(pathname);
   const showWork = isWorkPath(pathname);
 
@@ -185,7 +187,26 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
             <div className="relative ml-auto hidden w-56 lg:block">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search records…" className="h-8 bg-[#f7f8fa] pl-8 text-sm" aria-label="Search records" />
+              <Input
+                placeholder="Search records…"
+                className="h-8 bg-[#f7f8fa] pl-8 text-sm"
+                aria-label="Search records"
+                value={headerSearch}
+                onChange={(event) => setHeaderSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  const q = headerSearch.trim();
+                  const segments = pathname.split("/").filter(Boolean);
+                  // /pro/dashboard/<module> or /pro/dashboard/<module>/<id>
+                  const modulePath =
+                    segments.length >= 3
+                      ? `/${segments.slice(0, 3).join("/")}`
+                      : "/pro/dashboard/customers";
+                  const listBase =
+                    modulePath === "/pro/dashboard" ? "/pro/dashboard/customers" : modulePath;
+                  router.push(q ? `${listBase}?q=${encodeURIComponent(q)}` : listBase);
+                }}
+              />
             </div>
             <div className="ml-auto flex items-center gap-1 lg:ml-0">
               <PortalNotifications />

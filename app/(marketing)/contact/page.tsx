@@ -13,7 +13,7 @@ import { siteConfig } from "@/lib/site";
 export const dynamic = "force-dynamic";
 
 export const metadata = buildMetadata({
-  title: "Contact Request Services",
+  title: "Contact Request Service",
   description: `Have a question or need support? Contact ${siteConfig.name} by form, email, or phone.`,
   path: "/contact",
 });
@@ -208,7 +208,7 @@ export default function ContactPage() {
               Frequently Asked Questions
             </h2>
             <p className="mt-4 text-sm leading-7 text-muted-foreground md:text-base">
-              Find answers to common questions about Request Services and how we
+              Find answers to common questions about Request Service and how we
               can help you succeed.
             </p>
           </div>

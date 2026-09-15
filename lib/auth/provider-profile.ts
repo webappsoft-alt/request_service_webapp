@@ -37,9 +37,24 @@ export type AuthProviderRecord = {
     [key: string]: unknown;
   };
   coverage?: {
-    neighborhoods?: string[];
+    /** ObjectId strings, legacy titles, or populated `{ id, title }` objects. */
+    neighborhoods?: Array<
+      | string
+      | {
+          id?: string;
+          _id?: string;
+          title?: string;
+          name?: string;
+          [key: string]: unknown;
+        }
+    >;
     [key: string]: unknown;
   };
+  businessGallery?: Array<{
+    url?: string;
+    isBanner?: boolean;
+    sortOrder?: number;
+  }>;
   settings?: {
     workingHours?: Array<
       WorkingHours & {

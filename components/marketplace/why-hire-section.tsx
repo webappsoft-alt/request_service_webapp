@@ -32,7 +32,7 @@ export function WhyHireSection({
     <Section density="tight">
       <Container className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <p className="eyebrow text-muted-foreground">Why Request Services</p>
+          <p className="eyebrow text-muted-foreground">Why Request Service</p>
           <h2 className="max-w-2xl text-3xl font-semibold md:text-[2.5rem]">
             Why homeowners hire through here
           </h2>

@@ -3,7 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Provider Login",
-  description: "Sign in to the Request Services provider portal.",
+  description: "Sign in to the Request Service provider portal.",
   path: "/pro/login",
   index: false,
   follow: false,

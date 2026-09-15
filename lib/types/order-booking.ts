@@ -191,6 +191,8 @@ export interface CustomerOrderListItem {
   id: string;
   orderNumber: string;
   status: OrderStatus | string;
+  /** Fixed service id — from order.serviceId (string or populated doc). */
+  serviceId?: string;
   pricing: {
     totalAmount: number;
     currency: string;

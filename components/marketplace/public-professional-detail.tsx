@@ -5,7 +5,8 @@ import { getData } from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { Container } from "@/components/layout/container";
 import { ProviderProfile } from "@/components/marketplace/provider-profile";
-import { CenteredSpinner } from "@/components/ui/spinner";
+import { ProfessionalDetailSkeleton } from "@/components/shared/loading-skeletons";
+import { galleryBanner, galleryRest, normalizeBusinessGallery } from "@/lib/business-gallery";
 import type { ExplorePlace } from "@/lib/data/profile-explore";
 import type { PortalFixedService } from "@/lib/data/portal";
 import { getServiceAreaNames } from "@/lib/data/service-areas";
@@ -338,6 +339,7 @@ function stashRelatedProfessional(related: Provider): PublicProfessional {
     },
     location: {
       city: related.city,
+      state: related.state || "",
       country: "",
       zip: related.zip,
       address: related.street,
@@ -530,8 +532,18 @@ export function PublicProfessionalDetail({
 
   const livePhotos = useMemo(() => {
     if (!provider) return [];
+    const gallery = normalizeBusinessGallery(professional?.businessGallery);
+    if (gallery.length) {
+      const banner = galleryBanner(gallery);
+      const rest = galleryRest(gallery);
+      const ordered = banner ? [banner, ...rest] : rest;
+      return ordered.map((item) => ({
+        src: item.url,
+        alt: `${provider.companyName} gallery`,
+      }));
+    }
     return portfolioToPhotos(portfolioProjects, provider.companyName);
-  }, [portfolioProjects, provider]);
+  }, [portfolioProjects, professional?.businessGallery, provider]);
 
   const liveProjects = useMemo((): ProviderProject[] => {
     if (!provider) return [];
@@ -600,7 +612,7 @@ export function PublicProfessionalDetail({
   if (detailLoading || !detailError) {
     return (
       <Container className="py-16">
-        <CenteredSpinner label="Loading professional profile" />
+        <ProfessionalDetailSkeleton />
       </Container>
     );
   }

@@ -359,7 +359,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
       <div className="border border-black/15 bg-card p-6">
         <h1 className="text-lg font-semibold">Order not found</h1>
         <Button asChild className="mt-4" size="sm">
-          <Link href="/pro/dashboard/orders">Back to Orders</Link>
+          <Link href="/pro/dashboard/orders">Back to fixed service orders</Link>
         </Button>
       </div>
     );
@@ -408,7 +408,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
               className="gap-1.5 h-8 text-xs"
             >
               <Link href="/pro/dashboard/orders">
-                <ArrowLeft className="size-3.5" /> Back to Orders
+                <ArrowLeft className="size-3.5" /> Back to fixed service orders
               </Link>
             </Button>
 
@@ -542,7 +542,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                       href="/pro/dashboard/orders"
                       className="font-semibold text-primary hover:underline"
                     >
-                      Orders
+                      Fixed service orders
                     </Link>
                     <span>/</span>
                     <span className="font-medium text-foreground">

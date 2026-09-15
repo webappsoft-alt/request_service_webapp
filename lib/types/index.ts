@@ -160,6 +160,8 @@ export interface EstimateSignature {
   signedBy: string;
   signedAt: string;
   ipAddress?: string;
+  /** Base64/data-URL of customer signature when returned from CRM. */
+  imageBase64?: string;
 }
 
 export type JobStatus =

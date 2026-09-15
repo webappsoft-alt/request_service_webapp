@@ -11,7 +11,7 @@ import { RelatedBrowse } from "@/components/marketplace/related-browse";
 import { FixedServiceOrderDialog } from "@/components/marketplace/fixed-service-order-dialog";
 import type { ServiceJobListing } from "@/components/marketplace/service-job-card";
 import { Container } from "@/components/layout/container";
-import { CenteredSpinner } from "@/components/ui/spinner";
+import { ServiceDetailSkeleton } from "@/components/shared/loading-skeletons";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -25,11 +25,23 @@ import {
   normalizePublicProfessional,
   publicProfessionalToProvider,
 } from "@/store/publicProfessionalsSlice";
-import { setPendingOrderDraft } from "@/store/ordersSlice";
+import {
+  fetchCustomerOrders,
+  selectCustomerOrders,
+  setPendingOrderDraft,
+} from "@/store/ordersSlice";
 import type { JobRecord } from "@/lib/data/jobs";
 import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
+import {
+  findOpenOrderForService,
+  formatOrderStatus,
+} from "@/lib/orders/order-status";
+import { inferStateFromAddress } from "@/lib/format";
 import { locationDisplayLabel } from "@/store/locationSlice";
+import {
+  selectIsAuthenticated,
+} from "@/store/authSlice";
 import {
   pendingFixedOrderMatchesService,
   readPendingFixedOrder,
@@ -169,7 +181,9 @@ function providerFromService(service: PublicFixedService): Provider | null {
     serviceArea: service.workingArea,
     street: p.location.address || "",
     city: p.location.city || "",
-    state: "",
+    state:
+      p.location.state ||
+      inferStateFromAddress(p.location.city || "", p.location.address || ""),
     zip: p.location.zip || "",
     lat,
     lng,
@@ -203,12 +217,25 @@ function providerFromRelatedProfessional(raw: unknown): Provider | null {
     "Professional";
   const metrics = asRecord(record.metrics) || asRecord(record.pricing) || {};
   const verification = asRecord(record.verification) || {};
+  const location = asRecord(record.location) || {};
   const zones = Array.isArray(record.operatingZones)
     ? record.operatingZones
     : [];
   const firstZone = asRecord(zones[0]);
   const categories = Array.isArray(record.categories) ? record.categories : [];
   const categoryIds = categories.map(idOf).filter(Boolean);
+  const city =
+    (typeof location.city === "string" && location.city) ||
+    (typeof firstZone?.city === "string" && firstZone.city) ||
+    (typeof record.city === "string" && record.city) ||
+    "";
+  const address =
+    (typeof location.address === "string" && location.address) || "";
+  const state =
+    (typeof location.state === "string" && location.state) ||
+    (typeof firstZone?.state === "string" && firstZone.state) ||
+    (typeof record.state === "string" && record.state) ||
+    inferStateFromAddress(city, address);
 
   return {
     id,
@@ -245,13 +272,13 @@ function providerFromRelatedProfessional(raw: unknown): Provider | null {
         return typeof item?.zipCode === "string" ? item.zipCode : "";
       })
       .filter(Boolean),
-    street: "",
-    city:
-      (typeof firstZone?.city === "string" && firstZone.city) ||
-      (typeof record.city === "string" && record.city) ||
+    street: address,
+    city,
+    state,
+    zip:
+      (typeof location.zip === "string" && location.zip) ||
+      (typeof firstZone?.zipCode === "string" && firstZone.zipCode) ||
       "",
-    state: (typeof firstZone?.state === "string" && firstZone.state) || "",
-    zip: (typeof firstZone?.zipCode === "string" && firstZone.zipCode) || "",
     lat: 0,
     lng: 0,
     phone: "",
@@ -385,6 +412,16 @@ export function PublicFixedServiceDetail({
   const zip = customerLocation.zip.trim();
   const lat = customerLocation.latitude;
   const lng = customerLocation.longitude;
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const customerOrders = useAppSelector(selectCustomerOrders);
+  const customerOrdersLoaded = useAppSelector(
+    (state) => Boolean(state.orders?.listLoaded),
+  );
+
+  const openOrder = useMemo(() => {
+    if (!isAuthenticated || !service?.id) return null;
+    return findOpenOrderForService(customerOrders, service.id);
+  }, [customerOrders, isAuthenticated, service?.id]);
 
   useEffect(() => {
     if (!serviceSlug) return;
@@ -397,9 +434,32 @@ export function PublicFixedServiceDetail({
     void dispatch(fetchPublicFixedServiceBySlug(serviceSlug));
   }, [detailSlug, dispatch, service, serviceSlug]);
 
+  // Load customer orders so we can show View order when this job is already booked.
+  useEffect(() => {
+    if (!isAuthenticated || !service?.id) return;
+    void dispatch(fetchCustomerOrders({ page: 1, limit: 50 }));
+  }, [dispatch, isAuthenticated, service?.id]);
+
   useEffect(() => {
     if (!service) return;
     if (searchParams.get("book") !== "1") return;
+
+    // Wait for orders list when logged in so we don't open checkout over an existing booking.
+    if (isAuthenticated && !customerOrdersLoaded) {
+      return;
+    }
+
+    const existing = findOpenOrderForService(customerOrders, service.id);
+    if (existing) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("book");
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
+      router.push(`/account/orders/${existing.id}`);
+      return;
+    }
 
     const pending = readPendingFixedOrder();
     const matches = pendingFixedOrderMatchesService(
@@ -419,7 +479,16 @@ export function PublicFixedServiceDetail({
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
     });
-  }, [dispatch, pathname, router, searchParams, service]);
+  }, [
+    customerOrders,
+    customerOrdersLoaded,
+    dispatch,
+    isAuthenticated,
+    pathname,
+    router,
+    searchParams,
+    service,
+  ]);
 
   const serviceId = service?.id || "";
   const categoryId = service?.category?.id || "";
@@ -507,7 +576,8 @@ export function PublicFixedServiceDetail({
           const jobsFallbackQuery: Record<string, string | number> = {
             page: 1,
             limit: RELATED_LIMIT + 1,
-            category: JSON.stringify([categoryId]),
+            category: categoryId,
+            radius: 50,
             sortBy: "recommended",
           };
           if (typeof lat === "number" && Number.isFinite(lat)) {
@@ -605,10 +675,22 @@ export function PublicFixedServiceDetail({
               "",
             benefits: defaultBenefits(service),
             hideRelated: true,
-            onRequestJob: () => {
-              setRestoreDraft(null);
-              setOrderOpen(true);
-            },
+            ...(openOrder
+              ? {
+                  requestLabel: "View order",
+                  requestHref: `/account/orders/${openOrder.id}`,
+                  requestHint: `Already booked · ${formatOrderStatus(openOrder.status)}${
+                    openOrder.orderNumber
+                      ? ` · ${openOrder.orderNumber}`
+                      : ""
+                  }`,
+                }
+              : {
+                  onRequestJob: () => {
+                    setRestoreDraft(null);
+                    setOrderOpen(true);
+                  },
+                }),
             compareHref: categoryPath,
           }}
         />
@@ -621,15 +703,17 @@ export function PublicFixedServiceDetail({
           zip={zip || undefined}
           loc={loc || undefined}
         />
-        <FixedServiceOrderDialog
-          open={orderOpen}
-          onOpenChange={(next) => {
-            setOrderOpen(next);
-            if (!next) setRestoreDraft(null);
-          }}
-          service={service}
-          initialDraft={restoreDraft}
-        />
+        {!openOrder ? (
+          <FixedServiceOrderDialog
+            open={orderOpen}
+            onOpenChange={(next) => {
+              setOrderOpen(next);
+              if (!next) setRestoreDraft(null);
+            }}
+            service={service}
+            initialDraft={restoreDraft}
+          />
+        ) : null}
       </>
     );
   }
@@ -637,7 +721,7 @@ export function PublicFixedServiceDetail({
   if (detailLoading || !detailError) {
     return (
       <Container className="py-16">
-        <CenteredSpinner label="Loading service" className="min-h-[22rem]" />
+        <ServiceDetailSkeleton />
       </Container>
     );
   }

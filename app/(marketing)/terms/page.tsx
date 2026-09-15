@@ -24,7 +24,7 @@ export default function TermsPage() {
       <div className="section-space">
         <Container className="flex flex-col gap-5 text-sm leading-7 text-muted-foreground">
           <p>
-            The public website is provided for evaluation of the Request Services product. Marketplace listings, reviews, testimonials, and prices are demo or placeholder content unless stated otherwise.
+            The public website is provided for evaluation of the Request Service product. Marketplace listings, reviews, testimonials, and prices are demo or placeholder content unless stated otherwise.
           </p>
           <p>
             Provider subscriptions, payments, and portal access will be governed by a later agreement. Customers remain responsible for evaluating professionals before approving work.

@@ -9,9 +9,9 @@ import { buildMetadata } from "@/lib/seo";
 import { siteConfig } from "@/lib/site";
 
 export const metadata = buildMetadata({
-  title: "About Request Services",
+  title: "About Request Service",
   description:
-    "Request Services is a USA-focused marketplace and operations platform for home-service businesses and the homeowners who hire them.",
+    "Request Service is a USA-focused marketplace and operations platform for home-service businesses and the homeowners who hire them.",
   path: "/about",
 });
 

@@ -8,6 +8,7 @@ import {
   getData,
 } from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
+import { inferStateFromAddress } from "@/lib/format";
 
 export type PublicFixedServiceSortBy =
   | "recommended"
@@ -37,6 +38,7 @@ export type PublicFixedServiceProvider = {
   };
   location: {
     city: string;
+    state: string;
     country: string;
     zip: string;
     address: string;
@@ -202,6 +204,12 @@ function normalizeProvider(raw: unknown): PublicFixedServiceProvider | null {
     },
     location: {
       city: typeof location.city === "string" ? location.city : "",
+      state:
+        (typeof location.state === "string" && location.state) ||
+        inferStateFromAddress(
+          typeof location.city === "string" ? location.city : "",
+          typeof location.address === "string" ? location.address : "",
+        ),
       country: typeof location.country === "string" ? location.country : "",
       zip: typeof location.zip === "string" ? location.zip : "",
       address: typeof location.address === "string" ? location.address : "",
@@ -379,10 +387,13 @@ function toRequestParams(
       query.lat != null && Number.isFinite(query.lat) ? query.lat : undefined,
     lng:
       query.lng != null && Number.isFinite(query.lng) ? query.lng : undefined,
-    radius: undefined,
-    // Same getData pattern as pro. category stays the key; value is
-    // array-of-id strings encoded as JSON: ["id1","id2"].
-    category: categoryIds.length ? JSON.stringify(categoryIds) : undefined,
+    // Backend Joi default is 25; customer marketplace uses 50 miles.
+    radius:
+      query.radius != null && Number.isFinite(query.radius)
+        ? query.radius
+        : 50,
+    // Backend accepts ObjectId(s), slug(s), or comma-separated — not JSON arrays.
+    category: categoryIds.length ? categoryIds.join(",") : undefined,
     subCategory: query.subCategory?.trim() || undefined,
     commonServices: query.commonServices?.trim() || undefined,
     workingArea: query.workingArea?.trim() || undefined,
@@ -424,17 +435,8 @@ type LiveLocationState = {
 /**
  * Build the Fixed Services query from the latest Redux location at request time.
  * Never inherits prior zip/lat/lng from the slice's cached query.
+ * Empty location is allowed and returns the unfiltered paginated catalog.
  */
-function hasUsableFixedServicesLocation(location: LiveLocationState): boolean {
-  const hasZip = Boolean(location.zip.trim());
-  const hasCoords =
-    location.latitude != null &&
-    Number.isFinite(location.latitude) &&
-    location.longitude != null &&
-    Number.isFinite(location.longitude);
-  return hasZip || hasCoords;
-}
-
 function resolveQueryWithLiveLocation(
   incoming: PublicFixedServicesQuery | undefined,
   location: LiveLocationState,
@@ -452,7 +454,9 @@ function resolveQueryWithLiveLocation(
   const nextQuery: PublicFixedServicesQuery = {
     sortBy: incoming?.sortBy || fallbackSortBy || "recommended",
     ...incoming,
-    zipCode: hasZip ? location.zip.trim() : undefined,
+    // When lat/lng exist (city/place pick), omit ZIP — Places center ZIPs AND-filter
+    // against exact postal matches and wipe nearby results. Radius handles discovery.
+    zipCode: hasZip && !hasCoords ? location.zip.trim() : undefined,
     lat: hasCoords ? location.latitude! : undefined,
     lng: hasCoords ? location.longitude! : undefined,
     locationToken: usable
@@ -464,16 +468,15 @@ function resolveQueryWithLiveLocation(
           location.latitude ?? "",
           location.longitude ?? "",
         ].join("|")
-      : "",
+      : "all",
   };
 
   // Cleared / typing location must not keep a previous zip/geo via undefined merges.
-  if (!hasZip) delete nextQuery.zipCode;
+  if (!(hasZip && !hasCoords)) delete nextQuery.zipCode;
   if (!hasCoords) {
     delete nextQuery.lat;
     delete nextQuery.lng;
   }
-  if (!usable) delete nextQuery.locationToken;
 
   return nextQuery;
 }
@@ -542,8 +545,7 @@ export const fetchPublicFixedServices = createAsyncThunk<
         if (!state.hasNextPage) return false;
         return true;
       }
-      // Block the city-only / no-geo call that used to fire before lat/lng arrived.
-      if (!hasUsableFixedServicesLocation(root.location)) return false;
+      // Location is optional — empty location returns the full paginated catalog.
       const incoming =
         arg && typeof arg === "object" ? arg.query : undefined;
       const nextQuery = resolveQueryWithLiveLocation(
@@ -635,6 +637,12 @@ const publicFixedServicesSlice = createSlice({
     clearPublicFixedServicesError(state) {
       state.error = null;
       state.detailError = null;
+    },
+    /** Keep list visible; force the next fetch for the same filters. */
+    markPublicFixedServicesStale(state) {
+      state.loaded = false;
+      state.queryKey = "";
+      state.requestKey = "";
     },
     resetPublicFixedServices() {
       return initialState;
@@ -729,6 +737,7 @@ export const {
   setPublicFixedServiceDetail,
   clearPublicFixedServiceDetail,
   clearPublicFixedServicesError,
+  markPublicFixedServicesStale,
   resetPublicFixedServices,
 } = publicFixedServicesSlice.actions;
 

@@ -9,7 +9,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Frequently Asked Questions",
   description:
-    "Answers for customers and providers covering bookings, estimates, payments, subscriptions, and jobs on Request Services.",
+    "Answers for customers and providers covering bookings, estimates, payments, subscriptions, and jobs on Request Service.",
   path: "/faq",
 });
 

@@ -990,8 +990,10 @@ export function getPortalWorkspace(session?: DemoSession | null) {
 }
 
 export function getPortalCustomerName(provider: Provider, customerId: string) {
-  const customer = getPortalCustomers(provider).find((item) => item.id === customerId);
-  return customer ? `${customer.firstName} ${customer.lastName}` : "Customer";
+  // Do not resolve against seed/demo customers — live CRM names come from directory hooks.
+  void provider;
+  void customerId;
+  return "Customer";
 }
 
 export function jobTotal(job: Job) {

@@ -36,7 +36,7 @@ export default function OpenGraphImage() {
           >
             RS
           </div>
-          Request Services
+          Request Service
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 900 }}>
           <div style={{ fontSize: 64, lineHeight: 1.1, fontWeight: 600 }}>

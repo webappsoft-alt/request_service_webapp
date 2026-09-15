@@ -14,6 +14,7 @@ import { PortalPage } from "@/components/portal/portal-page";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { Button } from "@/components/ui/button";
 import {
   crmReminderStatusLabel,
@@ -246,7 +247,17 @@ export function ReminderDetailView({ id }: { id: string }) {
   const { reminders, employees, setReminderStatus } = useCrmDirectory();
   const lookups = useReminderLookups();
   const reminder = reminders.find((item) => item.id === id);
-  if (!reminder) return <Missing href="/pro/dashboard/reminders" label="Reminder" />;
+  const pending = useCrmRecordPending();
+  if (!reminder) {
+    if (pending) {
+      return (
+        <div className="border border-black/15 bg-card p-6">
+          <h1 className="text-lg font-semibold">Loading reminder…</h1>
+        </div>
+      );
+    }
+    return <Missing href="/pro/dashboard/reminders" label="Reminder" />;
+  }
   const employee = employees.find((item) => item.id === reminder.assignedEmployeeId);
   const subject = reminderSubject(reminder);
   const linkedName = lookups.label(subject.kind, subject.id);
@@ -503,13 +514,17 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function Missing({ href, label }: { href: string; label: string }) {
+  const plural =
+    label.toLowerCase() === "reminder"
+      ? "reminders"
+      : label.toLowerCase().endsWith("s")
+        ? label.toLowerCase()
+        : `${label.toLowerCase()}s`;
   return (
     <div className="border border-black/15 bg-card p-6">
       <h1 className="text-lg font-semibold">{label} not found</h1>
       <Button asChild className="mt-4" size="sm">
-        <Link href={href}>
-          Back to {label.toLowerCase()}s
-        </Link>
+        <Link href={href}>Back to {plural}</Link>
       </Button>
     </div>
   );

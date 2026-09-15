@@ -4,7 +4,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { assignSchedule as assignScheduleApi, updateSchedule as updateScheduleApi } from "@/lib/api/crm-client";
+import { assignSchedule as assignScheduleApi, updateSchedule as updateScheduleApi, deleteSchedule as deleteScheduleApi, createEmployee as createEmployeeApi, updateEmployee as updateEmployeeApi, deleteEmployee as deleteEmployeeApi } from "@/lib/api/crm-client";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
 import { employeeName, minutesForWindow } from "@/lib/data/portal";
 
@@ -87,11 +87,26 @@ export function usePortalCrew() {
     () => EMPTY,
   );
   const apiReady = crm.enabled && crm.ready;
+  const suppressSeedData = Boolean(workspace.session) || (crm.enabled && !crm.ready);
 
   const employees = useMemo(() => {
+    if (apiReady) {
+      return crm.employees
+        .filter((item) => !store.removedIds.includes(item.id))
+        .map((item) => ({ ...item, ...store.patches[item.id] }));
+    }
+    if (suppressSeedData) return [];
     const seeded = workspace.employees.filter((item) => !store.removedIds.includes(item.id));
     return [...seeded, ...store.extras].map((item) => ({ ...item, ...store.patches[item.id] }));
-  }, [store.extras, store.patches, store.removedIds, workspace.employees]);
+  }, [
+    apiReady,
+    crm.employees,
+    store.extras,
+    store.patches,
+    store.removedIds,
+    suppressSeedData,
+    workspace.employees,
+  ]);
 
   const events = useMemo(() => {
     const taskEvents: PortalCalendarEvent[] = tasks.map((task) => {
@@ -103,7 +118,7 @@ export function usePortalCrew() {
         title: task.number,
         detail: task.title,
         customerName: customer ? `${customer.firstName} ${customer.lastName}` : undefined,
-        date: task.dueAt,
+        date: String(task.dueAt || "").slice(0, 10),
         timeWindow: "all_day" as const,
         startMinutes: 8 * 60,
         endMinutes: 9 * 60,
@@ -308,6 +323,21 @@ export function usePortalCrew() {
       phone: string;
       trade: string;
     }) => {
+      if (apiReady) {
+        return (async () => {
+          const created = await createEmployeeApi({
+            firstName: input.firstName.trim(),
+            lastName: input.lastName.trim(),
+            role: input.role,
+            email: input.email.trim(),
+            phone: input.phone.trim(),
+            trade: input.trade.trim() || "General",
+            active: true,
+          });
+          await crm.refresh();
+          return created;
+        })();
+      }
       const current = readStore(key);
       const employee: PortalEmployee = {
         id: `emp_custom_${Date.now()}`,
@@ -322,11 +352,17 @@ export function usePortalCrew() {
       writeStore(key, { ...current, extras: [...current.extras, employee] });
       return employee;
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const removeEmployee = useCallback(
     (id: string) => {
+      if (apiReady) {
+        return (async () => {
+          await deleteEmployeeApi(id);
+          await crm.refresh();
+        })();
+      }
       const current = readStore(key);
       const seeded = workspace.employees.some((item) => item.id === id);
       const patches = { ...current.patches };
@@ -338,11 +374,20 @@ export function usePortalCrew() {
         patches,
       });
     },
-    [key, workspace.employees],
+    [apiReady, crm, key, workspace.employees],
   );
 
   const updateEmployee = useCallback(
     (id: string, patch: Partial<PortalEmployee>) => {
+      if (apiReady) {
+        return (async () => {
+          const currentEmployee = employees.find((item) => item.id === id);
+          if (!currentEmployee) throw new Error("Employee not found");
+          const updated = await updateEmployeeApi(id, { ...currentEmployee, ...patch });
+          await crm.refresh();
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const extra = current.extras.find((item) => item.id === id);
       writeStore(key, {
@@ -353,7 +398,24 @@ export function usePortalCrew() {
         patches: extra ? current.patches : { ...current.patches, [id]: { ...current.patches[id], ...patch } },
       });
     },
-    [key],
+    [apiReady, crm, employees, key],
+  );
+
+  const removeSchedule = useCallback(
+    (scheduleId: string) => {
+      if (apiReady) {
+        return (async () => {
+          await deleteScheduleApi(scheduleId);
+          await crm.refresh();
+        })();
+      }
+      const current = readStore(key);
+      writeStore(key, {
+        ...current,
+        assignments: current.assignments.filter((item) => item.recordId !== scheduleId),
+      });
+    },
+    [apiReady, crm, key],
   );
 
   const employeeById = useCallback(
@@ -369,6 +431,7 @@ export function usePortalCrew() {
     addEmployee,
     updateEmployee,
     removeEmployee,
+    removeSchedule,
     employeeById,
     employeeLabel: (id?: string) => {
       const employee = employeeById(id);

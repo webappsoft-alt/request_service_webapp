@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { ChevronDown, Loader2, Search, Sparkles, X } from "lucide-react";
 import { BlogCard } from "@/components/shared/blog-card";
+import { BlogCardSkeleton } from "@/components/shared/loading-skeletons";
 import { Button } from "@/components/ui/button";
 import {
   BLOG_CATEGORIES,
@@ -208,21 +209,13 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
 
       {/* Grid of Articles or Skeletons or Empty State */}
       {loading ? (
-        <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
+        <div
+          className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3"
+          aria-busy="true"
+          aria-label="Loading articles"
+        >
           {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex h-[360px] animate-pulse flex-col rounded-2xl border border-black/10 bg-card p-4 shadow-xs"
-            >
-              <div className="aspect-[16/10] w-full rounded-xl bg-muted" />
-              <div className="mt-4 flex flex-col gap-2.5">
-                <div className="h-3.5 w-1/3 rounded-sm bg-muted" />
-                <div className="h-5 w-4/5 rounded-sm bg-muted" />
-                <div className="h-3.5 w-full rounded-sm bg-muted" />
-                <div className="h-3.5 w-2/3 rounded-sm bg-muted" />
-              </div>
-              <div className="mt-auto h-3 w-1/4 rounded-sm bg-muted" />
-            </div>
+            <BlogCardSkeleton key={`blog-sk-${i}`} />
           ))}
         </div>
       ) : blogs.length > 0 ? (

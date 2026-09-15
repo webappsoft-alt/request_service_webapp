@@ -38,11 +38,23 @@ export function EstimateShareTab({
   const crm = useCrmApiData();
   const share = useEstimateShare();
   const snapshot = share.snapshotForEstimate(estimate.id);
-  const approval = share.approvalOf(estimate.id);
+  const localApproval = share.approvalOf(estimate.id);
+  const apiSignature = estimate.signature;
+  const approval =
+    localApproval ||
+    (apiSignature
+      ? {
+          estimateId: estimate.id,
+          signedBy: apiSignature.signedBy,
+          signedAt: apiSignature.signedAt,
+          signatureDataUrl: apiSignature.imageBase64 || "",
+        }
+      : undefined);
   const [url, setUrl] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const ready = estimateCanShare(estimate.status);
   const apiReady = crm.enabled && crm.ready;
+  const waitingOnCustomer = !approval && (Boolean(snapshot) || estimate.status === "sent");
 
   async function publish() {
     if (!ready) {
@@ -54,12 +66,27 @@ export function EstimateShareTab({
     if (apiReady) {
       const shared = await shareEstimateApi(estimate.id);
       token = shared.shareToken || token;
-      href = shared.shareUrl
-        ? new URL(shared.shareUrl, window.location.origin).toString()
-        : shared.shareToken
-          ? shareUrlFor(shared.shareToken)
-          : href;
+      href =
+        shared.absoluteShareUrl ||
+        (shared.shareUrl
+          ? new URL(shared.shareUrl, window.location.origin).toString()
+          : shared.shareToken
+            ? shareUrlFor(shared.shareToken)
+            : href);
       await crm.refresh();
+      if (shared.emailSent) {
+        toast.success(
+          shared.emailTo
+            ? `Estimate emailed to ${shared.emailTo}.`
+            : "Estimate emailed to the customer.",
+        );
+      } else if (shared.emailSkippedReason) {
+        toast.message("Link ready", { description: shared.emailSkippedReason });
+      } else if (shared.emailError) {
+        toast.message("Link ready", {
+          description: "Email could not be sent — check mail settings on the server.",
+        });
+      }
     }
     const next = buildEstimateSnapshot(estimate, {
       token,
@@ -145,10 +172,16 @@ export function EstimateShareTab({
           <p className="mt-1 text-sm text-emerald-950">
             Approved {formatDate(approval.signedAt.slice(0, 10))}. Convert this quote to a job to schedule the work.
           </p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt={`Signature of ${approval.signedBy}`} src={approval.signatureDataUrl} className="mt-3 h-16 w-48 object-contain" />
+          {approval.signatureDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt={`Signature of ${approval.signedBy}`}
+              src={approval.signatureDataUrl}
+              className="mt-3 h-16 w-48 object-contain"
+            />
+          ) : null}
         </div>
-      ) : snapshot ? (
+      ) : waitingOnCustomer ? (
         <p className="text-sm text-muted-foreground">Waiting on the customer to sign {estimate.number}.</p>
       ) : null}
       {snapshot ? <EstimatePdfDocument snapshot={snapshot} approval={approval} /> : null}

@@ -20,12 +20,15 @@ import {
 } from "@/components/shared/address-autocomplete";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectIsAuthenticated } from "@/store/authSlice";
+import { invalidatePublicCatalog } from "@/components/realtime/public-data-sync";
 import {
   checkoutFixedServiceOrder,
   clearAvailability,
   clearCheckoutError,
   clearPendingOrderDraft,
   fetchBookingAvailability,
+  fetchCustomerOrders,
+  selectCustomerOrders,
   setPendingOrderDraft,
 } from "@/store/ordersSlice";
 import {
@@ -39,6 +42,7 @@ import {
   type PendingFixedOrderAddress,
   writePendingFixedOrder,
 } from "@/lib/booking/pending-fixed-order";
+import { findOpenOrderForService } from "@/lib/orders/order-status";
 import { formatStartingPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +105,7 @@ export function FixedServiceOrderDialog({
     (state) => state.orders.availabilityError,
   );
   const checkoutLoading = useAppSelector((state) => state.orders.checkoutLoading);
+  const customerOrders = useAppSelector(selectCustomerOrders);
 
   const today = useMemo(() => toDateInputValue(new Date()), []);
   const [date, setDate] = useState(today);
@@ -231,6 +236,14 @@ export function FixedServiceOrderDialog({
       return;
     }
 
+    const existing = findOpenOrderForService(customerOrders, service.id);
+    if (existing) {
+      toast.error("You already have an open order for this service.");
+      onOpenChange(false);
+      router.push(`/account/orders/${existing.id}`);
+      return;
+    }
+
     const duration =
       selectedSlot.durationMinutes || availability?.duration || 60;
 
@@ -258,6 +271,8 @@ export function FixedServiceOrderDialog({
 
       clearPendingFixedOrder();
       dispatch(clearPendingOrderDraft());
+      invalidatePublicCatalog();
+      void dispatch(fetchCustomerOrders({ page: 1, limit: 50 }));
 
       toast.success(
         result.order.orderNumber
@@ -265,6 +280,9 @@ export function FixedServiceOrderDialog({
           : result.message,
       );
       onOpenChange(false);
+      if (result.order.id) {
+        router.push(`/account/orders/${result.order.id}`);
+      }
     } catch (error) {
       toast.error(
         typeof error === "string"

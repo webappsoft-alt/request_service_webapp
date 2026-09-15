@@ -44,7 +44,7 @@ export async function generateMetadata({
     apiPost.meta?.description || apiPost.description || "";
   const publishedTime = apiPost.publishedAt;
   const modifiedTime = apiPost.updatedAt;
-  const authorName = apiPost.authorName || "Request Services Editorial";
+  const authorName = apiPost.authorName || "Request Service Editorial";
 
   return buildMetadata({
     title,
@@ -73,7 +73,7 @@ export default async function BlogArticlePage({
   const categoryName = apiPost.category || "Article";
   const categorySlug = categoryNameToSlug(apiPost.category);
 
-  const authorName = apiPost.authorName || "Request Services Editorial";
+  const authorName = apiPost.authorName || "Request Service Editorial";
   const authorRole = "Editorial Team";
 
   const rawContent = apiPost.content;

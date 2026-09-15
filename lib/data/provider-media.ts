@@ -91,12 +91,33 @@ export function getServiceImagePool(categoryId: string) {
 
 export function getJobImage(categoryId: string, job: string, index?: number) {
   const pool = getServiceImagePool(categoryId);
-  if (!pool.length) return undefined;
-  if (typeof index === "number") return pool[index % pool.length];
+  const diverse = [
+    ...pool,
+    "/images/services/service-plumbing.jpg",
+    "/images/services/service-hvac.jpg",
+    "/images/services/service-electrical.jpg",
+    "/images/services/service-handyman.jpg",
+    "/images/services/service-cleaning.jpg",
+    "/images/services/service-cleaning-work.jpg",
+    "/images/services/service-roofing.jpg",
+    "/images/services/service-landscaping.jpg",
+    "/images/services/service-painting.jpg",
+    "/images/services/service-bathroom.jpg",
+    "/images/services/service-pest.jpg",
+    "/images/home/hero-home.jpg",
+    "/images/home/step-search.jpg",
+    "/images/home/step-compare.jpg",
+    "/images/home/step-hire.jpg",
+    "/images/home/split-homeowner.jpg",
+    "/images/home/split-provider.jpg",
+  ];
+  const uniquePool = [...new Set(diverse.filter(Boolean))];
+  if (!uniquePool.length) return undefined;
+  if (typeof index === "number") return uniquePool[index % uniquePool.length];
 
   let hash = 0;
   for (const char of job) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return pool[hash % pool.length];
+  return uniquePool[hash % uniquePool.length];
 }
 
 export function getJobStartingPrice(categoryId: string, job: string) {

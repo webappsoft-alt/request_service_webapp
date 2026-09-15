@@ -24,7 +24,7 @@ export const BLOG_CATEGORIES = [
     label: "Platform News",
     value: "Platform News",
     slug: "platform",
-    description: "How Request Services works for customers and providers.",
+    description: "How Request Service works for customers and providers.",
   },
   {
     label: "Home Maintenance",

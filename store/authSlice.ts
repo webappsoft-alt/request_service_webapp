@@ -379,12 +379,17 @@ const authSlice = createSlice({
         nextUser.providerId = nextProvider;
       }
 
+      const resolvedProvider: AuthProviderRecord | null =
+        nextProvider ??
+        extractAuthProvider({ provider: current.provider }) ??
+        state.provider;
+
       const nextPayload: AuthPayload = {
         ...current,
         token: current.token,
         refreshToken: current.refreshToken,
         user: nextUser,
-        provider: nextProvider ?? current.provider,
+        provider: resolvedProvider ?? undefined,
       };
 
       const encrypted = encryptData(nextPayload);
@@ -395,7 +400,7 @@ const authSlice = createSlice({
 
       state.userData = encrypted;
       state.user = nextUser;
-      state.provider = nextProvider;
+      state.provider = resolvedProvider;
       state.role = nextUser.role || state.role;
       // token + refreshToken intentionally untouched
       state.error = null;

@@ -10,7 +10,10 @@ import { ImageGallerySlider } from "@/components/shared/image-gallery-slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderCard } from "@/components/shared/provider-card";
-import { CenteredSpinner } from "@/components/ui/spinner";
+import {
+  ProviderCardSkeleton,
+  ServiceJobCardSkeleton,
+} from "@/components/shared/loading-skeletons";
 import { getJobImage, getJobStartingPrice } from "@/lib/data/provider-media";
 import { getRelatedJobs, type JobRecord } from "@/lib/data/jobs";
 import { formatStartingPrice } from "@/lib/format";
@@ -31,6 +34,10 @@ export type JobDetailContent = {
   requestHref?: string;
   /** When set, Request this job runs this handler instead of navigating. */
   onRequestJob?: () => void;
+  /** Override primary CTA label (e.g. "View order" when already booked). */
+  requestLabel?: string;
+  /** Short note under the CTA (e.g. already-booked status). */
+  requestHint?: string;
   compareHref?: string;
 };
 
@@ -69,6 +76,8 @@ export function JobDetail({
     content?.requestHref ??
     `/get-a-quote?service=${category.slug}&job=${record.slug}`;
   const onRequestJob = content?.onRequestJob;
+  const requestLabel = content?.requestLabel?.trim() || "Request this job";
+  const requestHint = content?.requestHint?.trim() || "";
   const compareHref = content?.compareHref ?? `/services/${category.slug}`;
   const description =
     content?.description ??
@@ -184,17 +193,22 @@ export function JobDetail({
               <div className="mt-5 flex flex-col gap-2.5">
                 {onRequestJob ? (
                   <Button size="xl" type="button" onClick={onRequestJob}>
-                    Request this job
+                    {requestLabel}
                     <ArrowRight data-icon="inline-end" />
                   </Button>
                 ) : (
                   <Button size="xl" asChild>
                     <Link href={requestHref}>
-                      Request this job
+                      {requestLabel}
                       <ArrowRight data-icon="inline-end" />
                     </Link>
                   </Button>
                 )}
+                {requestHint ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {requestHint}
+                  </p>
+                ) : null}
                 <Button size="xl" variant="outline" asChild>
                   <Link href={compareHref}>Compare local pros</Link>
                 </Button>
@@ -221,10 +235,15 @@ export function JobDetail({
               <h2 className="text-2xl font-semibold">Related jobs</h2>
             </div>
             {relatedLoading ? (
-              <CenteredSpinner
-                label="Loading related jobs"
-                className="min-h-48 border-0 bg-transparent"
-              />
+              <div
+                className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
+                aria-busy="true"
+                aria-label="Loading related jobs"
+              >
+                {Array.from({ length: 4 }, (_, i) => (
+                  <ServiceJobCardSkeleton key={`related-job-sk-${i}`} />
+                ))}
+              </div>
             ) : showRelatedListings ? (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
                 {relatedListings!.map((listing, relatedIndex) => (
@@ -270,10 +289,15 @@ export function JobDetail({
               </Link>
             </div>
             {providersLoading ? (
-              <CenteredSpinner
-                label="Loading professionals"
-                className="min-h-48 border-0 bg-transparent"
-              />
+              <div
+                className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
+                aria-busy="true"
+                aria-label="Loading professionals"
+              >
+                {Array.from({ length: 4 }, (_, i) => (
+                  <ProviderCardSkeleton key={`pro-sk-${i}`} />
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
                 {providers.map((provider) => (

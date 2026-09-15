@@ -131,7 +131,7 @@ export function buildPublicFixedServiceDescription(
       160,
     );
   }
-  return `${service.servicesName}${priceBit}${providerBit}${placeBit}. Book a fixed-price home service on Request Services.`.slice(
+  return `${service.servicesName}${priceBit}${providerBit}${placeBit}. Book a fixed-price home service on Request Service.`.slice(
     0,
     160,
   );

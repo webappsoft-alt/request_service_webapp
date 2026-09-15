@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Camera, CreditCard, FileText, LayoutDashboard, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
@@ -15,8 +15,10 @@ import { EstimatePipeline, EstimateSiteVisitTab, EstimateStageBanner } from "@/c
 import { EstimateShareTab } from "@/components/portal/share-estimate-panel";
 import { SendApprovalDialog } from "@/components/portal/send-approval-dialog";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { useEstimateShare } from "@/components/portal/use-estimate-share";
 import { ApplyPaymentButton, InvoiceFileChrome, InvoicePaymentsTab, InvoiceSummaryTab } from "@/components/portal/invoice-file";
+import { sendInvoice as sendInvoiceApi } from "@/lib/api/crm-client";
 import { PaymentFileChrome, PaymentSummaryTab } from "@/components/portal/payment-file";
 import {
   JobAttachmentsTab,
@@ -44,7 +46,8 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { estimateAsJob, invoiceAsJob, buildInvoice, buildJob, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
-import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
+import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, getEstimate, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
+import type { Estimate } from "@/lib/types";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,7 +86,10 @@ export function EstimateDetailView({ id }: { id: string }) {
   const share = useEstimateShare();
   const [assignOpen, setAssignOpen] = useState(false);
   const [approvalOpen, setApprovalOpen] = useState(false);
-  const seeded = records.mergeEstimates(estimates).find((item) => item.id === id);
+  const [fetched, setFetched] = useState<Estimate | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const listed = records.mergeEstimates(estimates).find((item) => item.id === id);
+  const seeded = listed ?? fetched;
   const estimate = seeded
     ? applyEstimateSettings({ ...seeded, status: records.statusOf("estimate", seeded.id, seeded.status) }, settings)
     : undefined;
@@ -101,8 +107,40 @@ export function EstimateDetailView({ id }: { id: string }) {
 
   const approval = share.approvalOf(id);
   const apiReady = crm.enabled && crm.ready;
+  const pending = useCrmRecordPending();
 
-  if (!estimate) return <Missing title="Estimate not found" href="/pro/dashboard/estimates" />;
+  useEffect(() => {
+    setFetched(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || listed || !crm.enabled) return;
+    let cancelled = false;
+    setFetching(true);
+    void getEstimate(id)
+      .then((item) => {
+        if (!cancelled) setFetched(item);
+      })
+      .catch(() => {
+        if (!cancelled) setFetched(null);
+      })
+      .finally(() => {
+        if (!cancelled) setFetching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [crm.enabled, id, listed?.id]);
+
+  if (!estimate) {
+    return pending || fetching || crm.refreshing ? (
+      <PortalPage title="Loading estimate…">
+        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+      </PortalPage>
+    ) : (
+      <Missing title="Estimate not found" href="/pro/dashboard/estimates" />
+    );
+  }
 
   const quote = estimate;
   const asJob = estimateAsJob(quote);
@@ -409,8 +447,17 @@ export function JobDetailView({ id }: { id: string }) {
       ? getPortalCustomerName(provider, job.customerId)
       : "Customer";
   const apiReady = crm.enabled && crm.ready;
+  const pending = useCrmRecordPending();
 
-  if (!job) return <Missing title="Job not found" href="/pro/dashboard/jobs" />;
+  if (!job) {
+    return pending ? (
+      <PortalPage title="Loading job…">
+        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+      </PortalPage>
+    ) : (
+      <Missing title="Job not found" href="/pro/dashboard/jobs" />
+    );
+  }
 
   const currentJob = job;
   const technician = settings?.assignedTo || (event ? employeeLabel(event.employeeId) : currentJob.assignedTo ?? "");
@@ -605,8 +652,17 @@ export function InvoiceDetailView({ id }: { id: string }) {
     : invoice
       ? getPortalCustomerName(provider, invoice.customerId)
       : "Customer";
+  const pending = useCrmRecordPending();
 
-  if (!invoice) return <Missing title="Invoice not found" href="/pro/dashboard/invoices" />;
+  if (!invoice) {
+    return pending ? (
+      <PortalPage title="Loading invoice…">
+        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+      </PortalPage>
+    ) : (
+      <Missing title="Invoice not found" href="/pro/dashboard/invoices" />
+    );
+  }
 
   const asJob = invoiceAsJob(invoice, job);
   const service = job ? jobServiceLabel(job, allEstimates, requests) : invoice.items[0]?.description || "Service";
@@ -635,6 +691,23 @@ export function InvoiceDetailView({ id }: { id: string }) {
       }
       actions={
         <>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void (async () => {
+                try {
+                  await sendInvoiceApi(invoice.id);
+                  await records.setStatus("invoice", invoice.id, "sent");
+                  toast.success(`${invoice.number} marked sent.`);
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Could not send this invoice.");
+                }
+              })();
+            }}
+          >
+            Send invoice
+          </Button>
           <ApplyPaymentButton invoice={invoice} />
           {job ? (
             <Button size="sm" variant="outline" asChild>
@@ -722,8 +795,17 @@ export function PaymentDetailView({ id }: { id: string }) {
   const service = job
     ? jobServiceLabel(job, allEstimates, requests)
     : invoice?.items[0]?.description || "Service";
+  const pending = useCrmRecordPending();
 
-  if (!payment) return <Missing title="Payment not found" href="/pro/dashboard/payments" />;
+  if (!payment) {
+    return pending ? (
+      <PortalPage title="Loading payment…">
+        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+      </PortalPage>
+    ) : (
+      <Missing title="Payment not found" href="/pro/dashboard/payments" />
+    );
+  }
 
   return (
     <RecordWorkspace

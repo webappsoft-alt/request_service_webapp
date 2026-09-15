@@ -3,7 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Account Settings",
-  description: "Manage your Request Services customer account settings.",
+  description: "Manage your Request Service customer account settings.",
   path: "/account/settings",
   index: false,
   follow: false,

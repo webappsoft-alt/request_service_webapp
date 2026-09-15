@@ -2,7 +2,16 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
+export type HomeSelectedCategory = {
+  id: string;
+  slug: string;
+  name: string;
+} | null;
+
 type HomeCategoryFilterValue = {
+  selected: HomeSelectedCategory;
+  setSelected: (value: HomeSelectedCategory) => void;
+  /** @deprecated Prefer `selected?.slug` — kept for call sites that only need the slug. */
   selectedSlug: string | null;
   setSelectedSlug: (slug: string | null) => void;
   dockPinned: boolean;
@@ -13,13 +22,32 @@ type HomeCategoryFilterValue = {
 const HomeCategoryFilterContext = createContext<HomeCategoryFilterValue | null>(null);
 
 export function HomeCategoryFilterProvider({ children }: { children: ReactNode }) {
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [selected, setSelected] = useState<HomeSelectedCategory>(null);
   const [dockPinned, setDockPinned] = useState(false);
   const pinDock = useCallback(() => setDockPinned(true), []);
   const unpinDock = useCallback(() => setDockPinned(false), []);
+
+  const setSelectedSlug = useCallback((slug: string | null) => {
+    if (!slug) {
+      setSelected(null);
+      return;
+    }
+    setSelected((current) =>
+      current?.slug === slug ? current : { id: "", slug, name: slug },
+    );
+  }, []);
+
   const value = useMemo(
-    () => ({ selectedSlug, setSelectedSlug, dockPinned, pinDock, unpinDock }),
-    [selectedSlug, dockPinned, pinDock, unpinDock]
+    () => ({
+      selected,
+      setSelected,
+      selectedSlug: selected?.slug ?? null,
+      setSelectedSlug,
+      dockPinned,
+      pinDock,
+      unpinDock,
+    }),
+    [selected, dockPinned, pinDock, unpinDock, setSelectedSlug],
   );
 
   return (

@@ -1,17 +1,32 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CategoryIcon } from "@/components/shared/category-icon";
+import { CategoryChipSkeleton } from "@/components/shared/loading-skeletons";
 import { useHomeCategoryFilter } from "@/components/home/home-category-filter";
-import { serviceCategories } from "@/lib/data/services";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchParentCategories,
+  selectParentCategories,
+  type PublicCategory,
+} from "@/store/categoriesSlice";
 import { cn } from "@/lib/utils";
+
+const CHIP_SKELETON_COUNT = 8;
 
 const CHIP =
   "flex flex-col items-center gap-1 rounded-lg px-1.5 pt-1 pb-[5px] text-center text-[13px] leading-none whitespace-nowrap transition-colors";
 const MIN_GAP = 12;
 const MAX_GAP = 20;
+
+function shortLabel(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return "Service";
+  const first = trimmed.split(/\s+/)[0] ?? trimmed;
+  return first.length > 14 ? `${first.slice(0, 13)}…` : first;
+}
 
 function itemWidths(list: HTMLElement) {
   return [...list.children].map((child) => (child as HTMLElement).offsetWidth);
@@ -63,6 +78,15 @@ function lastStart(maxWidth: number, widths: number[]) {
 }
 
 export function HeroServiceScroller() {
+  const dispatch = useAppDispatch();
+  const parents = useAppSelector(selectParentCategories);
+  const parentsLoaded = useAppSelector((state) => state.categories.parentsLoaded);
+  const parentsHasMore = useAppSelector((state) => state.categories.parentsHasMore);
+  const loadingParents = useAppSelector((state) => state.categories.loadingParents);
+  const loadingMoreParents = useAppSelector(
+    (state) => state.categories.loadingMoreParents,
+  );
+
   const viewportRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const startRef = useRef(0);
@@ -71,7 +95,24 @@ export function HeroServiceScroller() {
   const [clipWidth, setClipWidth] = useState<number | null>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
-  const { selectedSlug, setSelectedSlug, pinDock } = useHomeCategoryFilter();
+  const { selected, setSelected, pinDock } = useHomeCategoryFilter();
+
+  useEffect(() => {
+    void dispatch(fetchParentCategories());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!parentsLoaded || !parentsHasMore || loadingParents || loadingMoreParents) {
+      return;
+    }
+    void dispatch(fetchParentCategories({ append: true }));
+  }, [
+    dispatch,
+    loadingMoreParents,
+    loadingParents,
+    parentsHasMore,
+    parentsLoaded,
+  ]);
 
   const layout = useCallback((nextStart = startRef.current) => {
     const viewport = viewportRef.current;
@@ -111,7 +152,7 @@ export function HeroServiceScroller() {
       cancelled = true;
       observer.disconnect();
     };
-  }, [layout]);
+  }, [layout, parents.length]);
 
   function move(direction: -1 | 1) {
     const viewport = viewportRef.current;
@@ -140,8 +181,12 @@ export function HeroServiceScroller() {
     layout(index);
   }
 
-  function selectCategory(slug: string | null) {
-    setSelectedSlug(slug);
+  function selectCategory(category: PublicCategory | null) {
+    setSelected(
+      category
+        ? { id: category.id, slug: category.slug || category.id, name: category.name }
+        : null,
+    );
     pinDock();
     document.getElementById("browse-by-job")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -174,12 +219,12 @@ export function HeroServiceScroller() {
               <button
                 type="button"
                 onClick={() => selectCategory(null)}
-                aria-pressed={selectedSlug === null}
+                aria-pressed={selected === null}
                 className={cn(
                   CHIP,
-                  selectedSlug === null
+                  selected === null
                     ? "bg-primary/5 font-semibold text-primary"
-                    : "font-medium text-muted-foreground hover:text-primary"
+                    : "font-medium text-muted-foreground hover:text-primary",
                 )}
               >
                 <span className="flex size-5 items-center justify-center">
@@ -188,27 +233,39 @@ export function HeroServiceScroller() {
                 All
               </button>
             </li>
-            {serviceCategories.map((category) => {
-              const selected = selectedSlug === category.slug;
-              return (
-                <li key={category.id} className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => selectCategory(category.slug)}
-                    aria-pressed={selected}
-                    className={cn(
-                      CHIP,
-                      selected
-                        ? "bg-primary/5 font-semibold text-primary"
-                        : "font-medium text-muted-foreground hover:text-primary"
-                    )}
-                  >
-                    <CategoryIcon slug={category.slug} className="size-5 bg-current" />
-                    {category.shortName}
-                  </button>
-                </li>
-              );
-            })}
+            {!parents.length && (loadingParents || !parentsLoaded)
+              ? Array.from({ length: CHIP_SKELETON_COUNT }, (_, index) => (
+                  <li key={`chip-skeleton-${index}`} className="shrink-0">
+                    <CategoryChipSkeleton />
+                  </li>
+                ))
+              : parents.map((category) => {
+                  const selectedChip =
+                    selected?.id === category.id ||
+                    (!!selected?.slug && selected.slug === category.slug);
+                  const chipSlug = category.slug || category.id;
+                  return (
+                    <li key={category.id} className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => selectCategory(category)}
+                        aria-pressed={selectedChip}
+                        className={cn(
+                          CHIP,
+                          selectedChip
+                            ? "bg-primary/5 font-semibold text-primary"
+                            : "font-medium text-muted-foreground hover:text-primary",
+                        )}
+                      >
+                        <CategoryIcon
+                          slug={chipSlug}
+                          className="size-5 bg-current"
+                        />
+                        {shortLabel(category.name)}
+                      </button>
+                    </li>
+                  );
+                })}
           </ul>
         </div>
       </div>

@@ -46,8 +46,8 @@ type CategoriesState = {
   error: string | null;
 };
 
-const PARENTS_PAGE_SIZE = 10;
-const SUBS_PAGE_SIZE = 10;
+const PARENTS_PAGE_SIZE = 50;
+const SUBS_PAGE_SIZE = 50;
 
 const initialState: CategoriesState = {
   parents: [],
@@ -159,8 +159,45 @@ function extractCategoryList(response: unknown): PublicCategory[] {
     .filter((item): item is PublicCategory => Boolean(item));
 }
 
+/** Nested `children` from `only_parent` responses, keyed by parent id. */
+function extractNestedChildrenByParent(
+  response: unknown,
+): Record<string, PublicCategory[]> {
+  const root = asRecord(response) ?? {};
+  const list =
+    (Array.isArray(root.data) && root.data) ||
+    (Array.isArray(root.categories) && root.categories) ||
+    (Array.isArray(response) && response) ||
+    [];
+  const byParent: Record<string, PublicCategory[]> = {};
+
+  for (const raw of list) {
+    const record = asRecord(raw);
+    if (!record) continue;
+    const parentId =
+      (typeof record.id === "string" && record.id) ||
+      (typeof record._id === "string" && record._id) ||
+      "";
+    if (!parentId) continue;
+    const childrenRaw = record.children;
+    if (!Array.isArray(childrenRaw) || !childrenRaw.length) continue;
+    const children = childrenRaw
+      .map(normalizePublicCategory)
+      .filter((item): item is PublicCategory => Boolean(item))
+      .map((item) => ({
+        ...item,
+        parentCategory: item.parentCategory || parentId,
+      }));
+    if (children.length) byParent[parentId] = children;
+  }
+
+  return byParent;
+}
+
 export type FetchParentsResult = {
   items: PublicCategory[];
+  /** Nested children from the parent list payload (when API includes them). */
+  childrenByParent: Record<string, PublicCategory[]>;
   page: number;
   totalPages: number;
   hasMore: boolean;
@@ -198,6 +235,7 @@ export const fetchParentCategories = createAsyncThunk<
     if (!append && state.parentsLoaded && state.parents.length) {
       return {
         items: state.parents,
+        childrenByParent: {},
         page: state.parentsPage,
         totalPages: state.parentsTotalPages,
         hasMore: state.parentsHasMore,
@@ -215,26 +253,29 @@ export const fetchParentCategories = createAsyncThunk<
           limit: PARENTS_PAGE_SIZE,
           only_parent: true,
         },
-        { silent: true },
+        { silent: true, token: null },
       );
 
       let items = extractCategoryList(response).filter(
         (item) => !item.parentCategory,
       );
+      let childrenByParent = extractNestedChildrenByParent(response);
       let pagination = extractPagination(response);
 
       if (!append && !items.length) {
         const all = await getData(
           publicApi.categories,
           { page: nextPage, limit: PARENTS_PAGE_SIZE },
-          { silent: true },
+          { silent: true, token: null },
         );
         items = extractCategoryList(all).filter((item) => !item.parentCategory);
+        childrenByParent = extractNestedChildrenByParent(all);
         pagination = extractPagination(all);
       }
 
       return {
         items,
+        childrenByParent,
         page: pagination.page,
         totalPages: pagination.totalPages,
         hasMore: pagination.hasNextPage,
@@ -254,7 +295,7 @@ export const fetchParentCategories = createAsyncThunk<
         if (state.parentsPage >= state.parentsTotalPages) return false;
         return true;
       }
-      // Reuse cached parents across Landing + Find a Professional (no duplicate fetch).
+  // Allow retry when a prior load finished empty (e.g. auth race on public GETs).
       if (state.loadingParents) return false;
       if (state.parentsLoaded && state.parents.length) return false;
       return true;
@@ -298,7 +339,7 @@ export const fetchSubcategories = createAsyncThunk<
           limit: SUBS_PAGE_SIZE,
           parent_category_id: parentId,
         },
-        { silent: true },
+        { silent: true, token: null },
       );
 
       const items = extractCategoryList(response);
@@ -371,6 +412,10 @@ const categoriesSlice = createSlice({
       state.parentsHasMore = true;
       state.parentsLoaded = false;
     },
+    /** Soft-stale parents so UI keeps tiles while a background refetch runs. */
+    markParentCategoriesStale(state) {
+      state.parentsLoaded = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -391,6 +436,15 @@ const categoriesSlice = createSlice({
         state.parentsTotalPages = action.payload.totalPages;
         state.parentsHasMore = action.payload.hasMore;
         state.parentsLoaded = true;
+
+        const nested = action.payload.childrenByParent ?? {};
+        for (const [parentId, children] of Object.entries(nested)) {
+          if (!children.length) continue;
+          // Optimistic UI only — leave subMeta unset so fetchSubcategories still hits the API.
+          if (!state.subcategoriesByParent[parentId]?.length) {
+            state.subcategoriesByParent[parentId] = children;
+          }
+        }
 
         if (action.payload.append) {
           const seen = new Set(state.parents.map((item) => item.id));
@@ -469,6 +523,7 @@ export const {
   clearCategoriesError,
   invalidateSubcategories,
   invalidateParentCategories,
+  markParentCategoriesStale,
 } = categoriesSlice.actions;
 
 export const selectParentCategories = (state: {

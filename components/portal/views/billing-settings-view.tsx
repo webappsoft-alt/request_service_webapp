@@ -45,6 +45,8 @@ export function BillingView() {
   const { subscription } = usePortalWorkspace();
   const plans = getActivePlans();
   const current = plans.find((plan) => plan.id === subscription.planId) ?? plans[0];
+  const hasPeriod =
+    Boolean(subscription.currentPeriodStart) && Boolean(subscription.currentPeriodEnd);
 
   return (
     <PortalPage
@@ -58,15 +60,25 @@ export function BillingView() {
           <StatusPill label={subscription.status} tone="success" />
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
-          <p className="text-2xl font-semibold">{current.name}</p>
-          <p>
-            {formatPlanPrice(current)} / {current.interval}
-          </p>
+          <p className="text-2xl font-semibold">{current?.name ?? "Plan"}</p>
+          {current ? (
+            <p>
+              {formatPlanPrice(current)} / {current.interval}
+            </p>
+          ) : null}
+          {hasPeriod ? (
+            <p className="text-muted-foreground">
+              Current period {formatDate(subscription.currentPeriodStart)} –{" "}
+              {formatDate(subscription.currentPeriodEnd)}
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              Billing period syncs from your live subscription once card checkout is connected.
+            </p>
+          )}
           <p className="text-muted-foreground">
-            Current period {formatDate(subscription.currentPeriodStart)} –{" "}
-            {formatDate(subscription.currentPeriodEnd)}
+            Card checkout is not enabled in this portal yet. Contact support or your admin to change plans.
           </p>
-          <p className="text-muted-foreground">Payment method · Visa ending 4242</p>
         </CardContent>
       </Card>
 
@@ -76,7 +88,7 @@ export function BillingView() {
             key={plan.id}
             className={cn(
               "flex flex-col gap-3 rounded-xl border border-input bg-card p-5",
-              plan.id === current.id && "border-primary",
+              current && plan.id === current.id && "border-primary",
             )}
           >
             <p className="font-semibold">{plan.name}</p>
@@ -87,20 +99,18 @@ export function BillingView() {
               ))}
             </ul>
             <Button
-              variant={plan.id === current.id ? "outline" : "default"}
+              variant={current && plan.id === current.id ? "outline" : "default"}
               onClick={() =>
-                toast.success(
-                  plan.id === current.id
+                toast.message(
+                  current && plan.id === current.id
                     ? "You are already on this plan."
-                    : `${plan.name} selected. Billing would update after checkout.`,
+                    : "Plan changes are handled by an admin — online checkout is not available yet.",
                 )
               }
             >
-              {plan.id === current.id
+              {current && plan.id === current.id
                 ? "Current plan"
-                : plan.price > current.price
-                  ? "Upgrade"
-                  : "Downgrade"}
+                : "Request upgrade"}
             </Button>
           </div>
         ))}
@@ -110,12 +120,12 @@ export function BillingView() {
         <Button
           variant="outline"
           onClick={() =>
-            toast.success(
-              "Cancellation is scheduled for the period end in this demo.",
+            toast.message(
+              "Plan cancellation is handled by an admin — online billing changes are not available yet.",
             )
           }
         >
-          Cancel at period end
+          Contact admin to cancel
         </Button>
       </div>
     </PortalPage>

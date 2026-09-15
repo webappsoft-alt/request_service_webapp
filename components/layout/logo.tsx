@@ -16,7 +16,7 @@ export function Logo({
     <Link
       href={href}
       className={cn("inline-flex items-center gap-2.5", className)}
-      aria-label="Request Services home"
+      aria-label="Request Service home"
     >
       <span
         className={cn(
@@ -35,7 +35,7 @@ export function Logo({
             inverse ? "text-primary-foreground" : "text-foreground"
           )}
         >
-          Request Services
+          Request Service
         </span>
       )}
     </Link>

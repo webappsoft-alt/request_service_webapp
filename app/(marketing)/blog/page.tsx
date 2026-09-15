@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Home Services Journal",
   description:
-    "Guides for homeowners and service businesses on estimates, bookings, payments, maintenance, and how Request Services works.",
+    "Guides for homeowners and service businesses on estimates, bookings, payments, maintenance, and how Request Service works.",
   path: "/blog",
   keywords: ["home service guides", "contractor estimates", "home maintenance"],
 });

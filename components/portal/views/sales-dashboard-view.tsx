@@ -7,6 +7,7 @@ import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
 import { BoardCard, DateStamp, StatCell, dashboardGreeting } from "@/components/portal/dashboard-widgets";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, moneyTone } from "@/components/portal/status-pill";
+import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
@@ -14,6 +15,7 @@ import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  estimateCustomerName,
   estimateStatusLabel,
   estimateStatusTone,
   getPortalCustomerName,
@@ -59,6 +61,7 @@ function bucketKey(value: string, scale: SalesScale) {
 
 export function SalesDashboardView() {
   const { provider, requests, estimates, invoices, payments, jobs } = usePortalWorkspace();
+  const { customers } = useCrmDirectory();
   const { events } = usePortalCrew();
   const records = usePortalRecords();
   const [scale, setScale] = useState<SalesScale>("month");
@@ -245,7 +248,7 @@ export function SalesDashboardView() {
                   {estimate.number}
                   <span className="font-normal text-muted-foreground">
                     {" "}
-                    · {getPortalCustomerName(provider, estimate.customerId)}
+                    · {estimateCustomerName(estimate, customers, allRequests)}
                   </span>
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{formatMoney(estimate.total)}</p>

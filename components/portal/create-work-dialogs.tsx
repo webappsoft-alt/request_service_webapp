@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -122,6 +126,13 @@ export function CreateEstimateDialog({
     }
   }
 
+  function applyJobAddress(address: PlaceAddress) {
+    setStreet(address.formattedAddress || address.streetAddress);
+    setCity(address.city || "");
+    setState(address.state || "");
+    setZip(address.zipCode || "");
+  }
+
   async function create() {
     const customerIdValue = selectedCustomer || customers[0]?.id || "";
     if (!customerIdValue || !name.trim() || saving) {
@@ -138,6 +149,7 @@ export function CreateEstimateDialog({
         title: name.trim(),
         providerId: provider.id,
         customerId: customerIdValue,
+        customerName: customer ? crmCustomerName(customer) : undefined,
         requestId,
         address: addressFrom(street, city, state, zip),
         status: path === "site_visit" ? "site_visit" : "draft",
@@ -278,14 +290,17 @@ export function CreateEstimateDialog({
             <Field label="Expires">
               <Input type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
             </Field>
-            <Field label="Job address">
-              <Input value={street} onChange={(event) => setStreet(event.target.value)} />
+            <Field label="Job address" className="sm:col-span-2">
+              <AddressAutocomplete
+                id="estimate-job-address"
+                value={street}
+                onChange={setStreet}
+                onSelect={applyJobAddress}
+                placeholder="Start typing a street address…"
+              />
             </Field>
             <Field label="City">
               <Input value={city} onChange={(event) => setCity(event.target.value)} />
-            </Field>
-            <Field label="State">
-              <Input value={state} onChange={(event) => setState(event.target.value)} />
             </Field>
             <Field label="ZIP">
               <Input value={zip} onChange={(event) => setZip(event.target.value)} />
@@ -460,6 +475,7 @@ export function CreateJobDialog({
         number: nextRecordNumber("EST", allEstimates.map((item) => item.number)),
         providerId: provider.id,
         customerId: selectedCustomer,
+        customerName: customer ? crmCustomerName(customer) : undefined,
         address: addressFrom(street, city, state, zip),
         status: "accepted",
         notes,

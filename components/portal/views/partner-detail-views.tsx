@@ -58,6 +58,7 @@ import {
 } from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
+  estimateCustomerName,
   estimateDisplayName,
   estimateStatusLabel,
   estimateStatusTone,
@@ -263,7 +264,7 @@ export function ContractorDetailView({ id }: { id: string }) {
                   rows={relatedEstimates}
                   rowKey={(row) => row.id}
                   rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
-                  columns={estimateColumns(provider)}
+                  columns={estimateColumns(customers, requests)}
                 />
               );
             case "notes":
@@ -1004,7 +1005,10 @@ function VendorOrdersTab({ vendor, jobs }: { vendor: PortalVendor; jobs: Job[] }
   );
 }
 
-function estimateColumns(provider: Provider) {
+function estimateColumns(
+  customers: { id: string; entityKind?: string; companyName?: string; firstName?: string; lastName?: string }[],
+  requests: Array<{ id?: string; customerId?: string; customerName?: string }> = [],
+) {
   return [
     {
       id: "number",
@@ -1033,10 +1037,10 @@ function estimateColumns(provider: Provider) {
     {
       id: "customer",
       header: "Customer",
-      sortValue: (row: Estimate) => getPortalCustomerName(provider, row.customerId),
-      searchValue: (row: Estimate) => getPortalCustomerName(provider, row.customerId),
-      exportValue: (row: Estimate) => getPortalCustomerName(provider, row.customerId),
-      cell: (row: Estimate) => getPortalCustomerName(provider, row.customerId),
+      sortValue: (row: Estimate) => estimateCustomerName(row, customers, requests),
+      searchValue: (row: Estimate) => estimateCustomerName(row, customers, requests),
+      exportValue: (row: Estimate) => estimateCustomerName(row, customers, requests),
+      cell: (row: Estimate) => estimateCustomerName(row, customers, requests),
     },
     {
       id: "status",

@@ -466,6 +466,7 @@ export function getPortalEstimates(provider: Provider): Estimate[] {
       providerId: provider.id,
       customerId: customer.id,
       requestId: request.id,
+      customerName: request.customerName || `${customer.firstName} ${customer.lastName}`.trim(),
       propertyAddress: address,
       status: ESTIMATE_STATUSES[index % ESTIMATE_STATUSES.length],
       issuedAt: dateOffset(index + 2),
@@ -994,6 +995,32 @@ export function getPortalCustomerName(provider: Provider, customerId: string) {
   void provider;
   void customerId;
   return "Customer";
+}
+
+function directoryCustomerLabel(
+  customer: { entityKind?: string; companyName?: string; firstName?: string; lastName?: string },
+) {
+  const company = String(customer.companyName || "").trim();
+  if (customer.entityKind === "company" && company) return company;
+  const person = `${String(customer.firstName || "").trim()} ${String(customer.lastName || "").trim()}`.trim();
+  return person || company;
+}
+
+export function estimateCustomerName(
+  estimate: Pick<Estimate, "customerId" | "customerName" | "requestId">,
+  customers: Array<{ id: string; entityKind?: string; companyName?: string; firstName?: string; lastName?: string }>,
+  requests?: Array<{ id?: string; customerId?: string; customerName?: string }>,
+) {
+  const match = customers.find((item) => item.id === estimate.customerId);
+  const fromDirectory = match ? directoryCustomerLabel(match) : "";
+  if (fromDirectory && fromDirectory !== "Customer") return fromDirectory;
+  const fromEstimate = String(estimate.customerName || "").trim();
+  if (fromEstimate && fromEstimate !== "Customer") return fromEstimate;
+  const fromRequest = String(
+    requests?.find((item) => item.id === estimate.requestId || item.customerId === estimate.customerId)
+      ?.customerName || "",
+  ).trim();
+  return fromRequest || fromDirectory || fromEstimate || "Customer";
 }
 
 export function jobTotal(job: Job) {

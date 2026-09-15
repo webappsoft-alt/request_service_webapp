@@ -66,6 +66,7 @@ export function extractUploadedUrl(payload: unknown): string | null {
 
   const candidates = [
     root.image,
+    root.file,
     root.url,
     root.path,
     root.location,
@@ -73,6 +74,7 @@ export function extractUploadedUrl(payload: unknown): string | null {
     root.fileUrl,
     root.avatarUrl,
     nested?.image,
+    nested?.file,
     nested?.url,
     nested?.path,
     nested?.location,

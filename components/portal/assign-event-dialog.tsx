@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,16 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalTimeWindow } from "@/lib/data/portal";
 import { calendarEventKindLabel, timeWindowLabel } from "@/lib/data/portal";
 
@@ -45,6 +54,15 @@ export function AssignEventDialog({
   const [employeeId, setEmployeeId] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const activeEmployees = useMemo(
+    () => employees.filter((item) => item.active),
+    [employees],
+  );
+  const activeContractors = useMemo(
+    () => contractors.filter((item) => item.status === "active"),
+    [contractors],
+  );
+
   useEffect(() => {
     if (!open) return;
     const next = event ?? events[0];
@@ -53,10 +71,10 @@ export function AssignEventDialog({
       setDate(event?.date ?? defaultDate ?? next?.date ?? "");
       setEndDate(event?.endDate ?? event?.date ?? defaultDate ?? next?.endDate ?? "");
       setTimeWindow(event?.timeWindow ?? "morning");
-      setEmployeeId(event?.employeeId ?? employees.find((item) => item.active)?.id ?? "");
+      setEmployeeId(event?.employeeId ?? activeEmployees[0]?.id ?? "");
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [defaultDate, employees, event, events, open]);
+  }, [activeEmployees, defaultDate, event, events, open]);
 
   const selected = event ?? events.find((item) => `${item.kind}:${item.recordId}` === recordKey);
 
@@ -126,48 +144,60 @@ export function AssignEventDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="crew-window">Window</FieldLabel>
-            <NativeSelect
-              id="crew-window"
-              className="w-full"
+            <Select
               value={timeWindow}
-              onChange={(change) => setTimeWindow(change.target.value as PortalTimeWindow)}
+              onValueChange={(value) => setTimeWindow(value as PortalTimeWindow)}
             >
-              {TIME_WINDOWS.map((item) => (
-                <NativeSelectOption key={item} value={item}>
-                  {timeWindowLabel(item)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              <SelectTrigger id="crew-window" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start" className="z-[100] w-[var(--radix-select-trigger-width)]">
+                {TIME_WINDOWS.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {timeWindowLabel(item)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field>
             <FieldLabel htmlFor="crew-tech">Technician</FieldLabel>
-            <NativeSelect
-              id="crew-tech"
-              className="w-full"
-              value={employeeId}
-              onChange={(change) => setEmployeeId(change.target.value)}
-            >
-              <NativeSelectOptGroup label="Employees">
-                {employees
-                  .filter((item) => item.active)
-                  .map((item) => (
-                    <NativeSelectOption key={item.id} value={item.id}>
-                      {item.firstName} {item.lastName} · {item.trade}
-                    </NativeSelectOption>
-                  ))}
-              </NativeSelectOptGroup>
-              {contractors.filter((item) => item.status === "active").length ? (
-                <NativeSelectOptGroup label="Contractors">
-                  {contractors
-                    .filter((item) => item.status === "active")
-                    .map((item) => (
-                      <NativeSelectOption key={item.id} value={item.id}>
-                        {item.companyName} · {item.trade}
-                      </NativeSelectOption>
+            <Select value={employeeId || undefined} onValueChange={setEmployeeId}>
+              <SelectTrigger id="crew-tech" className="w-full">
+                <SelectValue placeholder="Select technician" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="start"
+                className="z-[100] max-h-64 w-[var(--radix-select-trigger-width)]"
+              >
+                {activeEmployees.length ? (
+                  <SelectGroup>
+                    <SelectLabel>Employees</SelectLabel>
+                    {activeEmployees.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.firstName} {item.lastName} · {item.trade}
+                      </SelectItem>
                     ))}
-                </NativeSelectOptGroup>
-              ) : null}
-            </NativeSelect>
+                  </SelectGroup>
+                ) : null}
+                {activeContractors.length ? (
+                  <SelectGroup>
+                    <SelectLabel>Contractors</SelectLabel>
+                    {activeContractors.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.companyName} · {item.trade}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {!activeEmployees.length && !activeContractors.length ? (
+                  <div className="px-2 py-3 text-sm text-muted-foreground">
+                    No technicians available.
+                  </div>
+                ) : null}
+              </SelectContent>
+            </Select>
           </Field>
         </FieldGroup>
         <DialogFooter>

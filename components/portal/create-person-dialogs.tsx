@@ -42,6 +42,7 @@ import {
   REMINDER_SUBJECT_KINDS,
   reminderSubjectKindLabel,
 } from "@/lib/data/crm-people";
+import { todayISO } from "@/components/portal/work-builders";
 
 const SOURCES: CrmPersonSource[] = ["external", "phone", "referral", "walk_in", "website"];
 const TYPES: CrmCustomerType[] = ["residential", "commercial", "property_manager"];
@@ -61,9 +62,9 @@ export function CreateCustomerDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [street, setStreet] = useState("");
-  const [city, setCity] = useState(provider.city);
-  const [state, setState] = useState(provider.state);
-  const [zip, setZip] = useState(provider.serviceArea[0] ?? "");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
   const [customerType, setCustomerType] = useState<CrmCustomerType>("residential");
   const [source, setSource] = useState<CrmPersonSource>("external");
   const [ein, setEin] = useState("");
@@ -78,9 +79,9 @@ export function CreateCustomerDialog({
     setEmail("");
     setPhone("");
     setStreet("");
-    setCity(provider.city);
-    setState(provider.state);
-    setZip(provider.serviceArea[0] ?? "");
+    setCity("");
+    setState("");
+    setZip("");
     setCustomerType("residential");
     setSource("external");
     setEin("");
@@ -89,7 +90,7 @@ export function CreateCustomerDialog({
   }
 
   function applyAddress(address: PlaceAddress) {
-    setStreet(address.formattedAddress || address.streetAddress);
+    setStreet(address.streetAddress || address.formattedAddress);
     setCity(address.city || "");
     setState(address.state || "");
     setZip(address.zipCode || "");
@@ -105,16 +106,19 @@ export function CreateCustomerDialog({
       lastName: lastName.trim() || "Customer",
       email: email.trim() || `${id}@office.local`,
       phone: phone.trim() || undefined,
-      addresses: [
-        {
-          id: `addr_${id}`,
-          street: street.trim() || "Address pending",
-          city: city.trim() || provider.city,
-          state: state.trim() || provider.state,
-          zip: zip.trim() || provider.serviceArea[0] || "00000",
-          country: "US",
-        },
-      ],
+      addresses:
+        street.trim() && city.trim() && state.trim() && zip.trim()
+          ? [
+              {
+                id: `addr_${id}`,
+                street: street.trim(),
+                city: city.trim(),
+                state: state.trim(),
+                zip: zip.trim(),
+                country: "US",
+              },
+            ]
+          : [],
       createdAt,
       updatedAt: createdAt,
       customerNumber: String(1000001 + customers.length).padStart(7, "0"),
@@ -122,8 +126,8 @@ export function CreateCustomerDialog({
       customerType,
       source,
       companyName: entityKind === "company" ? companyName.trim() : undefined,
-      ein: ein.trim() || undefined,
-      website: website.trim() || undefined,
+      ein: entityKind === "company" ? ein.trim() || undefined : undefined,
+      website: entityKind === "company" ? website.trim() || undefined : undefined,
       doNotCall: false,
       taxCode: "CO-SALES",
       laborTaxCode: "CO-LABOR",
@@ -162,7 +166,12 @@ export function CreateCustomerDialog({
                 type="radio"
                 name="entity"
                 checked={entityKind === "individual"}
-                onChange={() => setEntityKind("individual")}
+                onChange={() => {
+                  setEntityKind("individual");
+                  setCompanyName("");
+                  setEin("");
+                  setWebsite("");
+                }}
               />
               Individual
             </label>
@@ -174,27 +183,54 @@ export function CreateCustomerDialog({
           {entityKind === "company" ? (
             <Field>
               <FieldLabel htmlFor="cust-company">Company name</FieldLabel>
-              <Input id="cust-company" value={companyName} onChange={(change) => setCompanyName(change.target.value)} />
+              <Input
+                id="cust-company"
+                value={companyName}
+                onChange={(change) => setCompanyName(change.target.value)}
+                placeholder="Acme Plumbing"
+              />
             </Field>
           ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-first">First name</FieldLabel>
-              <Input id="cust-first" value={firstName} onChange={(change) => setFirstName(change.target.value)} />
+              <Input
+                id="cust-first"
+                value={firstName}
+                onChange={(change) => setFirstName(change.target.value)}
+                placeholder="Jane"
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="cust-last">Last name</FieldLabel>
-              <Input id="cust-last" value={lastName} onChange={(change) => setLastName(change.target.value)} />
+              <Input
+                id="cust-last"
+                value={lastName}
+                onChange={(change) => setLastName(change.target.value)}
+                placeholder="Ortiz"
+              />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-email">Email</FieldLabel>
-              <Input id="cust-email" type="email" value={email} onChange={(change) => setEmail(change.target.value)} />
+              <Input
+                id="cust-email"
+                type="email"
+                value={email}
+                onChange={(change) => setEmail(change.target.value)}
+                placeholder="jane@email.com"
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="cust-phone">Phone</FieldLabel>
-              <Input id="cust-phone" type="tel" value={phone} onChange={(change) => setPhone(change.target.value)} />
+              <Input
+                id="cust-phone"
+                type="tel"
+                value={phone}
+                onChange={(change) => setPhone(change.target.value)}
+                placeholder="(555) 123-4567"
+              />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -229,16 +265,28 @@ export function CreateCustomerDialog({
               </NativeSelect>
             </Field>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="cust-ein">EIN</FieldLabel>
-              <Input id="cust-ein" value={ein} onChange={(change) => setEin(change.target.value)} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-web">Website</FieldLabel>
-              <Input id="cust-web" value={website} onChange={(change) => setWebsite(change.target.value)} />
-            </Field>
-          </div>
+          {entityKind === "company" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="cust-ein">EIN</FieldLabel>
+                <Input
+                  id="cust-ein"
+                  value={ein}
+                  onChange={(change) => setEin(change.target.value)}
+                  placeholder="12-3456789"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="cust-web">Website</FieldLabel>
+                <Input
+                  id="cust-web"
+                  value={website}
+                  onChange={(change) => setWebsite(change.target.value)}
+                  placeholder="https://company.com"
+                />
+              </Field>
+            </div>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="cust-street">Street address</FieldLabel>
             <AddressAutocomplete
@@ -249,19 +297,44 @@ export function CreateCustomerDialog({
               placeholder="Start typing a street address…"
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Field>
               <FieldLabel htmlFor="cust-city">City</FieldLabel>
-              <Input id="cust-city" value={city} onChange={(change) => setCity(change.target.value)} />
+              <Input
+                id="cust-city"
+                value={city}
+                onChange={(change) => setCity(change.target.value)}
+                placeholder="Austin"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="cust-state">State</FieldLabel>
+              <Input
+                id="cust-state"
+                value={state}
+                onChange={(change) => setState(change.target.value)}
+                placeholder="TX"
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="cust-zip">ZIP</FieldLabel>
-              <Input id="cust-zip" value={zip} onChange={(change) => setZip(change.target.value)} />
+              <Input
+                id="cust-zip"
+                value={zip}
+                onChange={(change) => setZip(change.target.value)}
+                placeholder="78701"
+              />
             </Field>
           </div>
+          <p className="text-xs text-muted-foreground">City, state, and ZIP fill in when you pick an address.</p>
           <Field>
             <FieldLabel htmlFor="cust-notes">Notes</FieldLabel>
-            <Textarea id="cust-notes" value={notes} onChange={(change) => setNotes(change.target.value)} />
+            <Textarea
+              id="cust-notes"
+              value={notes}
+              onChange={(change) => setNotes(change.target.value)}
+              placeholder="Gate code, billing notes, access…"
+            />
           </Field>
         </FieldGroup>
         <DialogFooter>
@@ -328,34 +401,34 @@ export function CreateContractorDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="con-first">First name</FieldLabel>
-              <Input id="con-first" value={firstName} onChange={(change) => setFirstName(change.target.value)} />
+              <Input id="con-first" value={firstName} onChange={(change) => setFirstName(change.target.value)} placeholder="Alex" />
             </Field>
             <Field>
               <FieldLabel htmlFor="con-last">Last name</FieldLabel>
-              <Input id="con-last" value={lastName} onChange={(change) => setLastName(change.target.value)} />
+              <Input id="con-last" value={lastName} onChange={(change) => setLastName(change.target.value)} placeholder="Rivera" />
             </Field>
           </div>
           <Field>
             <FieldLabel htmlFor="con-co">Company</FieldLabel>
-            <Input id="con-co" value={companyName} onChange={(change) => setCompanyName(change.target.value)} />
+            <Input id="con-co" value={companyName} onChange={(change) => setCompanyName(change.target.value)} placeholder="Rivera Contracting" />
           </Field>
           <Field>
             <FieldLabel htmlFor="con-trade">Trade</FieldLabel>
-            <Input id="con-trade" value={trade} onChange={(change) => setTrade(change.target.value)} />
+            <Input id="con-trade" value={trade} onChange={(change) => setTrade(change.target.value)} placeholder="Plumbing, HVAC, Electrical…" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="con-email">Email</FieldLabel>
-              <Input id="con-email" value={email} onChange={(change) => setEmail(change.target.value)} />
+              <Input id="con-email" value={email} onChange={(change) => setEmail(change.target.value)} placeholder="alex@contractor.local" />
             </Field>
             <Field>
               <FieldLabel htmlFor="con-phone">Phone</FieldLabel>
-              <Input id="con-phone" value={phone} onChange={(change) => setPhone(change.target.value)} />
+              <Input id="con-phone" value={phone} onChange={(change) => setPhone(change.target.value)} placeholder="(555) 123-4567" />
             </Field>
           </div>
           <Field>
             <FieldLabel htmlFor="con-lic">License</FieldLabel>
-            <Input id="con-lic" value={license} onChange={(change) => setLicense(change.target.value)} />
+            <Input id="con-lic" value={license} onChange={(change) => setLicense(change.target.value)} placeholder="LIC-12345" />
           </Field>
         </FieldGroup>
         <DialogFooter>
@@ -417,24 +490,24 @@ export function CreateVendorDialog({
         <FieldGroup className="gap-4">
           <Field>
             <FieldLabel htmlFor="ven-name">Vendor name</FieldLabel>
-            <Input id="ven-name" value={name} onChange={(change) => setName(change.target.value)} />
+            <Input id="ven-name" value={name} onChange={(change) => setName(change.target.value)} placeholder="Ferguson Supply" />
           </Field>
           <Field>
             <FieldLabel htmlFor="ven-cat">Category</FieldLabel>
-            <Input id="ven-cat" value={category} onChange={(change) => setCategory(change.target.value)} />
+            <Input id="ven-cat" value={category} onChange={(change) => setCategory(change.target.value)} placeholder="Plumbing supply" />
           </Field>
           <Field>
             <FieldLabel htmlFor="ven-contact">Contact</FieldLabel>
-            <Input id="ven-contact" value={contact} onChange={(change) => setContact(change.target.value)} />
+            <Input id="ven-contact" value={contact} onChange={(change) => setContact(change.target.value)} placeholder="Accounts receivable" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="ven-email">Email</FieldLabel>
-              <Input id="ven-email" value={email} onChange={(change) => setEmail(change.target.value)} />
+              <Input id="ven-email" value={email} onChange={(change) => setEmail(change.target.value)} placeholder="orders@vendor.com" />
             </Field>
             <Field>
               <FieldLabel htmlFor="ven-phone">Phone</FieldLabel>
-              <Input id="ven-phone" value={phone} onChange={(change) => setPhone(change.target.value)} />
+              <Input id="ven-phone" value={phone} onChange={(change) => setPhone(change.target.value)} placeholder="(555) 123-4567" />
             </Field>
           </div>
         </FieldGroup>
@@ -571,16 +644,25 @@ export function CreateReminderDialog({
           )}
           <Field>
             <FieldLabel htmlFor="rem-title">Title</FieldLabel>
-            <Input id="rem-title" value={title} onChange={(change) => setTitle(change.target.value)} />
+            <Input id="rem-title" value={title} onChange={(change) => setTitle(change.target.value)} placeholder="Follow up on estimate" />
           </Field>
           <Field>
             <FieldLabel htmlFor="rem-note">Note</FieldLabel>
-            <Textarea id="rem-note" value={note} onChange={(change) => setNote(change.target.value)} />
+            <Textarea id="rem-note" value={note} onChange={(change) => setNote(change.target.value)} placeholder="Call back after the site visit…" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="rem-due">Due</FieldLabel>
-              <Input id="rem-due" type="date" value={dueAt} onChange={(change) => setDueAt(change.target.value)} />
+              <Input
+                id="rem-due"
+                type="date"
+                min={todayISO()}
+                value={dueAt}
+                onChange={(change) => {
+                  const next = change.target.value;
+                  setDueAt(next && next < todayISO() ? todayISO() : next);
+                }}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="rem-emp">Assigned</FieldLabel>
@@ -751,11 +833,11 @@ export function CreateTaskDialog({
           )}
           <Field>
             <FieldLabel htmlFor="task-title">Title</FieldLabel>
-            <Input id="task-title" value={title} onChange={(change) => setTitle(change.target.value)} />
+            <Input id="task-title" value={title} onChange={(change) => setTitle(change.target.value)} placeholder="Order parts, call customer…" />
           </Field>
           <Field>
             <FieldLabel htmlFor="task-note">Notes</FieldLabel>
-            <Textarea id="task-note" value={note} onChange={(change) => setNote(change.target.value)} />
+            <Textarea id="task-note" value={note} onChange={(change) => setNote(change.target.value)} placeholder="What needs to be done and by when…" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
@@ -791,7 +873,16 @@ export function CreateTaskDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="task-due">Due</FieldLabel>
-            <Input id="task-due" type="date" value={dueAt} onChange={(change) => setDueAt(change.target.value)} />
+            <Input
+              id="task-due"
+              type="date"
+              min={todayISO()}
+              value={dueAt}
+              onChange={(change) => {
+                const next = change.target.value;
+                setDueAt(next && next < todayISO() ? todayISO() : next);
+              }}
+            />
           </Field>
         </FieldGroup>
         <DialogFooter>

@@ -160,6 +160,7 @@ export interface Estimate {
   title?: string;
   providerId: string;
   customerId: string;
+  customerName?: string;
   requestId?: string;
   jobId?: string;
   serviceId?: string;

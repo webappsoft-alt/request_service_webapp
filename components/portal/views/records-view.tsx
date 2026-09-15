@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import {
   ESTIMATE_STATUS_FILTERS,
   estimateCanShare,
+  estimateCustomerName,
   estimateDisplayName,
   estimateStatusLabel,
   estimateStatusTone,
@@ -42,14 +43,20 @@ import type { Invoice } from "@/lib/types";
 
 export function EstimatesView() {
   const status = useSearchParams().get("status") ?? "";
-  const { session, estimates, provider } = usePortalWorkspace();
+  const { session, estimates, provider, requests } = usePortalWorkspace();
+  const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const share = useEstimateShare();
   const [createOpen, setCreateOpen] = useState(false);
   const archivedOnly = status === "archived";
+  const allRequests = records.mergeRequests(requests);
   const rows = records
     .listed("estimate", records.mergeEstimates(estimates), archivedOnly)
-    .map((item) => ({ ...item, status: records.statusOf("estimate", item.id, item.status) }))
+    .map((item) => ({
+      ...item,
+      status: records.statusOf("estimate", item.id, item.status),
+      customerName: estimateCustomerName(item, customers, allRequests),
+    }))
     .filter((item) => (archivedOnly || !status ? true : item.status === status));
 
   return (
@@ -104,12 +111,12 @@ export function EstimatesView() {
           {
             id: "customer",
             header: "Customer",
-            sortValue: (row) => getPortalCustomerName(provider, row.customerId),
-            searchValue: (row) => getPortalCustomerName(provider, row.customerId),
-            exportValue: (row) => getPortalCustomerName(provider, row.customerId),
+            sortValue: (row) => row.customerName || estimateCustomerName(row, customers, allRequests),
+            searchValue: (row) => row.customerName || estimateCustomerName(row, customers, allRequests),
+            exportValue: (row) => row.customerName || estimateCustomerName(row, customers, allRequests),
             cell: (row) => (
               <Link href={`/pro/dashboard/customers/${row.customerId}`} className="text-primary hover:underline">
-                {getPortalCustomerName(provider, row.customerId)}
+                {row.customerName || estimateCustomerName(row, customers, allRequests)}
               </Link>
             ),
           },
@@ -195,7 +202,7 @@ export function EstimatesView() {
                 companyName: provider.companyName,
                 companyEmail: provider.email,
                 companyPhone: provider.phone,
-                customerName: getPortalCustomerName(provider, row.customerId),
+                customerName: row.customerName || estimateCustomerName(row, customers, allRequests),
               });
               share.saveSnapshot(snapshot);
               records.setStatus("estimate", row.id, "sent");

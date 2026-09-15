@@ -125,6 +125,7 @@ export function buildEstimate(input: {
   title?: string;
   providerId: string;
   customerId: string;
+  customerName?: string;
   requestId?: string;
   address: ServiceAddress;
   status?: Estimate["status"];
@@ -145,6 +146,7 @@ export function buildEstimate(input: {
     title: input.title?.trim() || undefined,
     providerId: input.providerId,
     customerId: input.customerId,
+    customerName: input.customerName?.trim() || undefined,
     requestId: input.requestId,
     propertyAddress: input.address,
     status: input.status ?? "draft",

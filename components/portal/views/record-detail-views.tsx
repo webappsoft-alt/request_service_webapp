@@ -108,9 +108,7 @@ export function EstimateDetailView({ id }: { id: string }) {
   const customer = customers.find((item) => item.id === estimate?.customerId);
   const customerLabel = customer
     ? crmCustomerName(customer)
-    : estimate
-      ? getPortalCustomerName(provider, estimate.customerId)
-      : "Customer";
+    : estimate?.customerName?.trim() || "Customer";
 
   const approval = share.approvalOf(id);
   const apiReady = crm.enabled && crm.ready;

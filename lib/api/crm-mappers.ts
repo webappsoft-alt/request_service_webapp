@@ -107,6 +107,10 @@ export function crmIdOf(value: unknown): string {
   return "";
 }
 
+function personDisplayName(value: unknown): string {
+  return displayNameFromRecord(value);
+}
+
 function toIsoString(value: unknown): string {
   if (!value) return "";
   if (typeof value === "string") {
@@ -157,7 +161,7 @@ function displayNameFromRecord(value: unknown): string {
   const firstName = trimmed(record.firstName);
   const lastName = trimmed(record.lastName);
   const fullName = `${firstName} ${lastName}`.trim();
-  return fullName || trimmed(record.name);
+  return fullName || trimmed(record.displayName) || trimmed(record.name);
 }
 
 function firstValue<T>(...values: T[]): T | undefined {
@@ -607,6 +611,12 @@ export function mapEstimate(raw: unknown): Estimate | null {
     title: trimmed(record.title) || undefined,
     providerId: crmIdOf(record.providerId),
     customerId,
+    customerName:
+      customerNameParts(record).name ||
+      personDisplayName(record.customerSnapshot) ||
+      personDisplayName(record.customerId) ||
+      trimmed(record.customerName) ||
+      undefined,
     requestId: crmIdOf(record.requestId) || undefined,
     jobId: crmIdOf(record.jobId) || undefined,
     serviceId: crmIdOf(record.serviceId) || undefined,

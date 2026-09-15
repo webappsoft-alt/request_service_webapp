@@ -1,20 +1,4 @@
-import Image from "next/image";
 import { cn } from "@/lib/utils";
-
-const CUSTOMER_PHOTOS: Record<string, string> = {
-  maya: "/images/customers/maya.jpg",
-  elena: "/images/customers/elena.jpg",
-  noah: "/images/customers/noah.jpg",
-  priya: "/images/customers/priya.jpg",
-  luis: "/images/customers/luis.jpg",
-};
-
-const CREW_PHOTOS: Record<string, string> = {
-  luis: "/images/crew/luis.jpg",
-  ava: "/images/crew/ava.jpg",
-  marcus: "/images/crew/marcus.jpg",
-  sofia: "/images/crew/sofia.jpg",
-};
 
 const MARK_TONES = ["#003F7D", "#0b4f8a", "#1a3a5c", "#245a8f", "#0e3d6e"] as const;
 
@@ -31,7 +15,7 @@ function toneFor(name: string) {
 
 export function CrmMark({
   name,
-  photoKey,
+  photoKey: _photoKey,
   kind = "company",
   size = "lg",
 }: {
@@ -40,10 +24,6 @@ export function CrmMark({
   kind?: "company" | "person";
   size?: "sm" | "md" | "lg";
 }) {
-  const photo =
-    kind === "person" && photoKey
-      ? (CUSTOMER_PHOTOS[photoKey.toLowerCase()] ?? CREW_PHOTOS[photoKey.toLowerCase()])
-      : undefined;
   const initials = initialsFrom(name);
   const box = size === "sm" ? "size-9" : size === "md" ? "size-11" : "size-14";
 
@@ -53,12 +33,10 @@ export function CrmMark({
         "relative grid shrink-0 place-items-center overflow-hidden rounded-md border border-black/10 text-white shadow-[0_6px_16px_rgba(4,26,54,0.12)]",
         box,
       )}
-      style={photo ? undefined : { background: toneFor(name) }}
+      style={{ background: toneFor(name) }}
       aria-hidden="true"
     >
-      {photo ? (
-        <Image src={photo} alt="" fill sizes="56px" className="object-cover" />
-      ) : kind === "company" ? (
+      {kind === "company" ? (
         <svg viewBox="0 0 56 56" className="size-full">
           <rect width="56" height="56" fill={toneFor(name)} />
           <path d="M8 40V22l20-10 20 10v18H8Z" fill="rgba(255,255,255,0.1)" />

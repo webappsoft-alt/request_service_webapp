@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Briefcase, ClipboardList, MapPin, UserRound } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { getJobImage, getProviderPhotos } from "@/lib/data/provider-media";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 import type { Provider, ServiceCategory } from "@/lib/types";
 
 const fallbackSteps = [
@@ -34,7 +35,7 @@ export function RequestServiceHero({
     category?.image ??
     photos[0]?.src ??
     provider?.coverImage ??
-    "/images/home/hero-home.jpg";
+    HERO_HOME_IMAGE;
 
   const title = provider
     ? intent === "book" && fixedServiceName

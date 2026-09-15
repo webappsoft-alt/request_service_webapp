@@ -1,3 +1,7 @@
+/** Marketing heroes that stay as local assets. Everything else comes from the API. */
+export const HERO_HOME_IMAGE = "/images/home/hero-home.jpg";
+export const HERO_PRO_IMAGE = "/images/home/split-provider.jpg";
+
 export const siteConfig = {
   name: "Request Service",
   shortName: "Request",

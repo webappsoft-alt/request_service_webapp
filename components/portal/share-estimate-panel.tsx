@@ -28,11 +28,15 @@ export function EstimateShareTab({
   customer,
   customerLabel,
   onSent,
+  onFinalize,
+  finalizing = false,
 }: {
   estimate: Estimate;
   customer?: PortalCustomerCrm;
   customerLabel: string;
   onSent: (result?: SendApprovalResult) => void;
+  onFinalize?: () => void;
+  finalizing?: boolean;
 }) {
   const { session, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
@@ -139,7 +143,16 @@ export function EstimateShareTab({
           Preview the estimate as a two-page document, sign for the company, then send the customer link.
         </p>
         {ready ? null : (
-          <p className="mt-3 text-sm text-amber-900">Finalize this estimate before creating a customer link.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <p className="text-sm text-amber-900">
+              Click Finalize estimate first. That locks the quote so you can send the customer link.
+            </p>
+            {onFinalize ? (
+              <Button size="sm" disabled={finalizing} onClick={onFinalize}>
+                {finalizing ? "Finalizing…" : "Finalize estimate"}
+              </Button>
+            ) : null}
+          </div>
         )}
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Input readOnly value={url || (snapshot ? shareUrlFor(snapshot.token) : "Create the link, then copy it")} />

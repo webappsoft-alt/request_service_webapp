@@ -3,7 +3,7 @@ import { JobDetail } from "@/components/marketplace/job-detail";
 import { PublicFixedServiceDetail } from "@/components/marketplace/public-fixed-service-detail";
 import { RelatedBrowse } from "@/components/marketplace/related-browse";
 import { JsonLd } from "@/components/seo/json-ld";
-import { getAllJobs, getJobRecord } from "@/lib/data/jobs";
+import { getJobRecord } from "@/lib/data/jobs";
 import {
   buildPublicFixedServiceDescription,
   fetchPublicFixedServiceForSeo,
@@ -19,10 +19,7 @@ import { siteConfig, absoluteUrl } from "@/lib/site";
 import type { PageParams } from "@/lib/page-props";
 
 export function generateStaticParams() {
-  return getAllJobs().map(({ category, slug }) => ({
-    slug: category.slug,
-    job: slug,
-  }));
+  return [];
 }
 
 export async function generateMetadata({

@@ -162,7 +162,6 @@ export function applyEstimateSettings(estimate: Estimate, settings?: EstimateSet
     customerId: settings.customerId || estimate.customerId,
     issuedAt: settings.issuedAt || estimate.issuedAt,
     expiresAt: settings.expiresAt || estimate.expiresAt,
-    status: settings.status || estimate.status,
     notes: settings.notes || estimate.notes,
     terms: settings.terms || estimate.terms,
     propertyAddress: {

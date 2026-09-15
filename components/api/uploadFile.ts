@@ -12,29 +12,32 @@ function buildUrl(endpoint: string): string {
 }
 
 function getFileExtension(filename: string): string {
-  return filename.slice(((filename.lastIndexOf(".") - 1) >>> 0) + 2);
+  const index = filename.lastIndexOf(".");
+  return index >= 0 ? filename.slice(index + 1).toLowerCase() : "";
 }
 
-function isValidFileType(
-  file: File,
-  type: string[] = [
-    "jpg",
-    "jpeg",
-    "png",
-    "webp",
-    "gif",
-    "bmp",
-    "svg",
-    "ico",
-    "avif",
-    "heic",
-    "heif",
-    "tif",
-    "tiff",
-  ],
-): boolean {
-  const fileExtension = getFileExtension(file.name).toLowerCase();
-  return type.includes(fileExtension);
+const IMAGE_EXTENSIONS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "bmp",
+  "svg",
+  "ico",
+  "avif",
+  "heic",
+  "heif",
+  "tif",
+  "tiff",
+] as const;
+
+function isValidFileType(file: File): boolean {
+  const fileExtension = getFileExtension(file.name);
+  if (fileExtension && IMAGE_EXTENSIONS.includes(fileExtension as (typeof IMAGE_EXTENSIONS)[number])) {
+    return true;
+  }
+  return file.type.startsWith("image/");
 }
 
 /**
@@ -99,10 +102,9 @@ export async function uploadFile(
 ): Promise<AxiosResponse> {
   const check = isValidFileType(file);
   if (!check) {
-    throw {
-      message:
-        "Invalid file type. Please upload a valid image (jpg, jpeg, png, webp, gif, bmp, svg, ico, avif, heic, heif, tif, tiff).",
-    } satisfies UploadError;
+    throw new Error(
+      "Invalid file type. Please upload a valid image (jpg, jpeg, png, webp, gif, bmp, svg, ico, avif, heic, heif, tif, tiff).",
+    );
   }
 
   const formData = new FormData();

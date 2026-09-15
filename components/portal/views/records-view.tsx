@@ -213,7 +213,10 @@ export function EstimatesView() {
           ...(row.status === "site_visit"
             ? [{ label: "Open site visit", href: `/pro/dashboard/estimates/${row.id}?tab=visit` }]
             : []),
-          ...(row.status === "inspected" || row.status === "draft" || row.status === "changes_requested"
+          ...(row.status === "site_visit" ||
+          row.status === "inspected" ||
+          row.status === "draft" ||
+          row.status === "changes_requested"
             ? [
                 {
                   label: "Finalize",

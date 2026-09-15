@@ -9,6 +9,7 @@ import {
 import { Container, Section } from "@/components/layout/container";
 import { ProDeskTabs } from "@/components/pro/pro-desk-tabs";
 import { ProJobFile } from "@/components/pro/pro-job-file";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const featured = [
@@ -126,7 +127,7 @@ function RequestsPanel() {
       status: "New",
       tone: "navy" as const,
       note: "3 bed, 2 bath. Kitchen and baths are overdue. Same-week deep clean if you can.",
-      image: "/images/services/service-cleaning.jpg",
+      image: HERO_HOME_IMAGE,
       open: true,
     },
     {
@@ -137,7 +138,7 @@ function RequestsPanel() {
       status: "New",
       tone: "teal" as const,
       note: "Weekly house cleaning, published checklist.",
-      image: "/images/services/service-bathroom.jpg",
+      image: HERO_HOME_IMAGE,
       open: false,
     },
     {
@@ -148,7 +149,7 @@ function RequestsPanel() {
       status: "Quoted",
       tone: "amber" as const,
       note: "Empty apartment. Need it ready for keys Friday.",
-      image: "/images/services/service-handyman.jpg",
+      image: HERO_HOME_IMAGE,
       open: false,
     },
   ];
@@ -317,7 +318,7 @@ function EstimatePanel() {
           <div className="flex flex-col gap-3 p-3">
             <div className="relative h-24 overflow-hidden rounded-lg">
               <Image
-                src="/images/services/service-cleaning-work.jpg"
+                src={HERO_HOME_IMAGE}
                 alt="Crew cleaning windows on the Chen deep-clean job"
                 fill
                 sizes="(min-width: 1024px) 18vw, 70vw"
@@ -395,7 +396,7 @@ function SchedulePanel() {
     },
     {
       id: "luis",
-      photo: "/images/crew/luis.jpg",
+      photo: HERO_HOME_IMAGE,
       name: "Luis Herrera",
       role: "Technician",
       jobs: [
@@ -411,7 +412,7 @@ function SchedulePanel() {
     },
     {
       id: "ava",
-      photo: "/images/crew/ava.jpg",
+      photo: HERO_HOME_IMAGE,
       name: "Ava Chen",
       role: "Technician",
       jobs: [
@@ -427,7 +428,7 @@ function SchedulePanel() {
     },
     {
       id: "marcus",
-      photo: "/images/crew/marcus.jpg",
+      photo: HERO_HOME_IMAGE,
       name: "Marcus Reed",
       role: "Technician",
       jobs: [
@@ -443,7 +444,7 @@ function SchedulePanel() {
     },
     {
       id: "sofia",
-      photo: "/images/crew/sofia.jpg",
+      photo: HERO_HOME_IMAGE,
       name: "Sofia Nguyen",
       role: "Estimator",
       jobs: [

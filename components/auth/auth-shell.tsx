@@ -8,6 +8,7 @@ import {
 import { Logo } from "@/components/layout/logo";
 import { testimonials } from "@/lib/data/content";
 import type { DemoRole } from "@/lib/auth/demo-session";
+import { HERO_HOME_IMAGE, HERO_PRO_IMAGE } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 export const authLinkClass = "font-semibold text-primary hover:text-primary/80";
@@ -18,7 +19,7 @@ function panelFor(audience: DemoRole) {
   switch (audience) {
     case "customer":
       return {
-        src: "/images/home/hero-home.jpg",
+        src: HERO_HOME_IMAGE,
         alt: "Licensed plumber reviewing a kitchen sink repair on a tablet",
         kicker: "Homeowners",
         headline: "Get the work done right.",
@@ -33,7 +34,7 @@ function panelFor(audience: DemoRole) {
       };
     case "provider":
       return {
-        src: "/images/home/split-provider.jpg",
+        src: HERO_PRO_IMAGE,
         alt: "Service professional reviewing a job on a tablet in a home",
         kicker: "Service companies",
         headline: "Take the jobs that fit.",

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { FileCheck2, ShieldCheck, Wallet } from "lucide-react";
 import { Container } from "@/components/layout/container";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 
 const trustMarkers = [
   { icon: ShieldCheck, label: "Licensed and insured" },
@@ -13,7 +14,7 @@ export function HeroSection() {
     <section className="relative isolate">
       <div className="relative h-[18rem] w-full sm:h-[20rem] lg:h-[22rem] xl:h-[24rem]">
         <Image
-          src="/images/home/hero-home.jpg"
+          src={HERO_HOME_IMAGE}
           alt=""
           fill
           preload

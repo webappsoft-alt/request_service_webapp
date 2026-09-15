@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { Container } from "@/components/layout/container";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 
 const steps = [
   { n: "01", label: "Describe the job", icon: ClipboardList },
@@ -44,7 +45,7 @@ export function QuoteHero({ categoryName }: { categoryName?: string }) {
     <section className="relative isolate overflow-hidden">
       <div className="relative min-h-[17rem] w-full sm:min-h-[19rem] lg:min-h-[21rem]">
         <Image
-          src="/images/home/hero-home.jpg"
+          src={HERO_HOME_IMAGE}
           alt=""
           fill
           sizes="100vw"

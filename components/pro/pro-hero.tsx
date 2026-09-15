@@ -12,6 +12,7 @@ import {
   selectAuthUser,
   selectIsAuthenticated,
 } from "@/store/authSlice";
+import { HERO_PRO_IMAGE } from "@/lib/site";
 
 const trades = ["Plumbing", "HVAC", "Water heaters"];
 
@@ -27,7 +28,7 @@ export function ProHero() {
   return (
     <section className="relative isolate overflow-hidden">
       <Image
-        src="/images/home/split-provider.jpg"
+        src={HERO_PRO_IMAGE}
         alt=""
         fill
         preload

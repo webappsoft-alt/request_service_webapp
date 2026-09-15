@@ -9,6 +9,7 @@ import {
   createRequest as createRequestApi,
   recordInvoicePayment,
   updateEstimate as updateEstimateApi,
+  updateEstimateStatus as updateEstimateStatusApi,
   updateInvoice as updateInvoiceApi,
   updateJobStatus as updateJobStatusApi,
   updateRequestStatus,
@@ -183,16 +184,23 @@ export function usePortalRecords() {
       }
       if (apiReady && kind === "estimate") {
         return (async () => {
-          const currentEstimate =
-            crm.estimates.find((item) => item.id === id) ??
-            store.estimates.find((item) => item.id === id);
-          if (!currentEstimate) throw new Error("Estimate not found");
-          const updated = await updateEstimateApi(id, {
-            ...currentEstimate,
-            status: status as Estimate["status"],
-          });
-          await crm.refresh();
-          return updated;
+          const nextStatus = status as Estimate["status"];
+          try {
+            const updated = await updateEstimateStatusApi(id, nextStatus);
+            await crm.refresh();
+            return updated;
+          } catch (statusError) {
+            const currentEstimate =
+              crm.estimates.find((item) => item.id === id) ??
+              store.estimates.find((item) => item.id === id);
+            if (!currentEstimate) throw statusError;
+            const updated = await updateEstimateApi(id, {
+              ...currentEstimate,
+              status: nextStatus,
+            });
+            await crm.refresh();
+            return updated;
+          }
         })();
       }
       if (apiReady && kind === "job") {
@@ -319,13 +327,31 @@ export function usePortalRecords() {
 
   const mergeJobs = useCallback(
     (seeded: Job[]) =>
-      keep("job", apiReady ? crm.jobs : suppressSeedData ? [] : [...seeded, ...store.jobs]).map(
+      keep(
+        "job",
+        apiReady
+          ? upsertById(crm.jobs, store.jobs)
+          : suppressSeedData
+            ? store.jobs
+            : [...seeded, ...store.jobs],
+      ).map(
         (item) => ({
           ...item,
           status: statusOf("job", item.id, item.status),
         }),
       ),
     [apiReady, crm.jobs, keep, statusOf, store.jobs, suppressSeedData],
+  );
+
+  const cacheJob = useCallback(
+    (job: Job) => {
+      const current = readStore(key);
+      writeStore(key, {
+        ...current,
+        jobs: [job, ...current.jobs.filter((item) => item.id !== job.id)],
+      });
+    },
+    [key],
   );
 
   const mergeInvoices = useCallback(
@@ -570,6 +596,7 @@ export function usePortalRecords() {
     mergePayments,
     addEstimate,
     addJob,
+    cacheJob,
     addInvoice,
     patchInvoice,
     addPayment,

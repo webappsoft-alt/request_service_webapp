@@ -126,7 +126,7 @@ export function EstimateStageBanner({
       case "site_visit":
         return {
           title: "Technician on site",
-          body: "Capture photos, measurements, and findings on the Site visit tab. Then mark inspected.",
+          body: "Capture photos and findings on Site visit, price Line items, then click Finalize estimate. After that you can Share.",
         };
       case "inspected":
         return {
@@ -244,7 +244,13 @@ export function EstimateSiteVisitTab({
         toast.success(`${file.name} added to the site visit.`);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not upload that photo.");
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : error && typeof error === "object" && "message" in error
+            ? String((error as { message?: unknown }).message || "").trim()
+            : "";
+      toast.error(message || "Could not upload that photo.");
     } finally {
       setUploading(false);
     }

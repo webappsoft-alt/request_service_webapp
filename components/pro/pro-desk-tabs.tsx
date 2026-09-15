@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowUpRight, Check, MapPin, Phone, Sparkles } from "lucide-react";
 import { ProLocationsMapLazy } from "@/components/pro/pro-locations-map-lazy";
 import { proPaths } from "@/lib/pro-paths";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const tabs = [
@@ -339,7 +340,7 @@ function JobsPreview({ beat, onPick }: { beat: number; onPick: (value: number) =
       when: "Thu 9:00",
       status: "Scheduled",
       tech: "Ava Chen",
-      photo: "/images/crew/ava.jpg",
+      photo: HERO_HOME_IMAGE,
       scope: "3 bed / 2 bath · oven and fridge",
     },
     {
@@ -350,7 +351,7 @@ function JobsPreview({ beat, onPick }: { beat: number; onPick: (value: number) =
       when: "Thu 12:30",
       status: "On site",
       tech: "Luis Herrera",
-      photo: "/images/crew/luis.jpg",
+      photo: HERO_HOME_IMAGE,
       scope: "Weekly checklist · kitchen and baths",
     },
     {
@@ -361,7 +362,7 @@ function JobsPreview({ beat, onPick }: { beat: number; onPick: (value: number) =
       when: "Thu 2:30",
       status: "New",
       tech: "Marcus Reed",
-      photo: "/images/crew/marcus.jpg",
+      photo: HERO_HOME_IMAGE,
       scope: "Empty apartment · keys Friday",
     },
   ];
@@ -438,7 +439,7 @@ function CustomersPreview({ beat, onPick }: { beat: number; onPick: (value: numb
       status: "Signed",
       jobs: 3,
       spent: "$4,210",
-      photo: "/images/customers/maya.jpg",
+      photo: HERO_HOME_IMAGE,
     },
     {
       name: "Luis Ortega",
@@ -447,7 +448,7 @@ function CustomersPreview({ beat, onPick }: { beat: number; onPick: (value: numb
       status: "Quoted",
       jobs: 1,
       spent: "$189",
-      photo: "/images/customers/luis.jpg",
+      photo: HERO_HOME_IMAGE,
     },
     {
       name: "Aisha Cole",
@@ -456,7 +457,7 @@ function CustomersPreview({ beat, onPick }: { beat: number; onPick: (value: numb
       status: "Scheduled",
       jobs: 2,
       spent: "$640",
-      photo: "/images/customers/priya.jpg",
+      photo: HERO_HOME_IMAGE,
     },
   ];
   const active = beat % people.length;
@@ -525,10 +526,10 @@ function CustomersPreview({ beat, onPick }: { beat: number; onPick: (value: numb
 
 function TeamPreview({ beat, onPick }: { beat: number; onPick: (value: number) => void }) {
   const crew = [
-    { name: "Luis Herrera", role: "Technician", photo: "/images/crew/luis.jpg", day: "Drain · Lakewood" },
-    { name: "Ava Chen", role: "Technician", photo: "/images/crew/ava.jpg", day: "Heater · Aurora" },
-    { name: "Marcus Reed", role: "Technician", photo: "/images/crew/marcus.jpg", day: "Free after 1:00" },
-    { name: "Sofia Nguyen", role: "Estimator", photo: "/images/crew/sofia.jpg", day: "Site measure · Chen" },
+    { name: "Luis Herrera", role: "Technician", photo: HERO_HOME_IMAGE, day: "Drain · Lakewood" },
+    { name: "Ava Chen", role: "Technician", photo: HERO_HOME_IMAGE, day: "Heater · Aurora" },
+    { name: "Marcus Reed", role: "Technician", photo: HERO_HOME_IMAGE, day: "Free after 1:00" },
+    { name: "Sofia Nguyen", role: "Estimator", photo: HERO_HOME_IMAGE, day: "Site measure · Chen" },
   ];
   const active = beat % crew.length;
 
@@ -629,7 +630,7 @@ function MobileAppScreen({
               <p className="text-[16px] font-semibold tracking-tight">Ava’s schedule</p>
             </div>
             <span className="relative size-8 overflow-hidden rounded-full ring-1 ring-black/10">
-              <Image src="/images/crew/ava.jpg" alt="Ava Chen" fill sizes="32px" className="object-cover" />
+              <Image src={HERO_HOME_IMAGE} alt="Ava Chen" fill sizes="32px" className="object-cover" />
             </span>
           </div>
           <p className="text-[11px] text-muted-foreground">3 jobs · next stop 9:00</p>
@@ -1218,7 +1219,7 @@ function AiToolBody({ id }: { id: "scope" | "followup" | "photo" }) {
           <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2.5">
             <span className="relative h-[4.75rem] overflow-hidden rounded-lg bg-[#F3F7FB]">
               <Image
-                src="/images/blog/blog-hvac.jpg"
+                src={HERO_HOME_IMAGE}
                 alt="Job photo on RS-2841"
                 fill
                 sizes="88px"

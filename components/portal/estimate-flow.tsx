@@ -22,8 +22,6 @@ const STEPS = [
   { id: "job", label: "Job" },
 ] as const;
 
-const MAX_FILE = 2 * 1024 * 1024;
-
 export function estimateFlowIndex(args: {
   status: EstimateStatus;
   signed: boolean;
@@ -211,10 +209,6 @@ export function EstimateSiteVisitTab({
   function readFiles(list: FileList | File[]) {
     if (locked) return;
     for (const file of Array.from(list)) {
-      if (file.size > MAX_FILE) {
-        toast.error(`${file.name} is over 2 MB.`);
-        continue;
-      }
       const reader = new FileReader();
       reader.onload = () => {
         const photo: JobAttachment = {
@@ -352,7 +346,7 @@ export function EstimateSiteVisitTab({
           >
             <Upload className="size-6 text-primary" />
             <p className="text-sm font-medium">Drop photos here or browse</p>
-            <p className="text-xs text-muted-foreground">Images and PDFs up to 2 MB</p>
+            <p className="text-xs text-muted-foreground">Images and PDFs</p>
             <input
               className="sr-only"
               type="file"

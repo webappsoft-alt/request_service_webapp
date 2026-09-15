@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import {
   ESTIMATE_STATUS_FILTERS,
   estimateCanShare,
+  estimateDisplayName,
   estimateStatusLabel,
   estimateStatusTone,
   getPortalCustomerName,
@@ -85,6 +86,18 @@ export function EstimatesView() {
             cell: (row) => (
               <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-medium text-primary hover:underline">
                 {row.number}
+              </Link>
+            ),
+          },
+          {
+            id: "name",
+            header: "Estimate name",
+            sortValue: (row) => estimateDisplayName(row),
+            searchValue: (row) => estimateDisplayName(row),
+            exportValue: (row) => estimateDisplayName(row),
+            cell: (row) => (
+              <Link href={`/pro/dashboard/estimates/${row.id}`} className="text-primary hover:underline">
+                {estimateDisplayName(row)}
               </Link>
             ),
           },
@@ -359,8 +372,13 @@ export function JobsView() {
             label: "Delete",
             variant: "destructive",
             onSelect: () => {
-              records.remove("job", row.id);
-              toast.success(`${row.number} removed from this board.`);
+              void Promise.resolve(records.remove("job", row.id))
+                .then(() => {
+                  toast.success(`${row.number} deleted. The source estimate can be converted again.`);
+                })
+                .catch((error) => {
+                  toast.error(error instanceof Error ? error.message : "Could not delete this job.");
+                });
             },
           },
         ]}

@@ -5,6 +5,7 @@ import {
   createEstimate as createEstimateApi,
   createInvoice as createInvoiceApi,
   createJob as createJobApi,
+  deleteJob as deleteJobApi,
   createRequest as createRequestApi,
   recordInvoicePayment,
   updateEstimate as updateEstimateApi,
@@ -232,11 +233,28 @@ export function usePortalRecords() {
           await crm.refresh();
         })();
       }
+      if (apiReady && kind === "job") {
+        return (async () => {
+          await deleteJobApi(id);
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            deleted: current.deleted.includes(nextKey) ? current.deleted : [...current.deleted, nextKey],
+          });
+          await crm.refresh();
+        })();
+      }
       const current = readStore(key);
       const nextKey = recordKey(kind, id);
+      const job = kind === "job" ? current.jobs.find((item) => item.id === id) ?? crm.jobs.find((item) => item.id === id) : undefined;
       writeStore(key, {
         ...current,
         deleted: current.deleted.includes(nextKey) ? current.deleted : [...current.deleted, nextKey],
+        status:
+          job?.estimateId
+            ? { ...current.status, [recordKey("estimate", job.estimateId)]: "draft" }
+            : current.status,
       });
     },
     [apiReady, crm, key],

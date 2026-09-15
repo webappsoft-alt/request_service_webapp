@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type DragEvent, type ReactNode } from "react";
-import { Camera, Check, ImageIcon, Trash2, Upload } from "lucide-react";
+import { useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Camera, Check, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useJobFile, type EstimateSiteVisit, type JobAttachment } from "@/components/portal/use-job-file";
+import { extractUploadedUrl, uploadDoc, uploadFile } from "@/components/api/uploadFile";
+import { useJobFile, siteVisitFromRecord, type EstimateSiteVisit, type JobAttachment } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,7 @@ const STEPS = [
   { id: "job", label: "Job" },
 ] as const;
 
-const MAX_FILE = 2 * 1024 * 1024;
+const MAX_FILE = 15 * 1024 * 1024;
 
 export function estimateFlowIndex(args: {
   status: EstimateStatus;
@@ -117,7 +118,7 @@ export function EstimateStageBanner({
   hasJob: boolean;
 }) {
   const copy = (() => {
-    if (hasJob) return { title: "Job started", body: "The customer signed. The work is now on the jobs board." };
+    if (hasJob) return { title: "Converted to job", body: "This estimate is now a job. Open the linked job to continue the work." };
     if (signed || status === "accepted") {
       return { title: "Customer signed", body: "The quote is approved. Convert it to a job to start the work." };
     }
@@ -183,60 +184,76 @@ export function EstimateSiteVisitTab({
 }) {
   const { employees } = usePortalCrew();
   const { siteVisit, saveSiteVisit, actor } = useJobFile(asJob, estimate, undefined, "");
-  const fallback: EstimateSiteVisit = siteVisit ?? {
-    employeeId: "",
-    technician: "",
-    visitedAt: estimate.issuedAt.slice(0, 10),
-    accessNotes: "",
-    findings: "",
-    recommendations: "",
-    measurements: "",
-    photos: [],
-  };
+  const fallback: EstimateSiteVisit = siteVisit ??
+    siteVisitFromRecord(estimate.siteVisit) ?? {
+      employeeId: "",
+      technician: "",
+      visitedAt: estimate.issuedAt.slice(0, 10),
+      accessNotes: "",
+      findings: "",
+      recommendations: "",
+      measurements: "",
+      photos: [],
+    };
   const [draft, setDraft] = useState<EstimateSiteVisit | null>(null);
   const visit = draft ?? fallback;
+  const visitRef = useRef(visit);
+  visitRef.current = visit;
   const [over, setOver] = useState(false);
   const [preview, setPreview] = useState<JobAttachment | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   function patch(next: Partial<EstimateSiteVisit>) {
     setDraft({ ...visit, ...next });
   }
 
   function persist(next: EstimateSiteVisit) {
+    visitRef.current = next;
     setDraft(next);
     saveSiteVisit(next);
     onSave(next);
   }
 
-  function readFiles(list: FileList | File[]) {
-    if (locked) return;
-    for (const file of Array.from(list)) {
-      if (file.size > MAX_FILE) {
-        toast.error(`${file.name} is over 2 MB.`);
-        continue;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
+  async function readFiles(list: FileList | File[]) {
+    if (locked || uploading) return;
+    const files = Array.from(list);
+    if (!files.length) return;
+    setUploading(true);
+    let next = visitRef.current;
+    try {
+      for (const file of files) {
+        if (file.size > MAX_FILE) {
+          toast.error(`${file.name} is over 15 MB.`);
+          continue;
+        }
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const response = isPdf ? await uploadDoc(file) : await uploadFile(file);
+        const url = extractUploadedUrl(response.data);
+        if (!url) throw new Error(`Could not upload ${file.name}.`);
         const photo: JobAttachment = {
           id: `photo_${Date.now()}_${file.name}`,
           name: file.name,
-          type: file.type || "application/octet-stream",
+          type: file.type || (isPdf ? "application/pdf" : "image/jpeg"),
           size: file.size,
-          dataUrl: String(reader.result),
+          dataUrl: url,
           addedAt: new Date().toISOString(),
           actor,
         };
-        persist({ ...visit, photos: [photo, ...visit.photos] });
+        next = { ...next, photos: [photo, ...next.photos] };
+        persist(next);
         toast.success(`${file.name} added to the site visit.`);
-      };
-      reader.readAsDataURL(file);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload that photo.");
+    } finally {
+      setUploading(false);
     }
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setOver(false);
-    if (event.dataTransfer.files.length) readFiles(event.dataTransfer.files);
+    if (event.dataTransfer.files.length) void readFiles(event.dataTransfer.files);
   }
 
   return (
@@ -350,16 +367,17 @@ export function EstimateSiteVisitTab({
             onDragLeave={() => setOver(false)}
             onDrop={onDrop}
           >
-            <Upload className="size-6 text-primary" />
-            <p className="text-sm font-medium">Drop photos here or browse</p>
-            <p className="text-xs text-muted-foreground">Images and PDFs up to 2 MB</p>
+            {uploading ? <Loader2 className="size-6 animate-spin text-primary" /> : <Upload className="size-6 text-primary" />}
+            <p className="text-sm font-medium">{uploading ? "Uploading photos…" : "Drop photos here or browse"}</p>
+            <p className="text-xs text-muted-foreground">Images and PDFs up to 15 MB</p>
             <input
               className="sr-only"
               type="file"
               accept="image/*,.pdf"
               multiple
+              disabled={uploading}
               onChange={(event) => {
-                if (event.target.files?.length) readFiles(event.target.files);
+                if (event.target.files?.length) void readFiles(event.target.files);
                 event.target.value = "";
               }}
             />

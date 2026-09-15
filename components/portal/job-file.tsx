@@ -110,6 +110,17 @@ export function JobFileChrome({
           />
           {customer && customer.entityKind === "company" && contact ? <Detail label="Contact" value={contact} /> : null}
           <Detail label="Service" value={service} />
+          {estimate ? (
+            <Detail
+              label="Converted from estimate"
+              value={
+                <Link href={`/pro/dashboard/estimates/${estimate.id}`} className="font-semibold text-primary hover:underline">
+                  {estimate.number}
+                  {estimate.title ? ` · ${estimate.title}` : ""}
+                </Link>
+              }
+            />
+          ) : null}
           <Detail label="Technician" value={technician || "Unassigned"} />
           <Detail
             label="Address"

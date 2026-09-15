@@ -58,6 +58,7 @@ import {
 } from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
+  estimateDisplayName,
   estimateStatusLabel,
   estimateStatusTone,
   formatClock,
@@ -1014,6 +1015,18 @@ function estimateColumns(provider: Provider) {
       cell: (row: Estimate) => (
         <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
           {row.number}
+        </Link>
+      ),
+    },
+    {
+      id: "name",
+      header: "Estimate name",
+      sortValue: (row: Estimate) => estimateDisplayName(row),
+      searchValue: (row: Estimate) => estimateDisplayName(row),
+      exportValue: (row: Estimate) => estimateDisplayName(row),
+      cell: (row: Estimate) => (
+        <Link href={`/pro/dashboard/estimates/${row.id}`} className="text-primary hover:underline">
+          {estimateDisplayName(row)}
         </Link>
       ),
     },

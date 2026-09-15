@@ -242,10 +242,33 @@ function requestPayload(request: PortalRequest) {
   };
 }
 
+function siteVisitPayload(visit?: Estimate["siteVisit"]) {
+  if (!visit) return undefined;
+  return {
+    employeeId: visit.employeeId || "",
+    technician: visit.technician || "",
+    visitedAt: visit.visitedAt || "",
+    accessNotes: visit.accessNotes || "",
+    findings: visit.findings || "",
+    recommendations: visit.recommendations || "",
+    measurements: visit.measurements || "",
+    photos: (visit.photos ?? []).map((photo) => ({
+      id: photo.id,
+      name: photo.name,
+      type: photo.type,
+      size: photo.size,
+      url: photo.url,
+      addedAt: photo.addedAt,
+      actor: photo.actor || "",
+    })),
+  };
+}
+
 function estimatePayload(estimate: Estimate) {
   return {
     customerId: estimate.customerId,
     requestId: estimate.requestId || null,
+    title: estimate.title || "",
     status: normalizeStatus(estimate.status, [
       "site_visit",
       "inspected",
@@ -263,6 +286,8 @@ function estimatePayload(estimate: Estimate) {
     discount: estimate.discount,
     notes: estimate.notes || "",
     terms: estimate.terms || "",
+    propertyAddress: mapAddressForApi(estimate.propertyAddress),
+    siteVisit: siteVisitPayload(estimate.siteVisit),
   };
 }
 
@@ -270,6 +295,7 @@ function jobPayload(job: Job, employees: PortalEmployee[]) {
   return {
     customerId: job.customerId,
     estimateId: job.estimateId || null,
+    title: job.title || "",
     status: job.status,
     assignedEmployees: resolveAssignedEmployeeIds(job, employees),
     assignedContractors: [],
@@ -512,6 +538,10 @@ export async function shareEstimate(id: string) {
 export async function convertEstimateToJob(id: string) {
   const response = await postData(providerCrmApi.estimateConvertToJob(id), undefined, { silent: false });
   return mapCrmEntity(response, mapJob);
+}
+
+export async function deleteJob(id: string) {
+  return deleteData(providerCrmApi.job(id), { silent: false });
 }
 
 export async function listJobs(options?: CrmRequestOptions) {

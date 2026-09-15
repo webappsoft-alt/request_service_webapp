@@ -1,5 +1,5 @@
 import { jobMoneySheet, jobCostMix, lineTotal, type JobCostLine } from "@/components/portal/use-job-costing";
-import type { Estimate, EstimateItem, Invoice, InvoiceItem, Job, JobItem, ServiceAddress } from "@/lib/types";
+import type { Estimate, EstimateItem, EstimateSiteVisitRecord, Invoice, InvoiceItem, Job, JobItem, ServiceAddress } from "@/lib/types";
 
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -115,9 +115,14 @@ export function estimateAsJob(estimate: Estimate): Job {
   };
 }
 
+export function filledWorkLines(lines: JobCostLine[]) {
+  return lines.filter((line) => line.description.trim() || line.unitPrice > 0);
+}
+
 export function buildEstimate(input: {
   id?: string;
   number: string;
+  title?: string;
   providerId: string;
   customerId: string;
   requestId?: string;
@@ -127,14 +132,17 @@ export function buildEstimate(input: {
   expiresAt?: string;
   notes?: string;
   terms?: string;
+  siteVisit?: EstimateSiteVisitRecord;
   lines: JobCostLine[];
 }): Estimate {
   const id = input.id ?? `est_${Date.now().toString(36)}`;
   const now = new Date().toISOString();
-  const money = moneyFromLines(input.lines);
+  const lines = filledWorkLines(input.lines);
+  const money = moneyFromLines(lines);
   return {
     id,
     number: input.number,
+    title: input.title?.trim() || undefined,
     providerId: input.providerId,
     customerId: input.customerId,
     requestId: input.requestId,
@@ -148,7 +156,8 @@ export function buildEstimate(input: {
     discount: 0,
     tax: money.tax,
     total: money.total,
-    items: linesToEstimateItems(id, input.lines),
+    items: linesToEstimateItems(id, lines),
+    siteVisit: input.siteVisit,
     createdAt: now,
     updatedAt: now,
   };
@@ -157,6 +166,7 @@ export function buildEstimate(input: {
 export function buildJob(input: {
   id?: string;
   number: string;
+  title?: string;
   providerId: string;
   customerId: string;
   estimateId?: string;
@@ -174,6 +184,7 @@ export function buildJob(input: {
   return {
     id,
     number: input.number,
+    title: input.title?.trim() || undefined,
     providerId: input.providerId,
     customerId: input.customerId,
     estimateId: input.estimateId ?? "",

@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import type { Estimate, EstimateStatus, Invoice, InvoiceStatus, Job, JobStatus } from "@/lib/types";
+import type { Estimate, EstimateSiteVisitRecord, EstimateStatus, Invoice, InvoiceStatus, Job, JobStatus } from "@/lib/types";
 
 const EVENT = "rs-job-file";
 
@@ -90,6 +90,49 @@ export const EMPTY_SITE_VISIT: EstimateSiteVisit = {
   photos: [],
 };
 
+export function siteVisitFromRecord(visit?: EstimateSiteVisitRecord | null): EstimateSiteVisit | undefined {
+  if (!visit) return undefined;
+  return {
+    employeeId: visit.employeeId ?? "",
+    technician: visit.technician ?? "",
+    visitedAt: visit.visitedAt ?? "",
+    accessNotes: visit.accessNotes ?? "",
+    findings: visit.findings ?? "",
+    recommendations: visit.recommendations ?? "",
+    measurements: visit.measurements ?? "",
+    photos: (visit.photos ?? []).map((photo) => ({
+      id: photo.id,
+      name: photo.name,
+      type: photo.type,
+      size: photo.size,
+      dataUrl: photo.url,
+      addedAt: photo.addedAt,
+      actor: photo.actor ?? "",
+    })),
+  };
+}
+
+export function siteVisitToRecord(visit: EstimateSiteVisit): EstimateSiteVisitRecord {
+  return {
+    employeeId: visit.employeeId,
+    technician: visit.technician,
+    visitedAt: visit.visitedAt,
+    accessNotes: visit.accessNotes,
+    findings: visit.findings,
+    recommendations: visit.recommendations,
+    measurements: visit.measurements,
+    photos: visit.photos.map((photo) => ({
+      id: photo.id,
+      name: photo.name,
+      type: photo.type,
+      size: photo.size,
+      url: photo.dataUrl,
+      addedAt: photo.addedAt,
+      actor: photo.actor,
+    })),
+  };
+}
+
 type JobFileRecord = {
   logs: JobLog[];
   activities: JobActivity[];
@@ -115,6 +158,7 @@ export function applyEstimateSettings(estimate: Estimate, settings?: EstimateSet
   if (!settings) return estimate;
   return {
     ...estimate,
+    title: settings.name.trim() || estimate.title,
     customerId: settings.customerId || estimate.customerId,
     issuedAt: settings.issuedAt || estimate.issuedAt,
     expiresAt: settings.expiresAt || estimate.expiresAt,
@@ -304,6 +348,34 @@ export function useEstimateSettings(estimateId: string) {
     () => EMPTY,
   );
   return store[estimateId]?.estimateSettings;
+}
+
+export function appendJobAttachments(
+  email: string | undefined,
+  recordId: string,
+  files: JobAttachment[],
+  actor = "Desk",
+) {
+  if (!files.length) return;
+  const key = storageKey(email);
+  const latest = readStore(key)[recordId] ?? { logs: [], activities: [], attachments: [] };
+  writeStore(key, {
+    ...readStore(key),
+    [recordId]: {
+      ...latest,
+      attachments: [...files, ...latest.attachments],
+      logs: [
+        ...latest.logs,
+        {
+          id: `log_att_${Date.now()}`,
+          at: new Date().toISOString(),
+          title: "Attachments added",
+          detail: files.map((file) => file.name).join(", "),
+          actor,
+        },
+      ],
+    },
+  });
 }
 
 export function writeSiteVisit(
@@ -520,7 +592,17 @@ export function useJobFile(
     actor,
     logs,
     activities,
-    attachments: stored.attachments,
+    attachments: stored.attachments.length
+      ? stored.attachments
+      : (job.attachments ?? []).map((url, index) => ({
+          id: `job_att_${job.id}_${index + 1}`,
+          name: url.split("/").pop() || `Attachment ${index + 1}`,
+          type: url.toLowerCase().includes(".pdf") ? "application/pdf" : "image/jpeg",
+          size: 0,
+          dataUrl: url,
+          addedAt: job.createdAt,
+          actor: "System",
+        })),
     addLog,
     addActivity,
     updateActivity,
@@ -528,7 +610,7 @@ export function useJobFile(
     addAttachments,
     removeAttachment,
     settings: stored.settings,
-    siteVisit: stored.siteVisit,
+    siteVisit: stored.siteVisit ?? siteVisitFromRecord(estimate?.siteVisit),
     saveSiteVisit: (visit: EstimateSiteVisit) => {
       writeSiteVisit(session?.email, job.id, visit, actor);
     },

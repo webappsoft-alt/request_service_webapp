@@ -139,6 +139,7 @@ export function EstimateSettingsTab({
               if (apiReady) {
                 await updateEstimateApi(estimate.id, {
                   ...estimate,
+                  title: draft.name.trim(),
                   customerId: draft.customerId,
                   propertyAddress: {
                     ...estimate.propertyAddress,

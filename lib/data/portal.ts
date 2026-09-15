@@ -1000,11 +1000,20 @@ export function jobTotal(job: Job) {
   return job.items.reduce((sum, item) => sum + item.total, 0) + job.changeOrders.reduce((sum, order) => sum + order.total, 0);
 }
 
+export function estimateDisplayName(estimate: Pick<Estimate, "title" | "items" | "number">) {
+  const title = String(estimate.title || "").trim();
+  if (title) return title;
+  const first = estimate.items[0]?.description?.trim() ?? "";
+  const derived = first.replace(/\s+(labor|materials)$/i, "").trim();
+  return derived || estimate.number || "Untitled estimate";
+}
+
 export function jobServiceLabel(job: Job, estimates: Estimate[], requests: PortalRequest[]) {
   if (job.serviceId) {
     return job.items[0]?.description.replace(/ labor$/i, "") || "Fixed service";
   }
   const estimate = estimates.find((item) => item.id === job.estimateId);
+  if (estimate?.title?.trim()) return estimate.title.trim();
   const request = requests.find((item) => item.id === estimate?.requestId);
   if (request?.serviceName) return request.serviceName;
   return job.items[0]?.description.replace(/ labor$/i, "") || "Service";
@@ -1114,9 +1123,9 @@ export function estimateCanShare(status: EstimateStatus) {
   }
 }
 
-export function estimateCanConvert(status: EstimateStatus, signed: boolean) {
-  if (status === "converted_to_job") return false;
-  return signed || status === "accepted";
+export function estimateCanConvert(status: EstimateStatus, hasLiveJob: boolean) {
+  if (hasLiveJob) return false;
+  return status !== "rejected" && status !== "expired";
 }
 
 export function jobStatusLabel(status: JobStatus) {

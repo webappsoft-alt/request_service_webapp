@@ -7,13 +7,16 @@ import type { Provider, ProviderProject } from "@/lib/types";
 export function ProviderProjectCard({
   provider,
   project,
+  onBeforeNavigate,
 }: {
   provider: Provider;
   project: ProviderProject;
+  onBeforeNavigate?: () => void;
 }) {
   return (
     <Link
       href={`/professionals/${provider.slug}/projects/${project.slug}`}
+      onClick={() => onBeforeNavigate?.()}
       className="group flex h-full flex-col overflow-hidden rounded-xl border border-black/15 bg-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/25 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <div className="relative aspect-[16/10] overflow-hidden bg-muted">
@@ -52,11 +55,13 @@ export function ProviderProjects({
   provider,
   projects,
   keepVisible = false,
+  onBeforeNavigate,
 }: {
   provider: Provider;
   projects: ProviderProject[];
   /** Keep the Portfolio section shell visible even when there are no projects. */
   keepVisible?: boolean;
+  onBeforeNavigate?: () => void;
 }) {
   if (!projects.length && !keepVisible) return null;
 
@@ -73,7 +78,12 @@ export function ProviderProjects({
       {projects.length ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
-            <ProviderProjectCard key={project.slug} provider={provider} project={project} />
+            <ProviderProjectCard
+              key={project.slug}
+              provider={provider}
+              project={project}
+              onBeforeNavigate={onBeforeNavigate}
+            />
           ))}
         </div>
       ) : (

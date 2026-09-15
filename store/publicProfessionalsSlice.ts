@@ -17,6 +17,7 @@ import {
   type BusinessGalleryImage,
 } from "@/lib/business-gallery";
 import type { Provider, Review, WorkingHours } from "@/lib/types";
+import type { PortfolioProject } from "@/store/portfolioSlice";
 
 export type PublicProfessionalSortBy =
   | "recommended"
@@ -179,6 +180,8 @@ type PublicProfessionalsState = {
   detail: PublicProfessional | null;
   detailLoading: boolean;
   detailError: string | null;
+  /** Full portfolio objects from the profile page — project detail reads these (no refetch). */
+  portfolioProjectsByProviderSlug: Record<string, PortfolioProject[]>;
 };
 
 export const PUBLIC_PROFESSIONALS_LIMIT = 10;
@@ -204,6 +207,7 @@ const initialState: PublicProfessionalsState = {
   detail: null,
   detailLoading: false,
   detailError: null,
+  portfolioProjectsByProviderSlug: {},
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1078,6 +1082,15 @@ const publicProfessionalsSlice = createSlice({
       state.detailLoading = false;
       state.detailError = null;
     },
+    /** Cache profile portfolio cards so /projects/[slug] can render from state. */
+    setPublicPortfolioProjects(
+      state,
+      action: PayloadAction<{ providerSlug: string; projects: PortfolioProject[] }>,
+    ) {
+      const providerSlug = String(action.payload.providerSlug || "").trim();
+      if (!providerSlug) return;
+      state.portfolioProjectsByProviderSlug[providerSlug] = action.payload.projects;
+    },
     clearPublicProfessionalsError(state) {
       state.error = null;
       state.detailError = null;
@@ -1177,6 +1190,7 @@ const publicProfessionalsSlice = createSlice({
 export const {
   setPublicProfessionalDetail,
   clearPublicProfessionalDetail,
+  setPublicPortfolioProjects,
   clearPublicProfessionalsError,
   markPublicProfessionalsStale,
   resetPublicProfessionals,

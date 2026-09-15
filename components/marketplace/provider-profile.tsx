@@ -50,6 +50,7 @@ export type ProviderProfileLiveData = {
   portfolioLoading?: boolean;
   relatedLoading?: boolean;
   onRelatedBeforeNavigate?: (provider: Provider) => void;
+  onProjectBeforeNavigate?: () => void;
 };
 
 export function ProviderProfile({
@@ -197,6 +198,7 @@ export function ProviderProfile({
               provider={provider}
               projects={projects}
               keepVisible={isLive}
+              onBeforeNavigate={live?.onProjectBeforeNavigate}
             />
 
             <section className="flex flex-col gap-4">

@@ -512,7 +512,7 @@ export const acceptProviderOrder = createAsyncThunk<
 >("providerOrders/accept", async (id, { rejectWithValue }) => {
   const trimmed = String(id || "").trim();
   try {
-    const response = await putData(providerOrdersApi.accept(trimmed), null, {
+    const response = await putData(providerOrdersApi.accept(trimmed), undefined, {
       silent: true,
     });
     const root = asRecord(response) ?? {};
@@ -627,7 +627,7 @@ export const startWorkProviderOrder = createAsyncThunk<
 >("providerOrders/startWork", async (id, { rejectWithValue }) => {
   const trimmed = String(id || "").trim();
   try {
-    const response = await putData(providerOrdersApi.startWork(trimmed), null, {
+    const response = await putData(providerOrdersApi.startWork(trimmed), undefined, {
       silent: true,
     });
     const root = asRecord(response) ?? {};

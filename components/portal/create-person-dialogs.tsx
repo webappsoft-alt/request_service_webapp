@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
@@ -82,6 +86,13 @@ export function CreateCustomerDialog({
     setEin("");
     setWebsite("");
     setNotes("");
+  }
+
+  function applyAddress(address: PlaceAddress) {
+    setStreet(address.formattedAddress || address.streetAddress);
+    setCity(address.city || "");
+    setState(address.state || "");
+    setZip(address.zipCode || "");
   }
 
   function save() {
@@ -230,16 +241,18 @@ export function CreateCustomerDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="cust-street">Street address</FieldLabel>
-            <Input id="cust-street" value={street} onChange={(change) => setStreet(change.target.value)} />
+            <AddressAutocomplete
+              id="cust-street"
+              value={street}
+              onChange={setStreet}
+              onSelect={applyAddress}
+              placeholder="Start typing a street address…"
+            />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-city">City</FieldLabel>
               <Input id="cust-city" value={city} onChange={(change) => setCity(change.target.value)} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-state">State</FieldLabel>
-              <Input id="cust-state" value={state} onChange={(change) => setState(change.target.value)} />
             </Field>
             <Field>
               <FieldLabel htmlFor="cust-zip">ZIP</FieldLabel>

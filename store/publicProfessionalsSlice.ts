@@ -638,16 +638,23 @@ export function publicProfessionalToProvider(
   const resolvedCategoryNames = categoryIds
     .map((id) => getServiceCategoryById(id)?.name)
     .filter((name): name is string => Boolean(name));
-  const serviceLabels = resolvedCategoryNames.length
-    ? resolvedCategoryNames.slice(0, 2)
-    : [
-        primary?.name?.trim() ||
-          professional.tradeDetails.tradeTitle?.trim() ||
-          professional.tagline?.trim() ||
-          "",
-      ]
-        .filter(Boolean)
-        .slice(0, 2);
+  const specialtyLabels = professional.tradeDetails.specialties
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const serviceLabels = (
+    specialtyLabels.length
+      ? specialtyLabels
+      : resolvedCategoryNames.length
+        ? resolvedCategoryNames
+        : [
+            primary?.name?.trim() ||
+              professional.tradeDetails.tradeTitle?.trim() ||
+              professional.tagline?.trim() ||
+              "",
+          ]
+  )
+    .filter(Boolean)
+    .slice(0, 4);
 
   const tradeLabel =
     professional.tradeDetails.tradeTitle?.trim() ||

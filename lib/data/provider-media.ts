@@ -1,7 +1,13 @@
 import { getAreaName } from "@/lib/data/service-areas";
 import { getServiceCategoryById } from "@/lib/data/services";
-import { HERO_HOME_IMAGE } from "@/lib/site";
+import { HERO_HOME_IMAGE, HERO_PRO_IMAGE } from "@/lib/site";
 import type { Provider } from "@/lib/types";
+
+/** Profile/avatar photo for professional cards — never portfolio/project images. */
+export function getProviderProfileImage(provider: Provider) {
+  const avatar = provider.logoUrl?.trim();
+  return avatar || HERO_PRO_IMAGE;
+}
 
 const basePriceByCategory: Record<string, number> = {
   cat_plumbing: 119,

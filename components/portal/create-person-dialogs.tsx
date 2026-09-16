@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
   AddressAutocomplete,
   type PlaceAddress,
@@ -20,6 +21,13 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useReminderLookups } from "@/components/portal/reminder-banner";
 import type {
@@ -50,11 +58,15 @@ const TYPES: CrmCustomerType[] = ["residential", "commercial", "property_manager
 export function CreateCustomerDialog({
   open,
   onOpenChange,
+  customer = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  customer?: PortalCustomerCrm | null;
 }) {
-  const { addCustomer, provider, customers } = useCrmDirectory();
+  const { addCustomer, updateCustomer, provider, customers } = useCrmDirectory();
+  const isEdit = Boolean(customer);
+  const [saving, setSaving] = useState(false);
   const [entityKind, setEntityKind] = useState<CrmEntityKind>("individual");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -87,7 +99,34 @@ export function CreateCustomerDialog({
     setEin("");
     setWebsite("");
     setNotes("");
+    setSaving(false);
   }
+
+  useEffect(() => {
+    if (!open) return;
+    if (!customer) {
+      reset();
+      return;
+    }
+    const address = customer.addresses[0];
+    setEntityKind(customer.entityKind);
+    setFirstName(customer.firstName);
+    setLastName(customer.lastName);
+    setCompanyName(customer.companyName ?? "");
+    setEmail(customer.email);
+    setPhone(customer.phone ?? "");
+    setStreet(address?.street ?? "");
+    setCity(address?.city ?? provider.city);
+    setState(address?.state ?? provider.state);
+    setZip(address?.zip ?? provider.serviceArea[0] ?? "");
+    setCustomerType(customer.customerType);
+    setSource(customer.source);
+    setEin(customer.ein ?? "");
+    setWebsite(customer.website ?? "");
+    setNotes(customer.notes ?? "");
+    setSaving(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when dialog opens for a customer
+  }, [open, customer?.id]);
 
   function applyAddress(address: PlaceAddress) {
     setStreet(address.formattedAddress || address.streetAddress);
@@ -96,10 +135,56 @@ export function CreateCustomerDialog({
     setZip(address.zipCode || "");
   }
 
-  function save() {
+  async function save() {
+    if (saving) return;
+
+    if (isEdit && customer) {
+      setSaving(true);
+      const existingAddress = customer.addresses[0];
+      try {
+        await Promise.resolve(
+          updateCustomer(customer.id, {
+            firstName: firstName.trim() || companyName.trim() || customer.firstName,
+            lastName: lastName.trim() || customer.lastName,
+            email: email.trim() || customer.email,
+            phone: phone.trim() || undefined,
+            entityKind,
+            customerType,
+            source,
+            companyName: entityKind === "company" ? companyName.trim() : "",
+            ein: ein.trim() || undefined,
+            website: website.trim() || undefined,
+            notes: notes.trim(),
+            addresses: [
+              {
+                id: existingAddress?.id ?? `addr_${customer.id}`,
+                street: street.trim() || existingAddress?.street || "Address pending",
+                city: city.trim() || provider.city,
+                state: state.trim() || provider.state,
+                zip: zip.trim() || provider.serviceArea[0] || "00000",
+                country: existingAddress?.country ?? "US",
+                label: existingAddress?.label,
+                unit: existingAddress?.unit,
+              },
+            ],
+          }),
+        );
+        toast.success(
+          `${companyName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim() || "Customer"} updated.`,
+        );
+        reset();
+        onOpenChange(false);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not update this customer.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     const id = `cust_${provider.id}_new_${Date.now()}`;
     const createdAt = new Date().toISOString().slice(0, 10);
-    const customer: PortalCustomerCrm = {
+    const nextCustomer: PortalCustomerCrm = {
       id,
       userId: `user_${id}`,
       firstName: firstName.trim() || companyName.trim() || "New",
@@ -135,8 +220,10 @@ export function CreateCustomerDialog({
       notes: notes.trim(),
       amountOwing: 0,
     };
-    addCustomer(customer);
-    toast.success(`${customer.companyName ?? `${customer.firstName} ${customer.lastName}`} added to the directory.`);
+    addCustomer(nextCustomer);
+    toast.success(
+      `${nextCustomer.companyName ?? `${nextCustomer.firstName} ${nextCustomer.lastName}`} added to the directory.`,
+    );
     reset();
     onOpenChange(false);
   }
@@ -151,9 +238,11 @@ export function CreateCustomerDialog({
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>Create customer</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit customer" : "Create customer"}</DialogTitle>
           <DialogDescription>
-            Add a household, company, or walk-in that did not come through the website request form.
+            {isEdit
+              ? "Update contact details, address, and account information for this customer."
+              : "Add a household, company, or walk-in that did not come through the website request form."}
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -175,69 +264,119 @@ export function CreateCustomerDialog({
           {entityKind === "company" ? (
             <Field>
               <FieldLabel htmlFor="cust-company">Company name</FieldLabel>
-              <Input id="cust-company" value={companyName} onChange={(change) => setCompanyName(change.target.value)} />
+              <Input
+                id="cust-company"
+                value={companyName}
+                placeholder="Enter company name"
+                onChange={(change) => setCompanyName(change.target.value)}
+              />
             </Field>
           ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-first">First name</FieldLabel>
-              <Input id="cust-first" value={firstName} onChange={(change) => setFirstName(change.target.value)} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-last">Last name</FieldLabel>
-              <Input id="cust-last" value={lastName} onChange={(change) => setLastName(change.target.value)} />
+                  <Input
+                    id="cust-first"
+                    value={firstName}
+                    placeholder="Enter first name"
+                    onChange={(change) => setFirstName(change.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="cust-last">Last name</FieldLabel>
+                  <Input
+                    id="cust-last"
+                    value={lastName}
+                    placeholder="Enter last name"
+                    onChange={(change) => setLastName(change.target.value)}
+                  />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-email">Email</FieldLabel>
-              <Input id="cust-email" type="email" value={email} onChange={(change) => setEmail(change.target.value)} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-phone">Phone</FieldLabel>
-              <Input id="cust-phone" type="tel" value={phone} onChange={(change) => setPhone(change.target.value)} />
+                  <Input
+                    id="cust-email"
+                    type="email"
+                    value={email}
+                    placeholder="name@company.com"
+                    onChange={(change) => setEmail(change.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="cust-phone">Phone</FieldLabel>
+                  <AuthPhoneInput
+                    id="cust-phone"
+                    value={phone}
+                    onChange={setPhone}
+                    placeholder="Enter phone number"
+                  />
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-type">Customer type</FieldLabel>
-              <NativeSelect
-                id="cust-type"
-                className="w-full"
+              <Select
                 value={customerType}
-                onChange={(change) => setCustomerType(change.target.value as CrmCustomerType)}
+                onValueChange={(value) => setCustomerType(value as CrmCustomerType)}
               >
-                {TYPES.map((item) => (
-                  <NativeSelectOption key={item} value={item}>
-                    {crmTypeLabel(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                <SelectTrigger id="cust-type" className="w-full">
+                  <SelectValue placeholder="Select customer type" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {TYPES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {crmTypeLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
             <Field>
               <FieldLabel htmlFor="cust-source">Source</FieldLabel>
-              <NativeSelect
-                id="cust-source"
-                className="w-full"
+              <Select
                 value={source}
-                onChange={(change) => setSource(change.target.value as CrmPersonSource)}
+                onValueChange={(value) => setSource(value as CrmPersonSource)}
               >
-                {SOURCES.map((item) => (
-                  <NativeSelectOption key={item} value={item}>
-                    {crmSourceLabel(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                <SelectTrigger id="cust-source" className="w-full">
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {SOURCES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {crmSourceLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-ein">EIN</FieldLabel>
-              <Input id="cust-ein" value={ein} onChange={(change) => setEin(change.target.value)} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-web">Website</FieldLabel>
-              <Input id="cust-web" value={website} onChange={(change) => setWebsite(change.target.value)} />
+                  <Input
+                    id="cust-ein"
+                    value={ein}
+                    placeholder="Enter EIN"
+                    onChange={(change) => setEin(change.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="cust-web">Website</FieldLabel>
+                  <Input
+                    id="cust-web"
+                    value={website}
+                    placeholder="https://www.example.com"
+                    onChange={(change) => setWebsite(change.target.value)}
+                  />
             </Field>
           </div>
           <Field>
@@ -253,24 +392,42 @@ export function CreateCustomerDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="cust-city">City</FieldLabel>
-              <Input id="cust-city" value={city} onChange={(change) => setCity(change.target.value)} />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-zip">ZIP</FieldLabel>
-              <Input id="cust-zip" value={zip} onChange={(change) => setZip(change.target.value)} />
+                  <Input
+                    id="cust-city"
+                    value={city}
+                    placeholder="Enter city"
+                    onChange={(change) => setCity(change.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="cust-zip">ZIP</FieldLabel>
+                  <Input
+                    id="cust-zip"
+                    value={zip}
+                    placeholder="Enter ZIP code"
+                    onChange={(change) => setZip(change.target.value)}
+                  />
             </Field>
           </div>
           <Field>
             <FieldLabel htmlFor="cust-notes">Notes</FieldLabel>
-            <Textarea id="cust-notes" value={notes} onChange={(change) => setNotes(change.target.value)} />
+            <Textarea
+              id="cust-notes"
+              value={notes}
+              placeholder="Internal notes about this customer"
+              onChange={(change) => setNotes(change.target.value)}
+            />
           </Field>
         </FieldGroup>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button disabled={!firstName.trim() && !companyName.trim()} onClick={save}>
-            Save and finish
+          <Button
+            disabled={saving || (!firstName.trim() && !companyName.trim())}
+            onClick={() => void save()}
+          >
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Save and finish"}
           </Button>
         </DialogFooter>
       </DialogContent>

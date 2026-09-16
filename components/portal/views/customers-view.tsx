@@ -6,18 +6,26 @@ import { toast } from "sonner";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
-import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
-import { crmCustomerName, crmSourceLabel, crmTypeLabel } from "@/lib/data/crm-people";
+import {
+  crmCustomerName,
+  crmSourceLabel,
+  crmTypeLabel,
+  type PortalCustomerCrm,
+} from "@/lib/data/crm-people";
 import { formatDate, formatMoney } from "@/lib/format";
 
 export function CustomersView() {
   const { customers, remove } = useCrmDirectory();
   const records = usePortalRecords();
   const rows = records.keep("customer", customers);
+  const pending = useCrmRecordPending();
+  const tableLoading = pending && rows.length === 0;
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<PortalCustomerCrm | null>(null);
 
   return (
     <PortalPage
@@ -34,6 +42,7 @@ export function CustomersView() {
         filename="customers"
         countLabel="Customers"
         searchPlaceholder="Search name, email, address, ID…"
+        loading={tableLoading}
         letters
         letterValue={(row) => crmCustomerName(row)}
         rows={rows}
@@ -144,30 +153,12 @@ export function CustomersView() {
             ),
           },
           {
-            id: "credit",
-            header: "Credit limit",
-            sortValue: (row) => row.creditLimit,
-            searchValue: (row) => formatMoney(row.creditLimit),
-            exportValue: (row) => formatMoney(row.creditLimit),
-            className: "tabular-nums",
-            cell: (row) => formatMoney(row.creditLimit),
-          },
-          {
             id: "tax",
             header: "Tax code",
             sortValue: (row) => row.taxCode,
             searchValue: (row) => `${row.taxCode} ${row.laborTaxCode}`,
             exportValue: (row) => row.taxCode,
             cell: (row) => row.taxCode,
-          },
-          {
-            id: "stop",
-            header: "On stop",
-            sortValue: (row) => (row.onStop ? 1 : 0),
-            searchValue: (row) => (row.onStop ? "yes" : "no"),
-            exportValue: (row) => (row.onStop ? "Yes" : "No"),
-            cell: (row) =>
-              row.onStop ? <StatusPill label="On stop" tone="danger" /> : <span className="text-muted-foreground">No</span>,
           },
           {
             id: "added",
@@ -180,6 +171,10 @@ export function CustomersView() {
         ]}
         actions={(row) => [
           { label: "Open file", href: `/pro/dashboard/customers/${row.id}` },
+          {
+            label: "Edit",
+            onSelect: () => setEditing(row),
+          },
           { label: "Estimates", href: `/pro/dashboard/customers/${row.id}?tab=estimates` },
           { label: "Jobs", href: `/pro/dashboard/customers/${row.id}?tab=jobs` },
           { label: "Reminders", href: `/pro/dashboard/customers/${row.id}?tab=reminders` },
@@ -195,6 +190,13 @@ export function CustomersView() {
         ]}
       />
       <CreateCustomerDialog open={open} onOpenChange={setOpen} />
+      <CreateCustomerDialog
+        open={Boolean(editing)}
+        customer={editing}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null);
+        }}
+      />
     </PortalPage>
   );
 }

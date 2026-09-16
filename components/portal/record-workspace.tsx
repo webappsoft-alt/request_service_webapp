@@ -59,7 +59,7 @@ export function RecordWorkspace({
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>
-      <div className="bg-[#eef1f5] px-3 pt-2">
+      <div data-record-tabs className="bg-[#eef1f5] px-3 pt-2">
         <div className="flex flex-wrap gap-1">
           {tabs.map((item) => {
             const Icon = item.icon;
@@ -68,6 +68,7 @@ export function RecordWorkspace({
               <button
                 key={item.id}
                 type="button"
+                data-tab-id={item.id}
                 onClick={() => setTab(item.id)}
                 className={cn(
                   "cursor-pointer inline-flex items-center gap-1.5 rounded-t-md border px-3 py-2 text-[13px] font-medium",

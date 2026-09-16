@@ -1,15 +1,23 @@
 "use client";
 
-import { useRef, useState, type DragEvent, type ReactNode } from "react";
-import { Camera, Check, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Camera, Check, ImageIcon, Loader2, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { extractUploadedUrl, uploadDoc, uploadFile } from "@/components/api/uploadFile";
 import { useJobFile, siteVisitFromRecord, type EstimateSiteVisit, type JobAttachment } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { employeeName } from "@/lib/data/portal";
 import type { Estimate, EstimateStatus, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -180,7 +188,7 @@ export function EstimateSiteVisitTab({
   estimate: Estimate;
   asJob: Job;
   locked: boolean;
-  onSave: (visit: EstimateSiteVisit) => void;
+  onSave: (visit: EstimateSiteVisit) => void | Promise<void>;
 }) {
   const { employees } = usePortalCrew();
   const { siteVisit, saveSiteVisit, actor } = useJobFile(asJob, estimate, undefined, "");
@@ -202,16 +210,135 @@ export function EstimateSiteVisitTab({
   const [over, setOver] = useState(false);
   const [preview, setPreview] = useState<JobAttachment | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const bypassingRef = useRef(false);
+
+  const isDirty = useMemo(() => {
+    if (!draft) return false;
+    return (
+      (draft.employeeId || "") !== (fallback.employeeId || "") ||
+      (draft.visitedAt || "") !== (fallback.visitedAt || "") ||
+      (draft.accessNotes || "").trim() !== (fallback.accessNotes || "").trim() ||
+      (draft.findings || "").trim() !== (fallback.findings || "").trim() ||
+      (draft.recommendations || "").trim() !== (fallback.recommendations || "").trim() ||
+      (draft.measurements || "").trim() !== (fallback.measurements || "").trim()
+    );
+  }, [draft, fallback]);
+
+  useEffect(() => {
+    if (!preview) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setPreview(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preview]);
+
+  // Window beforeunload (tab close / refresh)
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // Intercept navigation or tab change when form has unsaved changes
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleClickCapture = (event: MouseEvent) => {
+      if (bypassingRef.current) return;
+
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      // Allow clicks within the site visit form, modals, dropdowns, toasts
+      if (
+        target.closest("[data-site-visit-form]") ||
+        target.closest("[role='dialog']") ||
+        target.closest("[role='listbox']") ||
+        target.closest("[data-radix-popper-content-wrapper]") ||
+        target.closest("[data-radix-focus-guard]") ||
+        target.closest("[data-radix-portal]") ||
+        target.closest("[data-sonner-toaster]") ||
+        target.closest(".sonner-toast")
+      ) {
+        return;
+      }
+
+      // Check if clicking on an interactive navigation or button element
+      const interactiveEl = target.closest(
+        "button, a[href], [role='tab'], [role='button'], [data-tab-id]"
+      ) as HTMLElement | null;
+
+      if (!interactiveEl) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      pendingActionRef.current = () => {
+        interactiveEl.click();
+      };
+
+      setShowUnsavedDialog(true);
+    };
+
+    document.addEventListener("click", handleClickCapture, true);
+    return () => {
+      document.removeEventListener("click", handleClickCapture, true);
+    };
+  }, [isDirty]);
+
+  function executePending() {
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    setShowUnsavedDialog(false);
+    if (action) {
+      bypassingRef.current = true;
+      setTimeout(() => {
+        action();
+        setTimeout(() => {
+          bypassingRef.current = false;
+        }, 150);
+      }, 0);
+    }
+  }
 
   function patch(next: Partial<EstimateSiteVisit>) {
     setDraft({ ...visit, ...next });
   }
 
-  function persist(next: EstimateSiteVisit) {
+  async function persist(next: EstimateSiteVisit) {
     visitRef.current = next;
-    setDraft(next);
+    setDraft(null);
     saveSiteVisit(next);
-    onSave(next);
+    await onSave(next);
+  }
+
+  async function handleSaveAndLeave() {
+    await persist(visit);
+    toast.success("Site visit saved.");
+    executePending();
+  }
+
+  function handleDiscardAndLeave() {
+    setDraft(null);
+    executePending();
+  }
+
+  function handleCancelDialog() {
+    pendingActionRef.current = null;
+    setShowUnsavedDialog(false);
   }
 
   async function readFiles(list: FileList | File[]) {
@@ -263,36 +390,69 @@ export function EstimateSiteVisitTab({
   }
 
   return (
-    <div className="space-y-4">
+    <div data-site-visit-form className="space-y-4">
       <div className="rounded-[4px] border border-black/10 bg-card p-4">
-        <h2 className="inline-flex items-center gap-2 text-base font-semibold">
-          <Camera className="size-4 text-primary" />
-          Site inspection
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          What the technician saw on site. Photos and notes stay with this estimate until the office finalizes the quote.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="inline-flex items-center gap-2 text-base font-semibold">
+              <Camera className="size-4 text-primary" />
+              Site inspection
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              What the technician saw on site. Photos and notes stay with this estimate until the office finalizes the quote.
+            </p>
+          </div>
+          {locked ? null : (
+            <Button
+              size="sm"
+              disabled={savingNotes}
+              onClick={async () => {
+                try {
+                  setSavingNotes(true);
+                  await persist(visit);
+                  toast.success("Site visit saved.");
+                } catch {
+                  // toast shown by onSave handler
+                } finally {
+                  setSavingNotes(false);
+                }
+              }}
+            >
+              {savingNotes ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {savingNotes ? "Saving…" : "Save field notes"}
+            </Button>
+          )}
+        </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="Technician">
-            <NativeSelect
-              className="w-full"
+            <Select
               disabled={locked}
-              value={visit.employeeId}
-              onChange={(event) => {
-                const employee = employees.find((item) => item.id === event.target.value);
+              value={visit.employeeId || "__unassigned__"}
+              onValueChange={(value) => {
+                const resolvedId = value === "__unassigned__" ? "" : value;
+                const employee = employees.find((item) => item.id === resolvedId);
                 patch({
-                  employeeId: event.target.value,
+                  employeeId: resolvedId,
                   technician: employee ? employeeName(employee) : "",
                 });
               }}
             >
-              <NativeSelectOption value="">Unassigned</NativeSelectOption>
-              {employees.map((item) => (
-                <NativeSelectOption key={item.id} value={item.id}>
-                  {employeeName(item)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="start"
+                className="z-[100] w-[var(--radix-select-trigger-width)]"
+              >
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                {employees.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {employeeName(item)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Visit date">
             <Input
@@ -339,18 +499,6 @@ export function EstimateSiteVisitTab({
             />
           </Field>
         </div>
-        {locked ? null : (
-          <Button
-            className="mt-4"
-            size="sm"
-            onClick={() => {
-              persist(visit);
-              toast.success("Site visit saved.");
-            }}
-          >
-            Save field notes
-          </Button>
-        )}
       </div>
 
       <div className="rounded-[4px] border border-black/10 bg-card p-4">
@@ -424,18 +572,65 @@ export function EstimateSiteVisitTab({
         )}
       </div>
 
-      {preview ? (
-        <div className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center bg-black/60 p-6" onClick={() => setPreview(null)}>
-          {preview.type.startsWith("image/") ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt={preview.name} src={preview.dataUrl} className="max-h-full max-w-full cursor-default rounded-[4px]" onClick={(e) => e.stopPropagation()} />
-          ) : (
-            <a href={preview.dataUrl} download={preview.name} className="cursor-pointer rounded-[4px] bg-white px-4 py-3 text-sm font-semibold" onClick={(e) => e.stopPropagation()}>
-              Download {preview.name}
-            </a>
-          )}
-        </div>
-      ) : null}
+      {preview && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[9999] flex cursor-pointer items-center justify-center bg-black/85 p-4 sm:p-8 backdrop-blur-sm transition-opacity animate-in fade-in-0 duration-150"
+              onClick={() => setPreview(null)}
+              role="dialog"
+              aria-modal="true"
+            >
+              <button
+                type="button"
+                className="absolute top-4 right-4 z-10 flex size-10 items-center justify-center rounded-full bg-black/60 text-white/90 transition hover:bg-black/80 hover:text-white hover:scale-105"
+                aria-label="Close preview"
+                onClick={() => setPreview(null)}
+              >
+                <X className="size-5" />
+              </button>
+              {preview.type.startsWith("image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={preview.name}
+                  src={preview.dataUrl}
+                  className="max-h-[90vh] max-w-[90vw] cursor-default object-contain rounded-md shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : preview.type === "application/pdf" ? (
+                <div
+                  className="h-[85vh] w-full max-w-4xl overflow-hidden rounded-lg bg-card shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <iframe
+                    title={preview.name}
+                    src={preview.dataUrl}
+                    className="h-full w-full border-none"
+                  />
+                </div>
+              ) : (
+                <a
+                  href={preview.dataUrl}
+                  download={preview.name}
+                  className="cursor-pointer rounded-md bg-white px-6 py-3 text-sm font-semibold shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Download {preview.name}
+                </a>
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
+
+      <UnsavedChangesDialog
+        open={showUnsavedDialog}
+        onOpenChange={(open) => {
+          if (!open) handleCancelDialog();
+        }}
+        onSave={handleSaveAndLeave}
+        onDiscard={handleDiscardAndLeave}
+        onCancel={handleCancelDialog}
+      />
     </div>
   );
 }

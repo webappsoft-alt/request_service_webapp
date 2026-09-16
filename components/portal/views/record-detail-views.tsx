@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, CreditCard, FileText, LayoutDashboard, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
+import { Camera, ChevronDown, CreditCard, FileText, LayoutDashboard, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
 import { toast } from "sonner";
-import { ArchiveBadge, ArchiveButton } from "@/components/portal/archive-control";
-import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/portal/create-person-dialogs";
+import { ArchiveBadge } from "@/components/portal/archive-control";
+import { CreateNoteDialog, CreateReminderDialog, CreateTaskDialog } from "@/components/portal/create-person-dialogs";
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
@@ -55,6 +55,12 @@ import type { Estimate, Job } from "@/lib/types";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   calendarEventKindLabel,
   estimateCanConvert,
   estimateCanShare,
@@ -93,6 +99,9 @@ export function EstimateDetailView({ id }: { id: string }) {
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [converting, setConverting] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const [fetched, setFetched] = useState<Estimate | null>(null);
   const [fetching, setFetching] = useState(false);
   const [statusOverride, setStatusOverride] = useState<Estimate["status"] | null>(null);
@@ -341,7 +350,7 @@ export function EstimateDetailView({ id }: { id: string }) {
               </Button>
             ) : canShare ? (
               <Button size="sm" variant="default" onClick={openApproval}>
-                <Share2 />
+                <Share2 className="size-3.5" />
                 Send for approval
               </Button>
             ) : (
@@ -349,18 +358,50 @@ export function EstimateDetailView({ id }: { id: string }) {
                 {finalizing ? "Finalizing…" : "Finalize estimate"}
               </Button>
             )}
-            {job || !canConvert ? null : (
+            {job || !canConvert ? (
+              <Button size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
+                Assign technician
+              </Button>
+            ) : (
               <Button size="sm" variant="outline" data-action="convert-to-job" disabled={converting} onClick={convertToJob}>
                 {converting ? "Converting…" : "Convert to job"}
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
-              Assign technician
-            </Button>
-            <ArchiveButton kind="estimate" id={estimate.id} label={estimate.number} />
-            <SetReminderButton subjectKind="estimate" subjectId={estimate.id} />
-            <SetTaskButton subjectKind="estimate" subjectId={estimate.id} />
-            <AddNoteButton subjectKind="estimate" subjectId={estimate.id} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  More actions
+                  <ChevronDown className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {canConvert && !job ? (
+                  <DropdownMenuItem onSelect={() => setAssignOpen(true)}>Assign technician</DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={() => setTaskOpen(true)}>Create task</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNoteOpen(true)}>Add note</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>Set reminder</DropdownMenuItem>
+                {records.isArchived("estimate", estimate.id) ? (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      records.restore("estimate", estimate.id);
+                      toast.success(`${estimate.number} restored.`);
+                    }}
+                  >
+                    Restore estimate
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      records.archive("estimate", estimate.id);
+                      toast.success(`${estimate.number} archived.`);
+                    }}
+                  >
+                    Archive estimate
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
         notice={<FileNotices kind="estimate" id={estimate.id} />}
@@ -382,7 +423,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                           ? "site_visit"
                           : estimate.status;
                       if (apiReady) {
-                        void updateEstimateApi(estimate.id, {
+                        return updateEstimateApi(estimate.id, {
                           ...estimate,
                           status: nextStatus,
                           siteVisit: siteVisitToRecord(visit),
@@ -390,8 +431,8 @@ export function EstimateDetailView({ id }: { id: string }) {
                           .then(() => crm.refresh())
                           .catch((error) => {
                             toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
+                            throw error;
                           });
-                        return;
                       }
                       if (estimate.status === "draft") records.setStatus("estimate", estimate.id, "site_visit");
                     }}
@@ -492,6 +533,24 @@ export function EstimateDetailView({ id }: { id: string }) {
           if (!viaApi) records.setStatus("estimate", estimate.id, "sent");
         }}
       />
+      <CreateReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        subjectKind="estimate"
+        subjectId={estimate.id}
+      />
+      <CreateTaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        subjectKind="estimate"
+        subjectId={estimate.id}
+      />
+      <CreateNoteDialog
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        subjectKind="estimate"
+        subjectId={estimate.id}
+      />
     </>
   );
 }
@@ -506,6 +565,9 @@ export function JobDetailView({ id }: { id: string }) {
   const settings = useJobSettings(id);
   const [assignOpen, setAssignOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const [fetched, setFetched] = useState<Job | null>(null);
   const [fetching, setFetching] = useState(false);
   const allJobs = records.mergeJobs(jobs);
@@ -688,16 +750,48 @@ export function JobDetailView({ id }: { id: string }) {
             <Button size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
               Assign technician
             </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/pro/dashboard/schedule">Open calendar</Link>
-            </Button>
-            <ArchiveButton kind="job" id={job.id} label={job.number} />
-            <Button size="sm" variant="outline" disabled={deleting} onClick={deleteJob}>
-              {deleting ? "Deleting…" : "Delete job"}
-            </Button>
-            <SetReminderButton subjectKind="job" subjectId={job.id} />
-            <SetTaskButton subjectKind="job" subjectId={job.id} />
-            <AddNoteButton subjectKind="job" subjectId={job.id} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  More actions
+                  <ChevronDown className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem asChild>
+                  <Link href="/pro/dashboard/schedule">Open calendar</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTaskOpen(true)}>Create task</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNoteOpen(true)}>Add note</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>Set reminder</DropdownMenuItem>
+                {records.isArchived("job", job.id) ? (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      records.restore("job", job.id);
+                      toast.success(`${job.number} restored.`);
+                    }}
+                  >
+                    Restore job
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      records.archive("job", job.id);
+                      toast.success(`${job.number} archived.`);
+                    }}
+                  >
+                    Archive job
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  disabled={deleting}
+                  onSelect={deleteJob}
+                >
+                  {deleting ? "Deleting…" : "Delete job"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
         notice={<FileNotices kind="job" id={job.id} />}
@@ -779,6 +873,24 @@ export function JobDetailView({ id }: { id: string }) {
           await assign(assignment);
           toast.success(`${calendarEventKindLabel(assignment.kind)} assigned on the calendar.`);
         }}
+      />
+      <CreateReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        subjectKind="job"
+        subjectId={job.id}
+      />
+      <CreateTaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        subjectKind="job"
+        subjectId={job.id}
+      />
+      <CreateNoteDialog
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        subjectKind="job"
+        subjectId={job.id}
       />
     </>
   );

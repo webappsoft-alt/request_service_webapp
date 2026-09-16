@@ -78,6 +78,7 @@ import {
   type PublicFixedServiceSortBy,
   type PublicFixedServicesQuery,
 } from "@/store/publicFixedServicesSlice";
+import { fetchPublicProfessionals, publicProfessionalToProvider } from "@/store/publicProfessionalsSlice";
 import type { ServiceJobListing } from "@/components/marketplace/service-job-card";
 
 type SortKey = "price-asc" | "price-desc" | "rating";
@@ -247,7 +248,10 @@ function listingFromService(
   };
 }
 
-function providerFromService(service: PublicFixedService): Provider | null {
+function providerFromService(
+  service: PublicFixedService,
+  avatarByKey?: Map<string, string>,
+): Provider | null {
   const p = service.provider;
   if (!p) return null;
   const coords = Array.isArray(p.location?.coordinates)
@@ -263,13 +267,21 @@ function providerFromService(service: PublicFixedService): Provider | null {
     .slice(0, 2)
     .toUpperCase();
 
+  const avatarUrl =
+    p.avatarUrl?.trim() ||
+    avatarByKey?.get(p.id) ||
+    (p.slug ? avatarByKey?.get(p.slug) : undefined) ||
+    "";
+
   return {
     id: p.id,
     slug: p.slug || p.id,
     companyName: p.companyName,
     logoInitials: initials || "PR",
-    coverImage: service.images[0],
-    images: service.images,
+    logoUrl: avatarUrl || undefined,
+    // Profile card must not use fixed-service / portfolio images.
+    coverImage: undefined,
+    images: undefined,
     startingPrice: service.price,
     tagline: p.tagline || "",
     description: "",
@@ -289,7 +301,7 @@ function providerFromService(service: PublicFixedService): Provider | null {
     phone: "",
     email: "",
     workingHours: [],
-    gallery: service.images,
+    gallery: [],
     foundedYear: 0,
     employeeCount: "",
     reviews: [],
@@ -506,6 +518,9 @@ export function ServicesDirectory({
   const fixedServicesHasNextPage = useAppSelector(
     (state) => state.publicFixedServices.hasNextPage,
   );
+  const professionalsForAvatars = useAppSelector(
+    (state) => state.publicProfessionals.items,
+  );
 
   const filterLabel = (filterId: string, value: string) => {
     const filter = dynamicServiceFilters.find((item) => item.id === filterId);
@@ -607,15 +622,41 @@ export function ServicesDirectory({
     fixedServices.length > 0 &&
     (fixedServicesLoading || pendingRefresh);
 
-  const matchingProfessionals = useMemo(
-    () =>
-      uniqueProviders(
-        fixedServices
-          .map(providerFromService)
-          .filter((item): item is Provider => Boolean(item)),
-      ),
-    [fixedServices],
-  );
+  const matchingProfessionals = useMemo(() => {
+    const ids = new Set(
+      fixedServices
+        .map((service) => service.provider?.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const slugs = new Set(
+      fixedServices
+        .map((service) => service.provider?.slug)
+        .filter((slug): slug is string => Boolean(slug)),
+    );
+
+    // Prefer professionals API records (avatarUrl, specialties, startingPrice).
+    const fromProfessionalsApi = professionalsForAvatars
+      .filter((pro) => ids.has(pro.id) || (pro.slug && slugs.has(pro.slug)))
+      .map(publicProfessionalToProvider);
+
+    if (fromProfessionalsApi.length) {
+      return uniqueProviders(fromProfessionalsApi);
+    }
+
+    // Fallback while professionals list is loading / empty.
+    const avatarByKey = new Map<string, string>();
+    for (const pro of professionalsForAvatars) {
+      const url = pro.avatarUrl?.trim();
+      if (!url) continue;
+      if (pro.id) avatarByKey.set(pro.id, url);
+      if (pro.slug) avatarByKey.set(pro.slug, url);
+    }
+    return uniqueProviders(
+      fixedServices
+        .map((service) => providerFromService(service, avatarByKey))
+        .filter((item): item is Provider => Boolean(item)),
+    );
+  }, [fixedServices, professionalsForAvatars]);
 
   const pageCount = Math.max(1, Math.ceil(matchingProfessionals.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -657,11 +698,32 @@ export function ServicesDirectory({
       void dispatch(
         fetchPublicFixedServices({ query: apiQueryRef.current }),
       ).finally(() => setPendingRefresh(false));
+      // Professionals list supplies avatarUrl for matching-professional cards.
+      const usable = hasServiceGeoLocation(customerLocation);
+      void dispatch(
+        fetchPublicProfessionals({
+          query: {
+            zipCode: usable ? customerLocation.zip || undefined : undefined,
+            lat: usable ? customerLocation.lat : undefined,
+            lng: usable ? customerLocation.lng : undefined,
+            locationToken: usable
+              ? [
+                  customerLocation.zip || "",
+                  String(customerLocation.lat ?? ""),
+                  String(customerLocation.lng ?? ""),
+                ].join("|")
+              : "all",
+          },
+        }),
+      );
     }, 220);
     return () => window.clearTimeout(timer);
   }, [
     apiQueryKey,
     customerLocation.detecting,
+    customerLocation.lat,
+    customerLocation.lng,
+    customerLocation.zip,
     dispatch,
   ]);
 

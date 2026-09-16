@@ -10,7 +10,10 @@ import { CredentialMark, credentialLabel } from "@/components/shared/credential-
 import { ProviderLogo } from "@/components/shared/provider-logo";
 import { Rating } from "@/components/shared/rating";
 import { getProviderPresence } from "@/lib/data/service-directory";
-import { getProviderPhotos, getStartingPrice } from "@/lib/data/provider-media";
+import {
+  getProviderProfileImage,
+  getStartingPrice,
+} from "@/lib/data/provider-media";
 import { getServiceCategoryById } from "@/lib/data/services";
 import type { ExplorePlace } from "@/lib/data/profile-explore";
 import { formatProviderCardLocation, formatStartingPrice } from "@/lib/format";
@@ -82,17 +85,24 @@ export function ProviderCard({
     provider.serviceLabels?.length
       ? provider.serviceLabels
       : categories.map((category) => category.name)
-  ).slice(0, 2);
-  const photos = getProviderPhotos(provider);
-  const coverImage = photos[0]?.src;
+  ).slice(0, 4);
+  // Card photo = profile avatar only (never portfolio / project / service images).
+  const coverImage = getProviderProfileImage(provider);
   // Visual marketplace cards always keep the photo header layout (previous design).
   const showCover = visual;
-  const showListPhoto = !visual && Boolean(coverImage);
+  const showListPhoto = !visual;
   const startingPrice = getStartingPrice(provider);
   const hasCredentials = provider.licensed || provider.insured;
   const hasRating = provider.rating > 0;
   const presence = getProviderPresence(provider.id);
   const profileHref = professionalHref(provider.slug, place);
+  const description = provider.description?.trim() || "";
+  const contactName = provider.contact?.name?.trim() || "";
+  const categoryBadge =
+    categories[0]?.shortName ||
+    categories[0]?.name ||
+    services[0] ||
+    "Pro";
 
   function handleProfileClick(event: React.MouseEvent<HTMLAnchorElement>) {
     event.stopPropagation();
@@ -116,14 +126,14 @@ export function ProviderCard({
         <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-muted sm:aspect-auto sm:min-h-[13.5rem] sm:w-72 sm:shrink-0 lg:w-80">
           <Image
             src={coverImage}
-            alt={photos[0]?.alt ?? provider.companyName}
+            alt={provider.companyName}
             fill
             sizes="(max-width: 640px) 90vw, 288px"
             className="object-cover"
             unoptimized={coverImage.startsWith("http")}
           />
           <span className="absolute top-3 left-3 rounded-md bg-card/95 px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm">
-            {services[0] ?? "Pro"}
+            {categoryBadge}
           </span>
           {presence.online ? (
             <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-md bg-card/95 px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm">
@@ -139,6 +149,14 @@ export function ProviderCard({
               <h3 className="text-xl leading-snug font-semibold tracking-tight">
                 {provider.companyName}
               </h3>
+              {contactName ? (
+                <p className="text-sm text-muted-foreground">
+                  Contact: <span className="text-foreground/80">{contactName}</span>
+                  {provider.contact?.role ? (
+                    <span className="text-muted-foreground"> · {provider.contact.role}</span>
+                  ) : null}
+                </p>
+              ) : null}
               <p className="line-clamp-1 text-sm text-muted-foreground">{provider.tagline}</p>
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                 {hasRating ? (
@@ -156,18 +174,27 @@ export function ProviderCard({
                     {credentialLabel(provider.licensed, provider.insured)}
                   </span>
                 ) : null}
+                {provider.yearsInBusiness > 0 ? (
+                  <span className="text-sm text-muted-foreground">
+                    {provider.yearsInBusiness} years in business
+                  </span>
+                ) : null}
               </span>
             </div>
-            <p className="line-clamp-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              {provider.description}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {services.slice(0, 3).map((service) => (
-                <Badge key={service} variant="secondary">
-                  {service}
-                </Badge>
-              ))}
-            </div>
+            {description ? (
+              <p className="line-clamp-2 max-w-xl text-sm leading-6 text-muted-foreground">
+                {description}
+              </p>
+            ) : null}
+            {services.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {services.map((service) => (
+                  <Badge key={service} variant="secondary">
+                    {service}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 flex-row items-end justify-between gap-4 sm:w-44 sm:flex-col sm:items-end sm:justify-between">
@@ -206,16 +233,14 @@ export function ProviderCard({
     >
       {showCover ? (
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-          {coverImage ? (
-            <Image
-              src={coverImage}
-              alt={photos[0]?.alt ?? provider.companyName}
-              fill
-              sizes="(max-width: 768px) 82vw, 25vw"
-              className="object-cover"
-              unoptimized={coverImage.startsWith("http")}
-            />
-          ) : null}
+          <Image
+            src={coverImage}
+            alt={provider.companyName}
+            fill
+            sizes="(max-width: 768px) 82vw, 25vw"
+            className="object-cover"
+            unoptimized={coverImage.startsWith("http")}
+          />
           <span
             className="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-black/25"
             aria-hidden="true"

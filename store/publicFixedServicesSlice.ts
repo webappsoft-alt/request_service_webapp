@@ -32,6 +32,8 @@ export type PublicFixedServiceProvider = {
   slug: string;
   tagline: string;
   description?: string;
+  /** Professional profile photo from API (`avatarUrl`). */
+  avatarUrl?: string;
   rating: {
     average: number;
     totalReviews: number;
@@ -198,6 +200,10 @@ function normalizeProvider(raw: unknown): PublicFixedServiceProvider | null {
     tagline: typeof record.tagline === "string" ? record.tagline : "",
     description:
       typeof record.description === "string" ? record.description : undefined,
+    avatarUrl:
+      (typeof record.avatarUrl === "string" && record.avatarUrl.trim()) ||
+      (typeof record.avatar === "string" && record.avatar.trim()) ||
+      undefined,
     rating: {
       average: toNumber(rating.average, 0),
       totalReviews: toNumber(rating.totalReviews, 0),

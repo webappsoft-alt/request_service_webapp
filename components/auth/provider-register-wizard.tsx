@@ -18,9 +18,12 @@ import { PasswordInput } from "@/components/auth/password-input";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AddressAutocomplete,
@@ -705,19 +708,25 @@ export function ProviderRegisterWizard() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="team">Team size</FieldLabel>
-                <NativeSelect
-                  id="team"
-                  value={draft.employeeCount}
-                  onChange={(event) => patch({ employeeCount: event.target.value })}
-                  className="w-full"
+                <Select
+                  value={draft.employeeCount || undefined}
+                  onValueChange={(value) => patch({ employeeCount: value })}
                 >
-                  <NativeSelectOption value="">Optional</NativeSelectOption>
-                  {TEAM_SIZES.map((size) => (
-                    <NativeSelectOption key={size} value={size}>
-                      {size}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger id="team" className="w-full">
+                    <SelectValue placeholder="Optional" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    align="start"
+                    className="z-[100] w-[var(--radix-select-trigger-width)]"
+                  >
+                    {TEAM_SIZES.map((size) => (
+                      <SelectItem key={size} value={size}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

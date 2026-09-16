@@ -34,6 +34,13 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { crmCustomerName, crmTaskStatusLabel, taskMatches } from "@/lib/data/crm-people";
@@ -751,18 +758,31 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">No files yet.</p>
       )}
-      {preview ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={() => setPreview(null)}>
-          {preview.type.startsWith("image/") ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt={preview.name} src={preview.dataUrl} className="max-h-full max-w-full rounded-[4px]" />
-          ) : (
-            <a href={preview.dataUrl} download={preview.name} className="rounded-[4px] bg-white px-4 py-3 text-sm font-semibold">
-              Download {preview.name}
-            </a>
-          )}
-        </div>
-      ) : null}
+      <Dialog open={Boolean(preview)} onOpenChange={(next) => !next && setPreview(null)}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-6">{preview?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center overflow-hidden rounded-md bg-black/5 p-2">
+            {preview?.type.startsWith("image/") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt={preview.name}
+                src={preview.dataUrl}
+                className="max-h-[75vh] w-auto max-w-full rounded-[4px] object-contain"
+              />
+            ) : preview ? (
+              <a
+                href={preview.dataUrl}
+                download={preview.name}
+                className="text-sm font-medium text-primary underline"
+              >
+                Download {preview.name}
+              </a>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -188,5 +188,5 @@ export function useJobCosting(job: Job) {
     [commit, lines],
   );
 
-  return { lines, mix, updateLine, addLine, removeLine };
+  return { lines, mix, commit, updateLine, addLine, removeLine };
 }

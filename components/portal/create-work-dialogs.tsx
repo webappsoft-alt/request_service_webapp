@@ -47,6 +47,13 @@ import { formatMoney } from "@/lib/format";
 import type { Estimate, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  detectCurrentLocation,
+  hasLocation,
+  setLocationFromPlace,
+} from "@/store/locationSlice";
+
 type EstimateTab = "customer" | "scope" | "visit" | "review";
 type EstimatePath = "site_visit" | "office";
 type JobTab = "customer" | "schedule" | "review";
@@ -67,6 +74,8 @@ export function CreateEstimateDialog({
   requestNotes?: string;
 }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const customerLocation = useAppSelector((state) => state.location);
   const { session, provider, estimates } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { employees } = usePortalCrew();
@@ -79,10 +88,10 @@ export function CreateEstimateDialog({
   const [selectedCustomer, setSelectedCustomer] = useState(customerId ?? first?.id ?? "");
   const customer = customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = customer?.addresses[0];
-  const [street, setStreet] = useState(address?.street ?? "");
-  const [city, setCity] = useState(address?.city ?? "");
-  const [state, setState] = useState(address?.state ?? "CO");
-  const [zip, setZip] = useState(address?.zip ?? "");
+  const [street, setStreet] = useState(address?.street || customerLocation.address || "");
+  const [city, setCity] = useState(address?.city || customerLocation.city || "");
+  const [state, setState] = useState(address?.state || customerLocation.state || "CO");
+  const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
   const [issuedAt, setIssuedAt] = useState(todayISO());
   const [expiresAt, setExpiresAt] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -121,15 +130,48 @@ export function CreateEstimateDialog({
     pickCustomer(customerId ?? customers[0].id);
   }, [customerId, customers, open, selectedCustomer]);
 
+  // Auto-detect location if empty and not yet attempted
+  useEffect(() => {
+    if (!open) return;
+    if (customerLocation.detectAttempted || customerLocation.detecting) return;
+    if (hasLocation(customerLocation)) return;
+    void dispatch(detectCurrentLocation());
+  }, [customerLocation.detectAttempted, customerLocation.detecting, customerLocation, dispatch, open]);
+
+  // When location finishes detecting or is available, prefill if fields are empty
+  useEffect(() => {
+    if (!open) return;
+    if (!hasLocation(customerLocation)) return;
+    const currentCustomer = customers.find((item) => item.id === selectedCustomer);
+    const custAddr = currentCustomer?.addresses[0];
+    if (!custAddr?.street && !street) {
+      setStreet(customerLocation.address || "");
+    }
+    if (!custAddr?.city && !city) {
+      setCity(customerLocation.city || "");
+    }
+    if (!custAddr?.state && (!state || state === "CO")) {
+      setState(customerLocation.state || "CO");
+    }
+    if (!custAddr?.zip && !zip) {
+      setZip(customerLocation.zip || "");
+    }
+  }, [customerLocation, customers, open, selectedCustomer, street, city, state, zip]);
+
   function pickCustomer(id: string) {
     setSelectedCustomer(id);
     const next = customers.find((item) => item.id === id);
     const nextAddress = next?.addresses[0];
-    if (nextAddress) {
-      setStreet(nextAddress.street);
-      setCity(nextAddress.city);
-      setState(nextAddress.state);
-      setZip(nextAddress.zip);
+    if (nextAddress && (nextAddress.street || nextAddress.city || nextAddress.zip)) {
+      setStreet(nextAddress.street || "");
+      setCity(nextAddress.city || "");
+      setState(nextAddress.state || "CO");
+      setZip(nextAddress.zip || "");
+    } else if (hasLocation(customerLocation)) {
+      setStreet(customerLocation.address || "");
+      setCity(customerLocation.city || "");
+      setState(customerLocation.state || "CO");
+      setZip(customerLocation.zip || "");
     }
   }
 
@@ -138,6 +180,7 @@ export function CreateEstimateDialog({
     setCity(address.city || "");
     setState(address.state || "");
     setZip(address.zipCode || "");
+    dispatch(setLocationFromPlace(address));
   }
 
   async function create() {
@@ -414,6 +457,8 @@ export function CreateJobDialog({
   estimate?: Estimate;
 }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const customerLocation = useAppSelector((state) => state.location);
   const { session, provider, estimates, jobs } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { employees } = usePortalCrew();
@@ -428,10 +473,10 @@ export function CreateJobDialog({
   const [selectedCustomer, setSelectedCustomer] = useState(estimate?.customerId ?? customerId ?? first?.id ?? "");
   const customer = customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = source?.propertyAddress ?? customer?.addresses[0];
-  const [street, setStreet] = useState(address?.street ?? "");
-  const [city, setCity] = useState(address?.city ?? "");
-  const [state, setState] = useState(address?.state ?? "CO");
-  const [zip, setZip] = useState(address?.zip ?? "");
+  const [street, setStreet] = useState(address?.street || customerLocation.address || "");
+  const [city, setCity] = useState(address?.city || customerLocation.city || "");
+  const [state, setState] = useState(address?.state || customerLocation.state || "CO");
+  const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
   const [start, setStart] = useState(todayISO());
   const [due, setDue] = useState("");
   const [status, setStatus] = useState<JobStatus>("unscheduled");
@@ -468,6 +513,34 @@ export function CreateJobDialog({
     setSelectedCustomer(estimate?.customerId ?? customerId ?? customers[0].id);
   }, [customerId, customers, estimate, open, selectedCustomer]);
 
+  // Auto-detect location if empty and not yet attempted
+  useEffect(() => {
+    if (!open) return;
+    if (customerLocation.detectAttempted || customerLocation.detecting) return;
+    if (hasLocation(customerLocation)) return;
+    void dispatch(detectCurrentLocation());
+  }, [customerLocation.detectAttempted, customerLocation.detecting, customerLocation, dispatch, open]);
+
+  // When location finishes detecting or is available, prefill if fields are empty
+  useEffect(() => {
+    if (!open || sourceId) return;
+    if (!hasLocation(customerLocation)) return;
+    const currentCustomer = customers.find((item) => item.id === selectedCustomer);
+    const custAddr = currentCustomer?.addresses[0];
+    if (!custAddr?.street && !street) {
+      setStreet(customerLocation.address || "");
+    }
+    if (!custAddr?.city && !city) {
+      setCity(customerLocation.city || "");
+    }
+    if (!custAddr?.state && (!state || state === "CO")) {
+      setState(customerLocation.state || "CO");
+    }
+    if (!custAddr?.zip && !zip) {
+      setZip(customerLocation.zip || "");
+    }
+  }, [customerLocation, customers, open, selectedCustomer, sourceId, street, city, state, zip]);
+
   function pickSource(id: string) {
     setSourceId(id);
     const next = allEstimates.find((item) => item.id === id);
@@ -488,6 +561,14 @@ export function CreateJobDialog({
         unitPrice: item.unitPrice,
       })),
     );
+  }
+
+  function applyJobAddress(address: PlaceAddress) {
+    setStreet(address.formattedAddress || address.streetAddress);
+    setCity(address.city || "");
+    setState(address.state || "");
+    setZip(address.zipCode || "");
+    dispatch(setLocationFromPlace(address));
   }
 
   function create() {
@@ -573,8 +654,14 @@ export function CreateJobDialog({
             <Field label="Job name">
               <Input value={name} onChange={(event) => setName(event.target.value)} />
             </Field>
-            <Field label="Job address">
-              <Input value={street} onChange={(event) => setStreet(event.target.value)} />
+            <Field label="Job address" className="sm:col-span-2">
+              <AddressAutocomplete
+                id="job-address-autocomplete"
+                value={street}
+                onChange={setStreet}
+                onSelect={applyJobAddress}
+                placeholder="Start typing a street address…"
+              />
             </Field>
             <Field label="City">
               <Input value={city} onChange={(event) => setCity(event.target.value)} />
@@ -728,6 +815,7 @@ export function CreateLeadDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const customerLocation = useAppSelector((state) => state.location);
   const { provider, requests } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
@@ -762,9 +850,9 @@ export function CreateLeadDialog({
       providerId: provider.id,
       categoryId: provider.categoryIds[0] ?? "plumbing",
       channel: "direct",
-      zip: address?.zip ?? "",
-      city: address?.city ?? provider.city,
-      state: address?.state ?? provider.state,
+      zip: address?.zip || customerLocation.zip || "",
+      city: address?.city || customerLocation.city || provider.city,
+      state: address?.state || customerLocation.state || provider.state,
       details: details.trim() || `${serviceName.trim()} requested by phone.`,
       preferredDate: preferredDate || undefined,
       preferredTimeWindow,
@@ -777,7 +865,7 @@ export function CreateLeadDialog({
       customerPhone: customer.phone ?? "",
       serviceName: serviceName.trim(),
       categoryName: "Service",
-      neighborhood: address?.city ?? provider.city,
+      neighborhood: address?.city || customerLocation.city || provider.city,
     };
     records.addRequest(request);
     toast.success(`${request.number} added to leads.`);

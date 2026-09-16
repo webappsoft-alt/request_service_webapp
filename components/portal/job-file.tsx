@@ -285,15 +285,17 @@ export function JobMaterialsTab({
   invoice,
   technician,
   noun = "job",
+  onSave,
 }: {
   job: Job;
   estimate?: Estimate;
   invoice?: Invoice;
   technician: string;
   noun?: CostingNoun;
+  onSave?: (lines: JobCostLine[]) => void | Promise<void>;
 }) {
   const { addLog, locked } = useJobFile(job, estimate, invoice, technician);
-  return <JobCosting job={job} locked={locked} noun={noun} onMutate={addLog} />;
+  return <JobCosting job={job} locked={locked} noun={noun} onMutate={addLog} onSave={onSave} />;
 }
 
 export function JobSettingsTab({

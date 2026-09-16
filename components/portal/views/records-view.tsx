@@ -62,23 +62,25 @@ export function EstimatesView() {
   const records = usePortalRecords();
   const share = useEstimateShare();
   const [createOpen, setCreateOpen] = useState(false);
-  const [apiRows, setApiRows] = useState<EstimateRow[]>([]);
+  const [apiItems, setApiItems] = useState<Estimate[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
-  const useApi = crm.enabled && crm.ready && !archivedOnly;
-  const allRequests = records.mergeRequests(requests);
+  const useApi = Boolean(crm.enabled && crm.ready && !archivedOnly);
+
+  const allRequests = useMemo(() => records.mergeRequests(requests), [records, requests]);
+  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
 
   const clientRows = useMemo(
     () =>
       records
-        .listed("estimate", records.mergeEstimates(estimates), archivedOnly)
+        .listed("estimate", allEstimates, archivedOnly)
         .map((item) => ({
           ...item,
           status: records.statusOf("estimate", item.id, item.status),
           customerName: estimateCustomerName(item, customers, allRequests),
         }))
         .filter((item) => (archivedOnly || !status ? true : item.status === status)),
-    [allRequests, archivedOnly, customers, estimates, records, status],
+    [allEstimates, allRequests, archivedOnly, customers, records, status],
   );
 
   useEffect(() => {
@@ -90,13 +92,9 @@ export function EstimatesView() {
       force: true,
     })
       .then((result) => {
-        if (cancelled) return;
-        setApiRows(
-          result.items.map((item) => ({
-            ...item,
-            customerName: estimateCustomerName(item, customers, allRequests),
-          })),
-        );
+        if (!cancelled) {
+          setApiItems(result.items);
+        }
       })
       .catch((error) => {
         if (cancelled) return;
@@ -112,9 +110,18 @@ export function EstimatesView() {
     return () => {
       cancelled = true;
     };
-  }, [allRequests, customers, status, useApi]);
+  }, [status, useApi]);
 
-  const rows = useApi ? apiRows : clientRows;
+  const rows: EstimateRow[] = useMemo(() => {
+    if (useApi) {
+      return apiItems.map((item) => ({
+        ...item,
+        status: records.statusOf("estimate", item.id, item.status),
+        customerName: estimateCustomerName(item, customers, allRequests),
+      }));
+    }
+    return clientRows;
+  }, [allRequests, apiItems, clientRows, customers, records, useApi]);
   return (
     <PortalPage
       eyebrow="Work / Estimates"
@@ -370,13 +377,17 @@ export function JobsView() {
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const [createOpen, setCreateOpen] = useState(false);
-  const allEstimates = records.mergeEstimates(estimates);
-  const allInvoices = records.mergeInvoices(invoices);
+  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
+  const allInvoices = useMemo(() => records.mergeInvoices(invoices), [records, invoices]);
   const archivedOnly = status === "archived";
-  const rows = records
-    .listed("job", records.mergeJobs(jobs), archivedOnly)
-    .map((item) => ({ ...item, status: records.statusOf("job", item.id, item.status) }))
-    .filter((item) => (archivedOnly || !status ? true : item.status === status));
+  const rows = useMemo(
+    () =>
+      records
+        .listed("job", records.mergeJobs(jobs), archivedOnly)
+        .map((item) => ({ ...item, status: records.statusOf("job", item.id, item.status) }))
+        .filter((item) => (archivedOnly || !status ? true : item.status === status)),
+    [archivedOnly, jobs, records, status],
+  );
 
   return (
     <PortalPage
@@ -488,12 +499,16 @@ export function InvoicesView() {
   const records = usePortalRecords();
   const [paying, setPaying] = useState<Invoice | null>(null);
   const archivedOnly = status === "archived";
-  const allJobs = records.mergeJobs(jobs);
-  const allEstimates = records.mergeEstimates(estimates);
-  const rows = records
-    .listed("invoice", records.mergeInvoices(invoices), archivedOnly)
-    .map((item) => ({ ...item, status: records.statusOf("invoice", item.id, item.status) }))
-    .filter((item) => archivedOnly || invoiceMatchesBoardFilter(item, status));
+  const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
+  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
+  const rows = useMemo(
+    () =>
+      records
+        .listed("invoice", records.mergeInvoices(invoices), archivedOnly)
+        .map((item) => ({ ...item, status: records.statusOf("invoice", item.id, item.status) }))
+        .filter((item) => archivedOnly || invoiceMatchesBoardFilter(item, status)),
+    [archivedOnly, invoices, records, status],
+  );
 
   return (
     <PortalPage eyebrow="Billing" title="Invoices" description="Each invoice keeps the original estimate plus approved extras.">
@@ -595,13 +610,17 @@ export function PaymentsView() {
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const archivedOnly = status === "archived";
-  const allInvoices = records.mergeInvoices(invoices);
-  const allJobs = records.mergeJobs(jobs);
-  const allEstimates = records.mergeEstimates(estimates);
-  const rows = records
-    .listed("payment", records.mergePayments(payments), archivedOnly)
-    .map((item) => ({ ...item, status: records.statusOf("payment", item.id, item.status) }))
-    .filter((item) => archivedOnly || paymentMatchesBoardFilter(item, status));
+  const allInvoices = useMemo(() => records.mergeInvoices(invoices), [records, invoices]);
+  const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
+  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
+  const rows = useMemo(
+    () =>
+      records
+        .listed("payment", records.mergePayments(payments), archivedOnly)
+        .map((item) => ({ ...item, status: records.statusOf("payment", item.id, item.status) }))
+        .filter((item) => archivedOnly || paymentMatchesBoardFilter(item, status)),
+    [archivedOnly, payments, records, status],
+  );
 
   return (
     <PortalPage

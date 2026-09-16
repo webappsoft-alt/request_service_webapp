@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
+import { customerPaths } from "@/lib/customer-paths";
 import { readPendingFixedOrder } from "@/lib/booking/pending-fixed-order";
 
 function isCustomerAuthPath(pathname: string): boolean {
@@ -100,12 +101,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
         return;
       }
       if (isCustomerAuthPath(pathname)) {
-        // Prefer ?next=… (order resume), then pending order returnPath, else home.
+        // Prefer ?next=… (order resume), then pending order returnPath, else dashboard.
         const fromQuery = readNextFromLocation();
         const fromPending = safeInternalPath(
           readPendingFixedOrder()?.returnPath,
         );
-        router.replace(fromQuery || fromPending || "/");
+        router.replace(fromQuery || fromPending || customerPaths.dashboard);
       }
       return;
     }

@@ -42,6 +42,7 @@ import {
   formatOrderStatus,
   orderStatusBadgeVariant,
 } from "@/lib/orders/order-status";
+import { customerPaths } from "@/lib/customer-paths";
 import { cn } from "@/lib/utils";
 
 function OrdersPagination({
@@ -121,7 +122,7 @@ function OrderCard({
   order: CustomerOrderListItem;
   onOpen: (order: CustomerOrderListItem) => void;
 }) {
-  const href = `/account/orders/${order.id}`;
+  const href = customerPaths.order(order.id);
   const title = orderServiceTitle(order);
   const images = order.service?.images?.filter(Boolean) ?? [];
   const address = formatOrderAddressLine(order.address);
@@ -220,7 +221,7 @@ export function CustomerOrdersView() {
   useEffect(() => {
     if (!auth.hydrated) return;
     if (!isAuthenticated) {
-      router.replace(`/login?next=${encodeURIComponent("/account/orders")}`);
+      router.replace(`/login?next=${encodeURIComponent(customerPaths.orders)}`);
     }
   }, [auth.hydrated, isAuthenticated, router]);
 

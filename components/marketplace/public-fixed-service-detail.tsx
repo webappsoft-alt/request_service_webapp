@@ -47,6 +47,7 @@ import {
   readPendingFixedOrder,
   type PendingFixedOrder,
 } from "@/lib/booking/pending-fixed-order";
+import { customerPaths } from "@/lib/customer-paths";
 
 const RELATED_LIMIT = 8;
 
@@ -457,7 +458,7 @@ export function PublicFixedServiceDetail({
       router.replace(query ? `${pathname}?${query}` : pathname, {
         scroll: false,
       });
-      router.push(`/account/orders/${existing.id}`);
+      router.push(customerPaths.order(existing.id));
       return;
     }
 
@@ -678,7 +679,7 @@ export function PublicFixedServiceDetail({
             ...(openOrder
               ? {
                   requestLabel: "View order",
-                  requestHref: `/account/orders/${openOrder.id}`,
+                  requestHref: customerPaths.order(openOrder.id),
                   requestHint: `Already booked · ${formatOrderStatus(openOrder.status)}${
                     openOrder.orderNumber
                       ? ` · ${openOrder.orderNumber}`

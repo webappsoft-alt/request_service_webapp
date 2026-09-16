@@ -1,14 +1,6 @@
-import { AccountSettingsView } from "@/components/account/account-settings-view";
-import { buildMetadata } from "@/lib/seo";
-
-export const metadata = buildMetadata({
-  title: "Account Settings",
-  description: "Manage your Request Service customer account settings.",
-  path: "/account/settings",
-  index: false,
-  follow: false,
-});
+import { redirect } from "next/navigation";
+import { customerPaths } from "@/lib/customer-paths";
 
 export default function AccountSettingsPage() {
-  return <AccountSettingsView />;
+  redirect(customerPaths.settings);
 }

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { MessageThreadSkeleton } from "@/components/shared/loading-skeletons";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { StatusPill } from "@/components/portal/status-pill";
+import { customerPaths } from "@/lib/customer-paths";
 import {
   listPublicChatThreads,
   markPublicChatRead,
@@ -58,7 +59,11 @@ function resolveListingEmail(
   return String(guestEmail || "").trim();
 }
 
-export function CustomerMessagesView() {
+export function CustomerMessagesView({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedId = searchParams.get("thread") ?? "";
@@ -86,7 +91,7 @@ export function CustomerMessagesView() {
     if (!auth.hydrated) return;
     if (!isAuthenticated) {
       router.replace(
-        `/login?next=${encodeURIComponent("/account/messages")}`,
+        `/login?next=${encodeURIComponent(customerPaths.messages)}`,
       );
     }
   }, [auth.hydrated, isAuthenticated, router]);
@@ -211,6 +216,9 @@ export function CustomerMessagesView() {
   }
 
   if (!auth.hydrated || !isAuthenticated) {
+    if (embedded) {
+      return <CenteredSpinner label="Loading messages" className="min-h-64" />;
+    }
     return (
       <Section tone="muted">
         <Container>
@@ -222,9 +230,9 @@ export function CustomerMessagesView() {
 
   const showInitialLoading = loading && !threads.length && !error;
 
-  return (
-    <Section tone="muted">
-      <Container className="max-w-6xl space-y-6">
+  const body = (
+    <div className="space-y-6">
+      {embedded ? null : (
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Messages
@@ -233,133 +241,141 @@ export function CustomerMessagesView() {
             Conversations with professionals you contacted from their profiles.
           </p>
         </div>
+      )}
 
-        {showInitialLoading ? (
-          <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading messages">
-            {Array.from({ length: 6 }, (_, i) => (
-              <MessageThreadSkeleton key={`msg-sk-${i}`} />
-            ))}
-          </div>
-        ) : error && !threads.length ? (
-          <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
-            <p className="text-base font-medium text-foreground">
-              Couldn’t load your messages
-            </p>
-            <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              {error}
-            </p>
-            <Button type="button" onClick={() => void loadThreads()}>
-              Try again
+      {showInitialLoading ? (
+        <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading messages">
+          {Array.from({ length: 6 }, (_, i) => (
+            <MessageThreadSkeleton key={`msg-sk-${i}`} />
+          ))}
+        </div>
+      ) : error && !threads.length ? (
+        <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
+          <p className="text-base font-medium text-foreground">
+            Couldn’t load your messages
+          </p>
+          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+            {error}
+          </p>
+          <Button type="button" onClick={() => void loadThreads()}>
+            Try again
+          </Button>
+        </div>
+      ) : !threads.length ? (
+        <NoData
+          icon={<MessageCircle className="size-4" />}
+          title="No messages yet"
+          description="When you chat with a professional from their profile, conversations will show up here."
+          action={
+            <Button asChild>
+              <Link href="/find-a-professional">Find a professional</Link>
             </Button>
-          </div>
-        ) : !threads.length ? (
-          <NoData
-            icon={<MessageCircle className="size-4" />}
-            title="No messages yet"
-            description="When you chat with a professional from their profile, conversations will show up here."
-            action={
-              <Button asChild>
-                <Link href="/find-a-professional">Find a professional</Link>
-              </Button>
-            }
-          />
-        ) : (
-          <div className="space-y-4">
-            {error ? (
-              <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-                {error}{" "}
-                <button
-                  type="button"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
-                  onClick={() => void loadThreads()}
-                >
-                  Retry
-                </button>
-              </div>
-            ) : null}
-
-            <div className="relative max-w-sm">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search conversations…"
-                className="pl-9"
-                aria-label="Search conversations"
-              />
+          }
+        />
+      ) : (
+        <div className="space-y-4">
+          {error ? (
+            <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+              {error}{" "}
+              <button
+                type="button"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+                onClick={() => void loadThreads()}
+              >
+                Retry
+              </button>
             </div>
+          ) : null}
 
-            {filteredThreads.length ? (
-              <div className="grid min-h-[32rem] overflow-hidden rounded-xl border border-input bg-card lg:grid-cols-[18rem_minmax(0,1fr)]">
-                <ul className="divide-y divide-black/8 border-b border-black/8 lg:border-r lg:border-b-0">
-                  {filteredThreads.map((thread) => {
-                    const active = selected?.id === thread.id;
-                    return (
-                      <li key={thread.id}>
-                        <Link
-                          href={`/account/messages?thread=${thread.id}`}
-                          className={cn(
-                            "flex flex-col gap-1 px-4 py-3 text-sm",
-                            active
-                              ? "bg-[#003F7D]/8"
-                              : "hover:bg-[#eef1f5]",
-                          )}
-                        >
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="font-medium">{THREAD_TITLE}</span>
-                            {thread.unreadForCustomer ? (
-                              <StatusPill
-                                label={`${thread.unreadForCustomer} new`}
-                                tone="warning"
-                              />
-                            ) : null}
-                          </span>
-                          <span className="line-clamp-2 text-xs text-muted-foreground">
-                            {lastPreview(thread)}
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {selected ? (
-                  <div className="flex min-h-0 flex-col">
-                    <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
-                      <div>
-                        <p className="font-semibold">{THREAD_TITLE}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Your conversation
-                          {connected ? " · live" : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <ChatPanel
-                      messages={selected.messages}
-                      self="customer"
-                      onSend={handleSend}
-                      onTypingChange={(isTyping) =>
-                        setTyping(selected.id, isTyping)
-                      }
-                      footer="Your message notifies the professional in their portal."
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <NoData
-                icon={<Search className="size-4" />}
-                title="No matching conversations"
-                description="Try a different search term, or clear the filter to see all messages."
-                action={
-                  <Button type="button" variant="outline" onClick={() => setQuery("")}>
-                    Clear search
-                  </Button>
-                }
-              />
-            )}
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search conversations…"
+              className="pl-9"
+              aria-label="Search conversations"
+            />
           </div>
-        )}
-      </Container>
+
+          {filteredThreads.length ? (
+            <div className="grid min-h-[32rem] overflow-hidden rounded-xl border border-input bg-card lg:grid-cols-[18rem_minmax(0,1fr)]">
+              <ul className="divide-y divide-black/8 border-b border-black/8 lg:border-r lg:border-b-0">
+                {filteredThreads.map((thread) => {
+                  const active = selected?.id === thread.id;
+                  return (
+                    <li key={thread.id}>
+                      <Link
+                        href={`${customerPaths.messages}?thread=${thread.id}`}
+                        className={cn(
+                          "flex flex-col gap-1 px-4 py-3 text-sm",
+                          active
+                            ? "bg-[#003F7D]/8"
+                            : "hover:bg-[#eef1f5]",
+                        )}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{THREAD_TITLE}</span>
+                          {thread.unreadForCustomer ? (
+                            <StatusPill
+                              label={`${thread.unreadForCustomer} new`}
+                              tone="warning"
+                            />
+                          ) : null}
+                        </span>
+                        <span className="line-clamp-2 text-xs text-muted-foreground">
+                          {lastPreview(thread)}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              {selected ? (
+                <div className="flex min-h-0 flex-col">
+                  <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
+                    <div>
+                      <p className="font-semibold">{THREAD_TITLE}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Your conversation
+                        {connected ? " · live" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <ChatPanel
+                    messages={selected.messages}
+                    self="customer"
+                    onSend={handleSend}
+                    onTypingChange={(isTyping) =>
+                      setTyping(selected.id, isTyping)
+                    }
+                    footer="Your message notifies the professional in their portal."
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <NoData
+              icon={<Search className="size-4" />}
+              title="No matching conversations"
+              description="Try a different search term, or clear the filter to see all messages."
+              action={
+                <Button type="button" variant="outline" onClick={() => setQuery("")}>
+                  Clear search
+                </Button>
+              }
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <Section tone="muted">
+      <Container className="max-w-6xl">{body}</Container>
     </Section>
   );
 }

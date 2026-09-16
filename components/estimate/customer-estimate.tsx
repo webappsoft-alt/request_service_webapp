@@ -16,6 +16,7 @@ import {
 import { getData, postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { Button } from "@/components/ui/button";
+import { rememberCustomerEstimateToken } from "@/lib/booking/customer-estimates-store";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -160,6 +161,7 @@ export function CustomerEstimatePage({ token }: { token: string }) {
         setApproval(undefined);
         return;
       }
+      rememberCustomerEstimateToken(token);
       setSnapshot(mapped.snapshot);
       setApproval(mapped.approval);
     } catch (err) {

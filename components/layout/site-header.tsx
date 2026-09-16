@@ -18,6 +18,7 @@ import { Logo } from "@/components/layout/logo";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { ProHeader } from "@/components/pro/pro-header";
 import { primaryNav, secondaryNav } from "@/lib/data/navigation";
+import { customerPaths } from "@/lib/customer-paths";
 import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
@@ -151,7 +152,7 @@ function HeaderActions({
     const isProvider = user.role === "provider";
     const settingsHref = isProvider
       ? "/pro/dashboard/settings"
-      : "/account/settings";
+      : customerPaths.settings;
 
     const onLogout = () =>
       handleUserLogout({
@@ -177,13 +178,13 @@ function HeaderActions({
             : (
                 <>
                   {wrap(
-                    <Button variant="outline" asChild>
-                      <Link href="/account/orders">My orders</Link>
+                    <Button asChild>
+                      <Link href={customerPaths.dashboard}>Dashboard</Link>
                     </Button>,
                   )}
                   {wrap(
                     <Button variant="outline" asChild>
-                      <Link href="/account/messages">Messages</Link>
+                      <Link href={customerPaths.messages}>Messages</Link>
                     </Button>,
                   )}
                 </>
@@ -208,7 +209,16 @@ function HeaderActions({
       );
     }
 
-    return <UserAccountMenu user={user} />;
+    return (
+      <div className="flex items-center gap-2">
+        {!isProvider ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={customerPaths.dashboard}>Dashboard</Link>
+          </Button>
+        ) : null}
+        <UserAccountMenu user={user} />
+      </div>
+    );
   }
 
   return (

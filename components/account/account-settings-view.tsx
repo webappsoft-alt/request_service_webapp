@@ -36,6 +36,7 @@ import {
   updateAuthUser,
   type AuthUser,
 } from "@/store/authSlice";
+import { customerPaths } from "@/lib/customer-paths";
 import { cn } from "@/lib/utils";
 
 function initialsFor(user: AuthUser): string {
@@ -102,7 +103,11 @@ function displayNameFromUser(user: AuthUser): string {
   return String(user.email || "Customer");
 }
 
-export function AccountSettingsView() {
+export function AccountSettingsView({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const fileInputId = useId();
@@ -140,7 +145,7 @@ export function AccountSettingsView() {
     if (!auth.hydrated) return;
     if (!isAuthenticated || !user) {
       router.replace(
-        `/login?next=${encodeURIComponent("/account/settings")}`,
+        `/login?next=${encodeURIComponent(customerPaths.settings)}`,
       );
     }
   }, [auth.hydrated, isAuthenticated, user, router]);
@@ -222,6 +227,9 @@ export function AccountSettingsView() {
   }
 
   if (!auth.hydrated) {
+    if (embedded) {
+      return <p className="text-sm text-muted-foreground">Loading account…</p>;
+    }
     return (
       <Section tone="muted">
         <Container>
@@ -448,40 +456,7 @@ export function AccountSettingsView() {
     }
   }
 
-  return (
-    <Section tone="muted" className="relative overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--brand)_16%,transparent),transparent_68%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,color-mix(in_oklab,var(--background)_40%,transparent)_45%,var(--background)_100%)]"
-      />
-
-      <Container className="relative max-w-3xl">
-        <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex flex-col gap-2">
-            <p className="eyebrow text-muted-foreground">Account</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Profile settings
-            </h1>
-            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-              Update your details, photo, location, and password for Request
-              Services.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-fit border-destructive/30 bg-background/80 text-destructive backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => handleUserLogout()}
-          >
-            <LogOut className="size-4" />
-            Log out
-          </Button>
-        </div>
-
+  const formCard = (
         <div className="overflow-hidden rounded-2xl border border-border/80 bg-card/95 shadow-[0_1px_0_rgba(15,23,42,0.04),0_18px_48px_-28px_rgba(0,63,125,0.4)] backdrop-blur-sm">
           <div className="border-b border-border/70 bg-linear-to-br from-primary/[0.07] via-card to-card px-5 py-7 sm:px-8">
             <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
@@ -675,7 +650,7 @@ export function AccountSettingsView() {
                       )}
                     </Button>
                     <Button asChild type="button" variant="ghost">
-                      <Link href="/">Back to home</Link>
+                      <Link href={customerPaths.site}>Back to home</Link>
                     </Button>
                   </div>
                 </form>
@@ -751,6 +726,46 @@ export function AccountSettingsView() {
             </Tabs>
           </div>
         </div>
+  );
+
+  if (embedded) {
+    return <div className="w-full">{formCard}</div>;
+  }
+
+  return (
+    <Section tone="muted" className="relative overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--brand)_16%,transparent),transparent_68%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,color-mix(in_oklab,var(--background)_40%,transparent)_45%,var(--background)_100%)]"
+      />
+
+      <Container className="relative max-w-3xl">
+        <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-2">
+            <p className="eyebrow text-muted-foreground">Account</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Profile settings
+            </h1>
+            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              Update your details, photo, location, and password for Request
+              Services.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-fit border-destructive/30 bg-background/80 text-destructive backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => handleUserLogout()}
+          >
+            <LogOut className="size-4" />
+            Log out
+          </Button>
+        </div>
+        {formCard}
       </Container>
     </Section>
   );

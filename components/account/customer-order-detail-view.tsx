@@ -46,6 +46,7 @@ import {
   formatPaymentStatus,
   orderStatusBadgeVariant,
 } from "@/lib/orders/order-status";
+import { customerPaths } from "@/lib/customer-paths";
 import { cn } from "@/lib/utils";
 
 function SideCard({
@@ -237,7 +238,13 @@ function CustomerOrderActions({
   );
 }
 
-export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
+export function CustomerOrderDetailView({
+  orderId,
+  embedded = false,
+}: {
+  orderId: string;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
@@ -246,7 +253,7 @@ export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
   const list = useAppSelector(selectCustomerOrders);
   const loading = useAppSelector(selectCustomerOrderDetailLoading);
   const error = useAppSelector(selectCustomerOrderDetailError);
-  const nextPath = `/account/orders/${encodeURIComponent(orderId)}`;
+  const nextPath = customerPaths.order(orderId);
 
   const activeOrder = useMemo(() => {
     if (order?.id === orderId) return order;
@@ -279,68 +286,68 @@ export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.hydrated, isAuthenticated, orderId, dispatch]);
 
-  if (!auth.hydrated || !isAuthenticated) {
+  function shell(
+    content: React.ReactNode,
+    options?: { className?: string; density?: "tight" },
+  ) {
+    if (embedded) {
+      return <div className={options?.className}>{content}</div>;
+    }
     return (
-      <Section tone="muted">
-        <Container>
-          <CenteredSpinner label="Loading order" className="min-h-64" />
-        </Container>
+      <Section tone="muted" density={options?.density}>
+        <Container className={options?.className}>{content}</Container>
       </Section>
     );
+  }
+
+  if (!auth.hydrated || !isAuthenticated) {
+    return shell(<CenteredSpinner label="Loading order" className="min-h-64" />);
   }
 
   if (loading && !activeOrder) {
-    return (
-      <Section tone="muted">
-        <Container className="max-w-6xl py-4">
-          <ServiceDetailSkeleton />
-        </Container>
-      </Section>
-    );
+    return shell(<ServiceDetailSkeleton />, { className: "max-w-6xl py-4" });
   }
 
   if (error && !activeOrder) {
-    return (
-      <Section tone="muted">
-        <Container className="max-w-3xl space-y-4">
-          <Button variant="ghost" size="sm" className="w-fit gap-1.5" asChild>
-            <Link href="/account/orders">
-              <ArrowLeft className="size-3.5" />
-              Back to orders
-            </Link>
+    return shell(
+      <>
+        <Button variant="ghost" size="sm" className="w-fit gap-1.5" asChild>
+          <Link href={customerPaths.orders}>
+            <ArrowLeft className="size-3.5" />
+            Back to orders
+          </Link>
+        </Button>
+        <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
+          <p className="text-base font-medium text-foreground">
+            Couldn’t load this order
+          </p>
+          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+            {error}
+          </p>
+          <Button
+            type="button"
+            onClick={() => void dispatch(fetchCustomerOrderById(orderId))}
+          >
+            Try again
           </Button>
-          <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
-            <p className="text-base font-medium text-foreground">
-              Couldn’t load this order
-            </p>
-            <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              {error}
-            </p>
-            <Button
-              type="button"
-              onClick={() => void dispatch(fetchCustomerOrderById(orderId))}
-            >
-              Try again
-            </Button>
-          </div>
-        </Container>
-      </Section>
+        </div>
+      </>,
+      { className: "max-w-3xl space-y-4" },
     );
   }
 
   if (!activeOrder) {
-    return (
-      <Section tone="muted">
-        <Container className="max-w-3xl space-y-4">
-          <Button variant="ghost" size="sm" className="w-fit gap-1.5" asChild>
-            <Link href="/account/orders">
-              <ArrowLeft className="size-3.5" />
-              Back to orders
-            </Link>
-          </Button>
-          <CenteredSpinner label="Loading order" className="min-h-64" />
-        </Container>
-      </Section>
+    return shell(
+      <>
+        <Button variant="ghost" size="sm" className="w-fit gap-1.5" asChild>
+          <Link href={customerPaths.orders}>
+            <ArrowLeft className="size-3.5" />
+            Back to orders
+          </Link>
+        </Button>
+        <CenteredSpinner label="Loading order" className="min-h-64" />
+      </>,
+      { className: "max-w-3xl space-y-4" },
     );
   }
 
@@ -358,12 +365,11 @@ export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
       ? `${(pricing.taxRate * 100).toFixed(2)}%`
       : null;
 
-  return (
-    <Section tone="muted" density="tight">
-      <Container className="max-w-6xl space-y-5">
+  return shell(
+    <>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" className="-ml-2 w-fit gap-1.5" asChild>
-            <Link href="/account/orders">
+            <Link href={customerPaths.orders}>
               <ArrowLeft className="size-3.5" />
               Back to orders
             </Link>
@@ -640,7 +646,7 @@ export function CustomerOrderDetailView({ orderId }: { orderId: string }) {
             />
           </aside>
         </div>
-      </Container>
-    </Section>
+    </>,
+    { className: "max-w-6xl space-y-5", density: "tight" },
   );
 }

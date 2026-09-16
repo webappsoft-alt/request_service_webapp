@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, LogOut, MessageCircle, Package, Settings, Store } from "lucide-react";
+import {
+  ChevronDown,
+  LogOut,
+  MessageCircle,
+  Settings,
+  Store,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { listPublicChatThreads } from "@/lib/api/chat-client";
 import { readChatGuest } from "@/lib/booking/chat-store";
+import { customerPaths } from "@/lib/customer-paths";
 import { getUserAvatarSrc, type AuthUser } from "@/store/authSlice";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { cn } from "@/lib/utils";
@@ -52,7 +59,7 @@ export function UserAccountMenu({
   const isProvider = user.role === "provider";
   const settingsHref = isProvider
     ? "/pro/dashboard/settings"
-    : "/account/settings";
+    : customerPaths.settings;
   const avatarUrl = getUserAvatarSrc(user);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
@@ -104,25 +111,17 @@ export function UserAccountMenu({
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       {!isProvider ? (
-        <>
-          <DropdownMenuItem asChild>
-            <Link href="/account/orders">
-              <Package />
-              My orders
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href="/account/messages">
-              <MessageCircle />
-              <span className="flex-1">Messages</span>
-              {unreadMessages > 0 ? (
-                <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                  {unreadMessages > 9 ? "9+" : unreadMessages}
-                </span>
-              ) : null}
-            </Link>
-          </DropdownMenuItem>
-        </>
+        <DropdownMenuItem asChild>
+          <Link href={customerPaths.messages}>
+            <MessageCircle />
+            <span className="flex-1">Messages</span>
+            {unreadMessages > 0 ? (
+              <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                {unreadMessages > 9 ? "9+" : unreadMessages}
+              </span>
+            ) : null}
+          </Link>
+        </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem asChild>
         <Link href={settingsHref}>

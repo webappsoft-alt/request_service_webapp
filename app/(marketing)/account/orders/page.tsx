@@ -1,14 +1,6 @@
-import { CustomerOrdersView } from "@/components/account/customer-orders-view";
-import { buildMetadata } from "@/lib/seo";
-
-export const metadata = buildMetadata({
-  title: "My Orders",
-  description: "Private account page for your Request Service bookings.",
-  path: "/account/orders",
-  index: false,
-  follow: false,
-});
+import { redirect } from "next/navigation";
+import { customerPaths } from "@/lib/customer-paths";
 
 export default function CustomerOrdersPage() {
-  return <CustomerOrdersView />;
+  redirect(customerPaths.orders);
 }

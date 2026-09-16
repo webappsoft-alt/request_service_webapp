@@ -44,6 +44,7 @@ import {
 } from "@/lib/booking/pending-fixed-order";
 import { findOpenOrderForService } from "@/lib/orders/order-status";
 import { formatStartingPrice } from "@/lib/format";
+import { customerPaths } from "@/lib/customer-paths";
 import { cn } from "@/lib/utils";
 
 function toDateInputValue(date: Date) {
@@ -240,7 +241,7 @@ export function FixedServiceOrderDialog({
     if (existing) {
       toast.error("You already have an open order for this service.");
       onOpenChange(false);
-      router.push(`/account/orders/${existing.id}`);
+      router.push(customerPaths.order(existing.id));
       return;
     }
 
@@ -281,7 +282,7 @@ export function FixedServiceOrderDialog({
       );
       onOpenChange(false);
       if (result.order.id) {
-        router.push(`/account/orders/${result.order.id}`);
+        router.push(customerPaths.order(result.order.id));
       }
     } catch (error) {
       toast.error(

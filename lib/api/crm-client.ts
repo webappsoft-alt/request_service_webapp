@@ -377,6 +377,8 @@ export type CrmListQuery = {
   page?: number;
   limit?: number;
   search?: string;
+  status?: string;
+  customerId?: string;
   silent?: boolean;
   force?: boolean;
 };
@@ -523,6 +525,24 @@ export async function updateRequestStatus(id: string, status: PortalRequest["sta
 
 export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
+}
+
+/** Paginated estimates list — supports `status`, `customerId`, and `search`. */
+export async function queryEstimates(query: CrmListQuery = {}) {
+  const page = Math.max(1, query.page ?? 1);
+  const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
+  const params: Record<string, string | number> = { page, limit };
+  const search = query.search?.trim();
+  const status = query.status?.trim();
+  const customerId = query.customerId?.trim();
+  if (search) params.search = search;
+  if (status) params.status = status;
+  if (customerId) params.customerId = customerId;
+  const response = await getData(providerCrmApi.estimates, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapEstimate);
 }
 
 export async function createEstimate(estimate: Estimate) {

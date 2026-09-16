@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Ban,
@@ -57,6 +57,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { queryEstimates } from "@/lib/api/crm-client";
 import {
   crmCustomerName,
   crmReminderStatusLabel,
@@ -114,6 +115,7 @@ export function CustomerDetailView({ id }: { id: string }) {
   const [createJobOpen, setCreateJobOpen] = useState(false);
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [estimateFilter, setEstimateFilter] = useState("");
+  const [estimateRefreshKey, setEstimateRefreshKey] = useState(0);
   const [jobFilter, setJobFilter] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState("");
   const customer = customers.find((item) => item.id === id);
@@ -365,105 +367,15 @@ export function CustomerDetailView({ id }: { id: string }) {
               );
             case "estimates":
               return (
-                <div>
-                  <div className="mb-3 flex justify-end">
-                    <Button size="sm" onClick={() => setCreateEstimateOpen(true)}>
-                      Create estimate
-                    </Button>
-                  </div>
-                  <LocalFilterTabs
-                    value={estimateFilter}
-                    onChange={setEstimateFilter}
-                    options={withArchiveFilter(ESTIMATE_STATUS_FILTERS)}
-                  />
-                  <PortalDataTable
-                    filename={`${customer.customerNumber}-estimates`}
-                    countLabel="Estimates"
-                    searchPlaceholder="Search estimates"
-                    empty="No estimates match this filter."
-                    rows={relatedEstimates.filter((item) => matchesArchiveFilter(records, "estimate", item, estimateFilter))}
-                    rowKey={(row) => row.id}
-                    rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
-                    columns={[
-                      {
-                        id: "number",
-                        header: "Estimate #",
-                        sortValue: (row) => row.number,
-                        searchValue: (row) => row.number,
-                        exportValue: (row) => row.number,
-                        cell: (row) => (
-                          <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-medium text-primary hover:underline">
-                            {row.number}
-                          </Link>
-                        ),
-                      },
-                      {
-                        id: "street",
-                        header: "Job address",
-                        sortValue: (row) => row.propertyAddress.street,
-                        searchValue: (row) => `${row.propertyAddress.street} ${row.propertyAddress.city}`,
-                        exportValue: (row) => row.propertyAddress.street,
-                        cell: (row) => row.propertyAddress.street,
-                      },
-                      {
-                        id: "issued",
-                        header: "Issued",
-                        sortValue: (row) => row.issuedAt,
-                        searchValue: (row) => formatDate(row.issuedAt),
-                        exportValue: (row) => formatDate(row.issuedAt),
-                        cell: (row) => formatDate(row.issuedAt),
-                      },
-                      {
-                        id: "expires",
-                        header: "Expires",
-                        sortValue: (row) => row.expiresAt ?? "",
-                        searchValue: (row) => (row.expiresAt ? formatDate(row.expiresAt) : ""),
-                        exportValue: (row) => (row.expiresAt ? formatDate(row.expiresAt) : ""),
-                        cell: (row) => (row.expiresAt ? formatDate(row.expiresAt) : "—"),
-                      },
-                      {
-                        id: "subtotal",
-                        header: "Subtotal",
-                        sortValue: (row) => row.subtotal,
-                        searchValue: (row) => formatMoney(row.subtotal),
-                        exportValue: (row) => formatMoney(row.subtotal),
-                        className: "tabular-nums",
-                        cell: (row) => formatMoney(row.subtotal),
-                      },
-                      {
-                        id: "tax",
-                        header: "Tax",
-                        sortValue: (row) => row.tax,
-                        searchValue: (row) => formatMoney(row.tax),
-                        exportValue: (row) => formatMoney(row.tax),
-                        className: "tabular-nums",
-                        cell: (row) => formatMoney(row.tax),
-                      },
-                      {
-                        id: "total",
-                        header: "Total",
-                        sortValue: (row) => row.total,
-                        searchValue: (row) => formatMoney(row.total),
-                        exportValue: (row) => formatMoney(row.total),
-                        className: "tabular-nums",
-                        cell: (row) => formatMoney(row.total),
-                      },
-                      {
-                        id: "status",
-                        header: "Status",
-                        sortValue: (row) => row.status,
-                        searchValue: (row) => estimateStatusLabel(row.status),
-                        exportValue: (row) => estimateStatusLabel(row.status),
-                        cell: (row) => <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />,
-                      },
-                    ]}
-                    actions={(row) => [
-                      { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
-                      { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
-                      archiveRowAction(records, "estimate", row.id, row.number),
-                    ]}
-                  />
-                </div>
+                <CustomerEstimatesPanel
+                  customerId={customer.id}
+                  customerNumber={customer.customerNumber}
+                  relatedEstimates={relatedEstimates}
+                  filter={estimateFilter}
+                  onFilterChange={setEstimateFilter}
+                  onCreate={() => setCreateEstimateOpen(true)}
+                  refreshKey={estimateRefreshKey}
+                />
               );
             case "jobs":
               return (
@@ -688,9 +600,182 @@ export function CustomerDetailView({ id }: { id: string }) {
         subjectKind="customer"
         subjectId={customer.id}
       />
-      <CreateEstimateDialog open={createEstimateOpen} onOpenChange={setCreateEstimateOpen} customerId={customer.id} />
+      <CreateEstimateDialog
+        open={createEstimateOpen}
+        onOpenChange={(next) => {
+          setCreateEstimateOpen(next);
+          if (!next) setEstimateRefreshKey((current) => current + 1);
+        }}
+        customerId={customer.id}
+      />
       <CreateJobDialog open={createJobOpen} onOpenChange={setCreateJobOpen} customerId={customer.id} />
     </>
+  );
+}
+
+function CustomerEstimatesPanel({
+  customerId,
+  customerNumber,
+  relatedEstimates,
+  filter,
+  onFilterChange,
+  onCreate,
+  refreshKey = 0,
+}: {
+  customerId: string;
+  customerNumber: string;
+  relatedEstimates: Estimate[];
+  filter: string;
+  onFilterChange: (value: string) => void;
+  onCreate: () => void;
+  refreshKey?: number;
+}) {
+  const crm = useCrmApiData();
+  const records = usePortalRecords();
+  const [apiRows, setApiRows] = useState<Estimate[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const archivedOnly = filter === "archived";
+  const useApi = crm.enabled && crm.ready && !archivedOnly;
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setListLoading(true);
+    void queryEstimates({
+      customerId,
+      status: filter || undefined,
+      force: true,
+    })
+      .then((result) => {
+        if (!cancelled) setApiRows(result.items);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load estimates.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId, filter, refreshKey, useApi]);
+
+  const rows = useApi
+    ? apiRows
+    : relatedEstimates.filter((item) => matchesArchiveFilter(records, "estimate", item, filter));
+
+  return (
+    <div>
+      <div className="mb-3 flex justify-end">
+        <Button size="sm" onClick={onCreate}>
+          Create estimate
+        </Button>
+      </div>
+      <LocalFilterTabs
+        value={filter}
+        onChange={onFilterChange}
+        options={withArchiveFilter(ESTIMATE_STATUS_FILTERS)}
+      />
+      <PortalDataTable
+        filename={`${customerNumber}-estimates`}
+        countLabel="Estimates"
+        searchPlaceholder="Search estimates"
+        loading={listLoading}
+        empty={
+          filter && filter !== "archived"
+            ? "No estimates match this status."
+            : "No estimates match this filter."
+        }
+        rows={rows}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+        columns={[
+          {
+            id: "number",
+            header: "Estimate #",
+            sortValue: (row) => row.number,
+            searchValue: (row) => row.number,
+            exportValue: (row) => row.number,
+            cell: (row) => (
+              <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-medium text-primary hover:underline">
+                {row.number}
+              </Link>
+            ),
+          },
+          {
+            id: "street",
+            header: "Job address",
+            sortValue: (row) => row.propertyAddress.street,
+            searchValue: (row) => `${row.propertyAddress.street} ${row.propertyAddress.city}`,
+            exportValue: (row) => row.propertyAddress.street,
+            cell: (row) => row.propertyAddress.street,
+          },
+          {
+            id: "issued",
+            header: "Issued",
+            sortValue: (row) => row.issuedAt,
+            searchValue: (row) => formatDate(row.issuedAt),
+            exportValue: (row) => formatDate(row.issuedAt),
+            cell: (row) => formatDate(row.issuedAt),
+          },
+          {
+            id: "expires",
+            header: "Expires",
+            sortValue: (row) => row.expiresAt ?? "",
+            searchValue: (row) => (row.expiresAt ? formatDate(row.expiresAt) : ""),
+            exportValue: (row) => (row.expiresAt ? formatDate(row.expiresAt) : ""),
+            cell: (row) => (row.expiresAt ? formatDate(row.expiresAt) : "—"),
+          },
+          {
+            id: "subtotal",
+            header: "Subtotal",
+            sortValue: (row) => row.subtotal,
+            searchValue: (row) => formatMoney(row.subtotal),
+            exportValue: (row) => formatMoney(row.subtotal),
+            className: "tabular-nums",
+            cell: (row) => formatMoney(row.subtotal),
+          },
+          {
+            id: "tax",
+            header: "Tax",
+            sortValue: (row) => row.tax,
+            searchValue: (row) => formatMoney(row.tax),
+            exportValue: (row) => formatMoney(row.tax),
+            className: "tabular-nums",
+            cell: (row) => formatMoney(row.tax),
+          },
+          {
+            id: "total",
+            header: "Total",
+            sortValue: (row) => row.total,
+            searchValue: (row) => formatMoney(row.total),
+            exportValue: (row) => formatMoney(row.total),
+            className: "tabular-nums",
+            cell: (row) => formatMoney(row.total),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            searchValue: (row) => estimateStatusLabel(row.status),
+            exportValue: (row) => estimateStatusLabel(row.status),
+            cell: (row) => (
+              <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />
+            ),
+          },
+        ]}
+        actions={(row) => [
+          { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
+          { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
+          archiveRowAction(records, "estimate", row.id, row.number),
+        ]}
+      />
+    </div>
   );
 }
 

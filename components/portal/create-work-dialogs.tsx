@@ -32,6 +32,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { crmCustomerName } from "@/lib/data/crm-people";
@@ -268,13 +275,22 @@ export function CreateEstimateDialog({
               </button>
             </div>
             <Field label="Customer">
-              <NativeSelect className="w-full" value={selectedCustomer} onChange={(event) => pickCustomer(event.target.value)}>
-                {customers.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {crmCustomerName(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <Select value={selectedCustomer} onValueChange={pickCustomer}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {customers.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {crmCustomerName(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
             <Field label="Estimate name">
               <Input
@@ -310,14 +326,26 @@ export function CreateEstimateDialog({
         {tab === "visit" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Technician">
-              <NativeSelect className="w-full" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-                <NativeSelectOption value="">Assign later</NativeSelectOption>
-                {employees.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {employeeName(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <Select
+                value={employeeId || "__unassigned__"}
+                onValueChange={(value) => setEmployeeId(value === "__unassigned__" ? "" : value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Assign later" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  <SelectItem value="__unassigned__">Assign later</SelectItem>
+                  {employees.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {employeeName(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
             <Field label="Visit date">
               <Input type="date" value={visitedAt} onChange={(event) => setVisitedAt(event.target.value)} />

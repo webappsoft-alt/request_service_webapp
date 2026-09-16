@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -16,10 +16,12 @@ import { paymentBoardColumns } from "@/components/portal/payment-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { queryEstimates } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,26 +41,71 @@ import {
   withArchiveFilter,
 } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { Invoice } from "@/lib/types";
+import type { Estimate, Invoice } from "@/lib/types";
+
+type EstimateRow = Estimate & { customerName: string };
 
 export function EstimatesView() {
   const status = useSearchParams().get("status") ?? "";
   const { session, estimates, provider, requests } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
+  const crm = useCrmApiData();
   const records = usePortalRecords();
   const share = useEstimateShare();
   const [createOpen, setCreateOpen] = useState(false);
+  const [apiRows, setApiRows] = useState<EstimateRow[]>([]);
+  const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
+  const useApi = crm.enabled && crm.ready && !archivedOnly;
   const allRequests = records.mergeRequests(requests);
-  const rows = records
-    .listed("estimate", records.mergeEstimates(estimates), archivedOnly)
-    .map((item) => ({
-      ...item,
-      status: records.statusOf("estimate", item.id, item.status),
-      customerName: estimateCustomerName(item, customers, allRequests),
-    }))
-    .filter((item) => (archivedOnly || !status ? true : item.status === status));
 
+  const clientRows = useMemo(
+    () =>
+      records
+        .listed("estimate", records.mergeEstimates(estimates), archivedOnly)
+        .map((item) => ({
+          ...item,
+          status: records.statusOf("estimate", item.id, item.status),
+          customerName: estimateCustomerName(item, customers, allRequests),
+        }))
+        .filter((item) => (archivedOnly || !status ? true : item.status === status)),
+    [allRequests, archivedOnly, customers, estimates, records, status],
+  );
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setListLoading(true);
+    void queryEstimates({
+      status: status || undefined,
+      force: true,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setApiRows(
+          result.items.map((item) => ({
+            ...item,
+            customerName: estimateCustomerName(item, customers, allRequests),
+          })),
+        );
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load estimates.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [allRequests, customers, status, useApi]);
+
+  const rows = useApi ? apiRows : clientRows;
   return (
     <PortalPage
       eyebrow="Work / Estimates"
@@ -80,9 +127,15 @@ export function EstimatesView() {
         filename="estimates"
         countLabel="Estimates"
         searchPlaceholder="Search quotes"
+        loading={listLoading}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+        empty={
+          status && status !== "archived"
+            ? "No estimates match this status."
+            : "No estimates yet."
+        }
         columns={[
           {
             id: "number",

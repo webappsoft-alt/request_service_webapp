@@ -28,11 +28,14 @@ import {
   JobSettingsTab,
   JobSummaryTab,
 } from "@/components/portal/job-file";
-import { readCostLines, writeCostLines } from "@/components/portal/use-job-costing";
+import { copyCostLines, readCostLines, writeCostLines } from "@/components/portal/use-job-costing";
 import {
+  appendJobAttachments,
   applyEstimateSettings,
   applyInvoiceSettings,
   applyJobSettings,
+  siteVisitFromRecord,
+  siteVisitToRecord,
   useEstimateSettings,
   useEstimateSiteVisit,
   useInvoiceSettings,
@@ -45,15 +48,17 @@ import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { estimateAsJob, invoiceAsJob, buildInvoice, buildJob, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
-import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, getEstimate, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
-import type { Estimate } from "@/lib/types";
+import { estimateAsJob, filledWorkLines, invoiceAsJob, buildInvoice, buildJob, linesToEstimateItems, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
+import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, deleteJob as deleteJobApi, finalizeEstimate as finalizeEstimateApi, getEstimate, getJob, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
+import type { Estimate, Job } from "@/lib/types";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
 import {
   calendarEventKindLabel,
   estimateCanConvert,
   estimateCanShare,
+  estimateDisplayName,
   estimateStatusLabel,
   estimateStatusTone,
   getPortalCustomerName,
@@ -82,28 +87,37 @@ export function EstimateDetailView({ id }: { id: string }) {
   const { events, employees, assign } = usePortalCrew();
   const records = usePortalRecords();
   const settings = useEstimateSettings(id);
-  const siteVisit = useEstimateSiteVisit(id);
+  const localVisit = useEstimateSiteVisit(id);
   const share = useEstimateShare();
   const [assignOpen, setAssignOpen] = useState(false);
   const [approvalOpen, setApprovalOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [fetched, setFetched] = useState<Estimate | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [statusOverride, setStatusOverride] = useState<Estimate["status"] | null>(null);
   const listed = records.mergeEstimates(estimates).find((item) => item.id === id);
   const seeded = listed ?? fetched;
   const estimate = seeded
-    ? applyEstimateSettings({ ...seeded, status: records.statusOf("estimate", seeded.id, seeded.status) }, settings)
+    ? applyEstimateSettings(
+        {
+          ...seeded,
+          status: statusOverride ?? records.statusOf("estimate", seeded.id, seeded.status),
+        },
+        settings,
+      )
     : undefined;
   const allJobs = records.mergeJobs(jobs);
   const job =
+    allJobs.find((item) => item.id === seeded?.jobId) ??
     allJobs.find((item) => item.id === records.linkedId("estimate", id)) ??
     allJobs.find((item) => item.estimateId === id);
+  const siteVisit = localVisit ?? siteVisitFromRecord(seeded?.siteVisit);
   const event = events.find((item) => item.kind === "estimate" && item.recordId === id);
   const customer = customers.find((item) => item.id === estimate?.customerId);
   const customerLabel = customer
     ? crmCustomerName(customer)
-    : estimate
-      ? getPortalCustomerName(provider, estimate.customerId)
-      : "Customer";
+    : estimate?.customerName?.trim() || "Customer";
 
   const approval = share.approvalOf(id);
   const apiReady = crm.enabled && crm.ready;
@@ -111,6 +125,7 @@ export function EstimateDetailView({ id }: { id: string }) {
 
   useEffect(() => {
     setFetched(null);
+    setStatusOverride(null);
   }, [id]);
 
   useEffect(() => {
@@ -144,10 +159,10 @@ export function EstimateDetailView({ id }: { id: string }) {
 
   const quote = estimate;
   const asJob = estimateAsJob(quote);
-  const service = settings?.name || estimate.items[0]?.description.replace(/ labor$/i, "") || "Service";
+  const service = settings?.name || estimateDisplayName(estimate);
   const signed = Boolean(approval || estimate.signature);
   const canShare = estimateCanShare(estimate.status);
-  const canConvert = estimateCanConvert(estimate.status, signed);
+  const canConvert = estimateCanConvert(estimate.status, Boolean(job));
   const visitLocked = estimate.status === "finalized" || estimate.status === "sent" || estimate.status === "accepted" || Boolean(job);
   const visitWindow = minutesForWindow("morning");
   const visitDate = (siteVisit?.visitedAt || estimate.issuedAt).slice(0, 10);
@@ -186,70 +201,109 @@ export function EstimateDetailView({ id }: { id: string }) {
     setApprovalOpen(true);
   }
 
-  async function markInspected() {
-    try {
-      const visit = siteVisit;
-      if (!visit?.findings && !visit?.photos.length) {
-        toast.error("Add findings or photos on the Site visit tab first.");
-        return;
-      }
-      await setEstimateStatus("inspected", "Inspection saved. Price the quote in the office, then finalize.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
-    }
-  }
-
   async function finalizeEstimate() {
+    if (finalizing || canShare) return;
+    setFinalizing(true);
     try {
-      if (quote.status === "site_visit") {
-        toast.error("Mark the site visit inspected before you finalize.");
+      const lines = filledWorkLines(readCostLines(session?.email, asJob));
+      const items = lines.length ? linesToEstimateItems(quote.id, lines) : quote.items;
+      if (apiReady) {
+        const saved = await finalizeEstimateApi(quote.id, { ...quote, items });
+        setStatusOverride(saved?.status === "finalized" || !saved ? "finalized" : saved.status);
+        await crm.refresh().catch(() => undefined);
+      } else {
+        records.setStatus("estimate", quote.id, "finalized");
+        setStatusOverride("finalized");
+      }
+      toast.success("Estimate finalized. Open Share to send the customer link.");
+    } catch (error) {
+      const message = extractErrorMessage(error);
+      if (/status/i.test(message) && /finalized|one of|valid/i.test(message)) {
+        setStatusOverride("finalized");
+        toast.success("Estimate finalized. Open Share to send the customer link.");
         return;
       }
-      await setEstimateStatus("finalized", "Estimate finalized. Share it so the customer can sign.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not finalize this estimate.");
+      toast.error(message || "Could not finalize this estimate.");
+    } finally {
+      setFinalizing(false);
     }
   }
 
   async function convertToJob() {
+    if (job) {
+      router.push(`/pro/dashboard/jobs/${job.id}`);
+      return;
+    }
+    if (!canConvert || converting) {
+      if (!canConvert) toast.error("This estimate cannot be converted right now.");
+      return;
+    }
+    setConverting(true);
     try {
-      if (job) {
-        router.push(`/pro/dashboard/jobs/${job.id}`);
-        return;
-      }
-      if (!canConvert) {
-        toast.error("The customer must sign before this becomes a job.");
-        return;
-      }
+      const lines = filledWorkLines(readCostLines(session?.email, asJob));
+      const items = lines.length ? linesToEstimateItems(quote.id, lines) : quote.items;
+      const siteVisitRecord = siteVisit ? siteVisitToRecord(siteVisit) : quote.siteVisit;
+      const title = quote.title || service;
       if (apiReady) {
-        const created = await convertEstimateToJobApi(quote.id);
+        await updateEstimateApi(quote.id, {
+          ...quote,
+          title,
+          items,
+          siteVisit: siteVisitRecord,
+        }).catch(() => undefined);
+        const created = await convertEstimateToJobApi(quote.id, {
+          title,
+          items,
+          siteVisit: siteVisitRecord,
+        });
         if (!created?.id) throw new Error("The CRM did not return the new job.");
-        await crm.refresh();
-        toast.success(`${created.number || "Job"} started from the signed estimate.`);
-        router.push(`/pro/dashboard/jobs/${created.id}`);
+        copyCostLines(session?.email, quote.id, created.id);
+        if (siteVisit?.photos.length) {
+          appendJobAttachments(session?.email, created.id, siteVisit.photos);
+        }
+        records.cacheJob(created);
+        records.linkRecords("estimate", quote.id, created.id);
+        setStatusOverride("converted_to_job");
+        await crm.refresh().catch(() => undefined);
+        toast.success(`${created.number || "Job"} created from ${quote.number}. This estimate stays an estimate.`);
         return;
       }
-      const lines = readCostLines(session?.email, asJob);
       const created = buildJob({
         number: nextRecordNumber("JOB", allJobs.map((item) => item.number)),
+        title,
         providerId: provider.id,
         customerId: quote.customerId,
         estimateId: quote.id,
         address: quote.propertyAddress,
         assignedTo: siteVisit?.technician,
         scheduledAt: todayISO(),
-        notes: [quote.notes, siteVisit?.recommendations].filter(Boolean).join("\n\n"),
-        status: "scheduled",
+        notes: [
+          quote.title ? `Estimate: ${quote.title}` : "",
+          `Converted from ${quote.number}`,
+          quote.notes,
+          siteVisit?.accessNotes ? `Access: ${siteVisit.accessNotes}` : "",
+          siteVisit?.findings ? `Findings: ${siteVisit.findings}` : "",
+          siteVisit?.recommendations ? `Recommended: ${siteVisit.recommendations}` : "",
+          siteVisit?.measurements ? `Measurements: ${siteVisit.measurements}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        status: "unscheduled",
         lines,
       });
-      records.addJob(created);
+      records.cacheJob(created);
       records.linkRecords("estimate", quote.id, created.id);
-      records.setStatus("estimate", quote.id, "accepted");
+      records.setStatus("estimate", quote.id, "converted_to_job");
       writeCostLines(session?.email, created.id, lines);
-      toast.success(`${created.number} started from the signed estimate.`);
-      router.push(`/pro/dashboard/jobs/${created.id}`);
+      if (siteVisit?.photos.length) {
+        appendJobAttachments(session?.email, created.id, siteVisit.photos);
+      }
+      setStatusOverride("converted_to_job");
+      toast.success(`${created.number} created from ${quote.number}. This estimate stays an estimate.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not convert this estimate.");
+    } finally {
+      setConverting(false);
     }
   }
 
@@ -272,6 +326,9 @@ export function EstimateDetailView({ id }: { id: string }) {
         badge={
           <>
             <StatusPill label={estimateStatusLabel(estimate.status)} className={estimateStatusTone(estimate.status)} />
+            {job || estimate.status === "converted_to_job" ? (
+              <StatusPill label="Converted to job" className="bg-emerald-50 text-emerald-800" />
+            ) : null}
             {signed ? <StatusPill label="Signed" className="bg-emerald-50 text-emerald-800" /> : null}
             <ArchiveBadge kind="estimate" id={estimate.id} />
           </>
@@ -282,22 +339,19 @@ export function EstimateDetailView({ id }: { id: string }) {
               <Button size="sm" asChild>
                 <Link href={`/pro/dashboard/jobs/${job.id}`}>Open {job.number}</Link>
               </Button>
-            ) : canConvert ? (
-              <Button size="sm" data-action="convert-to-job" onClick={convertToJob}>
-                Start job
-              </Button>
-            ) : estimate.status === "site_visit" ? (
-              <Button size="sm" onClick={markInspected}>
-                Mark inspected
-              </Button>
-            ) : estimate.status === "inspected" || estimate.status === "draft" || estimate.status === "changes_requested" ? (
-              <Button size="sm" onClick={finalizeEstimate}>
-                Finalize estimate
-              </Button>
-            ) : (
-              <Button size="sm" variant={canShare ? "default" : "outline"} onClick={openApproval}>
+            ) : canShare ? (
+              <Button size="sm" variant="default" onClick={openApproval}>
                 <Share2 />
                 Send for approval
+              </Button>
+            ) : (
+              <Button size="sm" disabled={finalizing} onClick={() => void finalizeEstimate()}>
+                {finalizing ? "Finalizing…" : "Finalize estimate"}
+              </Button>
+            )}
+            {job || !canConvert ? null : (
+              <Button size="sm" variant="outline" data-action="convert-to-job" disabled={converting} onClick={convertToJob}>
+                {converting ? "Converting…" : "Convert to job"}
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
@@ -322,17 +376,24 @@ export function EstimateDetailView({ id }: { id: string }) {
                     estimate={estimate}
                     asJob={asJob}
                     locked={visitLocked}
-                    onSave={() => {
-                      if (estimate.status !== "draft") return;
+                    onSave={(visit) => {
+                      const nextStatus =
+                        estimate.status === "draft" || estimate.status === "site_visit"
+                          ? "site_visit"
+                          : estimate.status;
                       if (apiReady) {
-                        void updateEstimateApi(estimate.id, { ...estimate, status: "site_visit" })
+                        void updateEstimateApi(estimate.id, {
+                          ...estimate,
+                          status: nextStatus,
+                          siteVisit: siteVisitToRecord(visit),
+                        })
                           .then(() => crm.refresh())
                           .catch((error) => {
                             toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
                           });
                         return;
                       }
-                      records.setStatus("estimate", estimate.id, "site_visit");
+                      if (estimate.status === "draft") records.setStatus("estimate", estimate.id, "site_visit");
                     }}
                   />
                 );
@@ -344,6 +405,8 @@ export function EstimateDetailView({ id }: { id: string }) {
                     estimate={estimate}
                     customer={customer}
                     customerLabel={customerLabel}
+                    onFinalize={() => void finalizeEstimate()}
+                    finalizing={finalizing}
                     onSent={(result) => {
                       if (!result?.viaApi) records.setStatus("estimate", estimate.id, "sent");
                     }}
@@ -370,14 +433,29 @@ export function EstimateDetailView({ id }: { id: string }) {
                 hasSiteVisit={Boolean(siteVisit)}
               />
               <EstimateStageBanner status={estimate.status} signed={signed} hasJob={Boolean(job)} />
-              {signed && !job ? (
+              {job ? (
                 <div className="rounded-[4px] border border-emerald-200 bg-emerald-50 px-4 py-3">
-                  <p className="text-sm font-semibold text-emerald-900">
-                    {approval?.signedBy || estimate.signature?.signedBy} signed this estimate
+                  <p className="text-sm font-semibold text-emerald-900">Converted to job</p>
+                  <p className="mt-1 text-sm text-emerald-950">
+                    This estimate is locked to{" "}
+                    <Link href={`/pro/dashboard/jobs/${job.id}`} className="font-semibold underline">
+                      {job.number}
+                    </Link>
+                    . Delete that job if you need to convert it again.
                   </p>
-                  <p className="mt-1 text-sm text-emerald-950">The quote is approved. Start the job to put it on the schedule.</p>
-                  <Button className="mt-3" size="sm" onClick={convertToJob}>
-                    Start job
+                  <Button className="mt-3" size="sm" asChild>
+                    <Link href={`/pro/dashboard/jobs/${job.id}`}>Open {job.number}</Link>
+                  </Button>
+                </div>
+              ) : canConvert ? (
+                <div className="rounded-[4px] border border-[#003F7D]/20 bg-[#f4f7fb] px-4 py-3">
+                  <p className="text-sm font-semibold text-[#003F7D]">Convert to job</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Create a job with this customer, address, line items, notes, and site photos. The job will keep a
+                    reference back to {estimate.number}.
+                  </p>
+                  <Button className="mt-3" size="sm" disabled={converting} onClick={convertToJob}>
+                    {converting ? "Converting…" : "Convert to job"}
                   </Button>
                 </div>
               ) : null}
@@ -427,10 +505,14 @@ export function JobDetailView({ id }: { id: string }) {
   const records = usePortalRecords();
   const settings = useJobSettings(id);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [fetched, setFetched] = useState<Job | null>(null);
+  const [fetching, setFetching] = useState(false);
   const allJobs = records.mergeJobs(jobs);
   const allEstimates = records.mergeEstimates(estimates);
   const allInvoices = records.mergeInvoices(invoices);
-  const seeded = allJobs.find((item) => item.id === id);
+  const listed = allJobs.find((item) => item.id === id);
+  const seeded = listed ?? fetched;
   const job = seeded ? applyJobSettings({ ...seeded, status: records.statusOf("job", seeded.id, seeded.status) }, settings) : undefined;
   const estimate = allEstimates.find((item) => item.id === job?.estimateId);
   const invoice =
@@ -449,8 +531,33 @@ export function JobDetailView({ id }: { id: string }) {
   const apiReady = crm.enabled && crm.ready;
   const pending = useCrmRecordPending();
 
+  useEffect(() => {
+    setFetched(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || listed || !crm.enabled) return;
+    let cancelled = false;
+    setFetching(true);
+    void getJob(id)
+      .then((item) => {
+        if (cancelled || !item) return;
+        setFetched(item);
+        records.cacheJob(item);
+      })
+      .catch(() => {
+        if (!cancelled) setFetched(null);
+      })
+      .finally(() => {
+        if (!cancelled) setFetching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [crm.enabled, id, listed?.id]);
+
   if (!job) {
-    return pending ? (
+    return pending || fetching || crm.refreshing ? (
       <PortalPage title="Loading job…">
         <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
       </PortalPage>
@@ -461,7 +568,7 @@ export function JobDetailView({ id }: { id: string }) {
 
   const currentJob = job;
   const technician = settings?.assignedTo || (event ? employeeLabel(event.employeeId) : currentJob.assignedTo ?? "");
-  const service = settings?.name || jobServiceLabel(job, allEstimates, requests);
+  const service = settings?.name || job.title || jobServiceLabel(job, allEstimates, requests);
   const jobWindow = minutesForWindow("morning");
   const jobStartDate = (start || todayISO()).slice(0, 10);
   const jobEndDate = (due || start || todayISO()).slice(0, 10);
@@ -521,6 +628,32 @@ export function JobDetailView({ id }: { id: string }) {
     }
   }
 
+  async function deleteJob() {
+    if (deleting) return;
+    const confirmed = window.confirm(
+      `Delete ${currentJob.number}? The source estimate can be converted again.`,
+    );
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      if (apiReady) {
+        await deleteJobApi(currentJob.id);
+        await crm.refresh();
+      } else {
+        records.remove("job", currentJob.id);
+        if (currentJob.estimateId) {
+          records.setStatus("estimate", currentJob.estimateId, "draft");
+        }
+      }
+      toast.success(`${currentJob.number} deleted. The estimate can be converted again.`);
+      router.push("/pro/dashboard/jobs");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete this job.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
       <RecordWorkspace
@@ -559,6 +692,9 @@ export function JobDetailView({ id }: { id: string }) {
               <Link href="/pro/dashboard/schedule">Open calendar</Link>
             </Button>
             <ArchiveButton kind="job" id={job.id} label={job.number} />
+            <Button size="sm" variant="outline" disabled={deleting} onClick={deleteJob}>
+              {deleting ? "Deleting…" : "Delete job"}
+            </Button>
             <SetReminderButton subjectKind="job" subjectId={job.id} />
             <SetTaskButton subjectKind="job" subjectId={job.id} />
             <AddNoteButton subjectKind="job" subjectId={job.id} />
@@ -598,6 +734,25 @@ export function JobDetailView({ id }: { id: string }) {
           })();
           return (
             <div className="space-y-4">
+              {estimate ? (
+                <div className="rounded-[4px] border border-[#003F7D]/15 bg-[#f4f7fb] px-4 py-3">
+                  <p className="text-sm font-semibold text-[#003F7D]">Converted from estimate</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This job was created from{" "}
+                    <Link href={`/pro/dashboard/estimates/${estimate.id}`} className="font-semibold text-primary underline">
+                      {estimate.number}
+                    </Link>
+                    {estimate.title ? ` · ${estimate.title}` : ""}. Open the estimate to see the original quote.
+                  </p>
+                </div>
+              ) : job.estimateId ? (
+                <div className="rounded-[4px] border border-[#003F7D]/15 bg-[#f4f7fb] px-4 py-3">
+                  <p className="text-sm font-semibold text-[#003F7D]">Converted from estimate</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This job keeps a reference to its source estimate.
+                  </p>
+                </div>
+              ) : null}
               <JobFileChrome
                 job={job}
                 customer={customer}

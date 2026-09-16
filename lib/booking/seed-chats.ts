@@ -1,4 +1,5 @@
 import type { ChatThread } from "@/lib/booking/chat-store";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 import { getPortalRequests } from "@/lib/data/portal";
 import type { Provider } from "@/lib/types";
 
@@ -40,7 +41,7 @@ export function getSeedChatThreads(provider: Provider): ChatThread[] {
             {
               id: "att_seed_e1",
               name: "kitchen-cabinet.jpg",
-              url: "/images/services/service-plumbing.jpg",
+              url: HERO_HOME_IMAGE,
               type: "image/jpeg",
             },
           ],
@@ -80,7 +81,7 @@ export function getSeedChatThreads(provider: Provider): ChatThread[] {
             {
               id: "att_seed_j1",
               name: "scope-notes.pdf",
-              url: "/images/services/service-plumbing.jpg",
+              url: HERO_HOME_IMAGE,
               type: "application/pdf",
             },
           ],

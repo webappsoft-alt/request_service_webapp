@@ -1,5 +1,6 @@
 import { getAreaName } from "@/lib/data/service-areas";
 import { getServiceCategoryById } from "@/lib/data/services";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 import type { Provider } from "@/lib/types";
 
 const basePriceByCategory: Record<string, number> = {
@@ -15,109 +16,17 @@ const basePriceByCategory: Record<string, number> = {
   cat_pest_control: 99,
 };
 
-const relatedImagesByCategory: Record<string, string[]> = {
-  cat_plumbing: [
-    "/images/services/service-plumbing.jpg",
-    "/images/services/service-bathroom.jpg",
-    "/images/home/hero-home.jpg",
-    "/images/home/step-compare.jpg",
-  ],
-  cat_hvac: [
-    "/images/services/service-hvac.jpg",
-    "/images/home/step-compare.jpg",
-    "/images/home/split-homeowner.jpg",
-    "/images/home/hero-home.jpg",
-  ],
-  cat_electrical: [
-    "/images/services/service-electrical.jpg",
-    "/images/home/step-search.jpg",
-    "/images/home/hero-home.jpg",
-    "/images/home/step-hire.jpg",
-  ],
-  cat_handyman: [
-    "/images/services/service-handyman.jpg",
-    "/images/home/step-hire.jpg",
-    "/images/home/step-search.jpg",
-    "/images/services/service-painting.jpg",
-  ],
-  cat_house_cleaning: [
-    "/images/services/service-cleaning.jpg",
-    "/images/home/split-homeowner.jpg",
-    "/images/home/hero-home.jpg",
-    "/images/home/step-compare.jpg",
-  ],
-  cat_roofing: [
-    "/images/services/service-roofing.jpg",
-    "/images/home/step-compare.jpg",
-    "/images/home/split-provider.jpg",
-    "/images/home/hero-home.jpg",
-  ],
-  cat_landscaping: [
-    "/images/services/service-landscaping.jpg",
-    "/images/home/split-provider.jpg",
-    "/images/home/step-hire.jpg",
-    "/images/services/service-painting.jpg",
-  ],
-  cat_painting: [
-    "/images/services/service-painting.jpg",
-    "/images/home/step-hire.jpg",
-    "/images/home/split-homeowner.jpg",
-    "/images/services/service-bathroom.jpg",
-  ],
-  cat_bathroom_remodeling: [
-    "/images/services/service-bathroom.jpg",
-    "/images/services/service-plumbing.jpg",
-    "/images/home/hero-home.jpg",
-    "/images/home/step-compare.jpg",
-  ],
-  cat_pest_control: [
-    "/images/services/service-pest.jpg",
-    "/images/home/step-search.jpg",
-    "/images/home/split-provider.jpg",
-    "/images/services/service-landscaping.jpg",
-  ],
-};
-
 export function getCategoryStartingPrice(categoryId: string) {
   return basePriceByCategory[categoryId] ?? 99;
 }
 
 export function getServiceImagePool(categoryId: string) {
   const category = getServiceCategoryById(categoryId);
-  return [...new Set([category?.image, ...(relatedImagesByCategory[categoryId] ?? [])])].filter(
-    (src): src is string => Boolean(src),
-  );
+  return [category?.image].filter((src): src is string => Boolean(src));
 }
 
-export function getJobImage(categoryId: string, job: string, index?: number) {
-  const pool = getServiceImagePool(categoryId);
-  const diverse = [
-    ...pool,
-    "/images/services/service-plumbing.jpg",
-    "/images/services/service-hvac.jpg",
-    "/images/services/service-electrical.jpg",
-    "/images/services/service-handyman.jpg",
-    "/images/services/service-cleaning.jpg",
-    "/images/services/service-cleaning-work.jpg",
-    "/images/services/service-roofing.jpg",
-    "/images/services/service-landscaping.jpg",
-    "/images/services/service-painting.jpg",
-    "/images/services/service-bathroom.jpg",
-    "/images/services/service-pest.jpg",
-    "/images/home/hero-home.jpg",
-    "/images/home/step-search.jpg",
-    "/images/home/step-compare.jpg",
-    "/images/home/step-hire.jpg",
-    "/images/home/split-homeowner.jpg",
-    "/images/home/split-provider.jpg",
-  ];
-  const uniquePool = [...new Set(diverse.filter(Boolean))];
-  if (!uniquePool.length) return undefined;
-  if (typeof index === "number") return uniquePool[index % uniquePool.length];
-
-  let hash = 0;
-  for (const char of job) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return uniquePool[hash % uniquePool.length];
+export function getJobImage(categoryId: string, _job: string, _index?: number) {
+  return getServiceImagePool(categoryId)[0] || HERO_HOME_IMAGE;
 }
 
 export function getJobStartingPrice(categoryId: string, job: string) {
@@ -137,15 +46,8 @@ export function getStartingPrice(provider: Provider) {
 }
 
 export function getProviderPhotos(provider: Provider) {
-  const categoryImages = provider.categoryIds
-    .flatMap((id) => {
-      const category = getServiceCategoryById(id);
-      return [category?.image, ...(relatedImagesByCategory[id] ?? [])];
-    })
-    .filter((src): src is string => Boolean(src));
-
   const unique = [
-    ...new Set([provider.coverImage, ...(provider.images ?? []), ...categoryImages]),
+    ...new Set([provider.coverImage, ...(provider.images ?? [])]),
   ].filter((src): src is string => Boolean(src));
 
   return unique.slice(0, 8).map((src, index) => ({

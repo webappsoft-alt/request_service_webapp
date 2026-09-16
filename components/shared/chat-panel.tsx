@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, Paperclip, Send, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, Send, X } from "lucide-react";
 import { toast } from "sonner";
+import { extractUploadedUrl, uploadDoc, uploadFile } from "@/components/api/uploadFile";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatAttachment, ChatMessage, ChatRole } from "@/lib/booking/chat-store";
@@ -23,13 +24,21 @@ function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = String((error as { message?: unknown }).message || "").trim();
+    if (message) return message;
+  }
+  return fallback;
+}
+
+async function uploadChatFile(file: File) {
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const response = isPdf ? await uploadDoc(file) : await uploadFile(file);
+  const url = extractUploadedUrl(response.data);
+  if (!url) throw new Error(`Could not upload ${file.name}.`);
+  return url;
 }
 
 export function ChatPanel({
@@ -49,6 +58,7 @@ export function ChatPanel({
 }) {
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [sending, setSending] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
@@ -96,23 +106,31 @@ export function ChatPanel({
   }
 
   async function send() {
+    if (sending) return;
     const text = draft.trim();
     if (!text && !pending.length) {
       toast.error("Write a message or attach a file.");
       return;
     }
-    const attachments = await Promise.all(
-      pending.map(async (item) => ({
-        id: item.id,
-        name: item.file.name,
-        url: await fileToDataUrl(item.file),
-        type: item.file.type,
-      })),
-    );
-    pending.forEach((item) => URL.revokeObjectURL(item.url));
-    setDraft("");
-    setPending([]);
-    await onSend(text, attachments);
+    setSending(true);
+    try {
+      const attachments = await Promise.all(
+        pending.map(async (item) => ({
+          id: item.id,
+          name: item.file.name,
+          url: await uploadChatFile(item.file),
+          type: item.file.type || (item.file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg"),
+        })),
+      );
+      await onSend(text, attachments);
+      pending.forEach((item) => URL.revokeObjectURL(item.url));
+      setDraft("");
+      setPending([]);
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not send the attachment."));
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -201,6 +219,7 @@ export function ChatPanel({
             accept={accept}
             multiple
             className="sr-only"
+            disabled={sending}
             onChange={(event) => addFiles(event.target.files)}
           />
           <Button
@@ -208,6 +227,7 @@ export function ChatPanel({
             variant="outline"
             size="icon-lg"
             aria-label="Attach a photo or PDF"
+            disabled={sending}
             onClick={() => fileRef.current?.click()}
           >
             <Paperclip />
@@ -226,16 +246,17 @@ export function ChatPanel({
             }}
             placeholder={placeholder}
             rows={1}
+            disabled={sending}
             className="min-h-11 max-h-32 resize-none"
           />
           <Button
             type="button"
             size="icon-lg"
             aria-label="Send message"
-            disabled={!draft.trim() && !pending.length}
+            disabled={sending || (!draft.trim() && !pending.length)}
             onClick={() => void send()}
           >
-            <Send />
+            {sending ? <Loader2 className="animate-spin" /> : <Send />}
           </Button>
         </div>
         {footer ? <p className="mt-2 text-[11px] text-muted-foreground">{footer}</p> : null}

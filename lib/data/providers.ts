@@ -17,12 +17,8 @@ export const providers: Provider[] = [
     slug: "summit-home-systems",
     companyName: "Summit Home Systems",
     logoInitials: "SH",
-    logoUrl: "/images/providers/logo-summit.jpg",
-    coverImage: "/images/services/service-plumbing.jpg",
     images: [
-      "/images/services/service-bathroom.jpg",
       "/images/home/hero-home.jpg",
-      "/images/services/service-hvac.jpg",
     ],
     startingPrice: 129,
     tagline: "Plumbing and HVAC for Austin homes.",
@@ -90,12 +86,7 @@ export const providers: Provider[] = [
     slug: "harbor-electric",
     companyName: "Harbor Electric",
     logoInitials: "HE",
-    logoUrl: "/images/providers/logo-harbor.jpg",
-    images: [
-      "/images/services/service-electrical.jpg",
-      "/images/home/step-search.jpg",
-      "/images/home/step-hire.jpg",
-    ],
+    images: [],
     startingPrice: 149,
     tagline: "Licensed electrical work with documented scopes.",
     description:
@@ -145,12 +136,7 @@ export const providers: Provider[] = [
     slug: "cedar-line-painting",
     companyName: "Cedar Line Painting",
     logoInitials: "CL",
-    logoUrl: "/images/providers/logo-cedar.jpg",
-    images: [
-      "/images/services/service-painting.jpg",
-      "/images/home/step-hire.jpg",
-      "/images/home/split-homeowner.jpg",
-    ],
+    images: [],
     startingPrice: 219,
     tagline: "Interior and exterior painting with prep in writing.",
     description:
@@ -200,10 +186,7 @@ export const providers: Provider[] = [
     slug: "northstar-roofing",
     companyName: "Northstar Roofing",
     logoInitials: "NR",
-    logoUrl: "/images/providers/logo-northstar.jpg",
     images: [
-      "/images/services/service-roofing.jpg",
-      "/images/home/step-compare.jpg",
       "/images/home/hero-home.jpg",
     ],
     startingPrice: 289,
@@ -255,12 +238,7 @@ export const providers: Provider[] = [
     slug: "bright-path-cleaning",
     companyName: "Bright Path Cleaning",
     logoInitials: "BP",
-    logoUrl: "/images/providers/logo-brightpath.jpg",
-    images: [
-      "/images/services/service-cleaning.jpg",
-      "/images/home/split-homeowner.jpg",
-      "/images/home/step-search.jpg",
-    ],
+    images: [],
     startingPrice: 129,
     tagline: "Recurring house cleaning with a published checklist.",
     description:
@@ -310,12 +288,7 @@ export const providers: Provider[] = [
     slug: "oak-and-iron-handyman",
     companyName: "Oak & Iron Handyman",
     logoInitials: "OI",
-    logoUrl: "/images/providers/logo-oakiron.jpg",
-    images: [
-      "/images/services/service-handyman.jpg",
-      "/images/services/service-bathroom.jpg",
-      "/images/home/step-hire.jpg",
-    ],
+    images: [],
     startingPrice: 99,
     tagline: "Small repairs, mounting, and punch-list work.",
     description:
@@ -365,11 +338,8 @@ export const providers: Provider[] = [
     slug: "greenfield-landscape",
     companyName: "Greenfield Landscape",
     logoInitials: "GL",
-    logoUrl: "/images/providers/logo-greenfield.jpg",
     images: [
-      "/images/services/service-landscaping.jpg",
       "/images/home/split-provider.jpg",
-      "/images/home/step-compare.jpg",
     ],
     startingPrice: 159,
     tagline: "Lawn care and seasonal outdoor maintenance.",
@@ -420,12 +390,7 @@ export const providers: Provider[] = [
     slug: "shield-pest-solutions",
     companyName: "Shield Pest Solutions",
     logoInitials: "SP",
-    logoUrl: "/images/providers/logo-shield.jpg",
-    images: [
-      "/images/services/service-pest.jpg",
-      "/images/home/step-search.jpg",
-      "/images/home/split-homeowner.jpg",
-    ],
+    images: [],
     startingPrice: 109,
     tagline: "Inspections, treatment, and prevention plans.",
     description:

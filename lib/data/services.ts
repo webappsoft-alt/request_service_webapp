@@ -32,7 +32,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Find licensed local plumbers for leaks, water heaters, drain cleaning, and fixture installation. Submit a request or book a professional directly on Request Service.",
     icon: "droplets",
-    image: "/images/services/service-plumbing.jpg",
     imageAlt: "Copper pipes and a chrome kitchen faucet being repaired",
   },
   {
@@ -66,7 +65,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Request HVAC repair, maintenance, and installation from local heating and cooling professionals. Compare estimates and book service through Request Service.",
     icon: "thermometer",
-    image: "/images/services/service-hvac.jpg",
     imageAlt: "Outdoor air conditioner with service gauges attached",
   },
   {
@@ -99,7 +97,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Find licensed electricians for panel upgrades, lighting, outlets, and electrical safety work. Request service or book a professional on Request Service.",
     icon: "zap",
-    image: "/images/services/service-electrical.jpg",
     imageAlt: "Open residential breaker panel with circuit work in progress",
   },
   {
@@ -132,7 +129,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Book a local handyman for assembly, mounting, repairs, and punch-list work. Submit a request with photos and get a professional estimate on Request Service.",
     icon: "wrench",
-    image: "/images/services/service-handyman.jpg",
     imageAlt: "Cordless drill mounting a wood floating shelf",
   },
   {
@@ -165,7 +161,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Find local house cleaning professionals for recurring service, deep cleans, and move-out cleaning. Request a quote on Request Service.",
     icon: "sparkles",
-    image: "/images/services/service-cleaning.jpg",
     imageAlt: "Sunlit kitchen island being wiped after a clean",
   },
   {
@@ -198,7 +193,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Request a roof inspection, leak repair, or replacement estimate from local roofing contractors. Compare professionals on Request Service.",
     icon: "house",
-    image: "/images/services/service-roofing.jpg",
     imageAlt: "Asphalt roof shingles under a blue sky",
   },
   {
@@ -231,7 +225,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Hire local landscaping professionals for lawn care, seasonal cleanup, and outdoor maintenance. Request service through Request Service.",
     icon: "trees",
-    image: "/images/services/service-landscaping.jpg",
     imageAlt: "Green hedges being trimmed in a front yard",
   },
   {
@@ -265,7 +258,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Find local painting professionals for interior, exterior, and cabinet projects. Review estimates and book service on Request Service.",
     icon: "paint-roller",
-    image: "/images/services/service-painting.jpg",
     imageAlt: "Paint roller applying terracotta paint to a wall",
   },
   {
@@ -298,7 +290,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Request bathroom remodeling estimates for vanities, tile, fixtures, and full remodels. Work with local professionals on Request Service.",
     icon: "bath",
-    image: "/images/services/service-bathroom.jpg",
     imageAlt: "White subway tile shower with chrome fixtures",
   },
   {
@@ -331,7 +322,6 @@ export const serviceCategories: ServiceCategory[] = [
     seoDescription:
       "Find local pest control professionals for inspections, treatments, and prevention plans. Request service on Request Service.",
     icon: "bug",
-    image: "/images/services/service-pest.jpg",
     imageAlt: "Pest treatment along a brick home foundation",
   },
 ];

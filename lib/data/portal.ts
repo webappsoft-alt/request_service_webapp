@@ -466,6 +466,7 @@ export function getPortalEstimates(provider: Provider): Estimate[] {
       providerId: provider.id,
       customerId: customer.id,
       requestId: request.id,
+      customerName: request.customerName || `${customer.firstName} ${customer.lastName}`.trim(),
       propertyAddress: address,
       status: ESTIMATE_STATUSES[index % ESTIMATE_STATUSES.length],
       issuedAt: dateOffset(index + 2),
@@ -996,8 +997,42 @@ export function getPortalCustomerName(provider: Provider, customerId: string) {
   return "Customer";
 }
 
+function directoryCustomerLabel(
+  customer: { entityKind?: string; companyName?: string; firstName?: string; lastName?: string },
+) {
+  const company = String(customer.companyName || "").trim();
+  if (customer.entityKind === "company" && company) return company;
+  const person = `${String(customer.firstName || "").trim()} ${String(customer.lastName || "").trim()}`.trim();
+  return person || company;
+}
+
+export function estimateCustomerName(
+  estimate: Pick<Estimate, "customerId" | "customerName" | "requestId">,
+  customers: Array<{ id: string; entityKind?: string; companyName?: string; firstName?: string; lastName?: string }>,
+  requests?: Array<{ id?: string; customerId?: string; customerName?: string }>,
+) {
+  const match = customers.find((item) => item.id === estimate.customerId);
+  const fromDirectory = match ? directoryCustomerLabel(match) : "";
+  if (fromDirectory && fromDirectory !== "Customer") return fromDirectory;
+  const fromEstimate = String(estimate.customerName || "").trim();
+  if (fromEstimate && fromEstimate !== "Customer") return fromEstimate;
+  const fromRequest = String(
+    requests?.find((item) => item.id === estimate.requestId || item.customerId === estimate.customerId)
+      ?.customerName || "",
+  ).trim();
+  return fromRequest || fromDirectory || fromEstimate || "Customer";
+}
+
 export function jobTotal(job: Job) {
   return job.items.reduce((sum, item) => sum + item.total, 0) + job.changeOrders.reduce((sum, order) => sum + order.total, 0);
+}
+
+export function estimateDisplayName(estimate: Pick<Estimate, "title" | "items" | "number">) {
+  const title = String(estimate.title || "").trim();
+  if (title) return title;
+  const first = estimate.items[0]?.description?.trim() ?? "";
+  const derived = first.replace(/\s+(labor|materials)$/i, "").trim();
+  return derived || estimate.number || "Untitled estimate";
 }
 
 export function jobServiceLabel(job: Job, estimates: Estimate[], requests: PortalRequest[]) {
@@ -1005,6 +1040,7 @@ export function jobServiceLabel(job: Job, estimates: Estimate[], requests: Porta
     return job.items[0]?.description.replace(/ labor$/i, "") || "Fixed service";
   }
   const estimate = estimates.find((item) => item.id === job.estimateId);
+  if (estimate?.title?.trim()) return estimate.title.trim();
   const request = requests.find((item) => item.id === estimate?.requestId);
   if (request?.serviceName) return request.serviceName;
   return job.items[0]?.description.replace(/ labor$/i, "") || "Service";
@@ -1114,9 +1150,9 @@ export function estimateCanShare(status: EstimateStatus) {
   }
 }
 
-export function estimateCanConvert(status: EstimateStatus, signed: boolean) {
-  if (status === "converted_to_job") return false;
-  return signed || status === "accepted";
+export function estimateCanConvert(status: EstimateStatus, hasLiveJob: boolean) {
+  if (hasLiveJob) return false;
+  return status !== "rejected" && status !== "expired";
 }
 
 export function jobStatusLabel(status: JobStatus) {

@@ -125,8 +125,8 @@ export function MessagesView() {
               <ChatPanel
                 messages={selected.messages}
                 self="provider"
-                onSend={(text, attachments) => {
-                  send(selected.id, "provider", text, attachments);
+                onSend={async (text, attachments) => {
+                  await send(selected.id, "provider", text, attachments);
                 }}
                 onTypingChange={(isTyping) => setTyping(selected.id, isTyping)}
                 footer="The customer sees this on the public profile chat."

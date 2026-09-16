@@ -133,12 +133,36 @@ export interface EstimateItem {
   total: number;
 }
 
+export interface EstimateSitePhoto {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url: string;
+  addedAt: string;
+  actor?: string;
+}
+
+export interface EstimateSiteVisitRecord {
+  employeeId?: string;
+  technician?: string;
+  visitedAt?: string;
+  accessNotes?: string;
+  findings?: string;
+  recommendations?: string;
+  measurements?: string;
+  photos: EstimateSitePhoto[];
+}
+
 export interface Estimate {
   id: string;
   number: string;
+  title?: string;
   providerId: string;
   customerId: string;
+  customerName?: string;
   requestId?: string;
+  jobId?: string;
   serviceId?: string;
   propertyAddress: ServiceAddress;
   status: EstimateStatus;
@@ -151,6 +175,7 @@ export interface Estimate {
   tax: number;
   total: number;
   items: EstimateItem[];
+  siteVisit?: EstimateSiteVisitRecord;
   signature?: EstimateSignature;
   createdAt: string;
   updatedAt: string;
@@ -205,6 +230,7 @@ export interface ChangeOrder {
 export interface Job {
   id: string;
   number: string;
+  title?: string;
   providerId: string;
   customerId: string;
   estimateId: string;
@@ -217,6 +243,7 @@ export interface Job {
   notes?: string;
   items: JobItem[];
   changeOrders: ChangeOrder[];
+  attachments?: string[];
   invoiceId?: string;
   createdAt: string;
   updatedAt: string;

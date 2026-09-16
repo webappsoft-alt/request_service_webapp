@@ -3,7 +3,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { getLocalKeywordPhrases } from "@/lib/data/local-keywords";
 import { fetchPublicProfessionalForSeo } from "@/lib/data/public-professional-seo";
 import { getStartingPrice } from "@/lib/data/provider-media";
-import { getAllProviders, getProviderBySlug } from "@/lib/data/providers";
+import { getProviderBySlug } from "@/lib/data/providers";
 import { getServiceCategoryById } from "@/lib/data/services";
 import { formatStartingPrice } from "@/lib/format";
 import { breadcrumbJsonLd, providerJsonLd } from "@/lib/json-ld";
@@ -11,7 +11,7 @@ import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
 export function generateStaticParams() {
-  return getAllProviders().map((provider) => ({ slug: provider.slug }));
+  return [];
 }
 
 export async function generateMetadata({ params }: PageParams<{ slug: string }>) {

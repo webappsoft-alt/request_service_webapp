@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BookOpen, Briefcase, Home } from "lucide-react";
 import { Container } from "@/components/layout/container";
+import { HERO_HOME_IMAGE } from "@/lib/site";
 
 const topics = [
   { label: "For homeowners", hint: "Hiring and estimates", href: "/blog/category/homeowners", icon: Home },
@@ -24,7 +25,7 @@ export function BlogHero({
     <section className="relative isolate overflow-hidden">
       <div className="relative min-h-[17rem] w-full sm:min-h-[19rem] lg:min-h-[21rem]">
         <Image
-          src="/images/blog/blog-request.jpg"
+          src={HERO_HOME_IMAGE}
           alt=""
           fill
           sizes="100vw"

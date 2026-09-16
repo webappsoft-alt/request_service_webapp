@@ -41,6 +41,7 @@ import {
   calendarEventKindLabel,
   employeeName,
   employeeRoleLabel,
+  estimateCustomerName,
   estimateStatusLabel,
   estimateStatusTone,
   formatClock,
@@ -224,10 +225,10 @@ export function TeamMemberView({ id }: { id: string }) {
                     {
                       id: "customer",
                       header: "Customer",
-                      sortValue: (row) => getPortalCustomerName(provider, row.customerId),
-                      searchValue: (row) => getPortalCustomerName(provider, row.customerId),
-                      exportValue: (row) => getPortalCustomerName(provider, row.customerId),
-                      cell: (row) => getPortalCustomerName(provider, row.customerId),
+                      sortValue: (row) => estimateCustomerName(row, customers, requests),
+                      searchValue: (row) => estimateCustomerName(row, customers, requests),
+                      exportValue: (row) => estimateCustomerName(row, customers, requests),
+                      cell: (row) => estimateCustomerName(row, customers, requests),
                     },
                     {
                       id: "service",

@@ -1,6 +1,5 @@
 import { PublicProjectDetailView } from "@/components/marketplace/public-project-detail";
 import {
-  getAllProviderProjectParams,
   getProviderProject,
   getRelatedProviderProjects,
 } from "@/lib/data/provider-projects";
@@ -9,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
 export function generateStaticParams() {
-  return getAllProviderProjectParams();
+  return [];
 }
 
 export async function generateMetadata({

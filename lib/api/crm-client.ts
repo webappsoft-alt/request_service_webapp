@@ -118,16 +118,23 @@ function mapAddressForApi(address?: ServiceAddress | null) {
     : undefined;
 }
 
-function estimateItemsToApi(items: Estimate["items"]) {
-  return items.map((item) => ({
-    id: item.id,
-    description: item.description,
-    kind: item.type === "materials" ? "material" : "labor",
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    taxRate: item.taxRate,
-    total: item.total,
-  }));
+function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
+  return items
+    .filter((item) => String(item.description || "").trim())
+    .map((item) => {
+      const quantity = Math.max(minQuantity, Number(item.quantity) || 1);
+      const unitPrice = Math.max(0, Number(item.unitPrice) || 0);
+      const taxRate = Math.max(0, Number(item.taxRate) || 0);
+      return {
+        id: item.id,
+        description: String(item.description).trim(),
+        kind: item.type === "materials" ? "material" : "labor",
+        quantity,
+        unitPrice,
+        taxRate,
+        total: Number(item.total) || quantity * unitPrice,
+      };
+    });
 }
 
 function jobItemsToApi(items: Job["items"]) {
@@ -242,10 +249,33 @@ function requestPayload(request: PortalRequest) {
   };
 }
 
+function siteVisitPayload(visit?: Estimate["siteVisit"]) {
+  if (!visit) return undefined;
+  return {
+    employeeId: visit.employeeId || "",
+    technician: visit.technician || "",
+    visitedAt: visit.visitedAt || "",
+    accessNotes: visit.accessNotes || "",
+    findings: visit.findings || "",
+    recommendations: visit.recommendations || "",
+    measurements: visit.measurements || "",
+    photos: (visit.photos ?? []).map((photo) => ({
+      id: photo.id,
+      name: photo.name,
+      type: photo.type,
+      size: photo.size,
+      url: photo.url,
+      addedAt: photo.addedAt,
+      actor: photo.actor || "",
+    })),
+  };
+}
+
 function estimatePayload(estimate: Estimate) {
   return {
     customerId: estimate.customerId,
     requestId: estimate.requestId || null,
+    title: estimate.title || "",
     status: normalizeStatus(estimate.status, [
       "site_visit",
       "inspected",
@@ -263,6 +293,8 @@ function estimatePayload(estimate: Estimate) {
     discount: estimate.discount,
     notes: estimate.notes || "",
     terms: estimate.terms || "",
+    propertyAddress: mapAddressForApi(estimate.propertyAddress),
+    siteVisit: siteVisitPayload(estimate.siteVisit),
   };
 }
 
@@ -270,6 +302,7 @@ function jobPayload(job: Job, employees: PortalEmployee[]) {
   return {
     customerId: job.customerId,
     estimateId: job.estimateId || null,
+    title: job.title || "",
     status: job.status,
     assignedEmployees: resolveAssignedEmployeeIds(job, employees),
     assignedContractors: [],
@@ -489,6 +522,33 @@ export async function updateEstimate(id: string, estimate: Estimate) {
   return mapCrmEntity(response, mapEstimate);
 }
 
+export async function updateEstimateStatus(id: string, status: Estimate["status"]) {
+  const response = await putData(providerCrmApi.estimate(id), { status }, { silent: true });
+  return mapCrmEntity(response, mapEstimate);
+}
+
+export async function finalizeEstimate(id: string, estimate?: Estimate) {
+  try {
+    return await updateEstimateStatus(id, "finalized");
+  } catch (statusError) {
+    if (!estimate) throw statusError;
+    const response = await putData(
+      providerCrmApi.estimate(id),
+      {
+        status: "finalized",
+        title: estimate.title || "",
+        items: estimateItemsToApi(estimate.items, 1),
+        notes: estimate.notes || "",
+        terms: estimate.terms || "",
+      },
+      { silent: true },
+    );
+    const mapped = mapCrmEntity(response, mapEstimate);
+    if (mapped) return mapped;
+    throw statusError;
+  }
+}
+
 export async function shareEstimate(id: string) {
   const response = await postData(providerCrmApi.estimateShare(id), undefined, { silent: false });
   const payload = ((response as { data?: unknown })?.data ?? response) as Partial<CrmEstimateShareResult>;
@@ -509,9 +569,31 @@ export async function shareEstimate(id: string) {
   } satisfies CrmEstimateShareResult;
 }
 
-export async function convertEstimateToJob(id: string) {
-  const response = await postData(providerCrmApi.estimateConvertToJob(id), undefined, { silent: false });
+export async function convertEstimateToJob(
+  id: string,
+  extras?: Pick<Estimate, "items" | "title" | "siteVisit">,
+) {
+  const response = await postData(
+    providerCrmApi.estimateConvertToJob(id),
+    extras
+      ? {
+          title: extras.title || undefined,
+          items: extras.items ? estimateItemsToApi(extras.items) : undefined,
+          siteVisit: extras.siteVisit ? siteVisitPayload(extras.siteVisit) : undefined,
+        }
+      : undefined,
+    { silent: false },
+  );
   return mapCrmEntity(response, mapJob);
+}
+
+export async function getJob(id: string) {
+  const response = await getData(providerCrmApi.job(id), undefined, { silent: true, force: true });
+  return mapCrmEntity(response, mapJob);
+}
+
+export async function deleteJob(id: string) {
+  return deleteData(providerCrmApi.job(id), { silent: false });
 }
 
 export async function listJobs(options?: CrmRequestOptions) {

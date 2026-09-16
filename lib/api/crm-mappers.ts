@@ -20,6 +20,7 @@ import type {
   Estimate,
   EstimateItem,
   EstimateItemType,
+  EstimateSiteVisitRecord,
   Invoice,
   InvoiceItem,
   Job,
@@ -106,6 +107,10 @@ export function crmIdOf(value: unknown): string {
   return "";
 }
 
+function personDisplayName(value: unknown): string {
+  return displayNameFromRecord(value);
+}
+
 function toIsoString(value: unknown): string {
   if (!value) return "";
   if (typeof value === "string") {
@@ -156,7 +161,7 @@ function displayNameFromRecord(value: unknown): string {
   const firstName = trimmed(record.firstName);
   const lastName = trimmed(record.lastName);
   const fullName = `${firstName} ${lastName}`.trim();
-  return fullName || trimmed(record.name);
+  return fullName || trimmed(record.displayName) || trimmed(record.name);
 }
 
 function firstValue<T>(...values: T[]): T | undefined {
@@ -524,6 +529,48 @@ function mapEstimateItems(estimateId: string, value: unknown): EstimateItem[] {
     .filter((item): item is EstimateItem => Boolean(item));
 }
 
+export function mapEstimateSiteVisit(value: unknown): EstimateSiteVisitRecord | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const photos = asArray(record.photos)
+    .map((entry, index) => {
+      const photo = asRecord(entry);
+      if (!photo) return null;
+      const url = trimmed(photo.url) || trimmed(photo.dataUrl);
+      if (!url) return null;
+      return {
+        id: trimmed(photo.id) || `photo_${index + 1}`,
+        name: trimmed(photo.name) || `Photo ${index + 1}`,
+        type: trimmed(photo.type) || "image/jpeg",
+        size: numberValue(photo.size),
+        url,
+        addedAt: trimmed(photo.addedAt) || toIsoString(photo.addedAt),
+        actor: trimmed(photo.actor) || undefined,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const hasText = [
+    record.employeeId,
+    record.technician,
+    record.visitedAt,
+    record.accessNotes,
+    record.findings,
+    record.recommendations,
+    record.measurements,
+  ].some((item) => trimmed(item));
+  if (!hasText && !photos.length) return undefined;
+  return {
+    employeeId: trimmed(record.employeeId) || undefined,
+    technician: trimmed(record.technician) || undefined,
+    visitedAt: trimmed(record.visitedAt) || undefined,
+    accessNotes: trimmed(record.accessNotes) || undefined,
+    findings: trimmed(record.findings) || undefined,
+    recommendations: trimmed(record.recommendations) || undefined,
+    measurements: trimmed(record.measurements) || undefined,
+    photos,
+  };
+}
+
 function mapApprovalSignature(value: unknown): Estimate["signature"] | undefined {
   const record = asRecord(value);
   if (!record) return undefined;
@@ -561,9 +608,17 @@ export function mapEstimate(raw: unknown): Estimate | null {
   return {
     id,
     number: trimmed(record.number) || `EST-${id.slice(-4).toUpperCase()}`,
+    title: trimmed(record.title) || undefined,
     providerId: crmIdOf(record.providerId),
     customerId,
+    customerName:
+      customerNameParts(record).name ||
+      personDisplayName(record.customerSnapshot) ||
+      personDisplayName(record.customerId) ||
+      trimmed(record.customerName) ||
+      undefined,
     requestId: crmIdOf(record.requestId) || undefined,
+    jobId: crmIdOf(record.jobId) || undefined,
     serviceId: crmIdOf(record.serviceId) || undefined,
     propertyAddress: address,
     status:
@@ -587,6 +642,7 @@ export function mapEstimate(raw: unknown): Estimate | null {
     tax: numberValue(record.tax),
     total: numberValue(record.total),
     items: mapEstimateItems(id, record.items),
+    siteVisit: mapEstimateSiteVisit(record.siteVisit),
     signature: mapApprovalSignature(record.approval ?? record.signature),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
@@ -681,6 +737,7 @@ export function mapJob(raw: unknown): Job | null {
   return {
     id,
     number: trimmed(record.number) || `JOB-${id.slice(-4).toUpperCase()}`,
+    title: trimmed(record.title) || undefined,
     providerId: crmIdOf(record.providerId),
     customerId: crmIdOf(record.customerId),
     estimateId: crmIdOf(record.estimateId),
@@ -711,6 +768,7 @@ export function mapJob(raw: unknown): Job | null {
     notes: trimmed(record.notes) || undefined,
     items: mapJobItems(id, record.items),
     changeOrders: mapChangeOrders(id, record.changeOrders),
+    attachments: toStringArray(record.attachments),
     invoiceId: crmIdOf(record.invoiceId) || undefined,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),

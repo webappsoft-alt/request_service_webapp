@@ -238,20 +238,24 @@ export function CustomerDetailView({ id }: { id: string }) {
                     </header>
                     <div className="grid sm:grid-cols-2">
                       <InfoRow icon={Building2} label="Source" value={crmSourceLabel(customer.source)} />
-                      <InfoRow icon={Shield} label="EIN" value={customer.ein ?? "—"} />
-                      <InfoRow
-                        icon={Globe}
-                        label="Website"
-                        value={
-                          customer.website ? (
-                            <a href={customer.website} className="text-primary hover:underline">
-                              {customer.website.replace(/^https?:\/\//, "")}
-                            </a>
-                          ) : (
-                            "—"
-                          )
-                        }
-                      />
+                      {customer.entityKind === "company" ? (
+                        <>
+                          <InfoRow icon={Shield} label="EIN" value={customer.ein ?? "—"} />
+                          <InfoRow
+                            icon={Globe}
+                            label="Website"
+                            value={
+                              customer.website ? (
+                                <a href={customer.website} className="text-primary hover:underline">
+                                  {customer.website.replace(/^https?:\/\//, "")}
+                                </a>
+                              ) : (
+                                "—"
+                              )
+                            }
+                          />
+                        </>
+                      ) : null}
                       <InfoRow
                         icon={Mail}
                         label="Email"

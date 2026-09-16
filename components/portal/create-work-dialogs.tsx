@@ -18,7 +18,7 @@ import {
   addressFrom,
   buildEstimate,
   buildJob,
-  defaultWorkLines,
+  filledWorkLines,
   nextRecordNumber,
   todayISO,
 } from "@/components/portal/work-builders";
@@ -83,7 +83,7 @@ export function CreateEstimateDialog({
   const [accessNotes, setAccessNotes] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("Valid for 30 days. Materials may change after site inspection.");
-  const [lines, setLines] = useState<JobCostLine[]>(() => defaultWorkLines("Service visit"));
+  const [lines, setLines] = useState<JobCostLine[]>([]);
   const [saving, setSaving] = useState(false);
   const hasEstimateName = Boolean(name.trim());
   const technician = employees.find((item) => item.id === employeeId);
@@ -104,7 +104,7 @@ export function CreateEstimateDialog({
     }
     setName("");
     setSaving(false);
-    setLines(defaultWorkLines(requestName || "Service visit"));
+    setLines([]);
     if (requestNotes) setNotes(requestNotes);
     if (customerId) pickCustomer(customerId);
   }, [customerId, open, requestName, requestNotes]);
@@ -146,8 +146,10 @@ export function CreateEstimateDialog({
     try {
       const estimate = buildEstimate({
         number: nextRecordNumber("EST", all.map((item) => item.number)),
+        title: name.trim(),
         providerId: provider.id,
         customerId: customerIdValue,
+        customerName: customer ? crmCustomerName(customer) : undefined,
         requestId,
         address: addressFrom(street, city, state, zip),
         status: path === "site_visit" ? "site_visit" : "draft",
@@ -155,7 +157,20 @@ export function CreateEstimateDialog({
         expiresAt: expiresAt || undefined,
         notes,
         terms,
-        lines: lines.length ? lines : defaultWorkLines(name),
+        siteVisit:
+          path === "site_visit"
+            ? {
+                employeeId,
+                technician: technician ? employeeName(technician) : "",
+                visitedAt,
+                accessNotes,
+                findings: "",
+                recommendations: "",
+                measurements: "",
+                photos: [],
+              }
+            : undefined,
+        lines,
       });
       const created = await records.addEstimate(estimate);
       const saved = created ?? estimate;
@@ -266,16 +281,7 @@ export function CreateEstimateDialog({
                 value={name}
                 placeholder="Enter estimate name"
                 required
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setLines((current) =>
-                    current.map((line) =>
-                      line.description.endsWith(" labor") || line.description.endsWith(" materials")
-                        ? { ...line, description: `${event.target.value} ${line.kind === "labor" ? "labor" : "materials"}` }
-                        : line,
-                    ),
-                  );
-                }}
+                onChange={(event) => setName(event.target.value)}
               />
             </Field>
             <Field label="Issued">
@@ -413,7 +419,7 @@ export function CreateJobDialog({
           unit: item.unit,
           unitPrice: item.unitPrice,
         }))
-      : defaultWorkLines("Service visit"),
+      : [],
   );
 
   const assignedTo = useMemo(() => {
@@ -462,13 +468,14 @@ export function CreateJobDialog({
       setTab("customer");
       return;
     }
-    const workLines = lines.length ? lines : defaultWorkLines(name);
+    const workLines = filledWorkLines(lines);
     const linked =
       source ??
       buildEstimate({
         number: nextRecordNumber("EST", allEstimates.map((item) => item.number)),
         providerId: provider.id,
         customerId: selectedCustomer,
+        customerName: customer ? crmCustomerName(customer) : undefined,
         address: addressFrom(street, city, state, zip),
         status: "accepted",
         notes,

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { archiveRowAction } from "@/components/portal/archive-control";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
@@ -24,6 +24,14 @@ import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { queryEstimates } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   ESTIMATE_STATUS_FILTERS,
   estimateCanShare,
@@ -46,6 +54,7 @@ import type { Estimate, Invoice } from "@/lib/types";
 type EstimateRow = Estimate & { customerName: string };
 
 export function EstimatesView() {
+  const router = useRouter();
   const status = useSearchParams().get("status") ?? "";
   const { session, estimates, provider, requests } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
@@ -118,11 +127,33 @@ export function EstimatesView() {
       }
     >
       <CreateEstimateDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <FilterTabs
-        baseHref="/pro/dashboard/estimates"
-        value={status}
-        options={withArchiveFilter(ESTIMATE_STATUS_FILTERS)}
-      />
+      <div className="mb-3 px-0">
+        <Field className="w-full max-w-xs gap-1.5">
+          <FieldLabel htmlFor="estimates-status-filter">Status</FieldLabel>
+          <Select
+            value={status || "__all__"}
+            onValueChange={(value) => {
+              const next = value === "__all__" ? "" : value;
+              router.replace(next ? `/pro/dashboard/estimates?status=${next}` : "/pro/dashboard/estimates");
+            }}
+          >
+            <SelectTrigger id="estimates-status-filter" className="w-full">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
+                <SelectItem key={option.label} value={option.value || "__all__"}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
       <PortalDataTable
         filename="estimates"
         countLabel="Estimates"

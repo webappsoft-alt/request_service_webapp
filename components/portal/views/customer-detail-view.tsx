@@ -57,6 +57,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { queryEstimates } from "@/lib/api/crm-client";
 import {
   crmCustomerName,
@@ -671,16 +679,33 @@ function CustomerEstimatesPanel({
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <Field className="w-full max-w-xs gap-1.5">
+          <FieldLabel htmlFor="estimate-status-filter">Status</FieldLabel>
+          <Select
+            value={filter || "__all__"}
+            onValueChange={(value) => onFilterChange(value === "__all__" ? "" : value)}
+          >
+            <SelectTrigger id="estimate-status-filter" className="w-full">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
+                <SelectItem key={option.label} value={option.value || "__all__"}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
         <Button size="sm" onClick={onCreate}>
           Create estimate
         </Button>
       </div>
-      <LocalFilterTabs
-        value={filter}
-        onChange={onFilterChange}
-        options={withArchiveFilter(ESTIMATE_STATUS_FILTERS)}
-      />
       <PortalDataTable
         filename={`${customerNumber}-estimates`}
         countLabel="Estimates"

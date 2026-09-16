@@ -393,7 +393,7 @@ export function EstimateSiteVisitTab({
           <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {visit.photos.map((file) => (
               <li key={file.id} className="overflow-hidden rounded-[4px] border border-black/10">
-                <button type="button" className="block w-full" onClick={() => setPreview(file)}>
+                <button type="button" className="block w-full cursor-pointer" onClick={() => setPreview(file)}>
                   {file.type.startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img alt={file.name} src={file.dataUrl} className="h-36 w-full object-cover" />
@@ -408,7 +408,7 @@ export function EstimateSiteVisitTab({
                   {locked ? null : (
                     <button
                       type="button"
-                      className="text-destructive"
+                      className="cursor-pointer text-destructive"
                       aria-label={`Remove ${file.name}`}
                       onClick={() => persist({ ...visit, photos: visit.photos.filter((item) => item.id !== file.id) })}
                     >
@@ -425,12 +425,12 @@ export function EstimateSiteVisitTab({
       </div>
 
       {preview ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onClick={() => setPreview(null)}>
+        <div className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center bg-black/60 p-6" onClick={() => setPreview(null)}>
           {preview.type.startsWith("image/") ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img alt={preview.name} src={preview.dataUrl} className="max-h-full max-w-full rounded-[4px]" />
+            <img alt={preview.name} src={preview.dataUrl} className="max-h-full max-w-full cursor-default rounded-[4px]" onClick={(e) => e.stopPropagation()} />
           ) : (
-            <a href={preview.dataUrl} download={preview.name} className="rounded-[4px] bg-white px-4 py-3 text-sm font-semibold">
+            <a href={preview.dataUrl} download={preview.name} className="cursor-pointer rounded-[4px] bg-white px-4 py-3 text-sm font-semibold" onClick={(e) => e.stopPropagation()}>
               Download {preview.name}
             </a>
           )}

@@ -148,7 +148,7 @@ function DeskTabButton({
       type="button"
       onClick={() => onSelect(tab.id)}
       className={cn(
-        "rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors",
+        "cursor-pointer rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-black/15 bg-card text-foreground hover:border-black/25",

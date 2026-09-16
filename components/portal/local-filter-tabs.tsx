@@ -19,7 +19,7 @@ export function LocalFilterTabs({
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              "rounded-md border px-2.5 py-1 text-[13px] font-medium",
+              "cursor-pointer rounded-md border px-2.5 py-1 text-[13px] font-medium",
               active
                 ? "border-primary bg-secondary text-primary"
                 : "border-black/10 bg-card text-muted-foreground hover:text-foreground",

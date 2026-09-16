@@ -20,7 +20,7 @@ export function FilterTabs({
             key={option.label}
             href={href}
             className={cn(
-              "-mb-px border-b-2 py-2.5 text-sm font-medium",
+              "-mb-px cursor-pointer border-b-2 py-2.5 text-sm font-medium",
               active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >

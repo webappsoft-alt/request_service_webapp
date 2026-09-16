@@ -70,7 +70,7 @@ export function RecordWorkspace({
                 type="button"
                 onClick={() => setTab(item.id)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-t-md border px-3 py-2 text-[13px] font-medium",
+                  "cursor-pointer inline-flex items-center gap-1.5 rounded-t-md border px-3 py-2 text-[13px] font-medium",
                   active
                     ? "-mb-px border-black/10 border-b-card bg-card text-primary shadow-[0_-1px_0_#003F7D]"
                     : "border-transparent text-muted-foreground hover:bg-white/70 hover:text-foreground",

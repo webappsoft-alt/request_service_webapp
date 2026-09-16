@@ -652,6 +652,7 @@ export function CreateReminderDialog({
   const [note, setNote] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState(employees[0]?.id ?? "");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -663,6 +664,7 @@ export function CreateReminderDialog({
     setNote("");
     setDueAt("");
     setAssignedEmployeeId(employees[0]?.id ?? "");
+    setSaving(false);
     // Reset the form only when the dialog opens, not when lookup arrays refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -672,9 +674,12 @@ export function CreateReminderDialog({
     setSelectedId(lookups.options(next)[0]?.id ?? "");
   }
 
-  function save() {
+  async function save() {
+    if (saving) return;
     const linkedKind = lockedKind ?? kind;
     const linkedId = lockedId ?? selectedId;
+    if (!title.trim() || !linkedId) return;
+
     const reminder: PortalReminder = {
       id: `rem_${provider.id}_new_${Date.now()}`,
       subjectKind: linkedKind,
@@ -687,17 +692,30 @@ export function CreateReminderDialog({
       status: "open",
       createdAt: new Date().toISOString().slice(0, 10),
     };
-    addReminder(reminder);
-    toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
-    onOpenChange(false);
+
+    setSaving(true);
+    try {
+      await Promise.resolve(addReminder(reminder));
+      toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this reminder.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const choices = lookups.options(kind);
   const linkedReady = Boolean(lockedId ?? selectedId);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (saving) return;
+        onOpenChange(next);
+      }}
+    >      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>Set reminder</DialogTitle>
           <DialogDescription>
@@ -807,11 +825,14 @@ export function CreateReminderDialog({
           </div>
         </FieldGroup>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button disabled={!title.trim() || !linkedReady} onClick={save}>
-            Save reminder
+          <Button
+            disabled={saving || !title.trim() || !linkedReady}
+            onClick={() => void save()}
+          >
+            {saving ? "Saving…" : "Save reminder"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1112,6 +1133,7 @@ export function CreateNoteDialog({
   const { session } = usePortalWorkspace();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
   const kind = subjectKind ?? (customerId ? "customer" : "customer");
   const id = subjectId ?? customerId ?? "";
   const author = [session?.firstName, session?.lastName].filter(Boolean).join(" ") || "Office";
@@ -1121,32 +1143,50 @@ export function CreateNoteDialog({
     if (!open) return;
     setTitle(note?.title ?? "");
     setBody(note?.body ?? "");
+    setSaving(false);
   }, [note, open]);
 
-  function save() {
-    if (note) {
-      updateNote(note.id, { title: title.trim() || "Note", body: body.trim() });
-      toast.success("Note updated.");
+  async function save() {
+    if (saving) return;
+    if (!title.trim() && !body.trim()) return;
+
+    setSaving(true);
+    try {
+      if (note) {
+        await Promise.resolve(
+          updateNote(note.id, { title: title.trim() || "Note", body: body.trim() }),
+        );
+        toast.success("Note updated.");
+      } else {
+        const next: PortalNote = {
+          id: `note_new_${Date.now()}`,
+          subjectKind: kind,
+          subjectId: id,
+          customerId: kind === "customer" ? id : undefined,
+          title: title.trim() || "Note",
+          body: body.trim(),
+          authorName: author,
+          createdAt: new Date().toISOString().slice(0, 10),
+        };
+        await Promise.resolve(addNote(next));
+        toast.success(`Note added to this ${label}.`);
+      }
       onOpenChange(false);
-      return;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this note.");
+    } finally {
+      setSaving(false);
     }
-    const next: PortalNote = {
-      id: `note_new_${Date.now()}`,
-      subjectKind: kind,
-      subjectId: id,
-      customerId: kind === "customer" ? id : undefined,
-      title: title.trim() || "Note",
-      body: body.trim(),
-      authorName: author,
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    addNote(next);
-    toast.success(`Note added to this ${label}.`);
-    onOpenChange(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (saving) return;
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>{note ? "Edit note" : "Add note"}</DialogTitle>
@@ -1164,25 +1204,31 @@ export function CreateNoteDialog({
               value={title}
               onChange={(change) => setTitle(change.target.value)}
               placeholder="Access, billing, follow-up…"
+              disabled={saving}
             />
           </Field>
-          <Field>
+          <Field className="w-full">
             <FieldLabel htmlFor="file-note-body">Note</FieldLabel>
             <Textarea
               id="file-note-body"
+              className="w-full min-h-24"
               value={body}
               onChange={(change) => setBody(change.target.value)}
               rows={5}
               placeholder="Gate code, billing preference, access…"
+              disabled={saving}
             />
           </Field>
         </FieldGroup>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button disabled={!title.trim() && !body.trim()} onClick={save}>
-            {note ? "Save changes" : "Save note"}
+          <Button
+            disabled={saving || (!title.trim() && !body.trim())}
+            onClick={() => void save()}
+          >
+            {saving ? "Saving…" : note ? "Save changes" : "Save note"}
           </Button>
         </DialogFooter>
       </DialogContent>

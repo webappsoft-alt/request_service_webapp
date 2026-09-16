@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -101,9 +102,22 @@ export function useReminderLookups() {
 
 export function OpenReminderBanner({ kind, id }: { kind: ReminderSubjectKind; id: string }) {
   const { reminders, setReminderStatus } = useCrmDirectory();
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const open = openRemindersFor(reminders, kind, id);
   if (!open.length) return null;
   const overdue = open.some((item) => reminderIsOverdue(item));
+
+  async function markDone(reminderId: string) {
+    if (pendingId) return;
+    setPendingId(reminderId);
+    try {
+      await Promise.resolve(setReminderStatus(reminderId, "done"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update this reminder.");
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   return (
     <div
@@ -126,8 +140,14 @@ export function OpenReminderBanner({ kind, id }: { kind: ReminderSubjectKind; id
                   {item.title}
                 </Link>
                 <span className={reminderIsOverdue(item) ? "font-medium" : "opacity-80"}>Due {formatDate(item.dueAt)}</span>
-                <Button size="sm" variant="outline" className="h-7 bg-white" onClick={() => setReminderStatus(item.id, "done")}>
-                  Mark done
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 bg-white"
+                  disabled={pendingId === item.id}
+                  onClick={() => void markDone(item.id)}
+                >
+                  {pendingId === item.id ? "Saving…" : "Mark done"}
                 </Button>
               </li>
             ))}

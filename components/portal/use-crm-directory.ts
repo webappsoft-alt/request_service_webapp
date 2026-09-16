@@ -306,7 +306,7 @@ export function useCrmDirectory() {
       if (apiReady) {
         return (async () => {
           const created = await createReminderApi(reminder);
-          await crm.refresh();
+          void crm.refresh({ silent: true });
           return created;
         })();
       }
@@ -350,7 +350,8 @@ export function useCrmDirectory() {
           }
           const current = readStore(key);
           writeStore(key, { ...current, notes: [...current.notes, note] });
-          await crm.refresh();
+          crm.patchCustomer(subjectId, { notes: nextNotes });
+          void crm.refresh({ silent: true });
           return note;
         })();
       }

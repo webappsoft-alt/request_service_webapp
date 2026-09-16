@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ListTodo } from "lucide-react";
+import { toast } from "sonner";
 import { OpenReminderBanner } from "@/components/portal/reminder-banner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { Button } from "@/components/ui/button";
@@ -18,10 +19,23 @@ import { cn } from "@/lib/utils";
 
 export function OpenTaskBanner({ kind, id }: { kind: ReminderSubjectKind; id: string }) {
   const { tasks, setTaskStatus } = useCrmDirectory();
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const open = openTasksFor(tasks, kind, id);
   if (!open.length) return null;
   const overdue = open.some((item) => taskIsOverdue(item));
   const blocked = open.some((item) => item.status === "blocked");
+
+  async function markDone(taskId: string) {
+    if (pendingId) return;
+    setPendingId(taskId);
+    try {
+      await Promise.resolve(setTaskStatus(taskId, "done"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update this task.");
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   return (
     <div
@@ -46,8 +60,14 @@ export function OpenTaskBanner({ kind, id }: { kind: ReminderSubjectKind; id: st
                 <span className={taskIsOverdue(item) ? "font-medium" : "opacity-80"}>
                   {crmTaskPriorityLabel(item.priority)} · {crmTaskStatusLabel(item.status)} · Due {formatDate(item.dueAt)}
                 </span>
-                <Button size="sm" variant="outline" className="h-7 bg-white" onClick={() => setTaskStatus(item.id, "done")}>
-                  Mark done
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 bg-white"
+                  disabled={pendingId === item.id}
+                  onClick={() => void markDone(item.id)}
+                >
+                  {pendingId === item.id ? "Saving…" : "Mark done"}
                 </Button>
               </li>
             ))}

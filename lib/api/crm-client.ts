@@ -1,4 +1,4 @@
-import { getData, postData, putData, patchData, deleteData } from "@/components/api/apiFuntions";
+import { getData, postData, putData, patchData, deleteData, invalidateGetCache } from "@/components/api/apiFuntions";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 import type {
   PortalContractor,
@@ -658,6 +658,7 @@ export async function updateTask(id: string, task: PortalTask) {
 
 export async function updateTaskStatus(id: string, status: PortalTask["status"]) {
   const response = await patchData(providerCrmApi.taskStatus(id), { status });
+  invalidateGetCache(providerCrmApi.tasks);
   return mapCrmEntity(response, mapPortalTask);
 }
 
@@ -676,6 +677,7 @@ export async function createReminder(reminder: PortalReminder) {
 
 export async function updateReminderStatus(id: string, status: PortalReminder["status"]) {
   const response = await patchData(providerCrmApi.reminderStatus(id), { status });
+  invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }
 

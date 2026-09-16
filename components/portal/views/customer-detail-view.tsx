@@ -8,6 +8,7 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  ChevronDown,
   FileText,
   Globe,
   History,
@@ -23,7 +24,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { archiveRowAction, matchesArchiveFilter } from "@/components/portal/archive-control";
-import { AddNoteButton, CreateReminderDialog, SetTaskButton } from "@/components/portal/create-person-dialogs";
+import {
+  CreateNoteDialog,
+  CreateReminderDialog,
+  CreateTaskDialog,
+  SetTaskButton,
+} from "@/components/portal/create-person-dialogs";
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
@@ -44,6 +50,13 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
+import { CenteredSpinner } from "@/components/ui/spinner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   crmCustomerName,
   crmReminderStatusLabel,
@@ -74,6 +87,7 @@ import {
   type PortalRequest,
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "profile", label: "Profile", icon: UserRound },
@@ -94,6 +108,8 @@ export function CustomerDetailView({ id }: { id: string }) {
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const [createEstimateOpen, setCreateEstimateOpen] = useState(false);
   const [createJobOpen, setCreateJobOpen] = useState(false);
   const [paying, setPaying] = useState<Invoice | null>(null);
@@ -106,8 +122,8 @@ export function CustomerDetailView({ id }: { id: string }) {
   if (!customer) {
     if (pending) {
       return (
-        <div className="border border-black/15 bg-card p-6">
-          <h1 className="text-lg font-semibold">Loading customer…</h1>
+        <div className="border border-black/15 bg-card" aria-busy="true">
+          <CenteredSpinner label="Loading customer" className="min-h-[22rem]" />
         </div>
       );
     }
@@ -197,11 +213,19 @@ export function CustomerDetailView({ id }: { id: string }) {
             >
               Save
             </Button>
-            <SetTaskButton subjectKind="customer" subjectId={customer.id} />
-            <AddNoteButton subjectKind="customer" subjectId={customer.id} />
-            <Button size="sm" onClick={() => setReminderOpen(true)}>
-              Set reminder
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  More actions
+                  <ChevronDown className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem onSelect={() => setTaskOpen(true)}>Create task</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNoteOpen(true)}>Add note</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>Set reminder</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
         notice={<FileNotices kind="customer" id={customer.id} />}
@@ -221,7 +245,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                       />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-lg font-semibold tracking-tight">{name}</h2>
+                          <h2 className="text-lg font-semibold capitalize tracking-tight">{name}</h2>
                           <StatusPill
                             label={customer.entityKind === "company" ? "Company" : "Individual"}
                             tone="primary"
@@ -238,48 +262,49 @@ export function CustomerDetailView({ id }: { id: string }) {
                     </header>
                     <div className="grid sm:grid-cols-2">
                       <InfoRow icon={Building2} label="Source" value={crmSourceLabel(customer.source)} />
-                      {customer.entityKind === "company" ? (
-                        <>
-                          <InfoRow icon={Shield} label="EIN" value={customer.ein ?? "—"} />
-                          <InfoRow
-                            icon={Globe}
-                            label="Website"
-                            value={
-                              customer.website ? (
-                                <a href={customer.website} className="text-primary hover:underline">
-                                  {customer.website.replace(/^https?:\/\//, "")}
-                                </a>
-                              ) : (
-                                "—"
-                              )
-                            }
-                          />
-                        </>
+                      {customer.entityKind === "company" && customer.ein?.trim() ? (
+                        <InfoRow icon={Shield} label="EIN" value={customer.ein} />
                       ) : null}
-                      <InfoRow
-                        icon={Mail}
-                        label="Email"
-                        value={<span className="text-primary">{customer.email}</span>}
-                      />
-                      <InfoRow icon={Phone} label="Phone" value={customer.phone ?? "—"} />
-                      <InfoRow icon={Phone} label="Alt. phone" value={customer.altPhone ?? "—"} />
-                      <InfoRow
-                        icon={Ban}
-                        label="Do not call"
-                        value={customer.doNotCall ? "Yes" : "No"}
-                        warn={customer.doNotCall}
-                      />
-                      <InfoRow icon={Phone} label="Fax" value={customer.fax ?? "—"} />
-                      <InfoRow
-                        icon={MapPin}
-                        label="Street"
-                        value={
-                          address
-                            ? `${address.street}, ${formatLocation(address.city, address.state, address.zip)}`
-                            : "—"
-                        }
-                      />
+                      {customer.entityKind === "company" && customer.website?.trim() ? (
+                        <InfoRow
+                          icon={Globe}
+                          label="Website"
+                          value={
+                            <a href={customer.website} className="text-primary hover:underline">
+                              {customer.website.replace(/^https?:\/\//, "")}
+                            </a>
+                          }
+                        />
+                      ) : null}
+                      {customer.email?.trim() ? (
+                        <InfoRow
+                          icon={Mail}
+                          label="Email"
+                          value={<span className="text-primary">{customer.email}</span>}
+                        />
+                      ) : null}
+                      {customer.phone?.trim() ? (
+                        <InfoRow icon={Phone} label="Phone" value={customer.phone} />
+                      ) : null}
+                      {customer.doNotCall ? (
+                        <InfoRow icon={Ban} label="Do not call" value="Yes" warn />
+                      ) : null}
+                      {address?.street?.trim() ? (
+                        <InfoRow
+                          icon={MapPin}
+                          label="Street"
+                          value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
+                        />
+                      ) : null}
                       <InfoRow icon={CalendarDays} label="Date created" value={formatDate(customer.createdAt)} />
+                      {customer.notes?.trim() ? (
+                        <InfoRow
+                          icon={NotebookPen}
+                          label="Notes"
+                          value={customer.notes}
+                          className="sm:col-span-2"
+                        />
+                      ) : null}
                     </div>
                   </section>
 
@@ -289,28 +314,33 @@ export function CustomerDetailView({ id }: { id: string }) {
                         <Wallet className="size-4 text-primary" aria-hidden="true" />
                         <h3 className="text-sm font-semibold">Account</h3>
                       </header>
-                      <div className="grid grid-cols-2 gap-px bg-black/5">
+                      <div className="grid grid-cols-1 gap-px bg-black/5">
                         <MoneyCell
                           label="Amount owing"
                           value={formatMoney(customer.amountOwing)}
                           emphasize={customer.amountOwing > 0}
                         />
-                        <MoneyCell label="Credit limit" value={formatMoney(customer.creditLimit)} />
                       </div>
                       <div className="grid sm:grid-cols-2">
-                        <InfoRow icon={Receipt} label="Tax code" value={customer.taxCode} />
-                        <InfoRow icon={Receipt} label="Labor tax" value={customer.laborTaxCode} />
-                        <InfoRow icon={Ban} label="On stop" value={customer.onStop ? "Yes" : "No"} warn={customer.onStop} />
+                        {customer.taxCode?.trim() ? (
+                          <InfoRow icon={Receipt} label="Tax code" value={customer.taxCode} />
+                        ) : null}
+                        {customer.laborTaxCode?.trim() ? (
+                          <InfoRow icon={Receipt} label="Labor tax" value={customer.laborTaxCode} />
+                        ) : null}
+                        {customer.onStop ? (
+                          <InfoRow icon={Ban} label="On stop" value="Yes" warn />
+                        ) : null}
                       </div>
                     </section>
 
-                    <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                      <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
-                        <UserRound className="size-4 text-primary" aria-hidden="true" />
-                        <h3 className="text-sm font-semibold">Preferred technician</h3>
-                      </header>
-                      <div className="px-5 py-4">
-                        {assigned ? (
+                    {assigned ? (
+                      <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                        <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                          <UserRound className="size-4 text-primary" aria-hidden="true" />
+                          <h3 className="text-sm font-semibold">Preferred technician</h3>
+                        </header>
+                        <div className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <CrmMark name={`${assigned.firstName} ${assigned.lastName}`} kind="person" photoKey={assigned.firstName} size="md" />
                             <div>
@@ -325,11 +355,9 @@ export function CustomerDetailView({ id }: { id: string }) {
                               </p>
                             </div>
                           </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">No preferred technician on file.</p>
-                        )}
-                      </div>
-                    </section>
+                        </div>
+                      </section>
+                    ) : null}
                   </div>
                 </div>
                 {address ? <CustomerLocationMapLazy provider={provider} address={address} name={name} /> : null}
@@ -648,6 +676,18 @@ export function CustomerDetailView({ id }: { id: string }) {
         subjectKind="customer"
         subjectId={customer.id}
       />
+      <CreateTaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        subjectKind="customer"
+        subjectId={customer.id}
+      />
+      <CreateNoteDialog
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        subjectKind="customer"
+        subjectId={customer.id}
+      />
       <CreateEstimateDialog open={createEstimateOpen} onOpenChange={setCreateEstimateOpen} customerId={customer.id} />
       <CreateJobDialog open={createJobOpen} onOpenChange={setCreateJobOpen} customerId={customer.id} />
     </>
@@ -659,18 +699,28 @@ function InfoRow({
   label,
   value,
   warn,
+  className,
 }: {
   icon: typeof Building2;
   label: string;
   value: ReactNode;
   warn?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="flex items-start gap-3 border-b border-black/5 px-5 py-3 last:border-b-0">
+    <div className={cn("flex items-start gap-3 border-b border-black/5 px-5 py-3 last:border-b-0", className)}>
       <Icon className="mt-0.5 size-3.5 shrink-0 text-primary/70" aria-hidden="true" />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-        <p className={warn ? "text-sm font-medium text-red-700" : "text-sm"}>{value}</p>
+        <p
+          className={
+            warn
+              ? "text-sm font-medium text-red-700 whitespace-pre-wrap break-words"
+              : "text-sm whitespace-pre-wrap break-words"
+          }
+        >
+          {value}
+        </p>
       </div>
     </div>
   );

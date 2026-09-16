@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import {
   Select,
   SelectContent,
@@ -216,7 +215,7 @@ export function CreateCustomerDialog({
       doNotCall: false,
       taxCode: "CO-SALES",
       laborTaxCode: "CO-LABOR",
-      creditLimit: entityKind === "company" ? 10000 : 1500,
+      creditLimit: 0,
       onStop: false,
       membership: "none",
       tags: [source === "website" ? "Website" : "Office"],
@@ -717,33 +716,44 @@ export function CreateReminderDialog({
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="rem-kind">Type</FieldLabel>
-                <NativeSelect
-                  id="rem-kind"
-                  className="w-full"
+                <Select
                   value={kind}
-                  onChange={(change) => changeKind(change.target.value as ReminderSubjectKind)}
+                  onValueChange={(value) => changeKind(value as ReminderSubjectKind)}
                 >
-                  {REMINDER_SUBJECT_KINDS.map((item) => (
-                    <NativeSelectOption key={item} value={item}>
-                      {reminderSubjectKindLabel(item)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger id="rem-kind" className="w-full">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    align="start"
+                    className="z-[100] w-[var(--radix-select-trigger-width)]"
+                  >
+                    {REMINDER_SUBJECT_KINDS.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {reminderSubjectKindLabel(item)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor="rem-subject">Record</FieldLabel>
-                <NativeSelect
-                  id="rem-subject"
-                  className="w-full"
-                  value={selectedId}
-                  onChange={(change) => setSelectedId(change.target.value)}
-                >
-                  {choices.map((item) => (
-                    <NativeSelectOption key={item.id} value={item.id}>
-                      {item.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <Select value={selectedId} onValueChange={setSelectedId}>
+                  <SelectTrigger id="rem-subject" className="w-full">
+                    <SelectValue placeholder="Select record" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    align="start"
+                    className="z-[100] w-[var(--radix-select-trigger-width)]"
+                  >
+                    {choices.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
           )}
@@ -751,9 +761,15 @@ export function CreateReminderDialog({
             <FieldLabel htmlFor="rem-title">Title</FieldLabel>
             <Input id="rem-title" value={title} onChange={(change) => setTitle(change.target.value)} placeholder="Follow up on estimate" />
           </Field>
-          <Field>
+          <Field className="w-full">
             <FieldLabel htmlFor="rem-note">Note</FieldLabel>
-            <Textarea id="rem-note" value={note} onChange={(change) => setNote(change.target.value)} placeholder="Call back after the site visit…" />
+            <Textarea
+              id="rem-note"
+              className="w-full min-h-24"
+              value={note}
+              onChange={(change) => setNote(change.target.value)}
+              placeholder="Call back after the site visit…"
+            />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
@@ -771,18 +787,22 @@ export function CreateReminderDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="rem-emp">Assigned</FieldLabel>
-              <NativeSelect
-                id="rem-emp"
-                className="w-full"
-                value={assignedEmployeeId}
-                onChange={(change) => setAssignedEmployeeId(change.target.value)}
-              >
-                {employees.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {item.firstName} {item.lastName}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <Select value={assignedEmployeeId} onValueChange={setAssignedEmployeeId}>
+                <SelectTrigger id="rem-emp" className="w-full">
+                  <SelectValue placeholder="Select assignee" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {employees.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.firstName} {item.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </div>
         </FieldGroup>
@@ -839,6 +859,7 @@ export function CreateTaskDialog({
   const [assignedEmployeeId, setAssignedEmployeeId] = useState(employees[0]?.id ?? "");
   const [priority, setPriority] = useState<CrmTaskPriority>("normal");
   const [dueAt, setDueAt] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -850,6 +871,7 @@ export function CreateTaskDialog({
     setAssignedEmployeeId(employees[0]?.id ?? "");
     setPriority("normal");
     setDueAt("");
+    setSaving(false);
     // Reset only when the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -859,9 +881,12 @@ export function CreateTaskDialog({
     setSelectedId(lookups.options(next)[0]?.id ?? "");
   }
 
-  function save() {
+  async function save() {
+    if (saving) return;
     const linkedKind = subjectKind ?? kind;
     const linkedId = subjectId ?? selectedId;
+    if (!title.trim() || !linkedId) return;
+
     const task: PortalTask = {
       id: `task_${provider.id}_new_${Date.now()}`,
       number: `TSK-${401 + tasks.length}`,
@@ -876,9 +901,20 @@ export function CreateTaskDialog({
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
       createdAt: new Date().toISOString().slice(0, 10),
     };
-    addTask(task);
-    toast.success(`${task.number} added on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
-    onOpenChange(false);
+
+    setSaving(true);
+    try {
+      const created = await Promise.resolve(addTask(task));
+      const saved = created ?? task;
+      toast.success(
+        `${saved.number} added on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`,
+      );
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this task.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const choices = lookups.options(kind);
@@ -886,8 +922,13 @@ export function CreateTaskDialog({
   const linkedReady = Boolean(subjectId ?? selectedId);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (saving) return;
+        onOpenChange(next);
+      }}
+    >      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>Create task</DialogTitle>
           <DialogDescription>
@@ -906,33 +947,44 @@ export function CreateTaskDialog({
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="task-kind">Type</FieldLabel>
-                <NativeSelect
-                  id="task-kind"
-                  className="w-full"
+                <Select
                   value={kind}
-                  onChange={(change) => changeKind(change.target.value as ReminderSubjectKind)}
+                  onValueChange={(value) => changeKind(value as ReminderSubjectKind)}
                 >
-                  {REMINDER_SUBJECT_KINDS.map((item) => (
-                    <NativeSelectOption key={item} value={item}>
-                      {reminderSubjectKindLabel(item)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  <SelectTrigger id="task-kind" className="w-full">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    align="start"
+                    className="z-[100] w-[var(--radix-select-trigger-width)]"
+                  >
+                    {REMINDER_SUBJECT_KINDS.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {reminderSubjectKindLabel(item)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor="task-subject">Record</FieldLabel>
-                <NativeSelect
-                  id="task-subject"
-                  className="w-full"
-                  value={selectedId}
-                  onChange={(change) => setSelectedId(change.target.value)}
-                >
-                  {choices.map((item) => (
-                    <NativeSelectOption key={item.id} value={item.id}>
-                      {item.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <Select value={selectedId} onValueChange={setSelectedId}>
+                  <SelectTrigger id="task-subject" className="w-full">
+                    <SelectValue placeholder="Select record" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    align="start"
+                    className="z-[100] w-[var(--radix-select-trigger-width)]"
+                  >
+                    {choices.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
           )}
@@ -940,40 +992,57 @@ export function CreateTaskDialog({
             <FieldLabel htmlFor="task-title">Title</FieldLabel>
             <Input id="task-title" value={title} onChange={(change) => setTitle(change.target.value)} placeholder="Order parts, call customer…" />
           </Field>
-          <Field>
+          <Field className="w-full">
             <FieldLabel htmlFor="task-note">Notes</FieldLabel>
-            <Textarea id="task-note" value={note} onChange={(change) => setNote(change.target.value)} placeholder="What needs to be done and by when…" />
+            <Textarea
+              id="task-note"
+              className="w-full min-h-24"
+              value={note}
+              onChange={(change) => setNote(change.target.value)}
+              placeholder="What needs to be done and by when…"
+            />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="task-emp">Assigned</FieldLabel>
-              <NativeSelect
-                id="task-emp"
-                className="w-full"
-                value={assignedEmployeeId}
-                onChange={(change) => setAssignedEmployeeId(change.target.value)}
-              >
-                {employees.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {item.firstName} {item.lastName}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <Select value={assignedEmployeeId} onValueChange={setAssignedEmployeeId}>
+                <SelectTrigger id="task-emp" className="w-full">
+                  <SelectValue placeholder="Select assignee" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {employees.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.firstName} {item.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
             <Field>
               <FieldLabel htmlFor="task-pri">Priority</FieldLabel>
-              <NativeSelect
-                id="task-pri"
-                className="w-full"
+              <Select
                 value={priority}
-                onChange={(change) => setPriority(change.target.value as CrmTaskPriority)}
+                onValueChange={(value) => setPriority(value as CrmTaskPriority)}
               >
-                {TASK_PRIORITIES.map((item) => (
-                  <NativeSelectOption key={item} value={item}>
-                    {crmTaskPriorityLabel(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                <SelectTrigger id="task-pri" className="w-full">
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {TASK_PRIORITIES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {crmTaskPriorityLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </div>
           <Field>
@@ -991,11 +1060,14 @@ export function CreateTaskDialog({
           </Field>
         </FieldGroup>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button disabled={!title.trim() || !linkedReady} onClick={save}>
-            Save task
+          <Button
+            disabled={saving || !title.trim() || !linkedReady}
+            onClick={() => void save()}
+          >
+            {saving ? "Saving…" : "Save task"}
           </Button>
         </DialogFooter>
       </DialogContent>

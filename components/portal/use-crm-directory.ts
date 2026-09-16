@@ -477,7 +477,8 @@ export function useCrmDirectory() {
       if (apiReady) {
         return (async () => {
           const updated = await updateReminderStatusApi(id, status);
-          await crm.refresh();
+          crm.patchReminder(id, { status: updated?.status ?? status });
+          void crm.refresh({ silent: true });
           return updated;
         })();
       }
@@ -496,7 +497,8 @@ export function useCrmDirectory() {
       if (apiReady) {
         return (async () => {
           const updated = await updateTaskStatusApi(id, status);
-          await crm.refresh();
+          crm.patchTask(id, { status: updated?.status ?? status });
+          void crm.refresh({ silent: true });
           return updated;
         })();
       }

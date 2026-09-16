@@ -27,6 +27,7 @@ import publicProfessionalsReducer from "./publicProfessionalsSlice";
 import contactUsReducer from "./contactUsSlice";
 import ordersReducer from "./ordersSlice";
 import providerOrdersReducer from "./providerOrdersSlice";
+import customersReducer from "./customersSlice";
 
 /**
  * Redux Persist storage key: `userData`
@@ -51,6 +52,7 @@ const rootReducer = combineReducers({
   contactUs: contactUsReducer,
   orders: ordersReducer,
   providerOrders: providerOrdersReducer,
+  customers: customersReducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
@@ -107,6 +109,7 @@ export function getStore(): AppStore {
       publicProfessionals?: unknown;
       contactUs?: unknown;
       orders?: unknown;
+      customers?: unknown;
     }).serviceAreas === undefined ||
     (clientStore.getState() as { categories?: unknown }).categories === undefined ||
     (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined ||
@@ -118,7 +121,8 @@ export function getStore(): AppStore {
       .publicProfessionals === undefined ||
     (clientStore.getState() as { contactUs?: unknown }).contactUs === undefined ||
     (clientStore.getState() as { orders?: unknown }).orders === undefined ||
-    (clientStore.getState() as { providerOrders?: unknown }).providerOrders === undefined
+    (clientStore.getState() as { providerOrders?: unknown }).providerOrders === undefined ||
+    (clientStore.getState() as { customers?: unknown }).customers === undefined
   ) {
     clientStore.replaceReducer(appReducer);
   }

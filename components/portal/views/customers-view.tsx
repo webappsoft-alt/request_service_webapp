@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
@@ -11,7 +11,6 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
-import { queryCustomers } from "@/lib/api/crm-client";
 import {
   crmCustomerName,
   crmSourceLabel,
@@ -19,11 +18,21 @@ import {
   type PortalCustomerCrm,
 } from "@/lib/data/crm-people";
 import { formatDate, formatMoney } from "@/lib/format";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  clearCustomersError,
+  customersApiSearch,
+  fetchCustomers,
+  invalidateCustomersCache,
+  setCustomersLetter,
+  setCustomersPage,
+  setCustomersSearch,
+} from "@/store/customersSlice";
 
-const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 400;
 
 export function CustomersView() {
+  const dispatch = useAppDispatch();
   const { customers, remove } = useCrmDirectory();
   const crm = useCrmApiData();
   const records = usePortalRecords();
@@ -31,56 +40,51 @@ export function CustomersView() {
   const pending = useCrmRecordPending();
   const useApi = crm.enabled && crm.ready;
 
+  const slice = useAppSelector((state) => state.customers);
+  const {
+    items,
+    page,
+    limit,
+    total,
+    totalPages,
+    search,
+    letter,
+    loading,
+    error,
+  } = slice ?? {
+    items: [],
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+    search: "",
+    letter: "",
+    loading: true,
+    error: null,
+  };
+
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalCustomerCrm | null>(null);
-
-  const [letter, setLetter] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [items, setItems] = useState<PortalCustomerCrm[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [listLoading, setListLoading] = useState(false);
+  const [searchInput, setSearchInput] = useState(search);
   const [actionLoading, setActionLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestIdRef = useRef(0);
 
-  const apiSearch = letter ? `^${letter}` : search;
-
-  const loadCustomers = useCallback(async () => {
-    if (!useApi) return;
-    const requestId = ++requestIdRef.current;
-    setListLoading(true);
-    try {
-      const result = await queryCustomers({
-        page,
-        limit: PAGE_SIZE,
-        search: apiSearch || undefined,
-        force: true,
-      });
-      if (requestId !== requestIdRef.current) return;
-      setItems(result.items);
-      setTotal(result.total);
-      setTotalPages(result.totalPages);
-    } catch (error) {
-      if (requestId !== requestIdRef.current) return;
-      toast.error(
-        error instanceof Error && error.message
-          ? error.message
-          : "Could not load customers.",
-      );
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setListLoading(false);
-        setActionLoading(false);
-      }
-    }
-  }, [apiSearch, page, useApi]);
+  const apiSearch = customersApiSearch(search, letter);
 
   useEffect(() => {
-    void loadCustomers();
-  }, [loadCustomers]);
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    void dispatch(fetchCustomers()).finally(() => {
+      if (!cancelled) setActionLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, useApi, page, search, letter, limit]);
 
   useEffect(() => {
     return () => {
@@ -88,36 +92,47 @@ export function CustomersView() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!useApi || !error || loading) return;
+    toast.error(error);
+    dispatch(clearCustomersError());
+  }, [dispatch, error, loading, useApi]);
+
   const rows = useApi ? items : directoryRows;
+  // Cached remount → no loader. Search / letter / page → soft overlay via actionLoading.
   const tableLoading =
     actionLoading ||
-    listLoading ||
-    (!useApi && pending && directoryRows.length === 0);
+    (useApi ? loading && items.length === 0 : pending && directoryRows.length === 0);
 
   function onLetterChange(next: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    setLetter(next);
     setSearchInput("");
-    setSearch("");
-    setPage(1);
     setActionLoading(true);
+    dispatch(setCustomersLetter(next));
   }
 
   function onSearchChange(value: string) {
     setSearchInput(value);
-    if (letter) setLetter("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setActionLoading(true);
-      setPage(1);
-      setSearch(value.trim());
+      dispatch(setCustomersSearch(value.trim()));
     }, SEARCH_DEBOUNCE_MS);
   }
 
   function onPageChange(nextPage: number) {
     if (nextPage === page) return;
     setActionLoading(true);
-    setPage(nextPage);
+    dispatch(setCustomersPage(nextPage));
+  }
+
+  function refreshList() {
+    if (!useApi) return;
+    setActionLoading(true);
+    dispatch(invalidateCustomersCache());
+    void dispatch(fetchCustomers({ force: true })).finally(() => {
+      setActionLoading(false);
+    });
   }
 
   return (
@@ -141,7 +156,7 @@ export function CustomersView() {
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/customers/${row.id}`}
-        pageSize={PAGE_SIZE}
+        pageSize={limit}
         empty={
           apiSearch
             ? "No customers match this search."
@@ -151,7 +166,7 @@ export function CustomersView() {
           useApi
             ? {
                 page,
-                pageSize: PAGE_SIZE,
+                pageSize: limit,
                 total,
                 totalPages,
                 onPageChange,
@@ -298,8 +313,7 @@ export function CustomersView() {
             onSelect: () => {
               records.remove("customer", row.id);
               void Promise.resolve(remove("customer", row.id)).then(() => {
-                setActionLoading(true);
-                void loadCustomers();
+                refreshList();
               });
               toast.success(`${crmCustomerName(row)} removed from this board.`);
             },
@@ -310,10 +324,7 @@ export function CustomersView() {
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
-          if (!next && useApi) {
-            setActionLoading(true);
-            void loadCustomers();
-          }
+          if (!next) refreshList();
         }}
       />
       <CreateCustomerDialog
@@ -322,10 +333,7 @@ export function CustomersView() {
         onOpenChange={(next) => {
           if (!next) {
             setEditing(null);
-            if (useApi) {
-              setActionLoading(true);
-              void loadCustomers();
-            }
+            refreshList();
           }
         }}
       />

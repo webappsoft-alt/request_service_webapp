@@ -54,6 +54,10 @@ type CrmApiContextValue = {
   chats: ChatThread[];
   inboxSummary: CrmInboxSummary;
   refresh: (options?: { silent?: boolean }) => Promise<void>;
+  /** Apply a local task update immediately (e.g. after status API succeeds). */
+  patchTask: (id: string, patch: Partial<PortalTask>) => void;
+  /** Apply a local reminder update immediately (e.g. after status API succeeds). */
+  patchReminder: (id: string, patch: Partial<PortalReminder>) => void;
 };
 
 const EMPTY_VALUE: CrmApiContextValue = {
@@ -77,9 +81,11 @@ const EMPTY_VALUE: CrmApiContextValue = {
   chats: [],
   inboxSummary: EMPTY_INBOX_SUMMARY,
   refresh: async () => {},
+  patchTask: () => {},
+  patchReminder: () => {},
 };
 
-type CrmDataState = Omit<CrmApiContextValue, "enabled" | "refresh">;
+type CrmDataState = Omit<CrmApiContextValue, "enabled" | "refresh" | "patchTask" | "patchReminder">;
 
 const CrmApiDataContext = createContext<CrmApiContextValue>(EMPTY_VALUE);
 
@@ -181,6 +187,24 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     [enabled, flushWaiters],
   );
 
+  const patchTask = useCallback((id: string, patch: Partial<PortalTask>) => {
+    setState((current) => ({
+      ...current,
+      tasks: current.tasks.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    }));
+  }, []);
+
+  const patchReminder = useCallback((id: string, patch: Partial<PortalReminder>) => {
+    setState((current) => ({
+      ...current,
+      reminders: current.reminders.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    }));
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -230,8 +254,10 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       enabled,
       ...state,
       refresh,
+      patchTask,
+      patchReminder,
     }),
-    [enabled, refresh, state],
+    [enabled, patchReminder, patchTask, refresh, state],
   );
 
   return (

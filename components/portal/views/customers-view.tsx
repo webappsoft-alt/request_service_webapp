@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
+import { queryCustomers } from "@/lib/api/crm-client";
 import {
   crmCustomerName,
   crmSourceLabel,
@@ -18,19 +20,110 @@ import {
 } from "@/lib/data/crm-people";
 import { formatDate, formatMoney } from "@/lib/format";
 
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 400;
+
 export function CustomersView() {
   const { customers, remove } = useCrmDirectory();
+  const crm = useCrmApiData();
   const records = usePortalRecords();
-  const rows = records.keep("customer", customers);
+  const directoryRows = records.keep("customer", customers);
   const pending = useCrmRecordPending();
-  const tableLoading = pending && rows.length === 0;
+  const useApi = crm.enabled && crm.ready;
+
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalCustomerCrm | null>(null);
+
+  const [letter, setLetter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [items, setItems] = useState<PortalCustomerCrm[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [listLoading, setListLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
+
+  const apiSearch = letter ? `^${letter}` : search;
+
+  const loadCustomers = useCallback(async () => {
+    if (!useApi) return;
+    const requestId = ++requestIdRef.current;
+    setListLoading(true);
+    try {
+      const result = await queryCustomers({
+        page,
+        limit: PAGE_SIZE,
+        search: apiSearch || undefined,
+        force: true,
+      });
+      if (requestId !== requestIdRef.current) return;
+      setItems(result.items);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : "Could not load customers.",
+      );
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setListLoading(false);
+        setActionLoading(false);
+      }
+    }
+  }, [apiSearch, page, useApi]);
+
+  useEffect(() => {
+    void loadCustomers();
+  }, [loadCustomers]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const rows = useApi ? items : directoryRows;
+  const tableLoading =
+    actionLoading ||
+    listLoading ||
+    (!useApi && pending && directoryRows.length === 0);
+
+  function onLetterChange(next: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setLetter(next);
+    setSearchInput("");
+    setSearch("");
+    setPage(1);
+    setActionLoading(true);
+  }
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (letter) setLetter("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setActionLoading(true);
+      setPage(1);
+      setSearch(value.trim());
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  function onPageChange(nextPage: number) {
+    if (nextPage === page) return;
+    setActionLoading(true);
+    setPage(nextPage);
+  }
 
   return (
     <PortalPage
       eyebrow="People / Customers"
-      title={`Customers (${rows.length})`}
+      title={`Customers (${useApi ? total : rows.length})`}
       description="Website requests and office-created accounts. Click a row to open the full customer file."
       actions={
         <Button size="sm" onClick={() => setOpen(true)}>
@@ -48,6 +141,27 @@ export function CustomersView() {
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/customers/${row.id}`}
+        pageSize={PAGE_SIZE}
+        empty={
+          apiSearch
+            ? "No customers match this search."
+            : "No customers yet. Create your first customer."
+        }
+        serverPagination={
+          useApi
+            ? {
+                page,
+                pageSize: PAGE_SIZE,
+                total,
+                totalPages,
+                onPageChange,
+                search: searchInput,
+                onSearchChange,
+                letter,
+                onLetterChange,
+              }
+            : undefined
+        }
         columns={[
           {
             id: "number",
@@ -183,18 +297,36 @@ export function CustomersView() {
             variant: "destructive",
             onSelect: () => {
               records.remove("customer", row.id);
-              remove("customer", row.id);
+              void Promise.resolve(remove("customer", row.id)).then(() => {
+                setActionLoading(true);
+                void loadCustomers();
+              });
               toast.success(`${crmCustomerName(row)} removed from this board.`);
             },
           },
         ]}
       />
-      <CreateCustomerDialog open={open} onOpenChange={setOpen} />
+      <CreateCustomerDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next && useApi) {
+            setActionLoading(true);
+            void loadCustomers();
+          }
+        }}
+      />
       <CreateCustomerDialog
         open={Boolean(editing)}
         customer={editing}
         onOpenChange={(next) => {
-          if (!next) setEditing(null);
+          if (!next) {
+            setEditing(null);
+            if (useApi) {
+              setActionLoading(true);
+              void loadCustomers();
+            }
+          }
         }}
       />
     </PortalPage>

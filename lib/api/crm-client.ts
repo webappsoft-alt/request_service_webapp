@@ -373,8 +373,30 @@ async function listMapped<T>(
   return mapCrmList(response, mapper).items;
 }
 
+export type CrmListQuery = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  silent?: boolean;
+  force?: boolean;
+};
+
 export async function listCustomers(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.customers, mapPortalCustomerCrm, options);
+}
+
+/** Paginated customers list — supports `search` for the A–Z bar and search box. */
+export async function queryCustomers(query: CrmListQuery = {}) {
+  const page = Math.max(1, query.page ?? 1);
+  const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
+  const params: Record<string, string | number> = { page, limit };
+  const search = query.search?.trim();
+  if (search) params.search = search;
+  const response = await getData(providerCrmApi.customers, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalCustomerCrm);
 }
 
 export async function createCustomer(customer: PortalCustomerCrm) {

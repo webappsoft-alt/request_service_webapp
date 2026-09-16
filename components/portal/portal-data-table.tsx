@@ -42,6 +42,9 @@ export type PortalTableServerPagination = {
   onPageChange: (page: number) => void;
   search: string;
   onSearchChange: (value: string) => void;
+  /** Active A–Z letter (`""` = All). When set with `onLetterChange`, letter clicks are parent-driven. */
+  letter?: string;
+  onLetterChange?: (letter: string) => void;
 };
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
@@ -96,6 +99,18 @@ export function PortalDataTable<T>({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
 
+  const letterControlled = Boolean(serverPagination?.onLetterChange);
+  const activeLetter = letterControlled ? (serverPagination?.letter ?? "") : letter;
+
+  function applyLetter(next: string) {
+    if (serverPagination?.onLetterChange) {
+      serverPagination.onLetterChange(next);
+      return;
+    }
+    setLetter(next);
+    setPage(1);
+  }
+
   const filtered = useMemo(() => {
     if (isServer) {
       const next = [...rows];
@@ -122,7 +137,7 @@ export function PortalDataTable<T>({
         ? columns.some((column) => (column.searchValue?.(row) ?? "").toLowerCase().includes(needle))
         : true;
       const initial = (letterValue?.(row) ?? "").trim().charAt(0).toUpperCase();
-      const matchesLetter = letter ? initial === letter : true;
+      const matchesLetter = activeLetter ? initial === activeLetter : true;
       return matchesQuery && matchesLetter;
     });
 
@@ -139,7 +154,7 @@ export function PortalDataTable<T>({
       });
     }
     return next;
-  }, [columns, isServer, letter, letterValue, query, rows, sortDir, sortId]);
+  }, [activeLetter, columns, isServer, letterValue, query, rows, sortDir, sortId]);
 
   const effectivePageSize = serverPagination?.pageSize ?? pageSize;
   const totalCount = serverPagination?.total ?? filtered.length;
@@ -189,17 +204,15 @@ export function PortalDataTable<T>({
 
   return (
     <div className="overflow-hidden border border-black/15 bg-card">
-      {letters && !isServer ? (
+      {letters ? (
         <div className="flex flex-wrap items-center gap-0.5 border-b border-black/10 px-3 py-1.5">
           <button
             type="button"
-            onClick={() => {
-              setLetter("");
-              setPage(1);
-            }}
+            onClick={() => applyLetter("")}
+            disabled={loading}
             className={cn(
-              "px-1.5 text-[11px] font-semibold tracking-wide uppercase",
-              letter ? "text-muted-foreground hover:text-foreground" : "text-primary",
+              "px-1.5 text-[11px] font-semibold tracking-wide uppercase disabled:opacity-50",
+              activeLetter ? "text-muted-foreground hover:text-foreground" : "text-primary",
             )}
           >
             All
@@ -208,13 +221,11 @@ export function PortalDataTable<T>({
             <button
               key={item}
               type="button"
-              onClick={() => {
-                setLetter(item);
-                setPage(1);
-              }}
+              onClick={() => applyLetter(item)}
+              disabled={loading}
               className={cn(
-                "px-1.5 text-[11px] font-semibold",
-                letter === item ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                "px-1.5 text-[11px] font-semibold disabled:opacity-50",
+                activeLetter === item ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
             >
               {item}

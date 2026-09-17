@@ -9,7 +9,11 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { loadCrmSnapshot, type CrmSnapshot } from "@/lib/api/crm-client";
+import {
+  getInboxSummary,
+  loadCrmSnapshot,
+  type CrmSnapshot,
+} from "@/lib/api/crm-client";
 import type { CrmInboxSummary } from "@/lib/api/crm-mappers";
 import type {
   PortalContractor,
@@ -53,7 +57,14 @@ type CrmApiContextValue = {
   schedule: PortalCalendarEvent[];
   chats: ChatThread[];
   inboxSummary: CrmInboxSummary;
+  /** Full CRM snapshot refresh (explicit / after mutations). */
   refresh: (options?: { silent?: boolean }) => Promise<void>;
+  /**
+   * Load the full CRM snapshot once if it is not ready yet.
+   * Call from pages that need directory data — not from Customers list
+   * (that page uses its own Redux `customers` slice).
+   */
+  ensureLoaded: () => Promise<void>;
   /** Apply a local task update immediately (e.g. after status API succeeds). */
   patchTask: (id: string, patch: Partial<PortalTask>) => void;
   /** Apply a local reminder update immediately (e.g. after status API succeeds). */
@@ -85,6 +96,7 @@ const EMPTY_VALUE: CrmApiContextValue = {
   chats: [],
   inboxSummary: EMPTY_INBOX_SUMMARY,
   refresh: async () => {},
+  ensureLoaded: async () => {},
   patchTask: () => {},
   patchReminder: () => {},
   patchCustomer: () => {},
@@ -93,7 +105,13 @@ const EMPTY_VALUE: CrmApiContextValue = {
 
 type CrmDataState = Omit<
   CrmApiContextValue,
-  "enabled" | "refresh" | "patchTask" | "patchReminder" | "patchCustomer" | "patchEstimate"
+  | "enabled"
+  | "refresh"
+  | "ensureLoaded"
+  | "patchTask"
+  | "patchReminder"
+  | "patchCustomer"
+  | "patchEstimate"
 >;
 
 const CrmApiDataContext = createContext<CrmApiContextValue>(EMPTY_VALUE);
@@ -130,6 +148,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
   const inFlightRef = useRef(false);
   const queuedSilentRef = useRef(false);
   const waitersRef = useRef<Array<() => void>>([]);
+  const readyRef = useRef(false);
   const [state, setState] = useState<CrmDataState>(EMPTY_VALUE);
 
   const flushWaiters = useCallback(() => {
@@ -165,6 +184,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       try {
         const snapshot = await loadCrmSnapshot();
         if (!mountedRef.current) return;
+        readyRef.current = true;
         setState(toState(snapshot));
       } catch (error) {
         if (!mountedRef.current) return;
@@ -195,6 +215,12 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     },
     [enabled, flushWaiters],
   );
+
+  const ensureLoaded = useCallback(async () => {
+    if (!enabled) return;
+    if (readyRef.current) return;
+    await refresh();
+  }, [enabled, refresh]);
 
   const patchTask = useCallback((id: string, patch: Partial<PortalTask>) => {
     setState((current) => ({
@@ -240,28 +266,58 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
+    readyRef.current = state.ready;
+  }, [state.ready]);
+
+  useEffect(() => {
     if (!enabled) {
       setState(EMPTY_VALUE);
+      readyRef.current = false;
       inFlightRef.current = false;
       queuedSilentRef.current = false;
       flushWaiters();
       return;
     }
-    void refresh();
-  }, [enabled, flushWaiters, refresh]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const id = window.setInterval(() => {
-      void refresh({ silent: true });
-    }, 60_000);
-    return () => window.clearInterval(id);
-  }, [enabled, refresh]);
+    // Lightweight badge data only — do NOT load the full CRM snapshot here.
+    // Full snapshot is opt-in via ensureLoaded() / refresh() so Customers
+    // (and similar list pages) are not flooded with unrelated APIs.
+    let cancelled = false;
+    void getInboxSummary({ silent: true })
+      .then((inboxSummary) => {
+        if (cancelled || !mountedRef.current) return;
+        setState((current) => ({
+          ...current,
+          inboxSummary,
+          error: null,
+        }));
+      })
+      .catch(() => {
+        /* badge is best-effort */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, flushWaiters]);
+
+  // No setInterval polling — full snapshot must not auto-fire on a timer.
 
   useEffect(() => {
     if (!enabled) return;
     let debounceId = 0;
     const onExternalRefresh = () => {
+      // Only refresh if snapshot was already loaded (mutations / realtime).
+      // Never bootstrap the full dump from a stray event while on Customers.
+      if (!readyRef.current) {
+        void getInboxSummary({ silent: true })
+          .then((inboxSummary) => {
+            if (!mountedRef.current) return;
+            setState((current) => ({ ...current, inboxSummary }));
+          })
+          .catch(() => undefined);
+        return;
+      }
       window.clearTimeout(debounceId);
       debounceId = window.setTimeout(() => {
         void refresh({ silent: true });
@@ -281,12 +337,22 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       enabled,
       ...state,
       refresh,
+      ensureLoaded,
       patchTask,
       patchReminder,
       patchCustomer,
       patchEstimate,
     }),
-    [enabled, patchCustomer, patchEstimate, patchReminder, patchTask, refresh, state],
+    [
+      enabled,
+      ensureLoaded,
+      patchCustomer,
+      patchEstimate,
+      patchReminder,
+      patchTask,
+      refresh,
+      state,
+    ],
   );
 
   return (

@@ -86,7 +86,7 @@ export type CrmEstimateShareResult = {
   emailError?: string | null;
 };
 
-const DEFAULT_LIST_LIMIT = 100;
+const DEFAULT_LIST_LIMIT = 10;
 
 function normalizePreferredTimeWindow(value?: string) {
   const raw = String(value || "").trim().toLowerCase();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
 import {
@@ -25,6 +25,7 @@ import { selectAuthProvider, selectAuthUser } from "@/store/authSlice";
 import { useAppSelector } from "@/store/hooks";
 import { usePortalSettings } from "@/components/portal/use-portal-settings";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
@@ -101,6 +102,7 @@ export function DashboardView() {
   const { officeHours } = usePortalSettings();
   const setupItems = getProfileSetupItems(user, authProvider, officeHours);
   const setup = profileSetupProgress(setupItems);
+  const crm = useCrmApiData();
   const { provider, stats, activity, revenue, requests, jobs, estimates, invoices, payments } = usePortalWorkspace();
   const { customers, contractors, vendors, tasks, reminders, employees } = useCrmDirectory();
   const { events, employeeLabel } = usePortalCrew();
@@ -111,6 +113,12 @@ export function DashboardView() {
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [jobOpen, setJobOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
+
+  // Dashboard needs cross-module stats — load CRM snapshot once for this page only.
+  useEffect(() => {
+    if (!crm.enabled) return;
+    void crm.ensureLoaded();
+  }, [crm.enabled, crm.ensureLoaded]);
 
   const today = new Date();
   const todayKey = today.toISOString().slice(0, 10);

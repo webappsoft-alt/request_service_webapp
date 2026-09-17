@@ -233,10 +233,14 @@ export function useCrmDirectory() {
 
   const addCustomer = useCallback(
     (customer: PortalCustomerCrm) => {
-      if (apiReady) {
+      // Use live API whenever the provider is authenticated — do not wait for
+      // the full CRM snapshot (Customers list no longer bootstraps it).
+      if (crm.enabled) {
         return (async () => {
           const created = await createCustomerApi(customer);
-          await crm.refresh();
+          if (crm.ready) {
+            await crm.refresh({ silent: true });
+          }
           return created;
         })();
       }
@@ -244,7 +248,7 @@ export function useCrmDirectory() {
       writeStore(key, { ...current, customers: [...current.customers, customer] });
       return customer;
     },
-    [apiReady, crm, key],
+    [crm, key],
   );
 
   const updateCustomer = useCallback(

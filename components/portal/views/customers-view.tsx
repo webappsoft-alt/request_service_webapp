@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
-import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -19,6 +18,7 @@ import {
 } from "@/lib/data/crm-people";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   clearCustomersError,
   customersApiSearch,
@@ -30,15 +30,22 @@ import {
 } from "@/store/customersSlice";
 
 const SEARCH_DEBOUNCE_MS = 400;
+const CUSTOMERS_PAGE_SIZE = 10;
 
 export function CustomersView() {
   const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
   const { customers, remove } = useCrmDirectory();
-  const crm = useCrmApiData();
   const records = usePortalRecords();
   const directoryRows = records.keep("customer", customers);
   const pending = useCrmRecordPending();
-  const useApi = crm.enabled && crm.ready;
+
+  // Customers list uses its own Redux API — do not wait for the full CRM snapshot.
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
 
   const slice = useAppSelector((state) => state.customers);
   const {
@@ -54,7 +61,7 @@ export function CustomersView() {
   } = slice ?? {
     items: [],
     page: 1,
-    limit: 20,
+    limit: CUSTOMERS_PAGE_SIZE,
     total: 0,
     totalPages: 1,
     search: "",
@@ -75,16 +82,22 @@ export function CustomersView() {
     setSearchInput(search);
   }, [search]);
 
+  // Active Customers tab → always hit customers API (limit 10).
   useEffect(() => {
     if (!useApi) return;
     let cancelled = false;
-    void dispatch(fetchCustomers()).finally(() => {
+    void dispatch(
+      fetchCustomers({
+        force: true,
+        limit: CUSTOMERS_PAGE_SIZE,
+      }),
+    ).finally(() => {
       if (!cancelled) setActionLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [dispatch, useApi, page, search, letter, limit]);
+  }, [dispatch, useApi, page, search, letter]);
 
   useEffect(() => {
     return () => {
@@ -99,10 +112,11 @@ export function CustomersView() {
   }, [dispatch, error, loading, useApi]);
 
   const rows = useApi ? items : directoryRows;
-  // Cached remount → no loader. Search / letter / page → soft overlay via actionLoading.
   const tableLoading =
     actionLoading ||
-    (useApi ? loading && items.length === 0 : pending && directoryRows.length === 0);
+    (useApi
+      ? loading && items.length === 0
+      : pending && directoryRows.length === 0);
 
   function onLetterChange(next: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -130,7 +144,9 @@ export function CustomersView() {
     if (!useApi) return;
     setActionLoading(true);
     dispatch(invalidateCustomersCache());
-    void dispatch(fetchCustomers({ force: true })).finally(() => {
+    void dispatch(
+      fetchCustomers({ force: true, limit: CUSTOMERS_PAGE_SIZE }),
+    ).finally(() => {
       setActionLoading(false);
     });
   }

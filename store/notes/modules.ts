@@ -20,6 +20,8 @@ export const NOTES_ENTITY_BY_SUBJECT: Record<
 export const customerNotesModule = createEntityNotesSlice({
   name: "customerNotes",
   entityType: "Customer",
+  /** CRM contract + product rule: Customer Notes always page size 10. */
+  fixedLimit: 10,
 });
 
 export const estimateNotesModule = createEntityNotesSlice({

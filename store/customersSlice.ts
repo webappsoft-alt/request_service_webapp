@@ -28,7 +28,7 @@ type CustomersState = {
   error: string | null;
 };
 
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 10;
 
 const initialState: CustomersState = {
   items: [],
@@ -168,14 +168,16 @@ const customersSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchCustomers.pending, (state) => {
-        state.loading = true;
+        // Keep existing rows visible on revisit; spinner only when empty.
+        if (state.items.length === 0) state.loading = true;
         state.error = null;
       })
       .addCase(fetchCustomers.fulfilled, (state, action) => {
         state.loading = false;
         state.items = action.payload.items;
         state.page = action.payload.pagination.page;
-        state.limit = action.payload.pagination.limit;
+        // Keep our page size (10) — do not adopt whatever the API echoes back.
+        state.limit = DEFAULT_LIMIT;
         state.total = action.payload.pagination.total;
         state.totalPages = Math.max(1, action.payload.pagination.totalPages);
         state.search = action.payload.search;

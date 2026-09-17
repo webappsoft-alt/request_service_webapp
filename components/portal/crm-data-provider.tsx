@@ -27,6 +27,7 @@ import type { ChatThread } from "@/lib/booking/chat-store";
 import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import { getAuthToken, getAuthUser } from "@/components/api/apiFuntions";
 
 const EVENT_NAME = "rs-crm-api";
 
@@ -157,10 +158,11 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     waiters.forEach((resolve) => resolve());
   }, []);
 
-  const enabled =
-    auth.hydrated &&
-    Boolean(auth.token) &&
-    (user?.role === "provider" || auth.role === "provider");
+  const token = auth.token || (typeof window !== "undefined" ? getAuthToken() : null);
+  const activeUser = user ?? (typeof window !== "undefined" ? getAuthUser() : null);
+  const roleStr = String(activeUser?.role || auth.role || "").toLowerCase();
+  const isProvider = !roleStr || roleStr === "provider" || roleStr === "pro";
+  const enabled = Boolean(token) && isProvider;
 
   const refresh = useCallback(
     async (options?: { silent?: boolean }) => {

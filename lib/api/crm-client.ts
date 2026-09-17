@@ -171,19 +171,23 @@ function estimateItemsToApi(items?: EstimateItem[], minItems = 0) {
   const mapped = list.map((item) => ({
     description: item.description || "",
     kind: item.type || "labor",
+    type: item.type || "labor",
     quantity: Math.max(0, item.quantity ?? 1),
     unit: item.unit || "ea",
     unitPrice: item.unitPrice ?? 0,
     cost: item.total ?? (item.quantity ?? 1) * (item.unitPrice ?? 0),
+    total: item.total ?? (item.quantity ?? 1) * (item.unitPrice ?? 0),
   }));
   while (mapped.length < minItems) {
     mapped.push({
       description: "Service",
       kind: "labor",
+      type: "labor",
       quantity: 1,
       unit: "ea",
       unitPrice: 0,
       cost: 0,
+      total: 0,
     });
   }
   return mapped;
@@ -199,42 +203,47 @@ function siteVisitPayload(siteVisit?: EstimateSiteVisitRecord) {
     findings: siteVisit.findings || "",
     recommendations: siteVisit.recommendations || "",
     measurements: siteVisit.measurements || "",
-    photos: (siteVisit.photos || []).map((photo) => ({
-      id: photo.id,
-      name: photo.name,
-      type: photo.type,
-      size: photo.size,
-      url: photo.url,
-      addedAt: photo.addedAt,
-      actor: photo.actor || "",
-    })),
+    photos: (siteVisit.photos || []).map((photo) => {
+      const p = photo as Record<string, unknown>;
+      const url = String(p.url || p.dataUrl || "").trim();
+      return {
+        id: photo.id || `photo_${Date.now()}`,
+        name: photo.name || "Photo",
+        type: photo.type || "image/jpeg",
+        size: typeof photo.size === "number" ? photo.size : 0,
+        url,
+        dataUrl: url,
+        addedAt: photo.addedAt || new Date().toISOString(),
+        actor: photo.actor || "",
+      };
+    }),
   };
 }
 
-function estimateAttachmentsToApi(attachments?: unknown[]): { name: string; attachment: string }[] {
+function estimateAttachmentsToApi(attachments?: unknown[]): { name: string; attachment: string; url: string; dataUrl: string }[] {
   if (!Array.isArray(attachments)) return [];
   return attachments
     .map((item, index) => {
       if (typeof item === "string" && item.trim()) {
         const url = item.trim();
         const name = url.split("/").pop() || `Attachment ${index + 1}`;
-        return { name, attachment: url };
+        return { name, attachment: url, url, dataUrl: url };
       }
       if (item && typeof item === "object") {
         const record = item as Record<string, unknown>;
         const url = String(record.attachment || record.dataUrl || record.url || "").trim();
         if (!url) return null;
         const name = String(record.name || "").trim() || url.split("/").pop() || `Attachment ${index + 1}`;
-        return { name, attachment: url };
+        return { name, attachment: url, url, dataUrl: url };
       }
       return null;
     })
-    .filter((entry): entry is { name: string; attachment: string } => Boolean(entry));
+    .filter((entry): entry is { name: string; attachment: string; url: string; dataUrl: string } => Boolean(entry));
 }
 
 function estimatePayload(estimate: Estimate) {
   return {
-    customerId: crmIdOf(estimate.customerId),
+    customerId: crmIdOf(estimate.customerId) || null,
     requestId: estimate.requestId || null,
     title: estimate.title || "",
     status: normalizeStatus(estimate.status, [
@@ -252,7 +261,7 @@ function estimatePayload(estimate: Estimate) {
     issuedAt: estimate.issuedAt,
     expiresAt: estimate.expiresAt || undefined,
     items: estimateItemsToApi(estimate.items),
-    discount: estimate.discount,
+    discount: Number(estimate.discount) || 0,
     notes: estimate.notes || "",
     terms: estimate.terms || "",
     propertyAddress: mapAddressForApi(estimate.propertyAddress),
@@ -550,6 +559,9 @@ export type EstimateSettingsPayload = {
   };
   notes?: string;
   terms?: string;
+  items?: EstimateItem[];
+  attachments?: unknown[];
+  siteVisit?: EstimateSiteVisitRecord;
 };
 
 export async function updateEstimateSettings(id: string, settings: EstimateSettingsPayload) {
@@ -570,6 +582,9 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
   }
   if (settings.notes !== undefined) payload.notes = settings.notes;
   if (settings.terms !== undefined) payload.terms = settings.terms;
+  if (settings.items !== undefined) payload.items = estimateItemsToApi(settings.items);
+  if (settings.attachments !== undefined) payload.attachments = estimateAttachmentsToApi(settings.attachments);
+  if (settings.siteVisit !== undefined) payload.siteVisit = siteVisitPayload(settings.siteVisit);
 
   const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);

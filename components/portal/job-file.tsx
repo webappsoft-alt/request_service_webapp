@@ -605,7 +605,7 @@ export function JobAttachmentsTab({
 }) {
   const { attachments, addAttachments, removeAttachment, actor } = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();
-  const apiReady = crm.enabled && crm.ready;
+  const apiReady = crm.enabled;
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -738,6 +738,10 @@ export function JobAttachmentsTab({
     } else {
       crm.patchEstimate(estimate.id, { attachments: attachmentPayload });
     }
+    if (crm.ready) {
+      void crm.refresh({ silent: true });
+    }
+    return updated;
   }
 
   async function handleSave() {
@@ -831,22 +835,28 @@ export function JobAttachmentsTab({
 
     setUploading(true);
     try {
+      const addedList: JobAttachment[] = [];
       for (const file of files) {
         const response = await uploadAnyFile(file);
         const url = extractUploadedUrl(response.data);
         if (!url) throw new Error(`Could not upload ${file.name}.`);
-        addAttachments([
-          {
-            id: `att_${Date.now()}_${file.name}`,
-            name: file.name,
-            type: file.type || "application/octet-stream",
-            size: file.size,
-            dataUrl: url,
-            addedAt: new Date().toISOString(),
-            actor,
-          },
-        ]);
+        const item: JobAttachment = {
+          id: `att_${Date.now()}_${file.name}`,
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          dataUrl: url,
+          addedAt: new Date().toISOString(),
+          actor,
+        };
+        addedList.push(item);
         toast.success(`${file.name} attached.`);
+      }
+      addAttachments(addedList);
+      if (estimate && apiReady) {
+        const combined = [...addedList, ...attachments];
+        await persistEstimateAttachments(combined);
+        setLastSavedUrls(combined.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
       }
     } catch (error) {
       const message =

@@ -50,7 +50,7 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { estimateAsJob, filledWorkLines, invoiceAsJob, buildInvoice, buildJob, linesToEstimateItems, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
 import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, deleteJob as deleteJobApi, finalizeEstimate as finalizeEstimateApi, getEstimate, getJob, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
+import { extractErrorMessage, getAuthToken } from "@/components/api/apiFuntions";
 import type { Estimate, Job } from "@/lib/types";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
@@ -129,7 +129,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     : estimate?.customerName?.trim() || "Customer";
 
   const approval = share.approvalOf(id);
-  const apiReady = crm.enabled;
+  const apiReady = crm.enabled || (typeof window !== "undefined" && Boolean(getAuthToken()));
   const pending = useCrmRecordPending();
 
   useEffect(() => {
@@ -458,6 +458,9 @@ export function EstimateDetailView({ id }: { id: string }) {
                               siteVisit: siteVisitToRecord(visit),
                             });
                           }
+                          if (crm.ready) {
+                            void crm.refresh({ silent: true });
+                          }
                         } catch (error) {
                           toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
                           throw error;
@@ -480,15 +483,23 @@ export function EstimateDetailView({ id }: { id: string }) {
                       const items = linesToEstimateItems(quote.id, filled);
                       writeCostLines(session?.email, quote.id, lines);
                       if (apiReady) {
-                        const updated = await updateEstimateApi(quote.id, {
-                          ...quote,
-                          items,
-                        });
-                        if (updated) {
-                          crm.patchEstimate(quote.id, updated);
-                          setFetched(updated);
-                        } else {
-                          crm.patchEstimate(quote.id, { items });
+                        try {
+                          const updated = await updateEstimateApi(quote.id, {
+                            ...quote,
+                            items,
+                          });
+                          if (updated) {
+                            crm.patchEstimate(quote.id, updated);
+                            setFetched(updated);
+                          } else {
+                            crm.patchEstimate(quote.id, { items });
+                          }
+                          if (crm.ready) {
+                            void crm.refresh({ silent: true });
+                          }
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Could not save line items to server.");
+                          throw error;
                         }
                       }
                     }}
@@ -514,7 +525,16 @@ export function EstimateDetailView({ id }: { id: string }) {
               case "attachments":
                 return <JobAttachmentsTab job={asJob} estimate={estimate} technician="" noun="estimate" />;
               case "settings":
-                return <EstimateSettingsTab estimate={estimate} job={job} service={service} />;
+                return (
+                  <EstimateSettingsTab
+                    estimate={estimate}
+                    job={job}
+                    service={service}
+                    onSave={(updated) => {
+                      setFetched(updated);
+                    }}
+                  />
+                );
               default:
                 return <JobSummaryTab job={asJob} estimate={estimate} technician="" noun="estimate" />;
             }

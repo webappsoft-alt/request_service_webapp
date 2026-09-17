@@ -370,7 +370,7 @@ export function EstimateSiteVisitTab({
           actor,
         };
         next = { ...next, photos: [photo, ...next.photos] };
-        persist(next);
+        await persist(next);
         toast.success(`${file.name} added to the site visit.`);
       }
     } catch (error) {
@@ -570,7 +570,14 @@ export function EstimateSiteVisitTab({
                       type="button"
                       className="cursor-pointer text-destructive"
                       aria-label={`Remove ${file.name}`}
-                      onClick={() => persist({ ...visit, photos: visit.photos.filter((item) => item.id !== file.id) })}
+                      onClick={async () => {
+                        try {
+                          await persist({ ...visit, photos: visit.photos.filter((item) => item.id !== file.id) });
+                          toast.success("Photo removed.");
+                        } catch {
+                          // toast shown by onSave handler
+                        }
+                      }}
                     >
                       <Trash2 className="size-4" />
                     </button>

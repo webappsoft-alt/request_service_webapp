@@ -400,7 +400,13 @@ export async function queryCustomers(query: CrmListQuery = {}) {
 }
 
 export async function listCustomers(options?: CrmRequestOptions) {
-  return listMapped(providerCrmApi.customers, mapPortalCustomerCrm, options);
+  const result = await queryCustomers({
+    page: 1,
+    limit: DEFAULT_LIST_LIMIT,
+    silent: options?.silent ?? true,
+    force: options?.force ?? true,
+  });
+  return result.items;
 }
 
 export async function getCustomer(id: string) {
@@ -586,6 +592,19 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
   if (settings.attachments !== undefined) payload.attachments = estimateAttachmentsToApi(settings.attachments);
   if (settings.siteVisit !== undefined) payload.siteVisit = siteVisitPayload(settings.siteVisit);
 
+  const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
+  return mapCrmEntity(response, mapEstimate);
+}
+
+export async function updateEstimateSiteVisit(
+  id: string,
+  siteVisit: EstimateSiteVisitRecord,
+  status?: EstimateStatus,
+) {
+  const payload: Record<string, unknown> = {
+    siteVisit: siteVisitPayload(siteVisit),
+  };
+  if (status !== undefined) payload.status = status;
   const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);
 }

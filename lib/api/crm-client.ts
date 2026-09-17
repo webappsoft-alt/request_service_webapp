@@ -8,7 +8,7 @@ import type {
   PortalVendor,
 } from "@/lib/data/crm-people";
 import { employeeName, type PortalEmployee, type PortalEventKind, type PortalRequest, type PortalTimeWindow } from "@/lib/data/portal";
-import type { Estimate, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
+import type { Estimate, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
   mapCrmEntity,
@@ -129,6 +129,7 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
         id: item.id,
         description: String(item.description).trim(),
         kind: item.type === "materials" ? "material" : "labor",
+        unit: item.unit || (item.type === "labor" ? "hr" : "ea"),
         quantity,
         unitPrice,
         taxRate,
@@ -271,6 +272,27 @@ function siteVisitPayload(visit?: Estimate["siteVisit"]) {
   };
 }
 
+function estimateAttachmentsToApi(attachments?: unknown[]): { name: string; attachment: string }[] {
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .map((item, index) => {
+      if (typeof item === "string" && item.trim()) {
+        const url = item.trim();
+        const name = url.split("/").pop() || `Attachment ${index + 1}`;
+        return { name, attachment: url };
+      }
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        const url = String(record.attachment || record.dataUrl || record.url || "").trim();
+        if (!url) return null;
+        const name = String(record.name || "").trim() || url.split("/").pop() || `Attachment ${index + 1}`;
+        return { name, attachment: url };
+      }
+      return null;
+    })
+    .filter((entry): entry is { name: string; attachment: string } => Boolean(entry));
+}
+
 function estimatePayload(estimate: Estimate) {
   return {
     customerId: estimate.customerId,
@@ -295,6 +317,7 @@ function estimatePayload(estimate: Estimate) {
     terms: estimate.terms || "",
     propertyAddress: mapAddressForApi(estimate.propertyAddress),
     siteVisit: siteVisitPayload(estimate.siteVisit),
+    attachments: estimateAttachmentsToApi(estimate.attachments as unknown[]),
   };
 }
 
@@ -561,6 +584,46 @@ export async function getEstimate(id: string) {
 
 export async function updateEstimate(id: string, estimate: Estimate) {
   const response = await putData(providerCrmApi.estimate(id), estimatePayload(estimate));
+  return mapCrmEntity(response, mapEstimate);
+}
+
+export type EstimateSettingsPayload = {
+  title?: string;
+  status?: EstimateStatus;
+  customerId?: string;
+  issuedAt?: string;
+  expiresAt?: string | null;
+  propertyAddress?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    unit?: string;
+  };
+  notes?: string;
+  terms?: string;
+};
+
+export async function updateEstimateSettings(id: string, settings: EstimateSettingsPayload) {
+  const payload: Record<string, unknown> = {};
+  if (settings.title !== undefined) payload.title = settings.title.trim();
+  if (settings.status !== undefined) payload.status = settings.status;
+  if (settings.customerId !== undefined) payload.customerId = settings.customerId;
+  if (settings.issuedAt !== undefined) payload.issuedAt = settings.issuedAt;
+  if (settings.expiresAt !== undefined) payload.expiresAt = settings.expiresAt || null;
+  if (settings.propertyAddress !== undefined) {
+    payload.propertyAddress = {
+      street: settings.propertyAddress.street || "",
+      city: settings.propertyAddress.city || "",
+      state: settings.propertyAddress.state || "",
+      zip: settings.propertyAddress.zip || "",
+      unit: settings.propertyAddress.unit || "",
+    };
+  }
+  if (settings.notes !== undefined) payload.notes = settings.notes;
+  if (settings.terms !== undefined) payload.terms = settings.terms;
+
+  const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);
 }
 

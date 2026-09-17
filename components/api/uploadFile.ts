@@ -32,6 +32,81 @@ const IMAGE_EXTENSIONS = [
   "tiff",
 ] as const;
 
+export const ATTACHMENT_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+
+export const ALLOWED_ATTACHMENT_MIME_TYPES = [
+  // Videos
+  "video/mp4",
+  "video/quicktime",
+  // Audio
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/ogg",
+  "audio/aac",
+  "audio/m4a",
+  "audio/webm",
+  "audio/m4b",
+  // Documents
+  "application/pdf",
+  // Images
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+] as const;
+
+export const ALLOWED_ATTACHMENT_EXTENSIONS = [
+  "mp4",
+  "mov",
+  "mp3",
+  "wav",
+  "ogg",
+  "aac",
+  "m4a",
+  "webm",
+  "m4b",
+  "pdf",
+  "jpeg",
+  "jpg",
+  "png",
+  "webp",
+  "gif",
+] as const;
+
+export const ATTACHMENT_ACCEPT_ATTRIBUTE = [
+  ...ALLOWED_ATTACHMENT_MIME_TYPES,
+  ...ALLOWED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`),
+].join(",");
+
+export function isValidAttachmentFile(file: File): boolean {
+  if (file.size > ATTACHMENT_MAX_FILE_SIZE) return false;
+  if (ALLOWED_ATTACHMENT_MIME_TYPES.includes(file.type as (typeof ALLOWED_ATTACHMENT_MIME_TYPES)[number])) {
+    return true;
+  }
+  const ext = getFileExtension(file.name);
+  if (ext && ALLOWED_ATTACHMENT_EXTENSIONS.includes(ext as (typeof ALLOWED_ATTACHMENT_EXTENSIONS)[number])) {
+    return true;
+  }
+  return false;
+}
+
+export function validateAttachmentFile(file: File): { valid: true } | { valid: false; error: string } {
+  if (file.size > ATTACHMENT_MAX_FILE_SIZE) {
+    return {
+      valid: false,
+      error: `"${file.name}" exceeds the maximum 500MB size limit.`,
+    };
+  }
+  if (!isValidAttachmentFile(file)) {
+    return {
+      valid: false,
+      error: `"${file.name}" format is not allowed. Supported formats: Videos (MP4, MOV), Audio (MP3, WAV, OGG, AAC, M4A, WEBM, M4B), Documents (PDF), Images (JPEG, PNG, WEBP, GIF).`,
+    };
+  }
+  return { valid: true };
+}
+
 function isValidFileType(file: File): boolean {
   const fileExtension = getFileExtension(file.name);
   if (fileExtension && IMAGE_EXTENSIONS.includes(fileExtension as (typeof IMAGE_EXTENSIONS)[number])) {
@@ -139,6 +214,11 @@ export async function uploadAnyFile(
   file: File,
   header2: Record<string, string> = {},
 ): Promise<AxiosResponse> {
+  const check = validateAttachmentFile(file);
+  if (!check.valid) {
+    throw new Error(check.error);
+  }
+
   const formData = new FormData();
   formData.append("file", file);
 

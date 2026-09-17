@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
@@ -11,9 +11,16 @@ import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { estimateAsJob } from "@/components/portal/work-builders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import { updateEstimate as updateEstimateApi, updateEstimateSettings as updateEstimateSettingsApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { ESTIMATE_STATUSES, estimateStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation } from "@/lib/format";
@@ -102,14 +109,15 @@ export function EstimateSettingsTab({
   job?: Job;
   service: string;
 }) {
-  const { customers } = useCrmDirectory();
+  const { customers, loading: customersLoading } = useCrmDirectory();
   const crm = useCrmApiData();
+  const loading = customersLoading || (crm.enabled && !crm.ready);
   const records = usePortalRecords();
   const asJob = estimateAsJob(estimate);
   const file = useJobFile(asJob, estimate, undefined, "");
-  const selected = customers.find((item) => item.id === estimate.customerId);
   const apiReady = crm.enabled && crm.ready;
-  const [draft, setDraft] = useState<EstimateSettingsDraft>(() => ({
+
+  const fallback = useMemo<EstimateSettingsDraft>(() => ({
     name: service,
     customerId: estimate.customerId,
     street: estimate.propertyAddress.street,
@@ -121,50 +129,210 @@ export function EstimateSettingsTab({
     status: estimate.status,
     notes: estimate.notes ?? "",
     terms: estimate.terms ?? "",
-  }));
+  }), [estimate, service]);
+
+  const [draft, setDraft] = useState<EstimateSettingsDraft>(fallback);
+  const selected = customers.find((item) => item.id === draft.customerId) ?? customers.find((item) => item.id === estimate.customerId);
+  const isKnownCustomer = customers.some((item) => item.id === draft.customerId);
+  const [saving, setSaving] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const bypassingRef = useRef(false);
+
+  useEffect(() => {
+    setDraft(fallback);
+  }, [fallback]);
+
+  const isDirty = useMemo(() => {
+    return (
+      (draft.name || "").trim() !== (fallback.name || "").trim() ||
+      (draft.customerId || "") !== (fallback.customerId || "") ||
+      (draft.street || "").trim() !== (fallback.street || "").trim() ||
+      (draft.city || "").trim() !== (fallback.city || "").trim() ||
+      (draft.state || "").trim() !== (fallback.state || "").trim() ||
+      (draft.zip || "").trim() !== (fallback.zip || "").trim() ||
+      (draft.issuedAt || "") !== (fallback.issuedAt || "") ||
+      (draft.expiresAt || "") !== (fallback.expiresAt || "") ||
+      draft.status !== fallback.status ||
+      (draft.notes || "").trim() !== (fallback.notes || "").trim() ||
+      (draft.terms || "").trim() !== (fallback.terms || "").trim()
+    );
+  }, [draft, fallback]);
+
+  // Window beforeunload (tab close / refresh)
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // Intercept navigation or tab change when form has unsaved changes
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleClickCapture = (event: MouseEvent) => {
+      if (bypassingRef.current) return;
+
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      // Allow clicks within the estimate settings form, modals, dropdowns, selects, toasts
+      if (
+        target.closest("[data-estimate-settings-form]") ||
+        target.closest("[role='dialog']") ||
+        target.closest("[role='listbox']") ||
+        target.closest("[data-radix-popper-content-wrapper]") ||
+        target.closest("[data-radix-focus-guard]") ||
+        target.closest("[data-radix-portal]") ||
+        target.closest("[data-sonner-toaster]") ||
+        target.closest(".sonner-toast")
+      ) {
+        return;
+      }
+
+      const interactiveEl = target.closest(
+        "button, a[href], [role='tab'], [role='button'], [data-tab-id]"
+      ) as HTMLElement | null;
+
+      if (!interactiveEl) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      pendingActionRef.current = () => {
+        interactiveEl.click();
+      };
+
+      setShowUnsavedDialog(true);
+    };
+
+    document.addEventListener("click", handleClickCapture, true);
+    return () => {
+      document.removeEventListener("click", handleClickCapture, true);
+    };
+  }, [isDirty]);
+
+  function executePending() {
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    setShowUnsavedDialog(false);
+    if (action) {
+      bypassingRef.current = true;
+      setTimeout(() => {
+        action();
+        setTimeout(() => {
+          bypassingRef.current = false;
+        }, 150);
+      }, 0);
+    }
+  }
 
   function patch(next: Partial<EstimateSettingsDraft>) {
     setDraft((current) => ({ ...current, ...next }));
   }
 
+  async function persist(settingsDraft: EstimateSettingsDraft) {
+    file.saveEstimateSettings(settingsDraft);
+    const chosenCustomer = customers.find((item) => item.id === settingsDraft.customerId);
+    const customerName = chosenCustomer ? crmCustomerName(chosenCustomer) : estimate.customerName;
+    if (apiReady) {
+      const updated = await updateEstimateSettingsApi(estimate.id, {
+        title: settingsDraft.name.trim(),
+        customerId: settingsDraft.customerId,
+        propertyAddress: {
+          street: settingsDraft.street,
+          city: settingsDraft.city,
+          state: settingsDraft.state,
+          zip: settingsDraft.zip,
+        },
+        issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
+        expiresAt: settingsDraft.expiresAt || null,
+        status: settingsDraft.status,
+        notes: settingsDraft.notes || "",
+        terms: settingsDraft.terms || "",
+      });
+      if (updated) {
+        crm.patchEstimate(estimate.id, updated);
+      } else {
+        crm.patchEstimate(estimate.id, {
+          title: settingsDraft.name.trim(),
+          customerId: settingsDraft.customerId,
+          customerName,
+          propertyAddress: {
+            ...estimate.propertyAddress,
+            street: settingsDraft.street,
+            city: settingsDraft.city,
+            state: settingsDraft.state,
+            zip: settingsDraft.zip,
+          },
+          issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
+          expiresAt: settingsDraft.expiresAt || undefined,
+          status: settingsDraft.status,
+          notes: settingsDraft.notes || undefined,
+          terms: settingsDraft.terms || undefined,
+        });
+      }
+    } else {
+      records.setStatus("estimate", estimate.id, settingsDraft.status);
+    }
+  }
+
+  async function handleManualSave() {
+    if (saving) return;
+    try {
+      setSaving(true);
+      await persist(draft);
+      toast.success("Estimate settings saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveAndLeave() {
+    try {
+      setSaving(true);
+      await persist(draft);
+      toast.success("Estimate settings saved.");
+      executePending();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDiscardAndLeave() {
+    setDraft(fallback);
+    executePending();
+  }
+
+  function handleCancelDialog() {
+    pendingActionRef.current = null;
+    setShowUnsavedDialog(false);
+  }
+
   return (
-    <div className="rounded-[4px] border border-black/10 bg-card p-4">
+    <div data-estimate-settings-form className="rounded-[4px] border border-black/10 bg-card p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Estimate settings</h2>
         <Button
           size="sm"
-          onClick={async () => {
-            try {
-              file.saveEstimateSettings(draft);
-              if (apiReady) {
-                await updateEstimateApi(estimate.id, {
-                  ...estimate,
-                  title: draft.name.trim(),
-                  customerId: draft.customerId,
-                  propertyAddress: {
-                    ...estimate.propertyAddress,
-                    street: draft.street,
-                    city: draft.city,
-                    state: draft.state,
-                    zip: draft.zip,
-                  },
-                  issuedAt: draft.issuedAt || estimate.issuedAt,
-                  expiresAt: draft.expiresAt || undefined,
-                  status: draft.status,
-                  notes: draft.notes || undefined,
-                  terms: draft.terms || undefined,
-                });
-                await crm.refresh();
-              } else {
-                records.setStatus("estimate", estimate.id, draft.status);
-              }
-              toast.success("Estimate settings saved.");
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
-            }
-          }}
+          disabled={saving}
+          onClick={handleManualSave}
         >
-          Save settings
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {saving ? "Saving…" : "Save settings"}
         </Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -172,26 +340,76 @@ export function EstimateSettingsTab({
           <Input value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
         </Field>
         <Field label="Status">
-          <NativeSelect
-            className="w-full"
+          <Select
+            disabled={loading}
             value={draft.status}
-            onChange={(event) => patch({ status: event.target.value as EstimateStatus })}
+            onValueChange={(value) => patch({ status: value as EstimateStatus })}
           >
-            {ESTIMATE_STATUSES.map((status) => (
-              <NativeSelectOption key={status} value={status}>
-                {estimateStatusLabel(status)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger className="w-full" loading={loading}>
+              <SelectValue placeholder={loading ? "Loading status…" : "Select status"} />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {ESTIMATE_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {estimateStatusLabel(status)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Customer">
-          <NativeSelect className="w-full" value={draft.customerId} onChange={(event) => patch({ customerId: event.target.value })}>
-            {customers.map((item) => (
-              <NativeSelectOption key={item.id} value={item.id}>
-                {crmCustomerName(item)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <Select
+            disabled={loading}
+            value={loading ? undefined : (draft.customerId || undefined)}
+            onValueChange={(value) => {
+              const nextCust = customers.find((item) => item.id === value);
+              const custAddr = nextCust?.addresses?.[0];
+              patch({
+                customerId: value,
+                ...(custAddr && (custAddr.street || custAddr.city || custAddr.zip)
+                  ? {
+                      street: custAddr.street || draft.street,
+                      city: custAddr.city || draft.city,
+                      state: custAddr.state || draft.state,
+                      zip: custAddr.zip || draft.zip,
+                    }
+                  : {}),
+              });
+            }}
+          >
+            <SelectTrigger className="w-full" loading={loading}>
+              <SelectValue placeholder={loading ? "Loading customers…" : "Select customer"} />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  <span>Loading customers…</span>
+                </div>
+              ) : (
+                <>
+                  {draft.customerId && !isKnownCustomer ? (
+                    <SelectItem value={draft.customerId}>
+                      {estimate.customerName || "Current customer"}
+                    </SelectItem>
+                  ) : null}
+                  {customers.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {crmCustomerName(item)}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Issued">
           <Input type="date" value={draft.issuedAt} onChange={(event) => patch({ issuedAt: event.target.value })} />
@@ -239,6 +457,17 @@ export function EstimateSettingsTab({
           </p>
         ) : null}
       </div>
+
+      <UnsavedChangesDialog
+        open={showUnsavedDialog}
+        onOpenChange={(open) => {
+          if (!open) handleCancelDialog();
+        }}
+        onSave={handleSaveAndLeave}
+        onDiscard={handleDiscardAndLeave}
+        onCancel={handleCancelDialog}
+        saving={saving}
+      />
     </div>
   );
 }

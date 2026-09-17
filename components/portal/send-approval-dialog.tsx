@@ -99,7 +99,7 @@ export function SendApprovalDialog({
                   if (!shared.shareToken) throw new Error("The CRM did not return a share link.");
                   token = shared.shareToken;
                   viaApi = true;
-                  await crm.refresh();
+                  crm.patchEstimate(estimate.id, { status: "sent" });
                   const next = { ...signed, token };
                   share.saveSnapshot(next);
                   const url = shared.absoluteShareUrl || shareUrlFor(token);

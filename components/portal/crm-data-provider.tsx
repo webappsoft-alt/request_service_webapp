@@ -60,6 +60,8 @@ type CrmApiContextValue = {
   patchReminder: (id: string, patch: Partial<PortalReminder>) => void;
   /** Apply a local customer update immediately (e.g. after note/save API succeeds). */
   patchCustomer: (id: string, patch: Partial<PortalCustomerCrm>) => void;
+  /** Apply a local estimate update immediately (e.g. after save/update API succeeds). */
+  patchEstimate: (id: string, patch: Partial<Estimate>) => void;
 };
 
 const EMPTY_VALUE: CrmApiContextValue = {
@@ -86,11 +88,12 @@ const EMPTY_VALUE: CrmApiContextValue = {
   patchTask: () => {},
   patchReminder: () => {},
   patchCustomer: () => {},
+  patchEstimate: () => {},
 };
 
 type CrmDataState = Omit<
   CrmApiContextValue,
-  "enabled" | "refresh" | "patchTask" | "patchReminder" | "patchCustomer"
+  "enabled" | "refresh" | "patchTask" | "patchReminder" | "patchCustomer" | "patchEstimate"
 >;
 
 const CrmApiDataContext = createContext<CrmApiContextValue>(EMPTY_VALUE);
@@ -220,6 +223,15 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     }));
   }, []);
 
+  const patchEstimate = useCallback((id: string, patch: Partial<Estimate>) => {
+    setState((current) => ({
+      ...current,
+      estimates: current.estimates.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    }));
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -272,8 +284,9 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       patchTask,
       patchReminder,
       patchCustomer,
+      patchEstimate,
     }),
-    [enabled, patchCustomer, patchReminder, patchTask, refresh, state],
+    [enabled, patchCustomer, patchEstimate, patchReminder, patchTask, refresh, state],
   );
 
   return (

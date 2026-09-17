@@ -18,6 +18,7 @@ import type {
   ChangeOrder,
   Customer,
   Estimate,
+  EstimateAttachmentItem,
   EstimateItem,
   EstimateItemType,
   EstimateSiteVisitRecord,
@@ -590,6 +591,25 @@ function mapApprovalSignature(value: unknown): Estimate["signature"] | undefined
   };
 }
 
+function mapEstimateAttachments(value: unknown): EstimateAttachmentItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item, index) => {
+      if (typeof item === "string" && item.trim()) {
+        const url = item.trim();
+        const name = url.split("/").pop() || `Attachment ${index + 1}`;
+        return { name, attachment: url };
+      }
+      const record = asRecord(item);
+      if (!record) return null;
+      const url = trimmed(record.attachment || record.url || record.dataUrl);
+      if (!url) return null;
+      const name = trimmed(record.name) || url.split("/").pop() || `Attachment ${index + 1}`;
+      return { name, attachment: url };
+    })
+    .filter((entry): entry is EstimateAttachmentItem => Boolean(entry));
+}
+
 export function mapEstimate(raw: unknown): Estimate | null {
   const record = asRecord(raw);
   if (!record) return null;
@@ -642,6 +662,7 @@ export function mapEstimate(raw: unknown): Estimate | null {
     tax: numberValue(record.tax),
     total: numberValue(record.total),
     items: mapEstimateItems(id, record.items),
+    attachments: mapEstimateAttachments(record.attachments),
     siteVisit: mapEstimateSiteVisit(record.siteVisit),
     signature: mapApprovalSignature(record.approval ?? record.signature),
     createdAt: toIsoString(record.createdAt),

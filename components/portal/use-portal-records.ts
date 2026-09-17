@@ -187,7 +187,11 @@ export function usePortalRecords() {
           const nextStatus = status as Estimate["status"];
           try {
             const updated = await updateEstimateStatusApi(id, nextStatus);
-            await crm.refresh();
+            if (updated) {
+              crm.patchEstimate(id, updated);
+            } else {
+              crm.patchEstimate(id, { status: nextStatus });
+            }
             return updated;
           } catch (statusError) {
             const currentEstimate =
@@ -198,7 +202,11 @@ export function usePortalRecords() {
               ...currentEstimate,
               status: nextStatus,
             });
-            await crm.refresh();
+            if (updated) {
+              crm.patchEstimate(id, updated);
+            } else {
+              crm.patchEstimate(id, { status: nextStatus });
+            }
             return updated;
           }
         })();

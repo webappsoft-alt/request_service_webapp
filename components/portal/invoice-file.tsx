@@ -18,7 +18,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import {
@@ -169,18 +175,25 @@ export function ApplyPaymentDialog({
             />
           </Field>
           <Field label="Method">
-            <NativeSelect
-              id="apply-pay-method"
-              className="w-full"
+            <Select
               value={method}
-              onChange={(change) => setMethod(change.target.value as PaymentMethodType)}
+              onValueChange={(val) => setMethod(val as PaymentMethodType)}
             >
-              {PAYMENT_METHODS.map((item) => (
-                <NativeSelectOption key={item} value={item}>
-                  {paymentMethodLabel(item)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              <SelectTrigger id="apply-pay-method" className="w-full">
+                <SelectValue placeholder="Select method" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="start"
+                className="z-[100] w-[var(--radix-select-trigger-width)]"
+              >
+                {PAYMENT_METHODS.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {paymentMethodLabel(item)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Payment date">
             <Input id="apply-pay-date" type="date" value={paidAt} onChange={(change) => setPaidAt(change.target.value)} />
@@ -432,26 +445,46 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Status">
-          <NativeSelect
-            className="w-full"
+          <Select
             value={draft.status}
-            onChange={(event) => patch({ status: event.target.value as InvoiceStatus })}
+            onValueChange={(value) => patch({ status: value as InvoiceStatus })}
           >
-            {INVOICE_STATUSES.map((status) => (
-              <NativeSelectOption key={status} value={status}>
-                {invoiceStatusLabel(status)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {INVOICE_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {invoiceStatusLabel(status)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Customer">
-          <NativeSelect className="w-full" value={draft.customerId} onChange={(event) => patch({ customerId: event.target.value })}>
-            {customers.map((item) => (
-              <NativeSelectOption key={item.id} value={item.id}>
-                {crmCustomerName(item)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <Select
+            value={draft.customerId}
+            onValueChange={(value) => patch({ customerId: value })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select customer" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {customers.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {crmCustomerName(item)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Issued">
           <Input type="date" value={draft.issuedAt} onChange={(event) => patch({ issuedAt: event.target.value })} />

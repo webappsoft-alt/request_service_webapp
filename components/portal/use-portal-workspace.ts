@@ -241,6 +241,7 @@ export function usePortalWorkspace() {
     providerDisplayId(authProvider) || demoWorkspace?.provider.id || "";
   const shouldUseApi = crm.enabled && isProvider;
   const apiReady = shouldUseApi && crm.ready;
+  const loading = crm.enabled && (!crm.ready || crm.loading);
 
   const customers = apiReady ? crm.customers : useLiveOnly ? [] : demoWorkspace!.customers;
   const requests = apiReady ? crm.requests : useLiveOnly ? [] : demoWorkspace!.requests;
@@ -417,6 +418,7 @@ export function usePortalWorkspace() {
 
   return {
     ready,
+    loading,
     session,
     authProvider,
     signOut: () => handleUserLogout(),

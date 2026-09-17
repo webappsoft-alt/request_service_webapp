@@ -3,18 +3,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MessageCircle, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  ExternalLink,
+  MessageSquare,
+  Paperclip,
+  Phone,
+  Search,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Container, Section } from "@/components/layout/container";
 import { ChatPanel } from "@/components/shared/chat-panel";
-import { NoData } from "@/components/shared/no-data";
 import { useRealtime } from "@/components/realtime/realtime-provider";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageThreadSkeleton } from "@/components/shared/loading-skeletons";
+import { ChatWorkspaceSkeleton, MessageThreadSkeleton } from "@/components/shared/loading-skeletons";
 import { CenteredSpinner } from "@/components/ui/spinner";
-import { StatusPill } from "@/components/portal/status-pill";
 import { customerPaths } from "@/lib/customer-paths";
+import { getAllProviders } from "@/lib/data/providers";
 import {
   listPublicChatThreads,
   markPublicChatRead,
@@ -25,6 +34,11 @@ import {
   type ChatAttachment,
   type ChatThread,
 } from "@/lib/booking/chat-store";
+import {
+  formatThreadTime,
+  getAvatarColor,
+  getInitials,
+} from "@/lib/chat-format";
 import { onRealtime } from "@/lib/realtime/socket";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -34,14 +48,37 @@ import {
 } from "@/store/authSlice";
 import { cn } from "@/lib/utils";
 
-const THREAD_TITLE = "Professional";
+type FilterTab = "all" | "unread";
 
-function lastPreview(thread: ChatThread) {
-  const last = thread.messages.at(-1);
-  if (!last) return "No messages yet";
-  if (last.text?.trim()) return last.text;
-  if (last.attachments.length) return last.attachments[0]?.name || "Attachment";
-  return "No messages yet";
+function resolveThreadProvider(thread: ChatThread) {
+  if (thread.providerName) {
+    return {
+      name: thread.providerName,
+      avatar: thread.providerAvatar,
+      phone: thread.providerPhone,
+      slug: undefined,
+    };
+  }
+  const matched = getAllProviders().find(
+    (p) =>
+      p.id === thread.providerId ||
+      p.email?.toLowerCase() === thread.providerId?.toLowerCase() ||
+      p.slug === thread.providerId,
+  );
+  if (matched) {
+    return {
+      name: matched.companyName,
+      avatar: matched.images?.[0],
+      phone: matched.phone,
+      slug: matched.slug,
+    };
+  }
+  return {
+    name: "Service Professional",
+    avatar: undefined,
+    phone: undefined,
+    slug: undefined,
+  };
 }
 
 function upsertThread(threads: ChatThread[], updated: ChatThread) {
@@ -76,6 +113,8 @@ export function CustomerMessagesView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [filterTab, setFilterTab] = useState<FilterTab>("all");
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [guestEmail, setGuestEmail] = useState("");
 
   const listingEmail = useMemo(
@@ -132,7 +171,8 @@ export function CustomerMessagesView({
 
   useEffect(() => {
     if (!listingEmail) return;
-    return onRealtime("CHAT_THREAD_UPDATED", (payload) => {
+
+    const unsubThread = onRealtime("CHAT_THREAD_UPDATED", (payload) => {
       const updated = payload as ChatThread;
       if (!updated?.id) return;
       if (
@@ -143,31 +183,87 @@ export function CustomerMessagesView({
       }
       setThreads((current) => upsertThread(current, updated));
     });
-  }, [listingEmail]);
+
+    const unsubMsg = onRealtime("CHAT_MESSAGE", (payload) => {
+      if (!payload?.threadId || !payload?.message) return;
+      setThreads((current) => {
+        const index = current.findIndex((t) => t.id === payload.threadId);
+        if (index >= 0) {
+          const thread = current[index];
+          if (thread.messages.some((m) => m.id === payload.message.id)) {
+            return current;
+          }
+          const isViewing = selectedId === thread.id;
+          const updated: ChatThread = {
+            ...thread,
+            messages: [...thread.messages, payload.message as any],
+            updatedAt: payload.message.at || new Date().toISOString(),
+            unreadForCustomer:
+              payload.message.from === "provider" && !isViewing
+                ? (thread.unreadForCustomer || 0) + 1
+                : thread.unreadForCustomer,
+          };
+          const next = [...current];
+          next.splice(index, 1);
+          return [updated, ...next];
+        }
+        if (payload.thread) {
+          return upsertThread(current, payload.thread as any);
+        }
+        void loadThreads({ silent: true });
+        return current;
+      });
+    });
+
+    return () => {
+      unsubThread();
+      unsubMsg();
+    };
+  }, [listingEmail, loadThreads, selectedId]);
 
   const filteredThreads = useMemo(() => {
+    let result = threads;
+
+    if (filterTab === "unread") {
+      result = result.filter((item) => (item.unreadForCustomer || 0) > 0);
+    }
+
     const needle = query.trim().toLowerCase();
-    if (!needle) return threads;
-    return threads.filter((thread) => {
+    if (!needle) return result;
+
+    return result.filter((thread) => {
+      const provider = resolveThreadProvider(thread);
+      const last = thread.messages.at(-1);
       const haystack = [
-        THREAD_TITLE,
+        provider.name,
         thread.providerId,
-        thread.customerName,
-        thread.customerEmail,
-        lastPreview(thread),
+        thread.requestId,
+        last?.text,
         ...thread.messages.map((message) => message.text),
       ]
+        .filter(Boolean)
         .join(" ")
         .toLowerCase();
       return haystack.includes(needle);
     });
-  }, [query, threads]);
+  }, [filterTab, query, threads]);
 
-  const selected =
-    filteredThreads.find((item) => item.id === selectedId) ??
-    threads.find((item) => item.id === selectedId) ??
-    filteredThreads[0] ??
-    threads[0];
+  const selected = useMemo(() => {
+    if (selectedId) {
+      return (
+        filteredThreads.find((item) => item.id === selectedId) ??
+        threads.find((item) => item.id === selectedId) ??
+        null
+      );
+    }
+    return filteredThreads[0] ?? threads[0] ?? null;
+  }, [filteredThreads, selectedId, threads]);
+
+  useEffect(() => {
+    if (selectedId) {
+      setMobileChatOpen(true);
+    }
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selected?.id || !listingEmail || !selected.unreadForCustomer) return;
@@ -229,153 +325,401 @@ export function CustomerMessagesView({
   }
 
   const showInitialLoading = loading && !threads.length && !error;
+  const unreadCount = threads.filter((item) => (item.unreadForCustomer || 0) > 0).length;
+  const selectedProvider = selected ? resolveThreadProvider(selected) : null;
 
-  const body = (
-    <div className="space-y-6">
-      {embedded ? null : (
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            Messages
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Conversations with professionals you contacted from their profiles.
-          </p>
-        </div>
+  const content = (
+    <div
+      className={cn(
+        "flex flex-1 flex-col overflow-hidden bg-background",
+        embedded
+          ? "-m-3 sm:-m-4 h-[calc(100vh-48px)] min-h-[580px]"
+          : "h-[calc(100vh-120px)] min-h-[600px] rounded-xl border border-border",
       )}
-
+    >
       {showInitialLoading ? (
-        <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading messages">
-          {Array.from({ length: 6 }, (_, i) => (
-            <MessageThreadSkeleton key={`msg-sk-${i}`} />
-          ))}
-        </div>
+        <ChatWorkspaceSkeleton />
       ) : error && !threads.length ? (
-        <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
+        <div className="flex h-full flex-col items-center justify-center p-8 text-center">
           <p className="text-base font-medium text-foreground">
             Couldn’t load your messages
           </p>
-          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
             {error}
           </p>
-          <Button type="button" onClick={() => void loadThreads()}>
+          <Button type="button" className="mt-4" onClick={() => void loadThreads()}>
             Try again
           </Button>
         </div>
       ) : !threads.length ? (
-        <NoData
-          icon={<MessageCircle className="size-4" />}
-          title="No messages yet"
-          description="When you chat with a professional from their profile, conversations will show up here."
-          action={
-            <Button asChild>
-              <Link href="/find-a-professional">Find a professional</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-4">
-          {error ? (
-            <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-              {error}{" "}
-              <button
-                type="button"
-                className="font-medium text-primary underline-offset-2 hover:underline"
-                onClick={() => void loadThreads()}
-              >
-                Retry
-              </button>
-            </div>
-          ) : null}
-
-          <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search conversations…"
-              className="pl-9"
-              aria-label="Search conversations"
-            />
+        <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-[#003F7D]/10 text-[#003F7D]">
+            <MessageSquare className="size-8" />
           </div>
+          <div className="max-w-md">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
+              No messages yet
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              When you message a professional from their profile or submit a quote request, conversations will show up here.
+            </p>
+          </div>
+          <Button asChild className="bg-[#003F7D] text-white hover:bg-[#003264]">
+            <Link href="/find-a-professional">Find a professional</Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
+          {/* Left Sidebar: Threads Inbox */}
+          <aside
+            className={cn(
+              "flex h-full w-full flex-col border-r border-border bg-card transition-all md:w-80 lg:w-[23rem]",
+              mobileChatOpen && selected ? "hidden md:flex" : "flex",
+            )}
+          >
+            {/* Sidebar Header */}
+            <div className="flex flex-col gap-2.5 border-b border-border p-3 sm:p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-base font-semibold tracking-tight text-foreground">
+                    Messages
+                  </h1>
+                  <span className="inline-flex h-5 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
+                    {threads.length}
+                  </span>
+                </div>
+                {unreadCount > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                    {unreadCount} new
+                  </span>
+                ) : null}
+              </div>
 
-          {filteredThreads.length ? (
-            <div className="grid min-h-[32rem] overflow-hidden rounded-xl border border-input bg-card lg:grid-cols-[18rem_minmax(0,1fr)]">
-              <ul className="divide-y divide-black/8 border-b border-black/8 lg:border-r lg:border-b-0">
-                {filteredThreads.map((thread) => {
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search professionals, chats…"
+                  aria-label="Search conversations"
+                  className="h-8.5 rounded-lg bg-background pl-8 pr-7 text-xs"
+                />
+                {query ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X className="size-3" />
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setFilterTab("all")}
+                  className={cn(
+                    "flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    filterTab === "all"
+                      ? "bg-[#003F7D] text-white shadow-2xs"
+                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  All ({threads.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterTab("unread")}
+                  className={cn(
+                    "flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    filterTab === "unread"
+                      ? "bg-[#003F7D] text-white shadow-2xs"
+                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  Unread {unreadCount > 0 ? `(${unreadCount})` : ""}
+                </button>
+              </div>
+            </div>
+
+            {/* Threads List */}
+            <div className="flex-1 overflow-y-auto divide-y divide-border/60">
+              {filteredThreads.length ? (
+                filteredThreads.map((thread) => {
                   const active = selected?.id === thread.id;
+                  const prov = resolveThreadProvider(thread);
+                  const last = thread.messages.at(-1);
+                  const lastTime = formatThreadTime(last?.at || thread.updatedAt);
+                  const hasUnread = (thread.unreadForCustomer || 0) > 0;
+
                   return (
-                    <li key={thread.id}>
-                      <Link
-                        href={`${customerPaths.messages}?thread=${thread.id}`}
-                        className={cn(
-                          "flex flex-col gap-1 px-4 py-3 text-sm",
-                          active
-                            ? "bg-[#003F7D]/8"
-                            : "hover:bg-[#eef1f5]",
-                        )}
-                      >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{THREAD_TITLE}</span>
-                          {thread.unreadForCustomer ? (
-                            <StatusPill
-                              label={`${thread.unreadForCustomer} new`}
-                              tone="warning"
-                            />
+                    <Link
+                      key={thread.id}
+                      href={`${customerPaths.messages}?thread=${thread.id}`}
+                      onClick={() => setMobileChatOpen(true)}
+                      className={cn(
+                        "group relative flex items-start gap-3 p-3 transition-colors text-left",
+                        active
+                          ? "bg-[#003F7D]/8 border-l-4 border-l-[#003F7D]"
+                          : "hover:bg-muted/50",
+                      )}
+                    >
+                      {/* Provider Avatar */}
+                      <div className="relative shrink-0">
+                        <Avatar className="size-10 shadow-2xs ring-1 ring-border">
+                          {prov.avatar ? (
+                            <AvatarImage src={prov.avatar} alt={prov.name} />
                           ) : null}
-                        </span>
-                        <span className="line-clamp-2 text-xs text-muted-foreground">
-                          {lastPreview(thread)}
-                        </span>
-                      </Link>
-                    </li>
+                          <AvatarFallback
+                            className={cn(
+                              "text-xs font-semibold",
+                              getAvatarColor(prov.name),
+                            )}
+                          >
+                            {getInitials(prov.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {connected ? (
+                          <span
+                            className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
+                            aria-label="Online"
+                          />
+                        ) : null}
+                      </div>
+
+                      {/* Content Preview */}
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span
+                            className={cn(
+                              "truncate text-sm",
+                              hasUnread ? "font-bold text-foreground" : "font-medium text-foreground",
+                            )}
+                          >
+                            {prov.name}
+                          </span>
+                          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+                            {lastTime}
+                          </span>
+                        </div>
+
+                        {/* Middle row: Lead chip & unread pill */}
+                        <div className="flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1.5 truncate">
+                            {thread.requestId ? (
+                              <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.2 text-[10px] font-medium text-[#003F7D] dark:bg-blue-950/60 dark:text-blue-300">
+                                Quote Request
+                              </span>
+                            ) : null}
+                          </div>
+                          {hasUnread ? (
+                            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#003F7D] text-[10px] font-bold text-white shadow-xs">
+                              {thread.unreadForCustomer}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {/* Last Message Snippet */}
+                        <p className="line-clamp-1 text-xs text-muted-foreground">
+                          {last ? (
+                            <>
+                              {last.from === "customer" ? (
+                                <span className="font-semibold text-foreground/75">
+                                  You:{" "}
+                                </span>
+                              ) : null}
+                              {last.text ? (
+                                <span>{last.text}</span>
+                              ) : last.attachments.some((a) =>
+                                  a.type.startsWith("image/"),
+                                ) ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Camera className="size-3 text-muted-foreground" />
+                                  Photo
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1">
+                                  <Paperclip className="size-3 text-muted-foreground" />
+                                  Attachment
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="italic opacity-70">No messages yet</span>
+                          )}
+                        </p>
+                      </div>
+                    </Link>
                   );
-                })}
-              </ul>
-              {selected ? (
-                <div className="flex min-h-0 flex-col">
-                  <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
-                    <div>
-                      <p className="font-semibold">{THREAD_TITLE}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Your conversation
-                        {connected ? " · live" : ""}
-                      </p>
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                  <MessageSquare className="size-8 stroke-[1.5] text-muted-foreground/50 mb-2" />
+                  <p className="text-sm font-medium">No conversations found</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                    {query
+                      ? "No chats matched your search query."
+                      : "No unread messages."}
+                  </p>
+                  {query ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 text-xs"
+                      onClick={() => setQuery("")}
+                    >
+                      Clear search
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Right Main Area: Active Chat */}
+          <main
+            className={cn(
+              "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background",
+              !mobileChatOpen && selected ? "hidden md:flex" : "flex",
+            )}
+          >
+            {selected && selectedProvider ? (
+              <div className="flex h-full min-h-0 flex-1 flex-col">
+                {/* Chat Top Header */}
+                <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6 shadow-2xs">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {/* Mobile Back Button */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileChatOpen(false)}
+                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+                      aria-label="Back to conversations list"
+                    >
+                      <ArrowLeft className="size-5" />
+                    </button>
+
+                    {/* Provider Avatar */}
+                    <div className="relative shrink-0">
+                      <Avatar className="size-10 shadow-2xs ring-1 ring-border">
+                        {selectedProvider.avatar ? (
+                          <AvatarImage
+                            src={selectedProvider.avatar}
+                            alt={selectedProvider.name}
+                          />
+                        ) : null}
+                        <AvatarFallback
+                          className={cn(
+                            "text-xs font-semibold",
+                            getAvatarColor(selectedProvider.name),
+                          )}
+                        >
+                          {getInitials(selectedProvider.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span
+                        className={cn(
+                          "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
+                          connected ? "bg-emerald-500" : "bg-muted-foreground/50",
+                        )}
+                        aria-label={connected ? "Online" : "Offline"}
+                      />
+                    </div>
+
+                    {/* Contact Info */}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
+                          {selectedProvider.name}
+                        </h2>
+                        {connected ? (
+                          <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 sm:inline-flex">
+                            <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                            Live
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        <span>Professional service provider</span>
+                        {selectedProvider.phone ? (
+                          <a
+                            href={`tel:${selectedProvider.phone}`}
+                            className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+                          >
+                            <Phone className="size-3 shrink-0" />
+                            <span>{selectedProvider.phone}</span>
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                  <ChatPanel
-                    messages={selected.messages}
-                    self="customer"
-                    onSend={handleSend}
-                    onTypingChange={(isTyping) =>
-                      setTyping(selected.id, isTyping)
-                    }
-                    footer="Your message notifies the professional in their portal."
-                  />
+
+                  {/* Actions Header */}
+                  <div className="flex items-center gap-2">
+                    {selectedProvider.slug ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs font-medium"
+                        asChild
+                      >
+                        <Link href={`/professionals/${selectedProvider.slug}`}>
+                          <ExternalLink className="size-3.5" />
+                          <span className="hidden sm:inline">View</span> Profile
+                        </Link>
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs font-medium"
+                      asChild
+                    >
+                      <Link href={customerPaths.estimates}>Estimates</Link>
+                    </Button>
+                  </div>
+                </header>
+
+                {/* Chat Panel with Messages */}
+                <ChatPanel
+                  messages={selected.messages}
+                  self="customer"
+                  otherName={selectedProvider.name}
+                  otherAvatar={selectedProvider.avatar}
+                  onSend={handleSend}
+                  onTypingChange={(isTyping) =>
+                    setTyping(selected.id, isTyping)
+                  }
+                />
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
+                <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
+                  <MessageSquare className="size-7 text-muted-foreground/60" />
                 </div>
-              ) : null}
-            </div>
-          ) : (
-            <NoData
-              icon={<Search className="size-4" />}
-              title="No matching conversations"
-              description="Try a different search term, or clear the filter to see all messages."
-              action={
-                <Button type="button" variant="outline" onClick={() => setQuery("")}>
-                  Clear search
-                </Button>
-              }
-            />
-          )}
+                <h2 className="text-base font-semibold text-foreground">
+                  Select a conversation
+                </h2>
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  Choose a chat from the left sidebar to send messages, ask project questions, and review quotes.
+                </p>
+              </div>
+            )}
+          </main>
         </div>
       )}
     </div>
   );
 
-  if (embedded) return body;
+  if (embedded) return content;
 
   return (
     <Section tone="muted">
-      <Container className="max-w-6xl">{body}</Container>
+      <Container className="max-w-7xl">{content}</Container>
     </Section>
   );
 }

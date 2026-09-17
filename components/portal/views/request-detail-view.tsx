@@ -8,12 +8,18 @@ import {
   Bell,
   Briefcase,
   CalendarDays,
+  ExternalLink,
+  FilePlus2,
   FileText,
   ImageIcon,
   LayoutDashboard,
   ListTodo,
+  Loader2,
+  Mail,
   MessageCircle,
+  MessageSquare,
   NotebookPen,
+  Phone,
   Settings,
   UserRound,
 } from "lucide-react";
@@ -24,7 +30,7 @@ import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/po
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { ChatPanel } from "@/components/shared/chat-panel";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
-import { CreateEstimateDialog } from "@/components/portal/create-work-dialogs";
+import { ConvertLeadToEstimateDialog } from "@/components/portal/convert-lead-to-estimate-dialog";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
@@ -36,10 +42,18 @@ import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending"
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import { getRequest, updateRequestStatus } from "@/lib/api/crm-client";
+import { ensureProviderChatThread } from "@/lib/api/chat-client";
+import { useRealtime } from "@/components/realtime/realtime-provider";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CenteredSpinner } from "@/components/ui/spinner";
+import { ChatPanelSkeleton } from "@/components/shared/loading-skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { getAvatarColor, getInitials } from "@/lib/chat-format";
 import {
   crmCustomerName,
   crmReminderStatusLabel,
@@ -57,6 +71,7 @@ import {
   timeWindowLabel,
   windowFromMinutes,
   type PortalCalendarEvent,
+  type PortalRequest,
   type PortalTimeWindow,
 } from "@/lib/data/portal";
 import { formatDate, formatLocation } from "@/lib/format";
@@ -139,6 +154,7 @@ function windowFromLabel(value?: string): PortalTimeWindow {
 
 export function RequestDetailView({ id }: { id: string }) {
   const { requests, estimates, jobs, invoices, provider } = usePortalWorkspace();
+  const crm = useCrmApiData();
   const { customers, reminders, tasks, setReminderStatus, setTaskStatus } = useCrmDirectory();
   const { events, employees, assign, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
@@ -147,9 +163,38 @@ export function RequestDetailView({ id }: { id: string }) {
   const tab = (searchParams.get("tab") ?? "summary") as LeadTab;
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [apiLead, setApiLead] = useState<PortalRequest | null>(null);
+  const [apiLoading, setApiLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setApiLoading(true);
+    void getRequest(id, { silent: true })
+      .then((item) => {
+        if (!cancelled && item) {
+          setApiLead(item);
+          // Backend GET auto-transitions status to "viewed", refresh counters
+          crm.refresh({ silent: true });
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setApiLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (searchParams.get("convert") === "1") {
+      setEstimateOpen(true);
+    }
+  }, [searchParams]);
+
   const allRequests = records.mergeRequests(requests);
-  const request = allRequests.find((item) => item.id === id);
-  const pending = useCrmRecordPending();
+  const request = apiLead || allRequests.find((item) => item.id === id);
+  const pending = useCrmRecordPending() || (apiLoading && !request);
   const allEstimates = records.mergeEstimates(estimates);
   const allJobs = records.mergeJobs(jobs);
   const relatedEstimates = allEstimates.filter((item) => item.requestId === id);
@@ -189,15 +234,49 @@ export function RequestDetailView({ id }: { id: string }) {
     if (tab === "messages" && thread?.unreadForProvider) chat.markRead(thread.id);
   }, [chat.markRead, tab, thread?.id, thread?.unreadForProvider]);
 
+  const { joinThread, leaveThread, setTyping, connected } = useRealtime();
+  const [startingChat, setStartingChat] = useState(false);
+
+  useEffect(() => {
+    if (!thread?.id || tab !== "messages") return;
+    joinThread(thread.id);
+    return () => leaveThread(thread.id);
+  }, [joinThread, leaveThread, thread?.id, tab]);
+
+  async function handleStartChat() {
+    if (startingChat || !request) return;
+    setStartingChat(true);
+    try {
+      await ensureProviderChatThread({
+        customerName: request.customerName,
+        customerEmail: request.customerEmail,
+        customerId: request.customerId || null,
+        requestId: request.id,
+      });
+      await chat.refresh();
+      crm.refresh({ silent: true });
+      toast.success(`Chat started with ${request.customerName}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not start chat");
+    } finally {
+      setStartingChat(false);
+    }
+  }
+
   if (!request) {
+    if (pending) {
+      return (
+        <div className="border border-black/15 bg-card" aria-busy="true">
+          <CenteredSpinner label="Loading lead details" className="min-h-[28rem]" />
+        </div>
+      );
+    }
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">{pending ? "Loading lead…" : "Lead not found"}</h1>
-        {!pending ? (
-          <Button asChild className="mt-4" size="sm">
-            <Link href="/pro/dashboard/requests">Back to leads</Link>
-          </Button>
-        ) : null}
+        <h1 className="text-lg font-semibold">Lead not found</h1>
+        <Button asChild className="mt-4" size="sm">
+          <Link href="/pro/dashboard/requests">Back to leads</Link>
+        </Button>
       </div>
     );
   }
@@ -208,13 +287,27 @@ export function RequestDetailView({ id }: { id: string }) {
   const customerLabel = customer ? crmCustomerName(customer) : lead.customerName;
   const lost = lead.status === "declined" || lead.status === "closed";
 
-  function markContacted() {
+  async function markContacted() {
     records.setStatus("request", lead.id, "contacted");
+    setApiLead((prev) => (prev ? { ...prev, status: "contacted" } : prev));
+    try {
+      await updateRequestStatus(lead.id, "contacted");
+      crm.refresh({ silent: true });
+    } catch {
+      /* handled */
+    }
     toast.success("Lead marked contacted.");
   }
 
-  function declineLead() {
+  async function declineLead() {
     records.setStatus("request", lead.id, "declined");
+    setApiLead((prev) => (prev ? { ...prev, status: "declined" } : prev));
+    try {
+      await updateRequestStatus(lead.id, "declined");
+      crm.refresh({ silent: true });
+    } catch {
+      /* handled */
+    }
     toast.success("Lead declined.");
   }
 
@@ -261,11 +354,12 @@ export function RequestDetailView({ id }: { id: string }) {
                 Create estimate
               </Button>
             )}
-            {thread ? (
-              <Button size="sm" variant="outline" asChild>
-                <Link href={`/pro/dashboard/requests/${request.id}?tab=messages`}>Discuss</Link>
-              </Button>
-            ) : null}
+            <Button size="sm" variant="outline" asChild className="gap-1.5">
+              <Link href={`/pro/dashboard/requests/${request.id}?tab=messages`}>
+                <MessageSquare className="size-3.5" />
+                Chat
+              </Link>
+            </Button>
             {request.status === "new" || request.status === "viewed" ? (
               <Button size="sm" variant="outline" onClick={markContacted}>
                 Mark contacted
@@ -519,24 +613,156 @@ export function RequestDetailView({ id }: { id: string }) {
                 />
               );
             case "messages": {
-              return thread ? (
-                <div className="min-h-[28rem] overflow-hidden rounded-[4px] border border-black/10">
-                  <ChatPanel
-                    messages={thread.messages}
-                    self="provider"
-                    onSend={(text, attachments) => {
-                      chat.send(thread.id, "provider", text, attachments);
-                      if (request.status === "new" || request.status === "viewed") {
-                        records.setStatus("request", request.id, "contacted");
-                      }
-                    }}
-                    footer="The customer sees this on the public profile chat."
-                  />
+              const customerName = thread?.customerName || customerLabel || request.customerName;
+              const customerEmail = thread?.customerEmail || customer?.email || request.customerEmail;
+              const customerPhone = thread?.customerPhone || customer?.phone || request.customerPhone;
+              const customerAvatar = thread?.customerAvatar;
+
+              return (
+                <div className="flex h-[calc(100vh-270px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
+                  {/* Chat Top Header */}
+                  <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6 shadow-2xs">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {/* Customer Avatar */}
+                      <div className="relative shrink-0">
+                        <Avatar className="size-10 shadow-2xs ring-1 ring-border">
+                          {customerAvatar ? (
+                            <AvatarImage
+                              src={customerAvatar}
+                              alt={customerName}
+                            />
+                          ) : null}
+                          <AvatarFallback
+                            className={cn(
+                              "text-xs font-semibold",
+                              getAvatarColor(customerName),
+                            )}
+                          >
+                            {getInitials(customerName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span
+                          className={cn(
+                            "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
+                            connected ? "bg-emerald-500" : "bg-muted-foreground/50",
+                          )}
+                          aria-label={connected ? "Online" : "Offline"}
+                        />
+                      </div>
+
+                      {/* Contact Info */}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
+                            {customerName}
+                          </h2>
+                          {connected ? (
+                            <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 sm:inline-flex">
+                              <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                              Live
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                          {customerEmail ? (
+                            <a
+                              href={`mailto:${customerEmail}`}
+                              className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+                            >
+                              <Mail className="size-3 shrink-0" />
+                              <span className="max-w-44 truncate sm:max-w-xs">
+                                {customerEmail}
+                              </span>
+                            </a>
+                          ) : null}
+
+                          {customerPhone ? (
+                            <a
+                              href={`tel:${customerPhone}`}
+                              className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+                            >
+                              <Phone className="size-3 shrink-0" />
+                              <span>{customerPhone}</span>
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions Header */}
+                    <div className="flex items-center gap-2">
+                      {thread ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="hidden sm:inline-flex gap-1.5 text-xs font-medium"
+                          asChild
+                        >
+                          <Link href={`/pro/dashboard/messages?thread=${thread.id}`}>
+                            <ExternalLink className="size-3.5" />
+                            Open in Messages
+                          </Link>
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-[#003F7D] text-white hover:bg-[#003264] text-xs font-medium"
+                        asChild
+                      >
+                        <Link href={`/pro/dashboard/estimates/new?request=${request.id}`}>
+                          <FilePlus2 className="size-3.5" />
+                          <span className="hidden sm:inline">Write</span> Estimate
+                        </Link>
+                      </Button>
+                    </div>
+                  </header>
+
+                  {/* Chat Panel or Initializer / Skeleton */}
+                  {chat.loading && !thread ? (
+                    <ChatPanelSkeleton />
+                  ) : thread ? (
+                    <ChatPanel
+                      messages={thread.messages}
+                      self="provider"
+                      otherName={customerName}
+                      otherAvatar={customerAvatar}
+                      onSend={async (text, attachments) => {
+                        await chat.send(thread.id, "provider", text, attachments);
+                        if (request.status === "new" || request.status === "viewed") {
+                          records.setStatus("request", request.id, "contacted");
+                        }
+                      }}
+                      onTypingChange={(isTyping) => setTyping(thread.id, isTyping)}
+                    />
+                  ) : (
+                    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+                      <div className="flex size-14 items-center justify-center rounded-2xl bg-[#003F7D]/10 text-[#003F7D]">
+                        <MessageSquare className="size-7" />
+                      </div>
+                      <div className="max-w-md">
+                        <h3 className="text-base font-semibold text-foreground">
+                          Start conversation with {customerName}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Directly message {customerName} regarding their inquiry for {request.serviceName}. The customer will be notified in their portal immediately.
+                        </p>
+                      </div>
+                      <Button
+                        disabled={startingChat}
+                        onClick={handleStartChat}
+                        className="gap-2 bg-[#003F7D] text-white hover:bg-[#003264] text-xs font-medium"
+                      >
+                        {startingChat ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <MessageSquare className="size-4" />
+                        )}
+                        Start conversation
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No website chat on this lead yet. If they wrote from the profile, it will show here.
-                </p>
               );
             }
             case "notes":
@@ -560,13 +786,15 @@ export function RequestDetailView({ id }: { id: string }) {
           }
         }}
       </RecordWorkspace>
-      <CreateEstimateDialog
+      <ConvertLeadToEstimateDialog
         open={estimateOpen}
         onOpenChange={setEstimateOpen}
-        customerId={request.customerId}
-        requestId={request.id}
-        requestName={request.serviceName}
-        requestNotes={request.details}
+        lead={lead}
+        onConverted={(estimateId) => {
+          setApiLead((prev) => (prev ? { ...prev, status: "estimate_sent" } : prev));
+          records.setStatus("request", lead.id, "estimate_sent");
+          crm.refresh({ silent: true });
+        }}
       />
       <AssignEventDialog
         open={assignOpen}
@@ -636,18 +864,7 @@ function QualifyTab({
   onSave,
   onStatus,
 }: {
-  request: {
-    id: string;
-    customerId?: string;
-    serviceName: string;
-    details: string;
-    preferredDate?: string;
-    preferredTimeWindow?: string;
-    zip: string;
-    city?: string;
-    state?: string;
-    status: RequestStatus;
-  };
+  request: PortalRequest;
   onSave: (patch: {
     serviceName: string;
     details: string;
@@ -672,6 +889,25 @@ function QualifyTab({
 
   return (
     <div className="space-y-4">
+      {request.answers && request.answers.length > 0 ? (
+        <div className="rounded-[4px] border border-black/10 bg-slate-50 p-4">
+          <h3 className="text-sm font-semibold text-slate-800 mb-2.5">
+            Diagnostic Intake Answers
+          </h3>
+          <dl className="grid gap-2 sm:grid-cols-2">
+            {request.answers.map((ans, idx) => (
+              <div
+                key={ans.id || idx}
+                className="rounded bg-white p-2.5 border border-slate-200"
+              >
+                <dt className="text-xs font-medium text-muted-foreground">{ans.label}</dt>
+                <dd className="text-sm font-semibold text-foreground mt-0.5">{ans.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Qualify this lead</h2>

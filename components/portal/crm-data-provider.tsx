@@ -323,12 +323,27 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
         void refresh({ silent: true });
       }, 300);
     };
+
+    const onRealtimeMessage = (event: Event) => {
+      const custom = event as CustomEvent<{ type?: string; payload?: any }>;
+      const detail = custom?.detail;
+      if (detail?.type === "INBOX_SUMMARY_INVALIDATE") {
+        void getInboxSummary({ silent: true })
+          .then((inboxSummary) => {
+            if (!mountedRef.current) return;
+            setState((current) => ({ ...current, inboxSummary }));
+          })
+          .catch(() => undefined);
+      }
+      onExternalRefresh();
+    };
+
     window.addEventListener(EVENT_NAME, onExternalRefresh);
-    window.addEventListener("rs-realtime", onExternalRefresh);
+    window.addEventListener("rs-realtime", onRealtimeMessage);
     return () => {
       window.clearTimeout(debounceId);
       window.removeEventListener(EVENT_NAME, onExternalRefresh);
-      window.removeEventListener("rs-realtime", onExternalRefresh);
+      window.removeEventListener("rs-realtime", onRealtimeMessage);
     };
   }, [enabled, refresh]);
 

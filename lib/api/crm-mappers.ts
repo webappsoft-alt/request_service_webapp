@@ -333,14 +333,41 @@ function customerNameParts(record: Record<string, unknown>) {
   const companyName = trimmed(
     firstValue(populated.companyName, record.customerCompanyName, record.companyName),
   );
-  const name = companyName || `${firstName} ${lastName}`.trim() || displayNameFromRecord(populated);
+  const directName = trimmed(
+    firstValue(
+      record.customerName,
+      record.name,
+      record.fullName,
+      populated.name,
+      populated.fullName,
+    ),
+  );
+  const name =
+    companyName ||
+    `${firstName} ${lastName}`.trim() ||
+    displayNameFromRecord(populated) ||
+    directName ||
+    "";
   return {
     firstName,
     lastName,
     companyName,
     name,
-    email: trimmed(firstValue(populated.email, record.customerEmail, record.email)),
-    phone: trimmed(firstValue(populated.phone, record.customerPhone, record.phone)),
+    email: trimmed(
+      firstValue(
+        populated.email,
+        record.customerEmail,
+        record.email,
+        record.phoneOrEmail,
+      ),
+    ),
+    phone: trimmed(
+      firstValue(
+        populated.phone,
+        record.customerPhone,
+        record.phone,
+      ),
+    ),
   };
 }
 
@@ -414,13 +441,30 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     .map((answer, index) => {
       const item = asRecord(answer);
       if (!item) return null;
+      const label = trimmed(item.label || item.questionTitle || item.question);
+      const value = trimmed(item.value || item.selectedValue || item.answer || item.text);
       return {
-        id: trimmed(item.id) || `ans_${index + 1}`,
-        label: trimmed(item.label),
-        value: trimmed(item.value),
+        id: trimmed(item.id || item.fieldId) || `ans_${index + 1}`,
+        label,
+        value,
       } satisfies QuoteAnswer;
     })
     .filter((item): item is QuoteAnswer => Boolean(item?.label));
+
+  const photos = toStringArray(record.photos ?? record.photoUrls);
+  const chatThread = asRecord(record.chatThread);
+  const chatThreadId =
+    crmIdOf(record.chatThreadId) || crmIdOf(chatThread?.id) || undefined;
+  const unreadMessagesCount = Math.max(
+    0,
+    numberValue(
+      record.unreadMessagesCount ?? chatThread?.unreadForProvider,
+      0,
+    ),
+  );
+  const hasActiveChat = Boolean(
+    record.hasActiveChat || chatThreadId || chatThread || unreadMessagesCount > 0,
+  );
 
   return {
     id,
@@ -429,13 +473,23 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     providerId: crmIdOf(record.providerId) || undefined,
     categoryId: crmIdOf(record.categoryId) || trimmed(record.categoryId),
     channel: trimmed(record.channel) === "marketplace" ? "marketplace" : "direct",
+    source: trimmed(record.source) || "quote_request",
+    viewCount: Math.max(1, numberValue(record.viewCount, 1)),
+    lastInteractionAt:
+      toIsoString(record.lastInteractionAt) ||
+      toIsoString(record.updatedAt) ||
+      toIsoString(record.createdAt),
+    chatThreadId,
+    unreadMessagesCount,
+    hasActiveChat,
     zip: trimmed(record.zip),
     city: trimmed(record.city),
     state: trimmed(record.state),
     details: trimmed(record.details),
     preferredDate: toIsoString(record.preferredDate) || undefined,
     preferredTimeWindow: mapRequestTimeWindow(record.preferredTimeWindow) || undefined,
-    photoUrls: toStringArray(record.photos ?? record.photoUrls),
+    photoUrls: photos,
+    photos,
     status:
       trimmed(record.status) === "viewed" ||
       trimmed(record.status) === "contacted" ||
@@ -1010,11 +1064,42 @@ export function mapChatThread(raw: unknown): ChatThread | null {
   const id = crmIdOf(record);
   if (!id) return null;
 
+  const cust = asRecord(record.customerId);
+  const customerAvatar =
+    trimmed(record.customerAvatar) ||
+    trimmed(cust?.avatarUrl) ||
+    trimmed(cust?.avatar) ||
+    undefined;
+
+  const prov = asRecord(record.providerId);
+  const providerName =
+    trimmed(record.providerName) ||
+    trimmed(prov?.companyName) ||
+    trimmed(prov?.name) ||
+    trimmed(prov?.businessName) ||
+    undefined;
+  const providerAvatar =
+    trimmed(record.providerAvatar) ||
+    trimmed(prov?.avatarUrl) ||
+    trimmed(prov?.avatar) ||
+    trimmed(prov?.logo) ||
+    undefined;
+  const providerPhone =
+    trimmed(record.providerPhone) ||
+    trimmed(prov?.phone) ||
+    undefined;
+
   return {
     id,
     providerId: crmIdOf(record.providerId),
-    customerName: trimmed(record.customerName) || "Customer",
-    customerEmail: trimmed(record.customerEmail),
+    providerName,
+    providerAvatar,
+    providerPhone,
+    customerId: crmIdOf(record.customerId) || undefined,
+    customerName: trimmed(record.customerName) || trimmed(cust?.name) || "Customer",
+    customerEmail: trimmed(record.customerEmail) || trimmed(cust?.email),
+    customerPhone: trimmed(record.customerPhone) || trimmed(cust?.phone) || undefined,
+    customerAvatar,
     requestId: crmIdOf(record.requestId) || undefined,
     unreadForProvider: Math.max(0, numberValue(record.unreadForProvider)),
     unreadForCustomer: Math.max(0, numberValue(record.unreadForCustomer)),
@@ -1061,14 +1146,26 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
 export function mapInboxSummary(raw: unknown): CrmInboxSummary {
   const root = asRecord(raw) ?? {};
   const data = asRecord(root.data) ?? root;
-  const newLeads = Math.max(0, numberValue(data.newLeads));
-  const unreadChats = Math.max(0, numberValue(data.unreadChats));
-  const pendingOrders = Math.max(0, numberValue(data.pendingOrders));
+  const newLeads = Math.max(
+    0,
+    numberValue(data.newLeadsCount ?? data.unseenLeadsCount ?? data.newLeads, 0),
+  );
+  const unreadChats = Math.max(
+    0,
+    numberValue(data.unreadMessagesCount ?? data.unreadChats, 0),
+  );
+  const pendingOrders = Math.max(0, numberValue(data.pendingOrders, 0));
   return {
     newLeads,
     unreadChats,
     pendingOrders,
-    total: Math.max(0, numberValue(data.total, newLeads + unreadChats + pendingOrders)),
+    total: Math.max(
+      0,
+      numberValue(
+        data.totalActiveLeads ?? data.total,
+        newLeads + unreadChats + pendingOrders,
+      ),
+    ),
   };
 }
 

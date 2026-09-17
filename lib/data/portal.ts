@@ -40,6 +40,21 @@ export type PortalRequest = ServiceRequest & {
   categoryName: string;
   neighborhood: string;
   answers?: QuoteAnswer[];
+  source?:
+    | "quote_request"
+    | "profile_view"
+    | "fixed_service_view"
+    | "direct_message"
+    | "phone"
+    | "walk_in"
+    | "external"
+    | string;
+  viewCount?: number;
+  lastInteractionAt?: string;
+  chatThreadId?: string;
+  unreadMessagesCount?: number;
+  hasActiveChat?: boolean;
+  photos?: string[];
 };
 
 export type ServiceAvailabilityMode = "office" | "custom";

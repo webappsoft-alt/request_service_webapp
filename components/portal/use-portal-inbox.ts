@@ -37,24 +37,17 @@ export function usePortalInbox() {
     return [...chatItems, ...leadItems];
   }, [chat.threads, newLeads]);
 
-  const newLeadCount =
-    crm.enabled && crm.ready
-      ? crm.inboxSummary.newLeads
-      : crm.enabled
-        ? 0
-        : newLeads.length;
-  const unreadChats =
-    crm.enabled && crm.ready
-      ? crm.inboxSummary.unreadChats
-      : crm.enabled
-        ? 0
-        : chat.unread;
+  const newLeadCount = crm.enabled
+    ? (crm.inboxSummary.newLeads || newLeads.length)
+    : newLeads.length;
+  const unreadChats = crm.enabled
+    ? (crm.inboxSummary.unreadChats || chat.unread)
+    : chat.unread;
 
   return {
     newLeads: newLeadCount,
     unreadChats,
-    pendingOrders:
-      crm.enabled && crm.ready ? crm.inboxSummary.pendingOrders : 0,
+    pendingOrders: crm.enabled ? crm.inboxSummary.pendingOrders : 0,
     total: newLeadCount + unreadChats,
     items,
   };

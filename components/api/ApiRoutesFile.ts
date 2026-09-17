@@ -95,8 +95,11 @@ export const providerCrmApi = {
   vendors: "provider/vendors",
   vendor: (id: string) => `provider/vendors/${id}`,
   requests: "provider/requests",
+  requestsSummary: "provider/requests/summary",
   request: (id: string) => `provider/requests/${id}`,
   requestStatus: (id: string) => `provider/requests/${id}/status`,
+  requestConvertToEstimate: (id: string) =>
+    `provider/requests/${id}/convert-to-estimate`,
   estimates: "provider/estimates",
   estimate: (id: string) => `provider/estimates/${id}`,
   estimateShare: (id: string) => `provider/estimates/${id}/share`,
@@ -154,6 +157,10 @@ export const publicApi = {
   portfolio: (idOrSlug: string) => `public/portfolio/${idOrSlug}`,
   /** POST contact inquiry */
   contactUs: "public/contact-us",
+  /** POST track public browsing interactions / leads */
+  leadsTrack: "public/leads/track",
+  /** POST submit structured quote questionnaire */
+  quotes: "public/quotes",
   /** GET public estimate by share token */
   estimate: (token: string) => `public/estimates/${token}`,
   /** POST customer digital approval */
@@ -167,6 +174,7 @@ export const publicApi = {
 } as const;
 
 export const publicQuoteApi = {
+  quotes: "public/quotes",
   requests: "public/quote-requests",
 } as const;
 

@@ -8,7 +8,7 @@ import type {
   PortalVendor,
 } from "@/lib/data/crm-people";
 import { employeeName, type PortalEmployee, type PortalEventKind, type PortalRequest, type PortalTimeWindow } from "@/lib/data/portal";
-import type { Estimate, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
+import type { Estimate, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
   mapCrmEntity,
@@ -584,6 +584,46 @@ export async function getEstimate(id: string) {
 
 export async function updateEstimate(id: string, estimate: Estimate) {
   const response = await putData(providerCrmApi.estimate(id), estimatePayload(estimate));
+  return mapCrmEntity(response, mapEstimate);
+}
+
+export type EstimateSettingsPayload = {
+  title?: string;
+  status?: EstimateStatus;
+  customerId?: string;
+  issuedAt?: string;
+  expiresAt?: string | null;
+  propertyAddress?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    unit?: string;
+  };
+  notes?: string;
+  terms?: string;
+};
+
+export async function updateEstimateSettings(id: string, settings: EstimateSettingsPayload) {
+  const payload: Record<string, unknown> = {};
+  if (settings.title !== undefined) payload.title = settings.title.trim();
+  if (settings.status !== undefined) payload.status = settings.status;
+  if (settings.customerId !== undefined) payload.customerId = settings.customerId;
+  if (settings.issuedAt !== undefined) payload.issuedAt = settings.issuedAt;
+  if (settings.expiresAt !== undefined) payload.expiresAt = settings.expiresAt || null;
+  if (settings.propertyAddress !== undefined) {
+    payload.propertyAddress = {
+      street: settings.propertyAddress.street || "",
+      city: settings.propertyAddress.city || "",
+      state: settings.propertyAddress.state || "",
+      zip: settings.propertyAddress.zip || "",
+      unit: settings.propertyAddress.unit || "",
+    };
+  }
+  if (settings.notes !== undefined) payload.notes = settings.notes;
+  if (settings.terms !== undefined) payload.terms = settings.terms;
+
+  const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);
 }
 

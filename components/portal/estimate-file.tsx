@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
-import { updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
+import { updateEstimate as updateEstimateApi, updateEstimateSettings as updateEstimateSettingsApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { ESTIMATE_STATUSES, estimateStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation } from "@/lib/format";
@@ -245,23 +245,20 @@ export function EstimateSettingsTab({
     const chosenCustomer = customers.find((item) => item.id === settingsDraft.customerId);
     const customerName = chosenCustomer ? crmCustomerName(chosenCustomer) : estimate.customerName;
     if (apiReady) {
-      const updated = await updateEstimateApi(estimate.id, {
-        ...estimate,
+      const updated = await updateEstimateSettingsApi(estimate.id, {
         title: settingsDraft.name.trim(),
         customerId: settingsDraft.customerId,
-        customerName,
         propertyAddress: {
-          ...estimate.propertyAddress,
           street: settingsDraft.street,
           city: settingsDraft.city,
           state: settingsDraft.state,
           zip: settingsDraft.zip,
         },
         issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
-        expiresAt: settingsDraft.expiresAt || undefined,
+        expiresAt: settingsDraft.expiresAt || null,
         status: settingsDraft.status,
-        notes: settingsDraft.notes || undefined,
-        terms: settingsDraft.terms || undefined,
+        notes: settingsDraft.notes || "",
+        terms: settingsDraft.terms || "",
       });
       if (updated) {
         crm.patchEstimate(estimate.id, updated);

@@ -440,7 +440,7 @@ export async function listCustomers(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.customers, mapPortalCustomerCrm, options);
 }
 
-/** Paginated customers list G?? supports `search` for the AG??Z bar and search box. */
+/** Paginated customers list — supports `search` for the A–Z bar and search box. */
 export async function queryCustomers(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -521,7 +521,7 @@ export async function listEmployees(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.team, mapPortalEmployee, options);
 }
 
-/** Paginated workforce list G?? MD: page/limit/active/role/trade/search only. */
+/** Paginated workforce list — MD: page/limit/active/role/trade/search only. */
 export async function queryTeam(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.team, params, {
@@ -557,7 +557,7 @@ export async function listContractors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.contractors, mapPortalContractor, options);
 }
 
-/** Paginated contractors G?? MD: page/limit/trade/status/search only. */
+/** Paginated contractors — MD: page/limit/trade/status/search only. */
 export async function queryContractors(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.contractors, params, {
@@ -595,7 +595,7 @@ export async function listVendors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.vendors, mapPortalVendor, options);
 }
 
-/** Paginated vendors G?? MD: page/limit/category/status/search only. */
+/** Paginated vendors — MD: page/limit/category/status/search only. */
 export async function queryVendors(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.vendors, params, {
@@ -631,7 +631,7 @@ export async function listRequests(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.requests, mapPortalRequest, options);
 }
 
-/** Paginated leads/requests G?? page/limit/search. */
+/** Paginated leads/requests — page/limit/search. */
 export async function queryRequests(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.requests, params, {
@@ -655,7 +655,7 @@ export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
 }
 
-/** Paginated estimates list G?? supports `status`, `customerId`, and `search`. */
+/** Paginated estimates list — supports `status`, `customerId`, and `search`. */
 export async function queryEstimates(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -810,7 +810,7 @@ export async function listJobs(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.jobs, mapJob, options);
 }
 
-/** Paginated jobs G?? page/limit/search. */
+/** Paginated jobs — page/limit/search. */
 export async function queryJobs(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.jobs, params, {
@@ -868,7 +868,7 @@ export async function listReminders(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.reminders, mapPortalReminder, options);
 }
 
-/** Paginated reminders G?? MD: page/limit/status/assignedEmployeeId/subjectKind/search only. */
+/** Paginated reminders — MD: page/limit/status/assignedEmployeeId/subjectKind/search only. */
 export async function queryReminders(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.reminders, params, {
@@ -897,7 +897,7 @@ export async function listInvoices(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.invoices, mapInvoice, options);
 }
 
-/** Paginated invoices G?? page/limit/search. */
+/** Paginated invoices — page/limit/search. */
 export async function queryInvoices(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.invoices, params, {

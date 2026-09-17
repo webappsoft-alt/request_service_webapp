@@ -7,6 +7,7 @@ import {
   Banknote,
   CalendarDays,
   Clock,
+  Eye,
   FileText,
   Film,
   ImageIcon,
@@ -31,29 +32,19 @@ import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/po
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
-import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
-import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { useEmployeeFile, weekdayLabel, type EmployeeDayHours } from "@/components/portal/use-employee-file";
-import type { JobAttachment } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { crmCustomerName, crmTaskStatusLabel, taskMatches } from "@/lib/data/crm-people";
+import { crmTaskStatusLabel } from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
   employeeName,
@@ -62,37 +53,134 @@ import {
   estimateStatusLabel,
   estimateStatusTone,
   formatClock,
-  getPortalCustomerName,
   timeWindowLabel,
   windowFromMinutes,
   type PortalCalendarEvent,
   type PortalEmployee,
+  type PortalEmployeeActiveAssignments,
+  type PortalEmployeeAssignmentSchedule,
   type PortalEmployeeRole,
+  type PortalEmployeeWorkingHours,
 } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getEmployee } from "@/lib/api/crm-client";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  clearTeamDetail,
+  deleteTeamMember,
+  fetchTeamMember,
+  updateTeamMember,
+} from "@/store/teamSlice";
 
 const ROLES: PortalEmployeeRole[] = ["technician", "estimator", "dispatcher", "owner"];
-const MAX_FILE = 2 * 1024 * 1024;
+
+const WEEKDAY_INDEX: PortalEmployeeWorkingHours["day"][] = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
+function minutesToTimeInput(minutes: number) {
+  const clamped = Math.max(0, Math.min(24 * 60 - 1, Math.round(minutes)));
+  const hours = Math.floor(clamped / 60);
+  const mins = clamped % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+}
+
+function timeInputToMinutes(value: string) {
+  const [hours, mins] = value.split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(mins)) return 0;
+  return hours * 60 + mins;
+}
+
+function hireDateInputValue(value?: string) {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
+
+function hireDateApiValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.includes("T")) return trimmed;
+  return `${trimmed}T00:00:00.000Z`;
+}
+
+function availabilityFromWorkingHours(hours?: PortalEmployeeWorkingHours[]): EmployeeDayHours[] {
+  const byDay = new Map((hours ?? []).map((item) => [item.day, item]));
+  return WEEKDAY_INDEX.map((day, index) => {
+    const match = byDay.get(day);
+    if (!match) {
+      return {
+        day: index,
+        off: index === 0 || index === 6,
+        start: "08:00",
+        end: "17:00",
+      };
+    }
+    return {
+      day: index,
+      off: !match.active,
+      start: minutesToTimeInput(match.startMinutes),
+      end: minutesToTimeInput(match.endMinutes),
+    };
+  });
+}
+
+function workingHoursFromAvailability(days: EmployeeDayHours[]): PortalEmployeeWorkingHours[] {
+  return days.map((item) => ({
+    day: WEEKDAY_INDEX[item.day] ?? "monday",
+    startMinutes: timeInputToMinutes(item.start || "08:00"),
+    endMinutes: timeInputToMinutes(item.end || "17:00"),
+    active: !item.off,
+  }));
+}
+
+function scheduleToCalendarEvents(
+  employeeId: string,
+  schedule: PortalEmployeeAssignmentSchedule[],
+): PortalCalendarEvent[] {
+  return schedule.map((item) => {
+    const date = item.date ? item.date.slice(0, 10) : undefined;
+    return {
+      id: item.id,
+      kind: "job" as const,
+      recordId: item.id,
+      title: item.title || "Schedule",
+      detail: item.status || "",
+      date,
+      timeWindow: windowFromMinutes(item.startMinutes, item.endMinutes) || "all_day",
+      startMinutes: item.startMinutes,
+      endMinutes: item.endMinutes,
+      employeeId,
+      href: `/pro/dashboard/schedule?employee=${employeeId}`,
+      status: item.status || "scheduled",
+    };
+  });
+}
 
 export function TeamMemberView({ id }: { id: string }) {
-  const { estimates, jobs, invoices, requests, provider } = usePortalWorkspace();
+  const dispatch = useAppDispatch();
+  const { estimates, requests } = usePortalWorkspace();
   const { customers, tasks } = useCrmDirectory();
-  const { employees, events, assign, updateEmployee, removeEmployee, employeeById, employeeLabel } = usePortalCrew();
+  const { employees, events, assign, removeEmployee, employeeById, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const crm = useCrmApiData();
   const sliceItems = useAppSelector((state) => state.team?.items ?? []);
-  const [fetched, setFetched] = useState<PortalEmployee | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailTried, setDetailTried] = useState(false);
+  const detail = useAppSelector((state) => state.team?.detail ?? null);
+  const detailAssignments = useAppSelector(
+    (state) => state.team?.detailAssignments ?? { jobs: [], tasks: [], schedule: [] },
+  );
+  const detailLoading = useAppSelector((state) => Boolean(state.team?.detailLoading));
+  const detailError = useAppSelector((state) => state.team?.detailError ?? null);
   const employee =
-    (fetched?.id === id ? fetched : null) ??
+    (detail?.id === id ? detail : null) ??
     sliceItems.find((item) => item.id === id) ??
     employees.find((item) => item.id === id);
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
-  const pending = useCrmRecordPending();
 
   useEffect(() => {
     if (!crm.enabled) return;
@@ -100,38 +188,28 @@ export function TeamMemberView({ id }: { id: string }) {
   }, [crm.enabled, crm.ensureLoaded]);
 
   useEffect(() => {
-    setFetched(null);
-    setDetailTried(false);
-  }, [id]);
-
-  useEffect(() => {
-    if (employee) {
-      setDetailLoading(false);
-      setDetailTried(true);
-      return;
-    }
-    let cancelled = false;
-    setDetailLoading(true);
-    void getEmployee(id)
-      .then((item) => {
-        if (!cancelled && item) setFetched(item);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setDetailLoading(false);
-          setDetailTried(true);
-        }
-      });
+    dispatch(clearTeamDetail());
+    void dispatch(fetchTeamMember(id));
     return () => {
-      cancelled = true;
+      dispatch(clearTeamDetail());
     };
-  }, [id, employee]);
+  }, [dispatch, id]);
+
+  async function saveEmployee(patch: Partial<PortalEmployee>) {
+    const result = await dispatch(updateTeamMember({ id, patch }));
+    if (updateTeamMember.rejected.match(result)) {
+      throw new Error(result.payload || "Could not save employee.");
+    }
+    return result.payload?.employee;
+  }
 
   if (!employee) {
-    const loading = detailLoading || (pending && !detailTried);
+    const loading = detailLoading || crm.enabled;
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">{loading ? "Loading employee…" : "Employee not found"}</h1>
+        <h1 className="text-lg font-semibold">
+          {loading ? "Loading employee…" : detailError || "Employee not found"}
+        </h1>
         {!loading ? (
           <Button asChild className="mt-4" size="sm">
             <Link href="/pro/dashboard/team">Back to employees</Link>
@@ -143,18 +221,20 @@ export function TeamMemberView({ id }: { id: string }) {
 
   const member = employee;
   const name = employeeName(member);
-  const assigned = events
+  const assignments: PortalEmployeeActiveAssignments =
+    detail?.id === id ? detailAssignments : { jobs: [], tasks: [], schedule: [] };
+  const assignedFromApi = scheduleToCalendarEvents(member.id, assignments.schedule);
+  const assignedFromCrew = events
     .filter((item) => item.employeeId === member.id)
     .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
-  const allJobs = records.mergeJobs(jobs);
+  const assigned = assignedFromApi.length ? assignedFromApi : assignedFromCrew;
   const allEstimates = records.mergeEstimates(estimates);
-  const jobIds = new Set(assigned.filter((item) => item.kind === "job").map((item) => item.recordId));
   const estimateIds = new Set(assigned.filter((item) => item.kind === "estimate").map((item) => item.recordId));
-  const relatedJobs = allJobs.filter((item) => jobIds.has(item.id) || item.assignedTo === name);
   const relatedEstimates = allEstimates.filter((item) => estimateIds.has(item.id));
-  const relatedTasks = tasks.filter(
-    (item) => item.assignedEmployeeId === member.id || taskMatches(item, "employee", member.id),
-  );
+  const relatedJobs = assignments.jobs;
+  const relatedTasks = assignments.tasks.length
+    ? assignments.tasks
+    : tasks.filter((item) => item.assignedEmployeeId === member.id);
 
   function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
     assign({
@@ -206,7 +286,11 @@ export function TeamMemberView({ id }: { id: string }) {
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  void Promise.resolve(removeEmployee(employee.id))
+                  void Promise.resolve(
+                    crm.enabled
+                      ? dispatch(deleteTeamMember(employee.id)).unwrap()
+                      : removeEmployee(employee.id),
+                  )
                     .then(() => toast.success(`${name} removed from the crew list.`))
                     .catch((error) =>
                       toast.error(error instanceof Error ? error.message : "Could not remove this employee."),
@@ -222,11 +306,11 @@ export function TeamMemberView({ id }: { id: string }) {
         {(tab) => {
           switch (tab) {
             case "settings":
-              return <EmployeeSettingsTab employee={employee} onSave={updateEmployee} />;
+              return <EmployeeSettingsTab employee={employee} onSave={saveEmployee} />;
             case "availability":
-              return <EmployeeAvailabilityTab employee={employee} />;
+              return <EmployeeAvailabilityTab employee={employee} onSave={saveEmployee} />;
             case "pay":
-              return <EmployeePayTab employee={employee} onSave={updateEmployee} />;
+              return <EmployeePayTab employee={employee} onSave={saveEmployee} />;
             case "schedule":
               return (
                 <EmployeeScheduleTab
@@ -247,17 +331,36 @@ export function TeamMemberView({ id }: { id: string }) {
                   rows={relatedJobs}
                   rowKey={(row) => row.id}
                   rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
-                  columns={jobBoardColumns({
-                    estimates: allEstimates,
-                    requests,
-                    invoices,
-                    events,
-                    employeeLabel,
-                    customerName: (customerId) => {
-                      const customer = customers.find((item) => item.id === customerId);
-                      return customer ? crmCustomerName(customer) : getPortalCustomerName(provider, customerId);
+                  columns={[
+                    {
+                      id: "number",
+                      header: "Job #",
+                      sortValue: (row) => row.number,
+                      searchValue: (row) => `${row.number} ${row.title}`,
+                      exportValue: (row) => row.number,
+                      cell: (row) => (
+                        <Link href={`/pro/dashboard/jobs/${row.id}`} className="font-semibold text-primary hover:underline">
+                          {row.number || row.id}
+                        </Link>
+                      ),
                     },
-                  })}
+                    {
+                      id: "title",
+                      header: "Title",
+                      sortValue: (row) => row.title,
+                      searchValue: (row) => row.title,
+                      exportValue: (row) => row.title,
+                      cell: (row) => row.title || "—",
+                    },
+                    {
+                      id: "status",
+                      header: "Status",
+                      sortValue: (row) => row.status,
+                      searchValue: (row) => row.status,
+                      exportValue: (row) => row.status,
+                      cell: (row) => <StatusPill label={row.status || "—"} />,
+                    },
+                  ]}
                 />
               );
             case "estimates":
@@ -334,33 +437,47 @@ export function TeamMemberView({ id }: { id: string }) {
                     {
                       id: "number",
                       header: "Task",
-                      sortValue: (row) => row.number,
-                      searchValue: (row) => `${row.number} ${row.title}`,
-                      exportValue: (row) => row.number,
+                      sortValue: (row) => ("number" in row ? String(row.number ?? "") : row.id),
+                      searchValue: (row) =>
+                        `${"number" in row ? row.number ?? "" : ""} ${"title" in row ? row.title ?? "" : ""}`,
+                      exportValue: (row) => ("number" in row ? String(row.number ?? row.id) : row.id),
                       cell: (row) => (
                         <div>
                           <Link href={`/pro/dashboard/tasks/${row.id}`} className="font-semibold text-primary hover:underline">
-                            {row.number}
+                            {"number" in row && row.number ? row.number : row.id}
                           </Link>
-                          <p className="text-xs text-muted-foreground">{row.title}</p>
+                          {"title" in row && row.title ? (
+                            <p className="text-xs text-muted-foreground">{row.title}</p>
+                          ) : null}
                         </div>
                       ),
                     },
                     {
                       id: "due",
                       header: "Due",
-                      sortValue: (row) => row.dueAt ?? "",
-                      searchValue: (row) => (row.dueAt ? formatDate(row.dueAt) : ""),
-                      exportValue: (row) => (row.dueAt ? formatDate(row.dueAt) : ""),
-                      cell: (row) => (row.dueAt ? formatDate(row.dueAt) : "—"),
+                      sortValue: (row) => ("dueAt" in row ? String(row.dueAt ?? "") : ""),
+                      searchValue: (row) =>
+                        "dueAt" in row && row.dueAt ? formatDate(String(row.dueAt)) : "",
+                      exportValue: (row) =>
+                        "dueAt" in row && row.dueAt ? formatDate(String(row.dueAt)) : "",
+                      cell: (row) =>
+                        "dueAt" in row && row.dueAt ? formatDate(String(row.dueAt)) : "—",
                     },
                     {
                       id: "status",
                       header: "Status",
-                      sortValue: (row) => row.status,
-                      searchValue: (row) => crmTaskStatusLabel(row.status),
-                      exportValue: (row) => crmTaskStatusLabel(row.status),
-                      cell: (row) => <StatusPill label={crmTaskStatusLabel(row.status)} />,
+                      sortValue: (row) => ("status" in row ? String(row.status ?? "") : ""),
+                      searchValue: (row) =>
+                        "status" in row && row.status
+                          ? crmTaskStatusLabel(row.status as never) || String(row.status)
+                          : "",
+                      exportValue: (row) => ("status" in row ? String(row.status ?? "") : ""),
+                      cell: (row) =>
+                        "status" in row && row.status ? (
+                          <StatusPill label={crmTaskStatusLabel(row.status as never) || String(row.status)} />
+                        ) : (
+                          "—"
+                        ),
                     },
                   ]}
                 />
@@ -370,7 +487,7 @@ export function TeamMemberView({ id }: { id: string }) {
             case "attachments":
               return <EmployeeAttachmentsTab employee={employee} />;
             default:
-              return <EmployeeSettingsTab employee={employee} onSave={updateEmployee} />;
+              return <EmployeeSettingsTab employee={employee} onSave={saveEmployee} />;
           }
         }}
       </RecordWorkspace>
@@ -397,9 +514,13 @@ function EmployeeSettingsTab({
   onSave,
 }: {
   employee: PortalEmployee;
-  onSave: (id: string, patch: Partial<PortalEmployee>) => void | Promise<unknown>;
+  onSave: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
 }) {
   const [draft, setDraft] = useState(employee);
+
+  useEffect(() => {
+    setDraft(employee);
+  }, [employee]);
 
   return (
     <div className="space-y-4">
@@ -411,7 +532,20 @@ function EmployeeSettingsTab({
         <Button
           size="sm"
           onClick={() => {
-            void Promise.resolve(onSave(employee.id, draft))
+            void Promise.resolve(
+              onSave({
+                firstName: draft.firstName,
+                lastName: draft.lastName,
+                role: draft.role,
+                trade: draft.trade,
+                email: draft.email,
+                phone: draft.phone,
+                active: draft.active,
+                hireDate: hireDateApiValue(hireDateInputValue(draft.hireDate) || ""),
+                emergencyName: draft.emergencyName,
+                emergencyPhone: draft.emergencyPhone,
+              }),
+            )
               .then(() => toast.success("Employee settings saved."))
               .catch((error) =>
                 toast.error(error instanceof Error ? error.message : "Could not save employee settings."),
@@ -461,7 +595,11 @@ function EmployeeSettingsTab({
           </NativeSelect>
         </Field>
         <Field label="Hire date">
-          <Input type="date" value={draft.hireDate ?? ""} onChange={(event) => setDraft({ ...draft, hireDate: event.target.value })} />
+          <Input
+            type="date"
+            value={hireDateInputValue(draft.hireDate)}
+            onChange={(event) => setDraft({ ...draft, hireDate: event.target.value })}
+          />
         </Field>
         <Field label="Emergency contact">
           <Input
@@ -482,9 +620,27 @@ function EmployeeSettingsTab({
   );
 }
 
-export function EmployeeAvailabilityTab({ employee }: { employee: PortalEmployee }) {
+export function EmployeeAvailabilityTab({
+  employee,
+  onSave,
+}: {
+  employee: PortalEmployee;
+  onSave?: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
+}) {
   const file = useEmployeeFile(employee);
-  const [days, setDays] = useState<EmployeeDayHours[]>(file.availability);
+  const [days, setDays] = useState<EmployeeDayHours[]>(() =>
+    employee.workingHours?.length
+      ? availabilityFromWorkingHours(employee.workingHours)
+      : file.availability,
+  );
+
+  useEffect(() => {
+    setDays(
+      employee.workingHours?.length
+        ? availabilityFromWorkingHours(employee.workingHours)
+        : file.availability,
+    );
+  }, [employee.id, employee.workingHours, file.availability]);
 
   function patch(day: number, next: Partial<EmployeeDayHours>) {
     setDays((current) => current.map((item) => (item.day === day ? { ...item, ...next } : item)));
@@ -500,8 +656,14 @@ export function EmployeeAvailabilityTab({ employee }: { employee: PortalEmployee
         <Button
           size="sm"
           onClick={() => {
-            file.saveAvailability(days);
-            toast.success("Availability saved.");
+            const workingHours = workingHoursFromAvailability(days);
+            void Promise.resolve(
+              onSave ? onSave({ workingHours }) : Promise.resolve(file.saveAvailability(days)),
+            )
+              .then(() => toast.success("Availability saved."))
+              .catch((error) =>
+                toast.error(error instanceof Error ? error.message : "Could not save availability."),
+              );
           }}
         >
           Save hours
@@ -563,18 +725,30 @@ export function EmployeePayTab({
   onSave,
 }: {
   employee: PortalEmployee;
-  onSave: (id: string, patch: Partial<PortalEmployee>) => void | Promise<unknown>;
+  onSave: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
 }) {
-  const file = useEmployeeFile(employee);
-  const [pay, setPay] = useState(file.pay);
+  const [pay, setPay] = useState({
+    hourlyRate: employee.hourlyRate ?? 0,
+    overtimeRate: employee.overtimeRate ?? 0,
+    travelRate: employee.travelRate ?? 0,
+  });
+
+  useEffect(() => {
+    setPay({
+      hourlyRate: employee.hourlyRate ?? 0,
+      overtimeRate: employee.overtimeRate ?? 0,
+      travelRate: employee.travelRate ?? 0,
+    });
+  }, [employee.id, employee.hourlyRate, employee.overtimeRate, employee.travelRate]);
+
   const weekHours = useMemo(() => {
-    return file.availability.reduce((total, day) => {
+    return availabilityFromWorkingHours(employee.workingHours).reduce((total, day) => {
       if (day.off) return total;
       const [startH, startM] = day.start.split(":").map(Number);
       const [endH, endM] = day.end.split(":").map(Number);
       return total + Math.max(0, endH * 60 + endM - (startH * 60 + startM)) / 60;
     }, 0);
-  }, [file.availability]);
+  }, [employee.workingHours]);
 
   return (
     <div className="space-y-4">
@@ -586,8 +760,7 @@ export function EmployeePayTab({
         <Button
           size="sm"
           onClick={() => {
-            file.savePay(pay);
-            void Promise.resolve(onSave(employee.id, pay))
+            void Promise.resolve(onSave(pay))
               .then(() => toast.success("Pay rate saved."))
               .catch((error) =>
                 toast.error(error instanceof Error ? error.message : "Could not save pay rates."),

@@ -7,12 +7,14 @@ import type {
   PortalTask,
   PortalVendor,
 } from "@/lib/data/crm-people";
-import { employeeName, type PortalEmployee, type PortalEventKind, type PortalRequest, type PortalTimeWindow } from "@/lib/data/portal";
+import { employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
 import type { Estimate, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
+  mapChatThread,
   mapCrmEntity,
   mapCrmList,
+  mapEmployeeDetail,
   mapEstimate,
   mapInboxSummary,
   mapInvoice,
@@ -29,7 +31,6 @@ import {
   mapScheduleEvent,
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
-import { mapChatThread } from "@/lib/api/crm-mappers";
 import type { ChatThread } from "@/lib/booking/chat-store";
 
 type CrmRequestOptions = {
@@ -500,21 +501,24 @@ export async function deleteCustomer(id: string) {
 }
 
 function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
-  return {
-    firstName: employee.firstName || "",
-    lastName: employee.lastName || "",
-    email: employee.email || "",
-    phone: employee.phone || "",
-    role: employee.role || "technician",
-    trade: employee.trade || "",
-    active: employee.active ?? true,
-    hourlyRate: employee.hourlyRate ?? 0,
-    overtimeRate: employee.overtimeRate ?? 0,
-    travelRate: employee.travelRate ?? 0,
-    hireDate: employee.hireDate || undefined,
-    emergencyName: employee.emergencyName || "",
-    emergencyPhone: employee.emergencyPhone || "",
-  };
+  const payload: Record<string, unknown> = {};
+  if (employee.firstName !== undefined) payload.firstName = employee.firstName || "";
+  if (employee.lastName !== undefined) payload.lastName = employee.lastName || "";
+  if (employee.email !== undefined) payload.email = employee.email || "";
+  if (employee.phone !== undefined) payload.phone = employee.phone || "";
+  if (employee.role !== undefined) payload.role = employee.role || "technician";
+  if (employee.trade !== undefined) payload.trade = employee.trade || "";
+  if (employee.active !== undefined) payload.active = employee.active ?? true;
+  if (employee.hourlyRate !== undefined) payload.hourlyRate = employee.hourlyRate ?? 0;
+  if (employee.overtimeRate !== undefined) payload.overtimeRate = employee.overtimeRate ?? 0;
+  if (employee.travelRate !== undefined) payload.travelRate = employee.travelRate ?? 0;
+  if (employee.hireDate !== undefined) payload.hireDate = employee.hireDate || undefined;
+  if (employee.emergencyName !== undefined) payload.emergencyName = employee.emergencyName || "";
+  if (employee.emergencyPhone !== undefined) payload.emergencyPhone = employee.emergencyPhone || "";
+  if (employee.workingHours !== undefined) {
+    payload.workingHours = (employee.workingHours as PortalEmployeeWorkingHours[] | undefined) ?? [];
+  }
+  return payload;
 }
 
 export async function listEmployees(options?: CrmRequestOptions) {
@@ -537,16 +541,26 @@ export async function createEmployee(employee: PortalEmployee | Parameters<typeo
 }
 
 export async function getEmployee(id: string) {
+  const detail = await getEmployeeDetail(id);
+  return detail?.employee ?? null;
+}
+
+/** GET /api/provider/team/:id — profile + activeAssignments (jobs, tasks, schedule). */
+export async function getEmployeeDetail(id: string): Promise<PortalEmployeeDetail | null> {
   const response = await getData(providerCrmApi.teamMember(id), undefined, {
     silent: true,
     force: true,
   });
-  return mapCrmEntity(response, mapPortalEmployee);
+  return mapEmployeeDetail(response);
 }
 
 export async function updateEmployee(id: string, employee: Partial<PortalEmployee>) {
   const response = await putData(providerCrmApi.teamMember(id), employeePayload(employee));
-  return mapCrmEntity(response, mapPortalEmployee);
+  const mapped = mapCrmEntity(response, mapPortalEmployee);
+  if (mapped) return mapped;
+  // Partial update responses may omit full profile — re-fetch.
+  const detail = await getEmployeeDetail(id);
+  return detail?.employee ?? null;
 }
 
 export async function deleteEmployee(id: string) {

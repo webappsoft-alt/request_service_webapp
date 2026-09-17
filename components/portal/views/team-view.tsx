@@ -402,7 +402,7 @@ function EmployeeFormDialog({
           const updated = await dispatch(
             updateTeamMember({ id: employee.id, patch: { ...employee, ...input } }),
           ).unwrap();
-          toast.success(`${updated.firstName} ${updated.lastName} updated.`);
+          toast.success(`${updated.employee.firstName} ${updated.employee.lastName} updated.`);
         } else {
           await Promise.resolve(updateEmployee(employee.id, input));
           toast.success(`${input.firstName} ${input.lastName} updated.`);

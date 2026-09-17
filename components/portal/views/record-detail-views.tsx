@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { Camera, ChevronDown, CreditCard, FileText, LayoutDashboard, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { ArchiveBadge } from "@/components/portal/archive-control";
-import { CreateNoteDialog, CreateReminderDialog, CreateTaskDialog } from "@/components/portal/create-person-dialogs";
-import { NotesPanel } from "@/components/portal/notes-panel";
+import { NotesPanel, CreateNoteDialogForSubject } from "@/components/portal/notes-panel";
+import { CreateReminderDialog, CreateTaskDialog } from "@/components/portal/create-person-dialogs";
 import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { EstimateFileChrome, EstimateSettingsTab } from "@/components/portal/estimate-file";
@@ -545,7 +545,7 @@ export function EstimateDetailView({ id }: { id: string }) {
         subjectKind="estimate"
         subjectId={estimate.id}
       />
-      <CreateNoteDialog
+      <CreateNoteDialogForSubject
         open={noteOpen}
         onOpenChange={setNoteOpen}
         subjectKind="estimate"
@@ -886,7 +886,7 @@ export function JobDetailView({ id }: { id: string }) {
         subjectKind="job"
         subjectId={job.id}
       />
-      <CreateNoteDialog
+      <CreateNoteDialogForSubject
         open={noteOpen}
         onOpenChange={setNoteOpen}
         subjectKind="job"

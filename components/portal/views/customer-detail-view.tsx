@@ -31,8 +31,8 @@ import {
 } from "@/components/portal/create-person-dialogs";
 import {
   CreateCustomerNoteDialog,
-  CustomerNotesPanel,
-} from "@/components/portal/customer-notes-panel";
+  UniversalNotesPanel,
+} from "@/components/portal/universal-notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
 import { CrmMark } from "@/components/portal/crm-mark";
@@ -525,8 +525,9 @@ export function CustomerDetailView({ id }: { id: string }) {
               );
             case "notes":
               return (
-                <CustomerNotesPanel
-                  customerId={customer.id}
+                <UniversalNotesPanel
+                  subjectKind="customer"
+                  entityId={customer.id}
                   empty="Add the first note on this customer."
                 />
               );

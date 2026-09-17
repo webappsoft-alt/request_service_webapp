@@ -9,6 +9,7 @@ import {
 } from "@/components/shared/address-autocomplete";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { CreateUniversalNoteDialog } from "@/components/portal/universal-notes-panel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -1129,110 +1130,40 @@ export function CreateNoteDialog({
   customerId?: string;
   note?: PortalNote | null;
 }) {
-  const { addNote, updateNote } = useCrmDirectory();
-  const { session } = usePortalWorkspace();
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [saving, setSaving] = useState(false);
   const kind = subjectKind ?? (customerId ? "customer" : "customer");
   const id = subjectId ?? customerId ?? "";
-  const author = [session?.firstName, session?.lastName].filter(Boolean).join(" ") || "Office";
-  const label = reminderSubjectKindLabel(kind).toLowerCase();
-
-  useEffect(() => {
-    if (!open) return;
-    setTitle(note?.title ?? "");
-    setBody(note?.body ?? "");
-    setSaving(false);
-  }, [note, open]);
-
-  async function save() {
-    if (saving) return;
-    if (!title.trim() && !body.trim()) return;
-
-    setSaving(true);
-    try {
-      if (note) {
-        await Promise.resolve(
-          updateNote(note.id, { title: title.trim() || "Note", body: body.trim() }),
-        );
-        toast.success("Note updated.");
-      } else {
-        const next: PortalNote = {
-          id: `note_new_${Date.now()}`,
-          subjectKind: kind,
-          subjectId: id,
-          customerId: kind === "customer" ? id : undefined,
-          title: title.trim() || "Note",
-          body: body.trim(),
-          authorName: author,
-          createdAt: new Date().toISOString().slice(0, 10),
-        };
-        await Promise.resolve(addNote(next));
-        toast.success(`Note added to this ${label}.`);
+  const mappedNote = note
+    ? {
+        id: note.id,
+        entityType: "",
+        entityId: id,
+        title: note.title,
+        content: note.body,
+        tags: [] as string[],
+        isPinned: Boolean(note.pinned),
+        color: null as string | null,
+        attachments: [] as {
+          url: string;
+          filename: string;
+          fileType: string;
+          sizeBytes: number;
+        }[],
+        authorId: "",
+        authorName: note.authorName,
+        isDeleted: false,
+        createdAt: note.createdAt,
+        updatedAt: note.createdAt,
       }
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this note.");
-    } finally {
-      setSaving(false);
-    }
-  }
+    : null;
 
   return (
-    <Dialog
+    <CreateUniversalNoteDialog
       open={open}
-      onOpenChange={(next) => {
-        if (saving) return;
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
-        <DialogHeader>
-          <DialogTitle>{note ? "Edit note" : "Add note"}</DialogTitle>
-          <DialogDescription>
-            {note
-              ? `Update the office note on this ${label}.`
-              : `A short office note on this ${label}. It stays on the file.`}
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup className="gap-4">
-          <Field>
-            <FieldLabel htmlFor="file-note-title">Title</FieldLabel>
-            <Input
-              id="file-note-title"
-              value={title}
-              onChange={(change) => setTitle(change.target.value)}
-              placeholder="Access, billing, follow-up…"
-              disabled={saving}
-            />
-          </Field>
-          <Field className="w-full">
-            <FieldLabel htmlFor="file-note-body">Note</FieldLabel>
-            <Textarea
-              id="file-note-body"
-              className="w-full min-h-24"
-              value={body}
-              onChange={(change) => setBody(change.target.value)}
-              rows={5}
-              placeholder="Gate code, billing preference, access…"
-              disabled={saving}
-            />
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            disabled={saving || (!title.trim() && !body.trim())}
-            onClick={() => void save()}
-          >
-            {saving ? "Saving…" : note ? "Save changes" : "Save note"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      onOpenChange={onOpenChange}
+      subjectKind={kind}
+      entityId={id}
+      note={mappedNote}
+    />
   );
 }
 
@@ -1249,7 +1180,12 @@ export function AddNoteButton({
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         Add note
       </Button>
-      <CreateNoteDialog open={open} onOpenChange={setOpen} subjectKind={subjectKind} subjectId={subjectId} />
+      <CreateNoteDialog
+        open={open}
+        onOpenChange={setOpen}
+        subjectKind={subjectKind}
+        subjectId={subjectId}
+      />
     </>
   );
 }

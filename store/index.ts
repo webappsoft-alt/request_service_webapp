@@ -28,7 +28,16 @@ import contactUsReducer from "./contactUsSlice";
 import ordersReducer from "./ordersSlice";
 import providerOrdersReducer from "./providerOrdersSlice";
 import customersReducer from "./customersSlice";
-import customerNotesReducer from "./customerNotesSlice";
+import {
+  contractorNotesModule,
+  customerNotesModule,
+  employeeNotesModule,
+  estimateNotesModule,
+  invoiceNotesModule,
+  jobNotesModule,
+  requestNotesModule,
+  vendorNotesModule,
+} from "./notes/modules";
 
 /**
  * Redux Persist storage key: `userData`
@@ -54,7 +63,14 @@ const rootReducer = combineReducers({
   orders: ordersReducer,
   providerOrders: providerOrdersReducer,
   customers: customersReducer,
-  customerNotes: customerNotesReducer,
+  customerNotes: customerNotesModule.reducer,
+  estimateNotes: estimateNotesModule.reducer,
+  requestNotes: requestNotesModule.reducer,
+  jobNotes: jobNotesModule.reducer,
+  employeeNotes: employeeNotesModule.reducer,
+  contractorNotes: contractorNotesModule.reducer,
+  vendorNotes: vendorNotesModule.reducer,
+  invoiceNotes: invoiceNotesModule.reducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
@@ -92,6 +108,30 @@ export type AppDispatch = AppStore["dispatch"];
 
 let clientStore: AppStore | undefined;
 
+function needsReducerHotReplace(state: RootState) {
+  return (
+    state.serviceAreas === undefined ||
+    state.categories === undefined ||
+    state.fixedServices === undefined ||
+    state.portfolio === undefined ||
+    state.location === undefined ||
+    state.publicFixedServices === undefined ||
+    state.publicProfessionals === undefined ||
+    state.contactUs === undefined ||
+    state.orders === undefined ||
+    state.providerOrders === undefined ||
+    state.customers === undefined ||
+    state.customerNotes === undefined ||
+    state.estimateNotes === undefined ||
+    state.requestNotes === undefined ||
+    state.jobNotes === undefined ||
+    state.employeeNotes === undefined ||
+    state.contractorNotes === undefined ||
+    state.vendorNotes === undefined ||
+    state.invoiceNotes === undefined
+  );
+}
+
 export function getStore(): AppStore {
   if (typeof window === "undefined") {
     return makeStore();
@@ -99,35 +139,7 @@ export function getStore(): AppStore {
   if (!clientStore) {
     clientStore = makeStore();
     clientStore.__persistor = persistStore(clientStore);
-  } else if (
-    // HMR can keep an older store instance before new reducers were added.
-    (clientStore.getState() as {
-      serviceAreas?: unknown;
-      categories?: unknown;
-      fixedServices?: unknown;
-      portfolio?: unknown;
-      location?: unknown;
-      publicFixedServices?: unknown;
-      publicProfessionals?: unknown;
-      contactUs?: unknown;
-      orders?: unknown;
-      customers?: unknown;
-    }).serviceAreas === undefined ||
-    (clientStore.getState() as { categories?: unknown }).categories === undefined ||
-    (clientStore.getState() as { fixedServices?: unknown }).fixedServices === undefined ||
-    (clientStore.getState() as { portfolio?: unknown }).portfolio === undefined ||
-    (clientStore.getState() as { location?: unknown }).location === undefined ||
-    (clientStore.getState() as { publicFixedServices?: unknown })
-      .publicFixedServices === undefined ||
-    (clientStore.getState() as { publicProfessionals?: unknown })
-      .publicProfessionals === undefined ||
-    (clientStore.getState() as { contactUs?: unknown }).contactUs === undefined ||
-    (clientStore.getState() as { orders?: unknown }).orders === undefined ||
-    (clientStore.getState() as { providerOrders?: unknown }).providerOrders === undefined ||
-    (clientStore.getState() as { customers?: unknown }).customers === undefined ||
-    (clientStore.getState() as { customerNotes?: unknown }).customerNotes ===
-      undefined
-  ) {
+  } else if (needsReducerHotReplace(clientStore.getState())) {
     clientStore.replaceReducer(appReducer);
   }
   return clientStore;

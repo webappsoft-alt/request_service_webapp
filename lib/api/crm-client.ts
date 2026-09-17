@@ -440,7 +440,7 @@ export async function listCustomers(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.customers, mapPortalCustomerCrm, options);
 }
 
-/** Paginated customers list G현 supports `search` for the AG혀Z bar and search box. */
+/** Paginated customers list G?? supports `search` for the AG??Z bar and search box. */
 export async function queryCustomers(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -452,6 +452,11 @@ export async function queryCustomers(query: CrmListQuery = {}) {
     force: query.force ?? true,
   });
   return mapCrmList(response, mapPortalCustomerCrm);
+}
+
+export async function getCustomer(id: string) {
+  const response = await getData(providerCrmApi.customer(id), undefined, { silent: true, force: true });
+  return mapCrmEntity(response, mapPortalCustomerCrm);
 }
 
 export async function createCustomer(customer: PortalCustomerCrm) {
@@ -490,6 +495,10 @@ export async function archiveCustomer(id: string) {
   return deleteData(providerCrmApi.customer(id), { silent: false });
 }
 
+export async function deleteCustomer(id: string) {
+  return deleteData(providerCrmApi.customer(id), { silent: false });
+}
+
 function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
   return {
     firstName: employee.firstName || "",
@@ -512,7 +521,7 @@ export async function listEmployees(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.team, mapPortalEmployee, options);
 }
 
-/** Paginated workforce list G현 MD: page/limit/active/role/trade/search only. */
+/** Paginated workforce list G?? MD: page/limit/active/role/trade/search only. */
 export async function queryTeam(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.team, params, {
@@ -548,7 +557,7 @@ export async function listContractors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.contractors, mapPortalContractor, options);
 }
 
-/** Paginated contractors G현 MD: page/limit/trade/status/search only. */
+/** Paginated contractors G?? MD: page/limit/trade/status/search only. */
 export async function queryContractors(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.contractors, params, {
@@ -586,7 +595,7 @@ export async function listVendors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.vendors, mapPortalVendor, options);
 }
 
-/** Paginated vendors G현 MD: page/limit/category/status/search only. */
+/** Paginated vendors G?? MD: page/limit/category/status/search only. */
 export async function queryVendors(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.vendors, params, {
@@ -622,7 +631,7 @@ export async function listRequests(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.requests, mapPortalRequest, options);
 }
 
-/** Paginated leads/requests G현 page/limit/search. */
+/** Paginated leads/requests G?? page/limit/search. */
 export async function queryRequests(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.requests, params, {
@@ -646,7 +655,7 @@ export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
 }
 
-/** Paginated estimates list G현 supports `status`, `customerId`, and `search`. */
+/** Paginated estimates list G?? supports `status`, `customerId`, and `search`. */
 export async function queryEstimates(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -801,7 +810,7 @@ export async function listJobs(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.jobs, mapJob, options);
 }
 
-/** Paginated jobs G현 page/limit/search. */
+/** Paginated jobs G?? page/limit/search. */
 export async function queryJobs(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.jobs, params, {
@@ -859,7 +868,7 @@ export async function listReminders(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.reminders, mapPortalReminder, options);
 }
 
-/** Paginated reminders G현 MD: page/limit/status/assignedEmployeeId/subjectKind/search only. */
+/** Paginated reminders G?? MD: page/limit/status/assignedEmployeeId/subjectKind/search only. */
 export async function queryReminders(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.reminders, params, {
@@ -888,7 +897,7 @@ export async function listInvoices(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.invoices, mapInvoice, options);
 }
 
-/** Paginated invoices G현 page/limit/search. */
+/** Paginated invoices G?? page/limit/search. */
 export async function queryInvoices(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.invoices, params, {

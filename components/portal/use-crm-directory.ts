@@ -156,18 +156,16 @@ export function useCrmDirectory() {
   const customers = useMemo(() => {
     if (crm.customers && crm.customers.length > 0) return crm.customers;
     if (reduxCustomers && reduxCustomers.length > 0) return reduxCustomers;
-    if (apiReady) return crm.customers;
-    if (suppressSeedData) {
-      return store.customers.filter((item) => !store.deleted.includes(`customer:${item.id}`));
-    }
-    return [...seedCustomers, ...store.customers].filter(
-      (item) => !store.deleted.includes(`customer:${item.id}`),
-    );
+    const local = store.customers.filter((item) => !store.deleted.includes(`customer:${item.id}`));
+    if (local.length > 0) return local;
+    if (apiReady && crm.customers) return crm.customers;
+    if (suppressSeedData) return local;
+    return [...seedCustomers, ...local];
   }, [apiReady, crm.customers, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
 
   useEffect(() => {
     if (crm.enabled && customers.length === 0 && !reduxLoading) {
-      void dispatch(fetchCustomers({ limit: 100 }));
+      void dispatch(fetchCustomers({ limit: 100, force: true }));
     }
   }, [crm.enabled, customers.length, dispatch, reduxLoading]);
 
@@ -250,6 +248,7 @@ export function useCrmDirectory() {
       if (crm.enabled) {
         return (async () => {
           const created = await createCustomerApi(customer);
+          void dispatch(fetchCustomers({ force: true, limit: 100 }));
           if (crm.ready) {
             await crm.refresh({ silent: true });
           }

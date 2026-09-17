@@ -8,10 +8,14 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { fetchCustomers } from "@/store/customersSlice";
+import { fetchEstimates, invalidateEstimatesCache } from "@/store/estimatesSlice";
+import { createEstimate as createEstimateApi } from "@/lib/api/crm-client";
 import { writeCostLines, type JobCostLine } from "@/components/portal/use-job-costing";
 import { writeSiteVisit } from "@/components/portal/use-job-file";
 import {
@@ -103,6 +107,7 @@ export function CreateEstimateDialog({
   const [terms, setTerms] = useState("Valid for 30 days. Materials may change after site inspection.");
   const [lines, setLines] = useState<JobCostLine[]>([]);
   const [saving, setSaving] = useState(false);
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const hasEstimateName = Boolean(name.trim());
   const technician = employees.find((item) => item.id === employeeId);
   const nextTab = (current: EstimateTab): EstimateTab => {
@@ -125,11 +130,21 @@ export function CreateEstimateDialog({
     setLines([]);
     if (requestNotes) setNotes(requestNotes);
     if (customerId) pickCustomer(customerId);
-  }, [customerId, open, requestName, requestNotes]);
+    if (customers.length === 0) {
+      void dispatch(fetchCustomers({ force: true, limit: 100 }));
+    }
+  }, [customerId, open, requestName, requestNotes, customers.length, dispatch]);
 
   useEffect(() => {
-    if (!open || selectedCustomer || !customers[0]) return;
-    pickCustomer(customerId ?? customers[0].id);
+    if (!open) return;
+    if (customerId) {
+      pickCustomer(customerId);
+    } else if (
+      (!selectedCustomer || !customers.some((c) => c.id === selectedCustomer)) &&
+      customers[0]?.id
+    ) {
+      pickCustomer(customers[0].id);
+    }
   }, [customerId, customers, open, selectedCustomer]);
 
   // Auto-detect location if empty and not yet attempted
@@ -224,7 +239,7 @@ export function CreateEstimateDialog({
             : undefined,
         lines,
       });
-      const created = await records.addEstimate(estimate);
+      const created = await createEstimateApi(estimate);
       const saved = created ?? estimate;
       if (!saved?.id) throw new Error("Could not create this estimate.");
       if (requestId) records.setStatus("request", requestId, "estimate_sent");
@@ -248,9 +263,11 @@ export function CreateEstimateDialog({
           photos: [],
         });
       }
+      dispatch(invalidateEstimatesCache());
+      void dispatch(fetchEstimates({ force: true }));
       onOpenChange(false);
-      toast.success(`${saved.number} created.`);
-      router.push(`/pro/dashboard/estimates/${saved.id}?tab=visit`);
+      toast.success(`${saved.number || "Estimate"} created.`);
+      router.push(`/pro/dashboard/estimates/${saved.id}${path === "site_visit" ? "?tab=visit" : ""}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create this estimate.");
     } finally {
@@ -259,7 +276,8 @@ export function CreateEstimateDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create estimate</DialogTitle>
@@ -319,31 +337,70 @@ export function CreateEstimateDialog({
                 <p className="mt-1 text-xs text-muted-foreground">Price the quote now, finalize, and send it for signature.</p>
               </button>
             </div>
-            <Field label="Customer">
+            <Field
+              label="Customer"
+              action={
+                <button
+                  type="button"
+                  onClick={() => setCreateCustomerOpen(true)}
+                  className="text-xs font-medium text-primary hover:underline cursor-pointer"
+                >
+                  + New customer
+                </button>
+              }
+            >
               <Select
-                disabled={customersLoading}
-                value={customersLoading ? undefined : selectedCustomer}
-                onValueChange={pickCustomer}
+                disabled={customersLoading && customers.length === 0}
+                value={selectedCustomer || undefined}
+                onValueChange={(val) => {
+                  if (val === "__new_customer__") {
+                    setCreateCustomerOpen(true);
+                    return;
+                  }
+                  pickCustomer(val);
+                }}
               >
-                <SelectTrigger className="w-full" loading={customersLoading}>
-                  <SelectValue placeholder={customersLoading ? "Loading customers…" : "Select customer"} />
+                <SelectTrigger className="w-full" loading={customersLoading && customers.length === 0}>
+                  <SelectValue placeholder={customersLoading && customers.length === 0 ? "Loading customers…" : "Select customer"} />
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
                   align="start"
                   className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  {customersLoading ? (
+                  {customersLoading && customers.length === 0 ? (
                     <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3.5 animate-spin" />
                       <span>Loading customers…</span>
                     </div>
+                  ) : customers.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-muted-foreground">
+                      <p className="font-medium text-foreground">No customers found</p>
+                      <p className="mt-0.5 text-[11px]">Create your first customer to continue.</p>
+                      <button
+                        type="button"
+                        onClick={() => setCreateCustomerOpen(true)}
+                        className="mt-2 inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                      >
+                        + Add Customer
+                      </button>
+                    </div>
                   ) : (
-                    customers.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {crmCustomerName(item)}
-                      </SelectItem>
-                    ))
+                    <>
+                      {customers.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {crmCustomerName(item)}
+                        </SelectItem>
+                      ))}
+                      <div className="border-t border-border p-1 mt-1">
+                        <SelectItem
+                          value="__new_customer__"
+                          className="text-primary font-medium focus:text-primary focus:bg-primary/10"
+                        >
+                          + Add new customer
+                        </SelectItem>
+                      </div>
+                    </>
                   )}
                 </SelectContent>
               </Select>
@@ -465,7 +522,12 @@ export function CreateEstimateDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+    <CreateCustomerDialog
+      open={createCustomerOpen}
+      onOpenChange={setCreateCustomerOpen}
+    />
+  </>
+);
 }
 
 export function CreateJobDialog({
@@ -667,6 +729,7 @@ export function CreateJobDialog({
             </Field>
             <Field label="Customer">
               <NativeSelect className="w-full" value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
+                {!customers.length ? <NativeSelectOption value="">No customers found</NativeSelectOption> : null}
                 {customers.map((item) => (
                   <NativeSelectOption key={item.id} value={item.id}>
                     {crmCustomerName(item)}
@@ -931,6 +994,7 @@ export function CreateLeadDialog({
         <div className="grid gap-3">
           <Field label="Customer">
             <NativeSelect className="w-full" value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
+              {!customers.length ? <NativeSelectOption value="">No customers found</NativeSelectOption> : null}
               {customers.map((item) => (
                 <NativeSelectOption key={item.id} value={item.id}>
                   {crmCustomerName(item)}
@@ -1004,11 +1068,24 @@ function WizardTabs<T extends string>({
   );
 }
 
-function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+function Field({
+  label,
+  action,
+  children,
+  className,
+}: {
+  label: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <label className={cn("grid gap-1.5 text-sm", className)}>
-      <span className="font-medium">{label}</span>
+    <div className={cn("grid gap-1.5 text-sm", className)}>
+      <div className="flex items-center justify-between">
+        <span className="font-medium">{label}</span>
+        {action}
+      </div>
       {children}
-    </label>
+    </div>
   );
 }

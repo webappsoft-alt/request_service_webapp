@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Banknote,
@@ -27,6 +27,7 @@ import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import {
@@ -47,6 +48,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { getContractor, getVendor } from "@/lib/api/crm-client";
 import {
   contractorAsEmployee,
   crmCustomerName,
@@ -72,6 +74,7 @@ import {
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Estimate, Job, Provider } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
 
 const DIRECTORY_STATUSES: CrmDirectoryStatus[] = ["active", "inactive", "on_stop"];
 const ORDER_STATUSES: PartnerOrder["status"][] = ["open", "received", "billed"];
@@ -107,16 +110,58 @@ export function ContractorDetailView({ id }: { id: string }) {
   const { contractors, customers, remove, updateContractor } = useCrmDirectory();
   const { employees, events, assign, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
-  const contractor = contractors.find((item) => item.id === id);
+  const crm = useCrmApiData();
+  const sliceItems = useAppSelector((state) => state.contractors?.items ?? []);
+  const [fetched, setFetched] = useState<PortalContractor | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTried, setDetailTried] = useState(false);
+  const contractor =
+    (fetched?.id === id ? fetched : null) ??
+    sliceItems.find((item) => item.id === id) ??
+    contractors.find((item) => item.id === id);
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const pending = useCrmRecordPending();
 
+  useEffect(() => {
+    if (!crm.enabled) return;
+    void crm.ensureLoaded();
+  }, [crm.enabled, crm.ensureLoaded]);
+
+  useEffect(() => {
+    setFetched(null);
+    setDetailTried(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (contractor) {
+      setDetailLoading(false);
+      setDetailTried(true);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    void getContractor(id)
+      .then((item) => {
+        if (!cancelled && item) setFetched(item);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDetailLoading(false);
+          setDetailTried(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, contractor]);
+
   if (!contractor) {
+    const loading = detailLoading || (pending && !detailTried);
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">{pending ? "Loading contractor…" : "Contractor not found"}</h1>
-        {!pending ? (
+        <h1 className="text-lg font-semibold">{loading ? "Loading contractor…" : "Contractor not found"}</h1>
+        {!loading ? (
           <Button asChild className="mt-4" size="sm">
             <Link href="/pro/dashboard/contractors">Back to contractors</Link>
           </Button>
@@ -216,7 +261,7 @@ export function ContractorDetailView({ id }: { id: string }) {
               return (
                 <EmployeePayTab
                   employee={asEmployee}
-                  onSave={(_, pay) => updateContractor(contractor.id, { hourlyRate: pay.hourlyRate })}
+                  onSave={(pay) => updateContractor(contractor.id, { hourlyRate: pay.hourlyRate })}
                 />
               );
             case "availability":
@@ -301,14 +346,56 @@ export function VendorDetailView({ id }: { id: string }) {
   const { vendors, customers, remove, updateVendor } = useCrmDirectory();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
-  const vendor = vendors.find((item) => item.id === id);
+  const crm = useCrmApiData();
+  const sliceItems = useAppSelector((state) => state.vendors?.items ?? []);
+  const [fetched, setFetched] = useState<PortalVendor | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTried, setDetailTried] = useState(false);
+  const vendor =
+    (fetched?.id === id ? fetched : null) ??
+    sliceItems.find((item) => item.id === id) ??
+    vendors.find((item) => item.id === id);
   const pending = useCrmRecordPending();
 
+  useEffect(() => {
+    if (!crm.enabled) return;
+    void crm.ensureLoaded();
+  }, [crm.enabled, crm.ensureLoaded]);
+
+  useEffect(() => {
+    setFetched(null);
+    setDetailTried(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (vendor) {
+      setDetailLoading(false);
+      setDetailTried(true);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    void getVendor(id)
+      .then((item) => {
+        if (!cancelled && item) setFetched(item);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDetailLoading(false);
+          setDetailTried(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, vendor]);
+
   if (!vendor) {
+    const loading = detailLoading || (pending && !detailTried);
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">{pending ? "Loading vendor…" : "Vendor not found"}</h1>
-        {!pending ? (
+        <h1 className="text-lg font-semibold">{loading ? "Loading vendor…" : "Vendor not found"}</h1>
+        {!loading ? (
           <Button asChild className="mt-4" size="sm">
             <Link href="/pro/dashboard/vendors">Back to vendors</Link>
           </Button>

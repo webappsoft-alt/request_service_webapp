@@ -21,6 +21,18 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import {
+  clearEstimatesError,
+  fetchEstimates,
+  invalidateEstimatesCache,
+  patchEstimateLocally,
+  removeEstimateLocally,
+  setEstimatesPage,
+  setEstimatesSearch,
+  setEstimatesStatus,
+} from "@/store/estimatesSlice";
 import { queryEstimates } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
@@ -55,79 +67,79 @@ type EstimateRow = Estimate & { customerName: string };
 
 export function EstimatesView() {
   const router = useRouter();
-  const status = useSearchParams().get("status") ?? "";
-  const { session, estimates, provider, requests } = usePortalWorkspace();
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status") ?? "";
+  const { session, provider, requests } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
-  const crm = useCrmApiData();
   const records = usePortalRecords();
   const share = useEstimateShare();
   const [createOpen, setCreateOpen] = useState(false);
-  const [apiItems, setApiItems] = useState<Estimate[]>([]);
-  const [listLoading, setListLoading] = useState(false);
-  const archivedOnly = status === "archived";
-  const useApi = Boolean(crm.enabled && !archivedOnly);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+
+  const slice = useAppSelector((state) => state.estimates);
+  const {
+    items,
+    page,
+    limit,
+    total,
+    totalPages,
+    search,
+    loading,
+    error,
+  } = slice ?? {
+    items: [],
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+    search: "",
+    loading: true,
+    error: null,
+  };
 
   const allRequests = useMemo(() => records.mergeRequests(requests), [records, requests]);
-  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
-
-  const clientRows = useMemo(
-    () =>
-      records
-        .listed("estimate", allEstimates, archivedOnly)
-        .map((item) => ({
-          ...item,
-          status: records.statusOf("estimate", item.id, item.status),
-          customerName: estimateCustomerName(item, customers, allRequests),
-        }))
-        .filter((item) => (archivedOnly || !status ? true : item.status === status)),
-    [allEstimates, allRequests, archivedOnly, customers, records, status],
-  );
-
-  useEffect(() => {
-    if (crm.enabled && !crm.ready) {
-      void crm.ensureLoaded();
-    }
-  }, [crm.enabled, crm.ready, crm.ensureLoaded]);
 
   useEffect(() => {
     if (!useApi) return;
     let cancelled = false;
-    setListLoading(true);
-    void queryEstimates({
-      status: status || undefined,
-      force: true,
-    })
-      .then((result) => {
-        if (!cancelled) {
-          setApiItems(result.items);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        toast.error(
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not load estimates.",
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setListLoading(false);
-      });
+    setActionLoading(true);
+    void dispatch(
+      fetchEstimates({
+        status: statusParam || undefined,
+        force: true,
+      }),
+    ).finally(() => {
+      if (!cancelled) setActionLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [status, useApi]);
+  }, [dispatch, useApi, statusParam, page, search]);
+
+  useEffect(() => {
+    if (!useApi || !error || loading) return;
+    toast.error(error);
+    dispatch(clearEstimatesError());
+  }, [dispatch, error, loading, useApi]);
 
   const rows: EstimateRow[] = useMemo(() => {
-    if (useApi) {
-      return apiItems.map((item) => ({
-        ...item,
-        status: records.statusOf("estimate", item.id, item.status),
-        customerName: estimateCustomerName(item, customers, allRequests),
-      }));
-    }
-    return clientRows;
-  }, [allRequests, apiItems, clientRows, customers, records, useApi]);
+    return items.map((item) => ({
+      ...item,
+      customerName: estimateCustomerName(item, customers, allRequests),
+    }));
+  }, [allRequests, customers, items]);
+
+  const tableLoading =
+    actionLoading || (useApi ? loading && items.length === 0 : false);
+
   return (
     <PortalPage
       eyebrow="Work / Estimates"
@@ -144,14 +156,14 @@ export function EstimatesView() {
         <Field className="w-full max-w-xs gap-1.5">
           <FieldLabel htmlFor="estimates-status-filter">Status</FieldLabel>
           <Select
-            disabled={listLoading}
-            value={status || "__all__"}
+            disabled={tableLoading}
+            value={statusParam || "__all__"}
             onValueChange={(value) => {
               const next = value === "__all__" ? "" : value;
               router.replace(next ? `/pro/dashboard/estimates?status=${next}` : "/pro/dashboard/estimates");
             }}
           >
-            <SelectTrigger id="estimates-status-filter" className="w-full" loading={listLoading}>
+            <SelectTrigger id="estimates-status-filter" className="w-full" loading={tableLoading}>
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent
@@ -172,12 +184,12 @@ export function EstimatesView() {
         filename="estimates"
         countLabel="Estimates"
         searchPlaceholder="Search quotes"
-        loading={listLoading}
+        loading={tableLoading}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
         empty={
-          status && status !== "archived"
+          statusParam && statusParam !== "archived"
             ? "No estimates match this status."
             : "No estimates yet."
         }
@@ -304,6 +316,7 @@ export function EstimatesView() {
               });
               share.saveSnapshot(snapshot);
               records.setStatus("estimate", row.id, "sent");
+              dispatch(patchEstimateLocally({ id: row.id, patch: { status: "sent" } }));
               void navigator.clipboard.writeText(shareUrlFor(snapshot.token));
               toast.success("Customer link copied.");
             },
@@ -320,6 +333,7 @@ export function EstimatesView() {
                   label: "Finalize",
                   onSelect: () => {
                     records.setStatus("estimate", row.id, "finalized");
+                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "finalized" } }));
                     toast.success(`${row.number} finalized.`);
                   },
                 },
@@ -331,6 +345,7 @@ export function EstimatesView() {
                   label: "Mark sent",
                   onSelect: () => {
                     records.setStatus("estimate", row.id, "sent");
+                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "sent" } }));
                     toast.success("Estimate marked sent.");
                   },
                 },
@@ -343,6 +358,7 @@ export function EstimatesView() {
                   label: "Mark accepted",
                   onSelect: () => {
                     records.setStatus("estimate", row.id, "accepted");
+                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "accepted" } }));
                     toast.success("Estimate marked accepted.");
                   },
                 },
@@ -354,6 +370,7 @@ export function EstimatesView() {
                   label: "Mark rejected",
                   onSelect: () => {
                     records.setStatus("estimate", row.id, "rejected");
+                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "rejected" } }));
                     toast.success("Estimate marked rejected.");
                   },
                 },
@@ -368,6 +385,7 @@ export function EstimatesView() {
             variant: "destructive",
             onSelect: () => {
               records.remove("estimate", row.id);
+              dispatch(removeEstimateLocally(row.id));
               toast.success(`${row.number} removed from this board.`);
             },
           },

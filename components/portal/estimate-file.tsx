@@ -104,10 +104,12 @@ export function EstimateSettingsTab({
   estimate,
   job,
   service,
+  onSave,
 }: {
   estimate: Estimate;
   job?: Job;
   service: string;
+  onSave?: (updated: Estimate) => void;
 }) {
   const { customers, loading: customersLoading } = useCrmDirectory();
   const crm = useCrmApiData();
@@ -245,26 +247,31 @@ export function EstimateSettingsTab({
     const chosenCustomer = customers.find((item) => item.id === settingsDraft.customerId);
     const customerName = chosenCustomer ? crmCustomerName(chosenCustomer) : estimate.customerName;
     if (apiReady) {
-      const updated = await updateEstimateSettingsApi(estimate.id, {
-        title: settingsDraft.name.trim(),
+      const updated = await updateEstimateApi(estimate.id, {
+        ...estimate,
+        title: settingsDraft.name.trim() || estimate.title,
         customerId: settingsDraft.customerId,
+        customerName,
         propertyAddress: {
+          ...estimate.propertyAddress,
           street: settingsDraft.street,
           city: settingsDraft.city,
           state: settingsDraft.state,
           zip: settingsDraft.zip,
         },
         issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
-        expiresAt: settingsDraft.expiresAt || null,
+        expiresAt: settingsDraft.expiresAt || undefined,
         status: settingsDraft.status,
         notes: settingsDraft.notes || "",
         terms: settingsDraft.terms || "",
       });
       if (updated) {
         crm.patchEstimate(estimate.id, updated);
+        onSave?.(updated);
       } else {
-        crm.patchEstimate(estimate.id, {
-          title: settingsDraft.name.trim(),
+        const patchedEstimate: Estimate = {
+          ...estimate,
+          title: settingsDraft.name.trim() || estimate.title,
           customerId: settingsDraft.customerId,
           customerName,
           propertyAddress: {
@@ -279,7 +286,12 @@ export function EstimateSettingsTab({
           status: settingsDraft.status,
           notes: settingsDraft.notes || undefined,
           terms: settingsDraft.terms || undefined,
-        });
+        };
+        crm.patchEstimate(estimate.id, patchedEstimate);
+        onSave?.(patchedEstimate);
+      }
+      if (crm.ready) {
+        void crm.refresh({ silent: true });
       }
     } else {
       records.setStatus("estimate", estimate.id, settingsDraft.status);

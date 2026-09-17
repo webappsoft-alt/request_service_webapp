@@ -48,9 +48,11 @@ import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { estimateAsJob, filledWorkLines, invoiceAsJob, buildInvoice, buildJob, linesToEstimateItems, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
-import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, deleteJob as deleteJobApi, finalizeEstimate as finalizeEstimateApi, getEstimate, getJob, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
+import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, deleteJob as deleteJobApi, finalizeEstimate as finalizeEstimateApi, getEstimate, getJob, updateEstimate as updateEstimateApi, updateEstimateSiteVisit } from "@/lib/api/crm-client";
+import { extractErrorMessage, getAuthToken } from "@/components/api/apiFuntions";
 import type { Estimate, Job } from "@/lib/types";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
@@ -87,6 +89,12 @@ import {
 
 export function EstimateDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const isProvider =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
   const crm = useCrmApiData();
   const { session, estimates, provider, jobs } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
@@ -106,7 +114,8 @@ export function EstimateDetailView({ id }: { id: string }) {
   const [fetching, setFetching] = useState(false);
   const [statusOverride, setStatusOverride] = useState<Estimate["status"] | null>(null);
   const listed = records.mergeEstimates(estimates).find((item) => item.id === id);
-  const seeded = listed ?? fetched;
+  // Prioritize live API data fetched from /api/provider/estimates/{id}
+  const seeded = fetched ?? listed;
   const estimate = seeded
     ? applyEstimateSettings(
         {
@@ -129,7 +138,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     : estimate?.customerName?.trim() || "Customer";
 
   const approval = share.approvalOf(id);
-  const apiReady = crm.enabled;
+  const apiReady = isProvider || crm.enabled || (typeof window !== "undefined" && Boolean(getAuthToken()));
   const pending = useCrmRecordPending();
 
   useEffect(() => {
@@ -144,15 +153,21 @@ export function EstimateDetailView({ id }: { id: string }) {
   }, [crm.enabled, crm.ready, crm.ensureLoaded]);
 
   useEffect(() => {
-    if (!id || !crm.enabled) return;
+    if (!id) return;
     let cancelled = false;
     setFetching(true);
     void getEstimate(id)
       .then((item) => {
         if (!cancelled && item) setFetched(item);
       })
-      .catch(() => {
-        if (!cancelled && !listed) setFetched(null);
+      .catch((error) => {
+        if (!cancelled) {
+          toast.error(
+            error instanceof Error && error.message
+              ? error.message
+              : "Could not load estimate.",
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setFetching(false);
@@ -160,7 +175,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [crm.enabled, id]);
+  }, [id]);
 
   if (!estimate) {
     return pending || fetching || crm.refreshing ? (
@@ -208,6 +223,7 @@ export function EstimateDetailView({ id }: { id: string }) {
         setFetched(updated);
       } else {
         crm.patchEstimate(quote.id, { status });
+        setFetched((prev) => (prev ? { ...prev, status } : prev));
       }
     } else {
       records.setStatus("estimate", quote.id, status);
@@ -444,19 +460,32 @@ export function EstimateDetailView({ id }: { id: string }) {
                           : estimate.status;
                       if (apiReady) {
                         try {
-                          const updated = await updateEstimateApi(estimate.id, {
-                            ...estimate,
-                            status: nextStatus,
-                            siteVisit: siteVisitToRecord(visit),
-                          });
+                          const siteVisitRecord = siteVisitToRecord(visit);
+                          const updated = await updateEstimateSiteVisit(
+                            estimate.id,
+                            siteVisitRecord ?? { photos: [] },
+                            nextStatus !== estimate.status ? nextStatus : undefined,
+                          );
                           if (updated) {
                             crm.patchEstimate(estimate.id, updated);
                             setFetched(updated);
                           } else {
                             crm.patchEstimate(estimate.id, {
                               status: nextStatus,
-                              siteVisit: siteVisitToRecord(visit),
+                              siteVisit: siteVisitRecord,
                             });
+                            setFetched((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    status: nextStatus,
+                                    siteVisit: siteVisitRecord,
+                                  }
+                                : prev,
+                            );
+                          }
+                          if (crm.ready) {
+                            void crm.refresh({ silent: true });
                           }
                         } catch (error) {
                           toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
@@ -480,15 +509,23 @@ export function EstimateDetailView({ id }: { id: string }) {
                       const items = linesToEstimateItems(quote.id, filled);
                       writeCostLines(session?.email, quote.id, lines);
                       if (apiReady) {
-                        const updated = await updateEstimateApi(quote.id, {
-                          ...quote,
-                          items,
-                        });
-                        if (updated) {
-                          crm.patchEstimate(quote.id, updated);
-                          setFetched(updated);
-                        } else {
-                          crm.patchEstimate(quote.id, { items });
+                        try {
+                          const updated = await updateEstimateApi(quote.id, {
+                            ...quote,
+                            items,
+                          });
+                          if (updated) {
+                            crm.patchEstimate(quote.id, updated);
+                            setFetched(updated);
+                          } else {
+                            crm.patchEstimate(quote.id, { items });
+                          }
+                          if (crm.ready) {
+                            void crm.refresh({ silent: true });
+                          }
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Could not save line items to server.");
+                          throw error;
                         }
                       }
                     }}
@@ -514,7 +551,16 @@ export function EstimateDetailView({ id }: { id: string }) {
               case "attachments":
                 return <JobAttachmentsTab job={asJob} estimate={estimate} technician="" noun="estimate" />;
               case "settings":
-                return <EstimateSettingsTab estimate={estimate} job={job} service={service} />;
+                return (
+                  <EstimateSettingsTab
+                    estimate={estimate}
+                    job={job}
+                    service={service}
+                    onSave={(updated) => {
+                      setFetched(updated);
+                    }}
+                  />
+                );
               default:
                 return <JobSummaryTab job={asJob} estimate={estimate} technician="" noun="estimate" />;
             }

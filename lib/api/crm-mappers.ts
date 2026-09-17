@@ -8,6 +8,12 @@ import type {
 import type {
   PortalCalendarEvent,
   PortalEmployee,
+  PortalEmployeeActiveAssignments,
+  PortalEmployeeAssignmentJob,
+  PortalEmployeeAssignmentSchedule,
+  PortalEmployeeAssignmentTask,
+  PortalEmployeeDetail,
+  PortalEmployeeWorkingHours,
   PortalEventKind,
   PortalRequest,
   PortalTimeWindow,
@@ -284,6 +290,7 @@ function getEntityPayload(response: unknown): unknown {
     const dataRec = asRecord(data);
     if (dataRec?.estimate !== undefined) return dataRec.estimate;
     if (dataRec?.customer !== undefined) return dataRec.customer;
+    if (dataRec?.employee !== undefined) return dataRec.employee;
     if (dataRec?.job !== undefined) return dataRec.job;
     if (dataRec?.invoice !== undefined) return dataRec.invoice;
     return data;
@@ -512,6 +519,35 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
   };
 }
 
+const EMPLOYEE_WORKING_DAYS: PortalEmployeeWorkingHours["day"][] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+function mapEmployeeWorkingHours(raw: unknown): PortalEmployeeWorkingHours[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((entry): PortalEmployeeWorkingHours | null => {
+      const record = asRecord(entry);
+      if (!record) return null;
+      const day = trimmed(record.day).toLowerCase() as PortalEmployeeWorkingHours["day"];
+      if (!EMPLOYEE_WORKING_DAYS.includes(day)) return null;
+      return {
+        day,
+        startMinutes: numberValue(record.startMinutes, 480),
+        endMinutes: numberValue(record.endMinutes, 1020),
+        active: booleanValue(record.active, true),
+      };
+    })
+    .filter((item): item is PortalEmployeeWorkingHours => Boolean(item));
+  return items.length ? items : undefined;
+}
+
 export function mapPortalEmployee(raw: unknown): PortalEmployee | null {
   const record = asRecord(raw);
   if (!record) return null;
@@ -541,6 +577,73 @@ export function mapPortalEmployee(raw: unknown): PortalEmployee | null {
     hireDate: toIsoString(record.hireDate) || undefined,
     emergencyName: trimmed(record.emergencyName) || undefined,
     emergencyPhone: trimmed(record.emergencyPhone) || undefined,
+    workingHours: mapEmployeeWorkingHours(record.workingHours),
+  };
+}
+
+function mapEmployeeAssignmentJob(raw: unknown): PortalEmployeeAssignmentJob | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = crmIdOf(record);
+  if (!id) return null;
+  return {
+    id,
+    number: trimmed(record.number),
+    title: trimmed(record.title),
+    status: trimmed(record.status),
+  };
+}
+
+function mapEmployeeAssignmentTask(raw: unknown): PortalEmployeeAssignmentTask | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = crmIdOf(record);
+  if (!id) return null;
+  return {
+    id,
+    number: trimmed(record.number) || undefined,
+    title: trimmed(record.title) || undefined,
+    status: trimmed(record.status) || undefined,
+    dueAt: toIsoString(record.dueAt) || undefined,
+  };
+}
+
+function mapEmployeeAssignmentSchedule(raw: unknown): PortalEmployeeAssignmentSchedule | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = crmIdOf(record);
+  if (!id) return null;
+  return {
+    id,
+    title: trimmed(record.title),
+    date: toIsoString(record.date) || trimmed(record.date),
+    startMinutes: numberValue(record.startMinutes, 0),
+    endMinutes: numberValue(record.endMinutes, 0),
+    status: trimmed(record.status),
+  };
+}
+
+export function mapEmployeeActiveAssignments(raw: unknown): PortalEmployeeActiveAssignments {
+  const record = asRecord(raw) ?? {};
+  return {
+    jobs: asArray(record.jobs).map(mapEmployeeAssignmentJob).filter((item): item is PortalEmployeeAssignmentJob => Boolean(item)),
+    tasks: asArray(record.tasks).map(mapEmployeeAssignmentTask).filter((item): item is PortalEmployeeAssignmentTask => Boolean(item)),
+    schedule: asArray(record.schedule)
+      .map(mapEmployeeAssignmentSchedule)
+      .filter((item): item is PortalEmployeeAssignmentSchedule => Boolean(item)),
+  };
+}
+
+/** GET /api/provider/team/:id — nested employee + activeAssignments. */
+export function mapEmployeeDetail(response: unknown): PortalEmployeeDetail | null {
+  const root = asRecord(response) ?? {};
+  const data = asRecord(root.data) ?? root;
+  const employeeRaw = data.employee ?? data;
+  const employee = mapPortalEmployee(employeeRaw);
+  if (!employee) return null;
+  return {
+    employee,
+    activeAssignments: mapEmployeeActiveAssignments(data.activeAssignments),
   };
 }
 

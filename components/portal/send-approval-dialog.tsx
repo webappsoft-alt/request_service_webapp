@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { EstimatePdfDocument, SignaturePadField, typedSignature, useSignPad } from "@/components/estimate/estimate-pdf";
 import { buildEstimateSnapshot, shareUrlFor, useEstimateShare } from "@/components/portal/use-estimate-share";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
@@ -102,7 +103,7 @@ export function SendApprovalDialog({
                   crm.patchEstimate(estimate.id, { status: "sent" });
                   const next = { ...signed, token };
                   share.saveSnapshot(next);
-                  const url = shared.absoluteShareUrl || shareUrlFor(token);
+                  const url = shareUrlFor(token);
                   onSent({ viaApi, token, url, href: url });
                   void navigator.clipboard.writeText(url);
                   if (shared.emailSent) {
@@ -129,7 +130,7 @@ export function SendApprovalDialog({
                 toast.success("Estimate sent for approval. Customer link copied.");
                 onOpenChange(false);
               } catch (error) {
-                toast.error(error instanceof Error ? error.message : "Could not send this estimate.");
+                toast.error(extractErrorMessage(error) || "Could not send this estimate.");
               }
             }}
           />
@@ -163,7 +164,7 @@ function ApprovalPreview({
       <div className="max-h-[68vh] overflow-y-auto bg-[#eef1f5] px-4 py-5">
         <EstimatePdfDocument
           snapshot={snapshot}
-          companySlot={<SignaturePadField name={signer} onName={setSigner} pad={companyPad} />}
+          companySlot={<SignaturePadField name={signer} onName={setSigner} pad={companyPad} showNameInput />}
         />
       </div>
       <DialogFooter className="m-0 rounded-none">

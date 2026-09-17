@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { archiveRowAction } from "@/components/portal/archive-control";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
 import { buildEstimateSnapshot } from "@/components/portal/share-estimate-panel";
@@ -98,11 +99,7 @@ export function EstimatesView() {
       })
       .catch((error) => {
         if (cancelled) return;
-        toast.error(
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not load estimates.",
-        );
+        toast.error(extractErrorMessage(error) || "Could not load estimates.");
       })
       .finally(() => {
         if (!cancelled) setListLoading(false);
@@ -483,7 +480,7 @@ export function JobsView() {
                   toast.success(`${row.number} deleted. The source estimate can be converted again.`);
                 })
                 .catch((error) => {
-                  toast.error(error instanceof Error ? error.message : "Could not delete this job.");
+                  toast.error(extractErrorMessage(error) || "Could not delete this job.");
                 });
             },
           },

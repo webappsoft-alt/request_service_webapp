@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -41,7 +42,7 @@ export function ScheduleView() {
         }
       })
       .catch((error) => {
-        toast.error(error instanceof Error ? error.message : "Could not move this calendar item.");
+        toast.error(extractErrorMessage(error) || "Could not move this calendar item.");
       });
   }
 
@@ -64,7 +65,7 @@ export function ScheduleView() {
                   })
                   .catch((error) => {
                     toast.error(
-                      error instanceof Error ? error.message : "Could not remove this schedule item.",
+                      extractErrorMessage(error) || "Could not remove this schedule item.",
                     );
                   });
               }}

@@ -1,4 +1,4 @@
-import { getData, postData, putData, patchData, deleteData, invalidateGetCache } from "@/components/api/apiFuntions";
+import { getData, postData, putData, patchData, deleteData } from "@/components/api/apiFuntions";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 import type {
   PortalContractor,
@@ -7,8 +7,8 @@ import type {
   PortalTask,
   PortalVendor,
 } from "@/lib/data/crm-people";
-import { employeeName, type PortalEmployee, type PortalEventKind, type PortalRequest, type PortalTimeWindow } from "@/lib/data/portal";
-import type { Estimate, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
+import { employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEventKind, type PortalRequest, type PortalTimeWindow } from "@/lib/data/portal";
+import type { Estimate, EstimateItem, EstimateItemType, EstimateSiteVisitRecord, EstimateStatus, Invoice, InvoiceItem, Job, JobItem, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
   mapCrmEntity,
@@ -30,10 +30,21 @@ import {
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
 import { mapChatThread } from "@/lib/api/crm-mappers";
-import type { ChatThread } from "@/lib/booking/chat-store";
+import type { ChatAttachment, ChatThread } from "@/lib/booking/chat-store";
 
-type CrmRequestOptions = {
+export type CrmRequestOptions = {
   silent?: boolean;
+  force?: boolean;
+};
+
+export type CrmListQuery = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  customerId?: string;
+  silent?: boolean;
+  force?: boolean;
 };
 
 export type CrmSnapshot = {
@@ -48,219 +59,147 @@ export type CrmSnapshot = {
   reminders: PortalReminder[];
   invoices: Invoice[];
   payments: Payment[];
-  schedule: ReturnType<typeof mapScheduleEvent>[];
+  schedule: PortalCalendarEvent[];
   chats: ChatThread[];
   inboxSummary: CrmInboxSummary;
 };
 
-export type CrmScheduleStatus =
-  | "scheduled"
-  | "confirmed"
-  | "in_progress"
-  | "completed"
-  | "cancelled";
-
-export type CrmScheduleAssignment = {
-  recordId?: string | null;
-  kind: PortalEventKind;
-  title: string;
-  date: string;
-  endDate?: string | null;
-  startMinutes: number;
-  endMinutes: number;
-  timeWindow: PortalTimeWindow | "custom";
-  employeeId?: string | null;
-  contractorId?: string | null;
-  status?: CrmScheduleStatus;
-};
-
-export type CrmEstimateShareResult = {
-  estimateId: string;
-  shareToken: string;
-  shareUrl: string;
-  absoluteShareUrl?: string;
-  status: string;
-  emailSent?: boolean;
-  emailTo?: string | null;
-  emailSkippedReason?: string | null;
-  emailError?: string | null;
-};
-
 const DEFAULT_LIST_LIMIT = 100;
 
-function normalizePreferredTimeWindow(value?: string) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (raw.startsWith("after")) return "afternoon";
-  if (raw.startsWith("eve")) return "afternoon";
-  if (raw.startsWith("all")) return "all_day";
-  if (raw.startsWith("flex")) return "all_day";
-  return "morning";
-}
-
 function normalizeStatus<T extends string>(
-  value: string | undefined,
+  value: unknown,
   allowed: readonly T[],
   fallback: T,
 ): T {
-  return allowed.includes(value as T) ? (value as T) : fallback;
+  if (typeof value === "string" && allowed.includes(value as T)) {
+    return value as T;
+  }
+  return fallback;
 }
 
-function mapAddressForApi(address?: ServiceAddress | null) {
-  return address
-    ? {
-        label: address.label || "Primary",
-        street: address.street,
-        unit: address.unit || "",
-        city: address.city,
-        state: address.state,
-        zip: address.zip,
-      }
-    : undefined;
+function mapAddressForApi(address?: ServiceAddress) {
+  if (!address) return undefined;
+  return {
+    street: address.street || "",
+    city: address.city || "",
+    state: address.state || "",
+    zip: address.zip || "",
+    unit: address.unit || "",
+  };
 }
 
-function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
-  return items
-    .filter((item) => String(item.description || "").trim())
-    .map((item) => {
-      const quantity = Math.max(minQuantity, Number(item.quantity) || 1);
-      const unitPrice = Math.max(0, Number(item.unitPrice) || 0);
-      const taxRate = Math.max(0, Number(item.taxRate) || 0);
-      return {
-        id: item.id,
-        description: String(item.description).trim(),
-        kind: item.type === "materials" ? "material" : "labor",
-        unit: item.unit || (item.type === "labor" ? "hr" : "ea"),
-        quantity,
-        unitPrice,
-        taxRate,
-        total: Number(item.total) || quantity * unitPrice,
-      };
-    });
-}
-
-function jobItemsToApi(items: Job["items"]) {
-  return items.map((item) => ({
-    id: item.id,
-    description: item.description,
-    kind: item.source === "change_order" ? "material" : /labor/i.test(item.description) ? "labor" : "material",
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    taxRate: 0,
-    total: item.total,
-  }));
-}
-
-function invoiceItemsToApi(items: Invoice["items"]) {
-  return items.map((item) => ({
-    id: item.id,
-    description: item.description,
-    kind:
-      item.source === "change_order"
-        ? "fee"
-        : item.source === "adjustment"
-          ? "discount"
-          : /material/i.test(item.description)
-            ? "material"
-            : "labor",
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    taxRate: 0,
-    total: item.total,
-  }));
-}
-
-function resolveAssignedEmployeeIds(job: Job, employees: PortalEmployee[]) {
+function resolveAssignedEmployeeIds(job: Job, employees: PortalEmployee[]): string[] {
   if (!job.assignedTo) return [];
-  const normalized = job.assignedTo.trim().toLowerCase();
-  return employees
-    .filter((employee) => employeeName(employee).trim().toLowerCase() === normalized)
-    .map((employee) => employee.id);
+  const directMatch = employees.find((emp) => emp.id === job.assignedTo);
+  if (directMatch) return [directMatch.id];
+  const nameMatch = employees.find((emp) => employeeName(emp).toLowerCase() === job.assignedTo?.toLowerCase());
+  if (nameMatch) return [nameMatch.id];
+  return [job.assignedTo];
 }
 
 function customerPayload(customer: PortalCustomerCrm) {
+  const addresses = (customer.addresses || []).map((addr) => mapAddressForApi(addr)).filter(Boolean);
   return {
-    entityKind: customer.entityKind,
-    customerType: customer.customerType,
-    firstName: customer.firstName,
-    lastName: customer.lastName,
+    firstName: customer.firstName || "",
+    lastName: customer.lastName || "",
     companyName: customer.companyName || "",
-    email: customer.email,
+    email: customer.email || "",
     phone: customer.phone || "",
-    altPhone: customer.altPhone || "",
-    source: customer.source,
-    creditLimit: customer.creditLimit,
-    onStop: customer.onStop,
-    membership: customer.membership,
-    taxCode: customer.taxCode,
-    notes: customer.notes,
-    linkedUserId: customer.userId.startsWith("user_") ? null : customer.userId,
-    serviceAddresses: customer.addresses.map((address) => mapAddressForApi(address)).filter(Boolean),
+    notes: customer.notes || "",
+    addresses,
+    address: addresses[0] || undefined,
   };
 }
 
-function contractorPayload(contractor: PortalContractor | Partial<PortalContractor>) {
+function employeePayload(employee: PortalEmployee) {
   return {
-    firstName: contractor.firstName || "",
-    lastName: contractor.lastName || "",
+    name: employee.name || "",
+    firstName: employee.name?.split(" ")[0] || "",
+    lastName: employee.name?.split(" ").slice(1).join(" ") || "",
+    email: employee.email || "",
+    phone: employee.phone || "",
+    role: employee.role || "technician",
+    active: employee.active ?? true,
+    color: employee.color || "#003F7D",
+  };
+}
+
+function contractorPayload(contractor: PortalContractor) {
+  return {
     companyName: contractor.companyName || "",
+    contactName: contractor.contactName || "",
+    trade: contractor.trade || "",
     email: contractor.email || "",
     phone: contractor.phone || "",
-    city: contractor.city || "",
-    state: contractor.state || "",
-    zip: contractor.zip || "",
-    trade: contractor.trade || "",
-    license: contractor.license || "",
-    status: contractor.status || "active",
     hourlyRate: contractor.hourlyRate ?? 0,
-    insuranceExpires: contractor.insuranceExpires || new Date().toISOString(),
+    rating: contractor.rating ?? 5,
+    notes: contractor.notes || "",
   };
 }
 
-function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
+function vendorPayload(vendor: PortalVendor) {
   return {
-    name: vendor.name || "",
+    companyName: vendor.companyName || "",
+    contactName: vendor.contactName || "",
     category: vendor.category || "",
-    contact: vendor.contact || "",
-    email: vendor.email || "",
-    phone: vendor.phone || "",
-    city: vendor.city || "",
-    state: vendor.state || "",
     accountNumber: vendor.accountNumber || "",
-    terms: vendor.terms || "Net 30",
-    balance: vendor.balance ?? 0,
-    status: vendor.status || "active",
+    phone: vendor.phone || "",
+    email: vendor.email || "",
+    website: vendor.website || "",
+    notes: vendor.notes || "",
   };
 }
 
 function requestPayload(request: PortalRequest) {
   return {
-    customerId: request.customerId,
-    categoryId: request.categoryId || null,
-    serviceName: request.serviceName,
-    channel: request.channel,
-    zip: request.zip,
-    city: request.city || "",
-    state: request.state || "",
-    details: request.details,
-    preferredDate: request.preferredDate || null,
-    preferredTimeWindow: normalizePreferredTimeWindow(request.preferredTimeWindow),
-    status: request.status,
-    photos: request.photoUrls,
-    answers: request.answers ?? [],
+    customerId: request.customerId || null,
+    customerName: request.customerName || "",
+    phone: request.phone || "",
+    email: request.email || "",
+    serviceAddress: mapAddressForApi(request.serviceAddress),
+    categoryName: request.categoryName || "",
+    serviceName: request.serviceName || "",
+    requestedScope: request.requestedScope || "",
+    preferredDate: request.preferredDate || "",
+    preferredTimeWindow: request.preferredTimeWindow || "All day",
+    status: request.status || "new",
   };
 }
 
-function siteVisitPayload(visit?: Estimate["siteVisit"]) {
-  if (!visit) return undefined;
+function estimateItemsToApi(items?: EstimateItem[], minItems = 0) {
+  const list = items || [];
+  const mapped = list.map((item) => ({
+    description: item.description || "",
+    kind: item.type || "labor",
+    quantity: Math.max(0, item.quantity ?? 1),
+    unit: item.unit || "ea",
+    unitPrice: item.unitPrice ?? 0,
+    cost: item.total ?? (item.quantity ?? 1) * (item.unitPrice ?? 0),
+  }));
+  while (mapped.length < minItems) {
+    mapped.push({
+      description: "Service",
+      kind: "labor",
+      quantity: 1,
+      unit: "ea",
+      unitPrice: 0,
+      cost: 0,
+    });
+  }
+  return mapped;
+}
+
+function siteVisitPayload(siteVisit?: EstimateSiteVisitRecord) {
+  if (!siteVisit) return undefined;
   return {
-    employeeId: visit.employeeId || "",
-    technician: visit.technician || "",
-    visitedAt: visit.visitedAt || "",
-    accessNotes: visit.accessNotes || "",
-    findings: visit.findings || "",
-    recommendations: visit.recommendations || "",
-    measurements: visit.measurements || "",
-    photos: (visit.photos ?? []).map((photo) => ({
+    employeeId: siteVisit.employeeId || null,
+    technician: siteVisit.technician || "",
+    visitedAt: siteVisit.visitedAt || "",
+    accessNotes: siteVisit.accessNotes || "",
+    findings: siteVisit.findings || "",
+    recommendations: siteVisit.recommendations || "",
+    measurements: siteVisit.measurements || "",
+    photos: (siteVisit.photos || []).map((photo) => ({
       id: photo.id,
       name: photo.name,
       type: photo.type,
@@ -321,6 +260,17 @@ function estimatePayload(estimate: Estimate) {
   };
 }
 
+function jobItemsToApi(items?: JobItem[]) {
+  return (items || []).map((item) => ({
+    description: item.description || "",
+    source: item.source || "estimate",
+    quantity: Math.max(0, item.quantity ?? 1),
+    unit: item.unit || "ea",
+    unitPrice: item.unitPrice ?? 0,
+    total: item.total ?? (item.quantity ?? 1) * (item.unitPrice ?? 0),
+  }));
+}
+
 function jobPayload(job: Job, employees: PortalEmployee[]) {
   return {
     customerId: job.customerId,
@@ -333,7 +283,7 @@ function jobPayload(job: Job, employees: PortalEmployee[]) {
     dueAt: job.dueAt || null,
     notes: job.notes || "",
     items: jobItemsToApi(job.items),
-    attachments: [],
+    attachments: (job.attachments || []).map((url) => String(url || "").trim()).filter(Boolean),
   };
 }
 
@@ -342,75 +292,90 @@ function reminderPayload(reminder: PortalReminder) {
     customerId: reminder.customerId || null,
     subjectKind: reminder.subjectKind || "customer",
     subjectId: reminder.subjectId || null,
-    assignedEmployeeId: reminder.assignedEmployeeId || null,
-    title: reminder.title,
+    title: reminder.title || "",
     note: reminder.note || "",
-    dueAt: reminder.dueAt,
-    status: reminder.status,
+    dueAt: reminder.dueAt || "",
+    assignedEmployeeId: reminder.assignedEmployeeId || null,
+    status: reminder.status || "open",
   };
 }
 
 function taskPayload(task: PortalTask) {
-  const subjectKind = normalizeStatus(task.subjectKind, [
-    "job",
-    "customer",
-    "estimate",
-    "contractor",
-    "vendor",
-  ] as const, "customer");
   return {
+    title: task.title || "",
+    note: task.note || "",
     customerId: task.customerId || null,
-    subjectKind,
+    subjectKind: task.subjectKind || "customer",
     subjectId: task.subjectId || null,
     assignedEmployeeId: task.assignedEmployeeId || null,
-    title: task.title,
-    note: task.note || "",
-    priority: task.priority,
-    status: task.status,
+    priority: task.priority || "normal",
+    status: task.status || "open",
     dueAt: task.dueAt || null,
   };
+}
+
+function invoiceItemsToApi(items?: InvoiceItem[]) {
+  return (items || []).map((item) => ({
+    description: item.description || "",
+    kind: item.source === "adjustment" ? "fee" : "service",
+    quantity: Math.max(0, item.quantity ?? 1),
+    unitPrice: item.unitPrice ?? 0,
+    total: item.total ?? (item.quantity ?? 1) * (item.unitPrice ?? 0),
+  }));
 }
 
 function invoicePayload(invoice: Invoice) {
   return {
     customerId: invoice.customerId,
     jobId: invoice.jobId || null,
-    status: invoice.status,
     issuedAt: invoice.issuedAt,
-    dueAt: invoice.dueAt || undefined,
+    dueAt: invoice.dueAt || null,
+    status: invoice.status || "draft",
     items: invoiceItemsToApi(invoice.items),
-    discount: invoice.discount,
     notes: "",
     terms: "",
   };
 }
 
+function paymentPayload(payment: Payment) {
+  return {
+    invoiceId: payment.invoiceId,
+    amount: payment.amount,
+    method: payment.method,
+    paidAt: payment.paidAt || new Date().toISOString(),
+    status: payment.status || "succeeded",
+  };
+}
+
+function schedulePayload(event: PortalCalendarEvent) {
+  return {
+    kind: event.kind,
+    recordId: event.recordId,
+    title: event.title,
+    detail: event.detail,
+    date: event.date,
+    endDate: event.endDate || event.date,
+    timeWindow: event.timeWindow || "all_day",
+    startMinutes: event.startMinutes ?? null,
+    endMinutes: event.endMinutes ?? null,
+    employeeId: event.employeeId || null,
+  };
+}
+
 async function listMapped<T>(
-  endpoint: string,
+  path: string,
   mapper: (value: unknown) => T | null,
-  options: CrmRequestOptions = {},
-) {
-  const response = await getData(endpoint, { page: 1, limit: DEFAULT_LIST_LIMIT }, {
-    silent: options.silent ?? true,
+  options?: CrmRequestOptions,
+): Promise<T[]> {
+  const response = await getData(path, { limit: DEFAULT_LIST_LIMIT }, {
+    silent: options?.silent ?? true,
+    force: options?.force ?? false,
   });
   return mapCrmList(response, mapper).items;
 }
 
-export type CrmListQuery = {
-  page?: number;
-  limit?: number;
-  search?: string;
-  status?: string;
-  customerId?: string;
-  silent?: boolean;
-  force?: boolean;
-};
+// ---------------- CUSTOMERS ----------------
 
-export async function listCustomers(options?: CrmRequestOptions) {
-  return listMapped(providerCrmApi.customers, mapPortalCustomerCrm, options);
-}
-
-/** Paginated customers list — supports `search` for the A–Z bar and search box. */
 export async function queryCustomers(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -424,35 +389,22 @@ export async function queryCustomers(query: CrmListQuery = {}) {
   return mapCrmList(response, mapPortalCustomerCrm);
 }
 
+export async function listCustomers(options?: CrmRequestOptions) {
+  return listMapped(providerCrmApi.customers, mapPortalCustomerCrm, options);
+}
+
+export async function getCustomer(id: string) {
+  const response = await getData(providerCrmApi.customer(id), undefined, { silent: true, force: true });
+  return mapCrmEntity(response, mapPortalCustomerCrm);
+}
+
 export async function createCustomer(customer: PortalCustomerCrm) {
   const response = await postData(providerCrmApi.customers, customerPayload(customer));
   return mapCrmEntity(response, mapPortalCustomerCrm);
 }
 
-export async function updateCustomer(id: string, customer: PortalCustomerCrm | Partial<PortalCustomerCrm>) {
-  const full = customer as PortalCustomerCrm;
-  const hasAddresses = Array.isArray(full.addresses);
-  const payload: Record<string, unknown> = {};
-  if (full.entityKind !== undefined) payload.entityKind = full.entityKind;
-  if (full.customerType !== undefined) payload.customerType = full.customerType;
-  if (full.firstName !== undefined) payload.firstName = full.firstName;
-  if (full.lastName !== undefined) payload.lastName = full.lastName;
-  if (full.companyName !== undefined) payload.companyName = full.companyName || "";
-  if (full.email !== undefined) payload.email = full.email;
-  if (full.phone !== undefined) payload.phone = full.phone || "";
-  if (full.altPhone !== undefined) payload.altPhone = full.altPhone || "";
-  if (full.source !== undefined) payload.source = full.source;
-  if (full.creditLimit !== undefined) payload.creditLimit = full.creditLimit;
-  if (full.onStop !== undefined) payload.onStop = full.onStop;
-  if (full.membership !== undefined) payload.membership = full.membership;
-  if (full.taxCode !== undefined) payload.taxCode = full.taxCode;
-  if (full.notes !== undefined) payload.notes = full.notes;
-  if (hasAddresses) {
-    payload.serviceAddresses = full.addresses
-      .map((address) => mapAddressForApi(address))
-      .filter(Boolean);
-  }
-  const response = await putData(providerCrmApi.customer(id), payload);
+export async function updateCustomer(id: string, customer: PortalCustomerCrm) {
+  const response = await putData(providerCrmApi.customer(id), customerPayload(customer));
   return mapCrmEntity(response, mapPortalCustomerCrm);
 }
 
@@ -460,34 +412,22 @@ export async function archiveCustomer(id: string) {
   return deleteData(providerCrmApi.customer(id), { silent: false });
 }
 
-function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
-  return {
-    firstName: employee.firstName || "",
-    lastName: employee.lastName || "",
-    email: employee.email || "",
-    phone: employee.phone || "",
-    role: employee.role || "technician",
-    trade: employee.trade || "",
-    active: employee.active ?? true,
-    hourlyRate: employee.hourlyRate ?? 0,
-    overtimeRate: employee.overtimeRate ?? 0,
-    travelRate: employee.travelRate ?? 0,
-    hireDate: employee.hireDate || undefined,
-    emergencyName: employee.emergencyName || "",
-    emergencyPhone: employee.emergencyPhone || "",
-  };
+export async function deleteCustomer(id: string) {
+  return deleteData(providerCrmApi.customer(id), { silent: false });
 }
+
+// ---------------- EMPLOYEES ----------------
 
 export async function listEmployees(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.team, mapPortalEmployee, options);
 }
 
-export async function createEmployee(employee: PortalEmployee | Parameters<typeof employeePayload>[0]) {
+export async function createEmployee(employee: PortalEmployee) {
   const response = await postData(providerCrmApi.team, employeePayload(employee));
   return mapCrmEntity(response, mapPortalEmployee);
 }
 
-export async function updateEmployee(id: string, employee: Partial<PortalEmployee>) {
+export async function updateEmployee(id: string, employee: PortalEmployee) {
   const response = await putData(providerCrmApi.teamMember(id), employeePayload(employee));
   return mapCrmEntity(response, mapPortalEmployee);
 }
@@ -495,6 +435,8 @@ export async function updateEmployee(id: string, employee: Partial<PortalEmploye
 export async function deleteEmployee(id: string) {
   return deleteData(providerCrmApi.teamMember(id), { silent: false });
 }
+
+// ---------------- CONTRACTORS ----------------
 
 export async function listContractors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.contractors, mapPortalContractor, options);
@@ -505,14 +447,16 @@ export async function createContractor(contractor: PortalContractor) {
   return mapCrmEntity(response, mapPortalContractor);
 }
 
-export async function updateContractor(id: string, patch: Partial<PortalContractor>) {
-  const response = await putData(providerCrmApi.contractor(id), contractorPayload(patch));
+export async function updateContractor(id: string, contractor: PortalContractor) {
+  const response = await putData(providerCrmApi.contractor(id), contractorPayload(contractor));
   return mapCrmEntity(response, mapPortalContractor);
 }
 
 export async function deleteContractor(id: string) {
   return deleteData(providerCrmApi.contractor(id), { silent: false });
 }
+
+// ---------------- VENDORS ----------------
 
 export async function listVendors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.vendors, mapPortalVendor, options);
@@ -523,14 +467,16 @@ export async function createVendor(vendor: PortalVendor) {
   return mapCrmEntity(response, mapPortalVendor);
 }
 
-export async function updateVendor(id: string, patch: Partial<PortalVendor>) {
-  const response = await putData(providerCrmApi.vendor(id), vendorPayload(patch));
+export async function updateVendor(id: string, vendor: PortalVendor) {
+  const response = await putData(providerCrmApi.vendor(id), vendorPayload(vendor));
   return mapCrmEntity(response, mapPortalVendor);
 }
 
 export async function deleteVendor(id: string) {
   return deleteData(providerCrmApi.vendor(id), { silent: false });
 }
+
+// ---------------- REQUESTS ----------------
 
 export async function listRequests(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.requests, mapPortalRequest, options);
@@ -546,11 +492,12 @@ export async function updateRequestStatus(id: string, status: PortalRequest["sta
   return mapCrmEntity(response, mapPortalRequest);
 }
 
+// ---------------- ESTIMATES ----------------
+
 export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
 }
 
-/** Paginated estimates list — supports `status`, `customerId`, and `search`. */
 export async function queryEstimates(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -583,7 +530,7 @@ export async function getEstimate(id: string) {
 }
 
 export async function updateEstimate(id: string, estimate: Estimate) {
-  const response = await putData(providerCrmApi.estimate(id), estimatePayload(estimate));
+  const response = await putData(providerCrmApi.estimate(id), estimatePayload(estimate), { silent: true });
   return mapCrmEntity(response, mapEstimate);
 }
 
@@ -623,7 +570,18 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
   if (settings.notes !== undefined) payload.notes = settings.notes;
   if (settings.terms !== undefined) payload.terms = settings.terms;
 
-  const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
+  const response = await putData(providerCrmApi.estimate(id), payload, { silent: true });
+  return mapCrmEntity(response, mapEstimate);
+}
+
+export async function updateEstimateAttachments(
+  id: string,
+  attachments: Array<{ name?: string; attachment?: string; url?: string; dataUrl?: string } | string>,
+) {
+  const payload = {
+    attachments: estimateAttachmentsToApi(attachments),
+  };
+  const response = await putData(providerCrmApi.estimate(id), payload, { silent: true });
   return mapCrmEntity(response, mapEstimate);
 }
 
@@ -654,55 +612,50 @@ export async function finalizeEstimate(id: string, estimate?: Estimate) {
   }
 }
 
+export type CrmEstimateShareResult = {
+  estimateId: string;
+  shareToken: string;
+  shareUrl: string;
+  status?: string;
+  emailSent?: boolean;
+  emailTo?: string;
+  emailSkippedReason?: string;
+  emailError?: string;
+};
+
 export async function shareEstimate(id: string) {
   const response = await postData(providerCrmApi.estimateShare(id), undefined, { silent: false });
-  const payload = ((response as { data?: unknown })?.data ?? response) as Partial<CrmEstimateShareResult>;
+  const payload = ((response as { data?: unknown })?.data ?? response) as Partial<CrmEstimateShareResult> & {
+    token?: string;
+    url?: string;
+  };
+  const token = String(payload.shareToken || payload.token || "");
   return {
     estimateId: String(payload.estimateId ?? id),
-    shareToken: String(payload.shareToken ?? ""),
-    shareUrl: String(payload.shareUrl ?? ""),
-    absoluteShareUrl: payload.absoluteShareUrl
-      ? String(payload.absoluteShareUrl)
-      : undefined,
-    status: String(payload.status ?? ""),
-    emailSent: Boolean(payload.emailSent),
-    emailTo: payload.emailTo == null ? null : String(payload.emailTo),
-    emailSkippedReason: payload.emailSkippedReason
-      ? String(payload.emailSkippedReason)
-      : null,
-    emailError: payload.emailError ? String(payload.emailError) : null,
-  } satisfies CrmEstimateShareResult;
+    shareToken: token,
+    shareUrl: String(payload.shareUrl || payload.url || ""),
+    status: payload.status,
+    emailSent: payload.emailSent,
+    emailTo: payload.emailTo,
+    emailSkippedReason: payload.emailSkippedReason,
+    emailError: payload.emailError,
+  };
 }
 
-export async function convertEstimateToJob(
-  id: string,
-  extras?: Pick<Estimate, "items" | "title" | "siteVisit">,
-) {
-  const response = await postData(
-    providerCrmApi.estimateConvertToJob(id),
-    extras
-      ? {
-          title: extras.title || undefined,
-          items: extras.items ? estimateItemsToApi(extras.items) : undefined,
-          siteVisit: extras.siteVisit ? siteVisitPayload(extras.siteVisit) : undefined,
-        }
-      : undefined,
-    { silent: false },
-  );
+export async function convertEstimateToJob(id: string) {
+  const response = await postData(providerCrmApi.estimateConvertToJob(id), undefined, { silent: false });
   return mapCrmEntity(response, mapJob);
+}
+
+// ---------------- JOBS ----------------
+
+export async function listJobs(options?: CrmRequestOptions) {
+  return listMapped(providerCrmApi.jobs, mapJob, options);
 }
 
 export async function getJob(id: string) {
   const response = await getData(providerCrmApi.job(id), undefined, { silent: true, force: true });
   return mapCrmEntity(response, mapJob);
-}
-
-export async function deleteJob(id: string) {
-  return deleteData(providerCrmApi.job(id), { silent: false });
-}
-
-export async function listJobs(options?: CrmRequestOptions) {
-  return listMapped(providerCrmApi.jobs, mapJob, options);
 }
 
 export async function createJob(job: Job, employees: PortalEmployee[]) {
@@ -715,15 +668,21 @@ export async function updateJob(id: string, job: Job, employees: PortalEmployee[
   return mapCrmEntity(response, mapJob);
 }
 
-export async function updateJobStatus(id: string, status: Job["status"], notes = "") {
-  const response = await patchData(providerCrmApi.jobStatus(id), { status, notes });
+export async function updateJobStatus(id: string, status: Job["status"], notes?: string) {
+  const response = await putData(providerCrmApi.jobStatus(id), { status, notes }, { silent: true });
   return mapCrmEntity(response, mapJob);
+}
+
+export async function deleteJob(id: string) {
+  return deleteData(providerCrmApi.job(id), { silent: false });
 }
 
 export async function convertJobToInvoice(id: string) {
   const response = await postData(providerCrmApi.jobConvertToInvoice(id), undefined, { silent: false });
   return mapCrmEntity(response, mapInvoice);
 }
+
+// ---------------- TASKS ----------------
 
 export async function listTasks(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.tasks, mapPortalTask, options);
@@ -734,20 +693,36 @@ export async function createTask(task: PortalTask) {
   return mapCrmEntity(response, mapPortalTask);
 }
 
-export async function updateTask(id: string, task: PortalTask) {
-  const response = await putData(providerCrmApi.task(id), taskPayload(task));
-  return mapCrmEntity(response, mapPortalTask);
-}
-
 export async function updateTaskStatus(id: string, status: PortalTask["status"]) {
   const response = await patchData(providerCrmApi.taskStatus(id), { status });
-  invalidateGetCache(providerCrmApi.tasks);
   return mapCrmEntity(response, mapPortalTask);
 }
 
 export async function deleteTask(id: string) {
   return deleteData(providerCrmApi.task(id), { silent: false });
 }
+
+// ---------------- SCHEDULE ----------------
+
+export async function listSchedule(options?: CrmRequestOptions) {
+  return listMapped(providerCrmApi.schedule, mapScheduleEvent, options);
+}
+
+export async function assignSchedule(event: PortalCalendarEvent) {
+  const response = await postData(providerCrmApi.scheduleAssign, schedulePayload(event));
+  return mapCrmEntity(response, mapScheduleEvent);
+}
+
+export async function updateSchedule(id: string, event: PortalCalendarEvent) {
+  const response = await putData(providerCrmApi.scheduleItem(id), schedulePayload(event));
+  return mapCrmEntity(response, mapScheduleEvent);
+}
+
+export async function deleteSchedule(id: string) {
+  return deleteData(providerCrmApi.scheduleItem(id), { silent: false });
+}
+
+// ---------------- REMINDERS ----------------
 
 export async function listReminders(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.reminders, mapPortalReminder, options);
@@ -760,13 +735,14 @@ export async function createReminder(reminder: PortalReminder) {
 
 export async function updateReminderStatus(id: string, status: PortalReminder["status"]) {
   const response = await patchData(providerCrmApi.reminderStatus(id), { status });
-  invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }
 
 export async function deleteReminder(id: string) {
   return deleteData(providerCrmApi.reminder(id), { silent: false });
 }
+
+// ---------------- INVOICES ----------------
 
 export async function listInvoices(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.invoices, mapInvoice, options);
@@ -783,93 +759,51 @@ export async function updateInvoice(id: string, invoice: Invoice) {
 }
 
 export async function sendInvoice(id: string) {
-  return postData(providerCrmApi.invoiceSend(id), undefined, { silent: false });
+  const response = await postData(providerCrmApi.invoiceSend(id), undefined, { silent: false });
+  return mapCrmEntity(response, mapInvoice);
 }
 
-export async function getInvoiceWithPayments(id: string) {
-  const response = await getData(providerCrmApi.invoice(id), undefined, { silent: true });
-  return mapInvoiceWithPayments(response);
-}
-
-export async function recordInvoicePayment(invoiceId: string, payment: Payment) {
-  const response = await postData(providerCrmApi.invoicePayments(invoiceId), {
-    amount: payment.amount,
-    method: payment.method,
-    scheduleId: payment.scheduleId || null,
-    notes: "",
-    transactionReference: "",
-  });
-  return {
-    payment: mapCrmEntity((response as { data?: unknown })?.data ? response : response, mapPayment),
-    invoice: mapCrmEntity((response as { data?: { invoice?: unknown } })?.data?.invoice ?? response, mapInvoice),
-  };
-}
+// ---------------- PAYMENTS ----------------
 
 export async function listPayments(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.payments, mapPayment, options);
 }
 
-export async function listSchedule(options?: CrmRequestOptions) {
-  const response = await getData(providerCrmApi.schedule, undefined, {
-    silent: options?.silent ?? true,
-  });
-  return mapCrmList(response, mapScheduleEvent).items.filter(
-    (item): item is NonNullable<typeof item> => Boolean(item),
-  );
+export async function recordInvoicePayment(payment: Payment) {
+  const response = await postData(providerCrmApi.invoicePayments(payment.invoiceId), paymentPayload(payment));
+  return mapInvoiceWithPayments(response);
 }
 
-export async function assignSchedule(schedule: CrmScheduleAssignment) {
-  const response = await postData(
-    providerCrmApi.scheduleAssign,
-    {
-      recordId: schedule.recordId || null,
-      kind: schedule.kind,
-      title: schedule.title,
-      date: schedule.date,
-      endDate: schedule.endDate ?? null,
-      startMinutes: schedule.startMinutes,
-      endMinutes: schedule.endMinutes,
-      timeWindow: schedule.timeWindow,
-      employeeId: schedule.employeeId || null,
-      contractorId: schedule.contractorId || null,
-      status: schedule.status ?? "scheduled",
-    },
-    { silent: false },
-  );
-  return mapCrmEntity(response, mapScheduleEvent);
-}
+// ---------------- CHAT ----------------
 
-export async function updateSchedule(id: string, schedule: Partial<CrmScheduleAssignment>) {
-  const payload: Record<string, unknown> = {};
-  if (schedule.title !== undefined) payload.title = schedule.title;
-  if (schedule.date !== undefined) payload.date = schedule.date;
-  if (schedule.endDate !== undefined) payload.endDate = schedule.endDate;
-  if (schedule.startMinutes !== undefined) payload.startMinutes = schedule.startMinutes;
-  if (schedule.endMinutes !== undefined) payload.endMinutes = schedule.endMinutes;
-  if (schedule.timeWindow !== undefined) payload.timeWindow = schedule.timeWindow;
-  if (schedule.employeeId !== undefined) payload.employeeId = schedule.employeeId || null;
-  if (schedule.contractorId !== undefined) payload.contractorId = schedule.contractorId || null;
-  if (schedule.status !== undefined) payload.status = schedule.status;
-  const response = await putData(providerCrmApi.scheduleItem(id), payload, { silent: false });
-  return mapCrmEntity(response, mapScheduleEvent);
-}
-
-export async function deleteSchedule(id: string) {
-  return deleteData(providerCrmApi.scheduleItem(id), { silent: false });
-}
-
-export async function listChats(options?: CrmRequestOptions) {
+export async function listProviderChatThreads(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.chats, mapChatThread, options);
 }
 
-export async function getInboxSummary(options?: CrmRequestOptions) {
-  const response = await getData(providerCrmApi.inboxSummary, undefined, {
-    silent: options?.silent ?? true,
-  });
+export async function getProviderInboxSummary(): Promise<CrmInboxSummary> {
+  const response = await getData(providerCrmApi.inboxSummary, undefined, { silent: true });
   return mapInboxSummary(response);
 }
 
-export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
+export async function sendProviderChatMessage(threadId: string, text: string, attachments?: ChatAttachment[]) {
+  const response = await postData(providerCrmApi.chatMessages(threadId), {
+    text: text.trim(),
+    attachments: (attachments || []).map((att) => ({
+      name: att.name,
+      url: att.url,
+      type: att.type,
+    })),
+  });
+  return mapCrmEntity(response, mapChatThread);
+}
+
+export async function markProviderChatRead(threadId: string) {
+  return patchData(providerCrmApi.chatRead(threadId), undefined, { silent: true });
+}
+
+// ---------------- SNAPSHOT ----------------
+
+export async function loadCrmSnapshot(options?: CrmRequestOptions): Promise<CrmSnapshot> {
   const [
     customers,
     employees,
@@ -886,20 +820,20 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
     chats,
     inboxSummary,
   ] = await Promise.all([
-    listCustomers({ silent: true }),
-    listEmployees({ silent: true }),
-    listContractors({ silent: true }),
-    listVendors({ silent: true }),
-    listRequests({ silent: true }),
-    listEstimates({ silent: true }),
-    listJobs({ silent: true }),
-    listTasks({ silent: true }),
-    listReminders({ silent: true }),
-    listInvoices({ silent: true }),
-    listPayments({ silent: true }),
-    listSchedule({ silent: true }),
-    listChats({ silent: true }),
-    getInboxSummary({ silent: true }),
+    listCustomers(options),
+    listEmployees(options),
+    listContractors(options),
+    listVendors(options),
+    listRequests(options),
+    listEstimates(options),
+    listJobs(options),
+    listTasks(options),
+    listReminders(options),
+    listInvoices(options),
+    listPayments(options),
+    listSchedule(options),
+    listProviderChatThreads(options),
+    getProviderInboxSummary(),
   ]);
 
   return {
@@ -918,17 +852,4 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
     chats,
     inboxSummary,
   };
-}
-
-export function findCustomerAddress(customer: CustomerLike | PortalCustomerCrm | null | undefined) {
-  const address = customer?.addresses?.[0];
-  return address ?? null;
-}
-
-type CustomerLike = {
-  addresses?: ServiceAddress[];
-};
-
-export function extractId(value: unknown) {
-  return crmIdOf(value);
 }

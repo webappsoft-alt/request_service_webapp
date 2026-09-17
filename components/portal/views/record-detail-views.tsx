@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, ChevronDown, CreditCard, FileText, LayoutDashboard, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
+import { Camera, ChevronDown, CreditCard, FileText, LayoutDashboard, Loader2, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { ArchiveBadge } from "@/components/portal/archive-control";
 import { NotesPanel, CreateNoteDialogForSubject } from "@/components/portal/notes-panel";
@@ -159,7 +159,9 @@ export function EstimateDetailView({ id }: { id: string }) {
   if (!estimate) {
     return pending || fetching || crm.refreshing ? (
       <PortalPage title="Loading estimate…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Estimate not found" href="/pro/dashboard/estimates" />
@@ -322,7 +324,7 @@ export function EstimateDetailView({ id }: { id: string }) {
       setStatusOverride("converted_to_job");
       toast.success(`${created.number} created from ${quote.number}. This estimate stays an estimate.`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not convert this estimate.");
+      toast.error(extractErrorMessage(error) || "Could not convert this estimate.");
     } finally {
       setConverting(false);
     }
@@ -451,7 +453,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                             });
                           }
                         } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
+                          toast.error(extractErrorMessage(error) || "Could not update this estimate.");
                           throw error;
                         }
                       } else {
@@ -667,7 +669,9 @@ export function JobDetailView({ id }: { id: string }) {
   if (!job) {
     return pending || fetching || crm.refreshing ? (
       <PortalPage title="Loading job…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Job not found" href="/pro/dashboard/jobs" />
@@ -732,7 +736,7 @@ export function JobDetailView({ id }: { id: string }) {
       toast.success(`${created.number} drafted from ${currentJob.number}.`);
       router.push(`/pro/dashboard/invoices/${created.id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not convert this job.");
+      toast.error(extractErrorMessage(error) || "Could not convert this job.");
     }
   }
 
@@ -756,7 +760,7 @@ export function JobDetailView({ id }: { id: string }) {
       toast.success(`${currentJob.number} deleted. The estimate can be converted again.`);
       router.push("/pro/dashboard/jobs");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete this job.");
+      toast.error(extractErrorMessage(error) || "Could not delete this job.");
     } finally {
       setDeleting(false);
     }
@@ -970,7 +974,9 @@ export function InvoiceDetailView({ id }: { id: string }) {
   if (!invoice) {
     return pending ? (
       <PortalPage title="Loading invoice…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Invoice not found" href="/pro/dashboard/invoices" />
@@ -1014,7 +1020,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   await records.setStatus("invoice", invoice.id, "sent");
                   toast.success(`${invoice.number} marked sent.`);
                 } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Could not send this invoice.");
+                  toast.error(extractErrorMessage(error) || "Could not send this invoice.");
                 }
               })();
             }}
@@ -1113,7 +1119,9 @@ export function PaymentDetailView({ id }: { id: string }) {
   if (!payment) {
     return pending ? (
       <PortalPage title="Loading payment…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Payment not found" href="/pro/dashboard/payments" />

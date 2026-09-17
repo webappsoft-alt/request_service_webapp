@@ -23,6 +23,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { archiveRowAction, matchesArchiveFilter } from "@/components/portal/archive-control";
 import {
   CreateReminderDialog,
@@ -219,7 +220,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                 void Promise.resolve(updateCustomer(customer.id, customer))
                   .then(() => toast.success("Customer file saved."))
                   .catch((error) =>
-                    toast.error(error instanceof Error ? error.message : "Could not save this customer."),
+                    toast.error(extractErrorMessage(error) || "Could not save this customer."),
                   );
               }}
             >
@@ -666,11 +667,7 @@ function CustomerEstimatesPanel({
       })
       .catch((error) => {
         if (cancelled) return;
-        toast.error(
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not load estimates.",
-        );
+        toast.error(extractErrorMessage(error) || "Could not load estimates.");
       })
       .finally(() => {
         if (!cancelled) setListLoading(false);

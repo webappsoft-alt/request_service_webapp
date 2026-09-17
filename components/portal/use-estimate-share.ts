@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { readCostLines } from "@/components/portal/use-job-costing";
 import { estimateAsJob, moneyFromLines } from "@/components/portal/work-builders";
 import type { Estimate } from "@/lib/types";
@@ -75,7 +75,7 @@ export function shareTokenFor(estimateId: string) {
 }
 
 export function sharePath(token: string) {
-  return `/e/${token}`;
+  return `/${token}`;
 }
 
 export function shareUrlFor(token: string) {
@@ -259,5 +259,8 @@ export function useEstimateShare() {
     return approval;
   }, []);
 
-  return { snapshotOf, snapshotForEstimate, approvalOf, saveSnapshot, approve };
+  return useMemo(
+    () => ({ snapshotOf, snapshotForEstimate, approvalOf, saveSnapshot, approve }),
+    [snapshotOf, snapshotForEstimate, approvalOf, saveSnapshot, approve],
+  );
 }

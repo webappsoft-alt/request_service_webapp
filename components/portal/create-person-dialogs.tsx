@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
   AddressAutocomplete,
@@ -175,7 +176,7 @@ export function CreateCustomerDialog({
         reset();
         onOpenChange(false);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not update this customer.");
+        toast.error(extractErrorMessage(error) || "Could not update this customer.");
       } finally {
         setSaving(false);
       }
@@ -700,7 +701,7 @@ export function CreateReminderDialog({
       toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this reminder.");
+      toast.error(extractErrorMessage(error) || "Could not save this reminder.");
     } finally {
       setSaving(false);
     }
@@ -933,7 +934,7 @@ export function CreateTaskDialog({
       );
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this task.");
+      toast.error(extractErrorMessage(error) || "Could not save this task.");
     } finally {
       setSaving(false);
     }

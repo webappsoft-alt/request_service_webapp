@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useJobFile, type EstimateSettingsDraft } from "@/components/portal/use-job-file";
@@ -293,7 +294,7 @@ export function EstimateSettingsTab({
       await persist(draft);
       toast.success("Estimate settings saved.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
+      toast.error(extractErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -306,7 +307,7 @@ export function EstimateSettingsTab({
       toast.success("Estimate settings saved.");
       executePending();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
+      toast.error(extractErrorMessage(error));
     } finally {
       setSaving(false);
     }

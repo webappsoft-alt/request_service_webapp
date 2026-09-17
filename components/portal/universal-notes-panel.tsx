@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
@@ -110,7 +111,7 @@ export function CreateUniversalNoteDialog({
       onOpenChange(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not save this note.",
+        extractErrorMessage(error) || "Could not save this note.",
       );
     } finally {
       setSaving(false);

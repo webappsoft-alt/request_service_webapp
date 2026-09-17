@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Briefcase,
@@ -35,6 +35,7 @@ import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { useEmployeeFile, weekdayLabel, type EmployeeDayHours } from "@/components/portal/use-employee-file";
@@ -70,6 +71,8 @@ import {
 } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { getEmployee } from "@/lib/api/crm-client";
+import { useAppSelector } from "@/store/hooks";
 
 const ROLES: PortalEmployeeRole[] = ["technician", "estimator", "dispatcher", "owner"];
 const MAX_FILE = 2 * 1024 * 1024;
@@ -79,15 +82,57 @@ export function TeamMemberView({ id }: { id: string }) {
   const { customers, tasks } = useCrmDirectory();
   const { employees, events, assign, updateEmployee, removeEmployee, employeeById, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
-  const employee = employees.find((item) => item.id === id);
+  const crm = useCrmApiData();
+  const sliceItems = useAppSelector((state) => state.team?.items ?? []);
+  const [fetched, setFetched] = useState<PortalEmployee | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailTried, setDetailTried] = useState(false);
+  const employee =
+    (fetched?.id === id ? fetched : null) ??
+    sliceItems.find((item) => item.id === id) ??
+    employees.find((item) => item.id === id);
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const pending = useCrmRecordPending();
 
+  useEffect(() => {
+    if (!crm.enabled) return;
+    void crm.ensureLoaded();
+  }, [crm.enabled, crm.ensureLoaded]);
+
+  useEffect(() => {
+    setFetched(null);
+    setDetailTried(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (employee) {
+      setDetailLoading(false);
+      setDetailTried(true);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    void getEmployee(id)
+      .then((item) => {
+        if (!cancelled && item) setFetched(item);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDetailLoading(false);
+          setDetailTried(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, employee]);
+
   if (!employee) {
+    const loading = detailLoading || (pending && !detailTried);
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">{pending ? "Loading employee…" : "Employee not found"}</h1>
-        {!pending ? (
+        <h1 className="text-lg font-semibold">{loading ? "Loading employee…" : "Employee not found"}</h1>
+        {!loading ? (
           <Button asChild className="mt-4" size="sm">
             <Link href="/pro/dashboard/team">Back to employees</Link>
           </Button>

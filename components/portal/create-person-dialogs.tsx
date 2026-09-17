@@ -8,6 +8,8 @@ import {
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { CreateUniversalNoteDialog } from "@/components/portal/universal-notes-panel";
 import { Button } from "@/components/ui/button";
@@ -29,7 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
+import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { useReminderLookups } from "@/components/portal/reminder-banner";
+import { employeeName } from "@/lib/data/portal";
 import type {
   CrmCustomerType,
   CrmEntityKind,
@@ -51,6 +56,11 @@ import {
   reminderSubjectKindLabel,
 } from "@/lib/data/crm-people";
 import { todayISO } from "@/components/portal/work-builders";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import { createContractorRecord, updateContractorRecord } from "@/store/contractorsSlice";
+import { createVendorRecord, updateVendorRecord } from "@/store/vendorsSlice";
+import { createReminderRecord } from "@/store/remindersSlice";
 
 const SOURCES: CrmPersonSource[] = ["external", "phone", "referral", "walk_in", "website"];
 const TYPES: CrmCustomerType[] = ["residential", "commercial", "property_manager"];
@@ -458,11 +468,21 @@ export function CreateCustomerDialog({
 export function CreateContractorDialog({
   open,
   onOpenChange,
+  contractor = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  contractor?: PortalContractor | null;
 }) {
-  const { addContractor, provider, contractors } = useCrmDirectory();
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+  const { addContractor, updateContractor, provider, contractors } = useCrmDirectory();
+  const isEdit = Boolean(contractor);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -470,11 +490,38 @@ export function CreateContractorDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [license, setLicense] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function save() {
-    const contractor: PortalContractor = {
-      id: `con_${provider.id}_new_${Date.now()}`,
-      number: `VNDC-${220 + contractors.length}`,
+  function reset() {
+    setFirstName("");
+    setLastName("");
+    setCompanyName("");
+    setTrade("");
+    setEmail("");
+    setPhone("");
+    setLicense("");
+    setSaving(false);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    if (!contractor) {
+      reset();
+      return;
+    }
+    setFirstName(contractor.firstName);
+    setLastName(contractor.lastName);
+    setCompanyName(contractor.companyName);
+    setTrade(contractor.trade);
+    setEmail(contractor.email);
+    setPhone(contractor.phone);
+    setLicense(contractor.license);
+    setSaving(false);
+  }, [open, contractor]);
+
+  async function save() {
+    if (saving) return;
+    const patch = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       companyName: companyName.trim() || `${lastName.trim()} Contracting`,
@@ -482,25 +529,68 @@ export function CreateContractorDialog({
       phone: phone.trim() || "(000) 000-0000",
       trade: trade.trim() || "General",
       license: license.trim() || "Pending",
-      city: provider.city,
-      state: provider.state,
-      zip: provider.serviceArea[0] ?? "",
-      status: "active",
-      hourlyRate: 75,
-      insuranceExpires: "2027-01-01",
-      createdAt: new Date().toISOString().slice(0, 10),
     };
-    addContractor(contractor);
-    toast.success(`${contractor.companyName} added.`);
-    onOpenChange(false);
+    if (!patch.firstName || !patch.lastName) return;
+
+    setSaving(true);
+    try {
+      if (isEdit && contractor) {
+        if (useApi) {
+          const updated = await dispatch(
+            updateContractorRecord({ id: contractor.id, patch: { ...contractor, ...patch } }),
+          ).unwrap();
+          toast.success(`${updated.companyName} updated.`);
+        } else {
+          await Promise.resolve(updateContractor(contractor.id, patch));
+          toast.success(`${patch.companyName} updated.`);
+        }
+      } else {
+        const next: PortalContractor = {
+          id: `con_${provider.id}_new_${Date.now()}`,
+          number: `VNDC-${220 + contractors.length}`,
+          ...patch,
+          city: provider.city,
+          state: provider.state,
+          zip: provider.serviceArea[0] ?? "",
+          status: "active",
+          hourlyRate: 75,
+          insuranceExpires: "2027-01-01",
+          createdAt: new Date().toISOString().slice(0, 10),
+        };
+        if (useApi) {
+          const created = await dispatch(createContractorRecord(next)).unwrap();
+          toast.success(`${created.companyName} added.`);
+        } else {
+          addContractor(next);
+          toast.success(`${next.companyName} added.`);
+        }
+      }
+      reset();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Could not save contractor.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (saving) return;
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>Create contractor</DialogTitle>
-          <DialogDescription>Subcontractors and specialty trades used on jobs.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit contractor" : "Create contractor"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update subcontractor contact and trade details."
+              : "Subcontractors and specialty trades used on jobs."}
+          </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -528,7 +618,12 @@ export function CreateContractorDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="con-phone">Phone</FieldLabel>
-              <Input id="con-phone" value={phone} onChange={(change) => setPhone(change.target.value)} placeholder="(555) 123-4567" />
+              <AuthPhoneInput
+                id="con-phone"
+                value={phone}
+                onChange={setPhone}
+                placeholder="(555) 123-4567"
+              />
             </Field>
           </div>
           <Field>
@@ -537,11 +632,11 @@ export function CreateContractorDialog({
           </Field>
         </FieldGroup>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button disabled={!firstName.trim() || !lastName.trim()} onClick={save}>
-            Save and finish
+          <Button disabled={saving || !firstName.trim() || !lastName.trim()} onClick={() => void save()}>
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Save and finish"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -552,45 +647,121 @@ export function CreateContractorDialog({
 export function CreateVendorDialog({
   open,
   onOpenChange,
+  vendor = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  vendor?: PortalVendor | null;
 }) {
-  const { addVendor, provider, vendors } = useCrmDirectory();
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+  const { addVendor, updateVendor, provider, vendors } = useCrmDirectory();
+  const isEdit = Boolean(vendor);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function save() {
-    const vendor: PortalVendor = {
-      id: `ven_${provider.id}_new_${Date.now()}`,
-      number: `VND-${310 + vendors.length}`,
+  function reset() {
+    setName("");
+    setCategory("");
+    setContact("");
+    setEmail("");
+    setPhone("");
+    setSaving(false);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    if (!vendor) {
+      reset();
+      return;
+    }
+    setName(vendor.name);
+    setCategory(vendor.category);
+    setContact(vendor.contact);
+    setEmail(vendor.email);
+    setPhone(vendor.phone);
+    setSaving(false);
+  }, [open, vendor]);
+
+  async function save() {
+    if (saving) return;
+    const patch = {
       name: name.trim(),
       category: category.trim() || "Supply",
       contact: contact.trim() || "Accounts",
       email: email.trim() || "orders@vendor.local",
       phone: phone.trim() || "(000) 000-0000",
-      city: provider.city,
-      state: provider.state,
-      accountNumber: `ACC-${vendors.length + 1}`,
-      terms: "Net 30",
-      balance: 0,
-      status: "active",
-      createdAt: new Date().toISOString().slice(0, 10),
     };
-    addVendor(vendor);
-    toast.success(`${vendor.name} added.`);
-    onOpenChange(false);
+    if (!patch.name) return;
+
+    setSaving(true);
+    try {
+      if (isEdit && vendor) {
+        if (useApi) {
+          const updated = await dispatch(
+            updateVendorRecord({ id: vendor.id, patch: { ...vendor, ...patch } }),
+          ).unwrap();
+          toast.success(`${updated.name} updated.`);
+        } else {
+          await Promise.resolve(updateVendor(vendor.id, patch));
+          toast.success(`${patch.name} updated.`);
+        }
+      } else {
+        const next: PortalVendor = {
+          id: `ven_${provider.id}_new_${Date.now()}`,
+          number: `VND-${310 + vendors.length}`,
+          ...patch,
+          city: provider.city,
+          state: provider.state,
+          accountNumber: `ACC-${vendors.length + 1}`,
+          terms: "Net 30",
+          balance: 0,
+          status: "active",
+          createdAt: new Date().toISOString().slice(0, 10),
+        };
+        if (useApi) {
+          const created = await dispatch(createVendorRecord(next)).unwrap();
+          toast.success(`${created.name} added.`);
+        } else {
+          addVendor(next);
+          toast.success(`${next.name} added.`);
+        }
+      }
+      reset();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Could not save vendor.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (saving) return;
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>Create vendor</DialogTitle>
-          <DialogDescription>Supply houses and accounts payable records.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit vendor" : "Create vendor"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update supplier contact and account details."
+              : "Supply houses and accounts payable records."}
+          </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
           <Field>
@@ -612,16 +783,21 @@ export function CreateVendorDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="ven-phone">Phone</FieldLabel>
-              <Input id="ven-phone" value={phone} onChange={(change) => setPhone(change.target.value)} placeholder="(555) 123-4567" />
+              <AuthPhoneInput
+                id="ven-phone"
+                value={phone}
+                onChange={setPhone}
+                placeholder="(555) 123-4567"
+              />
             </Field>
           </div>
         </FieldGroup>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button disabled={!name.trim()} onClick={save}>
-            Save and finish
+          <Button disabled={saving || !name.trim()} onClick={() => void save()}>
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Save and finish"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -642,37 +818,74 @@ export function CreateReminderDialog({
   subjectId?: string;
   customerId?: string;
 }) {
-  const { addReminder, employees, provider } = useCrmDirectory();
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+  const { addReminder, provider } = useCrmDirectory();
+  const { employees: crewEmployees } = usePortalCrew();
+  const crm = useCrmApiData();
   const lookups = useReminderLookups();
   const lockedKind = subjectKind ?? (customerId ? "customer" : undefined);
   const lockedId = subjectId ?? customerId;
   const [kind, setKind] = useState<ReminderSubjectKind>(lockedKind ?? "customer");
-  const records = lookups.options(kind);
-  const [selectedId, setSelectedId] = useState(lockedId ?? records[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(lockedId ?? "");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [dueAt, setDueAt] = useState("");
-  const [assignedEmployeeId, setAssignedEmployeeId] = useState(employees[0]?.id ?? "");
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [lookupsLoading, setLookupsLoading] = useState(false);
+
+  const recordPaging = usePaginatedCrmOptions(
+    open && useApi && !lockedId ? kind : null,
+    open && useApi && !lockedId,
+  );
+  const assigneePaging = usePaginatedCrmOptions(
+    open && useApi ? "assignee" : null,
+    open && useApi,
+  );
+
+  // Offline / demo: load snapshot once. API mode uses paginated dropdowns.
+  useEffect(() => {
+    if (!open || useApi || !crm.enabled) return;
+    let cancelled = false;
+    setLookupsLoading(true);
+    void crm.ensureLoaded().finally(() => {
+      if (!cancelled) setLookupsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, useApi, crm.enabled, crm.ensureLoaded]);
 
   useEffect(() => {
     if (!open) return;
     const nextKind = lockedKind ?? "customer";
-    const nextRecords = lookups.options(nextKind);
     setKind(nextKind);
-    setSelectedId(lockedId ?? nextRecords[0]?.id ?? "");
+    setSelectedId(lockedId ?? "");
     setTitle("");
     setNote("");
     setDueAt("");
-    setAssignedEmployeeId(employees[0]?.id ?? "");
+    setAssignedEmployeeId("");
     setSaving(false);
-    // Reset the form only when the dialog opens, not when lookup arrays refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const fallbackChoices = lookups.options(kind);
+  const recordOptions = useApi
+    ? recordPaging.options
+    : fallbackChoices.map((item) => ({ id: item.id, label: item.label }));
+  const assigneeOptions = useApi
+    ? assigneePaging.options
+    : crewEmployees.map((item) => ({ id: item.id, label: employeeName(item) }));
+
   function changeKind(next: ReminderSubjectKind) {
     setKind(next);
-    setSelectedId(lookups.options(next)[0]?.id ?? "");
+    setSelectedId("");
   }
 
   async function save() {
@@ -696,18 +909,33 @@ export function CreateReminderDialog({
 
     setSaving(true);
     try {
-      await Promise.resolve(addReminder(reminder));
+      if (useApi) {
+        await dispatch(createReminderRecord(reminder)).unwrap();
+      } else {
+        await Promise.resolve(addReminder(reminder));
+      }
       toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this reminder.");
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not save this reminder.",
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  const choices = lookups.options(kind);
   const linkedReady = Boolean(lockedId ?? selectedId);
+  const recordLoading = useApi
+    ? recordPaging.loading && recordOptions.length === 0
+    : lookupsLoading && recordOptions.length === 0;
+  const assigneeLoading = useApi
+    ? assigneePaging.loading && assigneeOptions.length === 0
+    : lookupsLoading && assigneeOptions.length === 0;
 
   return (
     <Dialog
@@ -716,7 +944,8 @@ export function CreateReminderDialog({
         if (saving) return;
         onOpenChange(next);
       }}
-    >      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
+    >
+      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>Set reminder</DialogTitle>
           <DialogDescription>
@@ -757,28 +986,30 @@ export function CreateReminderDialog({
               </Field>
               <Field>
                 <FieldLabel htmlFor="rem-subject">Record</FieldLabel>
-                <Select value={selectedId} onValueChange={setSelectedId}>
-                  <SelectTrigger id="rem-subject" className="w-full">
-                    <SelectValue placeholder="Select record" />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    align="start"
-                    className="z-[100] w-[var(--radix-select-trigger-width)]"
-                  >
-                    {choices.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PaginatedEntitySelect
+                  id="rem-subject"
+                  value={selectedId}
+                  options={recordOptions}
+                  loading={recordLoading}
+                  loadingMore={useApi ? recordPaging.loadingMore : false}
+                  hasMore={useApi ? recordPaging.hasMore : false}
+                  onLoadMore={useApi ? recordPaging.loadMore : () => {}}
+                  onChange={(id) => setSelectedId(id)}
+                  placeholder={recordLoading ? "Loading records…" : "Select record"}
+                  emptyLabel="No records found"
+                  disabled={recordLoading}
+                />
               </Field>
             </div>
           )}
           <Field>
             <FieldLabel htmlFor="rem-title">Title</FieldLabel>
-            <Input id="rem-title" value={title} onChange={(change) => setTitle(change.target.value)} placeholder="Follow up on estimate" />
+            <Input
+              id="rem-title"
+              value={title}
+              onChange={(change) => setTitle(change.target.value)}
+              placeholder="Follow up on estimate"
+            />
           </Field>
           <Field className="w-full">
             <FieldLabel htmlFor="rem-note">Note</FieldLabel>
@@ -806,22 +1037,19 @@ export function CreateReminderDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="rem-emp">Assigned</FieldLabel>
-              <Select value={assignedEmployeeId} onValueChange={setAssignedEmployeeId}>
-                <SelectTrigger id="rem-emp" className="w-full">
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  align="start"
-                  className="z-[100] w-[var(--radix-select-trigger-width)]"
-                >
-                  {employees.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.firstName} {item.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PaginatedEntitySelect
+                id="rem-emp"
+                value={assignedEmployeeId}
+                options={assigneeOptions}
+                loading={assigneeLoading}
+                loadingMore={useApi ? assigneePaging.loadingMore : false}
+                hasMore={useApi ? assigneePaging.hasMore : false}
+                onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+                onChange={(id) => setAssignedEmployeeId(id)}
+                placeholder={assigneeLoading ? "Loading assignees…" : "Select assignee"}
+                emptyLabel="No employees found"
+                disabled={assigneeLoading}
+              />
             </Field>
           </div>
         </FieldGroup>
@@ -872,35 +1100,73 @@ export function CreateTaskDialog({
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
 }) {
-  const { addTask, employees, provider, tasks } = useCrmDirectory();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+  const { addTask, provider, tasks } = useCrmDirectory();
+  const { employees: crewEmployees } = usePortalCrew();
+  const crm = useCrmApiData();
   const lookups = useReminderLookups();
   const [kind, setKind] = useState<ReminderSubjectKind>(subjectKind ?? "customer");
   const [selectedId, setSelectedId] = useState(subjectId ?? "");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
-  const [assignedEmployeeId, setAssignedEmployeeId] = useState(employees[0]?.id ?? "");
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
   const [priority, setPriority] = useState<CrmTaskPriority>("normal");
   const [dueAt, setDueAt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [lookupsLoading, setLookupsLoading] = useState(false);
+
+  const locked = Boolean(subjectKind && subjectId);
+  const recordPaging = usePaginatedCrmOptions(
+    open && useApi && !locked ? kind : null,
+    open && useApi && !locked,
+  );
+  const assigneePaging = usePaginatedCrmOptions(
+    open && useApi ? "assignee" : null,
+    open && useApi,
+  );
+
+  useEffect(() => {
+    if (!open || useApi || !crm.enabled) return;
+    let cancelled = false;
+    setLookupsLoading(true);
+    void crm.ensureLoaded().finally(() => {
+      if (!cancelled) setLookupsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, useApi, crm.enabled, crm.ensureLoaded]);
 
   useEffect(() => {
     if (!open) return;
     const nextKind = subjectKind ?? "customer";
     setKind(nextKind);
-    setSelectedId(subjectId ?? lookups.options(nextKind)[0]?.id ?? "");
+    setSelectedId(subjectId ?? "");
     setTitle("");
     setNote("");
-    setAssignedEmployeeId(employees[0]?.id ?? "");
+    setAssignedEmployeeId("");
     setPriority("normal");
     setDueAt("");
     setSaving(false);
-    // Reset only when the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const fallbackChoices = lookups.options(kind);
+  const recordOptions = useApi
+    ? recordPaging.options
+    : fallbackChoices.map((item) => ({ id: item.id, label: item.label }));
+  const assigneeOptions = useApi
+    ? assigneePaging.options
+    : crewEmployees.map((item) => ({ id: item.id, label: employeeName(item) }));
+
   function changeKind(next: ReminderSubjectKind) {
     setKind(next);
-    setSelectedId(lookups.options(next)[0]?.id ?? "");
+    setSelectedId("");
   }
 
   async function save() {
@@ -939,9 +1205,13 @@ export function CreateTaskDialog({
     }
   }
 
-  const choices = lookups.options(kind);
-  const locked = Boolean(subjectKind && subjectId);
   const linkedReady = Boolean(subjectId ?? selectedId);
+  const recordLoading = useApi
+    ? recordPaging.loading && recordOptions.length === 0
+    : lookupsLoading && recordOptions.length === 0;
+  const assigneeLoading = useApi
+    ? assigneePaging.loading && assigneeOptions.length === 0
+    : lookupsLoading && assigneeOptions.length === 0;
 
   return (
     <Dialog
@@ -950,7 +1220,8 @@ export function CreateTaskDialog({
         if (saving) return;
         onOpenChange(next);
       }}
-    >      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
+    >
+      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>Create task</DialogTitle>
           <DialogDescription>
@@ -991,28 +1262,30 @@ export function CreateTaskDialog({
               </Field>
               <Field>
                 <FieldLabel htmlFor="task-subject">Record</FieldLabel>
-                <Select value={selectedId} onValueChange={setSelectedId}>
-                  <SelectTrigger id="task-subject" className="w-full">
-                    <SelectValue placeholder="Select record" />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    align="start"
-                    className="z-[100] w-[var(--radix-select-trigger-width)]"
-                  >
-                    {choices.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PaginatedEntitySelect
+                  id="task-subject"
+                  value={selectedId}
+                  options={recordOptions}
+                  loading={recordLoading}
+                  loadingMore={useApi ? recordPaging.loadingMore : false}
+                  hasMore={useApi ? recordPaging.hasMore : false}
+                  onLoadMore={useApi ? recordPaging.loadMore : () => {}}
+                  onChange={(id) => setSelectedId(id)}
+                  placeholder={recordLoading ? "Loading records…" : "Select record"}
+                  emptyLabel="No records found"
+                  disabled={recordLoading}
+                />
               </Field>
             </div>
           )}
           <Field>
             <FieldLabel htmlFor="task-title">Title</FieldLabel>
-            <Input id="task-title" value={title} onChange={(change) => setTitle(change.target.value)} placeholder="Order parts, call customer…" />
+            <Input
+              id="task-title"
+              value={title}
+              onChange={(change) => setTitle(change.target.value)}
+              placeholder="Order parts, call customer…"
+            />
           </Field>
           <Field className="w-full">
             <FieldLabel htmlFor="task-note">Notes</FieldLabel>
@@ -1027,22 +1300,19 @@ export function CreateTaskDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="task-emp">Assigned</FieldLabel>
-              <Select value={assignedEmployeeId} onValueChange={setAssignedEmployeeId}>
-                <SelectTrigger id="task-emp" className="w-full">
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  align="start"
-                  className="z-[100] w-[var(--radix-select-trigger-width)]"
-                >
-                  {employees.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.firstName} {item.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PaginatedEntitySelect
+                id="task-emp"
+                value={assignedEmployeeId}
+                options={assigneeOptions}
+                loading={assigneeLoading}
+                loadingMore={useApi ? assigneePaging.loadingMore : false}
+                hasMore={useApi ? assigneePaging.hasMore : false}
+                onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+                onChange={(id) => setAssignedEmployeeId(id)}
+                placeholder={assigneeLoading ? "Loading assignees…" : "Select assignee"}
+                emptyLabel="No employees found"
+                disabled={assigneeLoading}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="task-pri">Priority</FieldLabel>

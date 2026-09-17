@@ -402,9 +402,39 @@ export type CrmListQuery = {
   search?: string;
   status?: string;
   customerId?: string;
+  trade?: string;
+  role?: string;
+  active?: boolean;
+  category?: string;
+  assignedEmployeeId?: string;
+  subjectKind?: string;
   silent?: boolean;
   force?: boolean;
 };
+
+function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT) {
+  const page = Math.max(1, query.page ?? 1);
+  const limit = Math.max(1, query.limit ?? defaultLimit);
+  const params: Record<string, string | number | boolean> = { page, limit };
+  const search = query.search?.trim();
+  const status = query.status?.trim();
+  const customerId = query.customerId?.trim();
+  const trade = query.trade?.trim();
+  const role = query.role?.trim();
+  const category = query.category?.trim();
+  const assignedEmployeeId = query.assignedEmployeeId?.trim();
+  const subjectKind = query.subjectKind?.trim();
+  if (search) params.search = search;
+  if (status) params.status = status;
+  if (customerId) params.customerId = customerId;
+  if (trade) params.trade = trade;
+  if (role) params.role = role;
+  if (category) params.category = category;
+  if (assignedEmployeeId) params.assignedEmployeeId = assignedEmployeeId;
+  if (subjectKind) params.subjectKind = subjectKind;
+  if (typeof query.active === "boolean") params.active = query.active;
+  return params;
+}
 
 export async function listCustomers(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.customers, mapPortalCustomerCrm, options);
@@ -482,8 +512,26 @@ export async function listEmployees(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.team, mapPortalEmployee, options);
 }
 
+/** Paginated workforce list — MD: page/limit/active/role/trade/search only. */
+export async function queryTeam(query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.team, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalEmployee);
+}
+
 export async function createEmployee(employee: PortalEmployee | Parameters<typeof employeePayload>[0]) {
   const response = await postData(providerCrmApi.team, employeePayload(employee));
+  return mapCrmEntity(response, mapPortalEmployee);
+}
+
+export async function getEmployee(id: string) {
+  const response = await getData(providerCrmApi.teamMember(id), undefined, {
+    silent: true,
+    force: true,
+  });
   return mapCrmEntity(response, mapPortalEmployee);
 }
 
@@ -500,9 +548,29 @@ export async function listContractors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.contractors, mapPortalContractor, options);
 }
 
+/** Paginated contractors — MD: page/limit/trade/status/search only. */
+export async function queryContractors(query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.contractors, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalContractor);
+}
+
 export async function createContractor(contractor: PortalContractor) {
   const response = await postData(providerCrmApi.contractors, contractorPayload(contractor));
   return mapCrmEntity(response, mapPortalContractor);
+}
+
+export async function getContractor(id: string) {
+  const response = await getData(providerCrmApi.contractor(id), undefined, {
+    silent: true,
+    force: true,
+  });
+  const payload = (response as { data?: unknown })?.data ?? response;
+  const nested = (payload as { contractor?: unknown })?.contractor ?? payload;
+  return mapPortalContractor(nested) ?? mapCrmEntity(response, mapPortalContractor);
 }
 
 export async function updateContractor(id: string, patch: Partial<PortalContractor>) {
@@ -518,8 +586,26 @@ export async function listVendors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.vendors, mapPortalVendor, options);
 }
 
+/** Paginated vendors — MD: page/limit/category/status/search only. */
+export async function queryVendors(query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.vendors, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalVendor);
+}
+
 export async function createVendor(vendor: PortalVendor) {
   const response = await postData(providerCrmApi.vendors, vendorPayload(vendor));
+  return mapCrmEntity(response, mapPortalVendor);
+}
+
+export async function getVendor(id: string) {
+  const response = await getData(providerCrmApi.vendor(id), undefined, {
+    silent: true,
+    force: true,
+  });
   return mapCrmEntity(response, mapPortalVendor);
 }
 
@@ -534,6 +620,16 @@ export async function deleteVendor(id: string) {
 
 export async function listRequests(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.requests, mapPortalRequest, options);
+}
+
+/** Paginated leads/requests — page/limit/search. */
+export async function queryRequests(query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.requests, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalRequest);
 }
 
 export async function createRequest(request: PortalRequest) {
@@ -705,6 +801,16 @@ export async function listJobs(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.jobs, mapJob, options);
 }
 
+/** Paginated jobs — page/limit/search. */
+export async function queryJobs(query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.jobs, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapJob);
+}
+
 export async function createJob(job: Job, employees: PortalEmployee[]) {
   const response = await postData(providerCrmApi.jobs, jobPayload(job, employees));
   return mapCrmEntity(response, mapJob);
@@ -753,6 +859,16 @@ export async function listReminders(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.reminders, mapPortalReminder, options);
 }
 
+/** Paginated reminders — MD: page/limit/status/assignedEmployeeId/subjectKind/search only. */
+export async function queryReminders(query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.reminders, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalReminder);
+}
+
 export async function createReminder(reminder: PortalReminder) {
   const response = await postData(providerCrmApi.reminders, reminderPayload(reminder));
   return mapCrmEntity(response, mapPortalReminder);
@@ -770,6 +886,16 @@ export async function deleteReminder(id: string) {
 
 export async function listInvoices(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.invoices, mapInvoice, options);
+}
+
+/** Paginated invoices — page/limit/search. */
+export async function queryInvoices(query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.invoices, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapInvoice);
 }
 
 export async function createInvoice(invoice: Invoice) {

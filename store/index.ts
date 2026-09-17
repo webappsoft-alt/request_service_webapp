@@ -29,6 +29,10 @@ import ordersReducer from "./ordersSlice";
 import providerOrdersReducer from "./providerOrdersSlice";
 import customersReducer from "./customersSlice";
 import estimatesReducer from "./estimatesSlice";
+import teamReducer from "./teamSlice";
+import contractorsReducer from "./contractorsSlice";
+import vendorsReducer from "./vendorsSlice";
+import remindersReducer from "./remindersSlice";
 import {
   contractorNotesModule,
   customerNotesModule,
@@ -65,6 +69,10 @@ const rootReducer = combineReducers({
   providerOrders: providerOrdersReducer,
   customers: customersReducer,
   estimates: estimatesReducer,
+  team: teamReducer,
+  contractors: contractorsReducer,
+  vendors: vendorsReducer,
+  reminders: remindersReducer,
   customerNotes: customerNotesModule.reducer,
   estimateNotes: estimateNotesModule.reducer,
   requestNotes: requestNotesModule.reducer,
@@ -124,6 +132,10 @@ function needsReducerHotReplace(state: RootState) {
     state.providerOrders === undefined ||
     state.customers === undefined ||
     state.estimates === undefined ||
+    state.team === undefined ||
+    state.contractors === undefined ||
+    state.vendors === undefined ||
+    state.reminders === undefined ||
     state.customerNotes === undefined ||
     state.estimateNotes === undefined ||
     state.requestNotes === undefined ||

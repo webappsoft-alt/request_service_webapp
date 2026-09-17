@@ -25,12 +25,14 @@ import {
 import { toast } from "sonner";
 import { archiveRowAction, matchesArchiveFilter } from "@/components/portal/archive-control";
 import {
-  CreateNoteDialog,
   CreateReminderDialog,
   CreateTaskDialog,
   SetTaskButton,
 } from "@/components/portal/create-person-dialogs";
-import { NotesPanel } from "@/components/portal/notes-panel";
+import {
+  CreateCustomerNoteDialog,
+  CustomerNotesPanel,
+} from "@/components/portal/customer-notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
 import { CrmMark } from "@/components/portal/crm-mark";
@@ -522,7 +524,12 @@ export function CustomerDetailView({ id }: { id: string }) {
                 </div>
               );
             case "notes":
-              return <NotesPanel kind="customer" id={customer.id} empty="Add the first note on this customer." />;
+              return (
+                <CustomerNotesPanel
+                  customerId={customer.id}
+                  empty="Add the first note on this customer."
+                />
+              );
             case "tasks":
               return (
                 <div className="space-y-3">
@@ -602,11 +609,10 @@ export function CustomerDetailView({ id }: { id: string }) {
         subjectKind="customer"
         subjectId={customer.id}
       />
-      <CreateNoteDialog
+      <CreateCustomerNoteDialog
         open={noteOpen}
         onOpenChange={setNoteOpen}
-        subjectKind="customer"
-        subjectId={customer.id}
+        customerId={customer.id}
       />
       <CreateEstimateDialog
         open={createEstimateOpen}

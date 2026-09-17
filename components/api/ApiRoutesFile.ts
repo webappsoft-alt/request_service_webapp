@@ -125,6 +125,10 @@ export const providerCrmApi = {
   chatMessages: (id: string) => `provider/chats/${id}/messages`,
   chatRead: (id: string) => `provider/chats/${id}/read`,
   inboxSummary: "provider/chats/inbox-summary",
+  /** GET list / POST create universal CRM notes */
+  notes: "provider/notes",
+  /** GET/PUT/PATCH/DELETE one note by id */
+  note: (id: string) => `provider/notes/${id}`,
 } as const;
 
 /** Public catalog endpoints (no provider auth required for reads). */

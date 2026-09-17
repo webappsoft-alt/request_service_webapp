@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AddressAutocomplete,
@@ -77,8 +77,8 @@ export function CreateEstimateDialog({
   const dispatch = useAppDispatch();
   const customerLocation = useAppSelector((state) => state.location);
   const { session, provider, estimates } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
-  const { employees } = usePortalCrew();
+  const { customers, loading: customersLoading } = useCrmDirectory();
+  const { employees, loading: crewLoading } = usePortalCrew();
   const records = usePortalRecords();
   const all = records.mergeEstimates(estimates);
   const first = customers[0];
@@ -318,20 +318,31 @@ export function CreateEstimateDialog({
               </button>
             </div>
             <Field label="Customer">
-              <Select value={selectedCustomer} onValueChange={pickCustomer}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select customer" />
+              <Select
+                disabled={customersLoading}
+                value={customersLoading ? undefined : selectedCustomer}
+                onValueChange={pickCustomer}
+              >
+                <SelectTrigger className="w-full" loading={customersLoading}>
+                  <SelectValue placeholder={customersLoading ? "Loading customers…" : "Select customer"} />
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
                   align="start"
                   className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  {customers.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {crmCustomerName(item)}
-                    </SelectItem>
-                  ))}
+                  {customersLoading ? (
+                    <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      <span>Loading customers…</span>
+                    </div>
+                  ) : (
+                    customers.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {crmCustomerName(item)}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </Field>
@@ -370,23 +381,33 @@ export function CreateEstimateDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Technician">
               <Select
-                value={employeeId || "__unassigned__"}
+                disabled={crewLoading}
+                value={crewLoading ? undefined : (employeeId || "__unassigned__")}
                 onValueChange={(value) => setEmployeeId(value === "__unassigned__" ? "" : value)}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Assign later" />
+                <SelectTrigger className="w-full" loading={crewLoading}>
+                  <SelectValue placeholder={crewLoading ? "Loading technicians…" : "Assign later"} />
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
                   align="start"
                   className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  <SelectItem value="__unassigned__">Assign later</SelectItem>
-                  {employees.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {employeeName(item)}
-                    </SelectItem>
-                  ))}
+                  {crewLoading ? (
+                    <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      <span>Loading technicians…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <SelectItem value="__unassigned__">Assign later</SelectItem>
+                      {employees.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {employeeName(item)}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </Field>

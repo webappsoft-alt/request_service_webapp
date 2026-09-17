@@ -426,6 +426,39 @@ export function useJobSettings(jobId: string) {
   return store[jobId]?.settings;
 }
 
+function toJobAttachmentItem(
+  raw: unknown,
+  index: number,
+  fallbackPrefix: string,
+  addedAt: string,
+): JobAttachment {
+  if (typeof raw === "string") {
+    const url = raw.trim();
+    const name = url.split("/").pop() || `Attachment ${index + 1}`;
+    return {
+      id: `${fallbackPrefix}_att_${index + 1}`,
+      name,
+      type: url.toLowerCase().includes(".pdf") ? "application/pdf" : "image/jpeg",
+      size: 0,
+      dataUrl: url,
+      addedAt,
+      actor: "System",
+    };
+  }
+  const record = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const url = String(record.attachment || record.dataUrl || record.url || "").trim();
+  const name = String(record.name || "").trim() || url.split("/").pop() || `Attachment ${index + 1}`;
+  return {
+    id: String(record.id || `${fallbackPrefix}_att_${index + 1}`),
+    name,
+    type: url.toLowerCase().includes(".pdf") ? "application/pdf" : "image/jpeg",
+    size: typeof record.size === "number" ? record.size : 0,
+    dataUrl: url,
+    addedAt: String(record.addedAt || addedAt),
+    actor: String(record.actor || "System"),
+  };
+}
+
 export function useJobFile(
   job: Job,
   estimate: Estimate | undefined,
@@ -542,9 +575,15 @@ export function useJobFile(
   const addAttachments = useCallback(
     (files: JobAttachment[]) => {
       const latest = current();
+      const currentAttachments =
+        latest.attachments.length > 0
+          ? latest.attachments
+          : (estimate?.attachments ?? job.attachments ?? []).map((item, index) =>
+              toJobAttachmentItem(item, index, estimate?.id ?? job.id, estimate?.createdAt ?? job.createdAt),
+            );
       commit({
         ...latest,
-        attachments: [...files, ...latest.attachments],
+        attachments: [...files, ...currentAttachments],
         logs: [
           ...latest.logs,
           ...files.map((file) => ({
@@ -557,16 +596,22 @@ export function useJobFile(
         ],
       });
     },
-    [actor, commit, current],
+    [actor, commit, current, estimate?.attachments, estimate?.createdAt, estimate?.id, job.attachments, job.createdAt, job.id],
   );
 
   const removeAttachment = useCallback(
     (id: string) => {
       const latest = current();
-      const file = latest.attachments.find((item) => item.id === id);
+      const currentAttachments =
+        latest.attachments.length > 0
+          ? latest.attachments
+          : (estimate?.attachments ?? job.attachments ?? []).map((item, index) =>
+              toJobAttachmentItem(item, index, estimate?.id ?? job.id, estimate?.createdAt ?? job.createdAt),
+            );
+      const file = currentAttachments.find((item) => item.id === id);
       commit({
         ...latest,
-        attachments: latest.attachments.filter((item) => item.id !== id),
+        attachments: currentAttachments.filter((item) => item.id !== id),
         logs: file
           ? [
               ...latest.logs,
@@ -581,7 +626,7 @@ export function useJobFile(
           : latest.logs,
       });
     },
-    [actor, commit, current],
+    [actor, commit, current, estimate?.attachments, estimate?.createdAt, estimate?.id, job.attachments, job.createdAt, job.id],
   );
 
   const logs = [...systemLogs, ...stored.logs].slice().sort((a, b) => (a.at < b.at ? 1 : -1));
@@ -593,15 +638,9 @@ export function useJobFile(
     activities,
     attachments: stored.attachments.length
       ? stored.attachments
-      : (job.attachments ?? []).map((url, index) => ({
-          id: `job_att_${job.id}_${index + 1}`,
-          name: url.split("/").pop() || `Attachment ${index + 1}`,
-          type: url.toLowerCase().includes(".pdf") ? "application/pdf" : "image/jpeg",
-          size: 0,
-          dataUrl: url,
-          addedAt: job.createdAt,
-          actor: "System",
-        })),
+      : (estimate?.attachments ?? job.attachments ?? []).map((item, index) =>
+          toJobAttachmentItem(item, index, estimate?.id ?? job.id, estimate?.createdAt ?? job.createdAt),
+        ),
     addLog,
     addActivity,
     updateActivity,

@@ -87,6 +87,7 @@ export function usePortalCrew() {
     () => EMPTY,
   );
   const apiReady = crm.enabled && crm.ready;
+  const loading = crm.enabled && (!crm.ready || crm.loading);
   const suppressSeedData = Boolean(workspace.session) || (crm.enabled && !crm.ready);
 
   const employees = useMemo(() => {
@@ -439,5 +440,8 @@ export function usePortalCrew() {
       const contractor = contractors.find((item) => item.id === id);
       return contractor ? contractor.companyName : "Unassigned";
     },
+    loading,
+    ready: !crm.enabled || crm.ready,
+    apiReady,
   };
 }

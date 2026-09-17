@@ -120,6 +120,7 @@ export function useCrmDirectory() {
     () => EMPTY,
   );
   const apiReady = crm.enabled && crm.ready;
+  const loading = crm.enabled && (!crm.ready || crm.loading);
   // Authenticated providers: never merge seed/demo people data.
   const suppressSeedData = Boolean(session) || (crm.enabled && !crm.ready);
 
@@ -535,5 +536,8 @@ export function useCrmDirectory() {
     remove,
     setReminderStatus,
     setTaskStatus,
+    loading,
+    ready: !crm.enabled || crm.ready,
+    apiReady,
   };
 }

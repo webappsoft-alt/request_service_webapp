@@ -175,10 +175,16 @@ export interface Estimate {
   tax: number;
   total: number;
   items: EstimateItem[];
+  attachments?: EstimateAttachmentItem[] | string[];
   siteVisit?: EstimateSiteVisitRecord;
   signature?: EstimateSignature;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EstimateAttachmentItem {
+  name: string;
+  attachment: string;
 }
 
 export interface EstimateSignature {

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Camera, Check, ImageIcon, Loader2, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { extractUploadedUrl, uploadDoc, uploadFile } from "@/components/api/uploadFile";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useJobFile, siteVisitFromRecord, type EstimateSiteVisit, type JobAttachment } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
@@ -190,7 +191,9 @@ export function EstimateSiteVisitTab({
   locked: boolean;
   onSave: (visit: EstimateSiteVisit) => void | Promise<void>;
 }) {
-  const { employees } = usePortalCrew();
+  const { employees, loading: crewLoading } = usePortalCrew();
+  const crm = useCrmApiData();
+  const loading = crewLoading || (crm.enabled && !crm.ready);
   const { siteVisit, saveSiteVisit, actor } = useJobFile(asJob, estimate, undefined, "");
   const fallback: EstimateSiteVisit = siteVisit ??
     siteVisitFromRecord(estimate.siteVisit) ?? {
@@ -426,8 +429,8 @@ export function EstimateSiteVisitTab({
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="Technician">
             <Select
-              disabled={locked}
-              value={visit.employeeId || "__unassigned__"}
+              disabled={locked || loading}
+              value={loading ? undefined : (visit.employeeId || "__unassigned__")}
               onValueChange={(value) => {
                 const resolvedId = value === "__unassigned__" ? "" : value;
                 const employee = employees.find((item) => item.id === resolvedId);
@@ -437,20 +440,29 @@ export function EstimateSiteVisitTab({
                 });
               }}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Unassigned" />
+              <SelectTrigger className="w-full" loading={loading}>
+                <SelectValue placeholder={loading ? "Loading technicians…" : "Unassigned"} />
               </SelectTrigger>
               <SelectContent
                 position="popper"
                 align="start"
                 className="z-[100] w-[var(--radix-select-trigger-width)]"
               >
-                <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                {employees.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {employeeName(item)}
-                  </SelectItem>
-                ))}
+                {loading ? (
+                  <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Loading technicians…</span>
+                  </div>
+                ) : (
+                  <>
+                    <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                    {employees.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {employeeName(item)}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </Field>

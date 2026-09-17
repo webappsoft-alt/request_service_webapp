@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown, Eye, FileText, ImageIcon, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Eye, FileText, Film, ImageIcon, Loader2, Music, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import {
+  ATTACHMENT_ACCEPT_ATTRIBUTE,
+  extractUploadedUrl,
+  uploadAnyFile,
+  validateAttachmentFile,
+} from "@/components/api/uploadFile";
 import {
   AddressAutocomplete,
   type PlaceAddress,
@@ -32,9 +39,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
+import { updateEstimate as updateEstimateApi, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
@@ -76,6 +89,8 @@ export function JobFileChrome({
         <span className="font-medium text-foreground">
           {customerLabel} – {service}
         </span>
+        <span className="text-muted-foreground">/</span>
+        <span className="font-semibold text-primary">{job.number}</span>
         {estimate ? (
           <>
             <span className="text-muted-foreground">/</span>
@@ -414,39 +429,75 @@ export function JobSettingsTab({
           <Input value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
         </Field>
         <Field label="Status">
-          <NativeSelect className="w-full" value={draft.status} onChange={(event) => patch({ status: event.target.value as JobStatus })}>
-            {JOB_STATUSES.map((status) => (
-              <NativeSelectOption key={status} value={status}>
-                {jobStatusLabel(status)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <Select
+            value={draft.status}
+            onValueChange={(value) => patch({ status: value as JobStatus })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {JOB_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {jobStatusLabel(status)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Customer">
-          <NativeSelect className="w-full" value={draft.customerId} onChange={(event) => patch({ customerId: event.target.value })}>
-            {customers.map((item) => (
-              <NativeSelectOption key={item.id} value={item.id}>
-                {crmCustomerName(item)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <Select
+            value={draft.customerId}
+            onValueChange={(value) => patch({ customerId: value })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select customer" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              {customers.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {crmCustomerName(item)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Assigned technician">
-          <NativeSelect className="w-full" value={draft.employeeId} onChange={(event) => patch({ employeeId: event.target.value })}>
-            <NativeSelectOption value="">Unassigned</NativeSelectOption>
-            {employees.map((item) => (
-              <NativeSelectOption key={item.id} value={item.id}>
-                {employeeName(item)}
-              </NativeSelectOption>
-            ))}
-            {contractors
-              .filter((item) => item.status === "active")
-              .map((item) => (
-                <NativeSelectOption key={item.id} value={item.id}>
-                  {item.companyName} · contractor
-                </NativeSelectOption>
+          <Select
+            value={draft.employeeId || "__unassigned__"}
+            onValueChange={(value) => patch({ employeeId: value === "__unassigned__" ? "" : value })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              align="start"
+              className="z-[100] w-[var(--radix-select-trigger-width)]"
+            >
+              <SelectItem value="__unassigned__">Unassigned</SelectItem>
+              {employees.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {employeeName(item)}
+                </SelectItem>
               ))}
-          </NativeSelect>
+              {contractors
+                .filter((item) => item.status === "active")
+                .map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.companyName} · contractor
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Start date">
           <Input type="date" value={draft.start} onChange={(event) => patch({ start: event.target.value })} />
@@ -553,46 +604,300 @@ export function JobAttachmentsTab({
   noun?: CostingNoun;
 }) {
   const { attachments, addAttachments, removeAttachment, actor } = useJobFile(job, estimate, invoice, technician);
+  const crm = useCrmApiData();
+  const apiReady = crm.enabled && crm.ready;
   const [over, setOver] = useState(false);
-  const [preview, setPreview] = useState<JobAttachment | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  function readFiles(list: FileList | File[]) {
-    for (const file of Array.from(list)) {
-      const reader = new FileReader();
-      reader.onload = () => {
+  const fallbackSavedUrls = useMemo(() => {
+    return (estimate?.attachments ?? [])
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          return String(record.attachment || record.dataUrl || record.url || "").trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }, [estimate?.attachments]);
+
+  const [lastSavedUrls, setLastSavedUrls] = useState<string[]>(fallbackSavedUrls);
+
+  useEffect(() => {
+    setLastSavedUrls(fallbackSavedUrls);
+  }, [fallbackSavedUrls]);
+
+  const isDirty = useMemo(() => {
+    if (!estimate) return false;
+    const currentUrls = attachments
+      .map((item) => (item.dataUrl || "").trim())
+      .filter(Boolean);
+    if (currentUrls.length !== lastSavedUrls.length) return true;
+    return currentUrls.some((url, idx) => url !== lastSavedUrls[idx]);
+  }, [estimate, attachments, lastSavedUrls]);
+
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const bypassingRef = useRef(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+
+  // Window beforeunload (tab close / refresh)
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // Intercept navigation or tab change when attachments have unsaved changes
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleClickCapture = (event: MouseEvent) => {
+      if (bypassingRef.current) return;
+
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      // Allow clicks within the attachments tab, modals, dropdowns, selects, toasts
+      if (
+        target.closest("[data-job-attachments-tab]") ||
+        target.closest("[role='dialog']") ||
+        target.closest("[role='listbox']") ||
+        target.closest("[data-radix-popper-content-wrapper]") ||
+        target.closest("[data-radix-focus-guard]") ||
+        target.closest("[data-radix-portal]") ||
+        target.closest("[data-sonner-toaster]") ||
+        target.closest(".sonner-toast")
+      ) {
+        return;
+      }
+
+      const interactiveEl = target.closest(
+        "button, a[href], [role='tab'], [role='button'], [data-tab-id]"
+      ) as HTMLElement | null;
+
+      if (!interactiveEl) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      pendingActionRef.current = () => {
+        interactiveEl.click();
+      };
+
+      setShowUnsavedDialog(true);
+    };
+
+    document.addEventListener("click", handleClickCapture, true);
+    return () => {
+      document.removeEventListener("click", handleClickCapture, true);
+    };
+  }, [isDirty]);
+
+  function executePending() {
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    setShowUnsavedDialog(false);
+    if (action) {
+      bypassingRef.current = true;
+      setTimeout(() => {
+        action();
+        setTimeout(() => {
+          bypassingRef.current = false;
+        }, 150);
+      }, 0);
+    }
+  }
+
+  async function persistEstimateAttachments(nextAttachments: JobAttachment[]) {
+    if (!estimate || !apiReady) return;
+    const attachmentPayload = nextAttachments
+      .map((item) => ({
+        name: (item.name || "").trim() || "Attachment",
+        attachment: (item.dataUrl || "").trim(),
+      }))
+      .filter((item) => Boolean(item.attachment));
+
+    const updated = await updateEstimateApi(estimate.id, {
+      ...estimate,
+      attachments: attachmentPayload,
+    });
+    if (updated) {
+      crm.patchEstimate(estimate.id, updated);
+    } else {
+      crm.patchEstimate(estimate.id, { attachments: attachmentPayload });
+    }
+  }
+
+  async function handleSave() {
+    if (!estimate) return;
+    setSaving(true);
+    try {
+      if (apiReady) {
+        await persistEstimateAttachments(attachments);
+      }
+      setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      toast.success("Attachments saved.");
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not save attachments.";
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveAndLeave() {
+    try {
+      setSaving(true);
+      await persistEstimateAttachments(attachments);
+      setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      toast.success("Attachments saved.");
+      executePending();
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not save attachments.";
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDiscardAndLeave() {
+    attachments.forEach((item) => {
+      const url = (item.dataUrl || "").trim();
+      if (!lastSavedUrls.includes(url)) {
+        removeAttachment(item.id);
+      }
+    });
+    executePending();
+  }
+
+  function handleCancelDialog() {
+    pendingActionRef.current = null;
+    setShowUnsavedDialog(false);
+  }
+
+  async function handleDelete(file: JobAttachment) {
+    if (deletingId) return;
+    setDeletingId(file.id);
+    try {
+      const remaining = attachments.filter((item) => item.id !== file.id);
+      removeAttachment(file.id);
+      if (estimate && apiReady) {
+        await persistEstimateAttachments(remaining);
+      }
+      setLastSavedUrls(remaining.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      toast.success("Attachment removed.");
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not update attachments on server.";
+      toast.error(message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function readFiles(list: FileList | File[]) {
+    if (uploading) return;
+    const files = Array.from(list);
+    if (!files.length) return;
+
+    // Validate all files upfront to prevent invalid requests from hitting the API
+    for (const file of files) {
+      const check = validateAttachmentFile(file);
+      if (!check.valid) {
+        toast.error(check.error);
+        return;
+      }
+    }
+
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const response = await uploadAnyFile(file);
+        const url = extractUploadedUrl(response.data);
+        if (!url) throw new Error(`Could not upload ${file.name}.`);
         addAttachments([
           {
             id: `att_${Date.now()}_${file.name}`,
             name: file.name,
             type: file.type || "application/octet-stream",
             size: file.size,
-            dataUrl: String(reader.result),
+            dataUrl: url,
             addedAt: new Date().toISOString(),
             actor,
           },
         ]);
         toast.success(`${file.name} attached.`);
-      };
-      reader.readAsDataURL(file);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : error && typeof error === "object" && "message" in error
+            ? String((error as { message?: unknown }).message || "").trim()
+            : "";
+      toast.error(message || "Could not upload that file.");
+    } finally {
+      setUploading(false);
     }
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setOver(false);
-    if (event.dataTransfer.files.length) readFiles(event.dataTransfer.files);
+    if (event.dataTransfer.files.length) void readFiles(event.dataTransfer.files);
   }
 
   return (
-    <div>
-      <h2 className="text-base font-semibold">Attachments</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Photos, PDFs, and other {noun === "estimate" ? "quote" : noun === "invoice" ? "invoice" : "job"} files. Preview or remove anytime.
-      </p>
+    <div data-job-attachments-tab>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold">Attachments</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Photos, PDFs, videos, and other {noun === "estimate" ? "quote" : noun === "invoice" ? "invoice" : "job"} files. Preview or remove anytime.
+          </p>
+        </div>
+        {estimate ? (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void handleSave()}
+            disabled={saving || uploading}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save attachments"
+            )}
+          </Button>
+        ) : null}
+      </div>
       <label
         className={cn(
           "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors",
           over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+          uploading && "pointer-events-none opacity-60",
         )}
         onDragEnter={(event) => {
           event.preventDefault();
@@ -605,15 +910,23 @@ export function JobAttachmentsTab({
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
       >
-        <Upload className="size-6 text-primary" />
-        <p className="text-sm font-medium">Drop files here or browse</p>
-        <p className="text-xs text-muted-foreground">PDF, images, and documents</p>
+        {uploading ? (
+          <Loader2 className="size-6 animate-spin text-primary" />
+        ) : (
+          <Upload className="size-6 text-primary" />
+        )}
+        <p className="text-sm font-medium">
+          {uploading ? "Uploading files…" : "Drop files here or browse"}
+        </p>
+        <p className="text-xs text-muted-foreground">Images, PDF, Video, and Audio up to 500 MB</p>
         <input
           className="sr-only"
           type="file"
           multiple
+          accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
+          disabled={uploading}
           onChange={(event) => {
-            if (event.target.files?.length) readFiles(event.target.files);
+            if (event.target.files?.length) void readFiles(event.target.files);
             event.target.value = "";
           }}
         />
@@ -623,29 +936,55 @@ export function JobAttachmentsTab({
           {attachments.map((file) => (
             <li key={file.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-md bg-[#eef1f5] text-primary">
-                {file.type.startsWith("image/") ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
+                {file.type.startsWith("image/") ? (
+                  <ImageIcon className="size-4" />
+                ) : file.type.startsWith("video/") ? (
+                  <Film className="size-4" />
+                ) : file.type.startsWith("audio/") ? (
+                  <Music className="size-4" />
+                ) : (
+                  <FileText className="size-4" />
+                )}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{file.name}</p>
+                <a
+                  href={file.dataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block truncate text-sm font-medium hover:text-primary hover:underline"
+                >
+                  {file.name}
+                </a>
                 <p className="text-xs text-muted-foreground">
                   {fileSize(file.size)} · {stamp(file.addedAt)}
                 </p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setPreview(file)}>
-                <Eye />
-                Preview
+              <Button size="sm" variant="outline" asChild>
+                <a
+                  href={file.dataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Preview ${file.name} in a new tab`}
+                >
+                  <Eye className="size-3.5" />
+                  Preview
+                </a>
               </Button>
               <Button
                 size="icon-sm"
                 variant="ghost"
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 aria-label={`Delete ${file.name}`}
+                disabled={deletingId === file.id || saving}
                 onClick={() => {
-                  removeAttachment(file.id);
-                  toast.success("Attachment removed.");
+                  void handleDelete(file);
                 }}
               >
-                <Trash2 />
+                {deletingId === file.id ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
               </Button>
             </li>
           ))}
@@ -653,24 +992,17 @@ export function JobAttachmentsTab({
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">No files on this job yet.</p>
       )}
-      <Dialog open={Boolean(preview)} onOpenChange={(next) => !next && setPreview(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{preview?.name}</DialogTitle>
-            <DialogDescription>{preview ? fileSize(preview.size) : ""}</DialogDescription>
-          </DialogHeader>
-          {preview?.type.startsWith("image/") ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt={preview.name} src={preview.dataUrl} className="max-h-[28rem] w-full object-contain" />
-          ) : preview?.type === "application/pdf" ? (
-            <iframe title={preview.name} src={preview.dataUrl} className="h-[28rem] w-full rounded-md border border-black/10" />
-          ) : preview ? (
-            <a href={preview.dataUrl} download={preview.name} className="text-sm font-medium text-primary underline">
-              Download {preview.name}
-            </a>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+
+      <UnsavedChangesDialog
+        open={showUnsavedDialog}
+        onOpenChange={(open) => {
+          if (!open) handleCancelDialog();
+        }}
+        onSave={handleSaveAndLeave}
+        onDiscard={handleDiscardAndLeave}
+        onCancel={handleCancelDialog}
+        saving={saving}
+      />
     </div>
   );
 }

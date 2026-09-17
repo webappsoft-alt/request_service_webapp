@@ -8,8 +8,11 @@ import {
   CalendarDays,
   Clock,
   FileText,
+  Film,
   ImageIcon,
   ListTodo,
+  Loader2,
+  Music,
   NotebookPen,
   Paperclip,
   Settings,
@@ -17,6 +20,12 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  ATTACHMENT_ACCEPT_ATTRIBUTE,
+  extractUploadedUrl,
+  uploadAnyFile,
+  validateAttachmentFile,
+} from "@/components/api/uploadFile";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/portal/create-person-dialogs";
 import { NotesPanel } from "@/components/portal/notes-panel";
@@ -664,40 +673,77 @@ function EmployeeScheduleTab({
   );
 }
 
+function stamp(value: string) {
+  const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function fileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee }) {
   const file = useEmployeeFile(employee);
   const [over, setOver] = useState(false);
-  const [preview, setPreview] = useState<JobAttachment | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  function readFiles(list: FileList | File[]) {
-    for (const fileItem of Array.from(list)) {
-      if (fileItem.size > MAX_FILE) {
-        toast.error(`${fileItem.name} is over 2 MB.`);
-        continue;
+  async function readFiles(list: FileList | File[]) {
+    if (uploading) return;
+    const files = Array.from(list);
+    if (!files.length) return;
+
+    for (const fileItem of files) {
+      const check = validateAttachmentFile(fileItem);
+      if (!check.valid) {
+        toast.error(check.error);
+        return;
       }
-      const reader = new FileReader();
-      reader.onload = () => {
+    }
+
+    setUploading(true);
+    try {
+      for (const fileItem of files) {
+        const response = await uploadAnyFile(fileItem);
+        const url = extractUploadedUrl(response.data);
+        if (!url) throw new Error(`Could not upload ${fileItem.name}.`);
         file.addAttachments([
           {
             id: `att_${Date.now()}_${fileItem.name}`,
             name: fileItem.name,
             type: fileItem.type || "application/octet-stream",
             size: fileItem.size,
-            dataUrl: String(reader.result),
+            dataUrl: url,
             addedAt: new Date().toISOString(),
             actor: file.actor,
           },
         ]);
         toast.success(`${fileItem.name} attached.`);
-      };
-      reader.readAsDataURL(fileItem);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : error && typeof error === "object" && "message" in error
+            ? String((error as { message?: unknown }).message || "").trim()
+            : "";
+      toast.error(message || "Could not upload that file.");
+    } finally {
+      setUploading(false);
     }
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setOver(false);
-    if (event.dataTransfer.files.length) readFiles(event.dataTransfer.files);
+    if (event.dataTransfer.files.length) void readFiles(event.dataTransfer.files);
   }
 
   return (
@@ -708,6 +754,7 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
         className={cn(
           "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
           over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+          uploading && "pointer-events-none opacity-60",
         )}
         onDragEnter={(event) => {
           event.preventDefault();
@@ -720,15 +767,23 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
       >
-        <Upload className="size-6 text-primary" />
-        <p className="text-sm font-medium">Drop files here or browse</p>
-        <p className="text-xs text-muted-foreground">PDF, images, and documents up to 2 MB</p>
+        {uploading ? (
+          <Loader2 className="size-6 animate-spin text-primary" />
+        ) : (
+          <Upload className="size-6 text-primary" />
+        )}
+        <p className="text-sm font-medium">
+          {uploading ? "Uploading files…" : "Drop files here or browse"}
+        </p>
+        <p className="text-xs text-muted-foreground">Images, PDF, Video, and Audio up to 500 MB</p>
         <input
           className="sr-only"
           type="file"
           multiple
+          accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
+          disabled={uploading}
           onChange={(event) => {
-            if (event.target.files?.length) readFiles(event.target.files);
+            if (event.target.files?.length) void readFiles(event.target.files);
             event.target.value = "";
           }}
         />
@@ -738,51 +793,58 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
           {file.attachments.map((item) => (
             <li key={item.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">
-                {item.type.startsWith("image/") ? <ImageIcon className="size-4" /> : <FileText className="size-4" />}
+                {item.type.startsWith("image/") ? (
+                  <ImageIcon className="size-4" />
+                ) : item.type.startsWith("video/") ? (
+                  <Film className="size-4" />
+                ) : item.type.startsWith("audio/") ? (
+                  <Music className="size-4" />
+                ) : (
+                  <FileText className="size-4" />
+                )}
               </span>
-              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setPreview(item)}>
-                <p className="truncate text-sm font-medium">{item.name}</p>
-                <p className="text-xs text-muted-foreground">{item.actor}</p>
-              </button>
-              <button
-                type="button"
-                className="text-destructive"
-                aria-label={`Remove ${item.name}`}
-                onClick={() => file.removeAttachment(item.id)}
+              <div className="min-w-0 flex-1">
+                <a
+                  href={item.dataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block truncate text-sm font-medium hover:text-primary hover:underline"
+                >
+                  {item.name}
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  {fileSize(item.size)} · {stamp(item.addedAt)}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" asChild>
+                <a
+                  href={item.dataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Preview ${item.name} in a new tab`}
+                >
+                  <Eye className="size-3.5" />
+                  Preview
+                </a>
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                aria-label={`Delete ${item.name}`}
+                onClick={() => {
+                  file.removeAttachment(item.id);
+                  toast.success("Attachment removed.");
+                }}
               >
-                <Trash2 className="size-4" />
-              </button>
+                <Trash2 />
+              </Button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">No files yet.</p>
+        <p className="mt-4 text-sm text-muted-foreground">No files on this employee record yet.</p>
       )}
-      <Dialog open={Boolean(preview)} onOpenChange={(next) => !next && setPreview(null)}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-6">{preview?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center justify-center overflow-hidden rounded-md bg-black/5 p-2">
-            {preview?.type.startsWith("image/") ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                alt={preview.name}
-                src={preview.dataUrl}
-                className="max-h-[75vh] w-auto max-w-full rounded-[4px] object-contain"
-              />
-            ) : preview ? (
-              <a
-                href={preview.dataUrl}
-                download={preview.name}
-                className="text-sm font-medium text-primary underline"
-              >
-                Download {preview.name}
-              </a>
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -77,7 +77,7 @@ export function EstimateShareTab({
           : shared.shareToken
             ? shareUrlFor(shared.shareToken)
             : href);
-      await crm.refresh();
+      crm.patchEstimate(estimate.id, { status: "sent" });
       if (shared.emailSent) {
         toast.success(
           shared.emailTo

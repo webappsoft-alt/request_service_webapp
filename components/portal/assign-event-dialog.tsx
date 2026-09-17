@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import {
   Select,
   SelectContent,
@@ -46,7 +47,9 @@ export function AssignEventDialog({
   defaultDate?: string;
   onSave: (assignment: PortalAssignment) => void | Promise<void>;
 }) {
-  const { contractors } = useCrmDirectory();
+  const { contractors, loading: contractorsLoading } = useCrmDirectory();
+  const crm = useCrmApiData();
+  const loading = contractorsLoading || (crm.enabled && !crm.ready);
   const [recordKey, setRecordKey] = useState("");
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -111,18 +114,25 @@ export function AssignEventDialog({
           {!event ? (
             <Field>
               <FieldLabel htmlFor="crew-event">Work item</FieldLabel>
-              <NativeSelect
-                id="crew-event"
-                className="w-full"
+              <Select
                 value={recordKey}
-                onChange={(change) => setRecordKey(change.target.value)}
+                onValueChange={(value) => setRecordKey(value)}
               >
-                {events.map((item) => (
-                  <NativeSelectOption key={item.id} value={`${item.kind}:${item.recordId}`}>
-                    {calendarEventKindLabel(item.kind)} · {item.title} — {item.detail}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                <SelectTrigger id="crew-event" className="w-full">
+                  <SelectValue placeholder="Select work item" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {events.map((item) => (
+                    <SelectItem key={item.id} value={`${item.kind}:${item.recordId}`}>
+                      {calendarEventKindLabel(item.kind)} · {item.title} — {item.detail}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           ) : (
             <p className="text-sm">
@@ -162,40 +172,53 @@ export function AssignEventDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="crew-tech">Technician</FieldLabel>
-            <Select value={employeeId || undefined} onValueChange={setEmployeeId}>
-              <SelectTrigger id="crew-tech" className="w-full">
-                <SelectValue placeholder="Select technician" />
+            <Select
+              disabled={loading}
+              value={loading ? undefined : (employeeId || undefined)}
+              onValueChange={setEmployeeId}
+            >
+              <SelectTrigger id="crew-tech" className="w-full" loading={loading}>
+                <SelectValue placeholder={loading ? "Loading technicians…" : "Select technician"} />
               </SelectTrigger>
               <SelectContent
                 position="popper"
                 align="start"
                 className="z-[100] max-h-64 w-[var(--radix-select-trigger-width)]"
               >
-                {activeEmployees.length ? (
-                  <SelectGroup>
-                    <SelectLabel>Employees</SelectLabel>
-                    {activeEmployees.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.firstName} {item.lastName} · {item.trade}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {activeContractors.length ? (
-                  <SelectGroup>
-                    <SelectLabel>Contractors</SelectLabel>
-                    {activeContractors.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.companyName} · {item.trade}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {!activeEmployees.length && !activeContractors.length ? (
-                  <div className="px-2 py-3 text-sm text-muted-foreground">
-                    No technicians available.
+                {loading ? (
+                  <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Loading technicians…</span>
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    {activeEmployees.length ? (
+                      <SelectGroup>
+                        <SelectLabel>Employees</SelectLabel>
+                        {activeEmployees.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.firstName} {item.lastName} · {item.trade}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : null}
+                    {activeContractors.length ? (
+                      <SelectGroup>
+                        <SelectLabel>Contractors</SelectLabel>
+                        {activeContractors.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.companyName} · {item.trade}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : null}
+                    {!activeEmployees.length && !activeContractors.length ? (
+                      <div className="px-2 py-3 text-sm text-muted-foreground">
+                        No technicians available.
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </Field>

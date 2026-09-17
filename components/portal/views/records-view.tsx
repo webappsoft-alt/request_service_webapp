@@ -138,13 +138,14 @@ export function EstimatesView() {
         <Field className="w-full max-w-xs gap-1.5">
           <FieldLabel htmlFor="estimates-status-filter">Status</FieldLabel>
           <Select
+            disabled={listLoading}
             value={status || "__all__"}
             onValueChange={(value) => {
               const next = value === "__all__" ? "" : value;
               router.replace(next ? `/pro/dashboard/estimates?status=${next}` : "/pro/dashboard/estimates");
             }}
           >
-            <SelectTrigger id="estimates-status-filter" className="w-full">
+            <SelectTrigger id="estimates-status-filter" className="w-full" loading={listLoading}>
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent

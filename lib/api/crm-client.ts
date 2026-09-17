@@ -129,6 +129,7 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
         id: item.id,
         description: String(item.description).trim(),
         kind: item.type === "materials" ? "material" : "labor",
+        unit: item.unit || (item.type === "labor" ? "hr" : "ea"),
         quantity,
         unitPrice,
         taxRate,
@@ -271,6 +272,27 @@ function siteVisitPayload(visit?: Estimate["siteVisit"]) {
   };
 }
 
+function estimateAttachmentsToApi(attachments?: unknown[]): { name: string; attachment: string }[] {
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .map((item, index) => {
+      if (typeof item === "string" && item.trim()) {
+        const url = item.trim();
+        const name = url.split("/").pop() || `Attachment ${index + 1}`;
+        return { name, attachment: url };
+      }
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        const url = String(record.attachment || record.dataUrl || record.url || "").trim();
+        if (!url) return null;
+        const name = String(record.name || "").trim() || url.split("/").pop() || `Attachment ${index + 1}`;
+        return { name, attachment: url };
+      }
+      return null;
+    })
+    .filter((entry): entry is { name: string; attachment: string } => Boolean(entry));
+}
+
 function estimatePayload(estimate: Estimate) {
   return {
     customerId: estimate.customerId,
@@ -295,6 +317,7 @@ function estimatePayload(estimate: Estimate) {
     terms: estimate.terms || "",
     propertyAddress: mapAddressForApi(estimate.propertyAddress),
     siteVisit: siteVisitPayload(estimate.siteVisit),
+    attachments: estimateAttachmentsToApi(estimate.attachments as unknown[]),
   };
 }
 

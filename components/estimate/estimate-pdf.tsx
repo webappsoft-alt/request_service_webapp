@@ -44,7 +44,7 @@ export function EstimatePdfDocument({
   customerSlot?: ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:space-y-0 print:p-0">
       <PdfPage n={1} of={2} snapshot={snapshot}>
         <PdfHeader snapshot={snapshot} />
         <div className="mt-6 grid grid-cols-2 gap-6">
@@ -64,7 +64,7 @@ export function EstimatePdfDocument({
             lines={[snapshot.customerPhone, snapshot.customerEmail, snapshot.street, formatLocation(snapshot.city, snapshot.state, snapshot.zip)]}
           />
         </div>
-        <div className="mt-6 grid grid-cols-3 gap-3 border border-black/10 bg-[#f8fafc] px-3 py-2.5 text-[11px]">
+        <div className="mt-6 grid grid-cols-3 gap-3 border border-black/10 bg-[#f8fafc] px-3 py-2.5 text-[11px] print:bg-transparent">
           <Meta label="Estimate" value={snapshot.number} />
           <Meta label="Issued" value={formatDate(snapshot.issuedAt)} />
           <Meta label="Expires" value={snapshot.expiresAt ? formatDate(snapshot.expiresAt) : "30 days"} />
@@ -73,7 +73,7 @@ export function EstimatePdfDocument({
           <p className="text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Work details</p>
           <table className="mt-2 w-full border-collapse text-[12px]">
             <thead>
-              <tr className="border-y border-black/10 bg-[#e8eef5] text-[10px] tracking-[0.12em] text-[#003F7D] uppercase">
+              <tr className="border-y border-black/10 bg-[#e8eef5] text-[10px] tracking-[0.12em] text-[#003F7D] uppercase print:bg-transparent">
                 <th className="px-2 py-2 text-left font-semibold">Description</th>
                 <th className="px-2 py-2 text-left font-semibold">Type</th>
                 <th className="px-2 py-2 text-right font-semibold">Qty</th>
@@ -110,14 +110,13 @@ export function EstimatePdfDocument({
             <p className="mt-1 text-[12px] leading-5">{snapshot.notes}</p>
           </div>
         ) : null}
-        <p className="mt-8 text-[11px] text-muted-foreground">Terms, conditions, and signatures continue on page 2.</p>
       </PdfPage>
 
       <PdfPage n={2} of={2} snapshot={snapshot}>
         <PdfHeader snapshot={snapshot} compact />
         <p className="mt-6 text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Terms and conditions</p>
         {snapshot.terms ? (
-          <p className="mt-2 border border-black/10 bg-[#f8fafc] px-3 py-2 text-[12px] leading-5">
+          <p className="mt-2 border border-black/10 bg-[#f8fafc] px-3 py-2 text-[12px] leading-5 print:bg-transparent">
             <span className="font-semibold">Project terms. </span>
             {snapshot.terms}
           </p>
@@ -167,11 +166,11 @@ function PdfPage({
   children: ReactNode;
 }) {
   return (
-    <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-      <div className="min-h-[10.4in] px-8 py-7">
+    <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)] print:border-none print:shadow-none print:rounded-none print:max-w-none print:w-full print:m-0 print:p-0 print:break-after-page print:bg-white">
+      <div className="min-h-[10.4in] px-8 py-7 print:min-h-0 print:px-0 print:py-0">
         {children}
       </div>
-      <footer className="flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2 text-[10px] text-muted-foreground">
+      <footer className="flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2 text-[10px] text-muted-foreground print:bg-transparent print:px-0">
         <span>
           {snapshot.number} · {snapshot.companyName}
         </span>
@@ -267,29 +266,31 @@ function SignatureBlock({
   empty,
 }: {
   title: string;
-  name: string;
+  name?: string;
   date?: string;
   image?: string;
   slot?: ReactNode;
   empty: string;
 }) {
   return (
-    <div className="rounded-[4px] border border-black/10 p-3">
+    <div className="flex flex-col">
       <p className="text-[10px] font-semibold tracking-[0.14em] text-[#003F7D] uppercase">{title}</p>
       {slot ? (
         slot
       ) : image ? (
         <div className="mt-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt={`Signature of ${name}`} src={image} className="h-16 w-full object-contain object-left" />
-          <p className="mt-2 text-[12px] font-medium">{name}</p>
+          <div className="h-20 border-b border-black/25">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt={name ? `Signature of ${name}` : "Signature"} src={image} className="h-full w-full object-contain object-left" />
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">{empty}</p>
+          {name ? <p className="mt-1 text-[12px] font-medium">{name}</p> : null}
           {date ? <p className="text-[11px] text-muted-foreground">{formatDate(date.slice(0, 10))}</p> : null}
         </div>
       ) : (
-        <div className="mt-3">
-          <div className="h-16 border-b border-black/25" />
+        <div className="mt-2">
+          <div className="h-20 border-b border-black/25" />
           <p className="mt-2 text-[11px] text-muted-foreground">{empty}</p>
-          <p className="text-[12px] font-medium">{name}</p>
         </div>
       )}
     </div>
@@ -384,28 +385,39 @@ export function SignaturePadField({
   name,
   onName,
   pad,
+  showNameInput = false,
+  showName = false,
 }: {
-  name: string;
-  onName: (value: string) => void;
+  name?: string;
+  onName?: (value: string) => void;
   pad: ReturnType<typeof useSignPad>;
+  showNameInput?: boolean;
+  showName?: boolean;
 }) {
   return (
-    <div className="mt-2 space-y-2">
-      <input
-        className="h-8 w-full rounded-[4px] border border-black/15 px-2 text-[12px]"
-        value={name}
-        onChange={(event) => onName(event.target.value)}
-        placeholder="Full name"
-      />
-      <div>
-        <div className="mb-1 flex justify-end">
-          <button type="button" className="text-[11px] font-medium text-primary hover:underline" onClick={pad.clear}>
-            Clear
-          </button>
-        </div>
+    <div className="mt-2">
+      {showNameInput && onName ? (
+        <input
+          className="mb-2 h-8 w-full rounded-[4px] border border-black/15 px-2 text-[12px]"
+          value={name || ""}
+          onChange={(event) => onName(event.target.value)}
+          placeholder="Signer name"
+        />
+      ) : showName && name ? (
+        <p className="mb-2 text-[12px] font-medium text-foreground">{name}</p>
+      ) : null}
+      <div className="relative">
+        <button
+          type="button"
+          className="absolute -top-5 right-0 text-[11px] font-medium text-primary hover:underline z-10 print:hidden"
+          onClick={pad.clear}
+        >
+          Clear
+        </button>
         <canvas
           ref={pad.ref}
-          className="h-20 w-full cursor-crosshair rounded-[4px] border border-black/15 bg-[#f8fafc]"
+          style={{ touchAction: "none" }}
+          className="h-20 w-full cursor-crosshair border-b border-black/25 bg-transparent"
           onPointerDown={pad.start}
           onPointerMove={pad.move}
           onPointerUp={pad.end}

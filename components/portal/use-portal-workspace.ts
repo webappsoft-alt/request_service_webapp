@@ -243,14 +243,14 @@ export function usePortalWorkspace() {
   const apiReady = shouldUseApi && crm.ready;
   const loading = crm.enabled && (!crm.ready || crm.loading);
 
-  const customers = apiReady ? crm.customers : useLiveOnly ? [] : demoWorkspace!.customers;
-  const requests = apiReady ? crm.requests : useLiveOnly ? [] : demoWorkspace!.requests;
-  const estimates = apiReady ? crm.estimates : useLiveOnly ? [] : demoWorkspace!.estimates;
-  const jobs = apiReady ? crm.jobs : useLiveOnly ? [] : demoWorkspace!.jobs;
-  const invoices = apiReady ? crm.invoices : useLiveOnly ? [] : demoWorkspace!.invoices;
-  const payments = apiReady ? crm.payments : useLiveOnly ? [] : demoWorkspace!.payments;
-  const employees = apiReady ? crm.employees : useLiveOnly ? [] : demoWorkspace!.employees;
-  const calendarEvents = apiReady
+  const customers = (apiReady || crm.customers.length > 0) ? crm.customers : useLiveOnly ? [] : demoWorkspace!.customers;
+  const requests = (apiReady || crm.requests.length > 0) ? crm.requests : useLiveOnly ? [] : demoWorkspace!.requests;
+  const estimates = (apiReady || crm.estimates.length > 0) ? crm.estimates : useLiveOnly ? [] : demoWorkspace!.estimates;
+  const jobs = (apiReady || crm.jobs.length > 0) ? crm.jobs : useLiveOnly ? [] : demoWorkspace!.jobs;
+  const invoices = (apiReady || crm.invoices.length > 0) ? crm.invoices : useLiveOnly ? [] : demoWorkspace!.invoices;
+  const payments = (apiReady || crm.payments.length > 0) ? crm.payments : useLiveOnly ? [] : demoWorkspace!.payments;
+  const employees = (apiReady || crm.employees.length > 0) ? crm.employees : useLiveOnly ? [] : demoWorkspace!.employees;
+  const calendarEvents = (apiReady || crm.schedule.length > 0)
     ? crm.schedule
     : useLiveOnly
       ? []

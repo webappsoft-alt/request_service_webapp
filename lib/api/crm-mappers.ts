@@ -247,6 +247,32 @@ function getListPayload(response: unknown): unknown[] {
   const root = asRecord(response) ?? {};
   if (Array.isArray(root.data)) return root.data;
   if (Array.isArray(root.items)) return root.items;
+  const nested = asRecord(root.data);
+  if (nested) {
+    if (Array.isArray(nested.items)) return nested.items;
+    if (Array.isArray(nested.estimates)) return nested.estimates;
+    if (Array.isArray(nested.customers)) return nested.customers;
+    if (Array.isArray(nested.jobs)) return nested.jobs;
+    if (Array.isArray(nested.invoices)) return nested.invoices;
+    if (Array.isArray(nested.payments)) return nested.payments;
+    if (Array.isArray(nested.tasks)) return nested.tasks;
+    if (Array.isArray(nested.reminders)) return nested.reminders;
+    if (Array.isArray(nested.requests)) return nested.requests;
+    if (Array.isArray(nested.results)) return nested.results;
+    if (Array.isArray(nested.rows)) return nested.rows;
+    if (Array.isArray(nested.list)) return nested.list;
+  }
+  if (Array.isArray(root.estimates)) return root.estimates;
+  if (Array.isArray(root.customers)) return root.customers;
+  if (Array.isArray(root.jobs)) return root.jobs;
+  if (Array.isArray(root.invoices)) return root.invoices;
+  if (Array.isArray(root.payments)) return root.payments;
+  if (Array.isArray(root.tasks)) return root.tasks;
+  if (Array.isArray(root.reminders)) return root.reminders;
+  if (Array.isArray(root.requests)) return root.requests;
+  if (Array.isArray(root.results)) return root.results;
+  if (Array.isArray(root.rows)) return root.rows;
+  if (Array.isArray(root.list)) return root.list;
   return [];
 }
 
@@ -254,7 +280,17 @@ function getEntityPayload(response: unknown): unknown {
   const root = asRecord(response);
   if (!root) return response;
   const data = root.data;
-  if (data !== undefined) return data;
+  if (data !== undefined && data !== null) {
+    const dataRec = asRecord(data);
+    if (dataRec?.estimate !== undefined) return dataRec.estimate;
+    if (dataRec?.customer !== undefined) return dataRec.customer;
+    if (dataRec?.job !== undefined) return dataRec.job;
+    if (dataRec?.invoice !== undefined) return dataRec.invoice;
+    return data;
+  }
+  if (root.estimate !== undefined) return root.estimate;
+  if (root.customer !== undefined) return root.customer;
+  if (root.job !== undefined) return root.job;
   if (root.invoice !== undefined || root.payments !== undefined) {
     return {
       invoice: root.invoice,
@@ -266,13 +302,17 @@ function getEntityPayload(response: unknown): unknown {
 
 function getPagination(response: unknown, count: number) {
   const root = asRecord(response) ?? {};
-  const pagination = asRecord(root.pagination) ?? {};
+  const nested = asRecord(root.data) ?? {};
+  const pagination = asRecord(root.pagination) ?? asRecord(nested.pagination) ?? root;
   const page = Math.max(1, numberValue(pagination.page, 1));
   const limit = Math.max(1, numberValue(pagination.limit, count || 100));
-  const total = Math.max(0, numberValue(pagination.total, count));
+  const total = Math.max(0, numberValue(pagination.total, numberValue(nested.total, count)));
   const totalPages = Math.max(
     1,
-    numberValue(pagination.totalPages, numberValue(pagination.pages, Math.ceil((total || count || 1) / limit))),
+    numberValue(
+      pagination.totalPages,
+      numberValue(pagination.pages, Math.ceil((total || count || 1) / limit)),
+    ),
   );
   return { page, limit, total, totalPages };
 }

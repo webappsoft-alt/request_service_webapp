@@ -46,7 +46,7 @@ export function SendApprovalDialog({
   const { session, provider } = usePortalWorkspace();
   const share = useEstimateShare();
   const ready = estimateCanShare(estimate.status);
-  const apiReady = crm.enabled && crm.ready;
+  const apiReady = crm.enabled;
 
   const snapshot = useMemo(
     () =>
@@ -102,7 +102,7 @@ export function SendApprovalDialog({
                   crm.patchEstimate(estimate.id, { status: "sent" });
                   const next = { ...signed, token };
                   share.saveSnapshot(next);
-                  const url = shared.absoluteShareUrl || shareUrlFor(token);
+                  const url = shareUrlFor(token);
                   onSent({ viaApi, token, url, href: url });
                   void navigator.clipboard.writeText(url);
                   if (shared.emailSent) {
@@ -163,7 +163,7 @@ function ApprovalPreview({
       <div className="max-h-[68vh] overflow-y-auto bg-[#eef1f5] px-4 py-5">
         <EstimatePdfDocument
           snapshot={snapshot}
-          companySlot={<SignaturePadField name={signer} onName={setSigner} pad={companyPad} />}
+          companySlot={<SignaturePadField name={signer} onName={setSigner} pad={companyPad} showNameInput />}
         />
       </div>
       <DialogFooter className="m-0 rounded-none">

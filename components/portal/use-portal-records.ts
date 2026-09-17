@@ -172,17 +172,19 @@ export function usePortalRecords() {
 
   const setStatus = useCallback(
     (kind: PortalRecordKind, id: string, status: string) => {
-      if (apiReady && kind === "request") {
+      if (crm.enabled && kind === "request") {
         return (async () => {
           const updated = await updateRequestStatus(
             id,
             status as PortalRequest["status"],
           );
-          await crm.refresh();
+          if (crm.ready) {
+            await crm.refresh({ silent: true });
+          }
           return updated;
         })();
       }
-      if (apiReady && kind === "estimate") {
+      if (crm.enabled && kind === "estimate") {
         return (async () => {
           const nextStatus = status as Estimate["status"];
           try {
@@ -191,6 +193,9 @@ export function usePortalRecords() {
               crm.patchEstimate(id, updated);
             } else {
               crm.patchEstimate(id, { status: nextStatus });
+            }
+            if (crm.ready) {
+              void crm.refresh({ silent: true });
             }
             return updated;
           } catch (statusError) {
@@ -206,6 +211,9 @@ export function usePortalRecords() {
               crm.patchEstimate(id, updated);
             } else {
               crm.patchEstimate(id, { status: nextStatus });
+            }
+            if (crm.ready) {
+              void crm.refresh({ silent: true });
             }
             return updated;
           }
@@ -399,17 +407,19 @@ export function usePortalRecords() {
   const addEstimate = useCallback(
     (estimate: Estimate) => {
       persistEstimate(estimate);
-      if (apiReady) {
+      if (crm.enabled) {
         return (async () => {
           const created = await createEstimateApi(estimate);
           const saved = created ?? estimate;
           persistEstimate(saved, created && created.id !== estimate.id ? [estimate.id] : []);
-          await crm.refresh();
+          if (crm.ready) {
+            await crm.refresh({ silent: true });
+          }
           return saved;
         })();
       }
     },
-    [apiReady, crm, persistEstimate],
+    [crm, persistEstimate],
   );
 
   const addJob = useCallback(

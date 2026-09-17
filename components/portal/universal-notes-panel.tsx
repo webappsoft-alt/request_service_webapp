@@ -487,3 +487,43 @@ export function UniversalNotesPanel({
     </div>
   );
 }
+
+/** @deprecated Prefer UniversalNotesPanel — kept for existing Customer imports. */
+export function CustomerNotesPanel({
+  customerId,
+  empty,
+}: {
+  customerId: string;
+  empty?: string;
+}) {
+  return (
+    <UniversalNotesPanel
+      subjectKind="customer"
+      entityId={customerId}
+      empty={empty}
+    />
+  );
+}
+
+/** @deprecated Prefer CreateUniversalNoteDialog */
+export function CreateCustomerNoteDialog({
+  open,
+  onOpenChange,
+  customerId,
+  note,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customerId: string;
+  note?: CrmNote | null;
+}) {
+  return (
+    <CreateUniversalNoteDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      subjectKind="customer"
+      entityId={customerId}
+      note={note}
+    />
+  );
+}

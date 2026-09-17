@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchCustomers } from "@/store/customersSlice";
 import {
   archiveCustomer,
   createContractor as createContractorApi,
@@ -111,6 +113,9 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function useCrmDirectory() {
+  const dispatch = useAppDispatch();
+  const reduxCustomers = useAppSelector((state) => state.customers?.items ?? []);
+  const reduxLoading = useAppSelector((state) => state.customers?.loading ?? false);
   const { session, provider, employees } = usePortalWorkspace();
   const crm = useCrmApiData();
   const key = storageKey(session?.email);
@@ -120,7 +125,6 @@ export function useCrmDirectory() {
     () => EMPTY,
   );
   const apiReady = crm.enabled && crm.ready;
-  const loading = crm.enabled && (!crm.ready || crm.loading);
   // Authenticated providers: never merge seed/demo people data.
   const suppressSeedData = Boolean(session) || (crm.enabled && !crm.ready);
 
@@ -149,17 +153,25 @@ export function useCrmDirectory() {
     [provider, suppressSeedData],
   );
 
-  const customers = useMemo(
-    () =>
-      apiReady
-        ? crm.customers
-        : suppressSeedData
-          ? store.customers.filter((item) => !store.deleted.includes(`customer:${item.id}`))
-          : [...seedCustomers, ...store.customers].filter(
-              (item) => !store.deleted.includes(`customer:${item.id}`),
-            ),
-    [apiReady, crm.customers, seedCustomers, store.customers, store.deleted, suppressSeedData],
-  );
+  const customers = useMemo(() => {
+    if (crm.customers && crm.customers.length > 0) return crm.customers;
+    if (reduxCustomers && reduxCustomers.length > 0) return reduxCustomers;
+    if (apiReady) return crm.customers;
+    if (suppressSeedData) {
+      return store.customers.filter((item) => !store.deleted.includes(`customer:${item.id}`));
+    }
+    return [...seedCustomers, ...store.customers].filter(
+      (item) => !store.deleted.includes(`customer:${item.id}`),
+    );
+  }, [apiReady, crm.customers, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
+
+  useEffect(() => {
+    if (crm.enabled && customers.length === 0 && !reduxLoading) {
+      void dispatch(fetchCustomers({ limit: 100 }));
+    }
+  }, [crm.enabled, customers.length, dispatch, reduxLoading]);
+
+  const loading = crm.enabled && customers.length === 0 && (reduxLoading || !crm.ready);
   const contractors = useMemo(
     () =>
       apiReady

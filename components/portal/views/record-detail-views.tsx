@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, ChevronDown, CreditCard, FileText, LayoutDashboard, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
+import { Camera, ChevronDown, CreditCard, FileText, LayoutDashboard, Loader2, NotebookPen, Paperclip, ScrollText, Settings, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { ArchiveBadge } from "@/components/portal/archive-control";
 import { NotesPanel, CreateNoteDialogForSubject } from "@/components/portal/notes-panel";
@@ -50,7 +50,7 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { estimateAsJob, filledWorkLines, invoiceAsJob, buildInvoice, buildJob, linesToEstimateItems, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
 import { convertEstimateToJob as convertEstimateToJobApi, convertJobToInvoice as convertJobToInvoiceApi, deleteJob as deleteJobApi, finalizeEstimate as finalizeEstimateApi, getEstimate, getJob, updateEstimate as updateEstimateApi } from "@/lib/api/crm-client";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
+import { extractErrorMessage, getAuthToken } from "@/components/api/apiFuntions";
 import type { Estimate, Job } from "@/lib/types";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
@@ -129,7 +129,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     : estimate?.customerName?.trim() || "Customer";
 
   const approval = share.approvalOf(id);
-  const apiReady = crm.enabled && crm.ready;
+  const apiReady = crm.enabled || (typeof window !== "undefined" && Boolean(getAuthToken()));
   const pending = useCrmRecordPending();
 
   useEffect(() => {
@@ -138,15 +138,21 @@ export function EstimateDetailView({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    if (!id || listed || (fetched && fetched.id === id) || !crm.enabled) return;
+    if (crm.enabled && !crm.ready) {
+      void crm.ensureLoaded();
+    }
+  }, [crm.enabled, crm.ready, crm.ensureLoaded]);
+
+  useEffect(() => {
+    if (!id || !crm.enabled) return;
     let cancelled = false;
     setFetching(true);
     void getEstimate(id)
       .then((item) => {
-        if (!cancelled) setFetched(item);
+        if (!cancelled && item) setFetched(item);
       })
       .catch(() => {
-        if (!cancelled) setFetched(null);
+        if (!cancelled && !listed) setFetched(null);
       })
       .finally(() => {
         if (!cancelled) setFetching(false);
@@ -154,12 +160,14 @@ export function EstimateDetailView({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [crm.enabled, id, listed?.id, fetched?.id]);
+  }, [crm.enabled, id]);
 
   if (!estimate) {
     return pending || fetching || crm.refreshing ? (
       <PortalPage title="Loading estimate…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Estimate not found" href="/pro/dashboard/estimates" />
@@ -450,6 +458,9 @@ export function EstimateDetailView({ id }: { id: string }) {
                               siteVisit: siteVisitToRecord(visit),
                             });
                           }
+                          if (crm.ready) {
+                            void crm.refresh({ silent: true });
+                          }
                         } catch (error) {
                           toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
                           throw error;
@@ -472,15 +483,23 @@ export function EstimateDetailView({ id }: { id: string }) {
                       const items = linesToEstimateItems(quote.id, filled);
                       writeCostLines(session?.email, quote.id, lines);
                       if (apiReady) {
-                        const updated = await updateEstimateApi(quote.id, {
-                          ...quote,
-                          items,
-                        });
-                        if (updated) {
-                          crm.patchEstimate(quote.id, updated);
-                          setFetched(updated);
-                        } else {
-                          crm.patchEstimate(quote.id, { items });
+                        try {
+                          const updated = await updateEstimateApi(quote.id, {
+                            ...quote,
+                            items,
+                          });
+                          if (updated) {
+                            crm.patchEstimate(quote.id, updated);
+                            setFetched(updated);
+                          } else {
+                            crm.patchEstimate(quote.id, { items });
+                          }
+                          if (crm.ready) {
+                            void crm.refresh({ silent: true });
+                          }
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Could not save line items to server.");
+                          throw error;
                         }
                       }
                     }}
@@ -506,7 +525,16 @@ export function EstimateDetailView({ id }: { id: string }) {
               case "attachments":
                 return <JobAttachmentsTab job={asJob} estimate={estimate} technician="" noun="estimate" />;
               case "settings":
-                return <EstimateSettingsTab estimate={estimate} job={job} service={service} />;
+                return (
+                  <EstimateSettingsTab
+                    estimate={estimate}
+                    job={job}
+                    service={service}
+                    onSave={(updated) => {
+                      setFetched(updated);
+                    }}
+                  />
+                );
               default:
                 return <JobSummaryTab job={asJob} estimate={estimate} technician="" noun="estimate" />;
             }
@@ -667,7 +695,9 @@ export function JobDetailView({ id }: { id: string }) {
   if (!job) {
     return pending || fetching || crm.refreshing ? (
       <PortalPage title="Loading job…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Job not found" href="/pro/dashboard/jobs" />
@@ -970,7 +1000,9 @@ export function InvoiceDetailView({ id }: { id: string }) {
   if (!invoice) {
     return pending ? (
       <PortalPage title="Loading invoice…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Invoice not found" href="/pro/dashboard/invoices" />
@@ -1113,7 +1145,9 @@ export function PaymentDetailView({ id }: { id: string }) {
   if (!payment) {
     return pending ? (
       <PortalPage title="Loading payment…">
-        <p className="text-sm text-muted-foreground">Pulling the latest CRM data…</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
       </PortalPage>
     ) : (
       <Missing title="Payment not found" href="/pro/dashboard/payments" />

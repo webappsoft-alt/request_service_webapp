@@ -90,6 +90,9 @@ export function usePortalCrew() {
   const loading = crm.enabled && (!crm.ready || crm.loading);
   const suppressSeedData = Boolean(workspace.session) || (crm.enabled && !crm.ready);
 
+  // Do NOT call ensureLoaded here — list tabs (Jobs, etc.) use this hook and
+  // must not trigger the full CRM snapshot. Schedule/dashboard call it explicitly.
+
   const employees = useMemo(() => {
     if (apiReady) {
       return crm.employees

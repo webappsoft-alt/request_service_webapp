@@ -20,6 +20,7 @@ import {
 } from "@/store/notes/normalize";
 import {
   createInitialEntityNotesState,
+  NOTES_DEFAULT_LIMIT,
   notesPageCacheKey,
   type CrmNote,
   type EntityNotesState,
@@ -44,8 +45,13 @@ export function createEntityNotesSlice(options: {
   name: NotesModuleKey;
   /** Exact API `entityType` from the CRM notes guide. */
   entityType: NotesEntityType;
+  /**
+   * When set, always request/store this page size and ignore API
+   * `pagination.limit` (prevents limit=100 overwrite + refetch loops).
+   */
+  fixedLimit?: number;
 }) {
-  const { name, entityType } = options;
+  const { name, entityType, fixedLimit } = options;
 
   const fetchNotes = createAsyncThunk<
     {
@@ -68,7 +74,8 @@ export function createEntityNotesSlice(options: {
       return rejectWithValue(`${entityType} id is required to load notes.`);
     }
     const page = params?.page ?? state.page;
-    const limit = params?.limit ?? state.limit;
+    const limit =
+      fixedLimit ?? params?.limit ?? state.limit ?? NOTES_DEFAULT_LIMIT;
     const search = params?.search ?? state.search;
 
     try {
@@ -80,17 +87,28 @@ export function createEntityNotesSlice(options: {
       };
       if (search.trim()) query.search = search.trim();
 
-      // Always hit the network on tab/page return (bypass getData's 45s
-      // recent-success cache). Loading UI is still suppressed in pending
-      // when Redux already has items — background refresh only.
+      // Bypass getData's 45s recent-success cache when force is set so
+      // tab return still hits the network (background refresh).
       const response = await getData(providerCrmApi.notes, query, {
         silent: true,
-        force: params?.force ?? true,
+        force: params?.force ?? false,
       });
       const parsed = extractNotesList(response, entityType);
+      const pagination = fixedLimit
+        ? {
+            ...parsed.pagination,
+            limit: fixedLimit,
+            totalPages: Math.max(
+              1,
+              Number(parsed.pagination.totalPages) ||
+                Math.ceil(parsed.pagination.total / fixedLimit) ||
+                1,
+            ),
+          }
+        : parsed.pagination;
       return {
         items: parsed.items,
-        pagination: parsed.pagination,
+        pagination,
         entityId,
         search,
       };
@@ -244,7 +262,8 @@ export function createEntityNotesSlice(options: {
           state.entityId = action.payload.entityId;
           state.items = action.payload.items;
           state.page = action.payload.pagination.page;
-          state.limit = action.payload.pagination.limit;
+          // Prefer locked page size when configured (Customer Notes = 10).
+          state.limit = fixedLimit ?? action.payload.pagination.limit;
           state.total = action.payload.pagination.total;
           state.totalPages = Math.max(1, action.payload.pagination.totalPages);
           state.search = action.payload.search;

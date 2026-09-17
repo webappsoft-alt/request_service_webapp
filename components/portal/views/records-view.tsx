@@ -22,7 +22,7 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { queryEstimates } from "@/lib/api/crm-client";
+import { listInvoices, listJobs, listPayments, queryEstimates } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -50,7 +50,7 @@ import {
   withArchiveFilter,
 } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { Estimate, Invoice } from "@/lib/types";
+import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 
 type EstimateRow = Estimate & { customerName: string };
 
@@ -66,7 +66,8 @@ export function EstimatesView() {
   const [apiItems, setApiItems] = useState<Estimate[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
-  const useApi = Boolean(crm.enabled && crm.ready && !archivedOnly);
+  // Tab-specific estimates API — do not wait for full CRM snapshot.
+  const useApi = Boolean(crm.enabled && !archivedOnly);
 
   const allRequests = useMemo(() => records.mergeRequests(requests), [records, requests]);
   const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
@@ -90,6 +91,7 @@ export function EstimatesView() {
     setListLoading(true);
     void queryEstimates({
       status: status || undefined,
+      limit: 10,
       force: true,
     })
       .then((result) => {
@@ -372,20 +374,48 @@ export function JobsView() {
   const status = useSearchParams().get("status") ?? "";
   const { jobs, provider, estimates, requests, invoices } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
+  const crm = useCrmApiData();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const [createOpen, setCreateOpen] = useState(false);
+  const [apiItems, setApiItems] = useState<Job[]>([]);
+  const [listLoading, setListLoading] = useState(false);
   const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
   const allInvoices = useMemo(() => records.mergeInvoices(invoices), [records, invoices]);
   const archivedOnly = status === "archived";
-  const rows = useMemo(
-    () =>
-      records
-        .listed("job", records.mergeJobs(jobs), archivedOnly)
-        .map((item) => ({ ...item, status: records.statusOf("job", item.id, item.status) }))
-        .filter((item) => (archivedOnly || !status ? true : item.status === status)),
-    [archivedOnly, jobs, records, status],
-  );
+  const useApi = Boolean(crm.enabled && !archivedOnly);
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setListLoading(true);
+    void listJobs({ silent: true })
+      .then((items) => {
+        if (!cancelled) setApiItems(items);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load jobs.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useApi, status]);
+
+  const rows = useMemo(() => {
+    const source = useApi ? apiItems : records.mergeJobs(jobs);
+    return records
+      .listed("job", source, archivedOnly)
+      .map((item) => ({ ...item, status: records.statusOf("job", item.id, item.status) }))
+      .filter((item) => (archivedOnly || !status ? true : item.status === status));
+  }, [apiItems, archivedOnly, jobs, records, status, useApi]);
 
   return (
     <PortalPage
@@ -408,6 +438,7 @@ export function JobsView() {
         filename="jobs"
         countLabel="Jobs"
         searchPlaceholder="Search jobs"
+        loading={listLoading && rows.length === 0}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
@@ -494,19 +525,47 @@ export function InvoicesView() {
   const status = useSearchParams().get("status") ?? "";
   const { invoices, jobs, estimates, requests, provider } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
+  const crm = useCrmApiData();
   const records = usePortalRecords();
   const [paying, setPaying] = useState<Invoice | null>(null);
+  const [apiItems, setApiItems] = useState<Invoice[]>([]);
+  const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
+  const useApi = Boolean(crm.enabled && !archivedOnly);
   const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
   const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
-  const rows = useMemo(
-    () =>
-      records
-        .listed("invoice", records.mergeInvoices(invoices), archivedOnly)
-        .map((item) => ({ ...item, status: records.statusOf("invoice", item.id, item.status) }))
-        .filter((item) => archivedOnly || invoiceMatchesBoardFilter(item, status)),
-    [archivedOnly, invoices, records, status],
-  );
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setListLoading(true);
+    void listInvoices({ silent: true })
+      .then((items) => {
+        if (!cancelled) setApiItems(items);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load invoices.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useApi, status]);
+
+  const rows = useMemo(() => {
+    const source = useApi ? apiItems : records.mergeInvoices(invoices);
+    return records
+      .listed("invoice", source, archivedOnly)
+      .map((item) => ({ ...item, status: records.statusOf("invoice", item.id, item.status) }))
+      .filter((item) => archivedOnly || invoiceMatchesBoardFilter(item, status));
+  }, [apiItems, archivedOnly, invoices, records, status, useApi]);
 
   return (
     <PortalPage eyebrow="Billing" title="Invoices" description="Each invoice keeps the original estimate plus approved extras.">
@@ -522,6 +581,7 @@ export function InvoicesView() {
         filename="invoices"
         countLabel="Invoices"
         searchPlaceholder="Search by invoice # or job #"
+        loading={listLoading && rows.length === 0}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/invoices/${row.id}`}
@@ -606,19 +666,47 @@ export function PaymentsView() {
   const status = useSearchParams().get("status") ?? "";
   const { payments, invoices, jobs, estimates, requests, provider } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
+  const crm = useCrmApiData();
   const records = usePortalRecords();
+  const [apiItems, setApiItems] = useState<Payment[]>([]);
+  const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
+  const useApi = Boolean(crm.enabled && !archivedOnly);
   const allInvoices = useMemo(() => records.mergeInvoices(invoices), [records, invoices]);
   const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
   const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
-  const rows = useMemo(
-    () =>
-      records
-        .listed("payment", records.mergePayments(payments), archivedOnly)
-        .map((item) => ({ ...item, status: records.statusOf("payment", item.id, item.status) }))
-        .filter((item) => archivedOnly || paymentMatchesBoardFilter(item, status)),
-    [archivedOnly, payments, records, status],
-  );
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setListLoading(true);
+    void listPayments({ silent: true })
+      .then((items) => {
+        if (!cancelled) setApiItems(items);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load payments.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useApi, status]);
+
+  const rows = useMemo(() => {
+    const source = useApi ? apiItems : records.mergePayments(payments);
+    return records
+      .listed("payment", source, archivedOnly)
+      .map((item) => ({ ...item, status: records.statusOf("payment", item.id, item.status) }))
+      .filter((item) => archivedOnly || paymentMatchesBoardFilter(item, status));
+  }, [apiItems, archivedOnly, payments, records, status, useApi]);
 
   return (
     <PortalPage
@@ -635,6 +723,7 @@ export function PaymentsView() {
         filename="payments"
         countLabel="Payments"
         searchPlaceholder="Search by payment #, invoice #, or job #"
+        loading={listLoading && rows.length === 0}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/payments/${row.id}`}

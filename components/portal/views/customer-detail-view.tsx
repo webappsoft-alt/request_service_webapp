@@ -32,8 +32,8 @@ import {
 } from "@/components/portal/create-person-dialogs";
 import {
   CreateCustomerNoteDialog,
-  UniversalNotesPanel,
-} from "@/components/portal/universal-notes-panel";
+  CustomerNotesPanel,
+} from "@/components/portal/customer-notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
 import { CrmMark } from "@/components/portal/crm-mark";
@@ -119,6 +119,13 @@ export function CustomerDetailView({ id }: { id: string }) {
   const crm = useCrmApiData();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
+
+  // Related estimates/jobs/tasks come from the CRM snapshot — load once here,
+  // not from the Customers list page.
+  useEffect(() => {
+    if (!crm.enabled) return;
+    void crm.ensureLoaded();
+  }, [crm.enabled, crm.ensureLoaded]);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -526,9 +533,8 @@ export function CustomerDetailView({ id }: { id: string }) {
               );
             case "notes":
               return (
-                <UniversalNotesPanel
-                  subjectKind="customer"
-                  entityId={customer.id}
+                <CustomerNotesPanel
+                  customerId={customer.id}
                   empty="Add the first note on this customer."
                 />
               );

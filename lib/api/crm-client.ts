@@ -64,7 +64,16 @@ export type CrmSnapshot = {
   inboxSummary: CrmInboxSummary;
 };
 
-const DEFAULT_LIST_LIMIT = 100;
+const DEFAULT_LIST_LIMIT = 10;
+
+function normalizePreferredTimeWindow(value?: string) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw.startsWith("after")) return "afternoon";
+  if (raw.startsWith("eve")) return "afternoon";
+  if (raw.startsWith("all")) return "all_day";
+  if (raw.startsWith("flex")) return "all_day";
+  return "morning";
+}
 
 function normalizeStatus<T extends string>(
   value: unknown,

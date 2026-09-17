@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -11,8 +11,10 @@ import { FilterTabs } from "@/components/portal/filter-tabs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { listRequests } from "@/lib/api/crm-client";
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import type { RequestStatus } from "@/lib/types";
@@ -43,11 +45,41 @@ export function RequestsView() {
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "";
   const { requests } = usePortalWorkspace();
+  const crm = useCrmApiData();
   const records = usePortalRecords();
   const [open, setOpen] = useState(false);
+  const [apiItems, setApiItems] = useState<PortalRequest[]>([]);
+  const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
+  const useApi = Boolean(crm.enabled && !archivedOnly);
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setListLoading(true);
+    void listRequests({ silent: true })
+      .then((items) => {
+        if (!cancelled) setApiItems(items);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load leads.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useApi, status]);
+
+  const source = useApi ? apiItems : records.mergeRequests(requests);
   const rows = records
-    .listed("request", records.mergeRequests(requests), archivedOnly)
+    .listed("request", source, archivedOnly)
     .filter((request) => archivedOnly || matchesFilter(request, status));
 
   return (
@@ -66,6 +98,7 @@ export function RequestsView() {
         filename="requests"
         countLabel="Leads"
         searchPlaceholder="Search leads"
+        loading={listLoading && rows.length === 0}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/requests/${row.id}`}

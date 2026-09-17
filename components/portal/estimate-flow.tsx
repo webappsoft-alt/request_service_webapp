@@ -1,12 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
-import { Camera, Check, ImageIcon, Loader2, Trash2, Upload, X } from "lucide-react";
+import {
+  Camera,
+  Check,
+  ImageIcon,
+  Loader2,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
-import { extractUploadedUrl, uploadDoc, uploadFile } from "@/components/api/uploadFile";
+import {
+  extractUploadedUrl,
+  uploadDoc,
+  uploadFile,
+} from "@/components/api/uploadFile";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
-import { useJobFile, siteVisitFromRecord, type EstimateSiteVisit, type JobAttachment } from "@/components/portal/use-job-file";
+import {
+  useJobFile,
+  siteVisitFromRecord,
+  type EstimateSiteVisit,
+  type JobAttachment,
+} from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,12 +115,19 @@ export function EstimatePipeline({
               <span
                 className={cn(
                   "relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ring-4 ring-card",
-                  active && "bg-[#003F7D] text-white shadow-[0_0_0_3px_rgba(0,63,125,0.22)]",
+                  active &&
+                    "bg-[#003F7D] text-white shadow-[0_0_0_3px_rgba(0,63,125,0.22)]",
                   done && !active && "bg-[#003F7D] text-white",
-                  !done && !active && "border border-[#c5ced8] bg-white text-muted-foreground",
+                  !done &&
+                    !active &&
+                    "border border-[#c5ced8] bg-white text-muted-foreground",
                 )}
               >
-                {done ? <Check className="size-3.5" strokeWidth={2.5} /> : String(index + 1).padStart(2, "0")}
+                {done ? (
+                  <Check className="size-3.5" strokeWidth={2.5} />
+                ) : (
+                  String(index + 1).padStart(2, "0")
+                )}
               </span>
               <span
                 className={cn(
@@ -107,7 +138,11 @@ export function EstimatePipeline({
                 )}
               >
                 {step.label}
-                {skipped ? <span className="mt-0.5 block font-normal opacity-70">skipped</span> : null}
+                {skipped ? (
+                  <span className="mt-0.5 block font-normal opacity-70">
+                    skipped
+                  </span>
+                ) : null}
               </span>
             </li>
           );
@@ -127,9 +162,16 @@ export function EstimateStageBanner({
   hasJob: boolean;
 }) {
   const copy = (() => {
-    if (hasJob) return { title: "Converted to job", body: "This estimate is now a job. Open the linked job to continue the work." };
+    if (hasJob)
+      return {
+        title: "Converted to job",
+        body: "This estimate is now a job. Open the linked job to continue the work.",
+      };
     if (signed || status === "accepted") {
-      return { title: "Customer signed", body: "The quote is approved. Convert it to a job to start the work." };
+      return {
+        title: "Customer signed",
+        body: "The quote is approved. Convert it to a job to start the work.",
+      };
     }
     switch (status) {
       case "site_visit":
@@ -153,13 +195,25 @@ export function EstimateStageBanner({
           body: "Share the customer link. They review the full estimate and sign to approve.",
         };
       case "sent":
-        return { title: "Waiting on signature", body: "The customer has the link. After they sign, convert this to a job." };
+        return {
+          title: "Waiting on signature",
+          body: "The customer has the link. After they sign, convert this to a job.",
+        };
       case "changes_requested":
-        return { title: "Changes requested", body: "Update the line items, finalize again, and send a new link." };
+        return {
+          title: "Changes requested",
+          body: "Update the line items, finalize again, and send a new link.",
+        };
       case "rejected":
-        return { title: "Customer declined", body: "This estimate was rejected. Archive it or start a new quote." };
+        return {
+          title: "Customer declined",
+          body: "This estimate was rejected. Archive it or start a new quote.",
+        };
       case "expired":
-        return { title: "Estimate expired", body: "Re-issue a new quote or restore this one with a new expiry." };
+        return {
+          title: "Estimate expired",
+          body: "Re-issue a new quote or restore this one with a new expiry.",
+        };
       case "converted_to_job":
         return {
           title: "Converted to job",
@@ -194,7 +248,12 @@ export function EstimateSiteVisitTab({
   const { employees, loading: crewLoading } = usePortalCrew();
   const crm = useCrmApiData();
   const loading = crewLoading || (crm.enabled && !crm.ready);
-  const { siteVisit, saveSiteVisit, actor } = useJobFile(asJob, estimate, undefined, "");
+  const { siteVisit, saveSiteVisit, actor } = useJobFile(
+    asJob,
+    estimate,
+    undefined,
+    "",
+  );
   const fallback: EstimateSiteVisit = siteVisit ??
     siteVisitFromRecord(estimate.siteVisit) ?? {
       employeeId: "",
@@ -224,10 +283,14 @@ export function EstimateSiteVisitTab({
     return (
       (draft.employeeId || "") !== (fallback.employeeId || "") ||
       (draft.visitedAt || "") !== (fallback.visitedAt || "") ||
-      (draft.accessNotes || "").trim() !== (fallback.accessNotes || "").trim() ||
+      (draft.accessNotes || "").trim() !==
+        (fallback.accessNotes || "").trim() ||
       (draft.findings || "").trim() !== (fallback.findings || "").trim() ||
-      (draft.recommendations || "").trim() !== (fallback.recommendations || "").trim() ||
-      (draft.measurements || "").trim() !== (fallback.measurements || "").trim()
+      (draft.recommendations || "").trim() !==
+        (fallback.recommendations || "").trim() ||
+      (draft.measurements || "").trim() !==
+        (fallback.measurements || "").trim() ||
+      draft.photos !== fallback.photos
     );
   }, [draft, fallback]);
 
@@ -278,7 +341,7 @@ export function EstimateSiteVisitTab({
 
       // Check if clicking on an interactive navigation or button element
       const interactiveEl = target.closest(
-        "button, a[href], [role='tab'], [role='button'], [data-tab-id]"
+        "button, a[href], [role='tab'], [role='button'], [data-tab-id]",
       ) as HTMLElement | null;
 
       if (!interactiveEl) {
@@ -349,19 +412,21 @@ export function EstimateSiteVisitTab({
     const files = Array.from(list);
     if (!files.length) return;
     setUploading(true);
-    let next = visitRef.current;
+    const newPhotos: JobAttachment[] = [];
     try {
       for (const file of files) {
         if (file.size > MAX_FILE) {
           toast.error(`${file.name} is over 15 MB.`);
           continue;
         }
-        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const isPdf =
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf");
         const response = isPdf ? await uploadDoc(file) : await uploadFile(file);
         const url = extractUploadedUrl(response.data);
         if (!url) throw new Error(`Could not upload ${file.name}.`);
         const photo: JobAttachment = {
-          id: `photo_${Date.now()}_${file.name}`,
+          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${file.name}`,
           name: file.name,
           type: file.type || (isPdf ? "application/pdf" : "image/jpeg"),
           size: file.size,
@@ -369,9 +434,15 @@ export function EstimateSiteVisitTab({
           addedAt: new Date().toISOString(),
           actor,
         };
-        next = { ...next, photos: [photo, ...next.photos] };
-        await persist(next);
-        toast.success(`${file.name} added to the site visit.`);
+        newPhotos.push(photo);
+      }
+      if (newPhotos.length > 0) {
+        patch({ photos: [...newPhotos, ...visit.photos] });
+        toast.success(
+          newPhotos.length === 1
+            ? `${newPhotos[0].name} uploaded. Click "Save site" to save.`
+            : `${newPhotos.length} photos uploaded. Click "Save site" to save.`,
+        );
       }
     } catch (error) {
       const message =
@@ -389,12 +460,13 @@ export function EstimateSiteVisitTab({
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setOver(false);
-    if (event.dataTransfer.files.length) void readFiles(event.dataTransfer.files);
+    if (event.dataTransfer.files.length)
+      void readFiles(event.dataTransfer.files);
   }
 
   return (
     <div data-site-visit-form className="space-y-4">
-      <div className="rounded-[4px] border border-black/10 bg-card p-4">
+      <div className="roundedlg border border-black/10 bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="inline-flex items-center gap-2 text-base font-semibold">
@@ -402,7 +474,8 @@ export function EstimateSiteVisitTab({
               Site inspection
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              What the technician saw on site. Photos and notes stay with this estimate until the office finalizes the quote.
+              What the technician saw on site. Photos and notes stay with this
+              estimate until the office finalizes the quote.
             </p>
           </div>
           {locked ? null : (
@@ -421,8 +494,10 @@ export function EstimateSiteVisitTab({
                 }
               }}
             >
-              {savingNotes ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {savingNotes ? "Saving…" : "Save field notes"}
+              {savingNotes ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : null}
+              {savingNotes ? "Saving…" : "Save Site Inspection"}
             </Button>
           )}
         </div>
@@ -430,10 +505,12 @@ export function EstimateSiteVisitTab({
           <Field label="Technician">
             <Select
               disabled={locked || loading}
-              value={loading ? undefined : (visit.employeeId || "__unassigned__")}
+              value={loading ? undefined : visit.employeeId || "__unassigned__"}
               onValueChange={(value) => {
                 const resolvedId = value === "__unassigned__" ? "" : value;
-                const employee = employees.find((item) => item.id === resolvedId);
+                const employee = employees.find(
+                  (item) => item.id === resolvedId,
+                );
                 patch({
                   employeeId: resolvedId,
                   technician: employee ? employeeName(employee) : "",
@@ -441,7 +518,9 @@ export function EstimateSiteVisitTab({
               }}
             >
               <SelectTrigger className="w-full" loading={loading}>
-                <SelectValue placeholder={loading ? "Loading technicians…" : "Unassigned"} />
+                <SelectValue
+                  placeholder={loading ? "Loading technicians…" : "Unassigned"}
+                />
               </SelectTrigger>
               <SelectContent
                 position="popper"
@@ -498,7 +577,9 @@ export function EstimateSiteVisitTab({
               disabled={locked}
               placeholder="Work you would price in the office"
               value={visit.recommendations}
-              onChange={(event) => patch({ recommendations: event.target.value })}
+              onChange={(event) =>
+                patch({ recommendations: event.target.value })
+              }
             />
           </Field>
           <Field label="Measurements / other detail">
@@ -515,12 +596,17 @@ export function EstimateSiteVisitTab({
 
       <div className="rounded-[4px] border border-black/10 bg-card p-4">
         <h3 className="text-sm font-semibold">Site photos</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Pictures from the visit. These stay internal until you send the finalized quote.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pictures from the visit. These stay internal until you send the
+          finalized quote.
+        </p>
         {locked ? null : (
           <label
             className={cn(
               "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
-              over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+              over
+                ? "border-primary bg-[#003F7D]/5"
+                : "border-black/20 bg-[#f8fafc]",
             )}
             onDragEnter={(event) => {
               event.preventDefault();
@@ -533,9 +619,17 @@ export function EstimateSiteVisitTab({
             onDragLeave={() => setOver(false)}
             onDrop={onDrop}
           >
-            {uploading ? <Loader2 className="size-6 animate-spin text-primary" /> : <Upload className="size-6 text-primary" />}
-            <p className="text-sm font-medium">{uploading ? "Uploading photos…" : "Drop photos here or browse"}</p>
-            <p className="text-xs text-muted-foreground">Images and PDFs up to 15 MB</p>
+            {uploading ? (
+              <Loader2 className="size-6 animate-spin text-primary" />
+            ) : (
+              <Upload className="size-6 text-primary" />
+            )}
+            <p className="text-sm font-medium">
+              {uploading ? "Uploading photos…" : "Drop photos here or browse"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Images and PDFs up to 15 MB
+            </p>
             <input
               className="sr-only"
               type="file"
@@ -543,7 +637,8 @@ export function EstimateSiteVisitTab({
               multiple
               disabled={uploading}
               onChange={(event) => {
-                if (event.target.files?.length) void readFiles(event.target.files);
+                if (event.target.files?.length)
+                  void readFiles(event.target.files);
                 event.target.value = "";
               }}
             />
@@ -552,11 +647,22 @@ export function EstimateSiteVisitTab({
         {visit.photos.length ? (
           <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {visit.photos.map((file) => (
-              <li key={file.id} className="overflow-hidden rounded-[4px] border border-black/10">
-                <button type="button" className="block w-full cursor-pointer" onClick={() => setPreview(file)}>
+              <li
+                key={file.id}
+                className="overflow-hidden rounded-[4px] border border-black/10"
+              >
+                <button
+                  type="button"
+                  className="block w-full cursor-pointer"
+                  onClick={() => setPreview(file)}
+                >
                   {file.type.startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img alt={file.name} src={file.dataUrl} className="h-36 w-full object-cover" />
+                    <img
+                      alt={file.name}
+                      src={file.dataUrl}
+                      className="h-36 w-full object-cover"
+                    />
                   ) : (
                     <span className="flex h-36 items-center justify-center bg-[#eef1f5] text-primary">
                       <ImageIcon className="size-6" />
@@ -570,13 +676,15 @@ export function EstimateSiteVisitTab({
                       type="button"
                       className="cursor-pointer text-destructive"
                       aria-label={`Remove ${file.name}`}
-                      onClick={async () => {
-                        try {
-                          await persist({ ...visit, photos: visit.photos.filter((item) => item.id !== file.id) });
-                          toast.success("Photo removed.");
-                        } catch {
-                          // toast shown by onSave handler
-                        }
+                      onClick={() => {
+                        patch({
+                          photos: visit.photos.filter(
+                            (item) => item.id !== file.id,
+                          ),
+                        });
+                        toast.success(
+                          'Photo removed. Click "Save site" to save.',
+                        );
                       }}
                     >
                       <Trash2 className="size-4" />

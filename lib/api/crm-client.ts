@@ -746,6 +746,19 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
   return mapCrmEntity(response, mapEstimate);
 }
 
+export async function updateEstimateSiteVisit(
+  id: string,
+  siteVisit: EstimateSiteVisitRecord,
+  status?: EstimateStatus,
+) {
+  const payload: Record<string, unknown> = {
+    siteVisit: siteVisitPayload(siteVisit),
+  };
+  if (status !== undefined) payload.status = status;
+  const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
+  return mapCrmEntity(response, mapEstimate);
+}
+
 export async function updateEstimateStatus(id: string, status: Estimate["status"]) {
   const response = await putData(providerCrmApi.estimate(id), { status }, { silent: true });
   return mapCrmEntity(response, mapEstimate);

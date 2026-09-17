@@ -129,7 +129,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     : estimate?.customerName?.trim() || "Customer";
 
   const approval = share.approvalOf(id);
-  const apiReady = crm.enabled && crm.ready;
+  const apiReady = crm.enabled;
   const pending = useCrmRecordPending();
 
   useEffect(() => {
@@ -138,15 +138,21 @@ export function EstimateDetailView({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    if (!id || listed || (fetched && fetched.id === id) || !crm.enabled) return;
+    if (crm.enabled && !crm.ready) {
+      void crm.ensureLoaded();
+    }
+  }, [crm.enabled, crm.ready, crm.ensureLoaded]);
+
+  useEffect(() => {
+    if (!id || !crm.enabled) return;
     let cancelled = false;
     setFetching(true);
     void getEstimate(id)
       .then((item) => {
-        if (!cancelled) setFetched(item);
+        if (!cancelled && item) setFetched(item);
       })
       .catch(() => {
-        if (!cancelled) setFetched(null);
+        if (!cancelled && !listed) setFetched(null);
       })
       .finally(() => {
         if (!cancelled) setFetching(false);
@@ -154,7 +160,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [crm.enabled, id, listed?.id, fetched?.id]);
+  }, [crm.enabled, id]);
 
   if (!estimate) {
     return pending || fetching || crm.refreshing ? (
@@ -324,7 +330,7 @@ export function EstimateDetailView({ id }: { id: string }) {
       setStatusOverride("converted_to_job");
       toast.success(`${created.number} created from ${quote.number}. This estimate stays an estimate.`);
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not convert this estimate.");
+      toast.error(error instanceof Error ? error.message : "Could not convert this estimate.");
     } finally {
       setConverting(false);
     }
@@ -453,7 +459,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                             });
                           }
                         } catch (error) {
-                          toast.error(extractErrorMessage(error) || "Could not update this estimate.");
+                          toast.error(error instanceof Error ? error.message : "Could not update this estimate.");
                           throw error;
                         }
                       } else {
@@ -736,7 +742,7 @@ export function JobDetailView({ id }: { id: string }) {
       toast.success(`${created.number} drafted from ${currentJob.number}.`);
       router.push(`/pro/dashboard/invoices/${created.id}`);
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not convert this job.");
+      toast.error(error instanceof Error ? error.message : "Could not convert this job.");
     }
   }
 
@@ -760,7 +766,7 @@ export function JobDetailView({ id }: { id: string }) {
       toast.success(`${currentJob.number} deleted. The estimate can be converted again.`);
       router.push("/pro/dashboard/jobs");
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not delete this job.");
+      toast.error(error instanceof Error ? error.message : "Could not delete this job.");
     } finally {
       setDeleting(false);
     }
@@ -1020,7 +1026,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   await records.setStatus("invoice", invoice.id, "sent");
                   toast.success(`${invoice.number} marked sent.`);
                 } catch (error) {
-                  toast.error(extractErrorMessage(error) || "Could not send this invoice.");
+                  toast.error(error instanceof Error ? error.message : "Could not send this invoice.");
                 }
               })();
             }}

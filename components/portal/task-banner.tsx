@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ListTodo } from "lucide-react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { OpenReminderBanner } from "@/components/portal/reminder-banner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { Button } from "@/components/ui/button";
@@ -32,7 +31,7 @@ export function OpenTaskBanner({ kind, id }: { kind: ReminderSubjectKind; id: st
     try {
       await Promise.resolve(setTaskStatus(taskId, "done"));
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not update this task.");
+      toast.error(error instanceof Error ? error.message : "Could not update this task.");
     } finally {
       setPendingId(null);
     }

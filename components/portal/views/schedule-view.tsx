@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalPage } from "@/components/portal/portal-page";
-import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
 import type { PortalCalendarEvent } from "@/lib/data/portal";
@@ -14,15 +12,9 @@ import { calendarEventKindLabel, formatClock, windowFromMinutes } from "@/lib/da
 import { formatDate } from "@/lib/format";
 
 export function ScheduleView() {
-  const crm = useCrmApiData();
   const { events, employees, assign, employeeLabel, removeSchedule } = usePortalCrew();
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const [scheduling, setScheduling] = useState(false);
-
-  useEffect(() => {
-    if (!crm.enabled) return;
-    void crm.ensureLoaded();
-  }, [crm.enabled, crm.ensureLoaded]);
 
   function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
     void Promise.resolve(
@@ -49,7 +41,7 @@ export function ScheduleView() {
         }
       })
       .catch((error) => {
-        toast.error(extractErrorMessage(error) || "Could not move this calendar item.");
+        toast.error(error instanceof Error ? error.message : "Could not move this calendar item.");
       });
   }
 
@@ -72,7 +64,7 @@ export function ScheduleView() {
                   })
                   .catch((error) => {
                     toast.error(
-                      extractErrorMessage(error) || "Could not remove this schedule item.",
+                      error instanceof Error ? error.message : "Could not remove this schedule item.",
                     );
                   });
               }}

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { Button } from "@/components/ui/button";
@@ -96,7 +95,7 @@ export function AssignEventDialog({
       });
       onOpenChange(false);
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not save this assignment.");
+      toast.error(error instanceof Error ? error.message : "Could not save this assignment.");
     } finally {
       setSaving(false);
     }

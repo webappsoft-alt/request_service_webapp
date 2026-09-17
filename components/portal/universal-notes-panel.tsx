@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
@@ -111,7 +110,7 @@ export function CreateUniversalNoteDialog({
       onOpenChange(false);
     } catch (error) {
       toast.error(
-        extractErrorMessage(error) || "Could not save this note.",
+        error instanceof Error ? error.message : "Could not save this note.",
       );
     } finally {
       setSaving(false);
@@ -486,5 +485,45 @@ export function UniversalNotesPanel({
         note={editing}
       />
     </div>
+  );
+}
+
+/** @deprecated Prefer UniversalNotesPanel — kept for existing Customer imports. */
+export function CustomerNotesPanel({
+  customerId,
+  empty,
+}: {
+  customerId: string;
+  empty?: string;
+}) {
+  return (
+    <UniversalNotesPanel
+      subjectKind="customer"
+      entityId={customerId}
+      empty={empty}
+    />
+  );
+}
+
+/** @deprecated Prefer CreateUniversalNoteDialog */
+export function CreateCustomerNoteDialog({
+  open,
+  onOpenChange,
+  customerId,
+  note,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customerId: string;
+  note?: CrmNote | null;
+}) {
+  return (
+    <CreateUniversalNoteDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      subjectKind="customer"
+      entityId={customerId}
+      note={note}
+    />
   );
 }

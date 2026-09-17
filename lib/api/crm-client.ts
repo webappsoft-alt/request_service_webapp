@@ -64,16 +64,7 @@ export type CrmSnapshot = {
   inboxSummary: CrmInboxSummary;
 };
 
-const DEFAULT_LIST_LIMIT = 10;
-
-function normalizePreferredTimeWindow(value?: string) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (raw.startsWith("after")) return "afternoon";
-  if (raw.startsWith("eve")) return "afternoon";
-  if (raw.startsWith("all")) return "all_day";
-  if (raw.startsWith("flex")) return "all_day";
-  return "morning";
-}
+const DEFAULT_LIST_LIMIT = 100;
 
 function normalizeStatus<T extends string>(
   value: unknown,
@@ -243,7 +234,7 @@ function estimateAttachmentsToApi(attachments?: unknown[]): { name: string; atta
 
 function estimatePayload(estimate: Estimate) {
   return {
-    customerId: estimate.customerId,
+    customerId: crmIdOf(estimate.customerId),
     requestId: estimate.requestId || null,
     title: estimate.title || "",
     status: normalizeStatus(estimate.status, [
@@ -256,6 +247,7 @@ function estimatePayload(estimate: Estimate) {
       "rejected",
       "expired",
       "changes_requested",
+      "converted_to_job",
     ] as const, "draft"),
     issuedAt: estimate.issuedAt,
     expiresAt: estimate.expiresAt || undefined,
@@ -539,7 +531,7 @@ export async function getEstimate(id: string) {
 }
 
 export async function updateEstimate(id: string, estimate: Estimate) {
-  const response = await putData(providerCrmApi.estimate(id), estimatePayload(estimate), { silent: true });
+  const response = await putData(providerCrmApi.estimate(id), estimatePayload(estimate));
   return mapCrmEntity(response, mapEstimate);
 }
 
@@ -579,18 +571,7 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
   if (settings.notes !== undefined) payload.notes = settings.notes;
   if (settings.terms !== undefined) payload.terms = settings.terms;
 
-  const response = await putData(providerCrmApi.estimate(id), payload, { silent: true });
-  return mapCrmEntity(response, mapEstimate);
-}
-
-export async function updateEstimateAttachments(
-  id: string,
-  attachments: Array<{ name?: string; attachment?: string; url?: string; dataUrl?: string } | string>,
-) {
-  const payload = {
-    attachments: estimateAttachmentsToApi(attachments),
-  };
-  const response = await putData(providerCrmApi.estimate(id), payload, { silent: true });
+  const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);
 }
 
@@ -789,10 +770,15 @@ export async function listProviderChatThreads(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.chats, mapChatThread, options);
 }
 
-export async function getProviderInboxSummary(): Promise<CrmInboxSummary> {
-  const response = await getData(providerCrmApi.inboxSummary, undefined, { silent: true });
+export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmInboxSummary> {
+  const response = await getData(providerCrmApi.inboxSummary, undefined, {
+    silent: options?.silent ?? true,
+    force: options?.force ?? false,
+  });
   return mapInboxSummary(response);
 }
+
+export const getProviderInboxSummary = getInboxSummary;
 
 export async function sendProviderChatMessage(threadId: string, text: string, attachments?: ChatAttachment[]) {
   const response = await postData(providerCrmApi.chatMessages(threadId), {
@@ -814,21 +800,21 @@ export async function markProviderChatRead(threadId: string) {
 
 export async function loadCrmSnapshot(options?: CrmRequestOptions): Promise<CrmSnapshot> {
   const [
-    customers,
-    employees,
-    contractors,
-    vendors,
-    requests,
-    estimates,
-    jobs,
-    tasks,
-    reminders,
-    invoices,
-    payments,
-    schedule,
-    chats,
-    inboxSummary,
-  ] = await Promise.all([
+    customersRes,
+    employeesRes,
+    contractorsRes,
+    vendorsRes,
+    requestsRes,
+    estimatesRes,
+    jobsRes,
+    tasksRes,
+    remindersRes,
+    invoicesRes,
+    paymentsRes,
+    scheduleRes,
+    chatsRes,
+    inboxSummaryRes,
+  ] = await Promise.allSettled([
     listCustomers(options),
     listEmployees(options),
     listContractors(options),
@@ -842,23 +828,26 @@ export async function loadCrmSnapshot(options?: CrmRequestOptions): Promise<CrmS
     listPayments(options),
     listSchedule(options),
     listProviderChatThreads(options),
-    getProviderInboxSummary(),
+    getProviderInboxSummary(options),
   ]);
 
   return {
-    customers,
-    employees,
-    contractors,
-    vendors,
-    requests,
-    estimates,
-    jobs,
-    tasks,
-    reminders,
-    invoices,
-    payments,
-    schedule,
-    chats,
-    inboxSummary,
+    customers: customersRes.status === "fulfilled" ? customersRes.value : [],
+    employees: employeesRes.status === "fulfilled" ? employeesRes.value : [],
+    contractors: contractorsRes.status === "fulfilled" ? contractorsRes.value : [],
+    vendors: vendorsRes.status === "fulfilled" ? vendorsRes.value : [],
+    requests: requestsRes.status === "fulfilled" ? requestsRes.value : [],
+    estimates: estimatesRes.status === "fulfilled" ? estimatesRes.value : [],
+    jobs: jobsRes.status === "fulfilled" ? jobsRes.value : [],
+    tasks: tasksRes.status === "fulfilled" ? tasksRes.value : [],
+    reminders: remindersRes.status === "fulfilled" ? remindersRes.value : [],
+    invoices: invoicesRes.status === "fulfilled" ? invoicesRes.value : [],
+    payments: paymentsRes.status === "fulfilled" ? paymentsRes.value : [],
+    schedule: scheduleRes.status === "fulfilled" ? scheduleRes.value : [],
+    chats: chatsRes.status === "fulfilled" ? chatsRes.value : [],
+    inboxSummary:
+      inboxSummaryRes.status === "fulfilled"
+        ? inboxSummaryRes.value
+        : { newLeads: 0, unreadChats: 0, pendingOrders: 0, total: 0 },
   };
 }

@@ -4,7 +4,6 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -114,7 +113,7 @@ export function OpenReminderBanner({ kind, id }: { kind: ReminderSubjectKind; id
     try {
       await Promise.resolve(setReminderStatus(reminderId, "done"));
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not update this reminder.");
+      toast.error(error instanceof Error ? error.message : "Could not update this reminder.");
     } finally {
       setPendingId(null);
     }

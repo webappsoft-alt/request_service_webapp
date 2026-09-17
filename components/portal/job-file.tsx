@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } 
 import Link from "next/link";
 import { ChevronDown, Eye, FileText, Film, ImageIcon, Loader2, Music, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import {
   ATTACHMENT_ACCEPT_ATTRIBUTE,
@@ -48,7 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { updateEstimate as updateEstimateApi, updateEstimateAttachments as updateEstimateAttachmentsApi, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
+import { updateEstimate as updateEstimateApi, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
@@ -410,7 +409,7 @@ export function JobSettingsTab({
       }
       toast.success("Job settings saved.");
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not save this job.");
+      toast.error(error instanceof Error ? error.message : "Could not save this job.");
     }
   }
 
@@ -730,7 +729,10 @@ export function JobAttachmentsTab({
       }))
       .filter((item) => Boolean(item.attachment));
 
-    const updated = await updateEstimateAttachmentsApi(estimate.id, attachmentPayload);
+    const updated = await updateEstimateApi(estimate.id, {
+      ...estimate,
+      attachments: attachmentPayload,
+    });
     if (updated) {
       crm.patchEstimate(estimate.id, updated);
     } else {
@@ -748,7 +750,11 @@ export function JobAttachmentsTab({
       setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
       toast.success("Attachments saved.");
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not save attachments.");
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not save attachments.";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -762,7 +768,11 @@ export function JobAttachmentsTab({
       toast.success("Attachments saved.");
       executePending();
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not save attachments.");
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not save attachments.";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -795,7 +805,11 @@ export function JobAttachmentsTab({
       setLastSavedUrls(remaining.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
       toast.success("Attachment removed.");
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not update attachments on server.");
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not update attachments on server.";
+      toast.error(message);
     } finally {
       setDeletingId(null);
     }

@@ -59,7 +59,7 @@ export function EstimateShareTab({
   const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const ready = estimateCanShare(estimate.status);
-  const apiReady = crm.enabled && crm.ready;
+  const apiReady = crm.enabled;
   const waitingOnCustomer = !approval && (Boolean(snapshot) || estimate.status === "sent");
 
   useEffect(() => {

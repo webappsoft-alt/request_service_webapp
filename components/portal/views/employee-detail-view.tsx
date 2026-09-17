@@ -20,7 +20,6 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import {
   ATTACHMENT_ACCEPT_ATTRIBUTE,
   extractUploadedUrl,
@@ -165,7 +164,7 @@ export function TeamMemberView({ id }: { id: string }) {
                   void Promise.resolve(removeEmployee(employee.id))
                     .then(() => toast.success(`${name} removed from the crew list.`))
                     .catch((error) =>
-                      toast.error(extractErrorMessage(error) || "Could not remove this employee."),
+                      toast.error(error instanceof Error ? error.message : "Could not remove this employee."),
                     );
                 }}
               >
@@ -370,7 +369,7 @@ function EmployeeSettingsTab({
             void Promise.resolve(onSave(employee.id, draft))
               .then(() => toast.success("Employee settings saved."))
               .catch((error) =>
-                toast.error(extractErrorMessage(error) || "Could not save employee settings."),
+                toast.error(error instanceof Error ? error.message : "Could not save employee settings."),
               );
           }}
         >
@@ -546,7 +545,7 @@ export function EmployeePayTab({
             void Promise.resolve(onSave(employee.id, pay))
               .then(() => toast.success("Pay rate saved."))
               .catch((error) =>
-                toast.error(extractErrorMessage(error) || "Could not save pay rates."),
+                toast.error(error instanceof Error ? error.message : "Could not save pay rates."),
               );
           }}
         >

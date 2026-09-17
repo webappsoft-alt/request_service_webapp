@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import {
   AddressAutocomplete,
   type PlaceAddress,
@@ -251,7 +250,7 @@ export function CreateEstimateDialog({
       toast.success(`${saved.number} created.`);
       router.push(`/pro/dashboard/estimates/${saved.id}?tab=visit`);
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not create this estimate.");
+      toast.error(error instanceof Error ? error.message : "Could not create this estimate.");
     } finally {
       setSaving(false);
     }

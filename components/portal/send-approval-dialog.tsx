@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { EstimatePdfDocument, SignaturePadField, typedSignature, useSignPad } from "@/components/estimate/estimate-pdf";
 import { buildEstimateSnapshot, shareUrlFor, useEstimateShare } from "@/components/portal/use-estimate-share";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
@@ -47,7 +46,7 @@ export function SendApprovalDialog({
   const { session, provider } = usePortalWorkspace();
   const share = useEstimateShare();
   const ready = estimateCanShare(estimate.status);
-  const apiReady = crm.enabled && crm.ready;
+  const apiReady = crm.enabled;
 
   const snapshot = useMemo(
     () =>
@@ -130,7 +129,7 @@ export function SendApprovalDialog({
                 toast.success("Estimate sent for approval. Customer link copied.");
                 onOpenChange(false);
               } catch (error) {
-                toast.error(extractErrorMessage(error) || "Could not send this estimate.");
+                toast.error(error instanceof Error ? error.message : "Could not send this estimate.");
               }
             }}
           />

@@ -240,12 +240,14 @@ export type PortalCalendarEvent = {
 export type PortalAssignment = {
   recordId: string;
   kind: PortalEventKind;
+  title?: string;
   date: string;
   endDate?: string;
   timeWindow: PortalTimeWindow;
   startMinutes?: number;
   endMinutes?: number;
   employeeId: string;
+  status?: string;
 };
 
 const REQUEST_STATUSES: RequestStatus[] = [

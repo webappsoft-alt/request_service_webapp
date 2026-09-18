@@ -25,11 +25,18 @@ type PageResult = {
   totalPages: number;
 };
 
+export type PaginatedCrmFilters = {
+  customerId?: string;
+  role?: string;
+};
+
 async function fetchKindPage(
   kind: PaginatedCrmKind,
   page: number,
   limit: number,
+  filters: PaginatedCrmFilters = {},
 ): Promise<PageResult> {
+  const customerId = filters.customerId?.trim() || undefined;
   switch (kind) {
     case "customer": {
       const result = await queryCustomers({ page, limit, force: true, silent: true });
@@ -44,7 +51,13 @@ async function fetchKindPage(
     }
     case "employee":
     case "assignee": {
-      const result = await queryTeam({ page, limit, force: true, silent: true });
+      const result = await queryTeam({
+        page,
+        limit,
+        role: filters.role?.trim() || undefined,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -77,7 +90,13 @@ async function fetchKindPage(
       };
     }
     case "estimate": {
-      const result = await queryEstimates({ page, limit, force: true, silent: true });
+      const result = await queryEstimates({
+        page,
+        limit,
+        customerId,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -88,7 +107,13 @@ async function fetchKindPage(
       };
     }
     case "request": {
-      const result = await queryRequests({ page, limit, force: true, silent: true });
+      const result = await queryRequests({
+        page,
+        limit,
+        customerId,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -99,7 +124,13 @@ async function fetchKindPage(
       };
     }
     case "job": {
-      const result = await queryJobs({ page, limit, force: true, silent: true });
+      const result = await queryJobs({
+        page,
+        limit,
+        customerId,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -110,7 +141,13 @@ async function fetchKindPage(
       };
     }
     case "invoice": {
-      const result = await queryInvoices({ page, limit, force: true, silent: true });
+      const result = await queryInvoices({
+        page,
+        limit,
+        customerId,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -135,6 +172,7 @@ export function usePaginatedCrmOptions(
   kind: PaginatedCrmKind | null,
   enabled: boolean,
   pageSize = CRM_DROPDOWN_PAGE_SIZE,
+  filters: PaginatedCrmFilters = {},
 ) {
   const [options, setOptions] = useState<PaginatedEntityOption[]>([]);
   const [page, setPage] = useState(0);
@@ -143,7 +181,10 @@ export function usePaginatedCrmOptions(
   const [loadingMore, setLoadingMore] = useState(false);
   const inFlightPageRef = useRef<number | null>(null);
   const kindRef = useRef(kind);
+  const filtersRef = useRef(filters);
   kindRef.current = kind;
+  filtersRef.current = filters;
+  const filterKey = `${filters.customerId?.trim() || ""}|${filters.role?.trim() || ""}`;
 
   const loadPage = useCallback(
     async (pageNum: number, append: boolean) => {
@@ -156,7 +197,12 @@ export function usePaginatedCrmOptions(
       else setLoading(true);
 
       try {
-        const result = await fetchKindPage(activeKind, pageNum, pageSize);
+        const result = await fetchKindPage(
+          activeKind,
+          pageNum,
+          pageSize,
+          filtersRef.current,
+        );
         if (kindRef.current !== activeKind) return;
 
         setOptions((prev) => {
@@ -190,7 +236,7 @@ export function usePaginatedCrmOptions(
     inFlightPageRef.current = null;
     if (!enabled || !kind) return;
     void loadPage(1, false);
-  }, [kind, enabled, loadPage]);
+  }, [kind, enabled, loadPage, filterKey]);
 
   const loadMore = useCallback(() => {
     if (!enabled || !kind) return;

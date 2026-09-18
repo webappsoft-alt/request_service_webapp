@@ -282,12 +282,12 @@ export function JobCosting({
 
   return (
     <div data-job-costing-form>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
           <h2 className="text-base font-semibold">Labor and materials</h2>
           <p className="mt-1 text-sm text-muted-foreground">{costingHint(noun, locked)}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 self-end md:self-auto">
           <Button size="sm" variant="outline" disabled={locked || saving} onClick={() => add("labor")}>
             <Plus />
             Add labor
@@ -308,32 +308,34 @@ export function JobCosting({
           )}
         </div>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Description</TableHead>
-            <TableHead className="w-28 sm:w-32">Type</TableHead>
-            <TableHead className="w-20 sm:w-24">Qty</TableHead>
-            <TableHead className="w-28 sm:w-36">Unit</TableHead>
-            <TableHead className="w-24 sm:w-28">Price</TableHead>
-            <TableHead className="w-24 text-right">Total</TableHead>
-            <TableHead className="w-10">
-              <span className="sr-only">Remove</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {activeLines.map((line) => (
-            <CostRow
-              key={line.id}
-              line={line}
-              locked={locked}
-              onChange={change}
-              onRemove={!locked ? () => remove(line.id) : undefined}
-            />
-          ))}
-        </TableBody>
-      </Table>
+      <div className="w-full overflow-x-auto rounded-[4px] border border-black/10">
+        <Table className="min-w-[760px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="min-w-[220px]">Description</TableHead>
+              <TableHead className="w-32 min-w-[125px]">Type</TableHead>
+              <TableHead className="w-24 min-w-[90px]">Qty</TableHead>
+              <TableHead className="w-36 min-w-[135px]">Unit</TableHead>
+              <TableHead className="w-28 min-w-[110px]">Price</TableHead>
+              <TableHead className="w-24 min-w-[95px] text-right">Total</TableHead>
+              <TableHead className="w-10 min-w-[44px]">
+                <span className="sr-only">Remove</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {activeLines.map((line) => (
+              <CostRow
+                key={line.id}
+                line={line}
+                locked={locked}
+                onChange={change}
+                onRemove={!locked ? () => remove(line.id) : undefined}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
       <dl className="mt-4 ml-auto grid max-w-xs grid-cols-2 gap-y-1 text-sm">
         <dt className="text-muted-foreground">Labor</dt>
         <dd className="text-right tabular-nums">{formatMoney(mix.labor)}</dd>
@@ -377,16 +379,17 @@ function CostRow({
 
   return (
     <TableRow>
-      <TableCell>
+      <TableCell className="min-w-[220px]">
         <Input
           aria-label="Description"
           disabled={locked}
           placeholder={line.kind === "labor" ? "Additional labor" : "Additional material"}
           value={line.description}
           onChange={(event) => onChange(line.id, { description: event.target.value })}
+          className="w-full"
         />
       </TableCell>
-      <TableCell className="w-28 sm:w-32">
+      <TableCell className="w-32 min-w-[125px]">
         <Select
           disabled={locked}
           value={line.kind}
@@ -405,10 +408,10 @@ function CostRow({
           </SelectContent>
         </Select>
       </TableCell>
-      <TableCell className="w-20 sm:w-24">
+      <TableCell className="w-24 min-w-[90px]">
         <Input
           aria-label="Quantity"
-          className="tabular-nums"
+          className="w-full tabular-nums"
           disabled={locked}
           inputMode="decimal"
           min={0}
@@ -418,7 +421,7 @@ function CostRow({
           onChange={(event) => onChange(line.id, { quantity: Number(event.target.value) || 0 })}
         />
       </TableCell>
-      <TableCell className="w-28 sm:w-36">
+      <TableCell className="w-36 min-w-[135px]">
         <Select
           disabled={locked}
           value={currentUnit}
@@ -436,10 +439,10 @@ function CostRow({
           </SelectContent>
         </Select>
       </TableCell>
-      <TableCell className="w-24 sm:w-28">
+      <TableCell className="w-28 min-w-[110px]">
         <Input
           aria-label="Unit price"
-          className="tabular-nums"
+          className="w-full tabular-nums"
           disabled={locked}
           inputMode="decimal"
           min={0}
@@ -450,8 +453,8 @@ function CostRow({
           onChange={(event) => onChange(line.id, { unitPrice: Number(event.target.value) || 0 })}
         />
       </TableCell>
-      <TableCell className="w-24 text-right font-medium tabular-nums">{formatMoney(lineTotal(line))}</TableCell>
-      <TableCell className="w-10">
+      <TableCell className="w-24 min-w-[95px] text-right font-medium tabular-nums">{formatMoney(lineTotal(line))}</TableCell>
+      <TableCell className="w-10 min-w-[44px] text-center">
         {onRemove ? (
           <Button
             aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}

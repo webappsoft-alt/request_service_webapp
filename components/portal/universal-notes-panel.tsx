@@ -184,10 +184,12 @@ export function UniversalNotesPanel({
   subjectKind,
   entityId,
   empty,
+  locked = false,
 }: {
   subjectKind: ReminderSubjectKind;
   entityId: string;
   empty?: string;
+  locked?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const module = getNotesModuleForSubject(subjectKind);
@@ -347,9 +349,11 @@ export function UniversalNotesPanel({
         loading={tableLoading}
         pageSize={limit}
         toolbar={
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            Add note
-          </Button>
+          locked ? null : (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              Add note
+            </Button>
+          )
         }
         serverPagination={{
           page,
@@ -405,30 +409,34 @@ export function UniversalNotesPanel({
             cell: (row) => formatDate(row.createdAt),
           },
         ]}
-        actions={(row) => [
-          { label: "Edit", onSelect: () => setEditing(row) },
-          row.isPinned
-            ? {
-                label: "Unpin",
-                onSelect: () => {
-                  void togglePin(row);
+        actions={(row) =>
+          locked
+            ? [{ label: "Copy", onSelect: () => copyNote(row) }]
+            : [
+                { label: "Edit", onSelect: () => setEditing(row) },
+                row.isPinned
+                  ? {
+                      label: "Unpin",
+                      onSelect: () => {
+                        void togglePin(row);
+                      },
+                    }
+                  : {
+                      label: "Pin",
+                      onSelect: () => {
+                        void togglePin(row);
+                      },
+                    },
+                { label: "Copy", onSelect: () => copyNote(row) },
+                {
+                  label: "Delete",
+                  variant: "destructive",
+                  onSelect: () => {
+                    setDeleteTarget(row);
+                  },
                 },
-              }
-            : {
-                label: "Pin",
-                onSelect: () => {
-                  void togglePin(row);
-                },
-              },
-          { label: "Copy", onSelect: () => copyNote(row) },
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => {
-              setDeleteTarget(row);
-            },
-          },
-        ]}
+              ]
+        }
       />
 
       <Dialog

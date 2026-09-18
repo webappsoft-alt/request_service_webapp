@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { PortalTableColumn } from "@/components/portal/portal-data-table";
 import { StatusPill } from "@/components/portal/status-pill";
+import { Button } from "@/components/ui/button";
 import {
   jobServiceLabel,
   jobStatusLabel,
@@ -21,6 +22,7 @@ export function jobBoardColumns({
   events,
   employeeLabel,
   customerName,
+  onChangeStatus,
 }: {
   estimates: Estimate[];
   requests: PortalRequest[];
@@ -28,6 +30,7 @@ export function jobBoardColumns({
   events: PortalCalendarEvent[];
   employeeLabel: (id?: string) => string;
   customerName: (customerId: string) => string;
+  onChangeStatus?: (job: Job) => void;
 }): PortalTableColumn<Job>[] {
   const eventFor = (job: Job) => events.find((item) => item.kind === "job" && item.recordId === job.id);
   const startOf = (job: Job) => eventFor(job)?.date ?? job.scheduledAt;
@@ -149,5 +152,29 @@ export function jobBoardColumns({
       exportValue: (row) => jobStatusLabel(row.status),
       cell: (row) => <StatusPill label={jobStatusLabel(row.status)} className={jobStatusTone(row.status)} />,
     },
+    ...(onChangeStatus
+      ? [
+          {
+            id: "change-status",
+            header: "Change status",
+            sortValue: () => "",
+            searchValue: () => "",
+            exportValue: () => "",
+            cell: (row: Job) => (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onChangeStatus(row);
+                }}
+              >
+                Change status
+              </Button>
+            ),
+          } satisfies PortalTableColumn<Job>,
+        ]
+      : []),
   ];
 }

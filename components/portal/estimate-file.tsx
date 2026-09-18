@@ -105,11 +105,13 @@ export function EstimateSettingsTab({
   estimate,
   job,
   service,
+  locked = false,
   onSave,
 }: {
   estimate: Estimate;
   job?: Job;
   service: string;
+  locked?: boolean;
   onSave?: (updated: Estimate) => void;
 }) {
   const { customers, loading: customersLoading } = useCrmDirectory();
@@ -147,21 +149,21 @@ export function EstimateSettingsTab({
     setDraft(fallback);
   }, [fallback]);
 
+  const isLocked = Boolean(job) || estimate.status === "converted_to_job" || locked;
+
   const isDirty = useMemo(() => {
+    if (isLocked) return false;
     return (
       (draft.name || "").trim() !== (fallback.name || "").trim() ||
-      (draft.customerId || "") !== (fallback.customerId || "") ||
       (draft.street || "").trim() !== (fallback.street || "").trim() ||
       (draft.city || "").trim() !== (fallback.city || "").trim() ||
       (draft.state || "").trim() !== (fallback.state || "").trim() ||
       (draft.zip || "").trim() !== (fallback.zip || "").trim() ||
-      (draft.issuedAt || "") !== (fallback.issuedAt || "") ||
       (draft.expiresAt || "") !== (fallback.expiresAt || "") ||
-      draft.status !== fallback.status ||
       (draft.notes || "").trim() !== (fallback.notes || "").trim() ||
       (draft.terms || "").trim() !== (fallback.terms || "").trim()
     );
-  }, [draft, fallback]);
+  }, [draft, fallback, isLocked]);
 
   // Window beforeunload (tab close / refresh)
   useEffect(() => {
@@ -247,7 +249,30 @@ export function EstimateSettingsTab({
     file.saveEstimateSettings(settingsDraft);
     const chosenCustomer = customers.find((item) => item.id === settingsDraft.customerId);
     const customerName = chosenCustomer ? crmCustomerName(chosenCustomer) : estimate.customerName;
-    if (apiReady) {
+
+    const patchedEstimate: Estimate = {
+      ...estimate,
+      title: settingsDraft.name.trim() || estimate.title,
+      customerId: settingsDraft.customerId,
+      customerName,
+      propertyAddress: {
+        ...estimate.propertyAddress,
+        street: settingsDraft.street,
+        city: settingsDraft.city,
+        state: settingsDraft.state,
+        zip: settingsDraft.zip,
+      },
+      issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
+      expiresAt: settingsDraft.expiresAt || undefined,
+      status: settingsDraft.status,
+      notes: settingsDraft.notes || undefined,
+      terms: settingsDraft.terms || undefined,
+    };
+    crm.patchEstimate(estimate.id, patchedEstimate);
+    records.setStatus("estimate", estimate.id, settingsDraft.status);
+    onSave?.(patchedEstimate);
+
+    if (estimate?.id) {
       const updated = await updateEstimateSettingsApi(estimate.id, {
         title: settingsDraft.name.trim() || estimate.title,
         customerId: settingsDraft.customerId,
@@ -266,38 +291,12 @@ export function EstimateSettingsTab({
       if (updated) {
         crm.patchEstimate(estimate.id, updated);
         onSave?.(updated);
-      } else {
-        const patchedEstimate: Estimate = {
-          ...estimate,
-          title: settingsDraft.name.trim() || estimate.title,
-          customerId: settingsDraft.customerId,
-          customerName,
-          propertyAddress: {
-            ...estimate.propertyAddress,
-            street: settingsDraft.street,
-            city: settingsDraft.city,
-            state: settingsDraft.state,
-            zip: settingsDraft.zip,
-          },
-          issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
-          expiresAt: settingsDraft.expiresAt || undefined,
-          status: settingsDraft.status,
-          notes: settingsDraft.notes || undefined,
-          terms: settingsDraft.terms || undefined,
-        };
-        crm.patchEstimate(estimate.id, patchedEstimate);
-        onSave?.(patchedEstimate);
       }
-      if (crm.ready) {
-        void crm.refresh({ silent: true });
-      }
-    } else {
-      records.setStatus("estimate", estimate.id, settingsDraft.status);
     }
   }
 
   async function handleManualSave() {
-    if (saving) return;
+    if (saving || isLocked) return;
     try {
       setSaving(true);
       await persist(draft);
@@ -332,31 +331,39 @@ export function EstimateSettingsTab({
     setShowUnsavedDialog(false);
   }
 
+  const customerName = selected ? crmCustomerName(selected) : estimate.customerName || "Customer";
+  const customerPhone = selected?.phone || estimate.customerPhone || "";
+  const customerEmail = selected?.email || estimate.customerEmail || "";
+
   return (
     <div data-estimate-settings-form className="rounded-[4px] border border-black/10 bg-card p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Estimate settings</h2>
+        <div>
+          <h2 className="text-sm font-semibold">Estimate settings</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {isLocked ? "This estimate is signed/locked. Settings cannot be edited." : "Manage editable quote settings."}
+          </p>
+        </div>
         <Button
           size="sm"
-          disabled={saving}
+          disabled={isLocked || saving || !isDirty}
           onClick={handleManualSave}
         >
           {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-          {saving ? "Saving…" : "Save settings"}
+          {saving ? "Saving…" : isLocked ? "Locked" : "Save settings"}
         </Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Estimate name">
-          <Input value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
+          <Input disabled={isLocked || saving} value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
         </Field>
         <Field label="Status">
           <Select
-            disabled={loading}
+            disabled
             value={draft.status}
-            onValueChange={(value) => patch({ status: value as EstimateStatus })}
           >
-            <SelectTrigger className="w-full" loading={loading}>
-              <SelectValue placeholder={loading ? "Loading status…" : "Select status"} />
+            <SelectTrigger className="w-full bg-muted/50 cursor-not-allowed">
+              <SelectValue placeholder={estimateStatusLabel(draft.status)} />
             </SelectTrigger>
             <SelectContent
               position="popper"
@@ -372,90 +379,43 @@ export function EstimateSettingsTab({
           </Select>
         </Field>
         <Field label="Customer">
-          <Select
-            disabled={loading}
-            value={loading ? undefined : (draft.customerId || undefined)}
-            onValueChange={(value) => {
-              const nextCust = customers.find((item) => item.id === value);
-              const custAddr = nextCust?.addresses?.[0];
-              patch({
-                customerId: value,
-                ...(custAddr && (custAddr.street || custAddr.city || custAddr.zip)
-                  ? {
-                      street: custAddr.street || draft.street,
-                      city: custAddr.city || draft.city,
-                      state: custAddr.state || draft.state,
-                      zip: custAddr.zip || draft.zip,
-                    }
-                  : {}),
-              });
-            }}
-          >
-            <SelectTrigger className="w-full" loading={loading}>
-              <SelectValue placeholder={loading ? "Loading customers…" : "Select customer"} />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
-            >
-              {loading ? (
-                <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  <span>Loading customers…</span>
-                </div>
-              ) : (
-                <>
-                  {draft.customerId && !isKnownCustomer ? (
-                    <SelectItem value={draft.customerId}>
-                      {estimate.customerName || "Current customer"}
-                    </SelectItem>
-                  ) : null}
-                  {customers.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {crmCustomerName(item)}
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-            </SelectContent>
-          </Select>
+          <Input disabled className="bg-muted/50 cursor-not-allowed" value={customerName} />
         </Field>
-        <Field label="Issued">
-          <Input type="date" value={draft.issuedAt} onChange={(event) => patch({ issuedAt: event.target.value })} />
+        <Field label="Issued date">
+          <Input type="date" disabled className="bg-muted/50 cursor-not-allowed" value={draft.issuedAt} />
         </Field>
-        <Field label="Expires">
-          <Input type="date" value={draft.expiresAt} onChange={(event) => patch({ expiresAt: event.target.value })} />
+        <Field label="Expires date">
+          <Input type="date" disabled={isLocked || saving} value={draft.expiresAt} onChange={(event) => patch({ expiresAt: event.target.value })} />
         </Field>
-        {selected?.phone ? (
+        {customerPhone ? (
           <Field label="Customer phone">
-            <Input readOnly value={selected.phone} />
+            <Input disabled className="bg-muted/50 cursor-not-allowed" value={customerPhone} />
           </Field>
         ) : null}
-        {selected?.email ? (
+        {customerEmail ? (
           <Field label="Customer email">
-            <Input readOnly value={selected.email} />
+            <Input disabled className="bg-muted/50 cursor-not-allowed" value={customerEmail} />
           </Field>
         ) : null}
         <Field label="Job address">
-          <Input value={draft.street} onChange={(event) => patch({ street: event.target.value })} />
+          <Input disabled={isLocked || saving} value={draft.street} onChange={(event) => patch({ street: event.target.value })} />
         </Field>
         <Field label="City">
-          <Input value={draft.city} onChange={(event) => patch({ city: event.target.value })} />
+          <Input disabled={isLocked || saving} value={draft.city} onChange={(event) => patch({ city: event.target.value })} />
         </Field>
         <Field label="State">
-          <Input value={draft.state} onChange={(event) => patch({ state: event.target.value })} />
+          <Input disabled={isLocked || saving} value={draft.state} onChange={(event) => patch({ state: event.target.value })} />
         </Field>
         <Field label="ZIP">
-          <Input value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />
+          <Input disabled={isLocked || saving} value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />
         </Field>
         <label className="grid gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium">Notes</span>
-          <Textarea rows={3} value={draft.notes} onChange={(event) => patch({ notes: event.target.value })} />
+          <Textarea disabled={isLocked || saving} rows={3} value={draft.notes} onChange={(event) => patch({ notes: event.target.value })} />
         </label>
         <label className="grid gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium">Terms</span>
-          <Textarea rows={3} value={draft.terms} onChange={(event) => patch({ terms: event.target.value })} />
+          <Textarea disabled={isLocked || saving} rows={3} value={draft.terms} onChange={(event) => patch({ terms: event.target.value })} />
         </label>
         {job ? (
           <p className="text-sm text-muted-foreground sm:col-span-2">

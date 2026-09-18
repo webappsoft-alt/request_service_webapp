@@ -16,8 +16,18 @@ export function addressFrom(
   state: string,
   zip: string,
   id = `addr_${Date.now().toString(36)}`,
+  coords?: { latitude?: number | null; longitude?: number | null },
 ): ServiceAddress {
-  return { id, street, city, state, zip, country: "US" };
+  return {
+    id,
+    street,
+    city,
+    state,
+    zip,
+    country: "US",
+    latitude: coords?.latitude ?? null,
+    longitude: coords?.longitude ?? null,
+  };
 }
 
 export function linesToEstimateItems(estimateId: string, lines: JobCostLine[]): EstimateItem[] {

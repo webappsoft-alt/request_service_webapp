@@ -36,6 +36,9 @@ export interface ServiceAddress {
   state: string;
   zip: string;
   country: "US";
+  /** Optional geo from Places / job.location.coordinates [lng, lat]. */
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export type ServiceCategorySlug =
@@ -161,6 +164,8 @@ export interface Estimate {
   providerId: string;
   customerId: string;
   customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
   requestId?: string;
   jobId?: string;
   serviceId?: string;
@@ -178,6 +183,10 @@ export interface Estimate {
   attachments?: EstimateAttachmentItem[] | string[];
   siteVisit?: EstimateSiteVisitRecord;
   signature?: EstimateSignature;
+  shareToken?: string;
+  shareUrl?: string;
+  isArchived?: boolean;
+  isArchieved?: boolean;
   logs?: EstimateLog[];
   activities?: EstimateActivity[];
   createdAt: string;

@@ -23,6 +23,7 @@ import { useEstimateActivities } from "@/components/portal/use-estimate-activiti
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
 import {
   useJobFile,
+  toJobAttachmentItem,
   type JobActivity,
   type JobAttachment,
   type JobLog,
@@ -47,7 +48,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
@@ -165,15 +165,21 @@ function Detail({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function stamp(value: string) {
-  const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+function stamp(value?: string) {
+  if (!value) return "Added recently";
+  try {
+    const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return "Added recently";
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return "Added recently";
+  }
 }
 
 function fileSize(bytes: number) {
@@ -192,12 +198,14 @@ export function JobSummaryTab({
   invoice,
   technician,
   noun = "job",
+  locked = false,
 }: {
   job: Job;
   estimate?: Estimate;
   invoice?: Invoice;
   technician: string;
   noun?: CostingNoun;
+  locked?: boolean;
 }) {
   const { lines, mix } = useJobCosting(job);
   const sheet = jobMoneySheet(mix);
@@ -270,16 +278,18 @@ export function JobSummaryTab({
       <Panel
         title="Activity"
         action={
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-          >
-            <Plus />
-            Add activity
-          </Button>
+          locked ? null : (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus />
+              Add activity
+            </Button>
+          )
         }
       >
         {activities.length ? (
@@ -288,6 +298,7 @@ export function JobSummaryTab({
               <ActivityCard
                 key={item.id}
                 item={item}
+                locked={locked}
                 deleting={estimateActivities.deletingId === item.id}
                 onEdit={() => {
                   setEditing({ id: item.id, title: item.title, html: item.html });
@@ -353,6 +364,7 @@ export function JobMaterialsTab({
   invoice,
   technician,
   noun = "job",
+  locked: propLocked,
   onSave,
 }: {
   job: Job;
@@ -360,10 +372,12 @@ export function JobMaterialsTab({
   invoice?: Invoice;
   technician: string;
   noun?: CostingNoun;
+  locked?: boolean;
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
 }) {
-  const { addLog, locked } = useJobFile(job, estimate, invoice, technician);
-  return <JobCosting job={job} locked={locked} noun={noun} onMutate={addLog} onSave={onSave} />;
+  const { addLog, locked: fileLocked } = useJobFile(job, estimate, invoice, technician);
+  const isLocked = propLocked ?? fileLocked;
+  return <JobCosting job={job} locked={isLocked} noun={noun} onMutate={addLog} onSave={onSave} />;
 }
 
 export function JobSettingsTab({
@@ -422,29 +436,33 @@ export function JobSettingsTab({
     };
     try {
       file.saveSettings(next);
-      if (apiReady) {
-        await updateJobApi(
-          job.id,
-          {
-            ...job,
-            customerId: next.customerId || job.customerId,
-            status: next.status,
-            notes: next.notes,
-            scheduledAt: next.start || job.scheduledAt,
-            dueAt: next.due || job.dueAt,
-            assignedTo: next.assignedTo || job.assignedTo,
-            address: {
-              ...job.address,
-              street: next.street || job.address.street,
-              city: next.city || job.address.city,
-              state: next.state || job.address.state,
-              zip: next.zip || job.address.zip,
+      if (job?.id) {
+        try {
+          await updateJobApi(
+            job.id,
+            {
+              ...job,
+              customerId: next.customerId || job.customerId,
+              status: next.status,
+              notes: next.notes,
+              scheduledAt: next.start || job.scheduledAt,
+              dueAt: next.due || job.dueAt,
+              assignedTo: next.assignedTo || job.assignedTo,
+              address: {
+                ...job.address,
+                street: next.street || job.address.street,
+                city: next.city || job.address.city,
+                state: next.state || job.address.state,
+                zip: next.zip || job.address.zip,
+              },
             },
-          },
-          employees,
-        );
-        await updateJobStatusApi(job.id, next.status, next.notes);
-        await crm.refresh();
+            employees,
+          );
+          await updateJobStatusApi(job.id, next.status, next.notes);
+          void crm.refresh({ silent: true });
+        } catch {
+          records.setStatus("job", job.id, next.status);
+        }
       } else {
         records.setStatus("job", job.id, next.status);
       }
@@ -537,16 +555,18 @@ export function JobSettingsTab({
               className="z-[100] w-[var(--radix-select-trigger-width)]"
             >
               <SelectItem value="__unassigned__">Unassigned</SelectItem>
-              {employees.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {employeeName(item)}
-                </SelectItem>
-              ))}
-              {contractors
-                .filter((item) => item.status === "active")
+              {employees
+                .filter((item) => {
+                  const role = String(item.role || "").toLowerCase().trim();
+                  return (
+                    item.active !== false &&
+                    (role === "technician" || role === "tech" || !role)
+                  );
+                })
                 .map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.companyName} · contractor
+                    {employeeName(item)}
+                    {item.trade ? ` · ${item.trade}` : ""}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -658,49 +678,52 @@ export function JobAttachmentsTab({
   invoice,
   technician,
   noun = "job",
+  locked = false,
+  onSave,
 }: {
   job: Job;
   estimate?: Estimate;
   invoice?: Invoice;
   technician: string;
   noun?: CostingNoun;
+  locked?: boolean;
+  onSave?: (updated: Estimate) => void;
 }) {
-  const { attachments, addAttachments, removeAttachment, actor } = useJobFile(job, estimate, invoice, technician);
+  const { addAttachments, removeAttachment, actor } = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();
-  const apiReady = crm.enabled;
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<JobAttachment[] | null>(null);
 
-  const fallbackSavedUrls = useMemo(() => {
-    return (estimate?.attachments ?? [])
-      .map((item) => {
-        if (typeof item === "string") return item.trim();
-        if (item && typeof item === "object") {
-          const record = item as Record<string, unknown>;
-          return String(record.attachment || record.dataUrl || record.url || "").trim();
-        }
-        return "";
-      })
-      .filter(Boolean);
-  }, [estimate?.attachments]);
+  const savedAttachments = useMemo<JobAttachment[]>(() => {
+    const rawList = estimate ? estimate.attachments : job?.attachments;
+    if (!rawList || !Array.isArray(rawList)) return [];
+    const prefix = estimate?.id ?? job?.id ?? "att";
+    const addedAt = estimate?.createdAt ?? job?.createdAt ?? new Date().toISOString();
+    return rawList
+      .map((item, index) => toJobAttachmentItem(item, index, prefix, addedAt))
+      .filter((item) => Boolean(item.dataUrl));
+  }, [estimate, job?.attachments, job?.id, job?.createdAt]);
 
-  const [lastSavedUrls, setLastSavedUrls] = useState<string[]>(fallbackSavedUrls);
-
-  const fallbackSavedKey = fallbackSavedUrls.join("|");
   useEffect(() => {
-    setLastSavedUrls(fallbackSavedUrls);
-  }, [fallbackSavedKey]);
+    setDraft(null);
+  }, [estimate?.id, job?.id]);
+
+  const activeAttachments = draft ?? savedAttachments;
 
   const isDirty = useMemo(() => {
-    if (!estimate) return false;
-    const currentUrls = attachments
-      .map((item) => (item.dataUrl || "").trim())
-      .filter(Boolean);
-    if (currentUrls.length !== lastSavedUrls.length) return true;
-    return currentUrls.some((url, idx) => url !== lastSavedUrls[idx]);
-  }, [estimate, attachments, lastSavedUrls]);
+    if (!draft) return false;
+    if (draft.length !== savedAttachments.length) return true;
+    return draft.some((item, index) => {
+      const saved = savedAttachments[index];
+      if (!saved) return true;
+      return (
+        (item.dataUrl || "").trim() !== (saved.dataUrl || "").trim() ||
+        (item.name || "").trim() !== (saved.name || "").trim()
+      );
+    });
+  }, [draft, savedAttachments]);
 
   const pendingActionRef = useRef<(() => void) | null>(null);
   const bypassingRef = useRef(false);
@@ -783,7 +806,7 @@ export function JobAttachmentsTab({
   }
 
   async function persistEstimateAttachments(nextAttachments: JobAttachment[]) {
-    if (!estimate || !apiReady) return;
+    if (!estimate?.id) return;
     const attachmentPayload = nextAttachments
       .map((item) => ({
         name: (item.name || "").trim() || "Attachment",
@@ -791,26 +814,29 @@ export function JobAttachmentsTab({
       }))
       .filter((item) => Boolean(item.attachment));
 
+    const updatedEstimate: Estimate = {
+      ...estimate,
+      attachments: attachmentPayload,
+    };
+
+    crm.patchEstimate(estimate.id, updatedEstimate);
+    onSave?.(updatedEstimate);
+
     const updated = await updateEstimateAttachments(estimate.id, attachmentPayload);
     if (updated) {
       crm.patchEstimate(estimate.id, updated);
-    } else {
-      crm.patchEstimate(estimate.id, { attachments: attachmentPayload });
+      onSave?.(updated);
+      return updated;
     }
-    if (crm.ready) {
-      void crm.refresh({ silent: true });
-    }
-    return updated;
+    return updatedEstimate;
   }
 
   async function handleSave() {
     if (!estimate) return;
     setSaving(true);
     try {
-      if (apiReady) {
-        await persistEstimateAttachments(attachments);
-      }
-      setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      await persistEstimateAttachments(activeAttachments);
+      setDraft(null);
       toast.success("Attachments saved.");
     } catch (error) {
       const message =
@@ -826,8 +852,10 @@ export function JobAttachmentsTab({
   async function handleSaveAndLeave() {
     try {
       setSaving(true);
-      await persistEstimateAttachments(attachments);
-      setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      if (estimate) {
+        await persistEstimateAttachments(activeAttachments);
+      }
+      setDraft(null);
       toast.success("Attachments saved.");
       executePending();
     } catch (error) {
@@ -842,12 +870,7 @@ export function JobAttachmentsTab({
   }
 
   function handleDiscardAndLeave() {
-    attachments.forEach((item) => {
-      const url = (item.dataUrl || "").trim();
-      if (!lastSavedUrls.includes(url)) {
-        removeAttachment(item.id);
-      }
-    });
+    setDraft(null);
     executePending();
   }
 
@@ -856,26 +879,14 @@ export function JobAttachmentsTab({
     setShowUnsavedDialog(false);
   }
 
-  async function handleDelete(file: JobAttachment) {
-    if (deletingId) return;
-    setDeletingId(file.id);
-    try {
-      const remaining = attachments.filter((item) => item.id !== file.id);
+  function handleDelete(file: JobAttachment) {
+    const current = draft ?? savedAttachments;
+    const remaining = current.filter((item) => item.id !== file.id && item.dataUrl !== file.dataUrl);
+    setDraft(remaining);
+    if (!estimate) {
       removeAttachment(file.id);
-      if (estimate && apiReady) {
-        await persistEstimateAttachments(remaining);
-      }
-      setLastSavedUrls(remaining.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
-      toast.success("Attachment removed.");
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : "Could not update attachments on server.";
-      toast.error(message);
-    } finally {
-      setDeletingId(null);
     }
+    toast.success(`${file.name} removed.`);
   }
 
   async function readFiles(list: FileList | File[]) {
@@ -900,7 +911,7 @@ export function JobAttachmentsTab({
         const url = extractUploadedUrl(response.data);
         if (!url) throw new Error(`Could not upload ${file.name}.`);
         const item: JobAttachment = {
-          id: `att_${Date.now()}_${file.name}`,
+          id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${file.name}`,
           name: file.name,
           type: file.type || "application/octet-stream",
           size: file.size,
@@ -911,11 +922,10 @@ export function JobAttachmentsTab({
         addedList.push(item);
         toast.success(`${file.name} attached.`);
       }
-      addAttachments(addedList);
-      if (estimate && apiReady) {
-        const combined = [...addedList, ...attachments];
-        await persistEstimateAttachments(combined);
-        setLastSavedUrls(combined.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      const current = draft ?? savedAttachments;
+      setDraft([...addedList, ...current]);
+      if (!estimate) {
+        addAttachments(addedList);
       }
     } catch (error) {
       const message =
@@ -945,7 +955,7 @@ export function JobAttachmentsTab({
             Photos, PDFs, videos, and other {noun === "estimate" ? "quote" : noun === "invoice" ? "invoice" : "job"} files. Preview or remove anytime.
           </p>
         </div>
-        {estimate ? (
+        {estimate && !locked ? (
           <Button
             type="button"
             size="sm"
@@ -963,47 +973,49 @@ export function JobAttachmentsTab({
           </Button>
         ) : null}
       </div>
-      <label
-        className={cn(
-          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors",
-          over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
-          uploading && "pointer-events-none opacity-60",
-        )}
-        onDragEnter={(event) => {
-          event.preventDefault();
-          setOver(true);
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setOver(true);
-        }}
-        onDragLeave={() => setOver(false)}
-        onDrop={onDrop}
-      >
-        {uploading ? (
-          <Loader2 className="size-6 animate-spin text-primary" />
-        ) : (
-          <Upload className="size-6 text-primary" />
-        )}
-        <p className="text-sm font-medium">
-          {uploading ? "Uploading files…" : "Drop files here or browse"}
-        </p>
-        <p className="text-xs text-muted-foreground">Images, PDF, Video, and Audio up to 500 MB</p>
-        <input
-          className="sr-only"
-          type="file"
-          multiple
-          accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
-          disabled={uploading}
-          onChange={(event) => {
-            if (event.target.files?.length) void readFiles(event.target.files);
-            event.target.value = "";
+      {!locked ? (
+        <label
+          className={cn(
+            "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors",
+            over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+            uploading && "pointer-events-none opacity-60",
+          )}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setOver(true);
           }}
-        />
-      </label>
-      {attachments.length ? (
+          onDragOver={(event) => {
+            event.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={onDrop}
+        >
+          {uploading ? (
+            <Loader2 className="size-6 animate-spin text-primary" />
+          ) : (
+            <Upload className="size-6 text-primary" />
+          )}
+          <p className="text-sm font-medium">
+            {uploading ? "Uploading files…" : "Drop files here or browse"}
+          </p>
+          <p className="text-xs text-muted-foreground">Images, PDF, Video, and Audio up to 500 MB</p>
+          <input
+            className="sr-only"
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
+            disabled={uploading}
+            onChange={(event) => {
+              if (event.target.files?.length) void readFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+        </label>
+      ) : null}
+      {activeAttachments.length ? (
         <ul className="mt-4 divide-y divide-black/10 border border-black/10">
-          {attachments.map((file) => (
+          {activeAttachments.map((file) => (
             <li key={file.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-md bg-[#eef1f5] text-primary">
                 {file.type.startsWith("image/") ? (
@@ -1026,7 +1038,7 @@ export function JobAttachmentsTab({
                   {file.name}
                 </a>
                 <p className="text-xs text-muted-foreground">
-                  {fileSize(file.size)} · {stamp(file.addedAt)}
+                  {stamp(file.addedAt)}
                 </p>
               </div>
               <Button size="sm" variant="outline" asChild>
@@ -1040,27 +1052,27 @@ export function JobAttachmentsTab({
                   Preview
                 </a>
               </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                aria-label={`Delete ${file.name}`}
-                disabled={deletingId === file.id || saving}
-                onClick={() => {
-                  void handleDelete(file);
-                }}
-              >
-                {deletingId === file.id ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
+              {!locked ? (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Delete ${file.name}`}
+                  disabled={saving}
+                  onClick={() => {
+                    handleDelete(file);
+                  }}
+                >
                   <Trash2 className="size-4" />
-                )}
-              </Button>
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-4 text-sm text-muted-foreground">No files on this job yet.</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {locked ? "No attachments on this estimate." : "No files on this job yet."}
+        </p>
       )}
 
       <UnsavedChangesDialog
@@ -1131,6 +1143,7 @@ function MoneyRow({ label, value, strong }: { label: string; value: number; stro
 function ActivityCard({
   item,
   deleting = false,
+  locked = false,
   onEdit,
   onDelete,
 }: {
@@ -1144,6 +1157,7 @@ function ActivityCard({
     description?: string;
   };
   deleting?: boolean;
+  locked?: boolean;
   onEdit: () => void;
   onDelete: () => void | Promise<void>;
 }) {
@@ -1158,21 +1172,23 @@ function ActivityCard({
             {item.actor || "Desk"} · {timestamp ? stamp(timestamp) : "Just now"}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" disabled={deleting} onClick={onEdit}>
-            <Pencil />
-          </Button>
-          <Button
-            aria-label={`Delete ${item.title}`}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            size="icon-sm"
-            variant="ghost"
-            disabled={deleting}
-            onClick={onDelete}
-          >
-            {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 />}
-          </Button>
-        </div>
+        {!locked ? (
+          <div className="flex shrink-0 gap-1">
+            <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" disabled={deleting} onClick={onEdit}>
+              <Pencil />
+            </Button>
+            <Button
+              aria-label={`Delete ${item.title}`}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              size="icon-sm"
+              variant="ghost"
+              disabled={deleting}
+              onClick={onDelete}
+            >
+              {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 />}
+            </Button>
+          </div>
+        ) : null}
       </div>
       {content ? (
         <div className="job-activity-html mt-2 text-sm" dangerouslySetInnerHTML={{ __html: safeHtml(content) }} />

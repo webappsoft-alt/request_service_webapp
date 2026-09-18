@@ -335,10 +335,12 @@ export function useCrmDirectory() {
 
   const addTask = useCallback(
     (task: PortalTask) => {
-      if (apiReady) {
+      // Match addCustomer: hit the API whenever the provider session is live —
+      // do not wait for the full CRM snapshot (create was skipping POST).
+      if (crm.enabled) {
         return (async () => {
           const created = await createTaskApi(task);
-          await crm.refresh();
+          void crm.refresh({ silent: true });
           return created;
         })();
       }
@@ -346,7 +348,7 @@ export function useCrmDirectory() {
       writeStore(key, { ...current, tasks: [...current.tasks, task] });
       return task;
     },
-    [apiReady, crm, key],
+    [crm, key],
   );
 
   const addNote = useCallback(

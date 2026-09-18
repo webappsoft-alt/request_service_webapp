@@ -426,7 +426,7 @@ export function useJobSettings(jobId: string) {
   return store[jobId]?.settings;
 }
 
-function toJobAttachmentItem(
+export function toJobAttachmentItem(
   raw: unknown,
   index: number,
   fallbackPrefix: string,

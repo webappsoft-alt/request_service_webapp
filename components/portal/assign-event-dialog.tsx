@@ -20,16 +20,55 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalTimeWindow } from "@/lib/data/portal";
-import { calendarEventKindLabel, employeeName, minutesForWindow, timeWindowLabel } from "@/lib/data/portal";
+import { calendarEventKindLabel, employeeName } from "@/lib/data/portal";
 
-const TIME_WINDOWS: PortalTimeWindow[] = ["morning", "afternoon", "all_day"];
+type TimeSlotOption = {
+  value: string;
+  startMinutes: number;
+  endMinutes: number;
+  label: string;
+  period: "AM" | "PM";
+};
+
+const TIME_INTERVAL_SLOTS: TimeSlotOption[] = (() => {
+  const slots: TimeSlotOption[] = [];
+  const formatClockLabel = (totalMinutes: number) => {
+    const clamped = ((totalMinutes % 1440) + 1440) % 1440;
+    const hours24 = Math.floor(clamped / 60);
+    const mins = clamped % 60;
+    const period = hours24 >= 12 ? "PM" : "AM";
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+    const hourStr = String(hours12).padStart(2, "0");
+    const minStr = String(mins).padStart(2, "0");
+    return `${hourStr}:${minStr} ${period}`;
+  };
+
+  for (let min = 0; min < 1440; min += 30) {
+    const startStr = formatClockLabel(min);
+    const endStr = formatClockLabel(min + 30);
+    const period = min < 720 ? "AM" : "PM";
+    slots.push({
+      value: String(min),
+      startMinutes: min,
+      endMinutes: min + 30,
+      label: `${startStr} – ${endStr}`,
+      period,
+    });
+  }
+  return slots;
+})();
+
+const AM_SLOTS = TIME_INTERVAL_SLOTS.filter((s) => s.period === "AM");
+const PM_SLOTS = TIME_INTERVAL_SLOTS.filter((s) => s.period === "PM");
 
 function formatClockMinutes(total: number) {
   const hours24 = Math.floor(total / 60) % 24;
@@ -90,7 +129,7 @@ export function AssignEventDialog({
   const [recordKey, setRecordKey] = useState("");
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [timeWindow, setTimeWindow] = useState<PortalTimeWindow>("morning");
+  const [timeSlot, setTimeSlot] = useState<string>("540");
   const [employeeId, setEmployeeId] = useState("");
   const [employeeLabel, setEmployeeLabel] = useState("");
   const [saving, setSaving] = useState(false);
@@ -117,8 +156,23 @@ export function AssignEventDialog({
     const frame = window.requestAnimationFrame(() => {
       setRecordKey(next ? `${next.kind}:${next.recordId}` : "");
       setDate(event?.date ?? defaultDate ?? next?.date ?? "");
-      setEndDate(event?.endDate ?? event?.date ?? defaultDate ?? next?.endDate ?? "");
-      setTimeWindow(event?.timeWindow ?? "morning");
+      setEndDate(
+        event?.endDate ?? event?.date ?? defaultDate ?? next?.endDate ?? "",
+      );
+
+      let initialMinutes = event?.startMinutes ?? next?.startMinutes;
+      if (initialMinutes === undefined) {
+        const win = event?.timeWindow ?? next?.timeWindow ?? "morning";
+        if (win === "afternoon") initialMinutes = 780;
+        else if (win === "all_day") initialMinutes = 480;
+        else initialMinutes = 540;
+      }
+      const roundedMinutes = Math.floor(initialMinutes / 30) * 30;
+      const matched = TIME_INTERVAL_SLOTS.find(
+        (s) => s.startMinutes === roundedMinutes,
+      );
+      setTimeSlot(matched ? matched.value : "540");
+
       const presetId = event?.employeeId ?? "";
       setEmployeeId(presetId);
       const match = technicianOptions.find((item) => item.id === presetId);
@@ -133,12 +187,19 @@ export function AssignEventDialog({
     if (match) setEmployeeLabel(match.label);
   }, [employeeId, employeeLabel, open, technicianOptions]);
 
-  const selected = event ?? events.find((item) => `${item.kind}:${item.recordId}` === recordKey);
+  const selected =
+    event ??
+    events.find((item) => `${item.kind}:${item.recordId}` === recordKey);
 
   async function handleSave() {
     if (!selected || !date || !employeeId) return;
-    const window = minutesForWindow(timeWindow);
     setSaving(true);
+    const slot =
+      TIME_INTERVAL_SLOTS.find((s) => s.value === timeSlot) ??
+      TIME_INTERVAL_SLOTS[18];
+    const timeWindow: PortalTimeWindow =
+      slot.startMinutes < 720 ? "morning" : "afternoon";
+
     try {
       await onSave({
         kind: selected.kind,
@@ -148,8 +209,8 @@ export function AssignEventDialog({
         date,
         endDate: endDate && endDate > date ? endDate : undefined,
         timeWindow,
-        startMinutes: window.startMinutes,
-        endMinutes: window.endMinutes,
+        startMinutes: slot.startMinutes,
+        endMinutes: slot.endMinutes,
         employeeId,
       });
       onOpenChange(false);
@@ -164,9 +225,12 @@ export function AssignEventDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>{event ? "Assign on calendar" : "Schedule a visit"}</DialogTitle>
+          <DialogTitle>
+            {event ? "Assign on calendar" : "Schedule a visit"}
+          </DialogTitle>
           <DialogDescription>
-            Put a job, estimate visit, or request on the calendar and give it to a technician or contractor.
+            Put a job, estimate visit, or request on the calendar and give it to
+            a technician or contractor.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -183,8 +247,12 @@ export function AssignEventDialog({
                   className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
                   {events.map((item) => (
-                    <SelectItem key={item.id} value={`${item.kind}:${item.recordId}`}>
-                      {calendarEventKindLabel(item.kind)} · {item.title} — {item.detail}
+                    <SelectItem
+                      key={item.id}
+                      value={`${item.kind}:${item.recordId}`}
+                    >
+                      {calendarEventKindLabel(item.kind)} · {item.title} —{" "}
+                      {item.detail}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -195,31 +263,58 @@ export function AssignEventDialog({
               <span className="font-medium">
                 {calendarEventKindLabel(event.kind)} {event.title}
               </span>
-              <span className="mt-1 block text-muted-foreground">{event.detail}</span>
+              <span className="mt-1 block text-muted-foreground">
+                {event.detail}
+              </span>
             </p>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="crew-date">Start</FieldLabel>
-              <Input id="crew-date" type="date" value={date} onChange={(change) => setDate(change.target.value)} />
+              <Input
+                id="crew-date"
+                type="date"
+                value={date}
+                onChange={(change) => setDate(change.target.value)}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="crew-end">End</FieldLabel>
-              <Input id="crew-end" type="date" value={endDate} onChange={(change) => setEndDate(change.target.value)} />
+              <Input
+                id="crew-end"
+                type="date"
+                value={endDate}
+                onChange={(change) => setEndDate(change.target.value)}
+              />
             </Field>
           </div>
           <Field>
-            <FieldLabel htmlFor="crew-window">Window</FieldLabel>
-            <Select value={timeWindow} onValueChange={(value) => setTimeWindow(value as PortalTimeWindow)}>
+            <FieldLabel htmlFor="crew-window">Time interval</FieldLabel>
+            <Select value={timeSlot} onValueChange={setTimeSlot}>
               <SelectTrigger id="crew-window" className="w-full">
-                <SelectValue />
+                <SelectValue placeholder="Select time interval" />
               </SelectTrigger>
-              <SelectContent position="popper" align="start" className="z-[100] w-[var(--radix-select-trigger-width)]">
-                {TIME_WINDOWS.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {timeWindowLabel(item)}
-                  </SelectItem>
-                ))}
+              <SelectContent
+                position="popper"
+                align="start"
+                className="z-[100] max-h-64 w-[var(--radix-select-trigger-width)]"
+              >
+                <SelectGroup>
+                  <SelectLabel>AM</SelectLabel>
+                  {AM_SLOTS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>PM</SelectLabel>
+                  {PM_SLOTS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
@@ -247,7 +342,10 @@ export function AssignEventDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void handleSave()} disabled={!selected || !date || !employeeId || saving}>
+          <Button
+            onClick={() => void handleSave()}
+            disabled={!selected || !date || !employeeId || saving}
+          >
             {saving ? "Saving..." : "Save assignment"}
           </Button>
         </DialogFooter>

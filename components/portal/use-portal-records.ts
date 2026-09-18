@@ -6,10 +6,12 @@ import {
   createInvoice as createInvoiceApi,
   createJob as createJobApi,
   deleteJob as deleteJobApi,
+  deleteEstimate as deleteEstimateApi,
   createRequest as createRequestApi,
   recordInvoicePayment,
   updateEstimate as updateEstimateApi,
   updateEstimateStatus as updateEstimateStatusApi,
+  updateEstimateArchive as updateEstimateArchiveApi,
   updateInvoice as updateInvoiceApi,
   updateJobStatus as updateJobStatusApi,
   updateRequestStatus,
@@ -160,8 +162,18 @@ export function usePortalRecords() {
   );
 
   const isArchived = useCallback(
-    (kind: PortalRecordKind, id: string) => store.archived.includes(recordKey(kind, id)),
-    [store.archived],
+    (kind: PortalRecordKind, id: string) => {
+      const nextKey = recordKey(kind, id);
+      if (store.archived.includes(nextKey)) return true;
+      if (kind === "estimate") {
+        const est = crm.estimates.find((item) => item.id === id);
+        if (est && (est.isArchived !== undefined || est.isArchieved !== undefined)) {
+          return Boolean(est.isArchived ?? est.isArchieved);
+        }
+      }
+      return false;
+    },
+    [crm.estimates, store.archived],
   );
 
   const statusOf = useCallback(
@@ -251,6 +263,22 @@ export function usePortalRecords() {
 
   const remove = useCallback(
     (kind: PortalRecordKind, id: string) => {
+      if (crm.enabled && kind === "estimate") {
+        return (async () => {
+          await deleteEstimateApi(id);
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            deleted: current.deleted.includes(nextKey)
+              ? current.deleted
+              : [...current.deleted, nextKey],
+          });
+          if (crm.ready) {
+            void crm.refresh();
+          }
+        })();
+      }
       if (apiReady && kind === "customer") {
         return (async () => {
           await archiveCustomerApi(id);
@@ -298,6 +326,26 @@ export function usePortalRecords() {
           await crm.refresh();
         })();
       }
+      if (apiReady && kind === "estimate") {
+        return (async () => {
+          const updated = await updateEstimateArchiveApi(id, true);
+          if (updated) {
+            crm.patchEstimate(id, updated);
+          } else {
+            crm.patchEstimate(id, { isArchived: true, isArchieved: true });
+          }
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            archived: current.archived.includes(nextKey) ? current.archived : [...current.archived, nextKey],
+          });
+          if (crm.ready) {
+            void crm.refresh({ silent: true });
+          }
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const nextKey = recordKey(kind, id);
       writeStore(key, {
@@ -310,13 +358,33 @@ export function usePortalRecords() {
 
   const unarchive = useCallback(
     (kind: PortalRecordKind, id: string) => {
+      if (apiReady && kind === "estimate") {
+        return (async () => {
+          const updated = await updateEstimateArchiveApi(id, false);
+          if (updated) {
+            crm.patchEstimate(id, updated);
+          } else {
+            crm.patchEstimate(id, { isArchived: false, isArchieved: false });
+          }
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            archived: current.archived.filter((item) => item !== nextKey),
+          });
+          if (crm.ready) {
+            void crm.refresh({ silent: true });
+          }
+          return updated;
+        })();
+      }
       const current = readStore(key);
       writeStore(key, {
         ...current,
         archived: current.archived.filter((item) => item !== recordKey(kind, id)),
       });
     },
-    [key],
+    [apiReady, crm, key],
   );
 
   const listed = useCallback(
@@ -611,6 +679,7 @@ export function usePortalRecords() {
     remove,
     archive,
     unarchive,
+    restore: unarchive,
     listed,
     keep,
     mergeEstimates,

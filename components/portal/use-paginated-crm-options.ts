@@ -27,6 +27,7 @@ type PageResult = {
 
 export type PaginatedCrmFilters = {
   customerId?: string;
+  role?: string;
 };
 
 async function fetchKindPage(
@@ -50,7 +51,13 @@ async function fetchKindPage(
     }
     case "employee":
     case "assignee": {
-      const result = await queryTeam({ page, limit, force: true, silent: true });
+      const result = await queryTeam({
+        page,
+        limit,
+        role: filters.role?.trim() || undefined,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -177,7 +184,7 @@ export function usePaginatedCrmOptions(
   const filtersRef = useRef(filters);
   kindRef.current = kind;
   filtersRef.current = filters;
-  const filterKey = filters.customerId?.trim() || "";
+  const filterKey = `${filters.customerId?.trim() || ""}|${filters.role?.trim() || ""}`;
 
   const loadPage = useCallback(
     async (pageNum: number, append: boolean) => {

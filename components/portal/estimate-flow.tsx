@@ -32,7 +32,8 @@ import {
   type JobAttachment,
 } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
-import { useAppDispatch } from "@/store/hooks";
+import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchTeam } from "@/store/teamSlice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
-import { employeeName } from "@/lib/data/portal";
+import { employeeName, type PortalEmployee } from "@/lib/data/portal";
 import type { Estimate, EstimateStatus, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -248,15 +249,52 @@ export function EstimateSiteVisitTab({
   onSave: (visit: EstimateSiteVisit) => void | Promise<void>;
 }) {
   const dispatch = useAppDispatch();
-  const { employees, loading: crewLoading } = usePortalCrew();
+  const reduxEmployees = useAppSelector((state) => state.team?.items ?? []);
+  const teamLoading = useAppSelector((state) => state.team?.loading ?? false);
+  const { employees: crewEmployees, loading: crewLoading } = usePortalCrew();
+  const { contractors } = useCrmDirectory();
   const crm = useCrmApiData();
-  const loading = crewLoading || (crm.enabled && !crm.ready);
 
   useEffect(() => {
-    if (employees.length === 0) {
-      void dispatch(fetchTeam({ force: true, limit: 100 }));
+    void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
+  }, [dispatch]);
+
+  const technicians = useMemo(() => {
+    const contractorIds = new Set([
+      ...(contractors || []).map((c) => c.id),
+      ...(crm.contractors || []).map((c) => c.id),
+    ]);
+    const list = [
+      ...(crewEmployees || []),
+      ...(reduxEmployees || []),
+      ...(crm.employees || []),
+    ];
+    const seen = new Set<string>();
+    const result: PortalEmployee[] = [];
+    for (const item of list) {
+      if (item && item.id && !seen.has(item.id)) {
+        seen.add(item.id);
+        if (
+          contractorIds.has(item.id) ||
+          item.id.startsWith("con_") ||
+          "companyName" in item
+        ) {
+          continue;
+        }
+        const role = String(item.role || "").toLowerCase().trim();
+        const isTechnician =
+          role === "technician" ||
+          role === "tech" ||
+          (!role && !item.id.startsWith("con_"));
+        if (item.active !== false && isTechnician) {
+          result.push(item);
+        }
+      }
     }
-  }, [employees.length, dispatch]);
+    return result;
+  }, [crewEmployees, reduxEmployees, crm.employees, crm.contractors, contractors]);
+
+  const loading = (crewLoading || teamLoading) && technicians.length === 0;
   const { siteVisit, saveSiteVisit, actor } = useJobFile(
     asJob,
     estimate,
@@ -516,7 +554,7 @@ export function EstimateSiteVisitTab({
               value={loading ? undefined : visit.employeeId || "__unassigned__"}
               onValueChange={(value) => {
                 const resolvedId = value === "__unassigned__" ? "" : value;
-                const employee = employees.find(
+                const employee = technicians.find(
                   (item) => item.id === resolvedId,
                 );
                 patch({
@@ -543,9 +581,10 @@ export function EstimateSiteVisitTab({
                 ) : (
                   <>
                     <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                    {employees.map((item) => (
+                    {technicians.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {employeeName(item)}
+                        {item.trade ? ` · ${item.trade}` : ""}
                       </SelectItem>
                     ))}
                   </>

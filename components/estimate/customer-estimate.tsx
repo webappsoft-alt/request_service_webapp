@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Download, Printer, ShieldCheck } from "lucide-react";
+import {
+  CheckCircle2,
+  Download,
+  FileQuestion,
+  Printer,
+  ShieldCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   EstimatePdfDocument,
@@ -15,6 +21,7 @@ import {
   type EstimateShareSnapshot,
 } from "@/components/portal/use-estimate-share";
 import {
+  extractErrorMessage,
   getData,
   postData,
   showApiErrorToast,
@@ -22,7 +29,10 @@ import {
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { rememberCustomerEstimateToken } from "@/lib/booking/customer-estimates-store";
+import {
+  forgetCustomerEstimateToken,
+  rememberCustomerEstimateToken,
+} from "@/lib/booking/customer-estimates-store";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -57,8 +67,12 @@ function mapPublicEstimateToSnapshot(
   raw: unknown,
 ): { snapshot: EstimateShareSnapshot; approval?: EstimateApproval } | null {
   const root = asRecord(raw);
+  if (!root) return null;
+  if ("success" in root && root.success === false) return null;
+
   const estimate = asRecord(root?.data) ?? root;
   if (!estimate) return null;
+  if ("success" in estimate && estimate.success === false) return null;
 
   const provider =
     asRecord(estimate.providerId) ?? asRecord(estimate.provider) ?? {};
@@ -210,7 +224,22 @@ export function CustomerEstimatePage({ token }: { token: string }) {
         token: null,
         skipLogoutOn401: true,
         silent: true,
+        force: true,
       });
+
+      const root = asRecord(response);
+      if (root && root.success === false) {
+        forgetCustomerEstimateToken(token);
+        setError(
+          stringValue(root.message) ||
+            "Estimate proposal not found or link has expired",
+        );
+        setSnapshot(null);
+        setApproval(undefined);
+        setLoading(false);
+        return;
+      }
+
       const mapped = mapPublicEstimateToSnapshot(token, response);
       if (mapped) {
         rememberCustomerEstimateToken(token);
@@ -221,24 +250,21 @@ export function CustomerEstimatePage({ token }: { token: string }) {
         setLoading(false);
         return;
       }
-    } catch {
-      // Fallback to local store if available
-    }
 
-    const local = share.snapshotOf(token);
-    if (local) {
-      rememberCustomerEstimateToken(token);
-      setSnapshot(local);
-      setApproval(share.approvalOf(local.estimateId));
+      forgetCustomerEstimateToken(token);
+      setError("Estimate proposal not found or link has expired");
+      setSnapshot(null);
+      setApproval(undefined);
       setLoading(false);
-      return;
+    } catch (err) {
+      forgetCustomerEstimateToken(token);
+      const message = extractErrorMessage(err);
+      setError(message || "Estimate proposal not found or link has expired");
+      setSnapshot(null);
+      setApproval(undefined);
+      setLoading(false);
     }
-
-    setError("Estimate link not found");
-    setSnapshot(null);
-    setApproval(undefined);
-    setLoading(false);
-  }, [token, share.snapshotOf, share.approvalOf]);
+  }, [token, share.approvalOf]);
 
   useEffect(() => {
     void load();
@@ -277,11 +303,14 @@ export function CustomerEstimatePage({ token }: { token: string }) {
   if (!snapshot) {
     return (
       <main id="main-content" className="min-h-svh bg-[#eef1f5] px-4 py-16">
-        <div className="mx-auto max-w-lg rounded-md border border-black/15 bg-card p-8 text-center shadow-sm">
-          <h1 className="text-xl font-semibold">Estimate link not found</h1>
+        <div className="mx-auto max-w-lg rounded-md bg-card p-8 text-center">
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+            <FileQuestion className="size-6" />
+          </div>
+          <h1 className="text-xl font-semibold">Estimate proposal not found</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {error ||
-              "Ask the company to send the estimate again. The link is created when they send it for approval."}
+              "Estimate proposal not found or link has expired. Please ask the service company to send a new link."}
           </p>
         </div>
       </main>
@@ -443,12 +472,12 @@ export function EstimateDocumentSkeleton() {
         </div>
 
         {/* Page 1 Skeleton */}
-        <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+        <article className="mx-auto w-full max-w-204 overflow-hidden rounded-xs border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
           <div className="min-h-[10.4in] px-8 py-7">
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
-                <Skeleton className="size-14 rounded-[4px]" />
+                <Skeleton className="size-14 rounded-lg" />
                 <div className="space-y-1.5">
                   <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-3 w-56" />

@@ -945,6 +945,12 @@ export function mapEstimate(raw: unknown): Estimate | null {
     attachments: mapEstimateAttachments(record.attachments),
     siteVisit: mapEstimateSiteVisit(record.siteVisit),
     signature: mapApprovalSignature(record.approval ?? record.signature),
+    isArchived: record.isArchived !== undefined || record.isArchieved !== undefined
+      ? Boolean(record.isArchived ?? record.isArchieved)
+      : undefined,
+    isArchieved: record.isArchived !== undefined || record.isArchieved !== undefined
+      ? Boolean(record.isArchived ?? record.isArchieved)
+      : undefined,
     logs: asArray(record.logs)
       .map((entry, idx) => mapEstimateLog(entry, idx))
       .filter((item): item is EstimateLog => Boolean(item)),

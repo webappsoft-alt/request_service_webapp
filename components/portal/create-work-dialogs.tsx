@@ -119,6 +119,7 @@ export function CreateEstimateDialog({
   const boundCustomerId = (customerId || "").trim();
   const lockedCustomer = Boolean(boundCustomerId);
 
+  const technicianFilter = useMemo(() => ({ role: "technician" }), []);
   const customerPaging = usePaginatedCrmOptions(
     open && useApi && !lockedCustomer ? "customer" : null,
     open && useApi && !lockedCustomer,
@@ -126,6 +127,8 @@ export function CreateEstimateDialog({
   const assigneePaging = usePaginatedCrmOptions(
     open && useApi && tab === "visit" ? "assignee" : null,
     open && useApi && tab === "visit",
+    undefined,
+    technicianFilter,
   );
 
   const customerOptions = useMemo(
@@ -138,7 +141,18 @@ export function CreateEstimateDialog({
   const technicianOptions = useMemo(() => {
     const rows = useApi
       ? assigneePaging.options
-      : employees.map((item) => ({ id: item.id, label: employeeName(item) }));
+      : employees
+          .filter((item) => {
+            const role = String(item.role || "").toLowerCase().trim();
+            return (
+              item.active !== false &&
+              (role === "technician" || role === "tech" || !role)
+            );
+          })
+          .map((item) => ({
+            id: item.id,
+            label: `${employeeName(item)}${item.trade ? ` · ${item.trade}` : ""}`,
+          }));
     return [{ id: "", label: "Assign later" }, ...rows];
   }, [useApi, assigneePaging.options, employees]);
 
@@ -164,7 +178,17 @@ export function CreateEstimateDialog({
     if (boundCustomerId) {
       pickCustomer(boundCustomerId);
     }
-  }, [boundCustomerId, open, requestName, requestNotes]);
+    if (!useApi && employees.length === 0) {
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
+    }
+  }, [boundCustomerId, open, requestName, requestNotes, useApi, employees.length, dispatch]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (tab === "visit" && !useApi && employees.length === 0) {
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
+    }
+  }, [open, tab, useApi, employees.length, dispatch]);
 
   useEffect(() => {
     if (!open || lockedCustomer) return;
@@ -631,6 +655,7 @@ export function CreateJobDialog({
     [boundCustomerId],
   );
 
+  const technicianFilter = useMemo(() => ({ role: "technician" }), []);
   const customerPaging = usePaginatedCrmOptions(
     open && useApi && !lockedCustomer ? "customer" : null,
     open && useApi && !lockedCustomer,
@@ -644,6 +669,8 @@ export function CreateJobDialog({
   const assigneePaging = usePaginatedCrmOptions(
     open && useApi ? "assignee" : null,
     open && useApi,
+    undefined,
+    technicianFilter,
   );
 
   const customerOptions = useMemo(
@@ -665,7 +692,18 @@ export function CreateJobDialog({
   const technicianOptions = useMemo(() => {
     const rows = useApi
       ? assigneePaging.options
-      : employees.map((item) => ({ id: item.id, label: employeeName(item) }));
+      : employees
+          .filter((item) => {
+            const role = String(item.role || "").toLowerCase().trim();
+            return (
+              item.active !== false &&
+              (role === "technician" || role === "tech" || !role)
+            );
+          })
+          .map((item) => ({
+            id: item.id,
+            label: `${employeeName(item)}${item.trade ? ` · ${item.trade}` : ""}`,
+          }));
     return [{ id: "", label: "Unassigned" }, ...rows];
   }, [useApi, assigneePaging.options, employees]);
   const statusOptions = useMemo(

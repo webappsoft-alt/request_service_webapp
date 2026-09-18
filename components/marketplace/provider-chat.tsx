@@ -281,6 +281,7 @@ export function ProviderChat({ provider }: { provider: Provider }) {
             <ChatPanel
               messages={thread?.messages ?? []}
               self="customer"
+              recipientUnreadCount={thread?.unreadForProvider ?? 0}
               footer="Your message notifies the pro. They reply from Messages in the dashboard."
               onTypingChange={(isTyping) => {
                 if (thread?.id) setTyping(thread.id, isTyping);
@@ -303,16 +304,12 @@ export function ProviderChat({ provider }: { provider: Provider }) {
                         "send the message",
                       )
                     : current;
-                  const readThread = requireThread(
-                    await markPublicChatRead(updated.id, guest!.email),
-                    "mark the chat as read",
-                  );
                   const nextThreads = [
-                    ...threads.filter((item) => item.id !== readThread.id),
-                    readThread,
+                    ...threads.filter((item) => item.id !== updated.id),
+                    updated,
                   ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
                   setThreads(nextThreads);
-                  setThread(readThread);
+                  setThread(updated);
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : "Unable to send the message.");
                 }

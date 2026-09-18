@@ -14,9 +14,11 @@ export type RealtimeEvents = {
     threadId: string;
     message: {
       id: string;
-      from: "customer" | "provider";
+      from: "customer" | "provider" | "admin";
       text: string;
       at: string;
+      isRead?: boolean;
+      readAt?: string;
       attachments?: Array<{
         id?: string;
         name?: string;
@@ -29,8 +31,28 @@ export type RealtimeEvents = {
   CHAT_THREAD_UPDATED: Record<string, unknown> & { id?: string };
   CHAT_TYPING: {
     threadId: string;
-    from: "customer" | "provider";
+    from: "customer" | "provider" | "admin";
     isTyping: boolean;
+  };
+  CHAT_READ_RECEIPT: {
+    threadId: string;
+    readBy: "customer" | "provider" | "admin";
+    readAt: string;
+    unreadForProvider?: number;
+    unreadForCustomer?: number;
+    unreadForAdmin?: number;
+  };
+  USER_PRESENCE: {
+    userId: string;
+    isOnline: boolean;
+    lastSeen?: string;
+    lastActiveAt?: string;
+  };
+  "chat:presence": {
+    userId: string;
+    isOnline: boolean;
+    lastSeen?: string;
+    lastActiveAt?: string;
   };
   NEW_NOTIFICATION: {
     title?: string;
@@ -134,9 +156,47 @@ export function leaveChatThread(threadId: string) {
   socket.emit("leave:thread", { threadId });
 }
 
-export function emitChatTyping(threadId: string, isTyping: boolean) {
+export function emitChatTyping(
+  threadId: string,
+  isTyping: boolean,
+  from?: "customer" | "provider" | "admin",
+) {
   if (!socket || !threadId) return;
-  socket.emit("chat:typing", { threadId, isTyping });
+  socket.emit("chat:typing", { threadId, isTyping, ...(from ? { from } : {}) });
+}
+
+export function emitChatMarkRead(threadId: string) {
+  if (!socket || !threadId) return;
+  socket.emit("chat:mark_read", { threadId });
+}
+
+export function queryPresence(
+  userIds: string | string[],
+  onResult?: (
+    results: Array<{
+      userId: string;
+      isOnline: boolean;
+      lastSeen?: string;
+      lastActiveAt?: string;
+    }>,
+  ) => void,
+) {
+  if (!socket || !userIds) return;
+  const list = (Array.isArray(userIds) ? userIds : [userIds])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+  const validUserIds = list.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
+  if (!validUserIds.length) return;
+
+  socket.emit(
+    "presence:query",
+    { userIds: validUserIds, userId: validUserIds[0] },
+    (response: any) => {
+      if (response?.ok && Array.isArray(response.data)) {
+        onResult?.(response.data);
+      }
+    },
+  );
 }
 
 export function onRealtime<E extends keyof RealtimeEvents>(

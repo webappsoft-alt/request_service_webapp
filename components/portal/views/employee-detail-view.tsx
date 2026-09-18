@@ -37,13 +37,21 @@ import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
-import { useEmployeeFile, weekdayLabel, type EmployeeDayHours } from "@/components/portal/use-employee-file";
+import { useEmployeeFile, weekdayLabel, type EmployeeDayHours, defaultAvailability } from "@/components/portal/use-employee-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
-import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { CenteredSpinner } from "@/components/ui/spinner";
 import { crmTaskStatusLabel } from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
@@ -57,8 +65,6 @@ import {
   windowFromMinutes,
   type PortalCalendarEvent,
   type PortalEmployee,
-  type PortalEmployeeActiveAssignments,
-  type PortalEmployeeAssignmentSchedule,
   type PortalEmployeeRole,
   type PortalEmployeeWorkingHours,
 } from "@/lib/data/portal";
@@ -67,10 +73,20 @@ import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   clearTeamDetail,
+  bindTeamDetailEmployee,
   deleteTeamMember,
+  fetchEmployeeEstimates,
+  fetchEmployeeJobs,
+  fetchEmployeeSchedule,
+  fetchEmployeeTasks,
   fetchTeamMember,
+  selectTeamTabRows,
+  selectTeamTabShowLoader,
+  teamTabFilterKey,
   updateTeamMember,
+  upsertEmployeeTask,
 } from "@/store/teamSlice";
+import { useRouter } from "next/navigation";
 
 const ROLES: PortalEmployeeRole[] = ["technician", "estimator", "dispatcher", "owner"];
 
@@ -139,41 +155,15 @@ function workingHoursFromAvailability(days: EmployeeDayHours[]): PortalEmployeeW
   }));
 }
 
-function scheduleToCalendarEvents(
-  employeeId: string,
-  schedule: PortalEmployeeAssignmentSchedule[],
-): PortalCalendarEvent[] {
-  return schedule.map((item) => {
-    const date = item.date ? item.date.slice(0, 10) : undefined;
-    return {
-      id: item.id,
-      kind: "job" as const,
-      recordId: item.id,
-      title: item.title || "Schedule",
-      detail: item.status || "",
-      date,
-      timeWindow: windowFromMinutes(item.startMinutes, item.endMinutes) || "all_day",
-      startMinutes: item.startMinutes,
-      endMinutes: item.endMinutes,
-      employeeId,
-      href: `/pro/dashboard/schedule?employee=${employeeId}`,
-      status: item.status || "scheduled",
-    };
-  });
-}
-
 export function TeamMemberView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
-  const { estimates, requests } = usePortalWorkspace();
-  const { customers, tasks } = useCrmDirectory();
+  const router = useRouter();
+  const { requests } = usePortalWorkspace();
+  const { customers } = useCrmDirectory();
   const { employees, events, assign, removeEmployee, employeeById, employeeLabel } = usePortalCrew();
-  const records = usePortalRecords();
   const crm = useCrmApiData();
   const sliceItems = useAppSelector((state) => state.team?.items ?? []);
   const detail = useAppSelector((state) => state.team?.detail ?? null);
-  const detailAssignments = useAppSelector(
-    (state) => state.team?.detailAssignments ?? { jobs: [], tasks: [], schedule: [] },
-  );
   const detailLoading = useAppSelector((state) => Boolean(state.team?.detailLoading));
   const detailError = useAppSelector((state) => state.team?.detailError ?? null);
   const employee =
@@ -181,6 +171,8 @@ export function TeamMemberView({ id }: { id: string }) {
     sliceItems.find((item) => item.id === id) ??
     employees.find((item) => item.id === id);
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     if (!crm.enabled) return;
@@ -188,7 +180,7 @@ export function TeamMemberView({ id }: { id: string }) {
   }, [crm.enabled, crm.ensureLoaded]);
 
   useEffect(() => {
-    dispatch(clearTeamDetail());
+    dispatch(bindTeamDetailEmployee(id));
     void dispatch(fetchTeamMember(id));
     return () => {
       dispatch(clearTeamDetail());
@@ -203,38 +195,53 @@ export function TeamMemberView({ id }: { id: string }) {
     return result.payload?.employee;
   }
 
+  async function confirmRemove() {
+    if (!employee || removing) return;
+    const name = employeeName(employee);
+    setRemoving(true);
+    try {
+      if (crm.enabled) {
+        const result = await dispatch(deleteTeamMember(employee.id)).unwrap();
+        if (result.requiresReassignment) {
+          toast.warning(
+            `Employee deactivated. ${result.pendingTasksCount ?? 0} pending tasks or jobs need reassignment.`,
+          );
+        } else {
+          toast.success(`${name} removed from the crew list.`);
+        }
+      } else {
+        await Promise.resolve(removeEmployee(employee.id));
+        toast.success(`${name} removed from the crew list.`);
+      }
+      setRemoveOpen(false);
+      router.push("/pro/dashboard/team");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : typeof error === "string" ? error : "Could not remove this employee.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   if (!employee) {
-    const loading = detailLoading || crm.enabled;
+    if (detailLoading) {
+      return (
+        <div className="border border-black/15 bg-card" aria-busy="true">
+          <CenteredSpinner label="Loading employee" className="min-h-[22rem]" />
+        </div>
+      );
+    }
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">
-          {loading ? "Loading employee…" : detailError || "Employee not found"}
-        </h1>
-        {!loading ? (
-          <Button asChild className="mt-4" size="sm">
-            <Link href="/pro/dashboard/team">Back to employees</Link>
-          </Button>
-        ) : null}
+        <h1 className="text-lg font-semibold">{detailError || "Employee not found"}</h1>
+        <Button asChild className="mt-4" size="sm">
+          <Link href="/pro/dashboard/team">Back to employees</Link>
+        </Button>
       </div>
     );
   }
 
   const member = employee;
   const name = employeeName(member);
-  const assignments: PortalEmployeeActiveAssignments =
-    detail?.id === id ? detailAssignments : { jobs: [], tasks: [], schedule: [] };
-  const assignedFromApi = scheduleToCalendarEvents(member.id, assignments.schedule);
-  const assignedFromCrew = events
-    .filter((item) => item.employeeId === member.id)
-    .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
-  const assigned = assignedFromApi.length ? assignedFromApi : assignedFromCrew;
-  const allEstimates = records.mergeEstimates(estimates);
-  const estimateIds = new Set(assigned.filter((item) => item.kind === "estimate").map((item) => item.recordId));
-  const relatedEstimates = allEstimates.filter((item) => estimateIds.has(item.id));
-  const relatedJobs = assignments.jobs;
-  const relatedTasks = assignments.tasks.length
-    ? assignments.tasks
-    : tasks.filter((item) => item.assignedEmployeeId === member.id);
 
   function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
     assign({
@@ -247,6 +254,7 @@ export function TeamMemberView({ id }: { id: string }) {
       timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
       employeeId: member.id,
     });
+    void dispatch(fetchEmployeeSchedule({ employeeId: member.id, force: true }));
   }
 
   return (
@@ -275,28 +283,21 @@ export function TeamMemberView({ id }: { id: string }) {
         notice={<FileNotices kind="employee" id={employee.id} />}
         actions={
           <>
-            <SetTaskButton subjectKind="employee" subjectId={employee.id} />
+            <SetTaskButton
+              subjectKind="employee"
+              subjectId={employee.id}
+              onCreated={(item) => {
+                dispatch(upsertEmployeeTask({ employeeId: employee.id, item }));
+                void dispatch(fetchEmployeeTasks({ employeeId: employee.id, force: true }));
+              }}
+            />
             <SetReminderButton subjectKind="employee" subjectId={employee.id} />
             <AddNoteButton subjectKind="employee" subjectId={employee.id} />
             <Button size="sm" asChild>
-              <Link href={`/pro/dashboard/schedule?employee=${employee.id}`}>Open calendar</Link>
+              <Link href={`/pro/dashboard/schedule?employeeId=${employee.id}`}>Open calendar</Link>
             </Button>
             {employee.role === "owner" ? null : (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  void Promise.resolve(
-                    crm.enabled
-                      ? dispatch(deleteTeamMember(employee.id)).unwrap()
-                      : removeEmployee(employee.id),
-                  )
-                    .then(() => toast.success(`${name} removed from the crew list.`))
-                    .catch((error) =>
-                      toast.error(error instanceof Error ? error.message : "Could not remove this employee."),
-                    );
-                }}
-              >
+              <Button size="sm" variant="outline" onClick={() => setRemoveOpen(true)}>
                 Remove
               </Button>
             )}
@@ -315,173 +316,23 @@ export function TeamMemberView({ id }: { id: string }) {
               return (
                 <EmployeeScheduleTab
                   employee={employee}
-                  assigned={assigned}
                   onOpen={setEditing}
                   onMove={moveEvent}
                   employeeLabel={employeeLabel}
                 />
               );
             case "jobs":
-              return (
-                <PortalDataTable
-                  filename={`${employee.lastName}-jobs`}
-                  countLabel="Jobs"
-                  searchPlaceholder="Search jobs"
-                  empty="No jobs assigned to this employee yet."
-                  rows={relatedJobs}
-                  rowKey={(row) => row.id}
-                  rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
-                  columns={[
-                    {
-                      id: "number",
-                      header: "Job #",
-                      sortValue: (row) => row.number,
-                      searchValue: (row) => `${row.number} ${row.title}`,
-                      exportValue: (row) => row.number,
-                      cell: (row) => (
-                        <Link href={`/pro/dashboard/jobs/${row.id}`} className="font-semibold text-primary hover:underline">
-                          {row.number || row.id}
-                        </Link>
-                      ),
-                    },
-                    {
-                      id: "title",
-                      header: "Title",
-                      sortValue: (row) => row.title,
-                      searchValue: (row) => row.title,
-                      exportValue: (row) => row.title,
-                      cell: (row) => row.title || "—",
-                    },
-                    {
-                      id: "status",
-                      header: "Status",
-                      sortValue: (row) => row.status,
-                      searchValue: (row) => row.status,
-                      exportValue: (row) => row.status,
-                      cell: (row) => <StatusPill label={row.status || "—"} />,
-                    },
-                  ]}
-                />
-              );
+              return <EmployeeJobsTab employeeId={employee.id} />;
             case "estimates":
               return (
-                <PortalDataTable
-                  filename={`${employee.lastName}-estimates`}
-                  countLabel="Estimates"
-                  searchPlaceholder="Search estimates"
-                  empty="No estimate visits assigned to this employee."
-                  rows={relatedEstimates}
-                  rowKey={(row) => row.id}
-                  rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
-                  columns={[
-                    {
-                      id: "number",
-                      header: "Quote #",
-                      sortValue: (row) => row.number,
-                      searchValue: (row) => row.number,
-                      exportValue: (row) => row.number,
-                      cell: (row) => (
-                        <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
-                          {row.number}
-                        </Link>
-                      ),
-                    },
-                    {
-                      id: "customer",
-                      header: "Customer",
-                      sortValue: (row) => estimateCustomerName(row, customers, requests),
-                      searchValue: (row) => estimateCustomerName(row, customers, requests),
-                      exportValue: (row) => estimateCustomerName(row, customers, requests),
-                      cell: (row) => estimateCustomerName(row, customers, requests),
-                    },
-                    {
-                      id: "service",
-                      header: "Work",
-                      sortValue: (row) => row.items[0]?.description ?? "",
-                      searchValue: (row) => row.items.map((item) => item.description).join(" "),
-                      exportValue: (row) => row.items[0]?.description ?? "",
-                      cell: (row) => row.items[0]?.description ?? "—",
-                    },
-                    {
-                      id: "total",
-                      header: "Total",
-                      sortValue: (row) => row.total,
-                      searchValue: (row) => formatMoney(row.total),
-                      exportValue: (row) => formatMoney(row.total),
-                      cell: (row) => formatMoney(row.total),
-                    },
-                    {
-                      id: "status",
-                      header: "Status",
-                      sortValue: (row) => row.status,
-                      searchValue: (row) => estimateStatusLabel(row.status),
-                      exportValue: (row) => estimateStatusLabel(row.status),
-                      cell: (row) => (
-                        <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />
-                      ),
-                    },
-                  ]}
+                <EmployeeEstimatesTab
+                  employeeId={employee.id}
+                  customers={customers}
+                  requests={requests}
                 />
               );
             case "tasks":
-              return (
-                <PortalDataTable
-                  filename={`${employee.lastName}-tasks`}
-                  countLabel="Tasks"
-                  searchPlaceholder="Search tasks"
-                  empty="No tasks assigned to or linked to this employee."
-                  rows={relatedTasks}
-                  rowKey={(row) => row.id}
-                  rowHref={(row) => `/pro/dashboard/tasks/${row.id}`}
-                  columns={[
-                    {
-                      id: "number",
-                      header: "Task",
-                      sortValue: (row) => ("number" in row ? String(row.number ?? "") : row.id),
-                      searchValue: (row) =>
-                        `${"number" in row ? row.number ?? "" : ""} ${"title" in row ? row.title ?? "" : ""}`,
-                      exportValue: (row) => ("number" in row ? String(row.number ?? row.id) : row.id),
-                      cell: (row) => (
-                        <div>
-                          <Link href={`/pro/dashboard/tasks/${row.id}`} className="font-semibold text-primary hover:underline">
-                            {"number" in row && row.number ? row.number : row.id}
-                          </Link>
-                          {"title" in row && row.title ? (
-                            <p className="text-xs text-muted-foreground">{row.title}</p>
-                          ) : null}
-                        </div>
-                      ),
-                    },
-                    {
-                      id: "due",
-                      header: "Due",
-                      sortValue: (row) => ("dueAt" in row ? String(row.dueAt ?? "") : ""),
-                      searchValue: (row) =>
-                        "dueAt" in row && row.dueAt ? formatDate(String(row.dueAt)) : "",
-                      exportValue: (row) =>
-                        "dueAt" in row && row.dueAt ? formatDate(String(row.dueAt)) : "",
-                      cell: (row) =>
-                        "dueAt" in row && row.dueAt ? formatDate(String(row.dueAt)) : "—",
-                    },
-                    {
-                      id: "status",
-                      header: "Status",
-                      sortValue: (row) => ("status" in row ? String(row.status ?? "") : ""),
-                      searchValue: (row) =>
-                        "status" in row && row.status
-                          ? crmTaskStatusLabel(row.status as never) || String(row.status)
-                          : "",
-                      exportValue: (row) => ("status" in row ? String(row.status ?? "") : ""),
-                      cell: (row) =>
-                        "status" in row && row.status ? (
-                          <StatusPill label={crmTaskStatusLabel(row.status as never) || String(row.status)} />
-                        ) : (
-                          "—"
-                        ),
-                    },
-                  ]}
-                />
-              );
+              return <EmployeeTasksTab employeeId={employee.id} />;
             case "notes":
               return <NotesPanel kind="employee" id={employee.id} />;
             case "attachments":
@@ -501,10 +352,35 @@ export function TeamMemberView({ id }: { id: string }) {
         employees={employees}
         onSave={(assignment) => {
           assign(assignment);
+          void dispatch(fetchEmployeeSchedule({ employeeId: member.id, force: true }));
           const next = employeeById(assignment.employeeId);
           toast.success(`Updated. ${next ? employeeName(next) : "Crew"} has this visit.`);
         }}
       />
+      <Dialog
+        open={removeOpen}
+        onOpenChange={(next) => {
+          if (!next && !removing) setRemoveOpen(false);
+        }}
+      >
+        <DialogContent showCloseButton={!removing} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Deactivate employee?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to deactivate this employee? All pending work orders and tasks will
+              require reassignment.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={removing} onClick={() => setRemoveOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={removing} onClick={() => void confirmRemove()}>
+              {removing ? "Removing…" : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -627,20 +503,22 @@ export function EmployeeAvailabilityTab({
   employee: PortalEmployee;
   onSave?: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
 }) {
-  const file = useEmployeeFile(employee);
+  const hoursKey = JSON.stringify(employee.workingHours ?? null);
   const [days, setDays] = useState<EmployeeDayHours[]>(() =>
     employee.workingHours?.length
       ? availabilityFromWorkingHours(employee.workingHours)
-      : file.availability,
+      : defaultAvailability(),
   );
 
   useEffect(() => {
     setDays(
       employee.workingHours?.length
         ? availabilityFromWorkingHours(employee.workingHours)
-        : file.availability,
+        : defaultAvailability(),
     );
-  }, [employee.id, employee.workingHours, file.availability]);
+    // hoursKey captures workingHours content without unstable array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync when employee or hours payload changes
+  }, [employee.id, hoursKey]);
 
   function patch(day: number, next: Partial<EmployeeDayHours>) {
     setDays((current) => current.map((item) => (item.day === day ? { ...item, ...next } : item)));
@@ -657,9 +535,7 @@ export function EmployeeAvailabilityTab({
           size="sm"
           onClick={() => {
             const workingHours = workingHoursFromAvailability(days);
-            void Promise.resolve(
-              onSave ? onSave({ workingHours }) : Promise.resolve(file.saveAvailability(days)),
-            )
+            void Promise.resolve(onSave?.({ workingHours }))
               .then(() => toast.success("Availability saved."))
               .catch((error) =>
                 toast.error(error instanceof Error ? error.message : "Could not save availability."),
@@ -813,23 +689,49 @@ export function EmployeePayTab({
 
 function EmployeeScheduleTab({
   employee,
-  assigned,
   onOpen,
   onMove,
   employeeLabel,
 }: {
   employee: PortalEmployee;
-  assigned: PortalCalendarEvent[];
   onOpen: (event: PortalCalendarEvent) => void;
   onMove: (event: PortalCalendarEvent, move: CalendarMove) => void;
   employeeLabel: (id?: string) => string;
 }) {
+  const dispatch = useAppDispatch();
+  const filterKey = teamTabFilterKey({});
+  const tab = useAppSelector((state) => state.team?.schedule);
+  const { events } = usePortalCrew();
+
+  useEffect(() => {
+    void dispatch(fetchEmployeeSchedule({ employeeId: employee.id, force: true }));
+  }, [dispatch, employee.id]);
+
+  const apiRows = selectTeamTabRows(tab, employee.id, filterKey, []);
+  const fallback = events.filter((item) => item.employeeId === employee.id);
+  const assigned = (apiRows.length ? apiRows : fallback).map((item) => ({
+    ...item,
+    // API list is already scoped; ensure client filters can match this employee.
+    employeeId: item.employeeId || employee.id,
+  }));
+  const listLoading = selectTeamTabShowLoader(tab, employee.id, filterKey);
+
+  if (listLoading) {
+    return (
+      <div className="border border-black/10" aria-busy="true">
+        <CenteredSpinner label="Loading schedule" className="min-h-[16rem]" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <EventCalendar
         events={assigned}
         employees={[employee]}
         employeeLabel={employeeLabel}
+        initialEmployeeId={employee.id}
+        lockEmployeeId={employee.id}
         onMove={onMove}
         onEventOpen={onOpen}
       />
@@ -888,6 +790,203 @@ function EmployeeScheduleTab({
         ]}
       />
     </div>
+  );
+}
+
+function EmployeeJobsTab({ employeeId }: { employeeId: string }) {
+  const dispatch = useAppDispatch();
+  const filterKey = teamTabFilterKey({});
+  const tab = useAppSelector((state) => state.team?.jobs);
+
+  useEffect(() => {
+    void dispatch(fetchEmployeeJobs({ employeeId, force: true }));
+  }, [dispatch, employeeId]);
+
+  const rows = selectTeamTabRows(tab, employeeId, filterKey, []);
+  const listLoading = selectTeamTabShowLoader(tab, employeeId, filterKey);
+
+  return (
+    <PortalDataTable
+      filename="employee-jobs"
+      countLabel="Jobs"
+      searchPlaceholder="Search jobs"
+      loading={listLoading}
+      empty="No jobs assigned to this employee yet."
+      rows={rows}
+      rowKey={(row) => row.id}
+      rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
+      columns={[
+        {
+          id: "number",
+          header: "Job #",
+          sortValue: (row) => row.number,
+          searchValue: (row) => `${row.number} ${row.title}`,
+          exportValue: (row) => row.number,
+          cell: (row) => (
+            <Link href={`/pro/dashboard/jobs/${row.id}`} className="font-semibold text-primary hover:underline">
+              {row.number || row.id}
+            </Link>
+          ),
+        },
+        {
+          id: "title",
+          header: "Title",
+          sortValue: (row) => row.title || "",
+          searchValue: (row) => row.title || "",
+          exportValue: (row) => row.title || "",
+          cell: (row) => row.title || "—",
+        },
+        {
+          id: "status",
+          header: "Status",
+          sortValue: (row) => row.status || "",
+          searchValue: (row) => row.status || "",
+          exportValue: (row) => row.status || "",
+          cell: (row) => <StatusPill label={row.status || "—"} />,
+        },
+      ]}
+    />
+  );
+}
+
+function EmployeeEstimatesTab({
+  employeeId,
+  customers,
+  requests,
+}: {
+  employeeId: string;
+  customers: Parameters<typeof estimateCustomerName>[1];
+  requests: Parameters<typeof estimateCustomerName>[2];
+}) {
+  const dispatch = useAppDispatch();
+  const filterKey = teamTabFilterKey({});
+  const tab = useAppSelector((state) => state.team?.estimates);
+
+  useEffect(() => {
+    void dispatch(fetchEmployeeEstimates({ employeeId, force: true }));
+  }, [dispatch, employeeId]);
+
+  const rows = selectTeamTabRows(tab, employeeId, filterKey, []);
+  const listLoading = selectTeamTabShowLoader(tab, employeeId, filterKey);
+
+  return (
+    <PortalDataTable
+      filename="employee-estimates"
+      countLabel="Estimates"
+      searchPlaceholder="Search estimates"
+      loading={listLoading}
+      empty="No estimate visits assigned to this employee."
+      rows={rows}
+      rowKey={(row) => row.id}
+      rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+      columns={[
+        {
+          id: "number",
+          header: "Quote #",
+          sortValue: (row) => row.number,
+          searchValue: (row) => row.number,
+          exportValue: (row) => row.number,
+          cell: (row) => (
+            <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
+              {row.number}
+            </Link>
+          ),
+        },
+        {
+          id: "customer",
+          header: "Customer",
+          sortValue: (row) => estimateCustomerName(row, customers, requests),
+          searchValue: (row) => estimateCustomerName(row, customers, requests),
+          exportValue: (row) => estimateCustomerName(row, customers, requests),
+          cell: (row) => estimateCustomerName(row, customers, requests),
+        },
+        {
+          id: "service",
+          header: "Work",
+          sortValue: (row) => row.items[0]?.description ?? "",
+          searchValue: (row) => row.items.map((item) => item.description).join(" "),
+          exportValue: (row) => row.items[0]?.description ?? "",
+          cell: (row) => row.items[0]?.description ?? "—",
+        },
+        {
+          id: "total",
+          header: "Total",
+          sortValue: (row) => row.total,
+          searchValue: (row) => formatMoney(row.total),
+          exportValue: (row) => formatMoney(row.total),
+          cell: (row) => formatMoney(row.total),
+        },
+        {
+          id: "status",
+          header: "Status",
+          sortValue: (row) => row.status,
+          searchValue: (row) => estimateStatusLabel(row.status),
+          exportValue: (row) => estimateStatusLabel(row.status),
+          cell: (row) => (
+            <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />
+          ),
+        },
+      ]}
+    />
+  );
+}
+
+function EmployeeTasksTab({ employeeId }: { employeeId: string }) {
+  const dispatch = useAppDispatch();
+  const filterKey = teamTabFilterKey({});
+  const tab = useAppSelector((state) => state.team?.tasks);
+
+  useEffect(() => {
+    void dispatch(fetchEmployeeTasks({ employeeId, force: true }));
+  }, [dispatch, employeeId]);
+
+  const rows = selectTeamTabRows(tab, employeeId, filterKey, []);
+  const listLoading = selectTeamTabShowLoader(tab, employeeId, filterKey);
+
+  return (
+    <PortalDataTable
+      filename="employee-tasks"
+      countLabel="Tasks"
+      searchPlaceholder="Search tasks"
+      loading={listLoading}
+      empty="No tasks assigned to or linked to this employee."
+      rows={rows}
+      rowKey={(row) => row.id}
+      rowHref={(row) => `/pro/dashboard/tasks/${row.id}`}
+      columns={[
+        {
+          id: "number",
+          header: "Task",
+          sortValue: (row) => row.number || row.title,
+          searchValue: (row) => `${row.number ?? ""} ${row.title ?? ""}`,
+          exportValue: (row) => row.number || row.id,
+          cell: (row) => (
+            <div>
+              <Link href={`/pro/dashboard/tasks/${row.id}`} className="font-semibold text-primary hover:underline">
+                {row.number || row.id}
+              </Link>
+              {row.title ? <p className="text-xs text-muted-foreground">{row.title}</p> : null}
+            </div>
+          ),
+        },
+        {
+          id: "due",
+          header: "Due",
+          sortValue: (row) => row.dueAt ?? "",
+          searchValue: (row) => (row.dueAt ? formatDate(row.dueAt) : ""),
+          exportValue: (row) => (row.dueAt ? formatDate(row.dueAt) : ""),
+          cell: (row) => (row.dueAt ? formatDate(row.dueAt) : "—"),
+        },
+        {
+          id: "status",
+          header: "Status",
+          sortValue: (row) => row.status,
+          searchValue: (row) => crmTaskStatusLabel(row.status),
+          exportValue: (row) => row.status,
+          cell: (row) => <StatusPill label={crmTaskStatusLabel(row.status)} />,
+        },
+      ]}
+    />
   );
 }
 

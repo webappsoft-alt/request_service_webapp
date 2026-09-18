@@ -2,7 +2,7 @@ import { CHAT_EVENT, readJson, writeJson } from "@/lib/booking/demo-stores";
 import { getSeedChatThreads } from "@/lib/booking/seed-chats";
 import { getAllProviders } from "@/lib/data/providers";
 
-export type ChatRole = "customer" | "provider";
+export type ChatRole = "customer" | "provider" | "admin";
 
 export type ChatAttachment = {
   id: string;
@@ -17,6 +17,9 @@ export type ChatMessage = {
   text: string;
   at: string;
   attachments: ChatAttachment[];
+  status?: "pending" | "sent" | "delivered" | "read" | "failed";
+  isRead?: boolean;
+  readAt?: string;
 };
 
 export type ChatThread = {
@@ -33,6 +36,10 @@ export type ChatThread = {
   requestId?: string;
   unreadForProvider: number;
   unreadForCustomer: number;
+  unreadForAdmin?: number;
+  isOnline?: boolean;
+  lastSeen?: string;
+  lastActiveAt?: string;
   messages: ChatMessage[];
   updatedAt: string;
 };

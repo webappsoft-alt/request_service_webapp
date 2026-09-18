@@ -25,11 +25,17 @@ type PublicThreadInput = {
   attachments?: ChatAttachment[];
 };
 
-export async function listProviderChatThreads(options?: { silent?: boolean }) {
+export async function listProviderChatThreads(options?: {
+  silent?: boolean;
+  force?: boolean;
+}) {
   const response = await getData(
     chatApi.providerThreads,
     { page: 1, limit: 100 },
-    { silent: options?.silent ?? true },
+    {
+      silent: options?.silent ?? true,
+      force: options?.force ?? true,
+    },
   );
   return mapCrmList(response, mapChatThread).items;
 }

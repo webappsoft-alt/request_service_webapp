@@ -202,8 +202,18 @@ export function JobSummaryTab({
   const { lines, mix } = useJobCosting(job);
   const sheet = jobMoneySheet(mix);
   const file = useJobFile(job, estimate, invoice, technician);
+  const crm = useCrmApiData();
   const isEstimate = noun === "estimate" && Boolean(estimate?.id);
-  const estimateActivities = useEstimateActivities(estimate?.id, isEstimate, estimate?.activities);
+  const estimateActivities = useEstimateActivities(
+    estimate?.id,
+    isEstimate,
+    estimate?.activities,
+    (next) => {
+      if (estimate?.id) {
+        crm.patchEstimate(estimate.id, { activities: next });
+      }
+    },
+  );
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<{ id: string; title: string; html: string } | null>(null);
@@ -220,8 +230,6 @@ export function JobSummaryTab({
         at: item.createdAt,
       }))
     : file.activities;
-
-  const loadingActivities = isEstimate && estimateActivities.loading;
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
@@ -274,12 +282,7 @@ export function JobSummaryTab({
           </Button>
         }
       >
-        {loadingActivities ? (
-          <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 size-4 animate-spin" />
-            Loading activities…
-          </div>
-        ) : activities.length ? (
+        {activities.length ? (
           <ul className="space-y-3">
             {activities.map((item) => (
               <ActivityCard

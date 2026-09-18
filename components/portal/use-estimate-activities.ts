@@ -6,7 +6,6 @@ import { extractErrorMessage } from "@/components/api/apiFuntions";
 import {
   createEstimateActivity,
   deleteEstimateActivity,
-  listEstimateActivities,
   updateEstimateActivity,
 } from "@/lib/api/crm-client";
 import type { EstimateActivity } from "@/lib/types";
@@ -15,9 +14,9 @@ export function useEstimateActivities(
   estimateId?: string,
   enabled = true,
   initialActivities?: EstimateActivity[],
+  onMutate?: (next: EstimateActivity[]) => void,
 ) {
   const [activities, setActivities] = useState<EstimateActivity[]>(() => initialActivities ?? []);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const mountedRef = useRef(true);
@@ -29,42 +28,12 @@ export function useEstimateActivities(
     };
   }, []);
 
-  // Synchronize when initialActivities changes
+  // Synchronize when estimate.activities from getEstimate API changes
   useEffect(() => {
-    if (initialActivities && initialActivities.length > 0) {
-      setActivities((current) => (current.length === 0 ? initialActivities : current));
+    if (initialActivities) {
+      setActivities(initialActivities);
     }
   }, [initialActivities]);
-
-  const refresh = useCallback(
-    async (options?: { silent?: boolean }) => {
-      if (!estimateId || !enabled) return;
-      if (!options?.silent) setLoading(true);
-      try {
-        const list = await listEstimateActivities(estimateId, { silent: options?.silent ?? true });
-        if (mountedRef.current) {
-          setActivities(list);
-        }
-      } catch (error) {
-        if (!options?.silent) {
-          toast.error(extractErrorMessage(error) || "Could not load estimate activities.");
-        }
-      } finally {
-        if (mountedRef.current && !options?.silent) {
-          setLoading(false);
-        }
-      }
-    },
-    [estimateId, enabled],
-  );
-
-  useEffect(() => {
-    if (estimateId && enabled) {
-      void refresh({ silent: Boolean(initialActivities && initialActivities.length > 0) });
-    } else {
-      setActivities([]);
-    }
-  }, [estimateId, enabled, refresh, initialActivities]);
 
   const addActivity = useCallback(
     async (title: string, description: string) => {
@@ -76,9 +45,11 @@ export function useEstimateActivities(
           description: description.trim(),
         });
         if (created && mountedRef.current) {
-          setActivities((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
-        } else {
-          await refresh({ silent: true });
+          setActivities((prev) => {
+            const next = [created, ...prev.filter((item) => item.id !== created.id)];
+            onMutate?.(next);
+            return next;
+          });
         }
         toast.success("Activity posted.");
         return created;
@@ -91,7 +62,7 @@ export function useEstimateActivities(
         }
       }
     },
-    [estimateId, refresh],
+    [estimateId, onMutate],
   );
 
   const updateActivity = useCallback(
@@ -104,11 +75,11 @@ export function useEstimateActivities(
           description: description.trim(),
         });
         if (updated && mountedRef.current) {
-          setActivities((prev) =>
-            prev.map((item) => (item.id === activityId ? updated : item)),
-          );
-        } else {
-          await refresh({ silent: true });
+          setActivities((prev) => {
+            const next = prev.map((item) => (item.id === activityId ? updated : item));
+            onMutate?.(next);
+            return next;
+          });
         }
         toast.success("Activity updated.");
         return updated;
@@ -121,7 +92,7 @@ export function useEstimateActivities(
         }
       }
     },
-    [estimateId, refresh],
+    [estimateId, onMutate],
   );
 
   const deleteActivity = useCallback(
@@ -131,7 +102,11 @@ export function useEstimateActivities(
       try {
         await deleteEstimateActivity(estimateId, activityId);
         if (mountedRef.current) {
-          setActivities((prev) => prev.filter((item) => item.id !== activityId));
+          setActivities((prev) => {
+            const next = prev.filter((item) => item.id !== activityId);
+            onMutate?.(next);
+            return next;
+          });
         }
         toast.success("Activity deleted.");
         return true;
@@ -144,15 +119,14 @@ export function useEstimateActivities(
         }
       }
     },
-    [estimateId],
+    [estimateId, onMutate],
   );
 
   return {
     activities,
-    loading,
+    loading: false,
     saving,
     deletingId,
-    refresh,
     addActivity,
     updateActivity,
     deleteActivity,

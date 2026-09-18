@@ -238,22 +238,6 @@ function customerPayload(customer: PortalCustomerCrm) {
   };
 }
 
-function employeePayload(employee: PortalEmployee) {
-  const firstName = employee.firstName || "";
-  const lastName = employee.lastName || "";
-  const name = [firstName, lastName].filter(Boolean).join(" ");
-  return {
-    name,
-    firstName,
-    lastName,
-    email: employee.email || "",
-    phone: employee.phone || "",
-    role: employee.role || "technician",
-    active: employee.active ?? true,
-    hourlyRate: employee.hourlyRate ?? 0,
-  };
-}
-
 function contractorPayload(contractor: PortalContractor | Partial<PortalContractor>) {
   return {
     firstName: contractor.firstName || "",
@@ -701,7 +685,7 @@ export async function listRequests(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.requests, mapPortalRequest, options);
 }
 
-export async function (query: CrmListQuery = {}) {
+export async function queryRequests(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
   const params: Record<string, string | number> = { page, limit };

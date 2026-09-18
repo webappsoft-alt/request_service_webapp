@@ -1,32 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Bell,
   Briefcase,
+  Building2,
   CalendarDays,
+  ChevronDown,
+  Clock,
   ExternalLink,
   FilePlus2,
   FileText,
   ImageIcon,
+  Info,
   LayoutDashboard,
   ListTodo,
   Loader2,
   Mail,
+  MapPin,
   MessageCircle,
   MessageSquare,
   NotebookPen,
   Phone,
+  Receipt,
   Settings,
   UserRound,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ArchiveBadge, ArchiveButton } from "@/components/portal/archive-control";
+import { ArchiveBadge } from "@/components/portal/archive-control";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
-import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/portal/create-person-dialogs";
+import {
+  CreateNoteDialog,
+  CreateReminderDialog,
+  CreateTaskDialog,
+} from "@/components/portal/create-person-dialogs";
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { ChatPanel } from "@/components/shared/chat-panel";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
@@ -45,18 +56,27 @@ import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { getRequest, updateRequestStatus } from "@/lib/api/crm-client";
 import { ensureProviderChatThread } from "@/lib/api/chat-client";
-import { useRealtime } from "@/components/realtime/realtime-provider";
+import { subscribeRealtime, useRealtime } from "@/components/realtime/realtime-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { ChatPanelSkeleton } from "@/components/shared/loading-skeletons";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { getAvatarColor, getInitials } from "@/lib/chat-format";
+import { CrmMark } from "@/components/portal/crm-mark";
+import { CustomerLocationMapLazy } from "@/components/portal/customer-location-map-lazy";
 import {
   crmCustomerName,
   crmReminderStatusLabel,
+  crmSourceLabel,
   crmTaskStatusLabel,
   reminderMatches,
   taskMatches,
@@ -74,8 +94,8 @@ import {
   type PortalRequest,
   type PortalTimeWindow,
 } from "@/lib/data/portal";
-import { formatDate, formatLocation } from "@/lib/format";
-import type { RequestStatus } from "@/lib/types";
+import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import type { RequestStatus, ServiceAddress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -163,6 +183,9 @@ export function RequestDetailView({ id }: { id: string }) {
   const tab = (searchParams.get("tab") ?? "summary") as LeadTab;
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
   const [apiLead, setApiLead] = useState<PortalRequest | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
 
@@ -234,8 +257,51 @@ export function RequestDetailView({ id }: { id: string }) {
     if (tab === "messages" && thread?.unreadForProvider) chat.markRead(thread.id);
   }, [chat.markRead, tab, thread?.id, thread?.unreadForProvider]);
 
-  const { joinThread, leaveThread, setTyping, connected } = useRealtime();
+  const {
+    joinThread,
+    leaveThread,
+    setTyping,
+    connected,
+    getPresence,
+    queryUserPresence,
+  } = useRealtime();
   const [startingChat, setStartingChat] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+
+  useEffect(() => {
+    const custId = thread?.customerId || request?.customerId;
+    if (custId && /^[0-9a-fA-F]{24}$/.test(custId)) {
+      queryUserPresence(custId);
+    }
+  }, [thread?.customerId, request?.customerId, queryUserPresence]);
+
+  useEffect(() => {
+    setIsOtherTyping(false);
+    if (!thread?.id || tab !== "messages") return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    const unsub = subscribeRealtime((detail) => {
+      if (detail?.type === "CHAT_TYPING" && detail.payload) {
+        const payload = detail.payload as {
+          threadId?: string;
+          from?: string;
+          isTyping?: boolean;
+        };
+        if (payload.threadId === thread.id && payload.from !== "provider") {
+          setIsOtherTyping(Boolean(payload.isTyping));
+          clearTimeout(timer);
+          if (payload.isTyping) {
+            timer = setTimeout(() => setIsOtherTyping(false), 3500);
+          }
+        }
+      }
+    });
+
+    return () => {
+      clearTimeout(timer);
+      unsub();
+    };
+  }, [thread?.id, tab]);
 
   useEffect(() => {
     if (!thread?.id || tab !== "messages") return;
@@ -286,6 +352,16 @@ export function RequestDetailView({ id }: { id: string }) {
   const lead = request;
   const customerLabel = customer ? crmCustomerName(customer) : lead.customerName;
   const lost = lead.status === "declined" || lead.status === "closed";
+  const isArchived = records.isArchived("request", lead.id);
+
+  const leadAddress: ServiceAddress = customer?.addresses?.[0] ?? {
+    id: `addr_${request.id}`,
+    street: request.neighborhood ? request.neighborhood : (request.city || "Address pending"),
+    city: request.city || "Faisalabad",
+    state: request.state || "NA",
+    zip: request.zip || "38000",
+    country: "US",
+  };
 
   async function markContacted() {
     records.setStatus("request", lead.id, "contacted");
@@ -334,13 +410,16 @@ export function RequestDetailView({ id }: { id: string }) {
         badge={
           <>
             <StatusPill label={requestStatusLabel(request.status)} tone={requestTone(request.status)} />
-            <StatusPill label={request.channel === "direct" ? "Direct" : "Marketplace"} />
+            <StatusPill label={request.channel === "direct" ? "Direct" : "Marketplace"} tone="neutral" />
             <ArchiveBadge kind="request" id={request.id} />
           </>
         }
         notice={<FileNotices kind="request" id={request.id} />}
         actions={
           <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/pro/dashboard/requests">Close</Link>
+            </Button>
             {hasJob ? (
               <Button size="sm" asChild>
                 <Link href={`/pro/dashboard/jobs/${job.id}`}>Open {job.number}</Link>
@@ -360,23 +439,51 @@ export function RequestDetailView({ id }: { id: string }) {
                 Chat
               </Link>
             </Button>
-            {request.status === "new" || request.status === "viewed" ? (
-              <Button size="sm" variant="outline" onClick={markContacted}>
-                Mark contacted
-              </Button>
-            ) : null}
-            <Button size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
-              Schedule visit
-            </Button>
-            <SetTaskButton subjectKind="request" subjectId={request.id} />
-            <SetReminderButton subjectKind="request" subjectId={request.id} />
-            <AddNoteButton subjectKind="request" subjectId={request.id} />
-            {lost ? null : (
-              <Button size="sm" variant="outline" onClick={declineLead}>
-                Decline
-              </Button>
-            )}
-            <ArchiveButton kind="request" id={request.id} label={request.number} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1">
+                  More actions
+                  <ChevronDown className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {request.status === "new" || request.status === "viewed" ? (
+                  <DropdownMenuItem onSelect={markContacted}>
+                    Mark contacted
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={() => setAssignOpen(true)}>
+                  Schedule visit
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTaskOpen(true)}>
+                  Create task
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNoteOpen(true)}>
+                  Add note
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>
+                  Set reminder
+                </DropdownMenuItem>
+                {!lost ? (
+                  <DropdownMenuItem onSelect={declineLead} className="text-red-600 focus:text-red-600">
+                    Decline
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem
+                  onSelect={() => {
+                    if (isArchived) {
+                      records.unarchive("request", request.id);
+                      toast.success(`${request.number} restored.`);
+                    } else {
+                      records.archive("request", request.id);
+                      toast.success(`${request.number} archived.`);
+                    }
+                  }}
+                >
+                  {isArchived ? "Restore" : "Archive"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       >
@@ -389,83 +496,246 @@ export function RequestDetailView({ id }: { id: string }) {
                   <LeadPipeline status={request.status} hasEstimate={hasEstimate} hasJob={hasJob} />
                   <div
                     className={cn(
-                      "rounded-[4px] border px-4 py-3 text-sm",
-                      lost ? "border-red-200 bg-red-50 text-red-950" : "border-black/10 bg-[#e8eef5] text-[#003F7D]",
+                      "flex items-center gap-2.5 rounded-lg border px-4 py-2.5 text-xs font-medium",
+                      lost
+                        ? "border-red-200 bg-red-50 text-red-950"
+                        : "border-black/10 bg-[#e8eef5]/60 text-[#003F7D]",
                     )}
                   >
-                    {leadStageCopy(request.status, hasEstimate, hasJob)}
+                    <Info className="size-4 shrink-0 text-[#003F7D]/70" aria-hidden="true" />
+                    <span>{leadStageCopy(request.status, hasEstimate, hasJob)}</span>
                   </div>
                   <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-                    <div className="grid gap-3 rounded-[4px] border border-black/10 p-4 sm:grid-cols-2">
-                      <Fact label="Service" value={request.serviceName} />
-                      <Fact label="Category" value={request.categoryName} />
-                      <Fact label="Preferred date" value={request.preferredDate ? formatDate(request.preferredDate) : "Flexible"} />
-                      <Fact label="Window" value={request.preferredTimeWindow ?? "Any time"} />
-                      <Fact label="Area" value={`${request.neighborhood} ${request.zip}`} />
-                      <Fact label="Received" value={formatDate(request.createdAt)} />
-                      {request.answers?.length ? (
-                        <div className="sm:col-span-2 space-y-2">
-                          <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                            Quote answers
+                    <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                      <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                        <CrmMark
+                          name={request.serviceName || "Lead"}
+                          kind="person"
+                          photoKey={request.serviceName}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-lg font-semibold capitalize tracking-tight">
+                              {request.serviceName}
+                            </h2>
+                            <StatusPill
+                              label={request.channel === "direct" ? "Direct" : "Marketplace"}
+                              tone="primary"
+                            />
+                            {request.categoryName ? (
+                              <StatusPill label={request.categoryName} tone="neutral" />
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            #{request.number} · {customerLabel}
+                            {request.customerEmail ? ` · ${request.customerEmail}` : ""}
                           </p>
-                          <dl className="grid gap-2 sm:grid-cols-2">
-                            {request.answers.map((item) => (
-                              <div key={item.id} className="rounded-[4px] bg-[#f8fafc] px-3 py-2">
-                                <dt className="text-[11px] text-muted-foreground">{item.label}</dt>
-                                <dd className="mt-0.5 text-sm font-medium">{item.value}</dd>
+                        </div>
+                      </header>
+                      <div className="grid sm:grid-cols-2">
+                        <InfoRow
+                          icon={Building2}
+                          label="Source"
+                          value={request.channel === "direct" ? "Website request" : "Marketplace lead"}
+                        />
+                        {request.customerEmail?.trim() ? (
+                          <InfoRow
+                            icon={Mail}
+                            label="Email"
+                            value={<span className="text-primary">{request.customerEmail}</span>}
+                          />
+                        ) : null}
+                        {request.customerPhone?.trim() ? (
+                          <InfoRow icon={Phone} label="Phone" value={request.customerPhone} />
+                        ) : null}
+                        <InfoRow
+                          icon={MapPin}
+                          label="Street / Area"
+                          value={
+                            customer?.addresses?.[0]?.street
+                              ? `${customer.addresses[0].street}, ${formatLocation(
+                                  request.city ?? customer.addresses[0].city,
+                                  request.state ?? customer.addresses[0].state,
+                                  request.zip,
+                                )}`
+                              : formatLocation(
+                                  request.neighborhood || request.city || "Address pending",
+                                  request.state || "",
+                                  request.zip,
+                                )
+                          }
+                        />
+                        <InfoRow
+                          icon={CalendarDays}
+                          label="Preferred date"
+                          value={request.preferredDate ? formatDate(request.preferredDate) : "Flexible"}
+                        />
+                        <InfoRow
+                          icon={Clock}
+                          label="Window"
+                          value={request.preferredTimeWindow ?? "Any time"}
+                        />
+                        <InfoRow
+                          icon={CalendarDays}
+                          label="Date created"
+                          value={formatDate(request.createdAt)}
+                        />
+                        {event?.date ? (
+                          <InfoRow
+                            icon={CalendarDays}
+                            label="Scheduled visit"
+                            value={`${formatDate(event.date)}${event.employeeId ? ` · ${employeeLabel(event.employeeId)}` : ""}`}
+                          />
+                        ) : null}
+                        {request.answers?.length ? (
+                          <div className="sm:col-span-2 border-b border-black/5 bg-[#f8fafc] px-5 py-4">
+                            <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase mb-3">
+                              Quote answers
+                            </p>
+                            <dl className="grid gap-2 sm:grid-cols-2">
+                              {request.answers.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="rounded-md border border-black/5 bg-card p-3 shadow-2xs"
+                                >
+                                  <dt className="text-[11px] font-medium text-muted-foreground">{item.label}</dt>
+                                  <dd className="mt-1 text-sm font-semibold text-foreground">{item.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                            {request.details?.split("\n\n")[0] && !request.details.startsWith("Answers") ? (
+                              <div className="mt-3">
+                                <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase mb-1">
+                                  Notes
+                                </p>
+                                <p className="text-sm">{request.details.split("\n\n")[0]}</p>
                               </div>
-                            ))}
-                          </dl>
-                          {request.details.split("\n\n")[0] && !request.details.startsWith("Answers") ? (
-                            <Fact label="Notes" value={request.details.split("\n\n")[0]} />
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {request.details?.trim() && (!request.answers?.length || request.details.startsWith("Answers")) ? (
+                          <InfoRow
+                            icon={NotebookPen}
+                            label="What they asked for"
+                            value={request.details}
+                            className="sm:col-span-2"
+                          />
+                        ) : null}
+                      </div>
+                    </section>
+
+                    <div className="grid gap-4 self-start">
+                      <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                        <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                          <Wallet className="size-4 text-primary" aria-hidden="true" />
+                          <h3 className="text-sm font-semibold">Account</h3>
+                        </header>
+                        <div className="grid grid-cols-1 gap-px bg-black/5">
+                          <MoneyCell
+                            label="Amount owing"
+                            value={customer?.amountOwing != null ? formatMoney(customer.amountOwing) : "$0.00"}
+                            emphasize={Boolean(customer && customer.amountOwing > 0)}
+                          />
+                        </div>
+                        <div className="grid sm:grid-cols-2">
+                          <InfoRow
+                            icon={FileText}
+                            label="Estimate total"
+                            value={estimate ? formatMoney(estimate.total) : "$0.00"}
+                            className="sm:col-span-2"
+                          />
+                        </div>
+                      </section>
+
+                      <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                        <header className="flex items-center justify-between border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <UserRound className="size-4 text-primary" aria-hidden="true" />
+                            <h3 className="text-sm font-semibold">Customer</h3>
+                          </div>
+                          {request.customerId ? (
+                            <Link
+                              href={`/pro/dashboard/customers/${request.customerId}`}
+                              className="text-xs font-medium text-primary hover:underline"
+                            >
+                              Open file &rarr;
+                            </Link>
                           ) : null}
+                        </header>
+                        <div className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <CrmMark
+                              name={customerLabel}
+                              kind="person"
+                              photoKey={customer?.firstName}
+                              size="md"
+                            />
+                            <div className="min-w-0 flex-1">
+                              {request.customerId ? (
+                                <Link
+                                  href={`/pro/dashboard/customers/${request.customerId}`}
+                                  className="font-medium text-primary hover:underline block truncate"
+                                >
+                                  {customerLabel}
+                                </Link>
+                              ) : (
+                                <p className="font-medium text-foreground truncate">{customerLabel}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                {request.customerPhone} · {request.customerEmail}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                {formatLocation(request.city ?? "", request.state ?? "", request.zip)}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="sm:col-span-2">
-                          <Fact label="What they asked for" value={request.details} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="rounded-[4px] border border-black/10 p-4">
-                      <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">Customer</p>
-                      {request.customerId ? (
-                        <Link href={`/pro/dashboard/customers/${request.customerId}`} className="mt-1 block font-semibold text-primary hover:underline">
-                          {customerLabel}
-                        </Link>
-                      ) : (
-                        <p className="mt-1 font-semibold">{customerLabel}</p>
-                      )}
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {request.customerPhone} · {request.customerEmail}
-                      </p>
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        {formatLocation(request.city ?? "", request.state ?? "", request.zip)}
-                      </p>
-                      {event?.date ? (
-                        <p className="mt-3 text-sm">
-                          Visit {formatDate(event.date)}
-                          {event.employeeId ? ` · ${employeeLabel(event.employeeId)}` : ""}
-                        </p>
-                      ) : null}
+                      </section>
                     </div>
                   </div>
+                  <CustomerLocationMapLazy
+                    provider={provider}
+                    address={leadAddress}
+                    name={customerLabel}
+                  />
                 </div>
               );
             case "customer":
               return (
-                <div className="grid gap-3 text-sm sm:grid-cols-2">
-                  <Fact label="Name" value={customerLabel} />
-                  <Fact label="Phone" value={request.customerPhone} />
-                  <Fact label="Email" value={request.customerEmail} />
-                  <Fact label="Neighborhood" value={`${request.neighborhood} ${request.zip}`} />
-                  {customer ? (
-                    <div className="sm:col-span-2">
+                <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                  <header className="flex items-center justify-between border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                    <div className="flex items-center gap-4">
+                      <CrmMark name={customerLabel} kind="person" photoKey={customer?.firstName} />
+                      <div>
+                        <h2 className="text-lg font-semibold tracking-tight">{customerLabel}</h2>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {request.customerPhone} · {request.customerEmail}
+                        </p>
+                      </div>
+                    </div>
+                    {customer ? (
                       <Button size="sm" asChild>
                         <Link href={`/pro/dashboard/customers/${customer.id}`}>Open customer file</Link>
                       </Button>
-                    </div>
-                  ) : null}
-                </div>
+                    ) : null}
+                  </header>
+                  <div className="grid sm:grid-cols-2">
+                    <InfoRow icon={UserRound} label="Customer name" value={customerLabel} />
+                    <InfoRow icon={Phone} label="Phone" value={request.customerPhone} />
+                    <InfoRow icon={Mail} label="Email" value={<span className="text-primary">{request.customerEmail}</span>} />
+                    <InfoRow
+                      icon={MapPin}
+                      label="Service area"
+                      value={formatLocation(request.neighborhood || request.city || "", request.state || "", request.zip)}
+                    />
+                    {customer ? (
+                      <>
+                        <InfoRow icon={Building2} label="Source" value={crmSourceLabel(customer.source)} />
+                        <InfoRow icon={CalendarDays} label="Client since" value={formatDate(customer.createdAt)} />
+                      </>
+                    ) : null}
+                  </div>
+                </section>
               );
             case "qualify":
               return (
@@ -617,6 +887,12 @@ export function RequestDetailView({ id }: { id: string }) {
               const customerEmail = thread?.customerEmail || customer?.email || request.customerEmail;
               const customerPhone = thread?.customerPhone || customer?.phone || request.customerPhone;
               const customerAvatar = thread?.customerAvatar;
+              const custPresence = thread?.customerId
+                ? getPresence(thread.customerId)
+                : request?.customerId
+                  ? getPresence(request.customerId)
+                  : undefined;
+              const isCustomerOnline = custPresence?.isOnline ?? thread?.isOnline ?? false;
 
               return (
                 <div className="flex h-[calc(100vh-270px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
@@ -644,9 +920,9 @@ export function RequestDetailView({ id }: { id: string }) {
                         <span
                           className={cn(
                             "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
-                            connected ? "bg-emerald-500" : "bg-muted-foreground/50",
+                            isCustomerOnline ? "bg-emerald-500" : "bg-muted-foreground/30",
                           )}
-                          aria-label={connected ? "Online" : "Offline"}
+                          aria-label={isCustomerOnline ? "Online" : "Offline"}
                         />
                       </div>
 
@@ -656,10 +932,10 @@ export function RequestDetailView({ id }: { id: string }) {
                           <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
                             {customerName}
                           </h2>
-                          {connected ? (
+                          {isCustomerOnline ? (
                             <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 sm:inline-flex">
                               <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-                              Live
+                              Online
                             </span>
                           ) : null}
                         </div>
@@ -725,8 +1001,11 @@ export function RequestDetailView({ id }: { id: string }) {
                     <ChatPanel
                       messages={thread.messages}
                       self="provider"
+                      recipientUnreadCount={thread.unreadForCustomer}
                       otherName={customerName}
                       otherAvatar={customerAvatar}
+                      isOtherTyping={isOtherTyping}
+                      otherTypingName={customerName}
                       onSend={async (text, attachments) => {
                         await chat.send(thread.id, "provider", text, attachments);
                         if (request.status === "new" || request.status === "viewed") {
@@ -809,6 +1088,24 @@ export function RequestDetailView({ id }: { id: string }) {
           toast.success("Visit put on the calendar.");
         }}
       />
+      <CreateTaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        subjectKind="request"
+        subjectId={request.id}
+      />
+      <CreateReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        subjectKind="request"
+        subjectId={request.id}
+      />
+      <CreateNoteDialog
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        subjectKind="request"
+        subjectId={request.id}
+      />
     </>
   );
 }
@@ -825,7 +1122,7 @@ function LeadPipeline({
   const current = leadFlowIndex(status, hasEstimate, hasJob);
   const lost = status === "declined" || status === "closed";
   return (
-    <ol className="grid grid-cols-2 gap-2 rounded-[4px] border border-black/10 bg-card p-3 sm:grid-cols-5">
+    <ol className="grid grid-cols-2 gap-2 rounded-lg border border-black/10 bg-card p-2 shadow-[0_4px_16px_rgba(4,26,54,0.04)] sm:grid-cols-5">
       {LEAD_STEPS.map((step, index) => {
         const done = !lost && index < current;
         const active = !lost && index === current;
@@ -833,25 +1130,25 @@ function LeadPipeline({
           <li
             key={step.id}
             className={cn(
-              "flex items-center gap-2 rounded-[4px] px-2 py-2",
-              active && "bg-[#003F7D] text-white",
-              done && !active && "bg-[#e8eef5] text-[#003F7D]",
+              "flex items-center gap-2.5 rounded-md px-3 py-2 transition-all",
+              active && "bg-[#003F7D] text-white shadow-xs font-semibold",
+              done && !active && "bg-[#e8eef5] text-[#003F7D] font-medium",
               !done && !active && "bg-[#f8fafc] text-muted-foreground",
               lost && "bg-red-50 text-red-800",
             )}
           >
             <span
               className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded-[4px] text-[11px] font-semibold",
-                active && "bg-white/15 text-white",
-                done && !active && "bg-white text-[#003F7D]",
+                "flex size-5 shrink-0 items-center justify-center rounded-sm text-[10px] font-semibold",
+                active && "bg-white/20 text-white",
+                done && !active && "bg-white text-[#003F7D] shadow-2xs",
                 !done && !active && "bg-white text-muted-foreground",
                 lost && "bg-white text-red-800",
               )}
             >
               {String(index + 1).padStart(2, "0")}
             </span>
-            <span className="text-sm font-medium">{step.label}</span>
+            <span className="text-xs">{step.label}</span>
           </li>
         );
       })}
@@ -978,6 +1275,57 @@ function QualifyTab({
   );
 }
 
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  warn,
+  className,
+}: {
+  icon: typeof Building2;
+  label: string;
+  value: ReactNode;
+  warn?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-start gap-3 border-b border-black/5 px-5 py-3 last:border-b-0", className)}>
+      <Icon className="mt-0.5 size-3.5 shrink-0 text-primary/70" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
+        <p
+          className={
+            warn
+              ? "text-sm font-medium text-red-700 whitespace-pre-wrap break-words"
+              : "text-sm whitespace-pre-wrap break-words"
+          }
+        >
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MoneyCell({
+  label,
+  value,
+  emphasize,
+}: {
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="bg-card px-5 py-4">
+      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
+      <p className={emphasize ? "mt-1 text-xl font-semibold tabular-nums text-primary" : "mt-1 text-xl font-semibold tabular-nums"}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function LinkedList({
   items,
   empty,
@@ -989,7 +1337,7 @@ function LinkedList({
   return (
     <div className="space-y-2">
       {items.map((item) => (
-        <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
+        <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-card px-4 py-3 shadow-2xs">
           <div>
             <Link href={item.href} className="text-sm font-medium text-primary hover:underline">
               {item.title}

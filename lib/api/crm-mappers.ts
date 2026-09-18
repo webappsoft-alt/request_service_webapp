@@ -1199,14 +1199,31 @@ export function mapChatMessage(raw: unknown): ChatMessage | null {
   const record = asRecord(raw);
   if (!record) return null;
   const id = crmIdOf(record);
+  const rawStatus = trimmed(record.status);
+  const status =
+    rawStatus === "pending" ||
+    rawStatus === "sent" ||
+    rawStatus === "delivered" ||
+    rawStatus === "read" ||
+    rawStatus === "failed"
+      ? rawStatus
+      : undefined;
   return {
     id: id || `msg_${Math.random().toString(36).slice(2, 10)}`,
-    from: trimmed(record.from) === "customer" ? "customer" : "provider",
+    from:
+      trimmed(record.from) === "customer"
+        ? "customer"
+        : trimmed(record.from) === "admin"
+          ? "admin"
+          : "provider",
     text: trimmed(record.text),
     at: toIsoString(record.at) || toIsoString(record.createdAt),
     attachments: asArray(record.attachments)
       .map((entry, index) => mapChatAttachment(entry, index))
       .filter((item): item is ChatAttachment => Boolean(item)),
+    status,
+    isRead: booleanValue(record.isRead, Boolean(record.readAt)),
+    readAt: toIsoString(record.readAt) || undefined,
   };
 }
 
@@ -1256,6 +1273,10 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     requestId: crmIdOf(record.requestId) || undefined,
     unreadForProvider: Math.max(0, numberValue(record.unreadForProvider)),
     unreadForCustomer: Math.max(0, numberValue(record.unreadForCustomer)),
+    unreadForAdmin: Math.max(0, numberValue(record.unreadForAdmin)),
+    isOnline: booleanValue(record.isOnline, false),
+    lastSeen: toIsoString(record.lastSeen) || undefined,
+    lastActiveAt: toIsoString(record.lastActiveAt) || undefined,
     messages: asArray(record.messages)
       .map(mapChatMessage)
       .filter((item): item is ChatMessage => Boolean(item)),

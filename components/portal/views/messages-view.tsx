@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Paperclip,
   Phone,
+  RotateCw,
   Search,
   Sparkles,
   User,
@@ -20,13 +21,14 @@ import {
 } from "lucide-react";
 import { ChatPanel } from "@/components/shared/chat-panel";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
-import { useRealtime } from "@/components/realtime/realtime-provider";
+import { subscribeRealtime, useRealtime } from "@/components/realtime/realtime-provider";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatWorkspaceSkeleton } from "@/components/shared/loading-skeletons";
 import {
+  formatClockTime,
   formatThreadTime,
   getAvatarColor,
   getInitials,
@@ -42,9 +44,26 @@ export function MessagesView() {
   const [query, setQuery] = useState("");
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
 
-  const { threads, send, markRead, loading } = useChatThreads();
-  const { joinThread, leaveThread, setTyping, connected } = useRealtime();
+  const { threads, send, markRead, loading, refresh } = useChatThreads();
+  const {
+    joinThread,
+    leaveThread,
+    setTyping,
+    connected,
+    markThreadRead,
+    getPresence,
+    queryUserPresence,
+  } = useRealtime();
+
+  const lastMarkedThreadIdRef = useRef<string | null>(null);
+
+  // Actively fetch live chat threads once on mount
+  useEffect(() => {
+    void refresh({ force: true, silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filter threads by search query and active tab
   const filtered = useMemo(() => {
@@ -93,17 +112,85 @@ export function MessagesView() {
     }
   }, [selectedId]);
 
+  // Mark thread read only ONCE when the selected thread changes.
+  // Using a ref guard prevents re-firing when unreadForProvider changes
+  // as new socket messages arrive (which would cause a mark-read API call
+  // for every incoming message and trigger cascading thread updates).
+  const markReadCallbackRef = useRef(markRead);
+  markReadCallbackRef.current = markRead;
+  const markThreadReadCallbackRef = useRef(markThreadRead);
+  markThreadReadCallbackRef.current = markThreadRead;
+
   useEffect(() => {
-    if (selected?.unreadForProvider) {
-      markRead(selected.id);
+    if (!selected?.id) return;
+    const lastMsg = selected.messages.at(-1);
+    const hasUnread = (selected.unreadForProvider ?? 0) > 0;
+    const isNewIncoming = lastMsg && lastMsg.from !== "provider" && !lastMsg.isRead;
+
+    if (hasUnread || isNewIncoming || lastMarkedThreadIdRef.current !== selected.id) {
+      lastMarkedThreadIdRef.current = selected.id;
+      markThreadReadCallbackRef.current(selected.id);
+      if (hasUnread || isNewIncoming) {
+        markReadCallbackRef.current(selected.id);
+      }
     }
-  }, [markRead, selected]);
+  }, [selected?.id, selected?.messages?.length, selected?.unreadForProvider]);
+
+  // Query live presence only when the set of customer IDs changes, not on every message
+  const presenceIdsKey = useMemo(() => {
+    const ids = Array.from(
+      new Set(
+        threads
+          .map((t) => t.customerId)
+          .filter((id): id is string => Boolean(id && /^[0-9a-fA-F]{24}$/.test(id))),
+      ),
+    ).sort();
+    return ids.join(',');
+  }, [threads]);
+
+  useEffect(() => {
+    if (!presenceIdsKey) return;
+    queryUserPresence(presenceIdsKey.split(','));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presenceIdsKey]);
+
+  // Real-time typing indicator listener for the active thread
+  useEffect(() => {
+    setIsOtherTyping(false);
+    if (!selected?.id) return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    const unsub = subscribeRealtime((detail) => {
+      if (detail?.type === "CHAT_TYPING" && detail.payload) {
+        const payload = detail.payload as {
+          threadId?: string;
+          from?: string;
+          isTyping?: boolean;
+        };
+        if (payload.threadId === selected.id && payload.from !== "provider") {
+          setIsOtherTyping(Boolean(payload.isTyping));
+          clearTimeout(timer);
+          if (payload.isTyping) {
+            timer = setTimeout(() => setIsOtherTyping(false), 3500);
+          }
+        }
+      }
+    });
+
+    return () => {
+      clearTimeout(timer);
+      unsub();
+    };
+  }, [selected?.id]);
 
   useEffect(() => {
     if (!selected?.id) return;
     joinThread(selected.id);
     return () => leaveThread(selected.id);
   }, [joinThread, leaveThread, selected?.id]);
+
+  const participantPresence = selected?.customerId ? getPresence(selected.customerId) : undefined;
+  const isParticipantOnline = participantPresence?.isOnline ?? selected?.isOnline ?? false;
 
   const unreadCount = useMemo(
     () => threads.filter((item) => item.unreadForProvider > 0).length,
@@ -137,14 +224,23 @@ export function MessagesView() {
             {/* Sidebar Header */}
             <div className="flex flex-col gap-2.5 border-b border-border p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base font-semibold tracking-tight text-foreground">
-                    Messages
-                  </h1>
-                  <span className="inline-flex h-5 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
-                    {threads.length}
-                  </span>
-                </div>
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-base font-semibold tracking-tight text-foreground">
+                      Messages
+                    </h1>
+                    <span className="inline-flex h-5 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
+                      {threads.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void refresh({ force: true, silent: false })}
+                      title="Refresh messages"
+                      aria-label="Refresh messages"
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <RotateCw className="size-3.5" />
+                    </button>
+                  </div>
                 {unreadCount > 0 ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                     {unreadCount} unread
@@ -223,6 +319,11 @@ export function MessagesView() {
                   const last = thread.messages.at(-1);
                   const lastTime = formatThreadTime(last?.at || thread.updatedAt);
                   const hasUnread = thread.unreadForProvider > 0;
+                  const customerPresence = thread.customerId
+                    ? getPresence(thread.customerId)
+                    : undefined;
+                  const isCustomerOnline =
+                    customerPresence?.isOnline ?? thread.isOnline ?? false;
 
                   return (
                     <Link
@@ -254,7 +355,7 @@ export function MessagesView() {
                             {getInitials(thread.customerName)}
                           </AvatarFallback>
                         </Avatar>
-                        {connected ? (
+                        {isCustomerOnline ? (
                           <span
                             className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
                             aria-label="Online"
@@ -394,9 +495,9 @@ export function MessagesView() {
                       <span
                         className={cn(
                           "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
-                          connected ? "bg-emerald-500" : "bg-muted-foreground/50",
+                          isParticipantOnline ? "bg-emerald-500" : "bg-muted-foreground/35",
                         )}
-                        aria-label={connected ? "Online" : "Offline"}
+                        aria-label={isParticipantOnline ? "Online" : "Offline"}
                       />
                     </div>
 
@@ -406,10 +507,14 @@ export function MessagesView() {
                         <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
                           {selected.customerName}
                         </h2>
-                        {connected ? (
+                        {isParticipantOnline ? (
                           <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 sm:inline-flex">
                             <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-                            Live
+                            Online
+                          </span>
+                        ) : participantPresence?.lastSeen ? (
+                          <span className="hidden text-[11px] text-muted-foreground sm:inline-flex">
+                            Last seen {formatClockTime(participantPresence.lastSeen)}
                           </span>
                         ) : null}
                       </div>
@@ -485,8 +590,11 @@ export function MessagesView() {
                 <ChatPanel
                   messages={selected.messages}
                   self="provider"
+                  recipientUnreadCount={selected.unreadForCustomer}
                   otherName={selected.customerName}
                   otherAvatar={selected.customerAvatar}
+                  isOtherTyping={isOtherTyping}
+                  otherTypingName={selected.customerName}
                   onSend={async (text, attachments) => {
                     await send(selected.id, "provider", text, attachments);
                   }}
@@ -522,9 +630,19 @@ export function MessagesView() {
               When customers contact you from your public profile or submit service inquiries, incoming chat conversations will appear here automatically.
             </p>
           </div>
-          <Button variant="outline" asChild>
-            <Link href="/pro/dashboard/requests">View incoming leads</Link>
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void refresh({ force: true, silent: false })}
+              className="gap-1.5"
+            >
+              <RotateCw className="size-3.5" />
+              Refresh messages
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/pro/dashboard/requests">View incoming leads</Link>
+            </Button>
+          </div>
         </div>
       )}
     </div>

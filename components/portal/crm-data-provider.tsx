@@ -336,8 +336,24 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             setState((current) => ({ ...current, inboxSummary }));
           })
           .catch(() => undefined);
+        return;
       }
-      onExternalRefresh();
+
+      // Do NOT trigger full CRM snapshot refresh for chat/presence/typing events!
+      // Chat messages, read receipts, typing, and presence are handled in real-time
+      // by the chat socket listeners directly. Triggering a full CRM snapshot refresh
+      // would overwrite live chat messages with the snapshot's stale/cached chat state.
+      const isChatEvent =
+        detail?.type === "CHAT_MESSAGE" ||
+        detail?.type === "CHAT_TYPING" ||
+        detail?.type === "CHAT_READ_RECEIPT" ||
+        detail?.type === "CHAT_THREAD_UPDATED" ||
+        detail?.type === "USER_PRESENCE" ||
+        detail?.type === "chat:presence";
+
+      if (!isChatEvent) {
+        onExternalRefresh();
+      }
     };
 
     window.addEventListener(EVENT_NAME, onExternalRefresh);

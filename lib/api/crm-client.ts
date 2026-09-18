@@ -8,7 +8,7 @@ import type {
   PortalVendor,
 } from "@/lib/data/crm-people";
 import { employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
-import type { Estimate, EstimateActivity, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
+import type { Estimate, EstimateActivity, EstimateSiteVisitRecord, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
   mapChatThread,
@@ -250,14 +250,9 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
     city: contractor.city || "",
     state: contractor.state || "",
     zip: contractor.zip || "",
-    trade: contractor.trade || "",
     license: contractor.license || "",
     status: contractor.status || "active",
     hourlyRate: contractor.hourlyRate ?? 0,
-    license: contractor.license || "",
-    city: contractor.city || "",
-    state: contractor.state || "",
-    zip: contractor.zip || "",
     insuranceExpires: contractor.insuranceExpires || new Date().toISOString(),
   };
 }
@@ -268,9 +263,7 @@ function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
     name: vendor.name || "",
     contact: vendor.contact || "",
     contactName: vendor.contact || "",
-    name: vendor.name || "",
     category: vendor.category || "",
-    contact: vendor.contact || "",
     email: vendor.email || "",
     terms: vendor.terms || "Net 30",
   };
@@ -1254,7 +1247,10 @@ export async function deleteSchedule(id: string) {
 }
 
 export async function listChats(options?: CrmRequestOptions) {
-  return listMapped(providerCrmApi.chats, mapChatThread, options);
+  return listMapped(providerCrmApi.chats, mapChatThread, {
+    ...options,
+    force: options?.force ?? true,
+  });
 }
 
 export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmInboxSummary> {

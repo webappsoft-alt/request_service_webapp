@@ -874,7 +874,9 @@ export function CreateReminderDialog({
     setTitle("");
     setNote("");
     setDueAt("");
-    setAssignedEmployeeId("");
+    setAssignedEmployeeId(
+      lockedKind === "employee" && lockedId ? lockedId : "",
+    );
     setSaving(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -1161,7 +1163,10 @@ export function CreateTaskDialog({
     setSelectedId(task?.subjectId ?? subjectId ?? "");
     setTitle(task?.title ?? "");
     setNote(task?.note ?? "");
-    setAssignedEmployeeId(task?.assignedEmployeeId ?? "");
+    setAssignedEmployeeId(
+      task?.assignedEmployeeId ??
+        (subjectKind === "employee" && subjectId ? subjectId : ""),
+    );
     setPriority(task?.priority ?? "normal");
     setDueAt(task?.dueAt ?? "");
     setSaving(false);

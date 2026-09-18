@@ -264,7 +264,7 @@ export function TeamView() {
         ]}
         actions={(row) => [
           { label: "View schedule", href: `/pro/dashboard/team/${row.id}` },
-          { label: "Open calendar", href: `/pro/dashboard/schedule?employee=${row.id}` },
+          { label: "Open calendar", href: `/pro/dashboard/schedule?employeeId=${row.id}` },
           {
             label: "Edit",
             onSelect: () => setEditing(row),

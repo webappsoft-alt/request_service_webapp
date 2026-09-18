@@ -486,6 +486,7 @@ export type CrmListQuery = {
   search?: string;
   status?: string;
   customerId?: string;
+  employeeId?: string;
   trade?: string;
   role?: string;
   active?: boolean;
@@ -508,6 +509,7 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   const search = query.search?.trim();
   const status = query.status?.trim();
   const customerId = query.customerId?.trim();
+  const employeeId = query.employeeId?.trim();
   const trade = query.trade?.trim();
   const role = query.role?.trim();
   const category = query.category?.trim();
@@ -521,6 +523,7 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   if (search) params.search = search;
   if (status) params.status = status;
   if (customerId) params.customerId = customerId;
+  if (employeeId) params.employeeId = employeeId;
   if (trade) params.trade = trade;
   if (role) params.role = role;
   if (category) params.category = category;
@@ -687,8 +690,25 @@ export async function updateEmployee(id: string, employee: Partial<PortalEmploye
   return detail?.employee ?? null;
 }
 
+export type DeleteEmployeeResult = {
+  message?: string;
+  id?: string;
+  requiresReassignment?: boolean;
+  pendingTasksCount?: number;
+};
+
 export async function deleteEmployee(id: string) {
-  return deleteData(providerCrmApi.teamMember(id), { silent: false });
+  const response = await deleteData<unknown>(providerCrmApi.teamMember(id), { silent: false });
+  const payload =
+    response && typeof response === "object" && "data" in response
+      ? (response as { data?: DeleteEmployeeResult }).data
+      : (response as DeleteEmployeeResult | null);
+  return {
+    id,
+    message: payload?.message,
+    requiresReassignment: Boolean(payload?.requiresReassignment),
+    pendingTasksCount: Number(payload?.pendingTasksCount ?? 0),
+  } satisfies DeleteEmployeeResult & { id: string };
 }
 
 export async function listContractors(options?: CrmRequestOptions) {
@@ -1352,14 +1372,16 @@ export async function listSchedule(options?: CrmRequestOptions) {
   );
 }
 
-/** GET /api/provider/schedule?customerId=&startDate=&endDate=&kind= */
+/** GET /api/provider/schedule?customerId=&employeeId=&startDate=&endDate=&kind= */
 export async function querySchedule(query: CrmListQuery = {}) {
   const params: Record<string, string | number> = {};
   const customerId = query.customerId?.trim();
+  const employeeId = query.employeeId?.trim();
   const startDate = query.startDate?.trim();
   const endDate = query.endDate?.trim();
   const kind = query.kind?.trim();
   if (customerId) params.customerId = customerId;
+  if (employeeId) params.employeeId = employeeId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
   if (kind) params.kind = kind;

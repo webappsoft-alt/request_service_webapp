@@ -13,6 +13,7 @@ import {
   Globe,
   History,
   ListTodo,
+  Loader2,
   Mail,
   MapPin,
   NotebookPen,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { archiveRowAction, matchesArchiveFilter } from "@/components/portal/archive-control";
+import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import {
   CreateReminderDialog,
   CreateTaskDialog,
@@ -549,7 +551,7 @@ export function CustomerDetailView({ id }: { id: string }) {
               return (
                 <CustomerRemindersPanel
                   customerId={customer.id}
-                  relatedReminders={relatedReminders}
+                  relatedReminders={[]}
                   onSetReminder={() => setReminderOpen(true)}
                 />
               );
@@ -1485,7 +1487,6 @@ function CustomerHistoryPanel({
 
 function CustomerTasksPanel({ customerId }: { customerId: string }) {
   const dispatch = useAppDispatch();
-  const { setTaskStatus } = useCrmDirectory();
   const tab = useAppSelector((state) => state.customers?.tasks);
   const filterKey = customerTabFilterKey({});
   const [editing, setEditing] = useState<PortalTask | null>(null);
@@ -1500,17 +1501,19 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
   // API-only list — never fall back to local/seed tasks on this tab.
   const rows = selectCustomerTabRows(tab, customerId, filterKey, []);
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
 
-  function toggleTask(item: PortalTask) {
+  async function toggleTask(item: PortalTask) {
+    setBusyTaskId(item.id);
     const nextStatus = item.status === "done" ? "open" : "done";
-    void dispatch(patchCustomerTaskStatus({ id: item.id, status: nextStatus, customerId })).then(
-      (result) => {
-        if (patchCustomerTaskStatus.fulfilled.match(result)) return;
-        void Promise.resolve(setTaskStatus(item.id, nextStatus)).catch((error) =>
-          toast.error(error instanceof Error ? error.message : "Could not update task."),
-        );
-      },
-    );
+    try {
+      const result = await dispatch(patchCustomerTaskStatus({ id: item.id, status: nextStatus, customerId }));
+      if (patchCustomerTaskStatus.rejected.match(result)) {
+        toast.error(typeof result.payload === "string" ? result.payload : "Could not update task.");
+      }
+    } finally {
+      setBusyTaskId(null);
+    }
   }
 
   async function confirmDelete() {
@@ -1551,12 +1554,16 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
         rows.map((item) => (
           <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
             <div className="flex min-w-0 items-start gap-3">
-              <Checkbox
-                checked={item.status === "done"}
-                onCheckedChange={() => toggleTask(item)}
-                aria-label={`Mark ${item.title} ${item.status === "done" ? "open" : "done"}`}
-                className="mt-1"
-              />
+              {busyTaskId === item.id ? (
+                <Loader2 className="mt-1 size-4 animate-spin text-primary" />
+              ) : (
+                <Checkbox
+                  checked={item.status === "done"}
+                  onCheckedChange={() => void toggleTask(item)}
+                  aria-label={`Mark ${item.title} ${item.status === "done" ? "open" : "done"}`}
+                  className="mt-1"
+                />
+              )}
               <div>
                 <Link href={`/pro/dashboard/tasks/${item.id}`} className="text-sm font-medium text-primary hover:underline">
                   {item.number} · {item.title}
@@ -1610,38 +1617,21 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
           void dispatch(fetchCustomerTimeline({ customerId, force: true }));
         }}
       />
-      <Dialog
+      <DeleteConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(next) => {
           if (!next && !deleting) setDeleteTarget(null);
         }}
-      >
-        <DialogContent showCloseButton={!deleting} className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete task?</DialogTitle>
-            <DialogDescription>
-              {deleteTarget
-                ? `This will permanently remove “${deleteTarget.number} · ${deleteTarget.title}”.`
-                : "This will permanently remove this task."}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deleting}
-              onClick={() => {
-                void confirmDelete();
-              }}
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete task?"
+        description={
+          deleteTarget
+            ? `This will permanently remove “${deleteTarget.number} · ${deleteTarget.title}”.`
+            : "This will permanently remove this task."
+        }
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
@@ -1656,11 +1646,12 @@ function CustomerRemindersPanel({
   onSetReminder: () => void;
 }) {
   const dispatch = useAppDispatch();
-  const { setReminderStatus } = useCrmDirectory();
   const tab = useAppSelector((state) => state.customers?.reminders);
   const filterKey = customerTabFilterKey({});
+  const [editing, setEditing] = useState<PortalReminder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PortalReminder | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [busyReminderId, setBusyReminderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!customerId) return;
@@ -1670,14 +1661,21 @@ function CustomerRemindersPanel({
   const rows = selectCustomerTabRows(tab, customerId, filterKey, relatedReminders);
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
 
-  function toggleReminder(item: PortalReminder) {
+  async function toggleReminder(item: PortalReminder) {
+    setBusyReminderId(item.id);
     const nextStatus = item.status === "open" ? "done" : "open";
-    void dispatch(
-      patchCustomerReminderStatus({ id: item.id, status: nextStatus, customerId }),
-    ).then((result) => {
-      if (patchCustomerReminderStatus.fulfilled.match(result)) return;
-      setReminderStatus(item.id, nextStatus);
-    });
+    try {
+      const result = await dispatch(
+        patchCustomerReminderStatus({ id: item.id, status: nextStatus, customerId }),
+      );
+      if (patchCustomerReminderStatus.rejected.match(result)) {
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not update reminder.",
+        );
+      }
+    } finally {
+      setBusyReminderId(null);
+    }
   }
 
   async function confirmDelete() {
@@ -1725,8 +1723,17 @@ function CustomerRemindersPanel({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => toggleReminder(item)}>
-                {crmReminderStatusLabel(item.status)}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busyReminderId === item.id}
+                onClick={() => void toggleReminder(item)}
+              >
+                {busyReminderId === item.id ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  crmReminderStatusLabel(item.status)
+                )}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1736,8 +1743,9 @@ function CustomerRemindersPanel({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setEditing(item)}>Edit</DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href={`/pro/dashboard/reminders/${item.id}`}>Edit</Link>
+                    <Link href={`/pro/dashboard/reminders/${item.id}`}>Open</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
@@ -1753,38 +1761,34 @@ function CustomerRemindersPanel({
       ) : (
         <Empty title="No reminders yet">Set a reminder to follow up on this customer.</Empty>
       )}
-      <Dialog
+      <CreateReminderDialog
+        open={Boolean(editing)}
+        reminder={editing}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null);
+        }}
+        subjectKind="customer"
+        subjectId={customerId}
+        onCreated={(item) => {
+          dispatch(upsertCustomerReminder({ customerId, item }));
+          void dispatch(fetchCustomerReminders({ customerId, force: true }));
+        }}
+      />
+      <DeleteConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(next) => {
           if (!next && !deleting) setDeleteTarget(null);
         }}
-      >
-        <DialogContent showCloseButton={!deleting} className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete reminder?</DialogTitle>
-            <DialogDescription>
-              {deleteTarget
-                ? `This will permanently remove “${deleteTarget.title}”.`
-                : "This will permanently remove this reminder."}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deleting}
-              onClick={() => {
-                void confirmDelete();
-              }}
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete reminder?"
+        description={
+          deleteTarget
+            ? `This will permanently remove “${deleteTarget.title}”.`
+            : "This will permanently remove this reminder."
+        }
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

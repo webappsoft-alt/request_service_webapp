@@ -367,12 +367,6 @@ export function useCrmDirectory() {
 
   const addReminder = useCallback(
     (reminder: PortalReminder) => {
-      crm.addReminder(reminder);
-      const current = readStore(key);
-      writeStore(key, {
-        ...current,
-        reminders: [reminder, ...current.reminders.filter((r) => r.id !== reminder.id)],
-      });
       if (crm.enabled) {
         return (async () => {
           const created = await createReminderApi(reminder);
@@ -386,6 +380,12 @@ export function useCrmDirectory() {
           return finalReminder;
         })();
       }
+      crm.addReminder(reminder);
+      const current = readStore(key);
+      writeStore(key, {
+        ...current,
+        reminders: [reminder, ...current.reminders.filter((r) => r.id !== reminder.id)],
+      });
       return reminder;
     },
     [crm, dispatch, key],
@@ -393,9 +393,6 @@ export function useCrmDirectory() {
 
   const addTask = useCallback(
     (task: PortalTask) => {
-      crm.addTask(task);
-      const current = readStore(key);
-      writeStore(key, { ...current, tasks: [task, ...current.tasks.filter((t) => t.id !== task.id)] });
       if (crm.enabled) {
         return (async () => {
           const created = await createTaskApi(task);
@@ -409,6 +406,9 @@ export function useCrmDirectory() {
           return finalTask;
         })();
       }
+      crm.addTask(task);
+      const current = readStore(key);
+      writeStore(key, { ...current, tasks: [task, ...current.tasks.filter((t) => t.id !== task.id)] });
       return task;
     },
     [crm, dispatch, key],
@@ -492,14 +492,6 @@ export function useCrmDirectory() {
             await crm.refresh({ silent: true });
             return;
           }
-          const current = readStore(key);
-          const nextKey = `${kind}:${id}`;
-          writeStore(key, {
-            ...current,
-            deleted: current.deleted.includes(nextKey)
-              ? current.deleted
-              : [...current.deleted, nextKey],
-          });
         })();
       }
       const current = readStore(key);
@@ -562,15 +554,9 @@ export function useCrmDirectory() {
 
   const setReminderStatus = useCallback(
     (id: string, status: PortalReminder["status"]) => {
-      crm.patchReminder(id, { status });
-      const current = readStore(key);
-      const inStore = current.reminders.some((item) => item.id === id);
-      const nextReminders = inStore
-        ? current.reminders.map((item) => (item.id === id ? { ...item, status } : item))
-        : [...current.reminders, ...seedReminders.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
-      writeStore(key, { ...current, reminders: nextReminders });
       if (crm.enabled) {
         return (async () => {
+          crm.patchReminder(id, { status });
           const updated = await updateReminderStatusApi(id, status);
           if (updated) {
             crm.patchReminder(id, updated);
@@ -583,21 +569,22 @@ export function useCrmDirectory() {
           return updated;
         })();
       }
+      crm.patchReminder(id, { status });
+      const current = readStore(key);
+      const inStore = current.reminders.some((item) => item.id === id);
+      const nextReminders = inStore
+        ? current.reminders.map((item) => (item.id === id ? { ...item, status } : item))
+        : [...current.reminders, ...seedReminders.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
+      writeStore(key, { ...current, reminders: nextReminders });
     },
     [crm, dispatch, key, seedReminders],
   );
 
   const setTaskStatus = useCallback(
     (id: string, status: PortalTask["status"]) => {
-      crm.patchTask(id, { status });
-      const current = readStore(key);
-      const inStore = current.tasks.some((item) => item.id === id);
-      const nextTasks = inStore
-        ? current.tasks.map((item) => (item.id === id ? { ...item, status } : item))
-        : [...current.tasks, ...seedTasks.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
-      writeStore(key, { ...current, tasks: nextTasks });
       if (crm.enabled) {
         return (async () => {
+          crm.patchTask(id, { status });
           const updated = await updateTaskStatusApi(id, status);
           if (updated) {
             crm.patchTask(id, updated);
@@ -610,6 +597,13 @@ export function useCrmDirectory() {
           return updated;
         })();
       }
+      crm.patchTask(id, { status });
+      const current = readStore(key);
+      const inStore = current.tasks.some((item) => item.id === id);
+      const nextTasks = inStore
+        ? current.tasks.map((item) => (item.id === id ? { ...item, status } : item))
+        : [...current.tasks, ...seedTasks.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
+      writeStore(key, { ...current, tasks: nextTasks });
     },
     [crm, dispatch, key, seedTasks],
   );

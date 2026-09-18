@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, MoreHorizontal, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, Loader2, MoreHorizontal, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -67,6 +67,8 @@ export function PortalDataTable<T>({
   countLabel,
   serverPagination,
   loading = false,
+  busyRowIds,
+  isRowBusy,
 }: {
   rows: T[];
   rowKey: (row: T) => string;
@@ -85,6 +87,10 @@ export function PortalDataTable<T>({
   serverPagination?: PortalTableServerPagination;
   /** Shows a spinner over the table body without hiding the toolbar. */
   loading?: boolean;
+  /** Row IDs currently undergoing asynchronous action (e.g. status update) */
+  busyRowIds?: string[];
+  /** Predicate to determine if a specific row is busy */
+  isRowBusy?: (row: T) => boolean;
 }) {
   const router = useRouter();
   const isServer = Boolean(serverPagination);
@@ -363,7 +369,11 @@ export function PortalDataTable<T>({
                         className="px-2.5 py-1.5 text-right whitespace-nowrap"
                         onClick={(event) => event.stopPropagation()}
                       >
-                        <RowActions row={row} actions={rowActions} />
+                        <RowActions
+                          row={row}
+                          actions={rowActions}
+                          busy={(busyRowIds && busyRowIds.includes(rowKey(row))) || (isRowBusy ? isRowBusy(row) : false)}
+                        />
                       </TableCell>
                     ) : null}
                   </TableRow>
@@ -421,9 +431,34 @@ export function PortalDataTable<T>({
   );
 }
 
-function RowActions<T>({ row, actions }: { row: T; actions: PortalTableAction<T>[] }) {
+function RowActions<T>({
+  row,
+  actions,
+  busy = false,
+}: {
+  row: T;
+  actions: PortalTableAction<T>[];
+  busy?: boolean;
+}) {
   const router = useRouter();
   if (!actions.length) return null;
+
+  if (busy) {
+    return (
+      <div className="inline-flex items-center justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className="size-7 opacity-90 cursor-wait pointer-events-none"
+          disabled
+          aria-label="Updating row…"
+        >
+          <Loader2 className="size-4 animate-spin text-primary" />
+        </Button>
+      </div>
+    );
+  }
 
   const quickAction = actions.find((a) => a.quick);
 

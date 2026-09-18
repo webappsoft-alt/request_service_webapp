@@ -38,8 +38,9 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ArchiveBadge } from "@/components/portal/archive-control";
+import { ArchiveBadge, archiveRowAction } from "@/components/portal/archive-control";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
+import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import {
   CreateNoteDialog,
   CreateReminderDialog,
@@ -51,8 +52,8 @@ import { useChatThreads } from "@/components/portal/use-chat-threads";
 import { ConvertLeadToEstimateDialog } from "@/components/portal/convert-lead-to-estimate-dialog";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { jobBoardColumns } from "@/components/portal/job-columns";
+import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
-import { PortalPagination } from "@/components/portal/portal-pagination";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
 import { FileNotices } from "@/components/portal/task-banner";
@@ -62,6 +63,10 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import { deleteTaskRecord, patchTaskStatus } from "@/store/tasksSlice";
+import { deleteReminderRecord, patchReminderStatus } from "@/store/remindersSlice";
 import { getCustomer, getRequest, queryEstimates, queryJobs, queryTasks, queryReminders } from "@/lib/api/crm-client";
 import { ensureProviderChatThread } from "@/lib/api/chat-client";
 import { subscribeRealtime, useRealtime } from "@/components/realtime/realtime-provider";
@@ -75,6 +80,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,9 +97,14 @@ import {
   crmCustomerName,
   crmReminderStatusLabel,
   crmSourceLabel,
+  crmTaskPriorityLabel,
   crmTaskStatusLabel,
+  reminderIsOverdue,
   reminderMatches,
+  taskIsOverdue,
   taskMatches,
+  type CrmTaskPriority,
+  type CrmTaskStatus,
   type PortalCustomerCrm,
   type PortalReminder,
   type PortalTask,
@@ -102,6 +119,7 @@ import {
   timeWindowLabel,
   windowFromMinutes,
   type PortalCalendarEvent,
+  type PortalEmployee,
   type PortalRequest,
   type PortalTimeWindow,
 } from "@/lib/data/portal";
@@ -154,6 +172,22 @@ const LEAD_STATUSES: RequestStatus[] = [
   "declined",
   "converted_to_job",
   "closed",
+];
+
+const REMINDER_FILTER_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "open", label: "Open" },
+  { value: "done", label: "Done" },
+  { value: "overdue", label: "Overdue" },
+];
+
+const TASK_FILTER_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "open", label: "Open" },
+  { value: "in_progress", label: "In progress" },
+  { value: "blocked", label: "Blocked" },
+  { value: "done", label: "Done" },
+  { value: "overdue", label: "Overdue" },
 ];
 
 function leadFlowIndex(status: RequestStatus, hasEstimate: boolean, hasJob: boolean) {
@@ -213,10 +247,28 @@ function windowFromLabel(value?: string): PortalTimeWindow {
 }
 
 export function RequestDetailView({ id }: { id: string }) {
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+
   const { requests, estimates, jobs, invoices, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
-  const { customers, reminders, tasks, setReminderStatus, setTaskStatus } = useCrmDirectory();
-  const { events, employees, assign, employeeLabel } = usePortalCrew();
+  const { customers, reminders, tasks, setReminderStatus, setTaskStatus, remove } = useCrmDirectory();
+  const { events, employees: crewEmployees, assign, employeeLabel } = usePortalCrew();
+  const teamItems = useAppSelector((state) => state.team?.items ?? []);
+  const allEmployees = useMemo(() => {
+    const pool = [...(crm.employees || []), ...(teamItems || []), ...(crewEmployees || [])];
+    const map = new Map<string, PortalEmployee>();
+    for (const item of pool) {
+      if (item?.id && !map.has(item.id)) map.set(item.id, item);
+    }
+    return Array.from(map.values());
+  }, [crm.employees, teamItems, crewEmployees]);
+  const employees = allEmployees.length > 0 ? allEmployees : crewEmployees;
   const records = usePortalRecords();
   const searchParams = useSearchParams();
   const tab = (searchParams.get("tab") ?? "summary") as LeadTab;
@@ -224,14 +276,19 @@ export function RequestDetailView({ id }: { id: string }) {
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<PortalTask | null>(null);
+  const [deletingTask, setDeletingTask] = useState<PortalTask | null>(null);
+  const [deleteTaskLoading, setDeleteTaskLoading] = useState(false);
+  const [busyTaskRowIds, setBusyTaskRowIds] = useState<string[]>([]);
+  const [taskStatusFilter, setTaskStatusFilter] = useState<string>("");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState<string>("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
-  const [taskSearch, setTaskSearch] = useState("");
-  const [reminderSearch, setReminderSearch] = useState("");
-  const [taskPage, setTaskPage] = useState(1);
-  const [reminderPage, setReminderPage] = useState(1);
-  const TASK_PAGE_SIZE = 10;
-  const REMINDER_PAGE_SIZE = 10;
+  const [editingReminder, setEditingReminder] = useState<PortalReminder | null>(null);
+  const [deletingReminder, setDeletingReminder] = useState<PortalReminder | null>(null);
+  const [deleteReminderLoading, setDeleteReminderLoading] = useState(false);
+  const [busyReminderRowIds, setBusyReminderRowIds] = useState<string[]>([]);
+  const [reminderStatusFilter, setReminderStatusFilter] = useState<string>("");
   const [apiLead, setApiLead] = useState<PortalRequest | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiCustomer, setApiCustomer] = useState<PortalCustomerCrm | null>(null);
@@ -301,18 +358,39 @@ export function RequestDetailView({ id }: { id: string }) {
   const allJobs = records.mergeJobs(jobs);
 
   const customer = apiCustomer || customers.find((item) => item.id === request?.customerId);
-  const baseEstimates = apiEstimates !== null ? apiEstimates : allEstimates;
-  const relatedEstimates = baseEstimates.filter(
-    (item) =>
-      item.requestId === id ||
-      (request?.customerId && item.customerId === request.customerId && item.requestId === id),
-  );
-  const baseJobs = apiJobs !== null ? apiJobs : allJobs;
-  const relatedJobs = baseJobs.filter(
-    (item) =>
-      relatedEstimates.some((estimate) => estimate.id === item.estimateId) ||
-      (item as { requestId?: string }).requestId === id,
-  );
+  const baseEstimates = useMemo(() => {
+    if (useApi) return apiEstimates ?? [];
+    return allEstimates;
+  }, [useApi, apiEstimates, allEstimates]);
+
+  const relatedEstimates = useMemo(() => {
+    const estId = (request as { estimateId?: string })?.estimateId;
+    return baseEstimates.filter(
+      (item) =>
+        item.requestId === id ||
+        (estId && item.id === estId) ||
+        (request?.customerId && item.customerId === request.customerId),
+    );
+  }, [baseEstimates, id, request]);
+
+  const baseJobs = useMemo(() => {
+    if (useApi) return apiJobs ?? [];
+    return allJobs;
+  }, [useApi, apiJobs, allJobs]);
+
+  const relatedJobs = useMemo(() => {
+    const estId = (request as { estimateId?: string })?.estimateId;
+    const jId = (request as { jobId?: string })?.jobId;
+    return baseJobs.filter(
+      (item) =>
+        (item as { requestId?: string }).requestId === id ||
+        (request?.customerId && item.customerId === request.customerId) ||
+        relatedEstimates.some((estimate) => estimate.id === item.estimateId) ||
+        (estId && item.estimateId === estId) ||
+        (jId && item.id === jId),
+    );
+  }, [baseJobs, id, request, relatedEstimates]);
+
   const estimate = relatedEstimates[0];
   const job = relatedJobs[0];
 
@@ -321,12 +399,14 @@ export function RequestDetailView({ id }: { id: string }) {
     void queryEstimates({
       customerId: request?.customerId || undefined,
       requestId: id,
-      limit: 50,
+      limit: 20,
       force: true,
       silent: true,
     })
       .then((result) => {
-        if (result?.items) setApiEstimates(result.items);
+        if (result?.items) {
+          setApiEstimates(result.items);
+        }
       })
       .catch(() => undefined)
       .finally(() => setEstimatesLoading(false));
@@ -337,12 +417,14 @@ export function RequestDetailView({ id }: { id: string }) {
     void queryJobs({
       customerId: request?.customerId || undefined,
       requestId: id,
-      limit: 50,
+      limit: 20,
       force: true,
       silent: true,
     })
       .then((result) => {
-        if (result?.items) setApiJobs(result.items);
+        if (result?.items) {
+          setApiJobs(result.items);
+        }
       })
       .catch(() => undefined)
       .finally(() => setJobsLoading(false));
@@ -352,37 +434,35 @@ export function RequestDetailView({ id }: { id: string }) {
     setTasksLoading(true);
     void queryTasks({
       customerId: request?.customerId || undefined,
-      limit: 100,
+      limit: 20,
       force: true,
       silent: true,
     })
       .then((result) => {
         if (result?.items) {
           setApiTasks(result.items);
-          result.items.forEach((t) => crm.addTask?.(t));
         }
       })
       .catch(() => undefined)
       .finally(() => setTasksLoading(false));
-  }, [request?.customerId, crm]);
+  }, [request?.customerId]);
 
   const refreshReminders = useCallback(() => {
     setRemindersLoading(true);
     void queryReminders({
       customerId: request?.customerId || undefined,
-      limit: 100,
+      limit: 20,
       force: true,
       silent: true,
     })
       .then((result) => {
         if (result?.items) {
           setApiReminders(result.items);
-          result.items.forEach((r) => crm.addReminder?.(r));
         }
       })
       .catch(() => undefined)
       .finally(() => setRemindersLoading(false));
-  }, [request?.customerId, crm]);
+  }, [request?.customerId]);
 
   // Fetch data per tab or when lead status indicates estimate/job exists
   useEffect(() => {
@@ -399,7 +479,7 @@ export function RequestDetailView({ id }: { id: string }) {
           })
           .catch(() => undefined)
           .finally(() => {
-            if (!cancelled) setCustomerLoading(false);
+            setCustomerLoading(false);
           });
       }
     }
@@ -407,94 +487,103 @@ export function RequestDetailView({ id }: { id: string }) {
     // 2. Estimates tab active OR status indicates estimate exists -> fetch estimates for this lead
     const shouldFetchEstimates =
       tab === "estimates" ||
+      tab === "jobs" ||
       request?.status === "estimate_sent" ||
       request?.status === "accepted" ||
       request?.status === "converted_to_job";
 
+    const estimatesFetchKey = `${id}_${request?.customerId || "none"}`;
     if (shouldFetchEstimates && (id || request?.customerId)) {
-      if (loadedTabsRef.current.estimates !== id) {
-        loadedTabsRef.current.estimates = id;
+      if (loadedTabsRef.current.estimates !== estimatesFetchKey) {
+        loadedTabsRef.current.estimates = estimatesFetchKey;
         setEstimatesLoading(true);
         void queryEstimates({
           customerId: request?.customerId || undefined,
           requestId: id,
-          limit: 50,
+          limit: 20,
           force: true,
           silent: true,
         })
           .then((result) => {
-            if (!cancelled && result?.items) setApiEstimates(result.items);
+            if (result?.items) {
+              setApiEstimates(result.items);
+            }
           })
           .catch(() => undefined)
           .finally(() => {
-            if (!cancelled) setEstimatesLoading(false);
+            setEstimatesLoading(false);
           });
       }
     }
 
     // 3. Jobs tab active -> fetch jobs for this lead
-    if (tab === "jobs" && (id || request?.customerId)) {
-      if (loadedTabsRef.current.jobs !== id) {
-        loadedTabsRef.current.jobs = id;
+    const jobsFetchKey = `${id}_${request?.customerId || "none"}`;
+    if ((tab === "jobs" || request?.status === "converted_to_job") && (id || request?.customerId)) {
+      if (loadedTabsRef.current.jobs !== jobsFetchKey) {
+        loadedTabsRef.current.jobs = jobsFetchKey;
         setJobsLoading(true);
         void queryJobs({
           customerId: request?.customerId || undefined,
           requestId: id,
-          limit: 50,
+          limit: 20,
           force: true,
           silent: true,
         })
           .then((result) => {
-            if (!cancelled && result?.items) setApiJobs(result.items);
+            if (result?.items) {
+              setApiJobs(result.items);
+            }
           })
           .catch(() => undefined)
           .finally(() => {
-            if (!cancelled) setJobsLoading(false);
+            setJobsLoading(false);
           });
       }
     }
 
     // 4. Tasks: fetch on lead load or when tab is active
-    if (id && loadedTabsRef.current.tasks !== id) {
-      loadedTabsRef.current.tasks = id;
+    const taskFetchKey = `${id}_${request?.customerId || "none"}`;
+    if (id && loadedTabsRef.current.tasks !== taskFetchKey) {
+      loadedTabsRef.current.tasks = taskFetchKey;
       setTasksLoading(true);
       void queryTasks({
         customerId: request?.customerId || undefined,
-        limit: 100,
+        limit: 20,
         force: true,
         silent: true,
       })
         .then((result) => {
-          if (!cancelled && result?.items) {
+          if (result?.items) {
             setApiTasks(result.items);
             result.items.forEach((t) => crm.addTask?.(t));
           }
         })
         .catch(() => undefined)
         .finally(() => {
-          if (!cancelled) setTasksLoading(false);
+          setTasksLoading(false);
         });
     }
 
     // 5. Reminders: fetch on lead load or when tab is active
-    if (id && loadedTabsRef.current.reminders !== id) {
-      loadedTabsRef.current.reminders = id;
+    const reminderFetchKey = `${id}_${request?.customerId || "none"}`;
+    if (id && loadedTabsRef.current.reminders !== reminderFetchKey) {
+      loadedTabsRef.current.reminders = reminderFetchKey;
       setRemindersLoading(true);
       void queryReminders({
         customerId: request?.customerId || undefined,
-        limit: 100,
+        limit: 20,
         force: true,
         silent: true,
       })
         .then((result) => {
-          if (!cancelled && result?.items) {
+          if (result?.items) {
             setApiReminders(result.items);
             result.items.forEach((r) => crm.addReminder?.(r));
           }
         })
         .catch(() => undefined)
         .finally(() => {
-          if (!cancelled) setRemindersLoading(false);
+          setRemindersLoading(false);
         });
     }
 
@@ -504,29 +593,24 @@ export function RequestDetailView({ id }: { id: string }) {
   }, [tab, id, request?.customerId, crm]);
 
   const allReminders = useMemo(() => {
-    const pool = [...(apiReminders || []), ...reminders];
-    const map = new Map<string, PortalReminder>();
-    for (const item of pool) {
-      if (item?.id && !map.has(item.id)) map.set(item.id, item);
-    }
-    return Array.from(map.values());
-  }, [apiReminders, reminders]);
+    if (useApi) return apiReminders ?? [];
+    return reminders;
+  }, [useApi, apiReminders, reminders]);
 
   const allTasks = useMemo(() => {
-    const pool = [...(apiTasks || []), ...tasks];
-    const map = new Map<string, PortalTask>();
-    for (const item of pool) {
-      if (item?.id && !map.has(item.id)) map.set(item.id, item);
-    }
-    return Array.from(map.values());
-  }, [apiTasks, tasks]);
+    if (useApi) return apiTasks ?? [];
+    return tasks;
+  }, [useApi, apiTasks, tasks]);
 
   const relatedReminders = useMemo(() => {
     return allReminders.filter(
       (item) =>
         reminderMatches(item, "request", id) ||
+        item.subjectId === id ||
         (request?.customerId &&
-          (item.customerId === request.customerId || reminderMatches(item, "customer", request.customerId))) ||
+          (item.customerId === request.customerId ||
+            item.subjectId === request.customerId ||
+            reminderMatches(item, "customer", request.customerId))) ||
         (item.subjectKind === "estimate" && relatedEstimates.some((e) => e.id === item.subjectId)) ||
         (item.subjectKind === "job" && relatedJobs.some((j) => j.id === item.subjectId)),
     );
@@ -536,44 +620,100 @@ export function RequestDetailView({ id }: { id: string }) {
     return allTasks.filter(
       (item) =>
         taskMatches(item, "request", id) ||
+        item.subjectId === id ||
         (request?.customerId &&
-          (item.customerId === request.customerId || taskMatches(item, "customer", request.customerId))) ||
+          (item.customerId === request.customerId ||
+            item.subjectId === request.customerId ||
+            taskMatches(item, "customer", request.customerId))) ||
         (item.jobId && relatedJobs.some((j) => j.id === item.jobId)) ||
         (item.subjectKind === "job" && relatedJobs.some((j) => j.id === item.subjectId)) ||
         (item.subjectKind === "estimate" && relatedEstimates.some((e) => e.id === item.subjectId)),
     );
   }, [allTasks, id, request?.customerId, relatedJobs, relatedEstimates]);
 
-  const filteredTasks = useMemo(() => {
-    if (!taskSearch.trim()) return relatedTasks;
-    const q = taskSearch.toLowerCase().trim();
-    return relatedTasks.filter(
-      (item) =>
-        item.title.toLowerCase().includes(q) ||
-        item.note.toLowerCase().includes(q) ||
-        item.number.toLowerCase().includes(q),
-    );
-  }, [relatedTasks, taskSearch]);
+  const displayedTasks = useMemo(() => {
+    let list = relatedTasks;
+    if (taskStatusFilter === "overdue") {
+      list = list.filter((item) => taskIsOverdue(item) && item.status !== "done");
+    } else if (taskStatusFilter) {
+      list = list.filter((item) => item.status === taskStatusFilter);
+    }
+    if (taskPriorityFilter) {
+      list = list.filter((item) => item.priority === taskPriorityFilter);
+    }
+    return list;
+  }, [relatedTasks, taskStatusFilter, taskPriorityFilter]);
 
-  const paginatedTasks = useMemo(() => {
-    const start = (taskPage - 1) * TASK_PAGE_SIZE;
-    return filteredTasks.slice(start, start + TASK_PAGE_SIZE);
-  }, [filteredTasks, taskPage]);
+  const displayedReminders = useMemo(() => {
+    let list = relatedReminders;
+    if (reminderStatusFilter === "overdue") {
+      list = list.filter((item) => reminderIsOverdue(item) && item.status !== "done");
+    } else if (reminderStatusFilter) {
+      list = list.filter((item) => item.status === reminderStatusFilter);
+    }
+    return list;
+  }, [relatedReminders, reminderStatusFilter]);
 
-  const filteredReminders = useMemo(() => {
-    if (!reminderSearch.trim()) return relatedReminders;
-    const q = reminderSearch.toLowerCase().trim();
-    return relatedReminders.filter(
-      (item) =>
-        item.title.toLowerCase().includes(q) ||
-        item.note.toLowerCase().includes(q),
-    );
-  }, [relatedReminders, reminderSearch]);
+  const handleTaskStatus = async (row: PortalTask, nextStatus: CrmTaskStatus) => {
+    setBusyTaskRowIds((prev) => [...prev, row.id]);
+    try {
+      const updated = await dispatch(patchTaskStatus({ id: row.id, status: nextStatus })).unwrap();
+      setApiTasks((prev) => (prev ? prev.map((t) => (t.id === row.id ? updated : t)) : [updated]));
+      toast.success(`Task status updated to ${crmTaskStatusLabel(nextStatus)}.`);
+      refreshTasks();
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : err instanceof Error ? err.message : "Failed to update task status.");
+    } finally {
+      setBusyTaskRowIds((prev) => prev.filter((id) => id !== row.id));
+    }
+  };
 
-  const paginatedReminders = useMemo(() => {
-    const start = (reminderPage - 1) * REMINDER_PAGE_SIZE;
-    return filteredReminders.slice(start, start + REMINDER_PAGE_SIZE);
-  }, [filteredReminders, reminderPage]);
+  const confirmDeleteTask = async () => {
+    if (!deletingTask || deleteTaskLoading) return;
+    setDeleteTaskLoading(true);
+    try {
+      await dispatch(deleteTaskRecord(deletingTask.id)).unwrap();
+      setApiTasks((prev) => (prev ? prev.filter((t) => t.id !== deletingTask.id) : []));
+      toast.success(`${deletingTask.number} removed.`);
+      setDeletingTask(null);
+      refreshTasks();
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : err instanceof Error ? err.message : "Failed to delete task.");
+    } finally {
+      setDeleteTaskLoading(false);
+    }
+  };
+
+  const handleReminderStatus = async (row: PortalReminder, nextStatus: "open" | "done") => {
+    setBusyReminderRowIds((prev) => [...prev, row.id]);
+    try {
+      const updated = await dispatch(patchReminderStatus({ id: row.id, status: nextStatus })).unwrap();
+      setApiReminders((prev) => (prev ? prev.map((r) => (r.id === row.id ? updated : r)) : [updated]));
+      toast.success(`Reminder marked ${crmReminderStatusLabel(nextStatus).toLowerCase()}.`);
+      refreshReminders();
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : err instanceof Error ? err.message : "Failed to update reminder status.");
+    } finally {
+      setBusyReminderRowIds((prev) => prev.filter((id) => id !== row.id));
+    }
+  };
+
+  const confirmDeleteReminder = async () => {
+    if (!deletingReminder || deleteReminderLoading) return;
+    setDeleteReminderLoading(true);
+    try {
+      await dispatch(deleteReminderRecord(deletingReminder.id)).unwrap();
+      setApiReminders((prev) => (prev ? prev.filter((r) => r.id !== deletingReminder.id) : []));
+      toast.success("Reminder removed.");
+      setDeletingReminder(null);
+      refreshReminders();
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : err instanceof Error ? err.message : "Failed to delete reminder.");
+    } finally {
+      setDeleteReminderLoading(false);
+    }
+  };
+
   const event = events.find((item) => item.kind === "request" && item.recordId === id);
   const requestEvent: PortalCalendarEvent = event ?? {
     id: `cal_${id}`,
@@ -1264,7 +1404,7 @@ export function RequestDetailView({ id }: { id: string }) {
                     employeeLabel,
                     customerName: (customerId) => {
                       const match = (apiCustomer && apiCustomer.id === customerId) ? apiCustomer : customers.find((item) => item.id === customerId);
-                      return match ? crmCustomerName(match) : getPortalCustomerName(provider, customerId);
+                      return match ? crmCustomerName(match) : (customerId === request.customerId && (request.customerName || customerLabel)) ? (request.customerName || customerLabel) : getPortalCustomerName(provider, customerId);
                     },
                   })}
                 />
@@ -1303,161 +1443,362 @@ export function RequestDetailView({ id }: { id: string }) {
               );
             case "tasks":
               return (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold">Tasks ({relatedTasks.length})</h3>
-                    <div className="flex items-center gap-2">
-                      {relatedTasks.length > 0 ? (
-                        <div className="relative w-44 sm:w-60">
-                          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-                          <Input
-                            value={taskSearch}
-                            onChange={(e) => {
-                              setTaskSearch(e.target.value);
-                              setTaskPage(1);
-                            }}
-                            placeholder="Search tasks…"
-                            className="h-8 pl-8 text-xs"
-                          />
-                        </div>
-                      ) : null}
-                      <Button size="sm" onClick={() => setTaskOpen(true)}>
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <LocalFilterTabs
+                      value={taskStatusFilter}
+                      onChange={setTaskStatusFilter}
+                      options={TASK_FILTER_OPTIONS}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select
+                        value={taskPriorityFilter || "all"}
+                        onValueChange={(val) => setTaskPriorityFilter(val === "all" ? "" : val)}
+                      >
+                        <SelectTrigger className="h-8 w-32 text-xs bg-card">
+                          <SelectValue placeholder="All priorities" />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="all">All priorities</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" onClick={() => { setEditingTask(null); setTaskOpen(true); }}>
                         + Create task
                       </Button>
                     </div>
                   </div>
-
-                  {tasksLoading && relatedTasks.length === 0 ? (
-                    <div className="rounded-lg border border-black/10 bg-card p-12 text-center">
-                      <CenteredSpinner className="mx-auto" />
-                    </div>
-                  ) : relatedTasks.length === 0 ? (
+                  {tasksLoading || displayedTasks.length ? (
+                    <PortalDataTable
+                      filename={`${request.number}-tasks`}
+                      countLabel="Tasks"
+                      searchPlaceholder="Search tasks"
+                      loading={tasksLoading}
+                      rows={displayedTasks}
+                      rowKey={(row) => row.id}
+                      rowHref={(row) => `/pro/dashboard/tasks/${row.id}`}
+                      pageSize={20}
+                      busyRowIds={busyTaskRowIds}
+                      empty="No tasks match this filter."
+                      columns={[
+                        {
+                          id: "number",
+                          header: "ID",
+                          sortValue: (row) => row.number,
+                          searchValue: (row) => row.number,
+                          exportValue: (row) => row.number,
+                          cell: (row) => (
+                            <Link href={`/pro/dashboard/tasks/${row.id}`} className="font-semibold text-primary hover:underline">
+                              {row.number}
+                            </Link>
+                          ),
+                        },
+                        {
+                          id: "title",
+                          header: "Task",
+                          sortValue: (row) => row.title,
+                          searchValue: (row) => `${row.title} ${row.note}`,
+                          exportValue: (row) => row.title,
+                          cell: (row) => (
+                            <div>
+                              <Link href={`/pro/dashboard/tasks/${row.id}`} className="font-medium text-primary hover:underline">
+                                {row.title}
+                              </Link>
+                              {row.note ? (
+                                <p className="text-xs text-muted-foreground line-clamp-1">{row.note}</p>
+                              ) : null}
+                            </div>
+                          ),
+                        },
+                        {
+                          id: "assigned",
+                          header: "Assigned",
+                          sortValue: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                            return emp ? `${emp.firstName} ${emp.lastName}`.trim() : row.assignedContractorName || row.assignedVendorName || "";
+                          },
+                          searchValue: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                            return emp ? `${emp.firstName} ${emp.lastName}`.trim() : row.assignedContractorName || row.assignedVendorName || "";
+                          },
+                          exportValue: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                            return emp ? `${emp.firstName} ${emp.lastName}`.trim() : row.assignedContractorName || row.assignedVendorName || "";
+                          },
+                          cell: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            if (row.assignedEmployeeId) {
+                              const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                              if (emp) return `${emp.firstName} ${emp.lastName}`.trim();
+                            }
+                            if (row.assignedContractorName) return row.assignedContractorName;
+                            if (row.assignedVendorName) return row.assignedVendorName;
+                            return "Unassigned";
+                          },
+                        },
+                        {
+                          id: "priority",
+                          header: "Priority",
+                          sortValue: (row) => row.priority,
+                          searchValue: (row) => crmTaskPriorityLabel(row.priority),
+                          exportValue: (row) => crmTaskPriorityLabel(row.priority),
+                          cell: (row) => (
+                            <StatusPill
+                              label={crmTaskPriorityLabel(row.priority)}
+                              tone={row.priority === "urgent" ? "danger" : row.priority === "high" ? "warning" : "neutral"}
+                            />
+                          ),
+                        },
+                        {
+                          id: "due",
+                          header: "Due",
+                          sortValue: (row) => row.dueAt,
+                          searchValue: (row) => formatDate(row.dueAt),
+                          exportValue: (row) => formatDate(row.dueAt),
+                          cell: (row) => formatDate(row.dueAt),
+                        },
+                        {
+                          id: "status",
+                          header: "Status",
+                          sortValue: (row) => row.status,
+                          searchValue: (row) => crmTaskStatusLabel(row.status),
+                          exportValue: (row) => crmTaskStatusLabel(row.status),
+                          cell: (row) => (
+                            <StatusPill
+                              label={taskIsOverdue(row) ? "Overdue" : crmTaskStatusLabel(row.status)}
+                              tone={
+                                taskIsOverdue(row)
+                                  ? "danger"
+                                  : row.status === "done"
+                                    ? "success"
+                                    : row.status === "in_progress"
+                                      ? "warning"
+                                      : "primary"
+                              }
+                            />
+                          ),
+                        },
+                      ]}
+                      actions={(row) => [
+                        { label: "Open file", href: `/pro/dashboard/tasks/${row.id}` },
+                        {
+                          label: "Edit task",
+                          onSelect: () => {
+                            setEditingTask(row);
+                            setTaskOpen(true);
+                          },
+                        },
+                        ...(row.status === "done"
+                          ? [
+                              {
+                                label: "Reopen",
+                                onSelect: () => void handleTaskStatus(row, "open"),
+                              },
+                            ]
+                          : row.status === "in_progress"
+                            ? [
+                                {
+                                  label: "Mark done",
+                                  onSelect: () => void handleTaskStatus(row, "done"),
+                                },
+                                {
+                                  label: "Block",
+                                  onSelect: () => void handleTaskStatus(row, "blocked"),
+                                },
+                                {
+                                  label: "Reset to open",
+                                  onSelect: () => void handleTaskStatus(row, "open"),
+                                },
+                              ]
+                            : row.status === "blocked"
+                              ? [
+                                  {
+                                    label: "Unblock & Start",
+                                    onSelect: () => void handleTaskStatus(row, "in_progress"),
+                                  },
+                                  {
+                                    label: "Mark open",
+                                    onSelect: () => void handleTaskStatus(row, "open"),
+                                  },
+                                  {
+                                    label: "Mark done",
+                                    onSelect: () => void handleTaskStatus(row, "done"),
+                                  },
+                                ]
+                              : [
+                                  {
+                                    label: "Start",
+                                    onSelect: () => void handleTaskStatus(row, "in_progress"),
+                                  },
+                                  {
+                                    label: "Block",
+                                    onSelect: () => void handleTaskStatus(row, "blocked"),
+                                  },
+                                  {
+                                    label: "Mark done",
+                                    onSelect: () => void handleTaskStatus(row, "done"),
+                                  },
+                                ]),
+                        archiveRowAction(records, "task", row.id, row.number),
+                        {
+                          label: "Delete",
+                          variant: "destructive",
+                          onSelect: () => setDeletingTask(row),
+                        },
+                      ]}
+                    />
+                  ) : (
                     <div className="rounded-lg border border-dashed border-black/15 bg-card p-8 text-center">
                       <ListTodo className="mx-auto size-8 text-muted-foreground/60" />
                       <h4 className="mt-2 text-sm font-semibold">No tasks yet</h4>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Create a task against this lead — call back, qualify, or pull a permit.
                       </p>
-                      <Button size="sm" className="mt-4" onClick={() => setTaskOpen(true)}>
+                      <Button size="sm" className="mt-4" onClick={() => { setEditingTask(null); setTaskOpen(true); }}>
                         + Create task
                       </Button>
                     </div>
-                  ) : filteredTasks.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-6 text-center">
-                      <p className="text-sm text-muted-foreground">No tasks match &quot;{taskSearch}&quot;</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2"
-                        onClick={() => {
-                          setTaskSearch("");
-                          setTaskPage(1);
-                        }}
-                      >
-                        Clear search
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <LinkedList
-                        empty="No tasks found."
-                        items={paginatedTasks.map((item) => ({
-                          id: item.id,
-                          href: `/pro/dashboard/tasks/${item.id}`,
-                          title: `${item.number} · ${item.title}`,
-                          detail: `Due ${formatDate(item.dueAt)}${item.note ? ` · ${item.note}` : ""}`,
-                          pill: crmTaskStatusLabel(item.status),
-                          action: item.status === "done" ? undefined : () => void setTaskStatus(item.id, "done"),
-                        }))}
-                      />
-                      <PortalPagination
-                        page={taskPage}
-                        pageSize={TASK_PAGE_SIZE}
-                        total={filteredTasks.length}
-                        onPageChange={setTaskPage}
-                        itemName="tasks"
-                      />
-                    </>
                   )}
                 </div>
               );
             case "reminders":
               return (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold">Reminders ({relatedReminders.length})</h3>
-                    <div className="flex items-center gap-2">
-                      {relatedReminders.length > 0 ? (
-                        <div className="relative w-44 sm:w-60">
-                          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-                          <Input
-                            value={reminderSearch}
-                            onChange={(e) => {
-                              setReminderSearch(e.target.value);
-                              setReminderPage(1);
-                            }}
-                            placeholder="Search reminders…"
-                            className="h-8 pl-8 text-xs"
-                          />
-                        </div>
-                      ) : null}
-                      <Button size="sm" onClick={() => setReminderOpen(true)}>
-                        + Set reminder
-                      </Button>
-                    </div>
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <LocalFilterTabs
+                      value={reminderStatusFilter}
+                      onChange={setReminderStatusFilter}
+                      options={REMINDER_FILTER_OPTIONS}
+                    />
+                    <Button size="sm" onClick={() => { setEditingReminder(null); setReminderOpen(true); }}>
+                      + Set reminder
+                    </Button>
                   </div>
-
-                  {remindersLoading && relatedReminders.length === 0 ? (
-                    <div className="rounded-lg border border-black/10 bg-card p-12 text-center">
-                      <CenteredSpinner className="mx-auto" />
-                    </div>
-                  ) : relatedReminders.length === 0 ? (
+                  {remindersLoading || displayedReminders.length ? (
+                    <PortalDataTable
+                      filename={`${request.number}-reminders`}
+                      countLabel="Reminders"
+                      searchPlaceholder="Search reminders"
+                      loading={remindersLoading}
+                      rows={displayedReminders}
+                      rowKey={(row) => row.id}
+                      rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
+                      pageSize={20}
+                      busyRowIds={busyReminderRowIds}
+                      empty="No reminders match this filter."
+                      columns={[
+                        {
+                          id: "title",
+                          header: "Reminder",
+                          sortValue: (row) => row.title,
+                          searchValue: (row) => `${row.title} ${row.note}`,
+                          exportValue: (row) => row.title,
+                          cell: (row) => (
+                            <div>
+                              <Link href={`/pro/dashboard/reminders/${row.id}`} className="font-medium text-primary hover:underline">
+                                {row.title}
+                              </Link>
+                              {row.note ? (
+                                <p className="text-xs text-muted-foreground line-clamp-1">{row.note}</p>
+                              ) : null}
+                            </div>
+                          ),
+                        },
+                        {
+                          id: "assigned",
+                          header: "Assigned",
+                          sortValue: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                            return emp ? `${emp.firstName} ${emp.lastName}`.trim() : row.assignedContractorName || row.assignedVendorName || "";
+                          },
+                          searchValue: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                            return emp ? `${emp.firstName} ${emp.lastName}`.trim() : row.assignedContractorName || row.assignedVendorName || "";
+                          },
+                          exportValue: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                            return emp ? `${emp.firstName} ${emp.lastName}`.trim() : row.assignedContractorName || row.assignedVendorName || "";
+                          },
+                          cell: (row) => {
+                            if (row.assignedEmployeeName) return row.assignedEmployeeName;
+                            if (row.assignedEmployeeId) {
+                              const emp = employees.find((item) => item.id === row.assignedEmployeeId);
+                              if (emp) return `${emp.firstName} ${emp.lastName}`.trim();
+                            }
+                            if (row.assignedContractorName) return row.assignedContractorName;
+                            if (row.assignedVendorName) return row.assignedVendorName;
+                            return "Unassigned";
+                          },
+                        },
+                        {
+                          id: "due",
+                          header: "Due",
+                          sortValue: (row) => row.dueAt,
+                          searchValue: (row) => formatDate(row.dueAt),
+                          exportValue: (row) => formatDate(row.dueAt),
+                          cell: (row) => formatDate(row.dueAt),
+                        },
+                        {
+                          id: "status",
+                          header: "Status",
+                          sortValue: (row) => row.status,
+                          searchValue: (row) => crmReminderStatusLabel(row.status),
+                          exportValue: (row) => crmReminderStatusLabel(row.status),
+                          cell: (row) => (
+                            <StatusPill
+                              label={
+                                row.status === "open" && reminderIsOverdue(row)
+                                  ? "Overdue"
+                                  : crmReminderStatusLabel(row.status)
+                              }
+                              tone={row.status === "done" ? "success" : reminderIsOverdue(row) ? "danger" : "warning"}
+                            />
+                          ),
+                        },
+                      ]}
+                      actions={(row) => [
+                        { label: "Open file", href: `/pro/dashboard/reminders/${row.id}` },
+                        // {
+                        //   label: "Edit reminder",
+                        //   onSelect: () => {
+                        //     setEditingReminder(row);
+                        //     setReminderOpen(true);
+                        //   },
+                        // },
+                        {
+                          label: row.status === "open" ? "Mark done" : "Reopen",
+                          onSelect: () => {
+                            const next = row.status === "open" ? "done" : "open";
+                            void handleReminderStatus(row, next);
+                          },
+                        },
+                        {
+                          label: "Delete",
+                          variant: "destructive",
+                          onSelect: () => setDeletingReminder(row),
+                        },
+                      ]}
+                    />
+                  ) : (
                     <div className="rounded-lg border border-dashed border-black/15 bg-card p-8 text-center">
                       <Bell className="mx-auto size-8 text-muted-foreground/60" />
                       <h4 className="mt-2 text-sm font-semibold">No reminders yet</h4>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Set a reminder so this inbound request does not sit.
+                        Set a reminder to follow up on this lead.
                       </p>
-                      <Button size="sm" className="mt-4" onClick={() => setReminderOpen(true)}>
+                      <Button size="sm" className="mt-4" onClick={() => { setEditingReminder(null); setReminderOpen(true); }}>
                         + Set reminder
                       </Button>
                     </div>
-                  ) : filteredReminders.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-6 text-center">
-                      <p className="text-sm text-muted-foreground">No reminders match &quot;{reminderSearch}&quot;</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2"
-                        onClick={() => {
-                          setReminderSearch("");
-                          setReminderPage(1);
-                        }}
-                      >
-                        Clear search
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <LinkedList
-                        empty="No reminders found."
-                        items={paginatedReminders.map((item) => ({
-                          id: item.id,
-                          href: `/pro/dashboard/reminders/${item.id}`,
-                          title: item.title,
-                          detail: `Due ${formatDate(item.dueAt)}${item.note ? ` · ${item.note}` : ""}`,
-                          pill: crmReminderStatusLabel(item.status),
-                          action: item.status === "open" ? () => void setReminderStatus(item.id, "done") : undefined,
-                        }))}
-                      />
-                      <PortalPagination
-                        page={reminderPage}
-                        pageSize={REMINDER_PAGE_SIZE}
-                        total={filteredReminders.length}
-                        onPageChange={setReminderPage}
-                        itemName="reminders"
-                      />
-                    </>
                   )}
                 </div>
               );
@@ -1675,10 +2016,14 @@ export function RequestDetailView({ id }: { id: string }) {
         }}
       />
       <CreateTaskDialog
-        open={taskOpen}
-        onOpenChange={setTaskOpen}
+        open={taskOpen || Boolean(editingTask)}
+        task={editingTask}
         subjectKind={request.customerId ? "customer" : undefined}
         subjectId={request.customerId || undefined}
+        onOpenChange={(next) => {
+          setTaskOpen(next);
+          if (!next) setEditingTask(null);
+        }}
         onCreated={(saved) => {
           if (saved) {
             setApiTasks((prev) => [saved, ...(prev || []).filter((t) => t.id !== saved.id)]);
@@ -1689,8 +2034,12 @@ export function RequestDetailView({ id }: { id: string }) {
         }}
       />
       <CreateReminderDialog
-        open={reminderOpen}
-        onOpenChange={setReminderOpen}
+        open={reminderOpen || Boolean(editingReminder)}
+        reminder={editingReminder}
+        onOpenChange={(next) => {
+          setReminderOpen(next);
+          if (!next) setEditingReminder(null);
+        }}
         subjectKind={request.customerId ? "customer" : undefined}
         subjectId={request.customerId || undefined}
         onCreated={(saved) => {
@@ -1707,6 +2056,36 @@ export function RequestDetailView({ id }: { id: string }) {
         onOpenChange={setNoteOpen}
         subjectKind="request"
         subjectId={request.id}
+      />
+      <DeleteConfirmDialog
+        open={Boolean(deletingTask)}
+        onOpenChange={(open) => {
+          if (!open && !deleteTaskLoading) setDeletingTask(null);
+        }}
+        title="Delete task?"
+        description={
+          deletingTask
+            ? `This will permanently remove “${deletingTask.number} · ${deletingTask.title}”.`
+            : "This will permanently remove this task."
+        }
+        confirmLabel="Delete"
+        loading={deleteTaskLoading}
+        onConfirm={confirmDeleteTask}
+      />
+      <DeleteConfirmDialog
+        open={Boolean(deletingReminder)}
+        onOpenChange={(open) => {
+          if (!open && !deleteReminderLoading) setDeletingReminder(null);
+        }}
+        title="Delete reminder?"
+        description={
+          deletingReminder
+            ? `This will permanently remove “${deletingReminder.title}”.`
+            : "This will permanently remove this reminder."
+        }
+        confirmLabel="Delete"
+        loading={deleteReminderLoading}
+        onConfirm={confirmDeleteReminder}
       />
     </>
   );
@@ -1932,38 +2311,6 @@ function MoneyCell({
       <p className={emphasize ? "mt-1 text-xl font-semibold tabular-nums text-primary" : "mt-1 text-xl font-semibold tabular-nums"}>
         {value}
       </p>
-    </div>
-  );
-}
-
-function LinkedList({
-  items,
-  empty,
-}: {
-  empty: string;
-  items: { id: string; href: string; title: string; detail: string; pill: string; action?: () => void }[];
-}) {
-  if (!items.length) return <p className="text-sm text-muted-foreground">{empty}</p>;
-  return (
-    <div className="space-y-2">
-      {items.map((item) => (
-        <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-card px-4 py-3 shadow-2xs">
-          <div>
-            <Link href={item.href} className="text-sm font-medium text-primary hover:underline">
-              {item.title}
-            </Link>
-            <p className="text-xs text-muted-foreground">{item.detail}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusPill label={item.pill} />
-            {item.action ? (
-              <Button size="sm" variant="outline" onClick={item.action}>
-                Mark done
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

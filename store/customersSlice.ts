@@ -1015,7 +1015,8 @@ const customersSlice = createSlice({
         },
       )
       .addMatcher(
-        (action): action is PayloadAction<PortalReminder> => action.type === "reminders/create/fulfilled",
+        (action): action is PayloadAction<PortalReminder> =>
+          action.type === "reminders/create/fulfilled" || action.type === "reminders/update/fulfilled",
         (state, action) => {
           const customerId =
             action.payload.customerId ||

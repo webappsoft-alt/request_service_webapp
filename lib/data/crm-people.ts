@@ -146,14 +146,18 @@ export const CRM_TASK_SUBJECT_KINDS: ReminderSubjectKind[] = [
 export type PortalReminder = {
   id: string;
   customerId?: string;
+  customerName?: string;
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
   title: string;
   note: string;
   dueAt: string;
   assignedEmployeeId?: string;
+  assignedEmployeeName?: string;
   assignedContractorId?: string;
+  assignedContractorName?: string;
   assignedVendorId?: string;
+  assignedVendorName?: string;
   status: CrmReminderStatus;
   createdAt: string;
 };
@@ -165,11 +169,15 @@ export type PortalTask = {
   note: string;
   jobId?: string;
   customerId?: string;
+  customerName?: string;
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
   assignedEmployeeId?: string;
+  assignedEmployeeName?: string;
   assignedContractorId?: string;
+  assignedContractorName?: string;
   assignedVendorId?: string;
+  assignedVendorName?: string;
   priority: CrmTaskPriority;
   status: CrmTaskStatus;
   dueAt: string;

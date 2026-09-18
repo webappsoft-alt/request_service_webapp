@@ -2,12 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   CreateContractorDialog,
   CreateReminderDialog,
   CreateVendorDialog,
 } from "@/components/portal/create-person-dialogs";
+import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
+import { FilterTabs } from "@/components/portal/filter-tabs";
 import { ReminderSubjectLink, useReminderLookups } from "@/components/portal/reminder-banner";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -32,8 +36,10 @@ import {
   reminderSubject,
   reminderSubjectKindLabel,
   type PortalContractor,
+  type PortalReminder,
   type PortalVendor,
 } from "@/lib/data/crm-people";
+import { withArchiveFilter } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -61,6 +67,7 @@ import {
   REMINDERS_DEFAULT_LIMIT,
   setRemindersPage,
   setRemindersSearch,
+  setRemindersStatus,
 } from "@/store/remindersSlice";
 import { fetchTeam } from "@/store/teamSlice";
 
@@ -503,7 +510,16 @@ export function RemindersView() {
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const employees = useApi && teamItems.length > 0 ? teamItems : crewEmployees;
   const lookups = useReminderLookups();
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status") ?? "";
+  const overdueOnly = statusParam === "overdue";
+  const archivedOnly = statusParam === "archived";
+
   const [open, setOpen] = useState(false);
+  const [editingReminder, setEditingReminder] = useState<PortalReminder | null>(null);
+  const [deletingReminder, setDeletingReminder] = useState<PortalReminder | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [busyStatusRowIds, setBusyStatusRowIds] = useState<string[]>([]);
 
   const slice = useAppSelector((state) => state.reminders);
   const {
@@ -536,6 +552,12 @@ export function RemindersView() {
 
   useEffect(() => {
     if (!useApi) return;
+    const targetStatus = overdueOnly || archivedOnly ? "" : statusParam;
+    dispatch(setRemindersStatus(targetStatus));
+  }, [dispatch, useApi, statusParam, overdueOnly, archivedOnly]);
+
+  useEffect(() => {
+    if (!useApi) return;
     let cancelled = false;
     void Promise.all([dispatch(fetchReminders()), dispatch(fetchTeam())]).finally(() => {
       if (!cancelled) setActionLoading(false);
@@ -543,7 +565,7 @@ export function RemindersView() {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, useApi, page, search]);
+  }, [dispatch, useApi, page, search, slice?.status]);
 
   useEffect(() => {
     return () => {
@@ -557,7 +579,13 @@ export function RemindersView() {
     dispatch(clearRemindersError());
   }, [dispatch, error, loading, useApi]);
 
-  const rows = useApi ? items : directoryReminders;
+  let rows = useApi ? items : directoryReminders;
+  if (overdueOnly) {
+    rows = rows.filter((item) => reminderIsOverdue(item) && item.status !== "done");
+  } else if (!useApi && statusParam) {
+    rows = rows.filter((item) => item.status === statusParam);
+  }
+
   const tableLoading = actionLoading || (useApi ? loading && items.length === 0 : false);
 
   function onSearchChange(value: string) {
@@ -575,22 +603,63 @@ export function RemindersView() {
     dispatch(setRemindersPage(nextPage));
   }
 
+  const handleToggleStatus = async (row: PortalReminder) => {
+    const next = row.status === "open" ? "done" : "open";
+    setBusyStatusRowIds((prev) => [...prev, row.id]);
+    try {
+      await dispatch(patchReminderStatus({ id: row.id, status: next })).unwrap();
+      toast.success(`Reminder marked as ${next}.`);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to update reminder status.");
+    } finally {
+      setBusyStatusRowIds((prev) => prev.filter((id) => id !== row.id));
+    }
+  };
+
+  const confirmDeleteReminder = async () => {
+    if (!deletingReminder) return;
+    setDeleteLoading(true);
+    try {
+      await dispatch(deleteReminderRecord(deletingReminder.id)).unwrap();
+      toast.success("Reminder removed.");
+      setDeletingReminder(null);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to delete reminder.");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   return (
     <PortalPage
       eyebrow="People / Reminders"
-      title={`Reminders (${useApi ? total : rows.length})`}
+      title={`Reminders (${useApi ? (overdueOnly ? rows.length : total) : rows.length})`}
       description="Follow-ups linked to a customer, employee, contractor, vendor, estimate, lead, or job."
       actions={
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={() => { setEditingReminder(null); setOpen(true); }}>
           + Set reminder
         </Button>
       }
     >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <FilterTabs
+          baseHref="/pro/dashboard/reminders"
+          value={statusParam}
+          options={withArchiveFilter([
+            { value: "", label: "All" },
+            { value: "open", label: "Open" },
+            { value: "done", label: "Done" },
+            { value: "overdue", label: "Overdue" },
+          ])}
+        />
+      </div>
+
       <PortalDataTable
         filename="reminders"
         countLabel="Reminders"
         searchPlaceholder="Search reminders"
         loading={tableLoading}
+        busyRowIds={busyStatusRowIds}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
@@ -601,7 +670,7 @@ export function RemindersView() {
             : "No reminders yet. Set your first reminder."
         }
         serverPagination={
-          useApi
+          useApi && !overdueOnly
             ? {
                 page,
                 pageSize: limit,
@@ -664,20 +733,29 @@ export function RemindersView() {
             id: "assigned",
             header: "Assigned",
             sortValue: (row) => {
+              if (row.assignedEmployeeName) return row.assignedEmployeeName;
               const employee = employees.find((item) => item.id === row.assignedEmployeeId);
-              return employee ? `${employee.lastName} ${employee.firstName}` : "";
+              return employee ? `${employee.lastName} ${employee.firstName}` : row.assignedContractorName || row.assignedVendorName || "";
             },
             searchValue: (row) => {
+              if (row.assignedEmployeeName) return row.assignedEmployeeName;
               const employee = employees.find((item) => item.id === row.assignedEmployeeId);
-              return employee ? `${employee.firstName} ${employee.lastName}` : "";
+              return employee ? `${employee.firstName} ${employee.lastName}` : row.assignedContractorName || row.assignedVendorName || "";
             },
             exportValue: (row) => {
+              if (row.assignedEmployeeName) return row.assignedEmployeeName;
               const employee = employees.find((item) => item.id === row.assignedEmployeeId);
-              return employee ? `${employee.firstName} ${employee.lastName}` : "";
+              return employee ? `${employee.firstName} ${employee.lastName}` : row.assignedContractorName || row.assignedVendorName || "";
             },
             cell: (row) => {
-              const employee = employees.find((item) => item.id === row.assignedEmployeeId);
-              return employee ? `${employee.firstName} ${employee.lastName}` : "—";
+              if (row.assignedEmployeeName) return row.assignedEmployeeName;
+              if (row.assignedEmployeeId) {
+                const employee = employees.find((item) => item.id === row.assignedEmployeeId);
+                if (employee) return `${employee.firstName} ${employee.lastName}`.trim();
+              }
+              if (row.assignedContractorName) return row.assignedContractorName;
+              if (row.assignedVendorName) return row.assignedVendorName;
+              return "Unassigned";
             },
           },
           {
@@ -699,46 +777,57 @@ export function RemindersView() {
           },
         ]}
         actions={(row) => [
-          { label: "Open", href: `/pro/dashboard/reminders/${row.id}` },
+          { label: "Open file", href: `/pro/dashboard/reminders/${row.id}` },
+          // {
+          //   label: "Edit reminder",
+          //   icon: <Pencil className="size-3.5" />,
+          //   onSelect: () => {
+          //     setEditingReminder(row);
+          //     setOpen(true);
+          //   },
+          // },
           {
             label: row.status === "open" ? "Mark done" : "Reopen",
-            onSelect: () => {
-              const next = row.status === "open" ? "done" : "open";
-              if (useApi) {
-                void dispatch(patchReminderStatus({ id: row.id, status: next }))
-                  .unwrap()
-                  .catch((err: string) => toast.error(err));
-                return;
-              }
-              setReminderStatus(row.id, next);
-            },
+            icon: row.status === "open" ? <CheckCircle2 className="size-3.5" /> : <RotateCcw className="size-3.5" />,
+            onSelect: () => void handleToggleStatus(row),
           },
           {
             label: "Delete",
             variant: "destructive",
-            onSelect: () => {
-              if (useApi) {
-                void dispatch(deleteReminderRecord(row.id))
-                  .unwrap()
-                  .then(() => toast.success("Reminder removed."))
-                  .catch((err: string) => toast.error(err));
-                return;
-              }
-              remove("reminder", row.id);
-              toast.success("Reminder removed.");
-            },
+            icon: <Trash2 className="size-3.5" />,
+            onSelect: () => setDeletingReminder(row),
           },
         ]}
       />
-      <CreateReminderDialog open={open} onOpenChange={setOpen} />
+
+      <CreateReminderDialog
+        open={open}
+        reminder={editingReminder}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setEditingReminder(null);
+        }}
+      />
+
+      <DeleteConfirmDialog
+        open={Boolean(deletingReminder)}
+        onOpenChange={(next) => {
+          if (!next) setDeletingReminder(null);
+        }}
+        title="Delete Reminder"
+        description={`Are you sure you want to delete "${deletingReminder?.title}"? This action cannot be undone.`}
+        loading={deleteLoading}
+        onConfirm={confirmDeleteReminder}
+      />
     </PortalPage>
   );
 }
 
 export function ReminderDetailView({ id }: { id: string }) {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const useApi = useProviderApi();
-  const { reminders: directoryReminders, setReminderStatus } = useCrmDirectory();
+  const { reminders: directoryReminders, setReminderStatus, remove } = useCrmDirectory();
   const { employees: crewEmployees } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const reminderItems = useAppSelector((state) => state.reminders?.items ?? []);
@@ -747,6 +836,11 @@ export function ReminderDetailView({ id }: { id: string }) {
   const lookups = useReminderLookups();
   const reminder = reminders.find((item) => item.id === id);
   const pending = useCrmRecordPending();
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   useEffect(() => {
     if (!useApi) return;
@@ -769,66 +863,135 @@ export function ReminderDetailView({ id }: { id: string }) {
   const linkedName = lookups.label(subject.kind, subject.id);
   const overdue = reminderIsOverdue(reminder);
 
-  function toggleStatus() {
+  async function toggleStatus() {
+    if (statusUpdating) return;
     const next = reminder!.status === "open" ? "done" : "open";
-    if (useApi) {
-      void dispatch(patchReminderStatus({ id: reminder!.id, status: next }))
-        .unwrap()
-        .catch((err: string) => toast.error(err));
-      return;
+    setStatusUpdating(true);
+    try {
+      await dispatch(patchReminderStatus({ id: reminder!.id, status: next })).unwrap();
+      toast.success(`Reminder marked as ${next}.`);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to update reminder status.");
+    } finally {
+      setStatusUpdating(false);
     }
-    setReminderStatus(reminder!.id, next);
+  }
+
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await dispatch(deleteReminderRecord(reminder!.id)).unwrap();
+      toast.success("Reminder removed.");
+      router.push("/pro/dashboard/reminders");
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to delete reminder.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
-    <RecordWorkspace
-      href={`/pro/dashboard/reminders/${reminder.id}`}
-      label={reminder.title}
-      kind="reminder"
-      tabs={[
-        { id: "profile", label: "Details" },
-        { id: "linked", label: "Linked record" },
-      ]}
-      badge={
-        <StatusPill
-          label={overdue ? "Overdue" : crmReminderStatusLabel(reminder.status)}
-          tone={reminder.status === "done" ? "success" : overdue ? "danger" : "warning"}
-        />
-      }
-      actions={
-        <Button size="sm" onClick={toggleStatus}>
-          {reminder.status === "open" ? "Mark done" : "Reopen"}
-        </Button>
-      }
-    >
-      {(tab) => {
-        if (tab === "linked") {
+    <>
+      <RecordWorkspace
+        href={`/pro/dashboard/reminders/${reminder.id}`}
+        label={reminder.title}
+        kind="reminder"
+        tabs={[
+          { id: "profile", label: "Details" },
+          { id: "linked", label: "Linked record" },
+        ]}
+        badge={
+          <StatusPill
+            label={overdue ? "Overdue" : crmReminderStatusLabel(reminder.status)}
+            tone={reminder.status === "done" ? "success" : overdue ? "danger" : "warning"}
+          />
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)} className="gap-1.5">
+              <Pencil className="size-3.5" />
+              Edit
+            </Button>
+            <Button size="sm" onClick={() => void toggleStatus()} disabled={statusUpdating} className="gap-1.5">
+              {statusUpdating ? (
+                <>
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  Updating…
+                </>
+              ) : reminder.status === "open" ? (
+                <>
+                  <CheckCircle2 className="size-3.5" />
+                  Mark done
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="size-3.5" />
+                  Reopen
+                </>
+              )}
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)} className="gap-1.5">
+              <Trash2 className="size-3.5" />
+              Delete
+            </Button>
+          </div>
+        }
+      >
+        {(tab) => {
+          if (tab === "linked") {
+            return (
+              <div className="text-sm">
+                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  {reminderSubjectKindLabel(subject.kind)}
+                </p>
+                <div className="mt-1">
+                  <ReminderSubjectLink kind={subject.kind} id={subject.id} name={linkedName} />
+                </div>
+                <p className="mt-2 text-muted-foreground">
+                  This reminder also appears as a warning banner on that file.
+                </p>
+              </div>
+            );
+          }
           return (
-            <div className="text-sm">
-              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                {reminderSubjectKindLabel(subject.kind)}
-              </p>
-              <ReminderSubjectLink kind={subject.kind} id={subject.id} name={linkedName} />
-              <p className="mt-2 text-muted-foreground">
-                This reminder also appears as a warning banner on that file.
-              </p>
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <Fact label="Due" value={formatDate(reminder.dueAt)} />
+              <Fact label="Status" value={overdue ? "Overdue" : crmReminderStatusLabel(reminder.status)} />
+              <Fact
+                label="Assigned"
+                value={
+                  reminder.assignedEmployeeName ||
+                  (employee ? `${employee.firstName} ${employee.lastName}`.trim() : "") ||
+                  reminder.assignedContractorName ||
+                  reminder.assignedVendorName ||
+                  "—"
+                }
+              />
+              <Fact label="Created" value={formatDate(reminder.createdAt)} />
+              <div className="sm:col-span-2">
+                <Fact label="Note" value={reminder.note || "—"} />
+              </div>
             </div>
           );
-        }
-        return (
-          <div className="grid gap-3 text-sm sm:grid-cols-2">
-            <Fact label="Due" value={formatDate(reminder.dueAt)} />
-            <Fact label="Status" value={overdue ? "Overdue" : crmReminderStatusLabel(reminder.status)} />
-            <Fact label="Linked to" value={`${reminderSubjectKindLabel(subject.kind)} · ${linkedName}`} />
-            <Fact label="Assigned" value={employee ? `${employee.firstName} ${employee.lastName}` : "—"} />
-            <Fact label="Created" value={formatDate(reminder.createdAt)} />
-            <div className="sm:col-span-2">
-              <Fact label="Note" value={reminder.note || "—"} />
-            </div>
-          </div>
-        );
-      }}
-    </RecordWorkspace>
+        }}
+      </RecordWorkspace>
+
+      <CreateReminderDialog
+        open={editOpen}
+        reminder={reminder}
+        onOpenChange={setEditOpen}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete Reminder"
+        description={`Are you sure you want to delete "${reminder.title}"? This action cannot be undone.`}
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
+    </>
   );
 }
 

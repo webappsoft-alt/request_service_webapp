@@ -61,11 +61,17 @@ import {
   reminderSubjectKindLabel,
 } from "@/lib/data/crm-people";
 import { todayISO } from "@/components/portal/work-builders";
+import { Loader2 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { createContractorRecord, updateContractorRecord } from "@/store/contractorsSlice";
 import { createVendorRecord, updateVendorRecord } from "@/store/vendorsSlice";
-import { createReminderRecord, upsertReminderItem } from "@/store/remindersSlice";
+import {
+  createReminderRecord,
+  updateReminderRecord,
+  patchReminderStatus,
+  upsertReminderItem,
+} from "@/store/remindersSlice";
 import {
   createCustomerTask,
   updateCustomerTask,
@@ -832,6 +838,7 @@ export function CreateReminderDialog({
   subjectKind,
   subjectId,
   customerId,
+  reminder,
   onCreated,
 }: {
   open: boolean;
@@ -839,6 +846,7 @@ export function CreateReminderDialog({
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
   customerId?: string;
+  reminder?: PortalReminder | null;
   onCreated?: (reminder: PortalReminder) => void;
 }) {
   const dispatch = useAppDispatch();
@@ -853,13 +861,15 @@ export function CreateReminderDialog({
   const crm = useCrmApiData();
   const lookups = useReminderLookups();
 
-  const resolveKind = (sk?: ReminderSubjectKind): ReminderSubjectKind => {
+  const resolveKind = (sk?: ReminderSubjectKind, r?: PortalReminder | null): ReminderSubjectKind => {
+    if (r?.subjectKind && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(r.subjectKind)) return r.subjectKind;
+    if (r?.customerId) return "customer";
     if (sk && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(sk)) return sk;
     return "customer";
   };
 
-  const initialKind = resolveKind(subjectKind ?? (customerId ? "customer" : undefined));
-  const initialId = subjectId ?? customerId ?? "";
+  const initialKind = resolveKind(subjectKind ?? (customerId ? "customer" : undefined), reminder);
+  const initialId = reminder?.subjectId ?? reminder?.customerId ?? subjectId ?? customerId ?? "";
 
   const [kind, setKind] = useState<ReminderSubjectKind>(initialKind);
   const [selectedId, setSelectedId] = useState(initialId);
@@ -895,6 +905,19 @@ export function CreateReminderDialog({
 
   useEffect(() => {
     if (!open) return;
+    if (reminder) {
+      const nextKind = resolveKind(subjectKind, reminder);
+      const nextId = reminder.subjectId ?? reminder.customerId ?? subjectId ?? "";
+      setKind(nextKind);
+      setSelectedId(nextId);
+      setTitle(reminder.title ?? "");
+      setNote(reminder.note ?? "");
+      setDueAt(reminder.dueAt ? reminder.dueAt.slice(0, 10) : "");
+      setAssignedEmployeeId(reminder.assignedEmployeeId ?? "");
+      setStatus(reminder.status ?? "open");
+      setSaving(false);
+      return;
+    }
     const nextKind = resolveKind(subjectKind ?? (customerId ? "customer" : undefined));
     const nextId = subjectId ?? customerId ?? "";
     setKind(nextKind);
@@ -905,7 +928,7 @@ export function CreateReminderDialog({
     setAssignedEmployeeId("");
     setStatus("open");
     setSaving(false);
-  }, [open, subjectKind, subjectId, customerId]);
+  }, [open, reminder, subjectKind, subjectId, customerId]);
 
   const fallbackChoices = lookups.options(kind);
   const baseRecordOptions = useApi
@@ -937,8 +960,8 @@ export function CreateReminderDialog({
     const linkedId = selectedId;
     if (!title.trim() || !linkedId) return;
 
-    const reminder: PortalReminder = {
-      id: `rem_${provider.id}_new_${Date.now()}`,
+    const payload: PortalReminder = {
+      id: reminder?.id ?? `rem_${provider.id}_new_${Date.now()}`,
       subjectKind: linkedKind,
       subjectId: linkedId,
       customerId: linkedKind === "customer" ? linkedId : undefined,
@@ -947,33 +970,20 @@ export function CreateReminderDialog({
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
       assignedEmployeeId: assignedEmployeeId || undefined,
       status,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: reminder?.createdAt ?? new Date().toISOString().slice(0, 10),
     };
 
     setSaving(true);
     try {
-      let saved = reminder;
-      if (useApi) {
-        saved = await dispatch(createReminderRecord(reminder)).unwrap();
-        crm.addReminder(saved);
-        if (saved.customerId) {
-          dispatch(upsertCustomerReminder({ customerId: saved.customerId, item: saved }));
-        }
-        if (crm.enabled) void crm.refresh({ silent: true });
+      let saved: PortalReminder;
+      if (reminder?.id) {
+        saved = await dispatch(updateReminderRecord({ id: reminder.id, reminder: payload })).unwrap();
       } else {
-        const created = await Promise.resolve(addReminder(reminder));
-        saved = created ?? reminder;
-        crm.addReminder(saved);
+        saved = await dispatch(createReminderRecord(payload)).unwrap();
       }
-      // Keep FileNotices / CRM directory banners in sync without a full page refresh.
-      if (crm.enabled) {
-        crm.upsertReminder(saved);
-      }
-      if (saved.subjectKind === "customer" && saved.subjectId) {
-        dispatch(upsertCustomerReminder({ customerId: saved.subjectId, item: saved }));
-      }
+      if (crm.enabled) void crm.refresh({ silent: true });
       onCreated?.(saved);
-      toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
+      toast.success(reminder?.id ? "Reminder updated." : `Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
       onOpenChange(false);
     } catch (error) {
       toast.error(
@@ -1006,7 +1016,7 @@ export function CreateReminderDialog({
     >
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>Set reminder</DialogTitle>
+          <DialogTitle>{reminder ? "Edit reminder" : "Set reminder"}</DialogTitle>
           <DialogDescription>
             Link a follow-up to a customer, job, estimate, contractor, or vendor.
           </DialogDescription>
@@ -1134,7 +1144,16 @@ export function CreateReminderDialog({
             disabled={saving || !title.trim() || !linkedReady}
             onClick={() => void save()}
           >
-            {saving ? "Saving…" : "Save reminder"}
+            {saving ? (
+              <>
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                Saving…
+              </>
+            ) : reminder ? (
+              "Save changes"
+            ) : (
+              "Save reminder"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1294,7 +1313,7 @@ export function CreateTaskDialog({
     setSaving(true);
     try {
       let saved: PortalTask;
-      if (task?.id && useApi) {
+      if (task?.id) {
         if (linkedKind === "customer" && linkedId) {
           saved = await dispatch(
             updateCustomerTask({ id: task.id, task: payload, customerId: linkedId }),
@@ -1306,12 +1325,7 @@ export function CreateTaskDialog({
             dispatch(upsertCustomerTask({ customerId: saved.customerId, item: saved }));
           }
         }
-        crm.patchTask(task.id, saved);
-        if (crm.enabled) void crm.refresh({ silent: true });
-      } else if (task?.id) {
-        saved = payload;
-        crm.patchTask(task.id, payload);
-      } else if (useApi) {
+      } else {
         if (linkedKind === "customer" && linkedId) {
           saved = await dispatch(createCustomerTask(payload)).unwrap();
           dispatch(upsertTaskItem(saved));
@@ -1321,18 +1335,13 @@ export function CreateTaskDialog({
             dispatch(upsertCustomerTask({ customerId: saved.customerId, item: saved }));
           }
         }
-        crm.addTask(saved);
-        if (crm.enabled) void crm.refresh({ silent: true });
-      } else {
-        const created = await Promise.resolve(addTask(payload));
-        saved = created ?? payload;
-        crm.addTask(saved);
       }
+      if (crm.enabled) void crm.refresh({ silent: true });
       onCreated?.(saved);
       toast.success(
         task?.id
-          ? `${saved.number} updated.`
-          : `${saved.number} added on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`,
+          ? `${saved.number || "Task"} updated.`
+          : `${saved.number || "Task"} added on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`,
       );
       onOpenChange(false);
     } catch (error) {
@@ -1518,7 +1527,16 @@ export function CreateTaskDialog({
             disabled={saving || !title.trim() || !linkedReady}
             onClick={() => void save()}
           >
-            {saving ? "Saving…" : "Save task"}
+            {saving ? (
+              <>
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                Saving…
+              </>
+            ) : task ? (
+              "Save changes"
+            ) : (
+              "Save task"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

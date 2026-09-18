@@ -1222,12 +1222,42 @@ export function mapPayment(raw: unknown): Payment | null {
   };
 }
 
+function extractPersonName(raw: unknown): string {
+  if (!raw) return "";
+  if (typeof raw === "string") return raw.trim();
+  const rec = asRecord(raw);
+  if (!rec) return "";
+  const name = trimmed(rec.name) || trimmed(rec.displayName) || trimmed(rec.fullName) || trimmed(rec.companyName);
+  if (name) return name;
+  const firstName = trimmed(rec.firstName);
+  const lastName = trimmed(rec.lastName);
+  const combined = `${firstName} ${lastName}`.trim();
+  if (combined) return combined;
+  return "";
+}
+
 export function mapPortalTask(raw: unknown): PortalTask | null {
   const record = asRecord(raw);
   if (!record) return null;
 
   const id = crmIdOf(record);
   if (!id) return null;
+
+  const assignedEmployeeName =
+    extractPersonName(record.assignedEmployeeId) ||
+    trimmed(record.assignedEmployeeName) ||
+    trimmed(record.employeeName);
+  const assignedContractorName =
+    extractPersonName(record.assignedContractorId) ||
+    trimmed(record.assignedContractorName) ||
+    trimmed(record.contractorName);
+  const assignedVendorName =
+    extractPersonName(record.assignedVendorId) ||
+    trimmed(record.assignedVendorName) ||
+    trimmed(record.vendorName);
+  const customerName =
+    extractPersonName(record.customerId) ||
+    trimmed(record.customerName);
 
   return {
     id,
@@ -1236,11 +1266,15 @@ export function mapPortalTask(raw: unknown): PortalTask | null {
     note: trimmed(record.note),
     jobId: crmIdOf(record.jobId) || undefined,
     customerId: crmIdOf(record.customerId) || undefined,
+    customerName: customerName || undefined,
     subjectKind: trimmed(record.subjectKind) as PortalTask["subjectKind"],
     subjectId: crmIdOf(record.subjectId) || undefined,
     assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || undefined,
+    assignedEmployeeName: assignedEmployeeName || undefined,
     assignedContractorId: crmIdOf(record.assignedContractorId) || undefined,
+    assignedContractorName: assignedContractorName || undefined,
     assignedVendorId: crmIdOf(record.assignedVendorId) || undefined,
+    assignedVendorName: assignedVendorName || undefined,
     priority:
       trimmed(record.priority) === "low" ||
       trimmed(record.priority) === "high" ||
@@ -1265,17 +1299,37 @@ export function mapPortalReminder(raw: unknown): PortalReminder | null {
   const id = crmIdOf(record);
   if (!id) return null;
 
+  const assignedEmployeeName =
+    extractPersonName(record.assignedEmployeeId) ||
+    trimmed(record.assignedEmployeeName) ||
+    trimmed(record.employeeName);
+  const assignedContractorName =
+    extractPersonName(record.assignedContractorId) ||
+    trimmed(record.assignedContractorName) ||
+    trimmed(record.contractorName);
+  const assignedVendorName =
+    extractPersonName(record.assignedVendorId) ||
+    trimmed(record.assignedVendorName) ||
+    trimmed(record.vendorName);
+  const customerName =
+    extractPersonName(record.customerId) ||
+    trimmed(record.customerName);
+
   return {
     id,
     customerId: crmIdOf(record.customerId) || undefined,
+    customerName: customerName || undefined,
     subjectKind: trimmed(record.subjectKind) as PortalReminder["subjectKind"],
     subjectId: crmIdOf(record.subjectId) || undefined,
     title: trimmed(record.title) || "Reminder",
     note: trimmed(record.note),
     dueAt: toIsoString(record.dueAt) || toIsoString(record.createdAt),
     assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || undefined,
+    assignedEmployeeName: assignedEmployeeName || undefined,
     assignedContractorId: crmIdOf(record.assignedContractorId) || undefined,
+    assignedContractorName: assignedContractorName || undefined,
     assignedVendorId: crmIdOf(record.assignedVendorId) || undefined,
+    assignedVendorName: assignedVendorName || undefined,
     status: trimmed(record.status) === "done" ? "done" : "open",
     createdAt: toIsoString(record.createdAt),
   };

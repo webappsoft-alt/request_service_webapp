@@ -166,7 +166,7 @@ export type CrmEstimateShareResult = {
   emailError?: string | null;
 };
 
-const DEFAULT_LIST_LIMIT = 10;
+const DEFAULT_LIST_LIMIT = 20;
 
 function normalizePreferredTimeWindow(value?: string) {
   const raw = String(value || "").trim().toLowerCase();
@@ -1426,6 +1426,18 @@ export async function queryReminders(query: CrmListQuery = {}) {
 
 export async function createReminder(reminder: PortalReminder) {
   const response = await postData(providerCrmApi.reminders, reminderPayload(reminder));
+  invalidateGetCache(providerCrmApi.reminders);
+  return mapCrmEntity(response, mapPortalReminder);
+}
+
+export async function updateReminder(id: string, reminder: PortalReminder) {
+  const payload = reminderPayload(reminder);
+  let response;
+  try {
+    response = await putData(providerCrmApi.reminder(id), payload);
+  } catch {
+    response = await patchData(providerCrmApi.reminder(id), payload);
+  }
   invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }

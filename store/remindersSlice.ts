@@ -8,13 +8,14 @@ import {
   createReminder,
   deleteReminder,
   queryReminders,
+  updateReminder,
   updateReminderStatus,
 } from "@/lib/api/crm-client";
 import type { PortalReminder } from "@/lib/data/crm-people";
 import { deleteCustomerReminder } from "./customersSlice";
 
 /** List page size for GET /provider/reminders */
-export const REMINDERS_DEFAULT_LIMIT = 10;
+export const REMINDERS_DEFAULT_LIMIT = 20;
 
 type RemindersState = {
   items: PortalReminder[];
@@ -92,6 +93,20 @@ export const createReminderRecord = createAsyncThunk<
     const created = await createReminder(payload);
     if (!created) return rejectWithValue("Reminder was created but could not be read.");
     return created;
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
+export const updateReminderRecord = createAsyncThunk<
+  PortalReminder,
+  { id: string; reminder: PortalReminder },
+  { rejectValue: string }
+>("reminders/update", async ({ id, reminder }, { rejectWithValue }) => {
+  try {
+    const updated = await updateReminder(id, reminder);
+    if (!updated) return rejectWithValue("Reminder was updated but could not be read.");
+    return updated;
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }
@@ -202,6 +217,21 @@ const remindersSlice = createSlice({
       .addCase(createReminderRecord.rejected, (state, action) => {
         state.mutating = false;
         state.error = action.payload || "Failed to create reminder.";
+      })
+      .addCase(updateReminderRecord.pending, (state) => {
+        state.mutating = true;
+      })
+      .addCase(updateReminderRecord.fulfilled, (state, action) => {
+        state.mutating = false;
+        state.pagesCache = {};
+        const updated = action.payload;
+        state.items = state.items.map((item) =>
+          item.id === updated.id ? { ...item, ...updated } : item,
+        );
+      })
+      .addCase(updateReminderRecord.rejected, (state, action) => {
+        state.mutating = false;
+        state.error = action.payload || "Failed to update reminder.";
       })
       .addCase(patchReminderStatus.fulfilled, (state, action) => {
         const updated = action.payload;

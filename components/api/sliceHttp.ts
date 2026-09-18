@@ -25,6 +25,9 @@ export function patchData(...args: Parameters<typeof import("@/components/api/ap
   return http().patchData(...args);
 }
 
-export function deleteData(...args: Parameters<typeof import("@/components/api/apiFuntions").deleteData>) {
-  return http().deleteData(...args);
+export function deleteData<T = unknown>(
+  endpoint: string,
+  options?: Parameters<typeof import("@/components/api/apiFuntions").deleteData>[1],
+): Promise<T> {
+  return http().deleteData<T>(endpoint, options);
 }

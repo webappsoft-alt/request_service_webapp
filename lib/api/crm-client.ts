@@ -62,8 +62,11 @@ function patchData(...args: Parameters<typeof import("@/components/api/apiFuntio
   return http().patchData(...args);
 }
 
-function deleteData(...args: Parameters<typeof import("@/components/api/apiFuntions").deleteData>) {
-  return http().deleteData(...args);
+function deleteData<T = unknown>(
+  endpoint: string,
+  options?: Parameters<typeof import("@/components/api/apiFuntions").deleteData>[1],
+): Promise<T> {
+  return http().deleteData<T>(endpoint, options);
 }
 
 function invalidateGetCache(...args: Parameters<typeof import("@/components/api/apiFuntions").invalidateGetCache>) {

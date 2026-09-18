@@ -17,7 +17,7 @@ import {
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ArchiveBadge, ConfirmArchiveDialog } from "@/components/portal/archive-control";
+import { ArchiveBadge, ArchiveButton, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import {
   NotesPanel,
   CreateNoteDialogForSubject,
@@ -271,7 +271,6 @@ export function EstimateDetailView({ id }: { id: string }) {
     approval ||
     estimate.signature ||
     estimate.status === "accepted" ||
-    estimate.status === "approved" ||
     estimate.status === "converted_to_job",
   );
   const canShare = estimateCanShare(estimate.status);
@@ -920,7 +919,8 @@ export function EstimateDetailView({ id }: { id: string }) {
           const techName = selectedTech
             ? employeeName(selectedTech)
             : assignment.employeeId || "";
-          const currentVisit = siteVisit || estimate.siteVisit;
+          const currentVisit =
+            siteVisit || siteVisitFromRecord(estimate.siteVisit);
           const visitIso = assignment.date
             ? `${assignment.date}T00:00:00.000Z`
             : currentVisit?.visitedAt || new Date().toISOString();

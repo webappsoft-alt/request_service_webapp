@@ -1,6 +1,10 @@
 import type {
   PortalContractor,
   PortalCustomerCrm,
+  CustomerDetailPayload,
+  CustomerDossier,
+  CustomerDossierJobSummary,
+  CustomerTimelineEvent,
   PortalReminder,
   PortalTask,
   PortalVendor,
@@ -179,15 +183,20 @@ function firstValue<T>(...values: T[]): T | undefined {
 
 function mapServiceAddress(value: unknown, fallbackId = ""): ServiceAddress {
   const record = asRecord(value) ?? {};
+  const coords = Array.isArray(record.coordinates) ? record.coordinates : null;
+  const lng = numberValue(record.longitude ?? record.lng ?? coords?.[0], Number.NaN);
+  const lat = numberValue(record.latitude ?? record.lat ?? coords?.[1], Number.NaN);
   return {
     id: crmIdOf(record) || fallbackId || `addr_${Math.random().toString(36).slice(2, 10)}`,
     label: trimmed(record.label) || undefined,
-    street: trimmed(record.street),
+    street: trimmed(record.street) || trimmed(record.address),
     unit: trimmed(record.unit) || undefined,
     city: trimmed(record.city),
     state: trimmed(record.state),
     zip: trimmed(record.zip),
     country: "US",
+    latitude: Number.isFinite(lat) ? lat : null,
+    longitude: Number.isFinite(lng) ? lng : null,
   };
 }
 
@@ -438,6 +447,72 @@ export function mapPortalCustomerCrm(raw: unknown): PortalCustomerCrm | null {
     tags: toStringArray(record.tags),
     notes: trimmed(record.notes),
     amountOwing: numberValue(record.amountOwing ?? record.balanceDue),
+  };
+}
+
+function mapDossierJobSummary(raw: unknown): CustomerDossierJobSummary | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = crmIdOf(record);
+  if (!id) return null;
+  return {
+    id,
+    number: trimmed(record.number),
+    title: trimmed(record.title),
+    status: trimmed(record.status),
+  };
+}
+
+export function mapCustomerDossier(raw: unknown): CustomerDossier {
+  const record = asRecord(raw) ?? {};
+  const mapList = (value: unknown) =>
+    asArray(value)
+      .map(mapDossierJobSummary)
+      .filter((item): item is CustomerDossierJobSummary => Boolean(item));
+  return {
+    balanceDue: numberValue(record.balanceDue),
+    totalInvoiced: numberValue(record.totalInvoiced),
+    totalPaid: numberValue(record.totalPaid),
+    estimatesCount: numberValue(record.estimatesCount),
+    jobsCount: numberValue(record.jobsCount),
+    invoicesCount: numberValue(record.invoicesCount),
+    activeJobs: mapList(record.activeJobs),
+    recentEstimates: mapList(record.recentEstimates),
+    recentJobs: mapList(record.recentJobs),
+    recentInvoices: mapList(record.recentInvoices),
+  };
+}
+
+/** GET /api/provider/customers/:id — nested customer + dossier. */
+export function mapCustomerDetail(response: unknown): CustomerDetailPayload | null {
+  const root = asRecord(response) ?? {};
+  const data = asRecord(root.data) ?? root;
+  const customer = mapPortalCustomerCrm(data.customer ?? data);
+  if (!customer) return null;
+  const dossier = mapCustomerDossier(data.dossier);
+  return {
+    customer: {
+      ...customer,
+      amountOwing: dossier.balanceDue || customer.amountOwing,
+    },
+    dossier,
+  };
+}
+
+export function mapCustomerTimelineEvent(raw: unknown): CustomerTimelineEvent | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = trimmed(record.id) || crmIdOf(record);
+  if (!id) return null;
+  return {
+    id,
+    type: trimmed(record.type),
+    title: trimmed(record.title),
+    description: trimmed(record.description),
+    status: trimmed(record.status),
+    actor: trimmed(record.actor) || "System",
+    timestamp: toIsoString(record.timestamp) || toIsoString(record.createdAt),
+    data: asRecord(record.data) ?? undefined,
   };
 }
 
@@ -1005,7 +1080,16 @@ export function mapJob(raw: unknown): Job | null {
   const id = crmIdOf(record);
   if (!id) return null;
 
+  const locationRecord = asRecord(record.location);
+  const locationHasAddress = Boolean(
+    locationRecord &&
+      (trimmed(locationRecord.address) ||
+        trimmed(locationRecord.street) ||
+        trimmed(locationRecord.city) ||
+        trimmed(locationRecord.zip)),
+  );
   const addressSource =
+    (locationHasAddress ? locationRecord : null) ??
     asRecord(asRecord(record.customerSnapshot)?.address) ??
     asRecord(record.address) ??
     {};

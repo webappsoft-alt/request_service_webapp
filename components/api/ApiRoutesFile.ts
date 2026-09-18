@@ -88,6 +88,7 @@ export const providerOrdersApi = {
 export const providerCrmApi = {
   customers: "provider/customers",
   customer: (id: string) => `provider/customers/${id}`,
+  customerTimeline: (id: string) => `provider/customers/${id}/timeline`,
   team: "provider/team",
   teamMember: (id: string) => `provider/team/${id}`,
   contractors: "provider/contractors",

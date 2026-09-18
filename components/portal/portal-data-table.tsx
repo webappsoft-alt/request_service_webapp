@@ -373,7 +373,7 @@ export function PortalDataTable<T>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length + (actions ? 1 : 0)}
-                  className="px-4 py-10 text-center text-muted-foreground"
+                  className="px-4 py-16 text-center text-sm text-muted-foreground"
                 >
                   {loading ? "\u00a0" : empty}
                 </TableCell>

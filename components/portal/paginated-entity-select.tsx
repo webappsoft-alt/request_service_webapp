@@ -16,6 +16,8 @@ type PaginatedEntitySelectProps = {
   options: PaginatedEntityOption[];
   disabled?: boolean;
   placeholder?: string;
+  /** Shown when value is set but not yet present in loaded options. */
+  selectedLabel?: string;
   loading?: boolean;
   loadingMore?: boolean;
   hasMore?: boolean;
@@ -39,6 +41,7 @@ export function PaginatedEntitySelect({
   options,
   disabled,
   placeholder = "Select…",
+  selectedLabel,
   loading,
   loadingMore,
   hasMore,
@@ -62,9 +65,11 @@ export function PaginatedEntitySelect({
   const selected = options.find((item) => item.id === value);
   const label = selected
     ? selected.label
-    : loading && !options.length
-      ? "Loading…"
-      : placeholder;
+    : value && selectedLabel
+      ? selectedLabel
+      : loading && !options.length
+        ? "Loading…"
+        : placeholder;
 
   function tryLoadMore() {
     if (!hasMoreRef.current || loadingMoreRef.current) return;
@@ -145,7 +150,7 @@ export function PaginatedEntitySelect({
           "flex h-10 w-full min-w-0 items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none",
           "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          !selected && "text-muted-foreground",
+          !selected && !selectedLabel && "text-muted-foreground",
         )}
       >
         <span className="line-clamp-1 flex-1">{label}</span>
@@ -164,13 +169,27 @@ export function PaginatedEntitySelect({
           role="listbox"
           aria-labelledby={id}
           ref={listRef}
-          className="absolute z-[1300] mt-1 max-h-60 w-full overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
+          className="absolute z-[1300] mt-1 max-h-48 w-full overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
         >
+          {loading && !options.length ? (
+            <div className="flex min-h-48 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+              <Spinner size="sm" label="Loading" />
+              <p className="text-xs text-muted-foreground">Loading…</p>
+            </div>
+          ) : null}
+
+          {!loading && !loadingMore && !options.length ? (
+            <div className="flex min-h-48 flex-col items-center justify-center gap-1 px-4 py-6 text-center">
+              <p className="text-sm font-medium text-foreground">No results</p>
+              <p className="max-w-[14rem] text-xs text-muted-foreground">{emptyLabel}</p>
+            </div>
+          ) : null}
+
           {options.map((option) => {
             const active = option.id === value;
             return (
               <button
-                key={option.id}
+                key={option.id || "__empty__"}
                 type="button"
                 role="option"
                 data-paginated-option=""
@@ -193,10 +212,6 @@ export function PaginatedEntitySelect({
             <div className="flex items-center justify-center py-2">
               <Spinner size="sm" label="Loading more" />
             </div>
-          ) : null}
-
-          {!loading && !loadingMore && !options.length ? (
-            <div className="px-3 py-3 text-sm text-muted-foreground">{emptyLabel}</div>
           ) : null}
         </div>
       ) : null}

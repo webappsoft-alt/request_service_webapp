@@ -161,7 +161,11 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
   const token = auth.token || (typeof window !== "undefined" ? getAuthToken() : null);
   const activeUser = user ?? (typeof window !== "undefined" ? getAuthUser() : null);
   const roleStr = String(activeUser?.role || auth.role || "").toLowerCase();
-  const isProvider = !roleStr || roleStr === "provider" || roleStr === "pro";
+  const isProvider =
+    !roleStr ||
+    roleStr === "provider" ||
+    roleStr === "pro" ||
+    roleStr === "admin";
   const enabled = Boolean(token) && isProvider;
 
   const refresh = useCallback(

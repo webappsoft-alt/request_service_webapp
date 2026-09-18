@@ -40,6 +40,44 @@ export type PortalCustomerCrm = Customer & {
   amountOwing: number;
 };
 
+/** Nested on GET /api/provider/customers/:id → data.dossier */
+export type CustomerDossierJobSummary = {
+  id: string;
+  number: string;
+  title: string;
+  status: string;
+};
+
+export type CustomerDossier = {
+  balanceDue: number;
+  totalInvoiced: number;
+  totalPaid: number;
+  estimatesCount: number;
+  jobsCount: number;
+  invoicesCount: number;
+  activeJobs: CustomerDossierJobSummary[];
+  recentEstimates: CustomerDossierJobSummary[];
+  recentJobs: CustomerDossierJobSummary[];
+  recentInvoices: CustomerDossierJobSummary[];
+};
+
+export type CustomerDetailPayload = {
+  customer: PortalCustomerCrm;
+  dossier: CustomerDossier;
+};
+
+/** GET /api/provider/customers/:id/timeline */
+export type CustomerTimelineEvent = {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  status: string;
+  actor: string;
+  timestamp: string;
+  data?: Record<string, unknown>;
+};
+
 export type PortalContractor = {
   id: string;
   number: string;

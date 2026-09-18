@@ -82,6 +82,7 @@ import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
+import { CenteredSpinner } from "@/components/ui/spinner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
@@ -979,18 +980,17 @@ export function JobDetailView({ id }: { id: string }) {
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [fetched, setFetched] = useState<Job | null>(null);
-  const [fetching, setFetching] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const allJobs = records.mergeJobs(jobs);
   const allEstimates = records.mergeEstimates(estimates);
   const allInvoices = records.mergeInvoices(invoices);
   const listed = allJobs.find((item) => item.id === id);
-  const seeded = listed ?? fetched;
+  // Prefer live GET /api/provider/jobs/:id over workspace list seed.
+  const seeded = fetched ?? listed;
   const job = seeded
     ? applyJobSettings(
-        {
-          ...seeded,
-          status: records.statusOf("job", seeded.id, seeded.status),
-        },
+        { ...seeded, status: records.statusOf("job", seeded.id, seeded.status) },
         settings,
       )
     : undefined;
@@ -1015,20 +1015,35 @@ export function JobDetailView({ id }: { id: string }) {
 
   useEffect(() => {
     setFetched(null);
+    setFetchError(null);
+    setFetching(true);
   }, [id]);
 
   useEffect(() => {
-    if (!id || listed || !crm.enabled) return;
+    if (!id) return;
     let cancelled = false;
     setFetching(true);
+    setFetchError(null);
+    // MD / CRM: GET /api/provider/jobs/:id
     void getJob(id)
       .then((item) => {
-        if (cancelled || !item) return;
+        if (cancelled) return;
+        if (!item) {
+          setFetched(null);
+          setFetchError("Job not found");
+          return;
+        }
         setFetched(item);
         records.cacheJob(item);
       })
-      .catch(() => {
-        if (!cancelled) setFetched(null);
+      .catch((error) => {
+        if (cancelled) return;
+        setFetched(null);
+        setFetchError(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load this job.",
+        );
       })
       .finally(() => {
         if (!cancelled) setFetching(false);
@@ -1036,15 +1051,22 @@ export function JobDetailView({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [crm.enabled, id, listed?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- records.cacheJob is stable enough; avoid refetch loops
+  }, [id]);
 
   if (!job) {
-    return pending || fetching || crm.refreshing ? (
-      <div className="flex min-h-[50vh] items-center justify-center py-12">
-        <Loader2 className="size-8 animate-spin text-primary" />
-      </div>
-    ) : (
-      <Missing title="Job not found" href="/pro/dashboard/jobs" />
+    if (pending || fetching || crm.refreshing) {
+      return (
+        <div className="border border-black/15 bg-card" aria-busy="true">
+          <CenteredSpinner className="min-h-[22rem]" />
+        </div>
+      );
+    }
+    return (
+      <Missing
+        title={fetchError || "Job not found"}
+        href="/pro/dashboard/jobs"
+      />
     );
   }
 

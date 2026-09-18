@@ -492,17 +492,22 @@ export function usePortalRecords() {
 
   const addJob = useCallback(
     (job: Job) => {
-      if (apiReady) {
+      // Match addEstimate: hit the API whenever the provider session is live.
+      if (crm.enabled) {
         return (async () => {
           const created = await createJobApi(job, crm.employees);
-          await crm.refresh();
-          return created;
+          const saved = created ?? job;
+          if (crm.ready) {
+            await crm.refresh({ silent: true });
+          }
+          return saved;
         })();
       }
       const current = readStore(key);
       writeStore(key, { ...current, jobs: [...current.jobs, job] });
+      return job;
     },
-    [apiReady, crm, key],
+    [crm, key],
   );
 
   const addInvoice = useCallback(

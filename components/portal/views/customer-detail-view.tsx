@@ -35,6 +35,7 @@ import {
 } from "@/components/portal/universal-notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
+import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { CrmMark } from "@/components/portal/crm-mark";
 import { CustomerEventCalendar } from "@/components/portal/customer-event-calendar";
 import { CustomerLocationMapLazy } from "@/components/portal/customer-location-map-lazy";
@@ -48,10 +49,14 @@ import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
+import { readCostLines } from "@/components/portal/use-job-costing";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { buildInvoice, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
+import { convertJobToInvoice as convertJobToInvoiceApi } from "@/lib/api/crm-client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import {
   DropdownMenu,
@@ -67,7 +72,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { queryEstimates } from "@/lib/api/crm-client";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   crmCustomerName,
   crmReminderStatusLabel,
@@ -77,12 +89,13 @@ import {
   noteMatches,
   reminderMatches,
   taskMatches,
+  type CustomerDossier,
+  type CustomerTimelineEvent,
   type PortalCustomerCrm,
   type PortalNote,
   type PortalReminder,
   type PortalTask,
 } from "@/lib/data/crm-people";
-import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 import {
   ESTIMATE_STATUS_FILTERS,
   estimateStatusLabel,
@@ -92,13 +105,44 @@ import {
   invoiceMatchesBoardFilter,
   invoiceStatusLabel,
   JOB_STATUS_FILTERS,
+  JOB_STATUSES,
   withArchiveFilter,
   jobStatusLabel,
+  minutesForWindow,
   requestStatusLabel,
+  type PortalCalendarEvent,
   type PortalRequest,
 } from "@/lib/data/portal";
+import type { Estimate, Invoice, Job, JobStatus, Payment } from "@/lib/types";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  clearCustomerDetail,
+  customerTabFilterKey,
+  deleteCustomerJob,
+  deleteCustomerReminder,
+  deleteCustomerTask,
+  fetchCustomerDetail,
+  fetchCustomerEstimates,
+  fetchCustomerInvoices,
+  fetchCustomerJobs,
+  fetchCustomerReminders,
+  fetchCustomerSchedule,
+  fetchCustomerTasks,
+  fetchCustomerTimeline,
+  patchCustomerJobStatus,
+  patchCustomerReminderStatus,
+  patchCustomerTaskStatus,
+  selectCustomerTabRows,
+  selectCustomerTabShowLoader,
+  updateCustomerDetail,
+  upsertCustomerEstimate,
+  upsertCustomerJob,
+  upsertCustomerReminder,
+  upsertCustomerTask,
+} from "@/store/customersSlice";
+import { useRouter } from "next/navigation";
 
 const TABS = [
   { id: "profile", label: "Profile", icon: UserRound },
@@ -113,11 +157,17 @@ const TABS = [
 ];
 
 export function CustomerDetailView({ id }: { id: string }) {
+  const dispatch = useAppDispatch();
   const { estimates, jobs, invoices, payments, requests, provider } = usePortalWorkspace();
-  const { customers, reminders, employees, tasks, notes, setReminderStatus, updateCustomer } = useCrmDirectory();
+  const { customers, reminders, employees, tasks, notes, updateCustomer } = useCrmDirectory();
   const crm = useCrmApiData();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
+  const detail = useAppSelector((state) => state.customers?.detail ?? null);
+  const dossier = useAppSelector((state) => state.customers?.dossier ?? null);
+  const detailLoading = useAppSelector((state) => Boolean(state.customers?.detailLoading));
+  const detailError = useAppSelector((state) => state.customers?.detailError ?? null);
+  const sliceItems = useAppSelector((state) => state.customers?.items ?? []);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -125,14 +175,25 @@ export function CustomerDetailView({ id }: { id: string }) {
   const [createJobOpen, setCreateJobOpen] = useState(false);
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [estimateFilter, setEstimateFilter] = useState("");
-  const [estimateRefreshKey, setEstimateRefreshKey] = useState(0);
   const [jobFilter, setJobFilter] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState("");
-  const customer = customers.find((item) => item.id === id);
   const pending = useCrmRecordPending();
 
+  useEffect(() => {
+    dispatch(clearCustomerDetail());
+    void dispatch(fetchCustomerDetail(id));
+    return () => {
+      dispatch(clearCustomerDetail());
+    };
+  }, [dispatch, id]);
+
+  const customer =
+    (detail?.id === id ? detail : null) ??
+    sliceItems.find((item) => item.id === id) ??
+    customers.find((item) => item.id === id);
+
   if (!customer) {
-    if (pending) {
+    if (detailLoading || pending) {
       return (
         <div className="border border-black/15 bg-card" aria-busy="true">
           <CenteredSpinner label="Loading customer" className="min-h-[22rem]" />
@@ -141,7 +202,7 @@ export function CustomerDetailView({ id }: { id: string }) {
     }
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">Customer not found</h1>
+        <h1 className="text-lg font-semibold">{detailError || "Customer not found"}</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/customers">Back to customers</Link>
         </Button>
@@ -149,6 +210,7 @@ export function CustomerDetailView({ id }: { id: string }) {
     );
   }
 
+  const amountOwing = dossier?.balanceDue ?? customer.amountOwing;
   const address = customer.addresses[0];
   const relatedEstimates = records.mergeEstimates(estimates).filter((item) => item.customerId === id);
   const relatedJobs = records.mergeJobs(jobs).filter((item) => item.customerId === id);
@@ -191,6 +253,27 @@ export function CustomerDetailView({ id }: { id: string }) {
   });
   const assigned = employees.find((item) => item.id === customer.preferredEmployeeId);
   const name = crmCustomerName(customer);
+  const file: PortalCustomerCrm = customer;
+
+  function saveCustomer() {
+    if (crm.enabled) {
+      void dispatch(updateCustomerDetail({ id: file.id, patch: file })).then((result) => {
+        if (updateCustomerDetail.fulfilled.match(result)) {
+          toast.success("Customer file saved.");
+          return;
+        }
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not save this customer.",
+        );
+      });
+      return;
+    }
+    void Promise.resolve(updateCustomer(file.id, file))
+      .then(() => toast.success("Customer file saved."))
+      .catch((error) =>
+        toast.error(error instanceof Error ? error.message : "Could not save this customer."),
+      );
+  }
 
   return (
     <>
@@ -200,9 +283,9 @@ export function CustomerDetailView({ id }: { id: string }) {
         kind="customer"
         tabs={TABS}
         badge={
-          customer.amountOwing > 0 ? (
+          amountOwing > 0 ? (
             <span className="rounded-sm bg-[#f4e4c4] px-2 py-1 text-[11px] font-semibold tracking-wide text-[#7a4a00] uppercase">
-              Balance owing {formatMoney(customer.amountOwing)}
+              Balance owing {formatMoney(amountOwing)}
             </span>
           ) : (
             <StatusPill label="Current" tone="success" />
@@ -213,16 +296,7 @@ export function CustomerDetailView({ id }: { id: string }) {
             <Button asChild variant="outline" size="sm">
               <Link href="/pro/dashboard/customers">Close</Link>
             </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                void Promise.resolve(updateCustomer(customer.id, customer))
-                  .then(() => toast.success("Customer file saved."))
-                  .catch((error) =>
-                    toast.error(error instanceof Error ? error.message : "Could not save this customer."),
-                  );
-              }}
-            >
+            <Button size="sm" onClick={saveCustomer}>
               Save
             </Button>
             <DropdownMenu>
@@ -240,7 +314,16 @@ export function CustomerDetailView({ id }: { id: string }) {
             </DropdownMenu>
           </>
         }
-        notice={<FileNotices kind="customer" id={customer.id} />}
+        notice={
+          <>
+            {customer.onStop ? (
+              <div className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                Account on Credit Hold
+              </div>
+            ) : null}
+            <FileNotices kind="customer" id={customer.id} />
+          </>
+        }
       >
         {(tab) => {
           switch (tab) {
@@ -329,8 +412,8 @@ export function CustomerDetailView({ id }: { id: string }) {
                       <div className="grid grid-cols-1 gap-px bg-black/5">
                         <MoneyCell
                           label="Amount owing"
-                          value={formatMoney(customer.amountOwing)}
-                          emphasize={customer.amountOwing > 0}
+                          value={formatMoney(amountOwing)}
+                          emphasize={amountOwing > 0}
                         />
                       </div>
                       <div className="grid sm:grid-cols-2">
@@ -384,144 +467,73 @@ export function CustomerDetailView({ id }: { id: string }) {
                   filter={estimateFilter}
                   onFilterChange={setEstimateFilter}
                   onCreate={() => setCreateEstimateOpen(true)}
-                  refreshKey={estimateRefreshKey}
                 />
               );
             case "jobs":
               return (
-                <div>
-                  <div className="mb-3 flex justify-end">
-                    <Button size="sm" onClick={() => setCreateJobOpen(true)}>
-                      Create job
-                    </Button>
-                  </div>
-                  <LocalFilterTabs
-                    value={jobFilter}
-                    onChange={setJobFilter}
-                    options={withArchiveFilter(JOB_STATUS_FILTERS)}
-                  />
-                  <PortalDataTable
-                    filename={`${customer.customerNumber}-jobs`}
-                    countLabel="Jobs"
-                    searchPlaceholder="Search jobs"
-                    empty="No jobs match this filter."
-                    rows={relatedJobs.filter((item) => matchesArchiveFilter(records, "job", item, jobFilter))}
-                    rowKey={(row) => row.id}
-                    rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
-                    columns={jobBoardColumns({
-                      estimates: records.mergeEstimates(estimates),
-                      requests,
-                      invoices: relatedInvoices,
-                      events,
-                      employeeLabel,
-                      customerName: (customerId) => {
-                        const match = customers.find((item) => item.id === customerId);
-                        return match ? crmCustomerName(match) : getPortalCustomerName(provider, customerId);
-                      },
-                    })}
-                    actions={(row) => [
-                      { label: "Open", href: `/pro/dashboard/jobs/${row.id}` },
-                      { label: "Convert to invoice", href: `/pro/dashboard/jobs/${row.id}` },
-                      { label: "Calendar", href: "/pro/dashboard/schedule" },
-                      archiveRowAction(records, "job", row.id, row.number),
-                    ]}
-                  />
-                </div>
+                <CustomerJobsPanel
+                  customerId={customer.id}
+                  customerNumber={customer.customerNumber}
+                  relatedJobs={relatedJobs}
+                  relatedInvoices={relatedInvoices}
+                  relatedEstimates={relatedEstimates}
+                  requests={requests}
+                  events={events}
+                  customers={customers}
+                  provider={provider}
+                  employeeLabel={employeeLabel}
+                  filter={jobFilter}
+                  onFilterChange={setJobFilter}
+                  onCreate={() => setCreateJobOpen(true)}
+                />
               );
             case "schedule":
-              return <CustomerEventCalendar events={relatedEvents} employeeLabel={employeeLabel} />;
+              return (
+                <CustomerSchedulePanel
+                  customerId={customer.id}
+                  fallbackEvents={relatedEvents}
+                  employeeLabel={employeeLabel}
+                />
+              );
             case "invoices":
               return (
-                <div>
-                  <LocalFilterTabs
-                    value={invoiceFilter}
-                    onChange={setInvoiceFilter}
-                    options={withArchiveFilter(INVOICE_BOARD_FILTERS)}
-                  />
-                  <PortalDataTable
-                    filename={`${customer.customerNumber}-invoices`}
-                    countLabel="Invoices"
-                    searchPlaceholder="Search by invoice # or job #"
-                    empty="No invoices match this filter."
-                    rows={relatedInvoices.filter((item) => {
-                      const archived = records.isArchived("invoice", item.id);
-                      if (invoiceFilter === "archived") return archived;
-                      return !archived && invoiceMatchesBoardFilter(item, invoiceFilter);
-                    })}
-                    rowKey={(row) => row.id}
-                    rowHref={(row) => `/pro/dashboard/invoices/${row.id}`}
-                    columns={invoiceBoardColumns({
-                      jobs: relatedJobs,
-                      estimates: relatedEstimates,
-                      requests: relatedRequests,
-                      hideCustomer: true,
-                      customerName: (customerId) => {
-                        const match = customers.find((item) => item.id === customerId);
-                        return match ? crmCustomerName(match) : getPortalCustomerName(provider, customerId);
-                      },
-                    })}
-                    actions={(row) => [
-                      { label: "Open", href: `/pro/dashboard/invoices/${row.id}` },
-                      ...(row.balanceDue > 0
-                        ? [
-                            {
-                              label: "Apply payment",
-                              onSelect: () => setPaying(row),
-                            },
-                          ]
-                        : []),
-                      ...(relatedJobs.some((job) => job.id === row.jobId)
-                        ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }]
-                        : []),
-                      archiveRowAction(records, "invoice", row.id, row.number),
-                    ]}
-                  />
-                  <ApplyPaymentDialog
-                    open={Boolean(paying)}
-                    onOpenChange={(open) => {
-                      if (!open) setPaying(null);
-                    }}
-                    invoice={paying}
-                  />
-                </div>
+                <CustomerInvoicesPanel
+                  customerId={customer.id}
+                  customerNumber={customer.customerNumber}
+                  relatedInvoices={relatedInvoices}
+                  relatedJobs={relatedJobs}
+                  relatedEstimates={relatedEstimates}
+                  relatedRequests={relatedRequests}
+                  customers={customers}
+                  provider={provider}
+                  filter={invoiceFilter}
+                  onFilterChange={setInvoiceFilter}
+                  paying={paying}
+                  onPayingChange={setPaying}
+                  onPaymentClosed={() => {
+                    void dispatch(fetchCustomerDetail(customer.id));
+                    void dispatch(
+                      fetchCustomerInvoices({
+                        customerId: customer.id,
+                        status: invoiceFilter || undefined,
+                        force: true,
+                      }),
+                    );
+                  }}
+                />
               );
             case "history":
               return (
-                <div className="space-y-4">
-                  <div className="grid gap-3 text-sm sm:grid-cols-4">
-                    <Stat label="Estimates" value={String(relatedEstimates.length)} />
-                    <Stat label="Jobs" value={String(relatedJobs.length)} />
-                    <Stat label="Invoices" value={String(relatedInvoices.length)} />
-                    <Stat label="Paid" value={formatMoney(relatedPayments.reduce((sum, item) => sum + item.amount, 0))} />
-                  </div>
-                  <div className="border border-black/15 bg-card">
-                    <div className="border-b border-black/10 px-4 py-3">
-                      <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Activity</p>
-                      <p className="text-sm text-muted-foreground">
-                        {history.length} events since {formatDate(customer.createdAt)} · {crmSourceLabel(customer.source)}
-                      </p>
-                    </div>
-                    <ol className="divide-y divide-black/10">
-                      {history.map((item) => (
-                        <li key={item.id} className="flex items-start gap-3 px-4 py-3">
-                          <span className={`mt-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${historyTone(item.kind)}`}>
-                            {historyKindLabel(item.kind)}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium">{item.title}</p>
-                            <p className="text-xs text-muted-foreground">{item.detail}</p>
-                            {item.href ? (
-                              <Link href={item.href} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
-                                Open
-                              </Link>
-                            ) : null}
-                          </div>
-                          <p className="shrink-0 text-xs text-muted-foreground">{formatDate(item.at)}</p>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </div>
+                <CustomerHistoryPanel
+                  customerId={customer.id}
+                  customer={customer}
+                  dossier={dossier}
+                  localHistory={history}
+                  localEstimateCount={relatedEstimates.length}
+                  localJobCount={relatedJobs.length}
+                  localInvoiceCount={relatedInvoices.length}
+                  localPaid={relatedPayments.reduce((sum, item) => sum + item.amount, 0)}
+                />
               );
             case "notes":
               return (
@@ -532,66 +544,14 @@ export function CustomerDetailView({ id }: { id: string }) {
                 />
               );
             case "tasks":
-              return (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-muted-foreground">
-                      {relatedTasks.length ? `${relatedTasks.length} tasks on this customer` : "No tasks yet"}
-                    </p>
-                    <SetTaskButton subjectKind="customer" subjectId={customer.id} />
-                  </div>
-                  {relatedTasks.length ? (
-                    relatedTasks.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
-                        <div>
-                          <Link href={`/pro/dashboard/tasks/${item.id}`} className="text-sm font-medium text-primary hover:underline">
-                            {item.number} · {item.title}
-                          </Link>
-                          <p className="text-xs text-muted-foreground">
-                            Due {formatDate(item.dueAt)} · {item.note}
-                          </p>
-                        </div>
-                        <StatusPill label={crmTaskStatusLabel(item.status)} />
-                      </div>
-                    ))
-                  ) : (
-                    <Empty>Create a task against this customer — permit, follow-up, or paperwork.</Empty>
-                  )}
-                </div>
-              );
+              return <CustomerTasksPanel customerId={customer.id} />;
             case "reminders":
               return (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-muted-foreground">
-                      {relatedReminders.length ? `${relatedReminders.length} reminders` : "No reminders yet"}
-                    </p>
-                    <Button size="sm" onClick={() => setReminderOpen(true)}>
-                      Set reminder
-                    </Button>
-                  </div>
-                  {relatedReminders.length ? (
-                    relatedReminders.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
-                        <div>
-                          <p className="text-sm font-medium">{item.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Due {formatDate(item.dueAt)} · {item.note}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setReminderStatus(item.id, item.status === "open" ? "done" : "open")}
-                        >
-                          {crmReminderStatusLabel(item.status)}
-                        </Button>
-                      </div>
-                    ))
-                  ) : (
-                    <Empty>Set a reminder to follow up on this customer.</Empty>
-                  )}
-                </div>
+                <CustomerRemindersPanel
+                  customerId={customer.id}
+                  relatedReminders={relatedReminders}
+                  onSetReminder={() => setReminderOpen(true)}
+                />
               );
             default:
               return <Empty>Unknown tab.</Empty>;
@@ -603,27 +563,53 @@ export function CustomerDetailView({ id }: { id: string }) {
         onOpenChange={setReminderOpen}
         subjectKind="customer"
         subjectId={customer.id}
+        onCreated={(item) => {
+          dispatch(upsertCustomerReminder({ customerId: customer.id, item }));
+        }}
       />
       <CreateTaskDialog
         open={taskOpen}
         onOpenChange={setTaskOpen}
         subjectKind="customer"
         subjectId={customer.id}
+        onCreated={(item) => {
+          dispatch(upsertCustomerTask({ customerId: customer.id, item }));
+          void dispatch(fetchCustomerTasks({ customerId: customer.id, force: true }));
+          void dispatch(fetchCustomerTimeline({ customerId: customer.id, force: true }));
+        }}
       />
       <CreateCustomerNoteDialog
         open={noteOpen}
-        onOpenChange={setNoteOpen}
+        onOpenChange={(next) => {
+          setNoteOpen(next);
+          if (!next) {
+            // Notes live in their own slice; timeline should refresh once after note create.
+            void dispatch(fetchCustomerTimeline({ customerId: customer.id, force: true }));
+          }
+        }}
         customerId={customer.id}
       />
       <CreateEstimateDialog
         open={createEstimateOpen}
-        onOpenChange={(next) => {
-          setCreateEstimateOpen(next);
-          if (!next) setEstimateRefreshKey((current) => current + 1);
-        }}
+        onOpenChange={setCreateEstimateOpen}
         customerId={customer.id}
+        onCreated={(item) => {
+          dispatch(upsertCustomerEstimate({ customerId: customer.id, item }));
+          void dispatch(fetchCustomerEstimates({ customerId: customer.id, force: true }));
+          void dispatch(fetchCustomerTimeline({ customerId: customer.id, force: true }));
+        }}
       />
-      <CreateJobDialog open={createJobOpen} onOpenChange={setCreateJobOpen} customerId={customer.id} />
+      <CreateJobDialog
+        open={createJobOpen}
+        onOpenChange={setCreateJobOpen}
+        customerId={customer.id}
+        onCreated={(item) => {
+          dispatch(upsertCustomerJob({ customerId: customer.id, item }));
+          void dispatch(fetchCustomerJobs({ customerId: customer.id, force: true }));
+          void dispatch(fetchCustomerSchedule({ customerId: customer.id, force: true }));
+          void dispatch(fetchCustomerTimeline({ customerId: customer.id, force: true }));
+        }}
+      />
     </>
   );
 }
@@ -635,7 +621,6 @@ function CustomerEstimatesPanel({
   filter,
   onFilterChange,
   onCreate,
-  refreshKey = 0,
 }: {
   customerId: string;
   customerNumber: string;
@@ -643,46 +628,38 @@ function CustomerEstimatesPanel({
   filter: string;
   onFilterChange: (value: string) => void;
   onCreate: () => void;
-  refreshKey?: number;
 }) {
-  const crm = useCrmApiData();
+  const dispatch = useAppDispatch();
   const records = usePortalRecords();
-  const [apiRows, setApiRows] = useState<Estimate[]>([]);
-  const [listLoading, setListLoading] = useState(false);
+  const tab = useAppSelector((state) => state.customers?.estimates);
   const archivedOnly = filter === "archived";
-  const useApi = Boolean(crm.enabled && !archivedOnly);
+  const useApi = !archivedOnly;
+  const filterKey = customerTabFilterKey({ status: filter || undefined });
 
   useEffect(() => {
-    if (!useApi) return;
-    let cancelled = false;
-    setListLoading(true);
-    void queryEstimates({
-      customerId,
-      status: filter || undefined,
-      force: true,
-    })
-      .then((result) => {
-        if (!cancelled) setApiRows(result.items);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        toast.error(
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not load estimates.",
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setListLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [customerId, filter, refreshKey, useApi]);
+    if (!useApi || !customerId) return;
+    // MD: GET /api/provider/estimates?customerId=:id&status=&page=1&limit=10
+    void dispatch(
+      fetchCustomerEstimates({
+        customerId,
+        status: filter || undefined,
+        force: true,
+      }),
+    );
+  }, [customerId, dispatch, filter, useApi]);
 
+  // API-only for live statuses — never fall back to the workspace-wide estimate list.
+  const apiRows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
+    (item) => item.customerId === customerId,
+  );
   const rows = useApi
     ? apiRows
-    : relatedEstimates.filter((item) => matchesArchiveFilter(records, "estimate", item, filter));
+    : relatedEstimates.filter(
+        (item) =>
+          item.customerId === customerId &&
+          matchesArchiveFilter(records, "estimate", item, filter),
+      );
+  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
 
   return (
     <div>
@@ -718,10 +695,11 @@ function CustomerEstimatesPanel({
         countLabel="Estimates"
         searchPlaceholder="Search estimates"
         loading={listLoading}
+        pageSize={10}
         empty={
           filter && filter !== "archived"
             ? "No estimates match this status."
-            : "No estimates match this filter."
+            : "No estimates yet."
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -803,12 +781,1019 @@ function CustomerEstimatesPanel({
         ]}
         actions={(row) => [
           { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
+          { label: "Edit", href: `/pro/dashboard/estimates/${row.id}` },
           { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
           archiveRowAction(records, "estimate", row.id, row.number),
         ]}
       />
     </div>
   );
+}
+
+function CustomerJobsPanel({
+  customerId,
+  customerNumber,
+  relatedJobs,
+  relatedInvoices,
+  relatedEstimates,
+  requests,
+  events,
+  customers,
+  provider,
+  employeeLabel,
+  filter,
+  onFilterChange,
+  onCreate,
+}: {
+  customerId: string;
+  customerNumber: string;
+  relatedJobs: Job[];
+  relatedInvoices: Invoice[];
+  relatedEstimates: Estimate[];
+  requests: PortalRequest[];
+  events: PortalCalendarEvent[];
+  customers: PortalCustomerCrm[];
+  provider: ReturnType<typeof usePortalWorkspace>["provider"];
+  employeeLabel: (id?: string) => string;
+  filter: string;
+  onFilterChange: (value: string) => void;
+  onCreate: () => void;
+}) {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const records = usePortalRecords();
+  const crm = useCrmApiData();
+  const { session, invoices } = usePortalWorkspace();
+  const { assign, employees } = usePortalCrew();
+  const tab = useAppSelector((state) => state.customers?.jobs);
+  const archivedOnly = filter === "archived";
+  const useApi = !archivedOnly;
+  const filterKey = customerTabFilterKey({ status: filter || undefined });
+  const [deleteTarget, setDeleteTarget] = useState<Job | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [editJob, setEditJob] = useState<Job | null>(null);
+  const [calendarJob, setCalendarJob] = useState<Job | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [statusJob, setStatusJob] = useState<Job | null>(null);
+  const [nextStatus, setNextStatus] = useState<JobStatus>("unscheduled");
+  const [savingStatus, setSavingStatus] = useState(false);
+
+  useEffect(() => {
+    if (!useApi || !customerId) return;
+    void dispatch(
+      fetchCustomerJobs({
+        customerId,
+        status: filter || undefined,
+        force: true,
+      }),
+    );
+  }, [customerId, dispatch, filter, useApi]);
+
+  const rows = useApi
+    ? selectCustomerTabRows(
+        tab,
+        customerId,
+        filterKey,
+        relatedJobs.filter((item) => matchesArchiveFilter(records, "job", item, filter)),
+      )
+    : relatedJobs.filter((item) => matchesArchiveFilter(records, "job", item, filter));
+  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const allInvoices = records.mergeInvoices(invoices);
+
+  const calendarEvent = (() => {
+    if (!calendarJob) return null;
+    const existing = events.find((item) => item.kind === "job" && item.recordId === calendarJob.id);
+    if (existing) return existing;
+    const window = minutesForWindow("morning");
+    const startDate = (calendarJob.scheduledAt || todayISO()).slice(0, 10);
+    const endDate = (calendarJob.dueAt || calendarJob.scheduledAt || todayISO()).slice(0, 10);
+    return {
+      id: `cal_${calendarJob.id}`,
+      kind: "job" as const,
+      recordId: calendarJob.id,
+      title: calendarJob.number,
+      detail: calendarJob.title || calendarJob.notes || calendarJob.address.city,
+      customerName: undefined,
+      date: startDate,
+      endDate,
+      timeWindow: "morning" as const,
+      startMinutes: window.startMinutes,
+      endMinutes: window.endMinutes,
+      employeeId: employees.find((item) => item.active)?.id,
+      href: `/pro/dashboard/jobs/${calendarJob.id}`,
+      status: calendarJob.status,
+    };
+  })();
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const result = await dispatch(
+        deleteCustomerJob({ id: deleteTarget.id, customerId }),
+      );
+      if (deleteCustomerJob.rejected.match(result)) {
+        toast.error(typeof result.payload === "string" ? result.payload : "Could not delete this job.");
+        return;
+      }
+      toast.success(`${deleteTarget.number} deleted.`);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function convertToInvoice(job: Job) {
+    if (convertingId) return;
+    const existing =
+      relatedInvoices.find((item) => item.jobId === job.id) ||
+      allInvoices.find((item) => item.jobId === job.id);
+    if (existing) {
+      router.push(`/pro/dashboard/invoices/${existing.id}`);
+      return;
+    }
+    setConvertingId(job.id);
+    try {
+      if (crm.enabled) {
+        const created = await convertJobToInvoiceApi(job.id);
+        if (!created?.id) throw new Error("The CRM did not return the new invoice.");
+        toast.success(`${created.number || "Invoice"} drafted from ${job.number}.`);
+        void dispatch(fetchCustomerJobs({ customerId, force: true }));
+        void dispatch(fetchCustomerInvoices({ customerId, force: true }));
+        void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+        router.push(`/pro/dashboard/invoices/${created.id}`);
+        return;
+      }
+      const lines = readCostLines(session?.email, job);
+      const created = buildInvoice({
+        number: nextRecordNumber(
+          "INV",
+          allInvoices.map((item) => item.number),
+        ),
+        providerId: provider.id,
+        customerId: job.customerId,
+        jobId: job.id,
+        lines: lines.length
+          ? lines
+          : job.items.map((item) => ({
+              id: item.id,
+              description: item.description,
+              kind: "materials" as const,
+              quantity: item.quantity,
+              unit: item.unit,
+              unitPrice: item.unitPrice,
+            })),
+      });
+      records.addInvoice(created);
+      records.linkRecords("job", job.id, created.id);
+      records.setStatus("job", job.id, "invoiced");
+      toast.success(`${created.number} drafted from ${job.number}.`);
+      router.push(`/pro/dashboard/invoices/${created.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not convert this job.");
+    } finally {
+      setConvertingId(null);
+    }
+  }
+
+  function openStatusModal(job: Job) {
+    setStatusJob(job);
+    setNextStatus(job.status);
+  }
+
+  async function confirmStatusChange() {
+    if (!statusJob || savingStatus) return;
+    if (nextStatus === statusJob.status) {
+      setStatusJob(null);
+      return;
+    }
+    setSavingStatus(true);
+    try {
+      const result = await dispatch(
+        patchCustomerJobStatus({
+          id: statusJob.id,
+          status: nextStatus,
+          customerId,
+        }),
+      );
+      if (patchCustomerJobStatus.rejected.match(result)) {
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not update job status.",
+        );
+        return;
+      }
+      toast.success(`${statusJob.number} marked ${jobStatusLabel(nextStatus)}.`);
+      setStatusJob(null);
+      void dispatch(fetchCustomerJobs({ customerId, force: true }));
+      void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-3 flex justify-end">
+        <Button size="sm" onClick={onCreate}>
+          Create job
+        </Button>
+      </div>
+      <LocalFilterTabs
+        value={filter}
+        onChange={onFilterChange}
+        options={withArchiveFilter(JOB_STATUS_FILTERS)}
+      />
+      <PortalDataTable
+        filename={`${customerNumber}-jobs`}
+        countLabel="Jobs"
+        searchPlaceholder="Search jobs"
+        loading={listLoading}
+        pageSize={10}
+        empty={
+          filter && filter !== "archived" ? "No jobs match this status." : "No jobs yet."
+        }
+        rows={rows}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
+        columns={jobBoardColumns({
+          estimates: relatedEstimates,
+          requests,
+          invoices: relatedInvoices,
+          events,
+          employeeLabel,
+          customerName: (id) => {
+            const match = customers.find((item) => item.id === id);
+            return match ? crmCustomerName(match) : getPortalCustomerName(provider, id);
+          },
+          onChangeStatus: openStatusModal,
+        })}
+        actions={(row) => [
+          { label: "Open", href: `/pro/dashboard/jobs/${row.id}` },
+          {
+            label: "Edit",
+            onSelect: () => setEditJob(row),
+          },
+          {
+            label: convertingId === row.id ? "Converting…" : "Convert to invoice",
+            onSelect: () => {
+              void convertToInvoice(row);
+            },
+          },
+          {
+            label: "Calendar",
+            onSelect: () => setCalendarJob(row),
+          },
+          archiveRowAction(records, "job", row.id, row.number),
+          {
+            label: "Delete",
+            variant: "destructive",
+            onSelect: () => setDeleteTarget(row),
+          },
+        ]}
+      />
+      <CreateJobDialog
+        open={Boolean(editJob)}
+        onOpenChange={(next) => {
+          if (!next) setEditJob(null);
+        }}
+        customerId={customerId}
+        job={editJob}
+        onUpdated={(item) => {
+          dispatch(upsertCustomerJob({ customerId, item }));
+          void dispatch(fetchCustomerJobs({ customerId, force: true }));
+          void dispatch(fetchCustomerSchedule({ customerId, force: true }));
+          void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+          setEditJob(null);
+        }}
+      />
+      <AssignEventDialog
+        open={Boolean(calendarJob)}
+        onOpenChange={(next) => {
+          if (!next) setCalendarJob(null);
+        }}
+        event={calendarEvent}
+        events={calendarEvent ? [calendarEvent] : []}
+        employees={employees}
+        defaultDate={calendarEvent?.date}
+        onSave={async (assignment) => {
+          await assign(assignment);
+          toast.success("Schedule updated.");
+          void dispatch(fetchCustomerJobs({ customerId, force: true }));
+          void dispatch(fetchCustomerSchedule({ customerId, force: true }));
+          void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+          setCalendarJob(null);
+        }}
+      />
+      <Dialog
+        open={Boolean(statusJob)}
+        onOpenChange={(next) => {
+          if (!next && !savingStatus) setStatusJob(null);
+        }}
+      >
+        <DialogContent showCloseButton={!savingStatus} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change status</DialogTitle>
+            <DialogDescription>
+              {statusJob
+                ? `Update the operational status for ${statusJob.number}.`
+                : "Update the operational status for this job."}
+            </DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="job-status-change">Status</FieldLabel>
+            <Select
+              value={nextStatus}
+              onValueChange={(value) => setNextStatus(value as JobStatus)}
+              disabled={savingStatus}
+            >
+              <SelectTrigger id="job-status-change" className="w-full">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                side="bottom"
+                align="start"
+                className="z-[100] max-h-48 w-[var(--radix-select-trigger-width)] overflow-y-auto"
+              >
+                {JOB_STATUSES.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {jobStatusLabel(item)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingStatus}
+              onClick={() => setStatusJob(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={savingStatus}
+              onClick={() => {
+                void confirmStatusChange();
+              }}
+            >
+              {savingStatus ? "Saving…" : "Update status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(next) => {
+          if (!next && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent showCloseButton={!deleting} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete job?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This will permanently remove “${deleteTarget.number}” from this customer.`
+                : "This will permanently remove this job."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => {
+                void confirmDelete();
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function CustomerSchedulePanel({
+  customerId,
+  fallbackEvents,
+  employeeLabel,
+}: {
+  customerId: string;
+  fallbackEvents: PortalCalendarEvent[];
+  employeeLabel: (id?: string) => string;
+}) {
+  const dispatch = useAppDispatch();
+  const tab = useAppSelector((state) => state.customers?.schedule);
+  const filterKey = customerTabFilterKey({});
+
+  useEffect(() => {
+    if (!customerId) return;
+    void dispatch(fetchCustomerSchedule({ customerId, force: true }));
+  }, [customerId, dispatch]);
+
+  const events = selectCustomerTabRows(tab, customerId, filterKey, fallbackEvents);
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
+
+  if (listLoading) {
+    return <CenteredSpinner label="Loading schedules" className="min-h-[12rem]" />;
+  }
+
+  return <CustomerEventCalendar events={events} employeeLabel={employeeLabel} />;
+}
+
+function CustomerInvoicesPanel({
+  customerId,
+  customerNumber,
+  relatedInvoices,
+  relatedJobs,
+  relatedEstimates,
+  relatedRequests,
+  customers,
+  provider,
+  filter,
+  onFilterChange,
+  paying,
+  onPayingChange,
+  onPaymentClosed,
+}: {
+  customerId: string;
+  customerNumber: string;
+  relatedInvoices: Invoice[];
+  relatedJobs: Job[];
+  relatedEstimates: Estimate[];
+  relatedRequests: PortalRequest[];
+  customers: PortalCustomerCrm[];
+  provider: ReturnType<typeof usePortalWorkspace>["provider"];
+  filter: string;
+  onFilterChange: (value: string) => void;
+  paying: Invoice | null;
+  onPayingChange: (invoice: Invoice | null) => void;
+  onPaymentClosed: () => void;
+}) {
+  const dispatch = useAppDispatch();
+  const records = usePortalRecords();
+  const tab = useAppSelector((state) => state.customers?.invoices);
+  const archivedOnly = filter === "archived";
+  const useApi = !archivedOnly;
+  const filterKey = customerTabFilterKey({ status: filter || undefined });
+
+  useEffect(() => {
+    if (!useApi || !customerId) return;
+    void dispatch(
+      fetchCustomerInvoices({
+        customerId,
+        status: filter || undefined,
+        force: true,
+      }),
+    );
+  }, [customerId, dispatch, filter, useApi]);
+
+  const fallbackRows = relatedInvoices.filter((item) => {
+    const archived = records.isArchived("invoice", item.id);
+    if (filter === "archived") return archived;
+    return !archived && invoiceMatchesBoardFilter(item, filter);
+  });
+  const rows = useApi
+    ? selectCustomerTabRows(tab, customerId, filterKey, fallbackRows).filter(
+        (item) => !records.isArchived("invoice", item.id),
+      )
+    : fallbackRows;
+  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
+
+  return (
+    <div>
+      <LocalFilterTabs
+        value={filter}
+        onChange={onFilterChange}
+        options={withArchiveFilter(INVOICE_BOARD_FILTERS)}
+      />
+      <PortalDataTable
+        filename={`${customerNumber}-invoices`}
+        countLabel="Invoices"
+        searchPlaceholder="Search by invoice # or job #"
+        loading={listLoading}
+        pageSize={10}
+        empty={
+          filter && filter !== "archived"
+            ? "No invoices match this status."
+            : "No invoices yet."
+        }
+        rows={rows}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/pro/dashboard/invoices/${row.id}`}
+        columns={invoiceBoardColumns({
+          jobs: relatedJobs,
+          estimates: relatedEstimates,
+          requests: relatedRequests,
+          hideCustomer: true,
+          customerName: (id) => {
+            const match = customers.find((item) => item.id === id);
+            return match ? crmCustomerName(match) : getPortalCustomerName(provider, id);
+          },
+        })}
+        actions={(row) => [
+          { label: "Open", href: `/pro/dashboard/invoices/${row.id}` },
+          { label: "Edit", href: `/pro/dashboard/invoices/${row.id}` },
+          ...(row.balanceDue > 0
+            ? [
+                {
+                  label: "Apply payment",
+                  onSelect: () => onPayingChange(row),
+                },
+              ]
+            : []),
+          ...(relatedJobs.some((job) => job.id === row.jobId)
+            ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }]
+            : []),
+          archiveRowAction(records, "invoice", row.id, row.number),
+        ]}
+      />
+      <ApplyPaymentDialog
+        open={Boolean(paying)}
+        onOpenChange={(open) => {
+          if (!open) {
+            onPayingChange(null);
+            onPaymentClosed();
+          }
+        }}
+        invoice={paying}
+      />
+    </div>
+  );
+}
+
+function CustomerHistoryPanel({
+  customerId,
+  customer,
+  dossier,
+  localHistory,
+  localEstimateCount,
+  localJobCount,
+  localInvoiceCount,
+  localPaid,
+}: {
+  customerId: string;
+  customer: PortalCustomerCrm;
+  dossier: CustomerDossier | null;
+  localHistory: HistoryItem[];
+  localEstimateCount: number;
+  localJobCount: number;
+  localInvoiceCount: number;
+  localPaid: number;
+}) {
+  const dispatch = useAppDispatch();
+  const tab = useAppSelector((state) => state.customers?.timeline);
+  const filterKey = customerTabFilterKey({});
+
+  useEffect(() => {
+    if (!customerId) return;
+    void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+  }, [customerId, dispatch]);
+
+  const useApiEvents = Boolean(
+    tab?.customerId === customerId && (tab.loaded || tab.loading || tab.items.length > 0),
+  );
+  const events: Array<HistoryItem | CustomerTimelineEvent> = useApiEvents
+    ? tab!.items
+    : localHistory;
+  const estimateCount = dossier?.estimatesCount ?? localEstimateCount;
+  const jobCount = dossier?.jobsCount ?? localJobCount;
+  const invoiceCount = dossier?.invoicesCount ?? localInvoiceCount;
+  const paid = dossier?.totalPaid ?? localPaid;
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 text-sm sm:grid-cols-4">
+        <Stat label="Estimates" value={String(estimateCount)} />
+        <Stat label="Jobs" value={String(jobCount)} />
+        <Stat label="Invoices" value={String(invoiceCount)} />
+        <Stat label="Paid" value={formatMoney(paid)} />
+      </div>
+      <div className="border border-black/15 bg-card">
+        <div className="border-b border-black/10 px-4 py-3">
+          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Activity</p>
+          <p className="text-sm text-muted-foreground">
+            {events.length} events since {formatDate(customer.createdAt)} · {crmSourceLabel(customer.source)}
+          </p>
+        </div>
+        {listLoading ? (
+          <CenteredSpinner label="Loading history" className="min-h-[12rem]" />
+        ) : events.length === 0 ? (
+          <Empty title="No history yet">Activity for this customer will show up here.</Empty>
+        ) : (
+          <ol className="divide-y divide-black/10">
+            {events.map((item) => {
+              if ("kind" in item) {
+                return (
+                  <li key={item.id} className="flex items-start gap-3 px-4 py-3">
+                    <span className={`mt-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${historyTone(item.kind)}`}>
+                      {historyKindLabel(item.kind)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.detail}</p>
+                      {item.href ? (
+                        <Link href={item.href} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+                          Open
+                        </Link>
+                      ) : null}
+                    </div>
+                    <p className="shrink-0 text-xs text-muted-foreground">{formatDate(item.at)}</p>
+                  </li>
+                );
+              }
+              const event = item as CustomerTimelineEvent;
+              return (
+                <li key={event.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className={`mt-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${timelineTone(event.type)}`}>
+                    {timelineTypeLabel(event.type)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{event.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {event.description}
+                      {event.actor ? ` · ${event.actor}` : ""}
+                      {event.status ? ` · ${event.status}` : ""}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-xs text-muted-foreground">{formatDate(event.timestamp)}</p>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomerTasksPanel({ customerId }: { customerId: string }) {
+  const dispatch = useAppDispatch();
+  const { setTaskStatus } = useCrmDirectory();
+  const tab = useAppSelector((state) => state.customers?.tasks);
+  const filterKey = customerTabFilterKey({});
+  const [editing, setEditing] = useState<PortalTask | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PortalTask | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!customerId) return;
+    void dispatch(fetchCustomerTasks({ customerId, force: true }));
+  }, [customerId, dispatch]);
+
+  // API-only list — never fall back to local/seed tasks on this tab.
+  const rows = selectCustomerTabRows(tab, customerId, filterKey, []);
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
+
+  function toggleTask(item: PortalTask) {
+    const nextStatus = item.status === "done" ? "open" : "done";
+    void dispatch(patchCustomerTaskStatus({ id: item.id, status: nextStatus, customerId })).then(
+      (result) => {
+        if (patchCustomerTaskStatus.fulfilled.match(result)) return;
+        void Promise.resolve(setTaskStatus(item.id, nextStatus)).catch((error) =>
+          toast.error(error instanceof Error ? error.message : "Could not update task."),
+        );
+      },
+    );
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const result = await dispatch(deleteCustomerTask({ id: deleteTarget.id, customerId }));
+      if (deleteCustomerTask.rejected.match(result)) {
+        toast.error(typeof result.payload === "string" ? result.payload : "Could not delete this task.");
+        return;
+      }
+      toast.success(`${deleteTarget.number} removed.`);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {listLoading || !rows.length ? "\u00a0" : `${rows.length} tasks on this customer`}
+        </p>
+        <SetTaskButton
+          subjectKind="customer"
+          subjectId={customerId}
+          onCreated={(item) => {
+            dispatch(upsertCustomerTask({ customerId, item }));
+            void dispatch(fetchCustomerTasks({ customerId, force: true }));
+            void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+          }}
+        />
+      </div>
+      {listLoading ? (
+        <CenteredSpinner label="Loading tasks" className="min-h-[12rem]" />
+      ) : rows.length ? (
+        rows.map((item) => (
+          <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
+            <div className="flex min-w-0 items-start gap-3">
+              <Checkbox
+                checked={item.status === "done"}
+                onCheckedChange={() => toggleTask(item)}
+                aria-label={`Mark ${item.title} ${item.status === "done" ? "open" : "done"}`}
+                className="mt-1"
+              />
+              <div>
+                <Link href={`/pro/dashboard/tasks/${item.id}`} className="text-sm font-medium text-primary hover:underline">
+                  {item.number} · {item.title}
+                </Link>
+                <p className="text-xs text-muted-foreground">
+                  Due {formatDate(item.dueAt)} · {item.note}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <StatusPill label={crmTaskStatusLabel(item.status)} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    Actions
+                    <ChevronDown className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setEditing(item)}>Edit</DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/pro/dashboard/tasks/${item.id}`}>Open</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setDeleteTarget(item)}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        ))
+      ) : (
+        <Empty title="No tasks yet">
+          Create a task against this customer — permit, follow-up, or paperwork.
+        </Empty>
+      )}
+      <CreateTaskDialog
+        open={Boolean(editing)}
+        task={editing}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null);
+        }}
+        subjectKind="customer"
+        subjectId={customerId}
+        onCreated={(item) => {
+          dispatch(upsertCustomerTask({ customerId, item }));
+          void dispatch(fetchCustomerTasks({ customerId, force: true }));
+          void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+        }}
+      />
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(next) => {
+          if (!next && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent showCloseButton={!deleting} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete task?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This will permanently remove “${deleteTarget.number} · ${deleteTarget.title}”.`
+                : "This will permanently remove this task."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => {
+                void confirmDelete();
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function CustomerRemindersPanel({
+  customerId,
+  relatedReminders,
+  onSetReminder,
+}: {
+  customerId: string;
+  relatedReminders: PortalReminder[];
+  onSetReminder: () => void;
+}) {
+  const dispatch = useAppDispatch();
+  const { setReminderStatus } = useCrmDirectory();
+  const tab = useAppSelector((state) => state.customers?.reminders);
+  const filterKey = customerTabFilterKey({});
+  const [deleteTarget, setDeleteTarget] = useState<PortalReminder | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!customerId) return;
+    void dispatch(fetchCustomerReminders({ customerId, force: true }));
+  }, [customerId, dispatch]);
+
+  const rows = selectCustomerTabRows(tab, customerId, filterKey, relatedReminders);
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
+
+  function toggleReminder(item: PortalReminder) {
+    const nextStatus = item.status === "open" ? "done" : "open";
+    void dispatch(
+      patchCustomerReminderStatus({ id: item.id, status: nextStatus, customerId }),
+    ).then((result) => {
+      if (patchCustomerReminderStatus.fulfilled.match(result)) return;
+      setReminderStatus(item.id, nextStatus);
+    });
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const result = await dispatch(deleteCustomerReminder({ id: deleteTarget.id, customerId }));
+      if (deleteCustomerReminder.rejected.match(result)) {
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not delete this reminder.",
+        );
+        return;
+      }
+      toast.success("Reminder removed.");
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {listLoading || !rows.length ? "\u00a0" : `${rows.length} reminders`}
+        </p>
+        <Button size="sm" onClick={onSetReminder}>
+          Set reminder
+        </Button>
+      </div>
+      {listLoading ? (
+        <CenteredSpinner label="Loading reminders" className="min-h-[12rem]" />
+      ) : rows.length ? (
+        rows.map((item) => (
+          <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
+            <div className="min-w-0">
+              <Link
+                href={`/pro/dashboard/reminders/${item.id}`}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                {item.title}
+              </Link>
+              <p className="text-xs text-muted-foreground">
+                Due {formatDate(item.dueAt)} · {item.note}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => toggleReminder(item)}>
+                {crmReminderStatusLabel(item.status)}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    Actions
+                    <ChevronDown className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/pro/dashboard/reminders/${item.id}`}>Edit</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setDeleteTarget(item)}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        ))
+      ) : (
+        <Empty title="No reminders yet">Set a reminder to follow up on this customer.</Empty>
+      )}
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(next) => {
+          if (!next && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent showCloseButton={!deleting} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete reminder?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This will permanently remove “${deleteTarget.title}”.`
+                : "This will permanently remove this reminder."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => {
+                void confirmDelete();
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function timelineTypeLabel(type: string) {
+  switch (type) {
+    case "customer":
+    case "account":
+      return "Account";
+    case "request":
+      return "Lead";
+    case "estimate":
+      return "Estimate";
+    case "job":
+      return "Job";
+    case "invoice":
+      return "Invoice";
+    case "payment":
+      return "Payment";
+    case "note":
+      return "Note";
+    case "reminder":
+      return "Reminder";
+    case "task":
+      return "Task";
+    case "schedule":
+      return "Schedule";
+    default:
+      return type ? type.charAt(0).toUpperCase() + type.slice(1) : "Event";
+  }
+}
+
+function timelineTone(type: string) {
+  switch (type) {
+    case "customer":
+    case "account":
+      return historyTone("account");
+    case "request":
+      return historyTone("request");
+    case "estimate":
+      return historyTone("estimate");
+    case "job":
+    case "schedule":
+      return historyTone("job");
+    case "invoice":
+      return historyTone("invoice");
+    case "payment":
+      return historyTone("payment");
+    case "note":
+      return historyTone("note");
+    case "reminder":
+      return historyTone("reminder");
+    case "task":
+      return historyTone("task");
+    default:
+      return "bg-[#64748b] text-white";
+  }
 }
 
 function InfoRow({
@@ -871,8 +1856,13 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Empty({ children }: { children: string }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>;
+function Empty({ title, children }: { title?: string; children: string }) {
+  return (
+    <div className="flex min-h-[12rem] flex-col items-center justify-center gap-1.5 px-6 py-8 text-center">
+      {title ? <p className="text-sm font-medium text-foreground">{title}</p> : null}
+      <p className="max-w-md text-sm text-muted-foreground">{children}</p>
+    </div>
+  );
 }
 
 type HistoryKind = "account" | "request" | "estimate" | "job" | "invoice" | "payment" | "note" | "reminder" | "task";

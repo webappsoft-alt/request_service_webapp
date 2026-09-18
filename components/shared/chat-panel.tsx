@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircle,
   Check,
   CheckCheck,
+  Clock,
   Download,
   FileText,
   Loader2,
   Maximize2,
   MessageSquare,
   Paperclip,
+  RotateCw,
   Send,
   X,
 } from "lucide-react";
@@ -36,6 +39,11 @@ import { cn } from "@/lib/utils";
 const accept = "image/jpeg,image/png,image/webp,image/gif,application/pdf";
 const maxFiles = 5;
 const maxBytes = 8 * 1024 * 1024;
+
+type OptimisticMessage = ChatMessage & {
+  status: "pending" | "sent" | "failed";
+  localPendingFiles?: { id: string; file: File; url: string }[];
+};
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -68,6 +76,9 @@ export function ChatPanel({
   otherName = "Customer",
   otherAvatar,
   quickReplies,
+  recipientUnreadCount = 0,
+  isOtherTyping = false,
+  otherTypingName,
 }: {
   messages: ChatMessage[];
   self: ChatRole;
@@ -78,10 +89,13 @@ export function ChatPanel({
   otherName?: string;
   otherAvatar?: string;
   quickReplies?: string[];
+  recipientUnreadCount?: number;
+  isOtherTyping?: boolean;
+  otherTypingName?: string;
 }) {
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<{ id: string; file: File; url: string }[]>([]);
-  const [sending, setSending] = useState(false);
+  const [optimisticList, setOptimisticList] = useState<OptimisticMessage[]>([]);
   const [lightboxAttachment, setLightboxAttachment] = useState<{
     url: string;
     name: string;
@@ -91,11 +105,57 @@ export function ChatPanel({
   const fileRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
 
+  // Combine parent messages with optimistic messages (with deduplication)
+  const displayMessages = useMemo(() => {
+    if (!optimisticList.length) return messages;
+
+    // Filter out optimistic messages that already exist in `messages` from the server
+    const pendingToKeep = optimisticList.filter((opt) => {
+      const alreadyDelivered = messages.some((m) => {
+        if (m.id === opt.id) return true;
+        if (m.from === opt.from && m.text === opt.text) {
+          const t1 = new Date(m.at).getTime();
+          const t2 = new Date(opt.at).getTime();
+          if (!Number.isNaN(t1) && !Number.isNaN(t2) && Math.abs(t1 - t2) < 20000) {
+            return true;
+          }
+        }
+        return false;
+      });
+      return !alreadyDelivered;
+    });
+
+    return [...messages, ...pendingToKeep];
+  }, [messages, optimisticList]);
+
+  // Clean up optimistic items that landed in server messages
+  useEffect(() => {
+    if (!optimisticList.length) return;
+    setOptimisticList((prev) =>
+      prev.filter((opt) => {
+        if (opt.status === "failed") return true; // Keep failed items for retry
+        const inServer = messages.some((m) => {
+          if (m.id === opt.id) return true;
+          if (m.from === opt.from && m.text === opt.text) {
+            const t1 = new Date(m.at).getTime();
+            const t2 = new Date(opt.at).getTime();
+            if (!Number.isNaN(t1) && !Number.isNaN(t2) && Math.abs(t1 - t2) < 20000) {
+              return true;
+            }
+          }
+          return false;
+        });
+        return !inServer;
+      }),
+    );
+  }, [messages, optimisticList.length]);
+
+  // Auto-scroll on new message or typing indicator change
   useEffect(() => {
     const node = listRef.current;
     if (!node) return;
     node.scrollTop = node.scrollHeight;
-  }, [messages, pending]);
+  }, [displayMessages.length, pending.length, isOtherTyping]);
 
   useEffect(() => {
     return () => {
@@ -133,36 +193,171 @@ export function ChatPanel({
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  async function send() {
-    if (sending) return;
+  async function executeSend(
+    text: string,
+    files: { id: string; file: File; url: string }[],
+    optId: string,
+  ) {
+    try {
+      let finalAttachments: ChatAttachment[] = [];
+      if (files.length) {
+        finalAttachments = await Promise.all(
+          files.map(async (item) => ({
+            id: item.id,
+            name: item.file.name,
+            url: item.url.startsWith("blob:")
+              ? await uploadChatFile(item.file)
+              : item.url,
+            type:
+              item.file.type ||
+              (item.file.name.toLowerCase().endsWith(".pdf")
+                ? "application/pdf"
+                : "image/jpeg"),
+          })),
+        );
+      }
+
+      await onSend(text, finalAttachments);
+
+      // Clean up object URLs
+      files.forEach((item) => {
+        if (item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
+      });
+
+      // Remove from optimistic list once server acknowledged
+      setOptimisticList((prev) => prev.filter((m) => m.id !== optId));
+    } catch (error) {
+      setOptimisticList((prev) =>
+        prev.map((m) => (m.id === optId ? { ...m, status: "failed" } : m)),
+      );
+      toast.error(errorMessage(error, "Could not send the message. Click Retry."));
+    }
+  }
+
+  function send() {
     const text = draft.trim();
     if (!text && !pending.length) {
       toast.error("Write a message or attach a file.");
       return;
     }
-    setSending(true);
-    try {
-      const attachments = await Promise.all(
-        pending.map(async (item) => ({
-          id: item.id,
-          name: item.file.name,
-          url: await uploadChatFile(item.file),
-          type:
-            item.file.type ||
-            (item.file.name.toLowerCase().endsWith(".pdf")
-              ? "application/pdf"
-              : "image/jpeg"),
-        })),
+
+    const currentPendingFiles = [...pending];
+    const optId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const tempAttachments: ChatAttachment[] = currentPendingFiles.map((item) => ({
+      id: item.id,
+      name: item.file.name,
+      url: item.url,
+      type:
+        item.file.type ||
+        (item.file.name.toLowerCase().endsWith(".pdf")
+          ? "application/pdf"
+          : "image/jpeg"),
+    }));
+
+    const optimisticMessage: OptimisticMessage = {
+      id: optId,
+      from: self,
+      text,
+      at: new Date().toISOString(),
+      attachments: tempAttachments,
+      status: "pending",
+      localPendingFiles: currentPendingFiles,
+    };
+
+    // Instant optimistic render: append immediately to chat view
+    setOptimisticList((prev) => [...prev, optimisticMessage]);
+    setDraft("");
+    setPending([]);
+    if (fileRef.current) fileRef.current.value = "";
+
+    // Execute API transmission asynchronously in background
+    void executeSend(text, currentPendingFiles, optId);
+  }
+
+  function handleRetry(msg: OptimisticMessage) {
+    setOptimisticList((prev) =>
+      prev.map((m) => (m.id === msg.id ? { ...m, status: "pending" } : m)),
+    );
+    void executeSend(msg.text, msg.localPendingFiles || [], msg.id);
+  }
+
+  // Calculate whether a sent message is read by the recipient
+  function isMessageReadByRecipient(
+    msg: ChatMessage,
+    index: number,
+    all: ChatMessage[],
+    unreadCount: number,
+  ): boolean {
+    if (msg.isRead || Boolean(msg.readAt) || msg.status === "read") return true;
+    if (unreadCount <= 0) return true;
+
+    // Count how many sent messages from `self` exist AFTER this message
+    const myLaterDeliveredCount = all
+      .slice(index + 1)
+      .filter((m) => m.from === self && m.status !== "pending" && m.status !== "failed").length;
+
+    // If this message has fewer than `unreadCount` later messages, it is within the unread tail
+    return myLaterDeliveredCount >= unreadCount;
+  }
+
+  function renderStatusIndicator(message: ChatMessage, index: number) {
+    // 1. Pending (Sending) -> Clock Icon
+    if (message.status === "pending") {
+      return (
+        <span
+          className="inline-flex items-center gap-1 text-muted-foreground/80"
+          title="Sending…"
+        >
+          <Clock className="size-3 animate-pulse text-muted-foreground" aria-label="Sending…" />
+        </span>
       );
-      await onSend(text, attachments);
-      pending.forEach((item) => URL.revokeObjectURL(item.url));
-      setDraft("");
-      setPending([]);
-    } catch (error) {
-      toast.error(errorMessage(error, "Could not send the attachment."));
-    } finally {
-      setSending(false);
     }
+
+    // 2. Failed -> Error Alert + Retry Button
+    if (message.status === "failed") {
+      return (
+        <span className="inline-flex items-center gap-1 text-rose-500">
+          <AlertCircle className="size-3 shrink-0" aria-label="Failed to send" />
+          <button
+            type="button"
+            onClick={() => handleRetry(message as OptimisticMessage)}
+            className="inline-flex items-center gap-0.5 rounded px-1 py-0.2 text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-colors"
+            title="Click to retry"
+          >
+            <RotateCw className="size-2.5" />
+            Retry
+          </button>
+        </span>
+      );
+    }
+
+    // 3. Delivered: Single vs Double Tick
+    const read = isMessageReadByRecipient(
+      message,
+      index,
+      displayMessages,
+      recipientUnreadCount,
+    );
+
+    if (read) {
+      return (
+        <span title="Read">
+          <CheckCheck
+            className="size-3.5 text-[#003F7D] dark:text-sky-400"
+            aria-label="Read"
+          />
+        </span>
+      );
+    }
+
+    return (
+      <span title="Sent (Delivered)">
+        <Check
+          className="size-3.5 text-muted-foreground/80"
+          aria-label="Sent"
+        />
+      </span>
+    );
   }
 
   return (
@@ -173,10 +368,11 @@ export function ChatPanel({
         data-lenis-prevent
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 sm:p-6"
       >
-        {messages.length ? (
-          messages.map((message, index) => {
+        {displayMessages.length ? (
+          displayMessages.map((message, index) => {
             const mine = message.from === self;
-            const prevMessage = messages[index - 1];
+            const isAdmin = message.from === "admin";
+            const prevMessage = displayMessages[index - 1];
             const showDateDivider =
               index === 0 ||
               formatDateDivider(message.at) !== formatDateDivider(prevMessage?.at);
@@ -202,17 +398,25 @@ export function ChatPanel({
                   {/* Incoming Sender Avatar */}
                   {!mine ? (
                     <Avatar className="size-8 shrink-0 shadow-2xs ring-1 ring-border">
-                      {otherAvatar ? (
-                        <AvatarImage src={otherAvatar} alt={otherName} />
-                      ) : null}
-                      <AvatarFallback
-                        className={cn(
-                          "text-xs font-semibold",
-                          getAvatarColor(otherName),
-                        )}
-                      >
-                        {getInitials(otherName)}
-                      </AvatarFallback>
+                      {isAdmin ? (
+                        <AvatarFallback className="bg-indigo-600 text-white text-[10px] font-bold">
+                          AD
+                        </AvatarFallback>
+                      ) : (
+                        <>
+                          {otherAvatar ? (
+                            <AvatarImage src={otherAvatar} alt={otherName} />
+                          ) : null}
+                          <AvatarFallback
+                            className={cn(
+                              "text-xs font-semibold",
+                              getAvatarColor(otherName),
+                            )}
+                          >
+                            {getInitials(otherName)}
+                          </AvatarFallback>
+                        </>
+                      )}
                     </Avatar>
                   ) : null}
 
@@ -222,13 +426,23 @@ export function ChatPanel({
                       mine ? "items-end" : "items-start",
                     )}
                   >
+                    {isAdmin ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Platform Support
+                      </span>
+                    ) : null}
+
                     {/* Bubble */}
                     <div
                       className={cn(
                         "group relative rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-xs transition-shadow",
-                        mine
-                          ? "rounded-br-xs bg-[#003F7D] text-white"
-                          : "rounded-bl-xs border border-black/10 bg-card text-foreground",
+                        isAdmin
+                          ? "rounded-bl-xs border border-indigo-200/80 bg-indigo-50/80 text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100"
+                          : mine
+                            ? "rounded-br-xs bg-[#003F7D] text-white"
+                            : "rounded-bl-xs border border-black/10 bg-card text-foreground",
+                        message.status === "failed" && "border-rose-400 bg-rose-50 text-rose-950 dark:bg-rose-950/40 dark:text-rose-100",
+                        message.status === "pending" && "opacity-85",
                       )}
                     >
                       {message.text ? (
@@ -295,20 +509,15 @@ export function ChatPanel({
                       ) : null}
                     </div>
 
-                    {/* Timestamp & Status */}
+                    {/* Timestamp & Status Icon */}
                     <div
                       className={cn(
-                        "flex items-center gap-1 px-1 text-[11px] text-muted-foreground",
+                        "flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground",
                         mine && "justify-end",
                       )}
                     >
                       <span>{formatClockTime(message.at)}</span>
-                      {mine ? (
-                        <CheckCheck
-                          className="size-3.5 text-[#003F7D] dark:text-sky-400"
-                          aria-label="Delivered"
-                        />
-                      ) : null}
+                      {mine ? renderStatusIndicator(message, index) : null}
                     </div>
                   </div>
                 </div>
@@ -326,6 +535,39 @@ export function ChatPanel({
             </p>
           </div>
         )}
+
+        {/* Real-time Typing Indicator */}
+        {isOtherTyping ? (
+          <div className="flex items-end gap-2 text-left animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <Avatar className="size-8 shrink-0 shadow-2xs ring-1 ring-border">
+              {otherAvatar ? (
+                <AvatarImage src={otherAvatar} alt={otherTypingName || otherName} />
+              ) : null}
+              <AvatarFallback
+                className={cn(
+                  "text-xs font-semibold",
+                  getAvatarColor(otherTypingName || otherName),
+                )}
+              >
+                {getInitials(otherTypingName || otherName)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col gap-1">
+              <div className="rounded-2xl rounded-bl-xs border border-border bg-card px-4 py-2.5 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {otherTypingName || otherName} is typing
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="size-1.5 animate-bounce rounded-full bg-[#003F7D] dark:bg-sky-400 [animation-delay:-0.3s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-[#003F7D] dark:bg-sky-400 [animation-delay:-0.15s]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-[#003F7D] dark:bg-sky-400" />
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Composer */}
@@ -359,9 +601,7 @@ export function ChatPanel({
                   aria-label={`Remove ${item.file.name}`}
                   onClick={() => {
                     URL.revokeObjectURL(item.url);
-                    setPending((current) =>
-                      current.filter((file) => file.id !== item.id),
-                    );
+                    setPending((current) => current.filter((p) => p.id !== item.id));
                   }}
                 >
                   <X className="size-3" />
@@ -371,15 +611,30 @@ export function ChatPanel({
           </ul>
         ) : null}
 
-        {/* Input Bar */}
-        <div className="flex items-end gap-2">
+        {/* Quick Replies */}
+        {quickReplies?.length ? (
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            {quickReplies.map((reply) => (
+              <button
+                key={reply}
+                type="button"
+                onClick={() => setDraft(reply)}
+                className="rounded-full border border-black/10 bg-muted/60 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted"
+              >
+                {reply}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Text Input Row */}
+        <div className="flex items-center gap-2">
           <input
             ref={fileRef}
             type="file"
             accept={accept}
             multiple
             className="sr-only"
-            disabled={sending}
             onChange={(event) => addFiles(event.target.files)}
           />
           <Button
@@ -389,7 +644,6 @@ export function ChatPanel({
             className="size-10 shrink-0 rounded-xl border-border text-muted-foreground hover:text-foreground"
             aria-label="Attach photos or PDF documents"
             title="Attach photos or PDF documents"
-            disabled={sending}
             onClick={() => fileRef.current?.click()}
           >
             <Paperclip className="size-4" />
@@ -404,29 +658,31 @@ export function ChatPanel({
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                void send();
+                send();
               }
             }}
             placeholder={placeholder}
             rows={1}
-            disabled={sending}
             className="min-h-10 max-h-32 resize-none rounded-xl bg-card text-sm leading-normal focus-visible:ring-1 focus-visible:ring-[#003F7D]"
           />
 
           <Button
             type="button"
+            size="icon"
             className="size-10 shrink-0 rounded-xl bg-[#003F7D] text-white shadow-xs hover:bg-[#003264]"
             aria-label="Send message"
-            disabled={sending || (!draft.trim() && !pending.length)}
-            onClick={() => void send()}
+            disabled={!draft.trim() && !pending.length}
+            onClick={() => send()}
           >
-            {sending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Send className="size-4" />
-            )}
+            <Send className="size-4" />
           </Button>
         </div>
+
+        {footer ? (
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            {footer}
+          </p>
+        ) : null}
       </div>
 
       {/* Lightbox Image Preview Dialog */}
@@ -453,19 +709,19 @@ export function ChatPanel({
               </Button>
             ) : null}
           </DialogHeader>
-          <div className="relative flex max-h-[75vh] items-center justify-center overflow-hidden rounded-xl bg-black/5 p-2">
-            {lightboxAttachment ? (
-              // eslint-disable-next-line @next/next/no-img-element
+
+          {lightboxAttachment ? (
+            <div className="flex max-h-[75vh] items-center justify-center overflow-hidden p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={lightboxAttachment.url}
                 alt={lightboxAttachment.name}
-                className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain shadow-md"
+                className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain shadow-lg"
               />
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-

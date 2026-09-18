@@ -25,11 +25,21 @@ import { readChatGuest } from "@/lib/booking/chat-store";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
 
+export type UserPresence = {
+  isOnline: boolean;
+  lastSeen?: string;
+  lastActiveAt?: string;
+};
+
 type RealtimeContextValue = {
   connected: boolean;
   joinThread: (threadId: string) => void;
   leaveThread: (threadId: string) => void;
   setTyping: (threadId: string, isTyping: boolean) => void;
+  markThreadRead: (threadId: string) => void;
+  queryUserPresence: (userIds: string | string[]) => void;
+  getPresence: (userId?: string | null) => UserPresence | undefined;
+  presenceMap: Record<string, UserPresence>;
   lastChatThreadId: string | null;
   lastNotificationAt: number;
 };
@@ -39,6 +49,10 @@ const RealtimeContext = createContext<RealtimeContextValue>({
   joinThread: () => {},
   leaveThread: () => {},
   setTyping: () => {},
+  markThreadRead: () => {},
+  queryUserPresence: () => {},
+  getPresence: () => undefined,
+  presenceMap: {},
   lastChatThreadId: null,
   lastNotificationAt: 0,
 });
@@ -57,6 +71,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   const [connected, setConnected] = useState(false);
   const [lastChatThreadId, setLastChatThreadId] = useState<string | null>(null);
   const [lastNotificationAt, setLastNotificationAt] = useState(0);
+  const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
   const activeThreadIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -84,18 +99,50 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
     socket.on("disconnect", onDisconnect);
     if (socket.connected) onConnect();
 
+    const handlePresence = (payload: {
+      userId?: string | null;
+      guestEmail?: string | null;
+      isOnline: boolean;
+      lastSeen?: string;
+      lastActiveAt?: string;
+    }) => {
+      const key = payload?.userId || payload?.guestEmail?.toLowerCase();
+      if (!key) return;
+      setPresenceMap((prev) => ({
+        ...prev,
+        [key]: {
+          isOnline: Boolean(payload.isOnline),
+          lastSeen: payload.lastSeen,
+          lastActiveAt: payload.lastActiveAt,
+        },
+      }));
+      broadcastRealtime({ type: "USER_PRESENCE", payload });
+    };
+
     const unsubscribers = [
       onRealtime("CHAT_MESSAGE", (payload) => {
         setLastChatThreadId(payload.threadId);
+        // Only broadcast to the window event bus \u2014 do NOT dispatch rs-crm-api here.
+        // Dispatching rs-crm-api on every message would trigger a full fetchThreads()
+        // API call in every subscriber (provider, customer) on each incoming message.
+        // Each view handles CHAT_MESSAGE in-place via subscribeRealtime().
         broadcastRealtime({ type: "CHAT_MESSAGE", payload });
-        window.dispatchEvent(new Event("rs-crm-api"));
       }),
       onRealtime("CHAT_THREAD_UPDATED", (payload) => {
         const id = typeof payload.id === "string" ? payload.id : null;
         if (id) setLastChatThreadId(id);
+        // Broadcast inline update; views update thread metadata without a fetch.
         broadcastRealtime({ type: "CHAT_THREAD_UPDATED", payload });
-        window.dispatchEvent(new Event("rs-crm-api"));
       }),
+      onRealtime("CHAT_TYPING", (payload) => {
+        broadcastRealtime({ type: "CHAT_TYPING", payload });
+      }),
+      onRealtime("CHAT_READ_RECEIPT", (payload) => {
+        broadcastRealtime({ type: "CHAT_READ_RECEIPT", payload });
+        // NOTE: Never dispatch rs-crm-api here to prevent infinite ping-pong refetch loops!
+      }),
+      onRealtime("USER_PRESENCE", handlePresence),
+      onRealtime("chat:presence", handlePresence),
       onRealtime("LEAD_CREATED", (payload) => {
         broadcastRealtime({ type: "LEAD_CREATED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));
@@ -110,8 +157,10 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         window.dispatchEvent(new Event("rs-crm-api"));
       }),
       onRealtime("INBOX_SUMMARY_INVALIDATE", (payload) => {
+        // Only broadcast to the window bus. Do NOT dispatch rs-crm-api here —
+        // INBOX_SUMMARY_INVALIDATE fires after every chat message send, so
+        // dispatching rs-crm-api would trigger a full fetchThreads() on every send.
         broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload });
-        window.dispatchEvent(new Event("rs-crm-api"));
       }),
       onRealtime("NEW_NOTIFICATION", (payload: RealtimeEvents["NEW_NOTIFICATION"]) => {
         setLastNotificationAt(Date.now());
@@ -158,12 +207,51 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
     emitChatTyping(threadId, isTyping);
   }, []);
 
+  const markThreadRead = useCallback((threadId: string) => {
+    import("@/lib/realtime/socket").then((mod) => {
+      mod.emitChatMarkRead(threadId);
+    });
+  }, []);
+
+  const queryUserPresence = useCallback((userIds: string | string[]) => {
+    import("@/lib/realtime/socket").then((mod) => {
+      mod.queryPresence(userIds, (results) => {
+        if (!results?.length) return;
+        setPresenceMap((prev) => {
+          const next = { ...prev };
+          for (const item of results) {
+            if (item.userId) {
+              next[item.userId] = {
+                isOnline: Boolean(item.isOnline),
+                lastSeen: item.lastSeen,
+                lastActiveAt: item.lastActiveAt,
+              };
+            }
+          }
+          return next;
+        });
+      });
+    });
+  }, []);
+
+  const getPresence = useCallback(
+    (userId?: string | null) => {
+      if (!userId) return undefined;
+      return presenceMap[userId] || presenceMap[userId.toLowerCase()];
+    },
+    [presenceMap],
+  );
+
   const value = useMemo(
     () => ({
       connected: connected || Boolean(getRealtimeSocket()?.connected),
       joinThread,
       leaveThread,
       setTyping,
+      markThreadRead,
+      queryUserPresence,
+      getPresence,
+      presenceMap,
       lastChatThreadId,
       lastNotificationAt,
     }),
@@ -172,6 +260,10 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       joinThread,
       leaveThread,
       setTyping,
+      markThreadRead,
+      queryUserPresence,
+      getPresence,
+      presenceMap,
       lastChatThreadId,
       lastNotificationAt,
     ],

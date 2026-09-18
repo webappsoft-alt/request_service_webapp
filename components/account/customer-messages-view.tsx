@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 import { Container, Section } from "@/components/layout/container";
 import { ChatPanel } from "@/components/shared/chat-panel";
-import { useRealtime } from "@/components/realtime/realtime-provider";
+import {  useRealtime } from "@/components/realtime/realtime-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ import {
   getAvatarColor,
   getInitials,
 } from "@/lib/chat-format";
-import { onRealtime } from "@/lib/realtime/socket";
+import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { useAppSelector } from "@/store/hooks";
 import {
   selectAuth,
@@ -82,7 +82,22 @@ function resolveThreadProvider(thread: ChatThread) {
 }
 
 function upsertThread(threads: ChatThread[], updated: ChatThread) {
-  return [...threads.filter((item) => item.id !== updated.id), updated].sort(
+  const existing = threads.find((t) => t.id === updated.id);
+  if (!existing) {
+    return [...threads, updated].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+  const existingMsgIds = new Set(
+    existing.messages.map((m) => m.id || (m as any)._id).filter(Boolean),
+  );
+  const newFromServer = (updated.messages || []).filter(
+    (m) => !existingMsgIds.has(m.id || (m as any)._id),
+  );
+  const merged: ChatThread = {
+    ...existing,
+    ...updated,
+    messages: [...existing.messages, ...newFromServer],
+  };
+  return [...threads.filter((item) => item.id !== updated.id), merged].sort(
     (a, b) => b.updatedAt.localeCompare(a.updatedAt),
   );
 }
@@ -107,7 +122,15 @@ export function CustomerMessagesView({
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  const { joinThread, leaveThread, setTyping, connected } = useRealtime();
+  const {
+    joinThread,
+    leaveThread,
+    setTyping,
+    connected,
+    getPresence,
+    queryUserPresence,
+    markThreadRead,
+  } = useRealtime();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +139,7 @@ export function CustomerMessagesView({
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [guestEmail, setGuestEmail] = useState("");
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
 
   const listingEmail = useMemo(
     () => resolveListingEmail(user?.email, guestEmail),
@@ -172,52 +196,96 @@ export function CustomerMessagesView({
   useEffect(() => {
     if (!listingEmail) return;
 
-    const unsubThread = onRealtime("CHAT_THREAD_UPDATED", (payload) => {
-      const updated = payload as ChatThread;
-      if (!updated?.id) return;
-      if (
-        String(updated.customerEmail || "").toLowerCase() !==
-        listingEmail.toLowerCase()
-      ) {
+    // Use subscribeRealtime (window event bus) instead of onRealtime (raw socket).
+    // The raw socket's onRealtime() silently drops handlers if the socket isn't
+    // connected yet at call time. The RealtimeProvider always re-dispatches every
+    // socket event to the window bus, so subscribeRealtime works regardless of
+    // connection timing or reconnects.
+    const unsub = subscribeRealtime((detail) => {
+      if (!detail?.type || !detail.payload) return;
+
+      if (detail.type === "CHAT_THREAD_UPDATED") {
+        const updated = detail.payload as ChatThread;
+        if (!updated?.id) return;
+        if (
+          String(updated.customerEmail || "").toLowerCase() !==
+          listingEmail.toLowerCase()
+        ) {
+          return;
+        }
+        setThreads((current) => upsertThread(current, updated));
         return;
       }
-      setThreads((current) => upsertThread(current, updated));
-    });
 
-    const unsubMsg = onRealtime("CHAT_MESSAGE", (payload) => {
-      if (!payload?.threadId || !payload?.message) return;
-      setThreads((current) => {
-        const index = current.findIndex((t) => t.id === payload.threadId);
-        if (index >= 0) {
-          const thread = current[index];
-          if (thread.messages.some((m) => m.id === payload.message.id)) {
-            return current;
+      if (detail.type === "CHAT_MESSAGE") {
+        const payload = detail.payload as { threadId?: string; message?: any; thread?: any };
+        if (!payload?.threadId || !payload?.message) return;
+        setThreads((current) => {
+          const index = current.findIndex((t) => t.id === payload.threadId);
+          if (index >= 0) {
+            const thread = current[index];
+            const msgId = payload.message.id || payload.message._id;
+            if (msgId && thread.messages.some((m) => (m.id || (m as any)._id) === msgId)) {
+              return current;
+            }
+            const isViewing = selectedId === thread.id;
+            const normalizedMsg = {
+              ...payload.message,
+              id: msgId || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              at: payload.message.at || payload.message.createdAt || new Date().toISOString(),
+            };
+            const updated: ChatThread = {
+              ...thread,
+              messages: [...thread.messages, normalizedMsg as any],
+              updatedAt: normalizedMsg.at,
+              unreadForCustomer:
+                payload.message.from === "provider" && !isViewing
+                  ? (thread.unreadForCustomer || 0) + 1
+                  : thread.unreadForCustomer,
+            };
+            const next = [...current];
+            next.splice(index, 1);
+            return [updated, ...next];
           }
-          const isViewing = selectedId === thread.id;
-          const updated: ChatThread = {
-            ...thread,
-            messages: [...thread.messages, payload.message as any],
-            updatedAt: payload.message.at || new Date().toISOString(),
-            unreadForCustomer:
-              payload.message.from === "provider" && !isViewing
-                ? (thread.unreadForCustomer || 0) + 1
-                : thread.unreadForCustomer,
-          };
-          const next = [...current];
-          next.splice(index, 1);
-          return [updated, ...next];
-        }
-        if (payload.thread) {
-          return upsertThread(current, payload.thread as any);
-        }
-        void loadThreads({ silent: true });
-        return current;
-      });
+          if (payload.thread) {
+            return upsertThread(current, payload.thread as any);
+          }
+          void loadThreads({ silent: true });
+          return current;
+        });
+        return;
+      }
+
+      if (detail.type === "CHAT_READ_RECEIPT") {
+        const payload = detail.payload as {
+          threadId?: string;
+          readBy?: string;
+          unreadForProvider?: number;
+          unreadForCustomer?: number;
+        };
+        if (!payload?.threadId) return;
+        const { threadId, readBy, unreadForProvider, unreadForCustomer } = payload;
+        setThreads((current) =>
+          current.map((t) => {
+            if (t.id !== threadId) return t;
+            return {
+              ...t,
+              unreadForCustomer:
+                readBy === "customer" ? (unreadForCustomer ?? 0) : t.unreadForCustomer,
+              unreadForProvider:
+                readBy === "provider" ? (unreadForProvider ?? 0) : t.unreadForProvider,
+              messages: t.messages.map((m) =>
+                m.from !== readBy ? { ...m, isRead: true, status: "read" as const } : m
+              ),
+            };
+          }),
+        );
+        return;
+      }
     });
 
     return () => {
-      unsubThread();
-      unsubMsg();
+      unsub();
     };
   }, [listingEmail, loadThreads, selectedId]);
 
@@ -265,22 +333,74 @@ export function CustomerMessagesView({
     }
   }, [selectedId]);
 
+  // Track which thread we've already marked as read
+  const lastMarkedReadRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!selected?.id || !listingEmail || !selected.unreadForCustomer) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const updated = await markPublicChatRead(selected.id, listingEmail);
-        if (cancelled || !updated) return;
-        setThreads((current) => upsertThread(current, updated));
-      } catch {
-        // Silent — unread badge will refresh on next load.
+    if (!selected?.id || !listingEmail) return;
+    const lastMsg = selected.messages.at(-1);
+    const hasUnread = (selected.unreadForCustomer ?? 0) > 0;
+    const isNewIncoming = lastMsg && lastMsg.from !== "customer" && !lastMsg.isRead;
+
+    if (hasUnread || isNewIncoming || lastMarkedReadRef.current !== selected.id) {
+      lastMarkedReadRef.current = selected.id;
+      markThreadRead(selected.id);
+      if (hasUnread || isNewIncoming) {
+        void markPublicChatRead(selected.id, listingEmail).catch(() => undefined);
+        setThreads((current) =>
+          current.map((t) => (t.id === selected.id ? { ...t, unreadForCustomer: 0 } : t)),
+        );
       }
-    })();
+    }
+  }, [listingEmail, selected?.id, selected?.messages?.length, selected?.unreadForCustomer, markThreadRead]);
+
+  // Query presence only when the set of provider IDs changes — not on every message.
+  // Using a stable string key prevents re-querying on every socket-driven state update.
+  const presenceIdsKey = useMemo(() => {
+    const ids = Array.from(
+      new Set(
+        threads
+          .map((t) => t.providerId)
+          .filter((id): id is string => Boolean(id && /^[0-9a-fA-F]{24}$/.test(id))),
+      ),
+    ).sort();
+    return ids.join(',');
+  }, [threads]);
+
+  useEffect(() => {
+    if (!presenceIdsKey) return;
+    queryUserPresence(presenceIdsKey.split(','));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presenceIdsKey]);
+
+  // Real-time typing listener for active customer thread
+  useEffect(() => {
+    setIsOtherTyping(false);
+    if (!selected?.id) return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    const unsub = subscribeRealtime((detail) => {
+      if (detail?.type === "CHAT_TYPING" && detail.payload) {
+        const payload = detail.payload as {
+          threadId?: string;
+          from?: string;
+          isTyping?: boolean;
+        };
+        if (payload.threadId === selected.id && payload.from !== "customer") {
+          setIsOtherTyping(Boolean(payload.isTyping));
+          clearTimeout(timer);
+          if (payload.isTyping) {
+            timer = setTimeout(() => setIsOtherTyping(false), 3500);
+          }
+        }
+      }
+    });
+
     return () => {
-      cancelled = true;
+      clearTimeout(timer);
+      unsub();
     };
-  }, [listingEmail, selected?.id, selected?.unreadForCustomer]);
+  }, [selected?.id]);
 
   useEffect(() => {
     if (!selected?.id) return;
@@ -301,9 +421,7 @@ export function CustomerMessagesView({
         attachments,
       );
       if (!updated) throw new Error("Unable to send the message.");
-      const readThread =
-        (await markPublicChatRead(updated.id, listingEmail)) ?? updated;
-      setThreads((current) => upsertThread(current, readThread));
+      setThreads((current) => upsertThread(current, updated));
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Unable to send the message.",
@@ -455,6 +573,8 @@ export function CustomerMessagesView({
                   const last = thread.messages.at(-1);
                   const lastTime = formatThreadTime(last?.at || thread.updatedAt);
                   const hasUnread = (thread.unreadForCustomer || 0) > 0;
+                  const provPresence = thread.providerId ? getPresence(thread.providerId) : undefined;
+                  const isProvOnline = provPresence?.isOnline ?? thread.isOnline ?? false;
 
                   return (
                     <Link
@@ -483,7 +603,7 @@ export function CustomerMessagesView({
                             {getInitials(prov.name)}
                           </AvatarFallback>
                         </Avatar>
-                        {connected ? (
+                        {isProvOnline ? (
                           <span
                             className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
                             aria-label="Online"
@@ -623,9 +743,15 @@ export function CustomerMessagesView({
                       <span
                         className={cn(
                           "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
-                          connected ? "bg-emerald-500" : "bg-muted-foreground/50",
+                          (selected.providerId ? getPresence(selected.providerId)?.isOnline : selected.isOnline)
+                            ? "bg-emerald-500"
+                            : "bg-muted-foreground/30",
                         )}
-                        aria-label={connected ? "Online" : "Offline"}
+                        aria-label={
+                          (selected.providerId ? getPresence(selected.providerId)?.isOnline : selected.isOnline)
+                            ? "Online"
+                            : "Offline"
+                        }
                       />
                     </div>
 
@@ -635,10 +761,10 @@ export function CustomerMessagesView({
                         <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
                           {selectedProvider.name}
                         </h2>
-                        {connected ? (
+                        {(selected.providerId ? getPresence(selected.providerId)?.isOnline : selected.isOnline) ? (
                           <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 sm:inline-flex">
                             <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-                            Live
+                            Online
                           </span>
                         ) : null}
                       </div>
@@ -688,8 +814,11 @@ export function CustomerMessagesView({
                 <ChatPanel
                   messages={selected.messages}
                   self="customer"
+                  recipientUnreadCount={selected.unreadForProvider}
                   otherName={selectedProvider.name}
                   otherAvatar={selectedProvider.avatar}
+                  isOtherTyping={isOtherTyping}
+                  otherTypingName={selectedProvider.name}
                   onSend={handleSend}
                   onTypingChange={(isTyping) =>
                     setTyping(selected.id, isTyping)

@@ -3,12 +3,8 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import {
-  extractErrorMessage,
-  getData,
-  postData,
-  putData,
-} from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { getData, postData, putData } from "@/components/api/sliceHttp";
 import { providerOrdersApi } from "@/components/api/ApiRoutesFile";
 import type {
   ArriveOrderPayload,

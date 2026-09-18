@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -8,7 +8,10 @@ import {
   archiveRowAction,
   ConfirmArchiveDialog,
 } from "@/components/portal/archive-control";
-import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
+import {
+  CreateEstimateDialog,
+  CreateJobDialog,
+} from "@/components/portal/create-work-dialogs";
 import { buildEstimateSnapshot } from "@/components/portal/share-estimate-panel";
 import {
   shareTokenFor,
@@ -92,6 +95,10 @@ export function EstimatesView() {
   const [actionLoading, setActionLoading] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<EstimateRow | null>(null);
   const [archiving, setArchiving] = useState(false);
+  // Controlled search input — updated immediately on keypress
+  const [searchInput, setSearchInput] = useState("");
+  // Debounce timer ref
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const useApi =
     auth.hydrated &&
@@ -99,35 +106,37 @@ export function EstimatesView() {
     (user?.role === "provider" || auth.role === "provider");
 
   const slice = useAppSelector((state) => state.estimates);
-  const {
-    items,
-    page,
-    limit,
-    total,
-    totalPages,
-    search,
-    loading,
-    error,
-  } = slice ?? {
-    items: [],
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 1,
-    search: "",
-    loading: true,
-    error: null,
-  };
+  const { items, page, limit, total, totalPages, search, loading, error } =
+    slice ?? {
+      items: [],
+      page: 1,
+      limit: 10,
+      total: 0,
+      totalPages: 1,
+      search: "",
+      loading: true,
+      error: null,
+    };
 
-  const allRequests = useMemo(() => records.mergeRequests(requests), [records, requests]);
+  const allRequests = useMemo(
+    () => records.mergeRequests(requests),
+    [records, requests],
+  );
 
+  // Sync the visible input from Redux when navigating back to a cached query
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  // Load on mount, status change, page change, or search change
   useEffect(() => {
     if (!useApi) return;
     let cancelled = false;
     setActionLoading(true);
     void dispatch(
       fetchEstimates({
-        status: statusParam || undefined,
+        search,
+        status: statusParam,
         force: true,
       }),
     ).finally(() => {
@@ -137,6 +146,29 @@ export function EstimatesView() {
       cancelled = true;
     };
   }, [dispatch, useApi, statusParam, page, search]);
+
+  // Debounced search: dispatches to slice (thunk checks pagesCache — no redundant API hits)
+  function handleSearchChange(value: string) {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setActionLoading(true);
+      dispatch(setEstimatesSearch(value.trim()));
+    }, 400);
+  }
+
+  function handlePageChange(nextPage: number) {
+    if (nextPage === page) return;
+    setActionLoading(true);
+    dispatch(setEstimatesPage(nextPage));
+  }
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!useApi || !error || loading) return;
@@ -156,8 +188,8 @@ export function EstimatesView() {
 
   return (
     <PortalPage
-      eyebrow="Work / Estimates"
-      title="Estimates"
+      eyebrow="Estimates"
+      title={`Estimates (${useApi ? total : rows.length})`}
       description="Site visit or write in the office, finalize, send for signature, then start the job."
       actions={
         <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -171,8 +203,21 @@ export function EstimatesView() {
         countLabel="Estimates"
         searchPlaceholder="Search quotes"
         loading={tableLoading}
+        serverPagination={
+          useApi
+            ? {
+                page,
+                pageSize: limit,
+                total,
+                totalPages,
+                onPageChange: handlePageChange,
+                search: searchInput,
+                onSearchChange: handleSearchChange,
+              }
+            : undefined
+        }
         toolbar={
-          <div className="w-40 sm:w-44">
+          <div className="h-8.5 w-40 sm:w-44">
             <Select
               disabled={tableLoading}
               value={statusParam || "__all__"}
@@ -188,8 +233,7 @@ export function EstimatesView() {
               <SelectTrigger
                 id="estimates-status-filter"
                 aria-label="Filter by status"
-                className="h-8.5 w-full text-xs"
-                loading={tableLoading}
+                className="h-full w-full text-xs"
               >
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
@@ -226,7 +270,10 @@ export function EstimatesView() {
             searchValue: (row) => row.number,
             exportValue: (row) => row.number,
             cell: (row) => (
-              <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-medium text-primary hover:underline">
+              <Link
+                href={`/pro/dashboard/estimates/${row.id}`}
+                className="font-medium text-primary hover:underline"
+              >
                 {row.number}
               </Link>
             ),
@@ -238,7 +285,10 @@ export function EstimatesView() {
             searchValue: (row) => estimateDisplayName(row),
             exportValue: (row) => estimateDisplayName(row),
             cell: (row) => (
-              <Link href={`/pro/dashboard/estimates/${row.id}`} className="text-primary hover:underline">
+              <Link
+                href={`/pro/dashboard/estimates/${row.id}`}
+                className="text-primary hover:underline"
+              >
                 {estimateDisplayName(row)}
               </Link>
             ),
@@ -246,12 +296,22 @@ export function EstimatesView() {
           {
             id: "customer",
             header: "Customer",
-            sortValue: (row) => row.customerName || estimateCustomerName(row, customers, allRequests),
-            searchValue: (row) => row.customerName || estimateCustomerName(row, customers, allRequests),
-            exportValue: (row) => row.customerName || estimateCustomerName(row, customers, allRequests),
+            sortValue: (row) =>
+              row.customerName ||
+              estimateCustomerName(row, customers, allRequests),
+            searchValue: (row) =>
+              row.customerName ||
+              estimateCustomerName(row, customers, allRequests),
+            exportValue: (row) =>
+              row.customerName ||
+              estimateCustomerName(row, customers, allRequests),
             cell: (row) => (
-              <Link href={`/pro/dashboard/customers/${row.customerId}`} className="text-primary hover:underline">
-                {row.customerName || estimateCustomerName(row, customers, allRequests)}
+              <Link
+                href={`/pro/dashboard/customers/${row.customerId}`}
+                className="text-primary hover:underline"
+              >
+                {row.customerName ||
+                  estimateCustomerName(row, customers, allRequests)}
               </Link>
             ),
           },
@@ -259,7 +319,8 @@ export function EstimatesView() {
             id: "street",
             header: "Job address",
             sortValue: (row) => row.propertyAddress.street,
-            searchValue: (row) => `${row.propertyAddress.street} ${row.propertyAddress.city} ${row.propertyAddress.zip}`,
+            searchValue: (row) =>
+              `${row.propertyAddress.street} ${row.propertyAddress.city} ${row.propertyAddress.zip}`,
             exportValue: (row) => row.propertyAddress.street,
             cell: (row) => row.propertyAddress.street,
           },
@@ -283,8 +344,10 @@ export function EstimatesView() {
             id: "expires",
             header: "Expires",
             sortValue: (row) => row.expiresAt ?? "",
-            searchValue: (row) => (row.expiresAt ? formatDate(row.expiresAt) : ""),
-            exportValue: (row) => (row.expiresAt ? formatDate(row.expiresAt) : ""),
+            searchValue: (row) =>
+              row.expiresAt ? formatDate(row.expiresAt) : "",
+            exportValue: (row) =>
+              row.expiresAt ? formatDate(row.expiresAt) : "",
             cell: (row) => (row.expiresAt ? formatDate(row.expiresAt) : "—"),
           },
           {
@@ -320,7 +383,12 @@ export function EstimatesView() {
             sortValue: (row) => row.status,
             searchValue: (row) => estimateStatusLabel(row.status),
             exportValue: (row) => estimateStatusLabel(row.status),
-            cell: (row) => <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />,
+            cell: (row) => (
+              <StatusPill
+                label={estimateStatusLabel(row.status)}
+                className={estimateStatusTone(row.status)}
+              />
+            ),
           },
         ]}
         actions={(row) => {
@@ -351,7 +419,24 @@ export function EstimatesView() {
                     onSelect: async () => {
                       try {
                         let linkUrl = "";
-                        if (useApi) {
+
+                        // 1. Use shareToken already present on the row (fastest, no API call)
+                        if (row.shareToken) {
+                          linkUrl = shareUrlFor(row.shareToken);
+                        }
+
+                        // 2. Fall back to locally-cached snapshot token
+                        if (!linkUrl) {
+                          const localToken = share.snapshotForEstimate(
+                            row.id,
+                          )?.token;
+                          if (localToken) {
+                            linkUrl = shareUrlFor(localToken);
+                          }
+                        }
+
+                        // 3. Last resort: call the API to generate / fetch the token
+                        if (!linkUrl && useApi) {
                           try {
                             const res = await shareEstimate(row.id);
                             if (res?.shareToken) {
@@ -362,22 +447,17 @@ export function EstimatesView() {
                                 : shareUrlFor(res.shareUrl.replace(/^\//, ""));
                             }
                           } catch {
-                            // fallback
+                            // ignore — show error below
                           }
                         }
-                        if (!linkUrl) {
-                          const token =
-                            row.shareToken ||
-                            share.snapshotForEstimate(row.id)?.token;
-                          if (token) {
-                            linkUrl = shareUrlFor(token);
-                          }
-                        }
+
                         if (linkUrl) {
                           await navigator.clipboard.writeText(linkUrl);
                           toast.success("Customer link copied to clipboard.");
                         } else {
-                          toast.error("Share token is not available for this estimate.");
+                          toast.error(
+                            "Share token is not available for this estimate.",
+                          );
                         }
                       } catch {
                         toast.error("Could not copy link to clipboard.");
@@ -499,12 +579,8 @@ export function EstimatesView() {
                   },
                 ]
               : []),
-            archiveRowAction(
-              records,
-              "estimate",
-              row.id,
-              row.number,
-              () => setArchiveTarget(row),
+            archiveRowAction(records, "estimate", row.id, row.number, () =>
+              setArchiveTarget(row),
             ),
           ];
         }}
@@ -547,20 +623,32 @@ export function EstimatesView() {
 
 export function JobsView() {
   const status = useSearchParams().get("status") ?? "";
-  const { jobs, provider, estimates, requests, invoices } = usePortalWorkspace();
+  const { jobs, provider, estimates, requests, invoices } =
+    usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const [createOpen, setCreateOpen] = useState(false);
-  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
-  const allInvoices = useMemo(() => records.mergeInvoices(invoices), [records, invoices]);
+  const allEstimates = useMemo(
+    () => records.mergeEstimates(estimates),
+    [records, estimates],
+  );
+  const allInvoices = useMemo(
+    () => records.mergeInvoices(invoices),
+    [records, invoices],
+  );
   const archivedOnly = status === "archived";
   const rows = useMemo(
     () =>
       records
         .listed("job", records.mergeJobs(jobs), archivedOnly)
-        .map((item) => ({ ...item, status: records.statusOf("job", item.id, item.status) }))
-        .filter((item) => (archivedOnly || !status ? true : item.status === status)),
+        .map((item) => ({
+          ...item,
+          status: records.statusOf("job", item.id, item.status),
+        }))
+        .filter((item) =>
+          archivedOnly || !status ? true : item.status === status,
+        ),
     [archivedOnly, jobs, records, status],
   );
 
@@ -596,12 +684,17 @@ export function JobsView() {
           employeeLabel,
           customerName: (customerId) => {
             const match = customers.find((item) => item.id === customerId);
-            return match ? crmCustomerName(match) : getPortalCustomerName(provider, customerId);
+            return match
+              ? crmCustomerName(match)
+              : getPortalCustomerName(provider, customerId);
           },
         })}
         actions={(row) => [
           { label: "View", href: `/pro/dashboard/jobs/${row.id}` },
-          { label: "Convert to invoice", href: `/pro/dashboard/jobs/${row.id}` },
+          {
+            label: "Convert to invoice",
+            href: `/pro/dashboard/jobs/${row.id}`,
+          },
           { label: "Assign on calendar", href: "/pro/dashboard/schedule" },
           ...(row.status === "in_progress"
             ? []
@@ -654,10 +747,16 @@ export function JobsView() {
             onSelect: () => {
               void Promise.resolve(records.remove("job", row.id))
                 .then(() => {
-                  toast.success(`${row.number} deleted. The source estimate can be converted again.`);
+                  toast.success(
+                    `${row.number} deleted. The source estimate can be converted again.`,
+                  );
                 })
                 .catch((error) => {
-                  toast.error(error instanceof Error ? error.message : "Could not delete this job.");
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not delete this job.",
+                  );
                 });
             },
           },
@@ -669,30 +768,47 @@ export function JobsView() {
 
 export function InvoicesView() {
   const status = useSearchParams().get("status") ?? "";
-  const { invoices, jobs, estimates, requests, provider } = usePortalWorkspace();
+  const { invoices, jobs, estimates, requests, provider } =
+    usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const [paying, setPaying] = useState<Invoice | null>(null);
   const archivedOnly = status === "archived";
   const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
-  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
+  const allEstimates = useMemo(
+    () => records.mergeEstimates(estimates),
+    [records, estimates],
+  );
   const rows = useMemo(
     () =>
       records
         .listed("invoice", records.mergeInvoices(invoices), archivedOnly)
-        .map((item) => ({ ...item, status: records.statusOf("invoice", item.id, item.status) }))
-        .filter((item) => archivedOnly || invoiceMatchesBoardFilter(item, status)),
+        .map((item) => ({
+          ...item,
+          status: records.statusOf("invoice", item.id, item.status),
+        }))
+        .filter(
+          (item) => archivedOnly || invoiceMatchesBoardFilter(item, status),
+        ),
     [archivedOnly, invoices, records, status],
   );
 
   return (
-    <PortalPage eyebrow="Billing" title="Invoices" description="Each invoice keeps the original estimate plus approved extras.">
+    <PortalPage
+      eyebrow="Billing"
+      title="Invoices"
+      description="Each invoice keeps the original estimate plus approved extras."
+    >
       <FilterTabs
         baseHref="/pro/dashboard/invoices"
         value={status}
         options={withArchiveFilter([
           ...INVOICE_BOARD_FILTERS,
-          { value: "payments", label: "Payments", href: "/pro/dashboard/payments" },
+          {
+            value: "payments",
+            label: "Payments",
+            href: "/pro/dashboard/payments",
+          },
         ])}
       />
       <PortalDataTable
@@ -708,7 +824,9 @@ export function InvoicesView() {
           requests,
           customerName: (customerId) => {
             const match = customers.find((item) => item.id === customerId);
-            return match ? crmCustomerName(match) : getPortalCustomerName(provider, customerId);
+            return match
+              ? crmCustomerName(match)
+              : getPortalCustomerName(provider, customerId);
           },
         })}
         actions={(row) => [
@@ -781,19 +899,31 @@ export function InvoicesView() {
 
 export function PaymentsView() {
   const status = useSearchParams().get("status") ?? "";
-  const { payments, invoices, jobs, estimates, requests, provider } = usePortalWorkspace();
+  const { payments, invoices, jobs, estimates, requests, provider } =
+    usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const archivedOnly = status === "archived";
-  const allInvoices = useMemo(() => records.mergeInvoices(invoices), [records, invoices]);
+  const allInvoices = useMemo(
+    () => records.mergeInvoices(invoices),
+    [records, invoices],
+  );
   const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
-  const allEstimates = useMemo(() => records.mergeEstimates(estimates), [records, estimates]);
+  const allEstimates = useMemo(
+    () => records.mergeEstimates(estimates),
+    [records, estimates],
+  );
   const rows = useMemo(
     () =>
       records
         .listed("payment", records.mergePayments(payments), archivedOnly)
-        .map((item) => ({ ...item, status: records.statusOf("payment", item.id, item.status) }))
-        .filter((item) => archivedOnly || paymentMatchesBoardFilter(item, status)),
+        .map((item) => ({
+          ...item,
+          status: records.statusOf("payment", item.id, item.status),
+        }))
+        .filter(
+          (item) => archivedOnly || paymentMatchesBoardFilter(item, status),
+        ),
     [archivedOnly, payments, records, status],
   );
 
@@ -822,16 +952,29 @@ export function PaymentsView() {
           requests,
           customerName: (customerId) => {
             const match = customers.find((item) => item.id === customerId);
-            return match ? crmCustomerName(match) : getPortalCustomerName(provider, customerId);
+            return match
+              ? crmCustomerName(match)
+              : getPortalCustomerName(provider, customerId);
           },
         })}
         actions={(row) => {
           const invoice = allInvoices.find((item) => item.id === row.invoiceId);
-          const job = invoice ? allJobs.find((item) => item.id === invoice.jobId) : undefined;
+          const job = invoice
+            ? allJobs.find((item) => item.id === invoice.jobId)
+            : undefined;
           return [
             { label: "View", href: `/pro/dashboard/payments/${row.id}` },
-            ...(invoice ? [{ label: "Open invoice", href: `/pro/dashboard/invoices/${invoice.id}` }] : []),
-            ...(job ? [{ label: "Open job", href: `/pro/dashboard/jobs/${job.id}` }] : []),
+            ...(invoice
+              ? [
+                  {
+                    label: "Open invoice",
+                    href: `/pro/dashboard/invoices/${invoice.id}`,
+                  },
+                ]
+              : []),
+            ...(job
+              ? [{ label: "Open job", href: `/pro/dashboard/jobs/${job.id}` }]
+              : []),
             archiveRowAction(records, "payment", row.id, paymentNumber(row)),
             {
               label: "Delete",

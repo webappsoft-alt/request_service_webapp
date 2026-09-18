@@ -73,6 +73,8 @@ import {
   applyJobSettings,
   siteVisitFromRecord,
   siteVisitToRecord,
+  writeSiteVisit,
+  type EstimateSiteVisit,
   useEstimateSettings,
   useEstimateSiteVisit,
   useInvoiceSettings,
@@ -124,6 +126,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   calendarEventKindLabel,
+  employeeName,
   estimateCanConvert,
   estimateCanShare,
   estimateDisplayName,
@@ -279,24 +282,45 @@ export function EstimateDetailView({ id }: { id: string }) {
     estimate.status === "sent" ||
     estimate.status === "accepted" ||
     Boolean(job);
+  const assignedTechId =
+    event?.employeeId ||
+    siteVisit?.employeeId ||
+    estimate.siteVisit?.employeeId ||
+    undefined;
+  const visitDate = (
+    siteVisit?.visitedAt ||
+    estimate.siteVisit?.visitedAt ||
+    estimate.issuedAt
+  ).slice(0, 10);
   const visitWindow = minutesForWindow("morning");
-  const visitDate = (siteVisit?.visitedAt || estimate.issuedAt).slice(0, 10);
-  const estimateAssignmentEvent: PortalCalendarEvent = event ?? {
-    id: `cal_${estimate.id}`,
-    kind: "estimate",
-    recordId: estimate.id,
-    title: estimate.number,
-    detail: `${service} · site visit`,
-    customerName: customerLabel,
-    date: visitDate,
-    endDate: visitDate,
-    timeWindow: "morning",
-    startMinutes: visitWindow.startMinutes,
-    endMinutes: visitWindow.endMinutes,
-    employeeId: employees.find((item) => item.active)?.id,
-    href: `/pro/dashboard/estimates/${estimate.id}`,
-    status: estimate.status,
-  };
+  const estimateAssignmentEvent: PortalCalendarEvent = event
+    ? {
+        ...event,
+        employeeId: event.employeeId || assignedTechId,
+      }
+    : {
+        id: `cal_${estimate.id}`,
+        kind: "estimate",
+        recordId: estimate.id,
+        title: estimate.number,
+        detail: `${service} · site visit`,
+        customerName: customerLabel,
+        date: visitDate,
+        endDate: visitDate,
+        timeWindow: "morning",
+        startMinutes: visitWindow.startMinutes,
+        endMinutes: visitWindow.endMinutes,
+        employeeId:
+          assignedTechId ||
+          employees.find(
+            (item) =>
+              item.active &&
+              (String(item.role || "").toLowerCase().trim() === "technician" ||
+                String(item.role || "").toLowerCase().trim() === "tech"),
+          )?.id,
+        href: `/pro/dashboard/estimates/${estimate.id}`,
+        status: estimate.status,
+      };
 
   async function setEstimateStatus(
     status: (typeof quote)["status"],
@@ -397,12 +421,6 @@ export function EstimateDetailView({ id }: { id: string }) {
         : quote.siteVisit;
       const title = quote.title || service;
       if (apiReady) {
-        await updateEstimateApi(quote.id, {
-          ...quote,
-          title,
-          items,
-          siteVisit: siteVisitRecord,
-        }).catch(() => undefined);
         const created = await convertEstimateToJobApi(quote.id, {
           title,
           items,
@@ -417,7 +435,11 @@ export function EstimateDetailView({ id }: { id: string }) {
         records.cacheJob(created);
         records.linkRecords("estimate", quote.id, created.id);
         setStatusOverride("converted_to_job");
-        await crm.refresh().catch(() => undefined);
+        // Patch the estimate locally — no full CRM refresh needed
+        crm.patchEstimate(quote.id, {
+          status: "converted_to_job",
+          jobId: created.id,
+        });
         toast.success(
           `${created.number || "Job"} created from ${quote.number}. This estimate stays an estimate.`,
         );
@@ -891,8 +913,60 @@ export function EstimateDetailView({ id }: { id: string }) {
         employees={employees}
         onSave={async (assignment) => {
           await assign(assignment);
+
+          const selectedTech = employees.find(
+            (emp) => emp.id === assignment.employeeId,
+          );
+          const techName = selectedTech
+            ? employeeName(selectedTech)
+            : assignment.employeeId || "";
+          const currentVisit =
+            siteVisit || siteVisitFromRecord(estimate.siteVisit);
+          const visitIso = assignment.date
+            ? `${assignment.date}T00:00:00.000Z`
+            : currentVisit?.visitedAt || new Date().toISOString();
+
+          const updatedSiteVisit: EstimateSiteVisit = {
+            employeeId: assignment.employeeId || "",
+            technician: techName,
+            visitedAt: visitIso,
+            accessNotes: currentVisit?.accessNotes || "",
+            findings: currentVisit?.findings || "",
+            recommendations: currentVisit?.recommendations || "",
+            measurements: currentVisit?.measurements || "",
+            photos: currentVisit?.photos || [],
+          };
+
+          writeSiteVisit(session?.email, estimate.id, updatedSiteVisit);
+
+          if (apiReady) {
+            try {
+              const siteVisitRecord = siteVisitToRecord(updatedSiteVisit);
+              const updated = await updateEstimateSiteVisit(
+                estimate.id,
+                siteVisitRecord ?? { photos: [] },
+              );
+              if (updated) {
+                crm.patchEstimate(estimate.id, updated);
+                setFetched(updated);
+              } else {
+                crm.patchEstimate(estimate.id, {
+                  siteVisit: siteVisitRecord,
+                });
+                setFetched((prev) =>
+                  prev ? { ...prev, siteVisit: siteVisitRecord } : prev,
+                );
+              }
+              if (crm.ready) {
+                void crm.refresh({ silent: true });
+              }
+            } catch {
+              // local fallback already written
+            }
+          }
+
           toast.success(
-            `${calendarEventKindLabel(assignment.kind)} placed on the calendar.`,
+            `${techName ? `${techName} assigned to estimate` : "Assignment saved"} and scheduled on the calendar.`,
           );
         }}
       />

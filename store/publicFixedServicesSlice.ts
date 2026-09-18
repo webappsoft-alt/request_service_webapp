@@ -3,10 +3,8 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import {
-  extractErrorMessage,
-  getData,
-} from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { getData } from "@/components/api/sliceHttp";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { inferStateFromAddress } from "@/lib/format";
 

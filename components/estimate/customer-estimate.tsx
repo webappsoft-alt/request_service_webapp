@@ -86,8 +86,9 @@ function mapPublicEstimateToSnapshot(
     asRecord(estimate.propertyAddress) ??
     asRecord(snapshotCustomer.address) ??
     asRecord(estimate.address) ??
-    (Array.isArray(snapshotCustomer.addresses) &&
-      asRecord(snapshotCustomer.addresses[0])) ??
+    (Array.isArray(snapshotCustomer.addresses)
+      ? asRecord(snapshotCustomer.addresses[0])
+      : null) ??
     {};
 
   const companySignature = asRecord(estimate.signature);

@@ -3,26 +3,19 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
-  Banknote,
   Boxes,
   Briefcase,
-  CalendarDays,
-  Clock,
-  FileText,
   NotebookPen,
   Package,
   Paperclip,
   Settings,
-  Shield,
   Trash2,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/portal/create-person-dialogs";
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
-import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
@@ -40,39 +33,21 @@ import {
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import {
-  EmployeeAttachmentsTab,
-  EmployeeAvailabilityTab,
-  EmployeePayTab,
-} from "@/components/portal/views/employee-detail-view";
+import { EmployeeAttachmentsTab } from "@/components/portal/views/employee-detail-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { getContractor, getVendor } from "@/lib/api/crm-client";
+import { getVendor } from "@/lib/api/crm-client";
 import {
-  contractorAsEmployee,
   crmCustomerName,
   crmStatusLabel,
   vendorAsEmployee,
   type CrmDirectoryStatus,
-  type PortalContractor,
   type PortalVendor,
 } from "@/lib/data/crm-people";
-import {
-  calendarEventKindLabel,
-  estimateCustomerName,
-  estimateDisplayName,
-  estimateStatusLabel,
-  estimateStatusTone,
-  formatClock,
-  getPortalCustomerName,
-  jobServiceLabel,
-  timeWindowLabel,
-  windowFromMinutes,
-  type PortalCalendarEvent,
-} from "@/lib/data/portal";
-import { formatDate, formatMoney } from "@/lib/format";
-import type { Estimate, Job, Provider } from "@/lib/types";
+import { getPortalCustomerName, jobServiceLabel } from "@/lib/data/portal";
+import { formatMoney } from "@/lib/format";
+import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 
@@ -103,242 +78,6 @@ function tradeTokens(value: string) {
     .toLowerCase()
     .split(/[/,·\s]+/)
     .filter((token) => token.length > 2);
-}
-
-export function ContractorDetailView({ id }: { id: string }) {
-  const { estimates, jobs, invoices, requests, provider } = usePortalWorkspace();
-  const { contractors, customers, remove, updateContractor } = useCrmDirectory();
-  const { employees, events, assign, employeeLabel } = usePortalCrew();
-  const records = usePortalRecords();
-  const crm = useCrmApiData();
-  const sliceItems = useAppSelector((state) => state.contractors?.items ?? []);
-  const [fetched, setFetched] = useState<PortalContractor | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailTried, setDetailTried] = useState(false);
-  const contractor =
-    (fetched?.id === id ? fetched : null) ??
-    sliceItems.find((item) => item.id === id) ??
-    contractors.find((item) => item.id === id);
-  const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
-  const [assignOpen, setAssignOpen] = useState(false);
-  const pending = useCrmRecordPending();
-
-  useEffect(() => {
-    if (!crm.enabled) return;
-    void crm.ensureLoaded();
-  }, [crm.enabled, crm.ensureLoaded]);
-
-  useEffect(() => {
-    setFetched(null);
-    setDetailTried(false);
-  }, [id]);
-
-  useEffect(() => {
-    if (contractor) {
-      setDetailLoading(false);
-      setDetailTried(true);
-      return;
-    }
-    let cancelled = false;
-    setDetailLoading(true);
-    void getContractor(id)
-      .then((item) => {
-        if (!cancelled && item) setFetched(item);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setDetailLoading(false);
-          setDetailTried(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id, contractor]);
-
-  if (!contractor) {
-    const loading = detailLoading || (pending && !detailTried);
-    return (
-      <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">{loading ? "Loading contractor…" : "Contractor not found"}</h1>
-        {!loading ? (
-          <Button asChild className="mt-4" size="sm">
-            <Link href="/pro/dashboard/contractors">Back to contractors</Link>
-          </Button>
-        ) : null}
-      </div>
-    );
-  }
-
-  const asEmployee = contractorAsEmployee(contractor);
-  const assigned = events
-    .filter((item) => item.employeeId === contractor.id)
-    .sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
-  const allJobs = records.mergeJobs(jobs);
-  const allEstimates = records.mergeEstimates(estimates);
-  const jobIds = new Set(assigned.filter((item) => item.kind === "job").map((item) => item.recordId));
-  const estimateIds = new Set(assigned.filter((item) => item.kind === "estimate").map((item) => item.recordId));
-  const tokens = tradeTokens(contractor.trade);
-  const relatedJobs = allJobs.filter((item) => {
-    if (jobIds.has(item.id) || item.assignedTo === contractor.companyName) return true;
-    const label = jobServiceLabel(item, allEstimates, requests);
-    return tokens.some((token) => matchesKeyword(label, token) || item.items.some((line) => matchesKeyword(line.description, token)));
-  });
-  const relatedEstimates = allEstimates.filter((item) => {
-    if (estimateIds.has(item.id)) return true;
-    const label = item.items[0]?.description ?? "";
-    return tokens.some((token) => matchesKeyword(label, token));
-  });
-  const expired = contractor.insuranceExpires && contractor.insuranceExpires < new Date().toISOString().slice(0, 10);
-  const partner = contractor;
-
-  function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
-    assign({
-      kind: event.kind,
-      recordId: event.recordId,
-      date: move.date,
-      endDate: move.endDate,
-      startMinutes: move.startMinutes,
-      endMinutes: move.endMinutes,
-      timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
-      employeeId: partner.id,
-    });
-  }
-
-  return (
-    <>
-      <RecordWorkspace
-        href={`/pro/dashboard/contractors/${contractor.id}`}
-        label={`${contractor.companyName} · ${contractor.number}`}
-        kind="contractor"
-        tabs={[
-          { id: "settings", label: "Settings", icon: Settings },
-          { id: "compliance", label: "Compliance", icon: Shield },
-          { id: "pay", label: "Pay rate", icon: Banknote },
-          { id: "availability", label: "Availability", icon: Clock },
-          { id: "schedule", label: "Schedule", icon: CalendarDays },
-          { id: "jobs", label: "Jobs", icon: Briefcase },
-          { id: "estimates", label: "Estimates", icon: FileText },
-          { id: "notes", label: "Notes", icon: NotebookPen },
-          { id: "attachments", label: "Attachments", icon: Paperclip },
-        ]}
-        badge={
-          <>
-            <StatusPill label={contractor.trade} />
-            <StatusPill label={crmStatusLabel(contractor.status)} tone={contractor.status === "active" ? "success" : "neutral"} />
-            {expired ? <StatusPill label="Insurance expired" className="bg-red-50 text-red-800" /> : null}
-          </>
-        }
-        notice={<FileNotices kind="contractor" id={contractor.id} />}
-        actions={
-          <>
-            <SetTaskButton subjectKind="contractor" subjectId={contractor.id} />
-            <SetReminderButton subjectKind="contractor" subjectId={contractor.id} />
-            <AddNoteButton subjectKind="contractor" subjectId={contractor.id} />
-            <Button size="sm" onClick={() => setAssignOpen(true)}>
-              Assign job
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                remove("contractor", contractor.id);
-                toast.success(`${contractor.companyName} removed.`);
-              }}
-            >
-              Remove
-            </Button>
-          </>
-        }
-      >
-        {(tab) => {
-          switch (tab) {
-            case "settings":
-              return <ContractorSettingsTab contractor={contractor} onSave={updateContractor} />;
-            case "compliance":
-              return <ContractorComplianceTab contractor={contractor} onSave={updateContractor} />;
-            case "pay":
-              return (
-                <EmployeePayTab
-                  employee={asEmployee}
-                  onSave={(pay) => updateContractor(contractor.id, { hourlyRate: pay.hourlyRate })}
-                />
-              );
-            case "availability":
-              return <EmployeeAvailabilityTab employee={asEmployee} />;
-            case "schedule":
-              return (
-                <ContractorScheduleTab
-                  contractor={contractor}
-                  assigned={assigned}
-                  onOpen={setEditing}
-                  onMove={moveEvent}
-                  employeeLabel={employeeLabel}
-                />
-              );
-            case "jobs":
-              return (
-                <PortalDataTable
-                  filename={`${contractor.companyName}-jobs`}
-                  countLabel="Jobs"
-                  searchPlaceholder="Search jobs"
-                  empty="No jobs for this contractor yet. Assign one from their schedule."
-                  rows={relatedJobs}
-                  rowKey={(row) => row.id}
-                  rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
-                  columns={jobBoardColumns({
-                    estimates: allEstimates,
-                    requests,
-                    invoices,
-                    events,
-                    employeeLabel,
-                    customerName: (customerId) => {
-                      const customer = customers.find((item) => item.id === customerId);
-                      return customer ? crmCustomerName(customer) : getPortalCustomerName(provider, customerId);
-                    },
-                  })}
-                />
-              );
-            case "estimates":
-              return (
-                <PortalDataTable
-                  filename={`${contractor.companyName}-estimates`}
-                  countLabel="Estimates"
-                  searchPlaceholder="Search estimates"
-                  empty="No estimate visits for this trade yet."
-                  rows={relatedEstimates}
-                  rowKey={(row) => row.id}
-                  rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
-                  columns={estimateColumns(customers, requests)}
-                />
-              );
-            case "notes":
-              return <NotesPanel kind="contractor" id={contractor.id} />;
-            case "attachments":
-              return <EmployeeAttachmentsTab employee={asEmployee} />;
-            default:
-              return <ContractorSettingsTab contractor={contractor} onSave={updateContractor} />;
-          }
-        }}
-      </RecordWorkspace>
-      <AssignEventDialog
-        open={Boolean(editing) || assignOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditing(null);
-            setAssignOpen(false);
-          }
-        }}
-        event={editing}
-        events={events}
-        employees={employees}
-        onSave={(assignment) => {
-          assign({ ...assignment, employeeId: assignment.employeeId || contractor.id });
-          toast.success("Work assigned.");
-        }}
-      />
-    </>
-  );
 }
 
 export function VendorDetailView({ id }: { id: string }) {
@@ -497,213 +236,6 @@ export function VendorDetailView({ id }: { id: string }) {
         }
       }}
     </RecordWorkspace>
-  );
-}
-
-function ContractorSettingsTab({
-  contractor,
-  onSave,
-}: {
-  contractor: PortalContractor;
-  onSave: (id: string, patch: Partial<PortalContractor>) => void;
-}) {
-  const [draft, setDraft] = useState(contractor);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Contractor settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Outside crew you send to a job. Contact and company live here.</p>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            onSave(contractor.id, draft);
-            toast.success("Contractor settings saved.");
-          }}
-        >
-          Save settings
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
-        <Field label="Company">
-          <Input value={draft.companyName} onChange={(event) => setDraft({ ...draft, companyName: event.target.value })} />
-        </Field>
-        <Field label="Trade">
-          <Input value={draft.trade} onChange={(event) => setDraft({ ...draft, trade: event.target.value })} />
-        </Field>
-        <Field label="First name">
-          <Input value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} />
-        </Field>
-        <Field label="Last name">
-          <Input value={draft.lastName} onChange={(event) => setDraft({ ...draft, lastName: event.target.value })} />
-        </Field>
-        <Field label="Email">
-          <Input value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
-        </Field>
-        <Field label="Phone">
-          <Input value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} />
-        </Field>
-        <Field label="City">
-          <Input value={draft.city} onChange={(event) => setDraft({ ...draft, city: event.target.value })} />
-        </Field>
-        <Field label="State">
-          <Input value={draft.state} onChange={(event) => setDraft({ ...draft, state: event.target.value })} />
-        </Field>
-        <Field label="ZIP">
-          <Input value={draft.zip} onChange={(event) => setDraft({ ...draft, zip: event.target.value })} />
-        </Field>
-        <Field label="Status">
-          <NativeSelect
-            className="w-full"
-            value={draft.status}
-            onChange={(event) => setDraft({ ...draft, status: event.target.value as CrmDirectoryStatus })}
-          >
-            {DIRECTORY_STATUSES.map((status) => (
-              <NativeSelectOption key={status} value={status}>
-                {crmStatusLabel(status)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </Field>
-      </div>
-    </div>
-  );
-}
-
-function ContractorComplianceTab({
-  contractor,
-  onSave,
-}: {
-  contractor: PortalContractor;
-  onSave: (id: string, patch: Partial<PortalContractor>) => void;
-}) {
-  const [draft, setDraft] = useState({
-    license: contractor.license,
-    insuranceExpires: contractor.insuranceExpires,
-    hourlyRate: contractor.hourlyRate,
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Compliance</h2>
-          <p className="mt-1 text-sm text-muted-foreground">License and insurance required before they go on a customer site.</p>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            onSave(contractor.id, draft);
-            toast.success("Compliance saved.");
-          }}
-        >
-          Save compliance
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
-        <Field label="License">
-          <Input value={draft.license} onChange={(event) => setDraft({ ...draft, license: event.target.value })} />
-        </Field>
-        <Field label="Insurance expires">
-          <Input
-            type="date"
-            value={draft.insuranceExpires}
-            onChange={(event) => setDraft({ ...draft, insuranceExpires: event.target.value })}
-          />
-        </Field>
-        <Field label="Quoted hourly rate">
-          <Input
-            type="number"
-            min="0"
-            value={draft.hourlyRate || ""}
-            placeholder="0"
-            onChange={(event) => setDraft({ ...draft, hourlyRate: Number(event.target.value) || 0 })}
-          />
-        </Field>
-      </div>
-    </div>
-  );
-}
-
-function ContractorScheduleTab({
-  contractor,
-  assigned,
-  onOpen,
-  onMove,
-  employeeLabel,
-}: {
-  contractor: PortalContractor;
-  assigned: PortalCalendarEvent[];
-  onOpen: (event: PortalCalendarEvent) => void;
-  onMove: (event: PortalCalendarEvent, move: CalendarMove) => void;
-  employeeLabel: (id?: string) => string;
-}) {
-  return (
-    <div className="space-y-4">
-      <EventCalendar
-        events={assigned}
-        employees={[contractorAsEmployee(contractor)]}
-        employeeLabel={employeeLabel}
-        onMove={onMove}
-        onEventOpen={onOpen}
-      />
-      <PortalDataTable
-        filename="contractor-schedule"
-        countLabel="Assignments"
-        searchPlaceholder="Search assignments"
-        empty="Nothing assigned yet. Use Assign job to put them on a visit."
-        rows={assigned}
-        rowKey={(row) => row.id}
-        columns={[
-          {
-            id: "title",
-            header: "Work",
-            sortValue: (row) => row.title,
-            searchValue: (row) => `${row.title} ${row.detail}`,
-            exportValue: (row) => row.title,
-            cell: (row) => (
-              <div>
-                <p className="font-medium">{row.title}</p>
-                <p className="text-xs text-muted-foreground">{row.detail}</p>
-              </div>
-            ),
-          },
-          {
-            id: "kind",
-            header: "Type",
-            sortValue: (row) => row.kind,
-            searchValue: (row) => calendarEventKindLabel(row.kind),
-            exportValue: (row) => calendarEventKindLabel(row.kind),
-            cell: (row) => calendarEventKindLabel(row.kind),
-          },
-          {
-            id: "date",
-            header: "Date",
-            sortValue: (row) => row.date ?? "",
-            searchValue: (row) => (row.date ? formatDate(row.date) : ""),
-            exportValue: (row) => (row.date ? formatDate(row.date) : ""),
-            cell: (row) => (row.date ? formatDate(row.date) : "—"),
-          },
-          {
-            id: "window",
-            header: "Window",
-            sortValue: (row) => row.timeWindow,
-            searchValue: (row) => timeWindowLabel(row.timeWindow),
-            exportValue: (row) => timeWindowLabel(row.timeWindow),
-            cell: (row) =>
-              row.startMinutes != null && row.endMinutes != null
-                ? `${formatClock(row.startMinutes)}–${formatClock(row.endMinutes)}`
-                : timeWindowLabel(row.timeWindow),
-          },
-        ]}
-        actions={(row) => [
-          { label: "Open", href: row.href },
-          { label: "Reassign", onSelect: () => onOpen(row) },
-        ]}
-      />
-    </div>
   );
 }
 
@@ -1090,56 +622,6 @@ function VendorOrdersTab({ vendor, jobs }: { vendor: PortalVendor; jobs: Job[] }
       )}
     </div>
   );
-}
-
-function estimateColumns(
-  customers: { id: string; entityKind?: string; companyName?: string; firstName?: string; lastName?: string }[],
-  requests: Array<{ id?: string; customerId?: string; customerName?: string }> = [],
-) {
-  return [
-    {
-      id: "number",
-      header: "Quote #",
-      sortValue: (row: Estimate) => row.number,
-      searchValue: (row: Estimate) => row.number,
-      exportValue: (row: Estimate) => row.number,
-      cell: (row: Estimate) => (
-        <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
-          {row.number}
-        </Link>
-      ),
-    },
-    {
-      id: "name",
-      header: "Estimate name",
-      sortValue: (row: Estimate) => estimateDisplayName(row),
-      searchValue: (row: Estimate) => estimateDisplayName(row),
-      exportValue: (row: Estimate) => estimateDisplayName(row),
-      cell: (row: Estimate) => (
-        <Link href={`/pro/dashboard/estimates/${row.id}`} className="text-primary hover:underline">
-          {estimateDisplayName(row)}
-        </Link>
-      ),
-    },
-    {
-      id: "customer",
-      header: "Customer",
-      sortValue: (row: Estimate) => estimateCustomerName(row, customers, requests),
-      searchValue: (row: Estimate) => estimateCustomerName(row, customers, requests),
-      exportValue: (row: Estimate) => estimateCustomerName(row, customers, requests),
-      cell: (row: Estimate) => estimateCustomerName(row, customers, requests),
-    },
-    {
-      id: "status",
-      header: "Status",
-      sortValue: (row: Estimate) => row.status,
-      searchValue: (row: Estimate) => estimateStatusLabel(row.status),
-      exportValue: (row: Estimate) => estimateStatusLabel(row.status),
-      cell: (row: Estimate) => (
-        <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />
-      ),
-    },
-  ];
 }
 
 function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {

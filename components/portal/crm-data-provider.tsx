@@ -73,6 +73,8 @@ type CrmApiContextValue = {
   patchTask: (id: string, patch: Partial<PortalTask>) => void;
   /** Apply a local reminder update immediately (e.g. after status API succeeds). */
   patchReminder: (id: string, patch: Partial<PortalReminder>) => void;
+  /** Insert or replace a reminder in the live CRM cache (e.g. after create). */
+  upsertReminder: (reminder: PortalReminder) => void;
   /** Apply a local customer update immediately (e.g. after note/save API succeeds). */
   patchCustomer: (id: string, patch: Partial<PortalCustomerCrm>) => void;
   /** Apply a local estimate update immediately (e.g. after save/update API succeeds). */
@@ -109,6 +111,7 @@ const EMPTY_VALUE: CrmApiContextValue = {
   removeReminder: () => {},
   patchTask: () => {},
   patchReminder: () => {},
+  upsertReminder: () => {},
   patchCustomer: () => {},
   patchEstimate: () => {},
   patchRequest: () => {},
@@ -125,6 +128,7 @@ type CrmDataState = Omit<
   | "removeReminder"
   | "patchTask"
   | "patchReminder"
+  | "upsertReminder"
   | "patchCustomer"
   | "patchEstimate"
   | "patchRequest"
@@ -289,6 +293,18 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     }));
   }, []);
 
+  const upsertReminder = useCallback((reminder: PortalReminder) => {
+    setState((current) => {
+      const index = current.reminders.findIndex((item) => item.id === reminder.id);
+      if (index >= 0) {
+        const next = current.reminders.slice();
+        next[index] = { ...next[index], ...reminder };
+        return { ...current, reminders: next };
+      }
+      return { ...current, reminders: [reminder, ...current.reminders] };
+    });
+  }, []);
+
   const patchCustomer = useCallback((id: string, patch: Partial<PortalCustomerCrm>) => {
     setState((current) => ({
       ...current,
@@ -450,6 +466,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       removeReminder,
       patchTask,
       patchReminder,
+      upsertReminder,
       patchCustomer,
       patchEstimate,
       patchRequest,
@@ -465,6 +482,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       patchEstimate,
       patchReminder,
       patchRequest,
+      upsertReminder,
       patchTask,
       refresh,
       state,

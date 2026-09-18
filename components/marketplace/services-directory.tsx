@@ -704,13 +704,13 @@ export function ServicesDirectory({
         fetchPublicProfessionals({
           query: {
             zipCode: usable ? customerLocation.zip || undefined : undefined,
-            lat: usable ? customerLocation.lat : undefined,
-            lng: usable ? customerLocation.lng : undefined,
+            lat: usable ? customerLocation.latitude ?? undefined : undefined,
+            lng: usable ? customerLocation.longitude ?? undefined : undefined,
             locationToken: usable
               ? [
                   customerLocation.zip || "",
-                  String(customerLocation.lat ?? ""),
-                  String(customerLocation.lng ?? ""),
+                  String(customerLocation.latitude ?? ""),
+                  String(customerLocation.longitude ?? ""),
                 ].join("|")
               : "all",
           },
@@ -721,8 +721,8 @@ export function ServicesDirectory({
   }, [
     apiQueryKey,
     customerLocation.detecting,
-    customerLocation.lat,
-    customerLocation.lng,
+    customerLocation.latitude,
+    customerLocation.longitude,
     customerLocation.zip,
     dispatch,
   ]);

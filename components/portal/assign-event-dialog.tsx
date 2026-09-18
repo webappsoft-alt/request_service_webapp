@@ -107,6 +107,7 @@ export function AssignEventDialog({
   events,
   employees,
   defaultDate,
+  defaultEmployeeId,
   onSave,
 }: {
   open: boolean;
@@ -115,6 +116,8 @@ export function AssignEventDialog({
   events: PortalCalendarEvent[];
   employees: PortalEmployee[];
   defaultDate?: string;
+  /** Prefill assignee (e.g. contractor profile Assign job). */
+  defaultEmployeeId?: string;
   onSave: (assignment: PortalAssignment) => void | Promise<void>;
 }) {
   const auth = useAppSelector(selectAuth);
@@ -173,13 +176,13 @@ export function AssignEventDialog({
       );
       setTimeSlot(matched ? matched.value : "540");
 
-      const presetId = event?.employeeId ?? "";
+      const presetId = event?.employeeId || defaultEmployeeId || "";
       setEmployeeId(presetId);
       const match = technicianOptions.find((item) => item.id === presetId);
       setEmployeeLabel(match?.label ?? "");
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [defaultDate, event, events, open]);
+  }, [defaultDate, defaultEmployeeId, event, events, open]);
 
   useEffect(() => {
     if (!open || !employeeId || employeeLabel) return;

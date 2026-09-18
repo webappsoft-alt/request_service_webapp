@@ -1,9 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import {
-  extractErrorMessage,
-  getData,
-  postData,
-} from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { getData, postData } from "@/components/api/sliceHttp";
 import { bookingsApi, ordersApi } from "@/components/api/ApiRoutesFile";
 import type {
   OrderCheckoutRequest,

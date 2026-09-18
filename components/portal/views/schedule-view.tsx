@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
@@ -12,6 +13,9 @@ import { calendarEventKindLabel, formatClock, windowFromMinutes } from "@/lib/da
 import { formatDate } from "@/lib/format";
 
 export function ScheduleView() {
+  const searchParams = useSearchParams();
+  const initialEmployeeId =
+    searchParams.get("employeeId")?.trim() || searchParams.get("employee")?.trim() || "";
   const { events, employees, assign, employeeLabel, removeSchedule } = usePortalCrew();
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const [scheduling, setScheduling] = useState(false);
@@ -88,6 +92,7 @@ export function ScheduleView() {
         events={events}
         employees={employees}
         employeeLabel={employeeLabel}
+        initialEmployeeId={initialEmployeeId}
         onMove={moveEvent}
         onEventOpen={setEditing}
       />

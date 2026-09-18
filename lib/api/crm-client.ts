@@ -1,5 +1,4 @@
 import { providerCrmApi, publicApi } from "@/components/api/ApiRoutesFile";
-import { getData, postData, putData, patchData, deleteData, invalidateGetCache } from "@/components/api/apiFuntions";
 import type {
   CustomerDetailPayload,
   CustomerTimelineEvent,
@@ -38,6 +37,42 @@ import {
 } from "@/lib/api/crm-mappers";
 import type { ChatThread } from "@/lib/booking/chat-store";
 import { emitLeadStatusChange } from "@/lib/realtime/socket";
+
+/**
+ * Lazy axios helpers — avoids store → slice → crm-client → apiFuntions → store
+ * circular init while Redux reducers are still loading.
+ */
+function http() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- deferred to break circular import
+  return require("@/components/api/apiFuntions") as typeof import("@/components/api/apiFuntions");
+}
+
+function getData(...args: Parameters<typeof import("@/components/api/apiFuntions").getData>) {
+  return http().getData(...args);
+}
+
+function postData(...args: Parameters<typeof import("@/components/api/apiFuntions").postData>) {
+  return http().postData(...args);
+}
+
+function putData(...args: Parameters<typeof import("@/components/api/apiFuntions").putData>) {
+  return http().putData(...args);
+}
+
+function patchData(...args: Parameters<typeof import("@/components/api/apiFuntions").patchData>) {
+  return http().patchData(...args);
+}
+
+function deleteData<T = unknown>(
+  endpoint: string,
+  options?: Parameters<typeof import("@/components/api/apiFuntions").deleteData>[1],
+): Promise<T> {
+  return http().deleteData<T>(endpoint, options);
+}
+
+function invalidateGetCache(...args: Parameters<typeof import("@/components/api/apiFuntions").invalidateGetCache>) {
+  return http().invalidateGetCache(...args);
+}
 
 type CrmRequestOptions = {
   silent?: boolean;
@@ -280,22 +315,28 @@ function customerPayload(customer: PortalCustomerCrm) {
 }
 
 function contractorPayload(contractor: PortalContractor | Partial<PortalContractor>) {
-  return {
-    firstName: contractor.firstName || "",
-    lastName: contractor.lastName || "",
-    companyName: contractor.companyName || "",
-    contactName: [contractor.firstName, contractor.lastName].filter(Boolean).join(" "),
-    trade: contractor.trade || "",
-    email: contractor.email || "",
-    phone: contractor.phone || "",
-    city: contractor.city || "",
-    state: contractor.state || "",
-    zip: contractor.zip || "",
-    license: contractor.license || "",
-    status: contractor.status || "active",
-    hourlyRate: contractor.hourlyRate ?? 0,
-    insuranceExpires: contractor.insuranceExpires || new Date().toISOString(),
-  };
+  const payload: Record<string, unknown> = {};
+  if (contractor.firstName !== undefined) payload.firstName = contractor.firstName || "";
+  if (contractor.lastName !== undefined) payload.lastName = contractor.lastName || "";
+  if (contractor.companyName !== undefined) payload.companyName = contractor.companyName || "";
+  if (contractor.firstName !== undefined || contractor.lastName !== undefined) {
+    payload.contactName = [contractor.firstName || "", contractor.lastName || ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (contractor.trade !== undefined) payload.trade = contractor.trade || "";
+  if (contractor.email !== undefined) payload.email = contractor.email || "";
+  if (contractor.phone !== undefined) payload.phone = contractor.phone || "";
+  if (contractor.city !== undefined) payload.city = contractor.city || "";
+  if (contractor.state !== undefined) payload.state = contractor.state || "";
+  if (contractor.zip !== undefined) payload.zip = contractor.zip || "";
+  if (contractor.license !== undefined) payload.license = contractor.license || "";
+  if (contractor.status !== undefined) payload.status = contractor.status || "active";
+  if (contractor.hourlyRate !== undefined) payload.hourlyRate = contractor.hourlyRate ?? 0;
+  if (contractor.insuranceExpires !== undefined) {
+    payload.insuranceExpires = contractor.insuranceExpires || new Date().toISOString();
+  }
+  return payload;
 }
 
 function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
@@ -440,29 +481,44 @@ function reminderPayload(reminder: PortalReminder) {
 }
 
 function taskPayload(task: PortalTask) {
+  const validSubjectKinds = [
+    "job",
+    "customer",
+    "estimate",
+    "contractor",
+    "vendor",
+  ] as const;
+
+  const subjectKind = normalizeStatus(
+    task.subjectKind,
+    validSubjectKinds,
+    "customer",
+  );
+
   const payload: Record<string, unknown> = {
     title: task.title,
     priority: task.priority || "normal",
     status: task.status || "open",
+    subjectKind,
+    subjectId: task.subjectId || null,
+    customerId: task.customerId || (subjectKind === "customer" ? task.subjectId : null) || null,
+    jobId: task.jobId || (subjectKind === "job" ? task.subjectId : null) || null,
+    assignedEmployeeId: task.assignedEmployeeId || null,
+    assignedContractorId:
+      task.assignedContractorId ||
+      (subjectKind === "contractor" && task.subjectId ? task.subjectId : null),
+    assignedVendorId:
+      task.assignedVendorId ||
+      (subjectKind === "vendor" && task.subjectId ? task.subjectId : null),
   };
+
   if (task.note) payload.note = task.note;
   if (task.dueAt) {
     payload.dueAt = task.dueAt.includes("T")
       ? task.dueAt
       : new Date(task.dueAt).toISOString();
   }
-  const jobId = task.jobId || (task.subjectKind === "job" ? task.subjectId : undefined);
-  if (jobId) payload.jobId = jobId;
-  const customerId = task.customerId || (task.subjectKind === "customer" ? task.subjectId : undefined);
-  if (customerId) payload.customerId = customerId;
-  if (task.assignedEmployeeId) payload.assignedEmployeeId = task.assignedEmployeeId;
-  if (task.assignedContractorId) payload.assignedContractorId = task.assignedContractorId;
-  if (task.assignedVendorId) payload.assignedVendorId = task.assignedVendorId;
-  const validSubjectKinds = ["job", "customer", "estimate", "contractor", "vendor"];
-  if (task.subjectKind && validSubjectKinds.includes(task.subjectKind)) {
-    payload.subjectKind = task.subjectKind;
-    if (task.subjectId) payload.subjectId = task.subjectId;
-  }
+
   return payload;
 }
 
@@ -723,8 +779,25 @@ export async function updateEmployee(id: string, employee: Partial<PortalEmploye
   return detail?.employee ?? null;
 }
 
+export type DeleteEmployeeResult = {
+  message?: string;
+  id?: string;
+  requiresReassignment?: boolean;
+  pendingTasksCount?: number;
+};
+
 export async function deleteEmployee(id: string) {
-  return deleteData(providerCrmApi.teamMember(id), { silent: false });
+  const response = await deleteData<unknown>(providerCrmApi.teamMember(id), { silent: false });
+  const payload =
+    response && typeof response === "object" && "data" in response
+      ? (response as { data?: DeleteEmployeeResult }).data
+      : (response as DeleteEmployeeResult | null);
+  return {
+    id,
+    message: payload?.message,
+    requiresReassignment: Boolean(payload?.requiresReassignment),
+    pendingTasksCount: Number(payload?.pendingTasksCount ?? 0),
+  } satisfies DeleteEmployeeResult & { id: string };
 }
 
 export async function listContractors(options?: CrmRequestOptions) {
@@ -742,7 +815,24 @@ export async function queryContractors(query: CrmListQuery = {}) {
 }
 
 export async function createContractor(contractor: PortalContractor) {
-  const response = await postData(providerCrmApi.contractors, contractorPayload(contractor));
+  const response = await postData(
+    providerCrmApi.contractors,
+    contractorPayload({
+      firstName: contractor.firstName,
+      lastName: contractor.lastName,
+      companyName: contractor.companyName,
+      trade: contractor.trade,
+      email: contractor.email,
+      phone: contractor.phone,
+      city: contractor.city,
+      state: contractor.state,
+      zip: contractor.zip,
+      license: contractor.license,
+      status: contractor.status,
+      hourlyRate: contractor.hourlyRate,
+      insuranceExpires: contractor.insuranceExpires,
+    }),
+  );
   return mapCrmEntity(response, mapPortalContractor);
 }
 
@@ -758,7 +848,9 @@ export async function getContractor(id: string) {
 
 export async function updateContractor(id: string, patch: Partial<PortalContractor>) {
   const response = await putData(providerCrmApi.contractor(id), contractorPayload(patch));
-  return mapCrmEntity(response, mapPortalContractor);
+  const mapped = mapCrmEntity(response, mapPortalContractor);
+  if (mapped) return mapped;
+  return getContractor(id);
 }
 
 export async function deleteContractor(id: string) {
@@ -1410,14 +1502,18 @@ export async function listSchedule(options?: CrmRequestOptions) {
   );
 }
 
-/** GET /api/provider/schedule?customerId=&startDate=&endDate=&kind= */
+/** GET /api/provider/schedule?customerId=&employeeId=&contractorId=&startDate=&endDate=&kind= */
 export async function querySchedule(query: CrmListQuery = {}) {
   const params: Record<string, string | number> = {};
   const customerId = query.customerId?.trim();
+  const employeeId = query.employeeId?.trim();
+  const contractorId = query.contractorId?.trim();
   const startDate = query.startDate?.trim();
   const endDate = query.endDate?.trim();
   const kind = query.kind?.trim();
   if (customerId) params.customerId = customerId;
+  if (employeeId) params.employeeId = employeeId;
+  if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
   if (kind) params.kind = kind;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -147,6 +147,8 @@ export function EventCalendar({
   onMove,
   onEventOpen,
   toolbar,
+  initialEmployeeId = "",
+  lockEmployeeId = "",
 }: {
   events: PortalCalendarEvent[];
   employeeLabel: (id?: string) => string;
@@ -154,6 +156,9 @@ export function EventCalendar({
   onMove: (event: PortalCalendarEvent, move: CalendarMove) => void;
   onEventOpen?: (event: PortalCalendarEvent) => void;
   toolbar?: ReactNode;
+  initialEmployeeId?: string;
+  /** When set, calendar stays scoped to this employee (hides Everyone filter). */
+  lockEmployeeId?: string;
 }) {
   const today = toIso(new Date());
   const firstDated =
@@ -165,19 +170,30 @@ export function EventCalendar({
   const [view, setView] = useState<CalendarView>("day");
   const [cursor, setCursor] = useState({ year: start.getFullYear(), month: start.getMonth() });
   const [kindFilter, setKindFilter] = useState<PortalEventKind | "">("");
-  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState(
+    lockEmployeeId || initialEmployeeId,
+  );
   const [selectedDay, setSelectedDay] = useState(firstDated);
   const [overDay, setOverDay] = useState<string | null>(null);
 
-  const visible = useMemo(
-    () =>
-      events.filter((item) => {
-        if (kindFilter && item.kind !== kindFilter) return false;
-        if (employeeFilter && item.employeeId !== employeeFilter) return false;
-        return true;
-      }),
-    [employeeFilter, events, kindFilter],
-  );
+  useEffect(() => {
+    const next = lockEmployeeId || initialEmployeeId;
+    if (next) setEmployeeFilter(next);
+  }, [initialEmployeeId, lockEmployeeId]);
+
+  const visible = useMemo(() => {
+    const locked = lockEmployeeId.trim();
+    const employeeId = locked || employeeFilter.trim();
+    const kind = kindFilter;
+    return events.filter((item) => {
+      if (kind && item.kind !== kind) return false;
+      if (employeeId) {
+        const eventEmployeeId = String(item.employeeId || "").trim();
+        if (eventEmployeeId !== employeeId) return false;
+      }
+      return true;
+    });
+  }, [employeeFilter, events, kindFilter, lockEmployeeId]);
 
   const cells = useMemo(() => {
     const first = new Date(cursor.year, cursor.month, 1);
@@ -357,7 +373,22 @@ export function EventCalendar({
             </button>
           ))}
         </div>
-        <NativeSelect className="w-40" value={kindFilter} onChange={(change) => setKindFilter(change.target.value as PortalEventKind | "")}>
+        <NativeSelect
+          className="w-40"
+          value={kindFilter}
+          onChange={(change) => {
+            const next = change.target.value;
+            setKindFilter(
+              next === "job" ||
+                next === "estimate" ||
+                next === "request" ||
+                next === "invoice" ||
+                next === "task"
+                ? next
+                : "",
+            );
+          }}
+        >
           <NativeSelectOption value="">All work</NativeSelectOption>
           {KINDS.map((kind) => (
             <NativeSelectOption key={kind} value={kind}>
@@ -365,11 +396,15 @@ export function EventCalendar({
             </NativeSelectOption>
           ))}
         </NativeSelect>
-        {employees ? (
-          <NativeSelect className="w-48" value={employeeFilter} onChange={(change) => setEmployeeFilter(change.target.value)}>
+        {employees && !lockEmployeeId ? (
+          <NativeSelect
+            className="w-48"
+            value={employeeFilter}
+            onChange={(change) => setEmployeeFilter(change.target.value)}
+          >
             <NativeSelectOption value="">Everyone</NativeSelectOption>
             {employees
-              .filter((item) => item.active)
+              .filter((item) => item.active !== false)
               .map((item) => (
                 <NativeSelectOption key={item.id} value={item.id}>
                   {item.firstName} {item.lastName}
@@ -381,11 +416,24 @@ export function EventCalendar({
       </div>
 
       <div className="flex flex-wrap gap-2 text-[11px]">
-        {KINDS.map((kind) => (
-          <span key={kind} className={cn("rounded-md px-2 py-0.5 font-medium", calendarEventTone(kind))}>
-            {calendarEventKindLabel(kind)}
-          </span>
-        ))}
+        {KINDS.map((kind) => {
+          const active = kindFilter === kind;
+          return (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => setKindFilter((current) => (current === kind ? "" : kind))}
+              className={cn(
+                "rounded-md px-2 py-0.5 font-medium transition-opacity",
+                calendarEventTone(kind),
+                active ? "ring-2 ring-primary ring-offset-1" : kindFilter ? "opacity-45" : null,
+              )}
+              aria-pressed={active}
+            >
+              {calendarEventKindLabel(kind)}
+            </button>
+          );
+        })}
         <span className="text-muted-foreground">
           {view === "month"
             ? "Drag to a day. Pull the right edge to extend dates."

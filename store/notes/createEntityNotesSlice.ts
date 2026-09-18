@@ -3,14 +3,8 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import {
-  deleteData,
-  extractErrorMessage,
-  getData,
-  patchData,
-  postData,
-  putData,
-} from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { deleteData, getData, patchData, postData, putData } from "@/components/api/sliceHttp";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 import {
   extractNoteEntity,

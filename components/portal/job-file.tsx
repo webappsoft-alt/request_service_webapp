@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, Eye, FileText, Film, ImageIcon, Loader2, Music, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ import {
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -615,7 +616,13 @@ export function JobSettingsTab({
         </Field>
         <label className="grid gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium">Notes</span>
-          <Textarea rows={4} value={draft.notes} onChange={(event) => patch({ notes: event.target.value })} />
+          <Textarea
+            rows={4}
+            value={draft.notes}
+            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+              patch({ notes: event.target.value })
+            }
+          />
         </label>
       </div>
     </div>

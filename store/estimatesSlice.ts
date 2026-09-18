@@ -3,7 +3,7 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { queryEstimates } from "@/lib/api/crm-client";
 import type { Estimate } from "@/lib/types";
 

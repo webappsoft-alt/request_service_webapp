@@ -965,6 +965,13 @@ export function CreateReminderDialog({
         saved = created ?? reminder;
         crm.addReminder(saved);
       }
+      // Keep FileNotices / CRM directory banners in sync without a full page refresh.
+      if (crm.enabled) {
+        crm.upsertReminder(saved);
+      }
+      if (saved.subjectKind === "customer" && saved.subjectId) {
+        dispatch(upsertCustomerReminder({ customerId: saved.subjectId, item: saved }));
+      }
       onCreated?.(saved);
       toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
       onOpenChange(false);
@@ -1228,7 +1235,10 @@ export function CreateTaskDialog({
     setSelectedId(nextId);
     setTitle(task?.title ?? "");
     setNote(task?.note ?? "");
-    setAssignedEmployeeId(task?.assignedEmployeeId ?? "");
+    setAssignedEmployeeId(
+      task?.assignedEmployeeId ??
+        (subjectKind === "employee" && subjectId ? subjectId : ""),
+    );
     setPriority(task?.priority ?? "normal");
     setStatus(task?.status ?? "open");
     setDueAt(task?.dueAt ? task.dueAt.slice(0, 10) : "");

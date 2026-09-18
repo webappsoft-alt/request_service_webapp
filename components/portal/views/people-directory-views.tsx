@@ -284,7 +284,8 @@ export function ContractorsView() {
   );
 }
 
-export { ContractorDetailView, VendorDetailView } from "@/components/portal/views/partner-detail-views";
+export { ContractorDetailView } from "@/components/portal/views/contractor-detail-view";
+export { VendorDetailView } from "@/components/portal/views/partner-detail-views";
 
 export function VendorsView() {
   const dispatch = useAppDispatch();

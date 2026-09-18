@@ -246,12 +246,15 @@ function resolveAssignedEmployeeIds(job: Job, employees: PortalEmployee[]) {
   if (!job.assignedTo) return [];
   const raw = job.assignedTo.trim();
   if (!raw) return [];
-  // Prefer id match when the dialog stores the employee id.
+  // Dialog stores technician dropdown value as employee id.
   if (employees.some((employee) => employee.id === raw)) return [raw];
   const normalized = raw.toLowerCase();
-  return employees
+  const byName = employees
     .filter((employee) => employeeName(employee).trim().toLowerCase() === normalized)
     .map((employee) => employee.id);
+  if (byName.length) return byName;
+  // Still send the raw value (id) when crew list is empty / not loaded.
+  return [raw];
 }
 
 function customerPayload(customer: PortalCustomerCrm) {
@@ -399,13 +402,15 @@ function estimatePayload(estimate: Estimate) {
   };
 }
 
-function jobPayload(job: Job, employees: PortalEmployee[]) {
+function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
+  const techId = String(job.assignedTo || "").trim();
   return {
     customerId: job.customerId,
     estimateId: job.estimateId || null,
     title: job.title || "",
     status: job.status,
-    assignedEmployees: resolveAssignedEmployeeIds(job, employees),
+    // Always send selected technician id(s) — dialog stores id on assignedTo.
+    assignedEmployees: techId ? [techId] : resolveAssignedEmployeeIds(job, _employees),
     assignedContractors: [],
     scheduledAt: job.scheduledAt || null,
     dueAt: job.dueAt || null,

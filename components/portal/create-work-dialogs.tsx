@@ -642,8 +642,8 @@ export function CreateJobDialog({
     estimateFilter,
   );
   const assigneePaging = usePaginatedCrmOptions(
-    open && useApi && tab === "schedule" ? "assignee" : null,
-    open && useApi && tab === "schedule",
+    open && useApi ? "assignee" : null,
+    open && useApi,
   );
 
   const customerOptions = useMemo(
@@ -855,6 +855,7 @@ export function CreateJobDialog({
         longitude: longitude ?? customerLocation.longitude ?? null,
       };
 
+      const techId = employeeId.trim();
       if (isEdit && job) {
         const nextJob = buildJob({
           id: job.id,
@@ -865,7 +866,7 @@ export function CreateJobDialog({
           estimateId: job.estimateId || source?.id || undefined,
           serviceId: job.serviceId,
           address: addressFrom(street, city, state, zip, job.address?.id, jobCoords),
-          assignedTo: employeeId || assignedTo || undefined,
+          assignedTo: techId || undefined,
           scheduledAt: start,
           dueAt: due || undefined,
           // Status has a separate PATCH /jobs/:id/status endpoint — do not change it here.
@@ -927,8 +928,8 @@ export function CreateJobDialog({
         customerId: jobCustomerId,
         estimateId: estimateId || undefined,
         address: addressFrom(street, city, state, zip, undefined, jobCoords),
-        // Prefer employee id so POST assignedEmployees resolves correctly.
-        assignedTo: employeeId || assignedTo || undefined,
+        // Technician select id → job.assignedTo → assignedEmployees[]
+        assignedTo: techId || undefined,
         scheduledAt: start,
         dueAt: due || undefined,
         status,
@@ -1093,6 +1094,7 @@ export function CreateJobDialog({
               <PaginatedEntitySelect
                 id="job-technician"
                 value={employeeId}
+                selectedLabel={employeeLabel}
                 options={technicianOptions}
                 placeholder="Unassigned"
                 emptyLabel="No technicians found."

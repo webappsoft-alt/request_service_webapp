@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -15,6 +15,8 @@ import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
+import { CenteredSpinner } from "@/components/ui/spinner";
+import { getTask } from "@/lib/api/crm-client";
 import {
   crmTaskPriorityLabel,
   crmTaskStatusLabel,
@@ -22,6 +24,7 @@ import {
   taskIsOverdue,
   taskSubject,
   type CrmTaskStatus,
+  type PortalTask,
 } from "@/lib/data/crm-people";
 import { withArchiveFilter } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
@@ -221,11 +224,62 @@ export function TasksView() {
 export function TaskDetailView({ id }: { id: string }) {
   const { tasks, employees, setTaskStatus } = useCrmDirectory();
   const lookups = useReminderLookups();
-  const task = tasks.find((item) => item.id === id);
+  const [fetched, setFetched] = useState<PortalTask | null>(null);
+  const [fetching, setFetching] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const listed = tasks.find((item) => item.id === id);
+  const task = fetched ?? listed;
+
+  useEffect(() => {
+    setFetched(null);
+    setFetchError(null);
+    setFetching(true);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setFetching(true);
+    setFetchError(null);
+    // MD / CRM: GET /api/provider/tasks/:id
+    void getTask(id)
+      .then((item) => {
+        if (cancelled) return;
+        if (!item) {
+          setFetched(null);
+          setFetchError("Task not found");
+          return;
+        }
+        setFetched(item);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setFetched(null);
+        setFetchError(
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not load this task.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setFetching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   if (!task) {
+    if (fetching) {
+      return (
+        <div className="border border-black/15 bg-card" aria-busy="true">
+          <CenteredSpinner className="min-h-[22rem]" />
+        </div>
+      );
+    }
     return (
       <div className="border border-black/15 bg-card p-6">
-        <h1 className="text-lg font-semibold">Task not found</h1>
+        <h1 className="text-lg font-semibold">{fetchError || "Task not found"}</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/tasks">Back to tasks</Link>
         </Button>

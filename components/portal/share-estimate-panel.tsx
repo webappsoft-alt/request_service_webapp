@@ -27,6 +27,7 @@ export function EstimateShareTab({
   estimate,
   customer,
   customerLabel,
+  locked = false,
   onSent,
   onFinalize,
   finalizing = false,
@@ -34,6 +35,7 @@ export function EstimateShareTab({
   estimate: Estimate;
   customer?: PortalCustomerCrm;
   customerLabel: string;
+  locked?: boolean;
   onSent: (result?: SendApprovalResult) => void;
   onFinalize?: () => void;
   finalizing?: boolean;
@@ -159,50 +161,76 @@ export function EstimateShareTab({
           Preview the estimate as a two-page document, sign for the company, then send the customer link.
         </p>
         {ready ? null : (
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="mt-3 flex flex-col gap-2 rounded-[4px] border border-amber-200 bg-amber-50/60 p-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-amber-900">
-              Click Finalize estimate first. That locks the quote so you can send the customer link.
+              {estimate.status === "site_visit"
+                ? "Complete the site inspection and save field notes before finalizing this estimate."
+                : "Click Finalize estimate first. That locks the quote so you can send the customer link."}
             </p>
-            {onFinalize ? (
-              <Button size="sm" disabled={finalizing} onClick={onFinalize}>
+            {estimate.status !== "site_visit" && onFinalize ? (
+              <Button size="sm" disabled={finalizing} onClick={onFinalize} className="shrink-0">
                 {finalizing ? "Finalizing…" : "Finalize estimate"}
               </Button>
             ) : null}
           </div>
         )}
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <Input
-            readOnly
-            value={displayUrl}
-            placeholder="Create the link, then copy it"
-          />
-          <Button onClick={() => setPreviewOpen(true)} disabled={!ready}>
-            Send for approval
-          </Button>
-          <Button variant="outline" onClick={() => void copy()} disabled={!ready}>
-            {copied ? (
-              <>
-                <Check className="size-4 text-emerald-600" />
-                <span>Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="size-4" />
-                <span>Copy link</span>
-              </>
+        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <Input
+              readOnly
+              value={displayUrl}
+              placeholder="Create the link, then copy it"
+              className="h-9 w-full font-mono text-xs"
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+            {locked || Boolean(approval) ? null : (
+              <Button
+                className="h-9 px-3.5"
+                onClick={() => setPreviewOpen(true)}
+                disabled={!ready}
+              >
+                Send for approval
+              </Button>
             )}
-          </Button>
-          {ready ? (
-            <Button variant="outline" onClick={() => void openCustomerView()}>
-              <ExternalLink className="size-4" />
-              Open customer view
+            <Button
+              className="h-9 px-3.5"
+              variant="outline"
+              onClick={() => void copy()}
+              disabled={!ready}
+            >
+              {copied ? (
+                <>
+                  <Check className="size-4 text-emerald-600" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="size-4" />
+                  <span>Copy link</span>
+                </>
+              )}
             </Button>
-          ) : (
-            <Button variant="outline" disabled>
-              <ExternalLink className="size-4" />
-              Open customer view
-            </Button>
-          )}
+            {ready ? (
+              <Button
+                className="h-9 px-3.5"
+                variant="outline"
+                onClick={() => void openCustomerView()}
+              >
+                <ExternalLink className="size-4" />
+                Open customer view
+              </Button>
+            ) : (
+              <Button
+                className="h-9 px-3.5"
+                variant="outline"
+                disabled
+              >
+                <ExternalLink className="size-4" />
+                Open customer view
+              </Button>
+            )}
+          </div>
         </div>
       </div>
       {approval ? (

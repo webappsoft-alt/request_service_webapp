@@ -67,10 +67,20 @@ function readNextFromLocation(): string | null {
   }
 }
 
+function isProAuthPath(pathname: string): boolean {
+  return (
+    pathname === "/pro/login" ||
+    pathname === "/pro/register" ||
+    pathname === "/pro/signup" ||
+    pathname === "/pro"
+  );
+}
+
 /**
  * Client-side RBAC after Redux Persist rehydrates.
  * - Customers must never see /pro/* (including pro login).
- * - Providers stay inside /pro/dashboard/* only.
+ * - Providers redirect away from login/auth and customer account pages to /pro/dashboard.
+ * - Public pages (estimates, services, landing) remain accessible to both.
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -112,8 +122,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (role === "provider") {
-      // Logged-in providers only use dashboard routes (and nested pages).
-      if (!isProDashboard(pathname)) {
+      // Logged-in providers only redirect away from auth and customer account areas.
+      if (
+        isProAuthPath(pathname) ||
+        isCustomerAuthPath(pathname) ||
+        isCustomerProtected(pathname)
+      ) {
         router.replace(proPaths.dashboard);
       }
     }

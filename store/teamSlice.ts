@@ -105,16 +105,20 @@ export const fetchTeam = createAsyncThunk<
     search: string;
     role: string;
   },
-  { force?: boolean } | void,
+  { force?: boolean; limit?: number; page?: number; search?: string; role?: string } | void,
   { state: { team: TeamState }; rejectValue: string }
->("team/fetchList", async (_params, { getState, rejectWithValue }) => {
+>("team/fetchList", async (params, { getState, rejectWithValue }) => {
   const state = getState().team ?? initialState;
   try {
+    const page = params && typeof params === "object" && params.page !== undefined ? params.page : state.page;
+    const limit = params && typeof params === "object" && params.limit !== undefined ? params.limit : (params && typeof params === "object" && params.force ? 100 : state.limit);
+    const search = params && typeof params === "object" && params.search !== undefined ? params.search : state.search;
+    const role = params && typeof params === "object" && params.role !== undefined ? params.role : state.role;
     const result = await queryTeam({
-      page: state.page,
-      limit: state.limit,
-      search: state.search.trim() || undefined,
-      role: state.role.trim() || undefined,
+      page,
+      limit,
+      search: search.trim() || undefined,
+      role: role.trim() || undefined,
       force: true,
       silent: true,
     });
@@ -124,8 +128,8 @@ export const fetchTeam = createAsyncThunk<
       limit: result.limit,
       total: result.total,
       totalPages: result.totalPages,
-      search: state.search,
-      role: state.role,
+      search,
+      role,
     };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));

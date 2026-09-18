@@ -76,7 +76,11 @@ function subscribe(onStoreChange: () => void) {
   };
 }
 
+import { useAppSelector } from "@/store/hooks";
+
 export function usePortalCrew() {
+  const reduxTeam = useAppSelector((state) => state.team?.items ?? []);
+  const reduxLoading = useAppSelector((state) => state.team?.loading ?? false);
   const workspace = usePortalWorkspace();
   const { tasks, contractors } = useCrmDirectory();
   const crm = useCrmApiData();
@@ -87,13 +91,23 @@ export function usePortalCrew() {
     () => EMPTY,
   );
   const apiReady = crm.enabled && crm.ready;
-  const loading = crm.enabled && (!crm.ready || crm.loading);
+  const loading = reduxLoading || (crm.enabled && (!crm.ready || crm.loading));
   const suppressSeedData = Boolean(workspace.session) || (crm.enabled && !crm.ready);
 
   // Do NOT call ensureLoaded here — list tabs (Jobs, etc.) use this hook and
   // must not trigger the full CRM snapshot. Schedule/dashboard call it explicitly.
 
   const employees = useMemo(() => {
+    if (reduxTeam && reduxTeam.length > 0) {
+      return reduxTeam
+        .filter((item) => !store.removedIds.includes(item.id))
+        .map((item) => ({ ...item, ...store.patches[item.id] }));
+    }
+    if (crm.employees && crm.employees.length > 0) {
+      return crm.employees
+        .filter((item) => !store.removedIds.includes(item.id))
+        .map((item) => ({ ...item, ...store.patches[item.id] }));
+    }
     if (apiReady) {
       return crm.employees
         .filter((item) => !store.removedIds.includes(item.id))
@@ -105,6 +119,7 @@ export function usePortalCrew() {
   }, [
     apiReady,
     crm.employees,
+    reduxTeam,
     store.extras,
     store.patches,
     store.removedIds,

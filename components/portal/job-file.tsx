@@ -19,9 +19,11 @@ import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type Costin
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useEstimateActivities } from "@/components/portal/use-estimate-activities";
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
 import {
   useJobFile,
+  toJobAttachmentItem,
   type JobActivity,
   type JobAttachment,
   type JobLog,
@@ -46,8 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { updateEstimate as updateEstimateApi, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
+import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
@@ -164,15 +165,21 @@ function Detail({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function stamp(value: string) {
-  const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+function stamp(value?: string) {
+  if (!value) return "Added recently";
+  try {
+    const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return "Added recently";
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return "Added recently";
+  }
 }
 
 function fileSize(bytes: number) {
@@ -191,20 +198,46 @@ export function JobSummaryTab({
   invoice,
   technician,
   noun = "job",
+  locked = false,
 }: {
   job: Job;
   estimate?: Estimate;
   invoice?: Invoice;
   technician: string;
   noun?: CostingNoun;
+  locked?: boolean;
 }) {
   const { lines, mix } = useJobCosting(job);
   const sheet = jobMoneySheet(mix);
   const file = useJobFile(job, estimate, invoice, technician);
+  const crm = useCrmApiData();
+  const isEstimate = noun === "estimate" && Boolean(estimate?.id);
+  const estimateActivities = useEstimateActivities(
+    estimate?.id,
+    isEstimate,
+    estimate?.activities,
+    (next) => {
+      if (estimate?.id) {
+        crm.patchEstimate(estimate.id, { activities: next });
+      }
+    },
+  );
+
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<JobActivity | null>(null);
+  const [editing, setEditing] = useState<{ id: string; title: string; html: string } | null>(null);
+  const [saving, setSaving] = useState(false);
   const laborLines = lines.filter((line) => line.kind === "labor");
   const materialLines = lines.filter((line) => line.kind === "materials");
+
+  const activities: Array<{ id: string; title: string; html: string; actor: string; at: string }> = isEstimate
+    ? estimateActivities.activities.map((item) => ({
+        id: item.id,
+        title: item.title,
+        html: item.description,
+        actor: item.actor || "Desk",
+        at: item.createdAt,
+      }))
+    : file.activities;
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
@@ -245,31 +278,39 @@ export function JobSummaryTab({
       <Panel
         title="Activity"
         action={
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-          >
-            <Plus />
-            Add activity
-          </Button>
+          locked ? null : (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus />
+              Add activity
+            </Button>
+          )
         }
       >
-        {file.activities.length ? (
+        {activities.length ? (
           <ul className="space-y-3">
-            {file.activities.map((item) => (
+            {activities.map((item) => (
               <ActivityCard
                 key={item.id}
                 item={item}
+                locked={locked}
+                deleting={estimateActivities.deletingId === item.id}
                 onEdit={() => {
-                  setEditing(item);
+                  setEditing({ id: item.id, title: item.title, html: item.html });
                   setOpen(true);
                 }}
-                onDelete={() => {
-                  file.removeActivity(item.id);
-                  toast.success("Activity deleted.");
+                onDelete={async () => {
+                  if (isEstimate) {
+                    await estimateActivities.deleteActivity(item.id);
+                  } else {
+                    file.removeActivity(item.id);
+                    toast.success("Activity deleted.");
+                  }
                 }}
               />
             ))}
@@ -281,13 +322,36 @@ export function JobSummaryTab({
       <ActivityDialog
         open={open}
         activity={editing}
+        saving={saving || (isEstimate && estimateActivities.saving)}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) setEditing(null);
         }}
-        onSave={(title, html) => {
-          if (editing) file.updateActivity(editing.id, title, html);
-          else file.addActivity(title, html);
+        onSave={async (title, html) => {
+          if (isEstimate) {
+            setSaving(true);
+            try {
+              if (editing) {
+                await estimateActivities.updateActivity(editing.id, title, html);
+              } else {
+                await estimateActivities.addActivity(title, html);
+              }
+              setOpen(false);
+              setEditing(null);
+            } finally {
+              setSaving(false);
+            }
+          } else {
+            if (editing) {
+              file.updateActivity(editing.id, title, html);
+              toast.success("Activity updated.");
+            } else {
+              file.addActivity(title, html);
+              toast.success("Activity posted.");
+            }
+            setOpen(false);
+            setEditing(null);
+          }
         }}
       />
     </div>
@@ -300,6 +364,7 @@ export function JobMaterialsTab({
   invoice,
   technician,
   noun = "job",
+  locked: propLocked,
   onSave,
 }: {
   job: Job;
@@ -307,10 +372,12 @@ export function JobMaterialsTab({
   invoice?: Invoice;
   technician: string;
   noun?: CostingNoun;
+  locked?: boolean;
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
 }) {
-  const { addLog, locked } = useJobFile(job, estimate, invoice, technician);
-  return <JobCosting job={job} locked={locked} noun={noun} onMutate={addLog} onSave={onSave} />;
+  const { addLog, locked: fileLocked } = useJobFile(job, estimate, invoice, technician);
+  const isLocked = propLocked ?? fileLocked;
+  return <JobCosting job={job} locked={isLocked} noun={noun} onMutate={addLog} onSave={onSave} />;
 }
 
 export function JobSettingsTab({
@@ -369,29 +436,33 @@ export function JobSettingsTab({
     };
     try {
       file.saveSettings(next);
-      if (apiReady) {
-        await updateJobApi(
-          job.id,
-          {
-            ...job,
-            customerId: next.customerId || job.customerId,
-            status: next.status,
-            notes: next.notes,
-            scheduledAt: next.start || job.scheduledAt,
-            dueAt: next.due || job.dueAt,
-            assignedTo: next.assignedTo || job.assignedTo,
-            address: {
-              ...job.address,
-              street: next.street || job.address.street,
-              city: next.city || job.address.city,
-              state: next.state || job.address.state,
-              zip: next.zip || job.address.zip,
+      if (job?.id) {
+        try {
+          await updateJobApi(
+            job.id,
+            {
+              ...job,
+              customerId: next.customerId || job.customerId,
+              status: next.status,
+              notes: next.notes,
+              scheduledAt: next.start || job.scheduledAt,
+              dueAt: next.due || job.dueAt,
+              assignedTo: next.assignedTo || job.assignedTo,
+              address: {
+                ...job.address,
+                street: next.street || job.address.street,
+                city: next.city || job.address.city,
+                state: next.state || job.address.state,
+                zip: next.zip || job.address.zip,
+              },
             },
-          },
-          employees,
-        );
-        await updateJobStatusApi(job.id, next.status, next.notes);
-        await crm.refresh();
+            employees,
+          );
+          await updateJobStatusApi(job.id, next.status, next.notes);
+          void crm.refresh({ silent: true });
+        } catch {
+          records.setStatus("job", job.id, next.status);
+        }
       } else {
         records.setStatus("job", job.id, next.status);
       }
@@ -571,6 +642,15 @@ export function JobLogsTab({
   noun?: CostingNoun;
 }) {
   const { logs } = useJobFile(job, estimate, invoice, technician);
+  const apiLogs = (estimate?.logs ?? []).map((log) => ({
+    id: log.id,
+    title: log.action || "Estimate updated",
+    detail: log.details || "",
+    actor: log.actor || "System",
+    at: log.timestamp,
+  }));
+  const displayLogs = noun === "estimate" && apiLogs.length > 0 ? apiLogs : logs;
+
   return (
     <div>
       <h2 className="text-base font-semibold">{noun === "estimate" ? "Estimate log" : noun === "invoice" ? "Invoice log" : "Job log"}</h2>
@@ -582,8 +662,8 @@ export function JobLogsTab({
             : "Every change on this job is recorded here."}
       </p>
       <ol className="mt-4 space-y-0">
-        {logs.map((item, index) => (
-          <LogRow key={item.id} item={item} last={index === logs.length - 1} />
+        {displayLogs.map((item, index) => (
+          <LogRow key={item.id} item={item} last={index === displayLogs.length - 1} />
         ))}
       </ol>
     </div>
@@ -596,49 +676,52 @@ export function JobAttachmentsTab({
   invoice,
   technician,
   noun = "job",
+  locked = false,
+  onSave,
 }: {
   job: Job;
   estimate?: Estimate;
   invoice?: Invoice;
   technician: string;
   noun?: CostingNoun;
+  locked?: boolean;
+  onSave?: (updated: Estimate) => void;
 }) {
-  const { attachments, addAttachments, removeAttachment, actor } = useJobFile(job, estimate, invoice, technician);
+  const { addAttachments, removeAttachment, actor } = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();
-  const apiReady = crm.enabled;
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<JobAttachment[] | null>(null);
 
-  const fallbackSavedUrls = useMemo(() => {
-    return (estimate?.attachments ?? [])
-      .map((item) => {
-        if (typeof item === "string") return item.trim();
-        if (item && typeof item === "object") {
-          const record = item as Record<string, unknown>;
-          return String(record.attachment || record.dataUrl || record.url || "").trim();
-        }
-        return "";
-      })
-      .filter(Boolean);
-  }, [estimate?.attachments]);
+  const savedAttachments = useMemo<JobAttachment[]>(() => {
+    const rawList = estimate ? estimate.attachments : job?.attachments;
+    if (!rawList || !Array.isArray(rawList)) return [];
+    const prefix = estimate?.id ?? job?.id ?? "att";
+    const addedAt = estimate?.createdAt ?? job?.createdAt ?? new Date().toISOString();
+    return rawList
+      .map((item, index) => toJobAttachmentItem(item, index, prefix, addedAt))
+      .filter((item) => Boolean(item.dataUrl));
+  }, [estimate, job?.attachments, job?.id, job?.createdAt]);
 
-  const [lastSavedUrls, setLastSavedUrls] = useState<string[]>(fallbackSavedUrls);
-
-  const fallbackSavedKey = fallbackSavedUrls.join("|");
   useEffect(() => {
-    setLastSavedUrls(fallbackSavedUrls);
-  }, [fallbackSavedKey]);
+    setDraft(null);
+  }, [estimate?.id, job?.id]);
+
+  const activeAttachments = draft ?? savedAttachments;
 
   const isDirty = useMemo(() => {
-    if (!estimate) return false;
-    const currentUrls = attachments
-      .map((item) => (item.dataUrl || "").trim())
-      .filter(Boolean);
-    if (currentUrls.length !== lastSavedUrls.length) return true;
-    return currentUrls.some((url, idx) => url !== lastSavedUrls[idx]);
-  }, [estimate, attachments, lastSavedUrls]);
+    if (!draft) return false;
+    if (draft.length !== savedAttachments.length) return true;
+    return draft.some((item, index) => {
+      const saved = savedAttachments[index];
+      if (!saved) return true;
+      return (
+        (item.dataUrl || "").trim() !== (saved.dataUrl || "").trim() ||
+        (item.name || "").trim() !== (saved.name || "").trim()
+      );
+    });
+  }, [draft, savedAttachments]);
 
   const pendingActionRef = useRef<(() => void) | null>(null);
   const bypassingRef = useRef(false);
@@ -721,7 +804,7 @@ export function JobAttachmentsTab({
   }
 
   async function persistEstimateAttachments(nextAttachments: JobAttachment[]) {
-    if (!estimate || !apiReady) return;
+    if (!estimate?.id) return;
     const attachmentPayload = nextAttachments
       .map((item) => ({
         name: (item.name || "").trim() || "Attachment",
@@ -729,29 +812,29 @@ export function JobAttachmentsTab({
       }))
       .filter((item) => Boolean(item.attachment));
 
-    const updated = await updateEstimateApi(estimate.id, {
+    const updatedEstimate: Estimate = {
       ...estimate,
       attachments: attachmentPayload,
-    });
+    };
+
+    crm.patchEstimate(estimate.id, updatedEstimate);
+    onSave?.(updatedEstimate);
+
+    const updated = await updateEstimateAttachments(estimate.id, attachmentPayload);
     if (updated) {
       crm.patchEstimate(estimate.id, updated);
-    } else {
-      crm.patchEstimate(estimate.id, { attachments: attachmentPayload });
+      onSave?.(updated);
+      return updated;
     }
-    if (crm.ready) {
-      void crm.refresh({ silent: true });
-    }
-    return updated;
+    return updatedEstimate;
   }
 
   async function handleSave() {
     if (!estimate) return;
     setSaving(true);
     try {
-      if (apiReady) {
-        await persistEstimateAttachments(attachments);
-      }
-      setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      await persistEstimateAttachments(activeAttachments);
+      setDraft(null);
       toast.success("Attachments saved.");
     } catch (error) {
       const message =
@@ -767,8 +850,10 @@ export function JobAttachmentsTab({
   async function handleSaveAndLeave() {
     try {
       setSaving(true);
-      await persistEstimateAttachments(attachments);
-      setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      if (estimate) {
+        await persistEstimateAttachments(activeAttachments);
+      }
+      setDraft(null);
       toast.success("Attachments saved.");
       executePending();
     } catch (error) {
@@ -783,12 +868,7 @@ export function JobAttachmentsTab({
   }
 
   function handleDiscardAndLeave() {
-    attachments.forEach((item) => {
-      const url = (item.dataUrl || "").trim();
-      if (!lastSavedUrls.includes(url)) {
-        removeAttachment(item.id);
-      }
-    });
+    setDraft(null);
     executePending();
   }
 
@@ -797,26 +877,14 @@ export function JobAttachmentsTab({
     setShowUnsavedDialog(false);
   }
 
-  async function handleDelete(file: JobAttachment) {
-    if (deletingId) return;
-    setDeletingId(file.id);
-    try {
-      const remaining = attachments.filter((item) => item.id !== file.id);
+  function handleDelete(file: JobAttachment) {
+    const current = draft ?? savedAttachments;
+    const remaining = current.filter((item) => item.id !== file.id && item.dataUrl !== file.dataUrl);
+    setDraft(remaining);
+    if (!estimate) {
       removeAttachment(file.id);
-      if (estimate && apiReady) {
-        await persistEstimateAttachments(remaining);
-      }
-      setLastSavedUrls(remaining.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
-      toast.success("Attachment removed.");
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : "Could not update attachments on server.";
-      toast.error(message);
-    } finally {
-      setDeletingId(null);
     }
+    toast.success(`${file.name} removed.`);
   }
 
   async function readFiles(list: FileList | File[]) {
@@ -841,7 +909,7 @@ export function JobAttachmentsTab({
         const url = extractUploadedUrl(response.data);
         if (!url) throw new Error(`Could not upload ${file.name}.`);
         const item: JobAttachment = {
-          id: `att_${Date.now()}_${file.name}`,
+          id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${file.name}`,
           name: file.name,
           type: file.type || "application/octet-stream",
           size: file.size,
@@ -852,11 +920,10 @@ export function JobAttachmentsTab({
         addedList.push(item);
         toast.success(`${file.name} attached.`);
       }
-      addAttachments(addedList);
-      if (estimate && apiReady) {
-        const combined = [...addedList, ...attachments];
-        await persistEstimateAttachments(combined);
-        setLastSavedUrls(combined.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
+      const current = draft ?? savedAttachments;
+      setDraft([...addedList, ...current]);
+      if (!estimate) {
+        addAttachments(addedList);
       }
     } catch (error) {
       const message =
@@ -886,7 +953,7 @@ export function JobAttachmentsTab({
             Photos, PDFs, videos, and other {noun === "estimate" ? "quote" : noun === "invoice" ? "invoice" : "job"} files. Preview or remove anytime.
           </p>
         </div>
-        {estimate ? (
+        {estimate && !locked ? (
           <Button
             type="button"
             size="sm"
@@ -904,47 +971,49 @@ export function JobAttachmentsTab({
           </Button>
         ) : null}
       </div>
-      <label
-        className={cn(
-          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors",
-          over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
-          uploading && "pointer-events-none opacity-60",
-        )}
-        onDragEnter={(event) => {
-          event.preventDefault();
-          setOver(true);
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setOver(true);
-        }}
-        onDragLeave={() => setOver(false)}
-        onDrop={onDrop}
-      >
-        {uploading ? (
-          <Loader2 className="size-6 animate-spin text-primary" />
-        ) : (
-          <Upload className="size-6 text-primary" />
-        )}
-        <p className="text-sm font-medium">
-          {uploading ? "Uploading files…" : "Drop files here or browse"}
-        </p>
-        <p className="text-xs text-muted-foreground">Images, PDF, Video, and Audio up to 500 MB</p>
-        <input
-          className="sr-only"
-          type="file"
-          multiple
-          accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
-          disabled={uploading}
-          onChange={(event) => {
-            if (event.target.files?.length) void readFiles(event.target.files);
-            event.target.value = "";
+      {!locked ? (
+        <label
+          className={cn(
+            "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors",
+            over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+            uploading && "pointer-events-none opacity-60",
+          )}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setOver(true);
           }}
-        />
-      </label>
-      {attachments.length ? (
+          onDragOver={(event) => {
+            event.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={onDrop}
+        >
+          {uploading ? (
+            <Loader2 className="size-6 animate-spin text-primary" />
+          ) : (
+            <Upload className="size-6 text-primary" />
+          )}
+          <p className="text-sm font-medium">
+            {uploading ? "Uploading files…" : "Drop files here or browse"}
+          </p>
+          <p className="text-xs text-muted-foreground">Images, PDF, Video, and Audio up to 500 MB</p>
+          <input
+            className="sr-only"
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
+            disabled={uploading}
+            onChange={(event) => {
+              if (event.target.files?.length) void readFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+        </label>
+      ) : null}
+      {activeAttachments.length ? (
         <ul className="mt-4 divide-y divide-black/10 border border-black/10">
-          {attachments.map((file) => (
+          {activeAttachments.map((file) => (
             <li key={file.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-md bg-[#eef1f5] text-primary">
                 {file.type.startsWith("image/") ? (
@@ -967,7 +1036,7 @@ export function JobAttachmentsTab({
                   {file.name}
                 </a>
                 <p className="text-xs text-muted-foreground">
-                  {fileSize(file.size)} · {stamp(file.addedAt)}
+                  {stamp(file.addedAt)}
                 </p>
               </div>
               <Button size="sm" variant="outline" asChild>
@@ -981,27 +1050,27 @@ export function JobAttachmentsTab({
                   Preview
                 </a>
               </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                aria-label={`Delete ${file.name}`}
-                disabled={deletingId === file.id || saving}
-                onClick={() => {
-                  void handleDelete(file);
-                }}
-              >
-                {deletingId === file.id ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
+              {!locked ? (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Delete ${file.name}`}
+                  disabled={saving}
+                  onClick={() => {
+                    handleDelete(file);
+                  }}
+                >
                   <Trash2 className="size-4" />
-                )}
-              </Button>
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-4 text-sm text-muted-foreground">No files on this job yet.</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {locked ? "No attachments on this estimate." : "No files on this job yet."}
+        </p>
       )}
 
       <UnsavedChangesDialog
@@ -1071,38 +1140,57 @@ function MoneyRow({ label, value, strong }: { label: string; value: number; stro
 
 function ActivityCard({
   item,
+  deleting = false,
+  locked = false,
   onEdit,
   onDelete,
 }: {
-  item: JobActivity;
+  item: {
+    id: string;
+    title: string;
+    actor?: string;
+    at?: string;
+    createdAt?: string;
+    html?: string;
+    description?: string;
+  };
+  deleting?: boolean;
+  locked?: boolean;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete: () => void | Promise<void>;
 }) {
+  const timestamp = item.at || item.createdAt || "";
+  const content = item.html ?? item.description ?? "";
   return (
     <li className="rounded-[4px] border border-black/10 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium">{item.title}</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {item.actor} · {stamp(item.at)}
+            {item.actor || "Desk"} · {timestamp ? stamp(timestamp) : "Just now"}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" onClick={onEdit}>
-            <Pencil />
-          </Button>
-          <Button
-            aria-label={`Delete ${item.title}`}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            size="icon-sm"
-            variant="ghost"
-            onClick={onDelete}
-          >
-            <Trash2 />
-          </Button>
-        </div>
+        {!locked ? (
+          <div className="flex shrink-0 gap-1">
+            <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" disabled={deleting} onClick={onEdit}>
+              <Pencil />
+            </Button>
+            <Button
+              aria-label={`Delete ${item.title}`}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              size="icon-sm"
+              variant="ghost"
+              disabled={deleting}
+              onClick={onDelete}
+            >
+              {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 />}
+            </Button>
+          </div>
+        ) : null}
       </div>
-      <div className="job-activity-html mt-2 text-sm" dangerouslySetInnerHTML={{ __html: safeHtml(item.html) }} />
+      {content ? (
+        <div className="job-activity-html mt-2 text-sm" dangerouslySetInnerHTML={{ __html: safeHtml(content) }} />
+      ) : null}
     </li>
   );
 }
@@ -1128,22 +1216,25 @@ function LogRow({ item, last }: { item: JobLog; last: boolean }) {
 function ActivityDialog({
   open,
   activity,
+  saving = false,
   onOpenChange,
   onSave,
 }: {
   open: boolean;
-  activity?: JobActivity | null;
+  activity?: { id?: string; title: string; html?: string; description?: string } | null;
+  saving?: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (title: string, html: string) => void;
+  onSave: (title: string, html: string) => Promise<void> | void;
 }) {
   const [title, setTitle] = useState("");
   const [html, setHtml] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const frame = window.requestAnimationFrame(() => {
       setTitle(activity?.title ?? "");
-      setHtml(activity?.html ?? "");
+      setHtml(activity?.html ?? activity?.description ?? "");
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activity, open]);
@@ -1152,6 +1243,8 @@ function ActivityDialog({
     setTitle("");
     setHtml("");
   }
+
+  const isBusy = saving || submitting;
 
   return (
     <Dialog
@@ -1165,13 +1258,18 @@ function ActivityDialog({
         <DialogHeader>
           <DialogTitle>{activity ? "Edit activity" : "Add activity"}</DialogTitle>
           <DialogDescription>
-            {activity ? "Update the title or note. The change is written to the log." : "Title plus a rich note. It posts to this job and the log."}
+            {activity ? "Update the title or note. The change is written to the log." : "Title plus a rich note. It posts to this record."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <label className="grid gap-1.5 text-sm">
             Title
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Site note, customer call, follow-up…" />
+            <Input
+              disabled={isBusy}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Site note, customer call, follow-up…"
+            />
           </label>
           <div className="grid gap-1.5 text-sm">
             <span>Description</span>
@@ -1179,22 +1277,29 @@ function ActivityDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={isBusy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
-            onClick={() => {
+            disabled={isBusy}
+            onClick={async () => {
               if (!title.trim()) {
                 toast.error("Add a title.");
                 return;
               }
-              onSave(title.trim(), html);
-              reset();
-              onOpenChange(false);
-              toast.success(activity ? "Activity updated." : "Activity posted.");
+              setSubmitting(true);
+              try {
+                await onSave(title.trim(), html);
+                reset();
+              } catch {
+                // error toasted by caller
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
-            {activity ? "Save changes" : "Post activity"}
+            {isBusy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : null}
+            {isBusy ? "Saving…" : activity ? "Save changes" : "Post activity"}
           </Button>
         </DialogFooter>
       </DialogContent>

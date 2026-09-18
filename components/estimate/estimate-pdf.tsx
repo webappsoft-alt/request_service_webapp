@@ -147,6 +147,8 @@ export function EstimatePdfDocument({
             image={approval?.signatureDataUrl}
             slot={customerSlot}
             empty="Customer signs to approve this estimate"
+            snapshot={snapshot}
+            isCustomer
           />
         </div>
       </PdfPage>
@@ -165,12 +167,20 @@ function PdfPage({
   snapshot: EstimateShareSnapshot;
   children: ReactNode;
 }) {
+  const isLast = n === of;
+
   return (
-    <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)] print:border-none print:shadow-none print:rounded-none print:max-w-none print:w-full print:m-0 print:p-0 print:break-after-page print:bg-white">
-      <div className="min-h-[10.4in] px-8 py-7 print:min-h-0 print:px-0 print:py-0">
+    <article
+      className={cn(
+        "mx-auto flex w-full max-w-[8.5in] flex-col justify-between overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]",
+        "print:m-0 print:flex print:min-h-[10.4in] print:w-full print:max-w-none print:flex-col print:justify-between print:rounded-none print:border-none print:bg-white print:p-0 print:shadow-none",
+        isLast ? "print:break-after-avoid" : "print:break-after-page",
+      )}
+    >
+      <div className="flex-1 min-h-[10in] px-8 py-7 print:min-h-0 print:px-0 print:py-0">
         {children}
       </div>
-      <footer className="flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2 text-[10px] text-muted-foreground print:bg-transparent print:px-0">
+      <footer className="mt-auto flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2 text-[10px] text-muted-foreground print:bg-transparent print:px-0">
         <span>
           {snapshot.number} · {snapshot.companyName}
         </span>
@@ -264,6 +274,8 @@ function SignatureBlock({
   image,
   slot,
   empty,
+  snapshot,
+  isCustomer = false,
 }: {
   title: string;
   name?: string;
@@ -271,6 +283,8 @@ function SignatureBlock({
   image?: string;
   slot?: ReactNode;
   empty: string;
+  snapshot?: EstimateShareSnapshot;
+  isCustomer?: boolean;
 }) {
   return (
     <div className="flex flex-col">
@@ -286,11 +300,31 @@ function SignatureBlock({
           <p className="mt-2 text-[11px] text-muted-foreground">{empty}</p>
           {name ? <p className="mt-1 text-[12px] font-medium">{name}</p> : null}
           {date ? <p className="text-[11px] text-muted-foreground">{formatDate(date.slice(0, 10))}</p> : null}
+          {isCustomer && snapshot ? (
+            <div className="mt-3 flex items-start gap-2 text-[11px] leading-4 text-foreground">
+              <span className="mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded-[2px] border border-black/40 bg-white text-[10px] font-bold text-[#003F7D]">
+                ✓
+              </span>
+              <span>
+                I have read pages 1 and 2 and authorize <strong>{snapshot.companyName}</strong> to proceed for{" "}
+                <strong>{formatMoney(snapshot.total)}</strong>.
+              </span>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="mt-2">
           <div className="h-20 border-b border-black/25" />
           <p className="mt-2 text-[11px] text-muted-foreground">{empty}</p>
+          {isCustomer && snapshot ? (
+            <div className="mt-3 flex items-start gap-2 text-[11px] leading-4 text-foreground">
+              <span className="mt-0.5 inline-block size-3.5 shrink-0 rounded-[2px] border border-black/40 bg-white" />
+              <span>
+                I have read pages 1 and 2 and authorize <strong>{snapshot.companyName}</strong> to proceed for{" "}
+                <strong>{formatMoney(snapshot.total)}</strong>.
+              </span>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -387,29 +421,23 @@ export function SignaturePadField({
   pad,
   showNameInput = false,
   showName = false,
+  caption,
+  date,
 }: {
   name?: string;
   onName?: (value: string) => void;
   pad: ReturnType<typeof useSignPad>;
   showNameInput?: boolean;
   showName?: boolean;
+  caption?: string;
+  date?: string;
 }) {
   return (
     <div className="mt-2">
-      {showNameInput && onName ? (
-        <input
-          className="mb-2 h-8 w-full rounded-[4px] border border-black/15 px-2 text-[12px]"
-          value={name || ""}
-          onChange={(event) => onName(event.target.value)}
-          placeholder="Signer name"
-        />
-      ) : showName && name ? (
-        <p className="mb-2 text-[12px] font-medium text-foreground">{name}</p>
-      ) : null}
       <div className="relative">
         <button
           type="button"
-          className="absolute -top-5 right-0 text-[11px] font-medium text-primary hover:underline z-10 print:hidden"
+          className="absolute -top-5 right-0 text-[11px] font-medium text-[#003F7D] hover:underline z-10 print:hidden cursor-pointer"
           onClick={pad.clear}
         >
           Clear
@@ -424,6 +452,21 @@ export function SignaturePadField({
           onPointerLeave={pad.end}
         />
       </div>
+      {caption ? <p className="mt-2 text-[11px] text-muted-foreground">{caption}</p> : null}
+      {showNameInput && onName ? (
+        <div className="mt-1">
+          <input
+            className="h-7 w-full max-w-[220px] rounded-[4px] border border-black/15 bg-white px-2 text-[12px] font-medium placeholder:text-muted-foreground/60 focus:border-[#003F7D] focus:outline-none"
+            value={name || ""}
+            onChange={(event) => onName(event.target.value)}
+            placeholder="Signer name"
+          />
+        </div>
+      ) : showName && name ? (
+        <p className="mt-1 text-[12px] font-medium text-foreground">{name}</p>
+      ) : null}
+      {date ? <p className="mt-1 text-[11px] text-muted-foreground">{formatDate(date.slice(0, 10))}</p> : null}
     </div>
   );
 }
+

@@ -103,6 +103,8 @@ export const providerCrmApi = {
     `provider/requests/${id}/convert-to-estimate`,
   estimates: "provider/estimates",
   estimate: (id: string) => `provider/estimates/${id}`,
+  estimateActivities: (id: string) => `provider/estimates/${id}/activities`,
+  estimateActivity: (id: string, activityId: string) => `provider/estimates/${id}/activities/${activityId}`,
   estimateShare: (id: string) => `provider/estimates/${id}/share`,
   estimateConvertToJob: (id: string) => `provider/estimates/${id}/convert-to-job`,
   jobs: "provider/jobs",

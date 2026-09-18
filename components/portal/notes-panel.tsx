@@ -14,13 +14,20 @@ export function NotesPanel({
   kind,
   id,
   empty,
+  locked = false,
 }: {
   kind: ReminderSubjectKind;
   id: string;
   empty?: string;
+  locked?: boolean;
 }) {
   return (
-    <UniversalNotesPanel subjectKind={kind} entityId={id} empty={empty} />
+    <UniversalNotesPanel
+      subjectKind={kind}
+      entityId={id}
+      empty={empty}
+      locked={locked}
+    />
   );
 }
 

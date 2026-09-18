@@ -163,7 +163,16 @@ function ApprovalPreview({
       <div className="max-h-[68vh] overflow-y-auto bg-[#eef1f5] px-4 py-5">
         <EstimatePdfDocument
           snapshot={snapshot}
-          companySlot={<SignaturePadField name={signer} onName={setSigner} pad={companyPad} showNameInput />}
+          companySlot={
+            <SignaturePadField
+              name={signer}
+              onName={setSigner}
+              pad={companyPad}
+              showNameInput
+              caption="Authorized company signature"
+              date={new Date().toISOString()}
+            />
+          }
         />
       </div>
       <DialogFooter className="m-0 rounded-none">

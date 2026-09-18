@@ -10,7 +10,7 @@ import type {
   PortalVendor,
 } from "@/lib/data/crm-people";
 import { employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
-import type { Estimate, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
+import type { Estimate, EstimateActivity, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
   mapChatThread,
@@ -20,6 +20,7 @@ import {
   mapCustomerTimelineEvent,
   mapEmployeeDetail,
   mapEstimate,
+  mapEstimateActivity,
   mapInboxSummary,
   mapInvoice,
   mapInvoiceWithPayments,
@@ -962,6 +963,18 @@ export async function updateEstimateSiteVisit(
   return mapCrmEntity(response, mapEstimate);
 }
 
+export async function updateEstimateAttachments(
+  id: string,
+  attachments: Array<{ name: string; attachment: string }>,
+) {
+  const response = await putData(
+    providerCrmApi.estimate(id),
+    { attachments },
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapEstimate);
+}
+
 export async function updateEstimateStatus(id: string, status: Estimate["status"]) {
   const response = await putData(providerCrmApi.estimate(id), { status }, { silent: true });
   return mapCrmEntity(response, mapEstimate);
@@ -1025,6 +1038,103 @@ export async function convertEstimateToJob(
     { silent: false },
   );
   return mapCrmEntity(response, mapJob);
+}
+
+export type EstimateActivityPayload = {
+  title: string;
+  description: string;
+};
+
+export async function listEstimateActivities(
+  estimateId: string,
+  options?: CrmRequestOptions,
+): Promise<EstimateActivity[]> {
+  const response = await getData(
+    providerCrmApi.estimateActivities(estimateId),
+    undefined,
+    {
+      silent: options?.silent ?? true,
+      force: true,
+    },
+  );
+  return mapCrmList(response, mapEstimateActivity).items;
+}
+
+export async function getEstimateActivity(
+  estimateId: string,
+  activityId: string,
+): Promise<EstimateActivity | null> {
+  const response = await getData(
+    providerCrmApi.estimateActivity(estimateId, activityId),
+    undefined,
+    {
+      silent: true,
+      force: true,
+    },
+  );
+  return mapCrmEntity(response, mapEstimateActivity);
+}
+
+export async function createEstimateActivity(
+  estimateId: string,
+  payload: EstimateActivityPayload,
+): Promise<EstimateActivity | null> {
+  const response = await postData(
+    providerCrmApi.estimateActivities(estimateId),
+    {
+      title: payload.title.trim(),
+      description: payload.description,
+    },
+    { silent: false },
+  );
+  const mapped = mapCrmEntity(response, mapEstimateActivity);
+  if (mapped) return mapped;
+  const raw = (response as { data?: unknown })?.data ?? response;
+  const id = crmIdOf(raw);
+  return {
+    id: id || `act_${Date.now()}`,
+    estimateId,
+    title: payload.title.trim(),
+    description: payload.description,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export async function updateEstimateActivity(
+  estimateId: string,
+  activityId: string,
+  payload: EstimateActivityPayload,
+): Promise<EstimateActivity | null> {
+  const body = {
+    title: payload.title.trim(),
+    description: payload.description,
+  };
+  const response = await patchData(
+    providerCrmApi.estimateActivity(estimateId, activityId),
+    body,
+    { silent: false },
+  );
+  const mapped = mapCrmEntity(response, mapEstimateActivity);
+  if (mapped) return mapped;
+  return {
+    id: activityId,
+    estimateId,
+    title: payload.title.trim(),
+    description: payload.description,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function deleteEstimateActivity(
+  estimateId: string,
+  activityId: string,
+): Promise<boolean> {
+  await deleteData(
+    providerCrmApi.estimateActivity(estimateId, activityId),
+    { silent: false },
+  );
+  return true;
 }
 
 export async function getJob(id: string) {

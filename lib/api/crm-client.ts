@@ -1,5 +1,4 @@
 import { providerCrmApi, publicApi } from "@/components/api/ApiRoutesFile";
-import { getData, postData, putData, patchData, deleteData, invalidateGetCache } from "@/components/api/apiFuntions";
 import type {
   CustomerDetailPayload,
   CustomerTimelineEvent,
@@ -37,6 +36,39 @@ import {
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
 import type { ChatThread } from "@/lib/booking/chat-store";
+
+/**
+ * Lazy axios helpers — avoids store → slice → crm-client → apiFuntions → store
+ * circular init while Redux reducers are still loading.
+ */
+function http() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- deferred to break circular import
+  return require("@/components/api/apiFuntions") as typeof import("@/components/api/apiFuntions");
+}
+
+function getData(...args: Parameters<typeof import("@/components/api/apiFuntions").getData>) {
+  return http().getData(...args);
+}
+
+function postData(...args: Parameters<typeof import("@/components/api/apiFuntions").postData>) {
+  return http().postData(...args);
+}
+
+function putData(...args: Parameters<typeof import("@/components/api/apiFuntions").putData>) {
+  return http().putData(...args);
+}
+
+function patchData(...args: Parameters<typeof import("@/components/api/apiFuntions").patchData>) {
+  return http().patchData(...args);
+}
+
+function deleteData(...args: Parameters<typeof import("@/components/api/apiFuntions").deleteData>) {
+  return http().deleteData(...args);
+}
+
+function invalidateGetCache(...args: Parameters<typeof import("@/components/api/apiFuntions").invalidateGetCache>) {
+  return http().invalidateGetCache(...args);
+}
 
 type CrmRequestOptions = {
   silent?: boolean;
@@ -279,22 +311,28 @@ function customerPayload(customer: PortalCustomerCrm) {
 }
 
 function contractorPayload(contractor: PortalContractor | Partial<PortalContractor>) {
-  return {
-    firstName: contractor.firstName || "",
-    lastName: contractor.lastName || "",
-    companyName: contractor.companyName || "",
-    contactName: [contractor.firstName, contractor.lastName].filter(Boolean).join(" "),
-    trade: contractor.trade || "",
-    email: contractor.email || "",
-    phone: contractor.phone || "",
-    city: contractor.city || "",
-    state: contractor.state || "",
-    zip: contractor.zip || "",
-    license: contractor.license || "",
-    status: contractor.status || "active",
-    hourlyRate: contractor.hourlyRate ?? 0,
-    insuranceExpires: contractor.insuranceExpires || new Date().toISOString(),
-  };
+  const payload: Record<string, unknown> = {};
+  if (contractor.firstName !== undefined) payload.firstName = contractor.firstName || "";
+  if (contractor.lastName !== undefined) payload.lastName = contractor.lastName || "";
+  if (contractor.companyName !== undefined) payload.companyName = contractor.companyName || "";
+  if (contractor.firstName !== undefined || contractor.lastName !== undefined) {
+    payload.contactName = [contractor.firstName || "", contractor.lastName || ""]
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (contractor.trade !== undefined) payload.trade = contractor.trade || "";
+  if (contractor.email !== undefined) payload.email = contractor.email || "";
+  if (contractor.phone !== undefined) payload.phone = contractor.phone || "";
+  if (contractor.city !== undefined) payload.city = contractor.city || "";
+  if (contractor.state !== undefined) payload.state = contractor.state || "";
+  if (contractor.zip !== undefined) payload.zip = contractor.zip || "";
+  if (contractor.license !== undefined) payload.license = contractor.license || "";
+  if (contractor.status !== undefined) payload.status = contractor.status || "active";
+  if (contractor.hourlyRate !== undefined) payload.hourlyRate = contractor.hourlyRate ?? 0;
+  if (contractor.insuranceExpires !== undefined) {
+    payload.insuranceExpires = contractor.insuranceExpires || new Date().toISOString();
+  }
+  return payload;
 }
 
 function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
@@ -440,6 +478,8 @@ function taskPayload(task: PortalTask) {
     subjectKind,
     subjectId: task.subjectId || null,
     assignedEmployeeId: task.assignedEmployeeId || null,
+    assignedContractorId:
+      subjectKind === "contractor" && task.subjectId ? task.subjectId : null,
     title: task.title,
     note: task.note || "",
     priority: task.priority,
@@ -480,11 +520,13 @@ export type CrmListQuery = {
   status?: string;
   customerId?: string;
   employeeId?: string;
+  contractorId?: string;
   trade?: string;
   role?: string;
   active?: boolean;
   category?: string;
   assignedEmployeeId?: string;
+  assignedContractorId?: string;
   subjectKind?: string;
   priority?: string;
   kind?: string;
@@ -503,10 +545,12 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   const status = query.status?.trim();
   const customerId = query.customerId?.trim();
   const employeeId = query.employeeId?.trim();
+  const contractorId = query.contractorId?.trim();
   const trade = query.trade?.trim();
   const role = query.role?.trim();
   const category = query.category?.trim();
   const assignedEmployeeId = query.assignedEmployeeId?.trim();
+  const assignedContractorId = query.assignedContractorId?.trim();
   const subjectKind = query.subjectKind?.trim();
   const priority = query.priority?.trim();
   const kind = query.kind?.trim();
@@ -517,10 +561,12 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   if (status) params.status = status;
   if (customerId) params.customerId = customerId;
   if (employeeId) params.employeeId = employeeId;
+  if (contractorId) params.contractorId = contractorId;
   if (trade) params.trade = trade;
   if (role) params.role = role;
   if (category) params.category = category;
   if (assignedEmployeeId) params.assignedEmployeeId = assignedEmployeeId;
+  if (assignedContractorId) params.assignedContractorId = assignedContractorId;
   if (subjectKind) params.subjectKind = subjectKind;
   if (priority) params.priority = priority;
   if (kind) params.kind = kind;
@@ -719,7 +765,24 @@ export async function queryContractors(query: CrmListQuery = {}) {
 }
 
 export async function createContractor(contractor: PortalContractor) {
-  const response = await postData(providerCrmApi.contractors, contractorPayload(contractor));
+  const response = await postData(
+    providerCrmApi.contractors,
+    contractorPayload({
+      firstName: contractor.firstName,
+      lastName: contractor.lastName,
+      companyName: contractor.companyName,
+      trade: contractor.trade,
+      email: contractor.email,
+      phone: contractor.phone,
+      city: contractor.city,
+      state: contractor.state,
+      zip: contractor.zip,
+      license: contractor.license,
+      status: contractor.status,
+      hourlyRate: contractor.hourlyRate,
+      insuranceExpires: contractor.insuranceExpires,
+    }),
+  );
   return mapCrmEntity(response, mapPortalContractor);
 }
 
@@ -735,7 +798,9 @@ export async function getContractor(id: string) {
 
 export async function updateContractor(id: string, patch: Partial<PortalContractor>) {
   const response = await putData(providerCrmApi.contractor(id), contractorPayload(patch));
-  return mapCrmEntity(response, mapPortalContractor);
+  const mapped = mapCrmEntity(response, mapPortalContractor);
+  if (mapped) return mapped;
+  return getContractor(id);
 }
 
 export async function deleteContractor(id: string) {
@@ -1365,16 +1430,18 @@ export async function listSchedule(options?: CrmRequestOptions) {
   );
 }
 
-/** GET /api/provider/schedule?customerId=&employeeId=&startDate=&endDate=&kind= */
+/** GET /api/provider/schedule?customerId=&employeeId=&contractorId=&startDate=&endDate=&kind= */
 export async function querySchedule(query: CrmListQuery = {}) {
   const params: Record<string, string | number> = {};
   const customerId = query.customerId?.trim();
   const employeeId = query.employeeId?.trim();
+  const contractorId = query.contractorId?.trim();
   const startDate = query.startDate?.trim();
   const endDate = query.endDate?.trim();
   const kind = query.kind?.trim();
   if (customerId) params.customerId = customerId;
   if (employeeId) params.employeeId = employeeId;
+  if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
   if (kind) params.kind = kind;

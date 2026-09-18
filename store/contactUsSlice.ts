@@ -1,8 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import {
-  extractErrorMessage,
-  postData,
-} from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { postData } from "@/components/api/sliceHttp";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 
 export type ContactUsPayload = {

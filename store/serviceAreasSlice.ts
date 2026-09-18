@@ -3,13 +3,8 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import {
-  deleteData,
-  extractErrorMessage,
-  getData,
-  postData,
-  putData,
-} from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { deleteData, getData, postData, putData } from "@/components/api/sliceHttp";
 import { providerApi } from "@/components/api/ApiRoutesFile";
 
 export type ServiceAreaLocation = {

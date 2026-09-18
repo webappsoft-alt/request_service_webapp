@@ -499,9 +499,11 @@ function EmployeeSettingsTab({
 export function EmployeeAvailabilityTab({
   employee,
   onSave,
+  description = "Working hours used when assigning this employee on the calendar.",
 }: {
   employee: PortalEmployee;
   onSave?: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
+  description?: string;
 }) {
   const hoursKey = JSON.stringify(employee.workingHours ?? null);
   const [days, setDays] = useState<EmployeeDayHours[]>(() =>
@@ -529,7 +531,7 @@ export function EmployeeAvailabilityTab({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold">Availability</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Working hours used when assigning this employee on the calendar.</p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
         <Button
           size="sm"

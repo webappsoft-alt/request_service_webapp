@@ -1224,6 +1224,15 @@ export async function listTasks(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.tasks, mapPortalTask, options);
 }
 
+/** GET /api/provider/tasks/:id */
+export async function getTask(id: string) {
+  const response = await getData(providerCrmApi.task(id), undefined, {
+    silent: true,
+    force: true,
+  });
+  return mapCrmEntity(response, mapPortalTask);
+}
+
 /** Paginated tasks — page/limit/customerId/status/priority/search. */
 export async function queryTasks(query: CrmListQuery = {}) {
   const params = buildListParams(query);

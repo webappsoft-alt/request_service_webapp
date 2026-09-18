@@ -7,6 +7,8 @@ import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { assignSchedule as assignScheduleApi, updateSchedule as updateScheduleApi, deleteSchedule as deleteScheduleApi, createEmployee as createEmployeeApi, updateEmployee as updateEmployeeApi, deleteEmployee as deleteEmployeeApi } from "@/lib/api/crm-client";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
 import { employeeName, minutesForWindow } from "@/lib/data/portal";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
 
 const CREW_EVENT = "rs-portal-crew";
 
@@ -76,9 +78,13 @@ function subscribe(onStoreChange: () => void) {
   };
 }
 
-import { useAppSelector } from "@/store/hooks";
-
 export function usePortalCrew() {
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const canCallApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
   const reduxTeam = useAppSelector((state) => state.team?.items ?? []);
   const reduxLoading = useAppSelector((state) => state.team?.loading ?? false);
   const workspace = usePortalWorkspace();
@@ -165,7 +171,8 @@ export function usePortalCrew() {
 
   const assign = useCallback(
     async (assignment: PortalAssignment) => {
-      if (apiReady) {
+      // Auth-gated like job create/edit — do not wait for full CRM snapshot ready.
+      if (canCallApi) {
         const fallbackWindow = minutesForWindow(assignment.timeWindow);
         const sourceEvent =
           events.find((item) => item.kind === assignment.kind && item.recordId === assignment.recordId) ??
@@ -283,7 +290,28 @@ export function usePortalCrew() {
               }
             }
           })();
-        if (!sourceEvent) {
+        // Customer/detail tabs often assign records that are not in the CRM workspace snapshot.
+        const resolvedEvent =
+          sourceEvent ??
+          (assignment.title
+            ? {
+                id: `cal_${assignment.recordId}`,
+                kind: assignment.kind,
+                recordId: assignment.recordId,
+                title: assignment.title,
+                detail: "",
+                customerName: undefined,
+                date: assignment.date,
+                endDate: assignment.endDate,
+                timeWindow: assignment.timeWindow,
+                startMinutes: fallbackWindow.startMinutes,
+                endMinutes: fallbackWindow.endMinutes,
+                employeeId: assignment.employeeId,
+                href: "",
+                status: assignment.status ?? "scheduled",
+              }
+            : undefined);
+        if (!resolvedEvent) {
           throw new Error("Could not find the calendar item to assign.");
         }
 
@@ -291,10 +319,10 @@ export function usePortalCrew() {
           (item) => item.kind === assignment.kind && item.recordId === assignment.recordId,
         );
         const contractor = contractors.find((item) => item.id === assignment.employeeId);
-        const startMinutes = assignment.startMinutes ?? sourceEvent.startMinutes ?? fallbackWindow.startMinutes;
-        const endMinutes = assignment.endMinutes ?? sourceEvent.endMinutes ?? fallbackWindow.endMinutes;
+        const startMinutes = assignment.startMinutes ?? resolvedEvent.startMinutes ?? fallbackWindow.startMinutes;
+        const endMinutes = assignment.endMinutes ?? resolvedEvent.endMinutes ?? fallbackWindow.endMinutes;
         const payload = {
-          title: sourceEvent.title,
+          title: resolvedEvent.title,
           date: assignment.date,
           endDate: assignment.endDate ?? null,
           startMinutes,
@@ -302,7 +330,7 @@ export function usePortalCrew() {
           timeWindow: assignment.timeWindow,
           employeeId: contractor ? null : assignment.employeeId,
           contractorId: contractor ? assignment.employeeId : null,
-          status: normalizeScheduleStatus(sourceEvent.status),
+          status: normalizeScheduleStatus(resolvedEvent.status),
         } as const;
 
         if (existingSchedule) {
@@ -315,7 +343,9 @@ export function usePortalCrew() {
           });
         }
 
-        await crm.refresh();
+        if (apiReady) {
+          await crm.refresh();
+        }
         return;
       }
 
@@ -330,7 +360,7 @@ export function usePortalCrew() {
         ],
       });
     },
-    [apiReady, contractors, crm, events, key, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
+    [apiReady, canCallApi, contractors, crm, events, key, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
   );
 
   const addEmployee = useCallback(

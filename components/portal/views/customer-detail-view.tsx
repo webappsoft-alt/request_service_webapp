@@ -1350,12 +1350,20 @@ function CustomerHistoryPanel({
 }) {
   const dispatch = useAppDispatch();
   const tab = useAppSelector((state) => state.customers?.timeline);
-  const filterKey = customerTabFilterKey({});
+  const [page, setPage] = useState(1);
+  const filterKey = customerTabFilterKey({ page });
 
   useEffect(() => {
     if (!customerId) return;
-    void dispatch(fetchCustomerTimeline({ customerId, force: true }));
-  }, [customerId, dispatch]);
+    void dispatch(
+      fetchCustomerTimeline({
+        customerId,
+        page,
+        limit: 10,
+        force: true,
+      }),
+    );
+  }, [customerId, dispatch, page]);
 
   const useApiEvents = Boolean(
     tab?.customerId === customerId && (tab.loaded || tab.loading || tab.items.length > 0),
@@ -1368,6 +1376,18 @@ function CustomerHistoryPanel({
   const invoiceCount = dossier?.invoicesCount ?? localInvoiceCount;
   const paid = dossier?.totalPaid ?? localPaid;
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const total = useApiEvents ? (tab?.total ?? events.length) : events.length;
+  const totalPages = useApiEvents
+    ? Math.max(1, tab?.totalPages ?? 1)
+    : Math.max(1, Math.ceil(events.length / 10));
+  const currentPage = useApiEvents ? (tab?.page ?? page) : page;
+  const from = total === 0 ? 0 : (currentPage - 1) * 10 + 1;
+  const to = Math.min(currentPage * 10, total);
+
+  function goToPage(next: number) {
+    const bounded = Math.min(Math.max(1, next), totalPages);
+    setPage(bounded);
+  }
 
   return (
     <div className="space-y-4">
@@ -1381,7 +1401,7 @@ function CustomerHistoryPanel({
         <div className="border-b border-black/10 px-4 py-3">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Activity</p>
           <p className="text-sm text-muted-foreground">
-            {events.length} events since {formatDate(customer.createdAt)} · {crmSourceLabel(customer.source)}
+            {total} events since {formatDate(customer.createdAt)} · {crmSourceLabel(customer.source)}
           </p>
         </div>
         {listLoading ? (
@@ -1430,6 +1450,34 @@ function CustomerHistoryPanel({
             })}
           </ol>
         )}
+        {useApiEvents && total > 0 ? (
+          <div className="flex flex-col gap-3 border-t border-black/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Showing {from}–{to} of {total}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1 || Boolean(tab?.loading)}
+                onClick={() => goToPage(currentPage - 1)}
+              >
+                Previous
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages || Boolean(tab?.loading)}
+                onClick={() => goToPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

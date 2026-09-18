@@ -570,7 +570,7 @@ export async function queryCustomerTimeline(
   query: Pick<CrmListQuery, "page" | "limit" | "type" | "silent" | "force"> = {},
 ) {
   const page = Math.max(1, query.page ?? 1);
-  const limit = Math.max(1, query.limit ?? 50);
+  const limit = Math.max(1, query.limit ?? 10);
   const params: Record<string, string | number> = { page, limit };
   const type = query.type?.trim();
   if (type) params.type = type;
@@ -1344,7 +1344,8 @@ export async function assignSchedule(schedule: CrmScheduleAssignment) {
       contractorId: schedule.contractorId || null,
       status: schedule.status ?? "scheduled",
     },
-    { silent: false },
+    // Caller (AssignEventDialog) shows extractErrorMessage — avoid duplicate/generic toasts.
+    { silent: true },
   );
   return mapCrmEntity(response, mapScheduleEvent);
 }

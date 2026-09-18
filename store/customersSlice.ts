@@ -98,7 +98,7 @@ type CustomersState = {
 
 const DEFAULT_LIMIT = 10;
 const DETAIL_TAB_LIMIT = 10;
-const TIMELINE_LIMIT = 50;
+const TIMELINE_LIMIT = 10;
 
 const EMPTY_DOSSIER: CustomerDossier = {
   balanceDue: 0,

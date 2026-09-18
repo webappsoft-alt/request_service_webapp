@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
+import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,16 +20,46 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalTimeWindow } from "@/lib/data/portal";
-import { calendarEventKindLabel, timeWindowLabel } from "@/lib/data/portal";
+import { calendarEventKindLabel, employeeName, minutesForWindow, timeWindowLabel } from "@/lib/data/portal";
 
 const TIME_WINDOWS: PortalTimeWindow[] = ["morning", "afternoon", "all_day"];
+
+function formatClockMinutes(total: number) {
+  const hours24 = Math.floor(total / 60) % 24;
+  const minutes = total % 60;
+  const period = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${period}`;
+}
+
+/** Prefer API collision text over axios "Request failed with status code 409". */
+function formatAssignError(error: unknown): string {
+  const raw = extractErrorMessage(error);
+  const match = raw.match(
+    /already has appointment ['"]?([^'"]+)['"]? booked between minutes (\d+) and (\d+)/i,
+  );
+  if (match) {
+    const [, label, startRaw, endRaw] = match;
+    const start = formatClockMinutes(Number(startRaw));
+    const end = formatClockMinutes(Number(endRaw));
+    return `This technician already has ${label} booked (${start}–${end}). Pick another time or technician.`;
+  }
+  if (/schedule collision/i.test(raw)) {
+    return raw.replace(
+      /between minutes (\d+) and (\d+)/gi,
+      (_full, startRaw: string, endRaw: string) =>
+        `from ${formatClockMinutes(Number(startRaw))} to ${formatClockMinutes(Number(endRaw))}`,
+    );
+  }
+  return raw || "Could not save this assignment.";
+}
 
 export function AssignEventDialog({
   open,
@@ -47,24 +78,38 @@ export function AssignEventDialog({
   defaultDate?: string;
   onSave: (assignment: PortalAssignment) => void | Promise<void>;
 }) {
-  const { contractors, loading: contractorsLoading } = useCrmDirectory();
-  const crm = useCrmApiData();
-  const loading = contractorsLoading || (crm.enabled && !crm.ready);
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+  const { contractors } = useCrmDirectory();
+  const assigneePaging = usePaginatedCrmOptions(open && useApi ? "assignee" : null, open && useApi);
+
   const [recordKey, setRecordKey] = useState("");
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [timeWindow, setTimeWindow] = useState<PortalTimeWindow>("morning");
   const [employeeId, setEmployeeId] = useState("");
+  const [employeeLabel, setEmployeeLabel] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const activeEmployees = useMemo(
-    () => employees.filter((item) => item.active),
-    [employees],
-  );
-  const activeContractors = useMemo(
-    () => contractors.filter((item) => item.status === "active"),
-    [contractors],
-  );
+  const technicianOptions = useMemo(() => {
+    const employeeRows = useApi
+      ? assigneePaging.options
+      : employees
+          .filter((item) => item.active)
+          .map((item) => ({ id: item.id, label: employeeName(item) }));
+    const contractorRows = contractors
+      .filter((item) => item.status === "active")
+      .map((item) => ({
+        id: item.id,
+        label: `${item.companyName || `${item.firstName} ${item.lastName}`.trim()} · ${item.trade}`,
+      }));
+    const seen = new Set(employeeRows.map((item) => item.id));
+    return [...employeeRows, ...contractorRows.filter((item) => !seen.has(item.id))];
+  }, [assigneePaging.options, contractors, employees, useApi]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,28 +119,42 @@ export function AssignEventDialog({
       setDate(event?.date ?? defaultDate ?? next?.date ?? "");
       setEndDate(event?.endDate ?? event?.date ?? defaultDate ?? next?.endDate ?? "");
       setTimeWindow(event?.timeWindow ?? "morning");
-      setEmployeeId(event?.employeeId ?? activeEmployees[0]?.id ?? "");
+      const presetId = event?.employeeId ?? "";
+      setEmployeeId(presetId);
+      const match = technicianOptions.find((item) => item.id === presetId);
+      setEmployeeLabel(match?.label ?? "");
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeEmployees, defaultDate, event, events, open]);
+  }, [defaultDate, event, events, open]);
+
+  useEffect(() => {
+    if (!open || !employeeId || employeeLabel) return;
+    const match = technicianOptions.find((item) => item.id === employeeId);
+    if (match) setEmployeeLabel(match.label);
+  }, [employeeId, employeeLabel, open, technicianOptions]);
 
   const selected = event ?? events.find((item) => `${item.kind}:${item.recordId}` === recordKey);
 
   async function handleSave() {
     if (!selected || !date || !employeeId) return;
+    const window = minutesForWindow(timeWindow);
     setSaving(true);
     try {
       await onSave({
         kind: selected.kind,
         recordId: selected.recordId,
+        title: selected.title,
+        status: selected.status,
         date,
         endDate: endDate && endDate > date ? endDate : undefined,
         timeWindow,
+        startMinutes: window.startMinutes,
+        endMinutes: window.endMinutes,
         employeeId,
       });
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this assignment.");
+      toast.error(formatAssignError(error));
     } finally {
       setSaving(false);
     }
@@ -114,10 +173,7 @@ export function AssignEventDialog({
           {!event ? (
             <Field>
               <FieldLabel htmlFor="crew-event">Work item</FieldLabel>
-              <Select
-                value={recordKey}
-                onValueChange={(value) => setRecordKey(value)}
-              >
+              <Select value={recordKey} onValueChange={(value) => setRecordKey(value)}>
                 <SelectTrigger id="crew-event" className="w-full">
                   <SelectValue placeholder="Select work item" />
                 </SelectTrigger>
@@ -154,10 +210,7 @@ export function AssignEventDialog({
           </div>
           <Field>
             <FieldLabel htmlFor="crew-window">Window</FieldLabel>
-            <Select
-              value={timeWindow}
-              onValueChange={(value) => setTimeWindow(value as PortalTimeWindow)}
-            >
+            <Select value={timeWindow} onValueChange={(value) => setTimeWindow(value as PortalTimeWindow)}>
               <SelectTrigger id="crew-window" className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -172,55 +225,22 @@ export function AssignEventDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="crew-tech">Technician</FieldLabel>
-            <Select
-              disabled={loading}
-              value={loading ? undefined : (employeeId || undefined)}
-              onValueChange={setEmployeeId}
-            >
-              <SelectTrigger id="crew-tech" className="w-full" loading={loading}>
-                <SelectValue placeholder={loading ? "Loading technicians…" : "Select technician"} />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                align="start"
-                className="z-[100] max-h-64 w-[var(--radix-select-trigger-width)]"
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    <span>Loading technicians…</span>
-                  </div>
-                ) : (
-                  <>
-                    {activeEmployees.length ? (
-                      <SelectGroup>
-                        <SelectLabel>Employees</SelectLabel>
-                        {activeEmployees.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.firstName} {item.lastName} · {item.trade}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ) : null}
-                    {activeContractors.length ? (
-                      <SelectGroup>
-                        <SelectLabel>Contractors</SelectLabel>
-                        {activeContractors.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.companyName} · {item.trade}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ) : null}
-                    {!activeEmployees.length && !activeContractors.length ? (
-                      <div className="px-2 py-3 text-sm text-muted-foreground">
-                        No technicians available.
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
+            <PaginatedEntitySelect
+              id="crew-tech"
+              value={employeeId}
+              selectedLabel={employeeLabel}
+              options={technicianOptions}
+              placeholder="Select technician"
+              emptyLabel="No technicians found."
+              loading={useApi ? assigneePaging.loading : false}
+              loadingMore={useApi ? assigneePaging.loadingMore : false}
+              hasMore={useApi ? assigneePaging.hasMore : false}
+              onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+              onChange={(id, option) => {
+                setEmployeeId(id);
+                setEmployeeLabel(option?.label && id ? option.label : "");
+              }}
+            />
           </Field>
         </FieldGroup>
         <DialogFooter>

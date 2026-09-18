@@ -22,8 +22,14 @@ export type ChatMessage = {
 export type ChatThread = {
   id: string;
   providerId: string;
+  providerName?: string;
+  providerAvatar?: string;
+  providerPhone?: string;
+  customerId?: string;
   customerName: string;
   customerEmail: string;
+  customerPhone?: string;
+  customerAvatar?: string;
   requestId?: string;
   unreadForProvider: number;
   unreadForCustomer: number;

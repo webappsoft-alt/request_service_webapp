@@ -261,7 +261,7 @@ export function ContractorDetailView({ id }: { id: string }) {
               return (
                 <EmployeePayTab
                   employee={asEmployee}
-                  onSave={(_, pay) => updateContractor(contractor.id, { hourlyRate: pay.hourlyRate })}
+                  onSave={(pay) => updateContractor(contractor.id, { hourlyRate: pay.hourlyRate })}
                 />
               );
             case "availability":

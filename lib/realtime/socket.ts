@@ -45,6 +45,7 @@ export type RealtimeEvents = {
   };
   INBOX_SUMMARY_INVALIDATE: {
     reason?: string;
+    threadId?: string;
   };
   ESTIMATE_ACCEPTED: {
     estimateId?: string;
@@ -100,8 +101,11 @@ export function connectRealtime(options: {
     reconnectionAttempts: 12,
     reconnectionDelay: 1000,
     auth: {
-      ...(token ? { token } : {}),
-      ...(guestEmail ? { guestEmail } : {}),
+      ...(token ? { token, Authorization: `Bearer ${token}` } : {}),
+      ...(guestEmail ? { guestEmail, email: guestEmail } : {}),
+    },
+    extraHeaders: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
 
@@ -119,11 +123,15 @@ export function disconnectRealtime() {
 export function joinChatThread(threadId: string) {
   if (!socket || !threadId) return;
   socket.emit("chat:join", { threadId });
+  socket.emit("join", { room: `thread:${threadId}`, threadId });
+  socket.emit("join:thread", { threadId });
 }
 
 export function leaveChatThread(threadId: string) {
   if (!socket || !threadId) return;
   socket.emit("chat:leave", { threadId });
+  socket.emit("leave", { room: `thread:${threadId}`, threadId });
+  socket.emit("leave:thread", { threadId });
 }
 
 export function emitChatTyping(threadId: string, isTyping: boolean) {

@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Wrench } from "lucide-react";
 import { getData } from "@/components/api/apiFuntions";
@@ -30,6 +30,9 @@ import {
   selectCustomerOrders,
   setPendingOrderDraft,
 } from "@/store/ordersSlice";
+import { selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
+import { trackLeadInteraction } from "@/lib/api/crm-client";
+import { readChatGuest } from "@/lib/booking/chat-store";
 import type { JobRecord } from "@/lib/data/jobs";
 import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
@@ -39,9 +42,6 @@ import {
 } from "@/lib/orders/order-status";
 import { inferStateFromAddress } from "@/lib/format";
 import { locationDisplayLabel } from "@/store/locationSlice";
-import {
-  selectIsAuthenticated,
-} from "@/store/authSlice";
 import {
   pendingFixedOrderMatchesService,
   readPendingFixedOrder,
@@ -414,10 +414,45 @@ export function PublicFixedServiceDetail({
   const lat = customerLocation.latitude;
   const lng = customerLocation.longitude;
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const authUser = useAppSelector(selectAuthUser);
   const customerOrders = useAppSelector(selectCustomerOrders);
   const customerOrdersLoaded = useAppSelector(
     (state) => Boolean(state.orders?.listLoaded),
   );
+  const trackedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!service) return;
+    const trackKey = `${service.id || serviceSlug}`;
+    if (trackedRef.current === trackKey) return;
+    trackedRef.current = trackKey;
+
+    const guest = readChatGuest();
+    const customerName =
+      [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
+      authUser?.name ||
+      guest?.name ||
+      "";
+    const customerEmail = authUser?.email || guest?.email || "";
+    const phone = authUser?.phone || "";
+
+    void trackLeadInteraction({
+      fixedServiceId: /^[a-f\d]{24}$/i.test(service.id) ? service.id : undefined,
+      fixedServiceSlug: service.slug || serviceSlug,
+      providerId:
+        service.provider?.id && /^[a-f\d]{24}$/i.test(service.provider.id)
+          ? service.provider.id
+          : undefined,
+      providerSlug: service.provider?.slug || undefined,
+      source: "fixed_service_view",
+      customerName,
+      customerEmail,
+      phone,
+      zip: zip || service.workingArea?.[0] || "",
+      city: customerLocation.city || "",
+      details: `Customer inspected fixed service pricing and scope: ${service.servicesName || "Fixed Service"}.`,
+    });
+  }, [authUser, customerLocation.city, service, serviceSlug, zip]);
 
   const openOrder = useMemo(() => {
     if (!isAuthenticated || !service?.id) return null;

@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { Suspense } from "react";
+import { CenteredSpinner } from "@/components/ui/spinner";
 
 export function PortalSuspense({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>{children}</Suspense>;
+  return (
+    <Suspense fallback={<CenteredSpinner label="Loading..." className="min-h-64" />}>
+      {children}
+    </Suspense>
+  );
 }
+

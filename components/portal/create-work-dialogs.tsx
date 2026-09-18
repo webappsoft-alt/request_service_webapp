@@ -46,6 +46,8 @@ import {
 } from "@/components/ui/select";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { CRM_API_EVENT } from "@/components/portal/crm-data-provider";
+import { createRequest } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel, type PortalRequest } from "@/lib/data/portal";
 import { formatMoney } from "@/lib/format";
@@ -939,39 +941,64 @@ export function CreateLeadDialog({
     setPreferredTimeWindow("Morning");
   }, [customers, open]);
 
-  function save() {
+  const [submitting, setSubmitting] = useState(false);
+
+  async function save() {
     if (!customer || !serviceName.trim()) {
       toast.error("Customer and service are required.");
       return;
     }
-    const request: PortalRequest = {
-      id: `req_${Date.now().toString(36)}`,
-      number: nextRecordNumber("RS", all.map((item) => item.number)),
-      customerId: customer.id,
-      providerId: provider.id,
-      categoryId: provider.categoryIds[0] ?? "plumbing",
-      channel: "direct",
-      zip: address?.zip || customerLocation.zip || "",
-      city: address?.city || customerLocation.city || provider.city,
-      state: address?.state || customerLocation.state || provider.state,
-      details: details.trim() || `${serviceName.trim()} requested by phone.`,
-      preferredDate: preferredDate || undefined,
-      preferredTimeWindow,
-      photoUrls: [],
-      status: "new",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      customerName: crmCustomerName(customer),
-      customerEmail: customer.email,
-      customerPhone: customer.phone ?? "",
-      serviceName: serviceName.trim(),
-      categoryName: "Service",
-      neighborhood: address?.city || customerLocation.city || provider.city,
-    };
-    records.addRequest(request);
-    toast.success(`${request.number} added to leads.`);
-    onOpenChange(false);
-    router.push(`/pro/dashboard/requests/${request.id}`);
+    setSubmitting(true);
+    try {
+      let created: PortalRequest | null = null;
+      try {
+        created = await createRequest({
+          customerId: customer.id,
+          serviceName: serviceName.trim(),
+          channel: "direct",
+          details: details.trim() || `${serviceName.trim()} requested by phone.`,
+          preferredDate: preferredDate || undefined,
+          preferredTimeWindow: preferredTimeWindow || "morning",
+        });
+      } catch {
+        /* fallback to local storage if offline/error */
+      }
+
+      const request: PortalRequest = created || {
+        id: `req_${Date.now().toString(36)}`,
+        number: nextRecordNumber("RS", all.map((item) => item.number)),
+        customerId: customer.id,
+        providerId: provider.id,
+        categoryId: provider.categoryIds[0] ?? "plumbing",
+        channel: "direct",
+        zip: address?.zip || customerLocation.zip || "",
+        city: address?.city || customerLocation.city || provider.city,
+        state: address?.state || customerLocation.state || provider.state,
+        details: details.trim() || `${serviceName.trim()} requested by phone.`,
+        preferredDate: preferredDate || undefined,
+        preferredTimeWindow,
+        photoUrls: [],
+        status: "new",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        customerName: crmCustomerName(customer),
+        customerEmail: customer.email,
+        customerPhone: customer.phone ?? "",
+        serviceName: serviceName.trim(),
+        categoryName: "Service",
+        neighborhood: address?.city || customerLocation.city || provider.city,
+      };
+
+      records.addRequest(request);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(CRM_API_EVENT));
+      }
+      toast.success(`${request.number} added to leads.`);
+      onOpenChange(false);
+      router.push(`/pro/dashboard/requests/${request.id}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -1018,11 +1045,11 @@ export function CreateLeadDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
-          <Button disabled={!serviceName.trim() || !customerId} onClick={save}>
-            Save lead
+          <Button disabled={!serviceName.trim() || !customerId || submitting} onClick={save}>
+            {submitting ? "Saving…" : "Save lead"}
           </Button>
         </DialogFooter>
       </DialogContent>

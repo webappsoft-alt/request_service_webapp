@@ -1,5 +1,5 @@
+import { providerCrmApi, publicApi } from "@/components/api/ApiRoutesFile";
 import { getData, postData, putData, patchData, deleteData, invalidateGetCache } from "@/components/api/apiFuntions";
-import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 import type {
   PortalContractor,
   PortalCustomerCrm,
@@ -7,12 +7,14 @@ import type {
   PortalTask,
   PortalVendor,
 } from "@/lib/data/crm-people";
-import { employeeName, type PortalEmployee, type PortalEventKind, type PortalRequest, type PortalTimeWindow } from "@/lib/data/portal";
+import { employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
 import type { Estimate, EstimateActivity, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
+  mapChatThread,
   mapCrmEntity,
   mapCrmList,
+  mapEmployeeDetail,
   mapEstimate,
   mapEstimateActivity,
   mapInboxSummary,
@@ -30,12 +32,49 @@ import {
   mapScheduleEvent,
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
-import { mapChatThread } from "@/lib/api/crm-mappers";
 import type { ChatThread } from "@/lib/booking/chat-store";
 
 type CrmRequestOptions = {
   silent?: boolean;
+  force?: boolean;
 };
+
+export type ConvertToEstimateInput = {
+  title?: string;
+  notes?: string;
+  terms?: string;
+  discount?: number;
+  unitPrice?: number;
+  items?: Array<{
+    description: string;
+    kind?: "labor" | "material" | "service";
+    quantity?: number;
+    unitPrice?: number;
+    taxRate?: number;
+  }>;
+};
+
+export type TrackLeadInput = {
+  providerId?: string;
+  providerSlug?: string;
+  fixedServiceId?: string;
+  fixedServiceSlug?: string;
+  source:
+    | "profile_view"
+    | "fixed_service_view"
+    | "quote_request"
+    | "direct_message"
+    | string;
+  customerName?: string;
+  customerEmail?: string;
+  phone?: string;
+  zip?: string;
+  city?: string;
+  state?: string;
+  details?: string;
+};
+
+
 
 export type CrmSnapshot = {
   customers: PortalCustomerCrm[];
@@ -199,11 +238,29 @@ function customerPayload(customer: PortalCustomerCrm) {
   };
 }
 
+function employeePayload(employee: PortalEmployee) {
+  const firstName = employee.firstName || "";
+  const lastName = employee.lastName || "";
+  const name = [firstName, lastName].filter(Boolean).join(" ");
+  return {
+    name,
+    firstName,
+    lastName,
+    email: employee.email || "",
+    phone: employee.phone || "",
+    role: employee.role || "technician",
+    active: employee.active ?? true,
+    hourlyRate: employee.hourlyRate ?? 0,
+  };
+}
+
 function contractorPayload(contractor: PortalContractor | Partial<PortalContractor>) {
   return {
     firstName: contractor.firstName || "",
     lastName: contractor.lastName || "",
     companyName: contractor.companyName || "",
+    contactName: [contractor.firstName, contractor.lastName].filter(Boolean).join(" "),
+    trade: contractor.trade || "",
     email: contractor.email || "",
     phone: contractor.phone || "",
     city: contractor.city || "",
@@ -213,42 +270,41 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
     license: contractor.license || "",
     status: contractor.status || "active",
     hourlyRate: contractor.hourlyRate ?? 0,
+    license: contractor.license || "",
+    city: contractor.city || "",
+    state: contractor.state || "",
+    zip: contractor.zip || "",
     insuranceExpires: contractor.insuranceExpires || new Date().toISOString(),
   };
 }
 
 function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
   return {
+    companyName: vendor.name || "",
+    name: vendor.name || "",
+    contact: vendor.contact || "",
+    contactName: vendor.contact || "",
     name: vendor.name || "",
     category: vendor.category || "",
     contact: vendor.contact || "",
     email: vendor.email || "",
-    phone: vendor.phone || "",
-    city: vendor.city || "",
-    state: vendor.state || "",
-    accountNumber: vendor.accountNumber || "",
     terms: vendor.terms || "Net 30",
-    balance: vendor.balance ?? 0,
-    status: vendor.status || "active",
   };
 }
 
-function requestPayload(request: PortalRequest) {
-  return {
+function requestPayload(request: Partial<PortalRequest>) {
+  const payload: Record<string, unknown> = {
     customerId: request.customerId,
-    categoryId: request.categoryId || null,
-    serviceName: request.serviceName,
-    channel: request.channel,
-    zip: request.zip,
-    city: request.city || "",
-    state: request.state || "",
-    details: request.details,
-    preferredDate: request.preferredDate || null,
-    preferredTimeWindow: normalizePreferredTimeWindow(request.preferredTimeWindow),
-    status: request.status,
-    photos: request.photoUrls,
-    answers: request.answers ?? [],
+    serviceName: request.serviceName || "Service Inquiry",
+    channel: request.channel === "marketplace" ? "marketplace" : "direct",
+    details: request.details || "",
+    preferredTimeWindow: request.preferredTimeWindow || "morning",
+    photos: request.photos ?? request.photoUrls ?? [],
   };
+  if (request.preferredDate && request.preferredDate.trim()) {
+    payload.preferredDate = request.preferredDate;
+  }
+  return payload;
 }
 
 function siteVisitPayload(visit?: Estimate["siteVisit"]) {
@@ -501,21 +557,24 @@ export async function deleteCustomer(id: string) {
 }
 
 function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
-  return {
-    firstName: employee.firstName || "",
-    lastName: employee.lastName || "",
-    email: employee.email || "",
-    phone: employee.phone || "",
-    role: employee.role || "technician",
-    trade: employee.trade || "",
-    active: employee.active ?? true,
-    hourlyRate: employee.hourlyRate ?? 0,
-    overtimeRate: employee.overtimeRate ?? 0,
-    travelRate: employee.travelRate ?? 0,
-    hireDate: employee.hireDate || undefined,
-    emergencyName: employee.emergencyName || "",
-    emergencyPhone: employee.emergencyPhone || "",
-  };
+  const payload: Record<string, unknown> = {};
+  if (employee.firstName !== undefined) payload.firstName = employee.firstName || "";
+  if (employee.lastName !== undefined) payload.lastName = employee.lastName || "";
+  if (employee.email !== undefined) payload.email = employee.email || "";
+  if (employee.phone !== undefined) payload.phone = employee.phone || "";
+  if (employee.role !== undefined) payload.role = employee.role || "technician";
+  if (employee.trade !== undefined) payload.trade = employee.trade || "";
+  if (employee.active !== undefined) payload.active = employee.active ?? true;
+  if (employee.hourlyRate !== undefined) payload.hourlyRate = employee.hourlyRate ?? 0;
+  if (employee.overtimeRate !== undefined) payload.overtimeRate = employee.overtimeRate ?? 0;
+  if (employee.travelRate !== undefined) payload.travelRate = employee.travelRate ?? 0;
+  if (employee.hireDate !== undefined) payload.hireDate = employee.hireDate || undefined;
+  if (employee.emergencyName !== undefined) payload.emergencyName = employee.emergencyName || "";
+  if (employee.emergencyPhone !== undefined) payload.emergencyPhone = employee.emergencyPhone || "";
+  if (employee.workingHours !== undefined) {
+    payload.workingHours = (employee.workingHours as PortalEmployeeWorkingHours[] | undefined) ?? [];
+  }
+  return payload;
 }
 
 export async function listEmployees(options?: CrmRequestOptions) {
@@ -538,16 +597,26 @@ export async function createEmployee(employee: PortalEmployee | Parameters<typeo
 }
 
 export async function getEmployee(id: string) {
+  const detail = await getEmployeeDetail(id);
+  return detail?.employee ?? null;
+}
+
+/** GET /api/provider/team/:id — profile + activeAssignments (jobs, tasks, schedule). */
+export async function getEmployeeDetail(id: string): Promise<PortalEmployeeDetail | null> {
   const response = await getData(providerCrmApi.teamMember(id), undefined, {
     silent: true,
     force: true,
   });
-  return mapCrmEntity(response, mapPortalEmployee);
+  return mapEmployeeDetail(response);
 }
 
 export async function updateEmployee(id: string, employee: Partial<PortalEmployee>) {
   const response = await putData(providerCrmApi.teamMember(id), employeePayload(employee));
-  return mapCrmEntity(response, mapPortalEmployee);
+  const mapped = mapCrmEntity(response, mapPortalEmployee);
+  if (mapped) return mapped;
+  // Partial update responses may omit full profile — re-fetch.
+  const detail = await getEmployeeDetail(id);
+  return detail?.employee ?? null;
 }
 
 export async function deleteEmployee(id: string) {
@@ -632,9 +701,15 @@ export async function listRequests(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.requests, mapPortalRequest, options);
 }
 
-/** Paginated leads/requests — page/limit/search. */
-export async function queryRequests(query: CrmListQuery = {}) {
-  const params = buildListParams(query);
+export async function (query: CrmListQuery = {}) {
+  const page = Math.max(1, query.page ?? 1);
+  const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
+  const params: Record<string, string | number> = { page, limit };
+  const search = query.search?.trim();
+  const status = query.status?.trim();
+  const customerId = query.customerId?.trim();
+  if (search) params.search = search;
+  if (status) params.status = status; if (customerId) params.customerId = customerId;
   const response = await getData(providerCrmApi.requests, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,
@@ -642,7 +717,15 @@ export async function queryRequests(query: CrmListQuery = {}) {
   return mapCrmList(response, mapPortalRequest);
 }
 
-export async function createRequest(request: PortalRequest) {
+export async function getRequest(id: string, options?: CrmRequestOptions) {
+  const response = await getData(providerCrmApi.request(id), undefined, {
+    silent: options?.silent ?? true,
+    force: true,
+  });
+  return mapCrmEntity(response, mapPortalRequest);
+}
+
+export async function createRequest(request: Partial<PortalRequest>) {
   const response = await postData(providerCrmApi.requests, requestPayload(request));
   return mapCrmEntity(response, mapPortalRequest);
 }
@@ -651,6 +734,76 @@ export async function updateRequestStatus(id: string, status: PortalRequest["sta
   const response = await patchData(providerCrmApi.requestStatus(id), { status });
   return mapCrmEntity(response, mapPortalRequest);
 }
+
+export async function convertRequestToEstimate(
+  id: string,
+  input: ConvertToEstimateInput = {},
+) {
+  const response = await postData(
+    providerCrmApi.requestConvertToEstimate(id),
+    {
+      title: input.title,
+      notes: input.notes,
+      terms: input.terms || "Proposal valid for 30 calendar days from issue date.",
+      discount: input.discount ?? 0,
+      unitPrice: input.unitPrice ?? 0,
+      items: input.items,
+    },
+  );
+  return mapCrmEntity(response, mapEstimate);
+}
+
+export async function trackLeadInteraction(input: TrackLeadInput) {
+  try {
+    const response = await postData(publicApi.leadsTrack, input, {
+      token: null,
+      skipLogoutOn401: true,
+      silent: true,
+    });
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+export type PublicQuoteInput = {
+  providerId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  zip: string;
+  serviceName?: string;
+  address?: string;
+  notes?: string;
+  answers?: Array<{ label?: string; answer: string; question?: string }>;
+};
+
+export async function createPublicQuoteRequest(input: PublicQuoteInput) {
+  const normalizedAnswers = (input.answers || []).map((a) => ({
+    label: a.label || a.question || "Requirement",
+    value: a.answer,
+    answer: a.answer,
+  }));
+  const payload = {
+    providerId: input.providerId,
+    name: input.name,
+    email: input.email,
+    phone: input.phone || "",
+    zip: input.zip,
+    serviceName: input.serviceName,
+    address: input.address,
+    notes: input.notes,
+    answers: normalizedAnswers,
+  };
+  const response = await postData(publicApi.quotes, payload, {
+    token: null,
+    skipLogoutOn401: true,
+    silent: false,
+  });
+  return response;
+}
+
+// ---------------- ESTIMATES ----------------
 
 export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
@@ -1120,7 +1273,17 @@ export async function listChats(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.chats, mapChatThread, options);
 }
 
-export async function getInboxSummary(options?: CrmRequestOptions) {
+export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmInboxSummary> {
+  try {
+    const response = await getData(providerCrmApi.requestsSummary, undefined, {
+      silent: options?.silent ?? true,
+      force: options?.force ?? false,
+    });
+    const mapped = mapInboxSummary(response);
+    if (mapped) return mapped;
+  } catch {
+    /* fallback to chats inbox-summary */
+  }
   const response = await getData(providerCrmApi.inboxSummary, undefined, {
     silent: options?.silent ?? true,
   });

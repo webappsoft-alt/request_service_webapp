@@ -40,6 +40,21 @@ export type PortalRequest = ServiceRequest & {
   categoryName: string;
   neighborhood: string;
   answers?: QuoteAnswer[];
+  source?:
+    | "quote_request"
+    | "profile_view"
+    | "fixed_service_view"
+    | "direct_message"
+    | "phone"
+    | "walk_in"
+    | "external"
+    | string;
+  viewCount?: number;
+  lastInteractionAt?: string;
+  chatThreadId?: string;
+  unreadMessagesCount?: number;
+  hasActiveChat?: boolean;
+  photos?: string[];
 };
 
 export type ServiceAvailabilityMode = "office" | "custom";
@@ -132,6 +147,21 @@ export type PortalRevenuePoint = {
 
 export type PortalEmployeeRole = "owner" | "technician" | "estimator" | "dispatcher";
 
+/** MD Workforce `workingHours` matrix — minutes from midnight. */
+export type PortalEmployeeWorkingHours = {
+  day:
+    | "monday"
+    | "tuesday"
+    | "wednesday"
+    | "thursday"
+    | "friday"
+    | "saturday"
+    | "sunday";
+  startMinutes: number;
+  endMinutes: number;
+  active: boolean;
+};
+
 export type PortalEmployee = {
   id: string;
   firstName: string;
@@ -147,6 +177,43 @@ export type PortalEmployee = {
   hireDate?: string;
   emergencyName?: string;
   emergencyPhone?: string;
+  workingHours?: PortalEmployeeWorkingHours[];
+};
+
+/** Nested on GET /api/provider/team/:id → data.activeAssignments */
+export type PortalEmployeeAssignmentJob = {
+  id: string;
+  number: string;
+  title: string;
+  status: string;
+};
+
+export type PortalEmployeeAssignmentTask = {
+  id: string;
+  number?: string;
+  title?: string;
+  status?: string;
+  dueAt?: string;
+};
+
+export type PortalEmployeeAssignmentSchedule = {
+  id: string;
+  title: string;
+  date: string;
+  startMinutes: number;
+  endMinutes: number;
+  status: string;
+};
+
+export type PortalEmployeeActiveAssignments = {
+  jobs: PortalEmployeeAssignmentJob[];
+  tasks: PortalEmployeeAssignmentTask[];
+  schedule: PortalEmployeeAssignmentSchedule[];
+};
+
+export type PortalEmployeeDetail = {
+  employee: PortalEmployee;
+  activeAssignments: PortalEmployeeActiveAssignments;
 };
 
 export type PortalEventKind = "job" | "estimate" | "request" | "invoice" | "task";

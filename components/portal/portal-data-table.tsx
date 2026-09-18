@@ -31,6 +31,8 @@ export type PortalTableAction<T> = {
   href?: string;
   onSelect?: (row: T) => void;
   variant?: "default" | "destructive";
+  icon?: ReactNode;
+  quick?: boolean;
 };
 
 export type PortalTableServerPagination = {
@@ -54,9 +56,9 @@ export function PortalDataTable<T>({
   rowKey,
   columns,
   actions,
-  searchPlaceholder = "Search",
+  searchPlaceholder = "Search records…",
   filename,
-  empty = "No records match this view.",
+  empty = "No records found.",
   rowHref,
   toolbar,
   letters,
@@ -119,73 +121,82 @@ export function PortalDataTable<T>({
         next.sort((a, b) => {
           const left = column.sortValue?.(a);
           const right = column.sortValue?.(b);
-          const compared =
-            typeof left === "number" && typeof right === "number"
-              ? left - right
-              : String(left ?? "").localeCompare(String(right ?? ""), undefined, {
-                  numeric: true,
-                });
-          return sortDir === "asc" ? compared : -compared;
+          if (left === undefined || right === undefined) return 0;
+          if (left < right) return sortDir === "asc" ? -1 : 1;
+          if (left > right) return sortDir === "asc" ? 1 : -1;
+          return 0;
         });
       }
       return next;
     }
 
     const needle = query.trim().toLowerCase();
-    const next = rows.filter((row) => {
-      const matchesQuery = needle
-        ? columns.some((column) => (column.searchValue?.(row) ?? "").toLowerCase().includes(needle))
-        : true;
-      const initial = (letterValue?.(row) ?? "").trim().charAt(0).toUpperCase();
-      const matchesLetter = activeLetter ? initial === activeLetter : true;
-      return matchesQuery && matchesLetter;
-    });
+    const withLetter = activeLetter
+      ? rows.filter((row) => {
+          const source = (letterValue ? letterValue(row) : String(columns[0]?.sortValue?.(row) ?? "")).trim();
+          return source.toUpperCase().startsWith(activeLetter);
+        })
+      : rows;
 
+    const withSearch = needle
+      ? withLetter.filter((row) =>
+          columns.some((column) => {
+            const raw = column.searchValue?.(row) ?? column.sortValue?.(row);
+            return String(raw ?? "").toLowerCase().includes(needle);
+          }),
+        )
+      : withLetter;
+
+    const sorted = [...withSearch];
     const column = columns.find((item) => item.id === sortId);
     if (column?.sortValue) {
-      next.sort((a, b) => {
+      sorted.sort((a, b) => {
         const left = column.sortValue?.(a);
         const right = column.sortValue?.(b);
-        const compared =
-          typeof left === "number" && typeof right === "number"
-            ? left - right
-            : String(left ?? "").localeCompare(String(right ?? ""), undefined, { numeric: true });
-        return sortDir === "asc" ? compared : -compared;
+        if (left === undefined || right === undefined) return 0;
+        if (left < right) return sortDir === "asc" ? -1 : 1;
+        if (left > right) return sortDir === "asc" ? 1 : -1;
+        return 0;
       });
     }
-    return next;
+
+    return sorted;
   }, [activeLetter, columns, isServer, letterValue, query, rows, sortDir, sortId]);
 
-  const effectivePageSize = serverPagination?.pageSize ?? pageSize;
-  const totalCount = serverPagination?.total ?? filtered.length;
-  const pageCount = Math.max(
-    1,
-    serverPagination?.totalPages ?? Math.ceil(totalCount / effectivePageSize),
-  );
-  const currentPage = Math.min(serverPagination?.page ?? page, pageCount);
-  const pageRows = isServer
-    ? filtered
-    : filtered.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
-  const from = totalCount ? (currentPage - 1) * effectivePageSize + 1 : 0;
-  const to = Math.min(currentPage * effectivePageSize, totalCount);
-  const searchValue = serverPagination?.search ?? query;
+  const totalCount = isServer ? (serverPagination?.total ?? 0) : filtered.length;
+  const pageCount = isServer
+    ? (serverPagination?.totalPages ?? Math.max(1, Math.ceil(totalCount / pageSize)))
+    : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = isServer ? (serverPagination?.page ?? 1) : page;
+
+  const pageRows = useMemo(() => {
+    if (isServer) return rows;
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [currentPage, filtered, isServer, pageSize, rows]);
 
   function toggleSort(id: string) {
-    if (sortId === id) {
-      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+    if (sortId !== id) {
+      setSortId(id);
+      setSortDir("asc");
       return;
     }
-    setSortId(id);
+    if (sortDir === "asc") {
+      setSortDir("desc");
+      return;
+    }
+    setSortId(null);
     setSortDir("asc");
   }
 
   function exportCsv() {
-    const headers = columns.map((column) => column.header);
-    const body = filtered.map((row) =>
-      columns.map((column) => csvCell(column.exportValue?.(row) ?? column.searchValue?.(row) ?? "")),
+    const exportColumns = columns.filter((col) => col.exportValue);
+    const header = exportColumns.map((col) => csvCell(col.header)).join(",");
+    const lines = filtered.map((row) =>
+      exportColumns.map((col) => csvCell(col.exportValue?.(row) ?? "")).join(","),
     );
-    const csv = [headers.join(","), ...body.map((line) => line.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const content = [header, ...lines].join("\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -194,25 +205,72 @@ export function PortalDataTable<T>({
     URL.revokeObjectURL(url);
   }
 
-  function goToPage(nextPage: number) {
-    if (serverPagination) {
-      serverPagination.onPageChange(nextPage);
+  const from = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const to = Math.min(currentPage * pageSize, totalCount);
+
+  function goToPage(next: number) {
+    const bounded = Math.max(1, Math.min(pageCount, next));
+    if (isServer && serverPagination?.onPageChange) {
+      serverPagination.onPageChange(bounded);
       return;
     }
-    setPage(nextPage);
+    setPage(bounded);
   }
 
   return (
-    <div className="overflow-hidden border border-black/15 bg-card">
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={isServer ? (serverPagination?.search ?? "") : query}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (isServer && serverPagination?.onSearchChange) {
+                  serverPagination.onSearchChange(next);
+                  return;
+                }
+                setQuery(next);
+                setPage(1);
+              }}
+              placeholder={searchPlaceholder}
+              className="h-8.5 pl-8 text-xs"
+            />
+          </div>
+          {countLabel ? (
+            <p className="text-xs text-muted-foreground">{countLabel}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {totalCount} {totalCount === 1 ? "record" : "records"}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {toolbar}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            className="h-8.5 text-xs"
+          >
+            <Download className="size-3.5" />
+            Export
+          </Button>
+        </div>
+      </div>
+
       {letters ? (
-        <div className="flex flex-wrap items-center gap-0.5 border-b border-black/10 px-3 py-1.5">
+        <div className="flex flex-wrap items-center gap-1 border-y border-black/10 py-1.5 text-xs">
           <button
             type="button"
             onClick={() => applyLetter("")}
-            disabled={loading}
             className={cn(
-              "px-1.5 text-[11px] font-semibold tracking-wide uppercase disabled:opacity-50",
-              activeLetter ? "text-muted-foreground hover:text-foreground" : "text-primary",
+              "rounded px-1.5 py-0.5 text-xs font-medium",
+              activeLetter === ""
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted",
             )}
           >
             All
@@ -222,10 +280,11 @@ export function PortalDataTable<T>({
               key={item}
               type="button"
               onClick={() => applyLetter(item)}
-              disabled={loading}
               className={cn(
-                "px-1.5 text-[11px] font-semibold disabled:opacity-50",
-                activeLetter === item ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                "rounded px-1.5 py-0.5 text-xs font-medium",
+                activeLetter === item
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted",
               )}
             >
               {item}
@@ -234,41 +293,8 @@ export function PortalDataTable<T>({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-b border-black/10 bg-card px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchValue}
-              onChange={(change) => {
-                const next = change.target.value;
-                if (serverPagination) {
-                  serverPagination.onSearchChange(next);
-                  return;
-                }
-                setQuery(next);
-                setPage(1);
-              }}
-              placeholder={searchPlaceholder}
-              className="h-8 bg-card pl-8 text-sm"
-              aria-label={searchPlaceholder}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {countLabel ?? filename} ({totalCount})
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {toolbar}
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!filtered.length}>
-            <Download />
-            Export
-          </Button>
-        </div>
-      </div>
-
-      <div className="relative min-h-[160px]">
-        <Table className={cn("text-[13px]", loading && pageRows.length ? "opacity-40" : undefined)}>
+      <div className="relative overflow-x-auto rounded-lg border border-black/10 bg-card">
+        <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               {columns.map((column) => {
@@ -304,7 +330,7 @@ export function PortalDataTable<T>({
                 );
               })}
               {actions ? (
-                <TableHead className="h-8 w-12 bg-[#f7f8fa] px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 min-w-[4.5rem] bg-[#f7f8fa] px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Options
                 </TableHead>
               ) : null}
@@ -334,7 +360,7 @@ export function PortalDataTable<T>({
                     ))}
                     {actions ? (
                       <TableCell
-                        className="px-2.5 py-1.5 text-right"
+                        className="px-2.5 py-1.5 text-right whitespace-nowrap"
                         onClick={(event) => event.stopPropagation()}
                       >
                         <RowActions row={row} actions={rowActions} />
@@ -399,39 +425,64 @@ function RowActions<T>({ row, actions }: { row: T; actions: PortalTableAction<T>
   const router = useRouter();
   if (!actions.length) return null;
 
+  const quickAction = actions.find((a) => a.quick);
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <div className="inline-flex items-center justify-end gap-1">
+      {quickAction ? (
         <Button
+          type="button"
           variant="outline"
           size="icon-sm"
-          className="size-7"
-          aria-label="Row actions"
+          className="size-7 text-[#003F7D] hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/60"
+          title={quickAction.label}
+          aria-label={quickAction.label}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (quickAction.href) router.push(quickAction.href);
+            quickAction.onSelect?.(row);
+          }}
         >
-          <MoreHorizontal className="size-4" />
+          {quickAction.icon ?? <MoreHorizontal className="size-4" />}
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-44">
-        {actions.map((action, index) => {
-          const previous = actions[index - 1];
-          const split = action.variant === "destructive" && previous?.variant !== "destructive";
-          return (
-            <Fragment key={`${action.label}-${index}`}>
-              {split ? <DropdownMenuSeparator /> : null}
-              <DropdownMenuItem
-                variant={action.variant}
-                onClick={() => {
-                  if (action.href) router.push(action.href);
-                  action.onSelect?.(row);
-                }}
-              >
-                {action.label}
-              </DropdownMenuItem>
-            </Fragment>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="size-7"
+            aria-label="Row actions"
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          {actions.map((action, index) => {
+            const previous = actions[index - 1];
+            const split = action.variant === "destructive" && previous?.variant !== "destructive";
+            return (
+              <Fragment key={`${action.label}-${index}`}>
+                {split ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuItem
+                  variant={action.variant}
+                  className="flex items-center gap-2 cursor-pointer text-xs"
+                  onClick={() => {
+                    if (action.href) router.push(action.href);
+                    action.onSelect?.(row);
+                  }}
+                >
+                  {action.icon ? (
+                    <span className="shrink-0 text-muted-foreground">{action.icon}</span>
+                  ) : null}
+                  <span>{action.label}</span>
+                </DropdownMenuItem>
+              </Fragment>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 

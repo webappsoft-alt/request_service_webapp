@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
@@ -56,6 +57,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   const [connected, setConnected] = useState(false);
   const [lastChatThreadId, setLastChatThreadId] = useState<string | null>(null);
   const [lastNotificationAt, setLastNotificationAt] = useState(0);
+  const activeThreadIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -70,12 +72,17 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      if (activeThreadIdRef.current) {
+        joinChatThread(activeThreadIdRef.current);
+      }
+    };
     const onDisconnect = () => setConnected(false);
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    if (socket.connected) setConnected(true);
+    if (socket.connected) onConnect();
 
     const unsubscribers = [
       onRealtime("CHAT_MESSAGE", (payload) => {
@@ -136,10 +143,14 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   }, []);
 
   const joinThread = useCallback((threadId: string) => {
+    activeThreadIdRef.current = threadId;
     joinChatThread(threadId);
   }, []);
 
   const leaveThread = useCallback((threadId: string) => {
+    if (activeThreadIdRef.current === threadId) {
+      activeThreadIdRef.current = null;
+    }
     leaveChatThread(threadId);
   }, []);
 

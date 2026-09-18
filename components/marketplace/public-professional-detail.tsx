@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getData } from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { Container } from "@/components/layout/container";
@@ -18,6 +18,8 @@ import type {
   ServiceCategorySlug,
 } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { trackLeadInteraction } from "@/lib/api/crm-client";
+import { readChatGuest } from "@/lib/booking/chat-store";
 import {
   normalizePortfolioProject,
   type PortfolioProject,
@@ -33,6 +35,7 @@ import {
   type PublicProfessional,
   type PublicProfessionalActiveService,
 } from "@/store/publicProfessionalsSlice";
+import { selectAuthUser } from "@/store/authSlice";
 
 const RELATED_LIMIT = 8;
 
@@ -392,6 +395,36 @@ export function PublicProfessionalDetail({
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [relatedProviders, setRelatedProviders] = useState<Provider[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
+  const authUser = useAppSelector(selectAuthUser);
+  const trackedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const targetSlug = professionalSlug || professional?.slug || fallbackProvider?.slug;
+    const targetId = professional?.id || fallbackProvider?.id;
+    if (!targetSlug && !targetId) return;
+    const trackKey = `${targetId || targetSlug}`;
+    if (trackedRef.current === trackKey) return;
+    trackedRef.current = trackKey;
+
+    const guest = readChatGuest();
+    const customerName =
+      [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
+      authUser?.name ||
+      guest?.name ||
+      "";
+    const customerEmail = authUser?.email || guest?.email || "";
+    const phone = authUser?.phone || "";
+
+    void trackLeadInteraction({
+      providerId: targetId && /^[a-f\d]{24}$/i.test(targetId) ? targetId : undefined,
+      providerSlug: targetSlug || undefined,
+      source: "profile_view",
+      customerName,
+      customerEmail,
+      phone,
+      details: "Customer viewed provider profile on public directory.",
+    });
+  }, [authUser, fallbackProvider?.id, fallbackProvider?.slug, professional?.id, professional?.slug, professionalSlug]);
 
   useEffect(() => {
     if (!professionalSlug) return;

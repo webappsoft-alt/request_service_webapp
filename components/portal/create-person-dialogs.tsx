@@ -61,7 +61,7 @@ import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { createContractorRecord, updateContractorRecord } from "@/store/contractorsSlice";
 import { createVendorRecord, updateVendorRecord } from "@/store/vendorsSlice";
 import { createReminderRecord } from "@/store/remindersSlice";
-import { createCustomerTask, updateCustomerTask } from "@/store/customersSlice";
+import { createCustomerTask, updateCustomerTask, upsertCustomerReminder } from "@/store/customersSlice";
 import { createTask as createTaskApi, updateTask as updateTaskApi } from "@/lib/api/crm-client";
 
 const SOURCES: CrmPersonSource[] = ["external", "phone", "referral", "walk_in", "website"];
@@ -921,6 +921,13 @@ export function CreateReminderDialog({
       } else {
         const created = await Promise.resolve(addReminder(reminder));
         saved = created ?? reminder;
+      }
+      // Keep FileNotices / CRM directory banners in sync without a full page refresh.
+      if (crm.enabled) {
+        crm.upsertReminder(saved);
+      }
+      if (saved.subjectKind === "customer" && saved.subjectId) {
+        dispatch(upsertCustomerReminder({ customerId: saved.subjectId, item: saved }));
       }
       onCreated?.(saved);
       toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);

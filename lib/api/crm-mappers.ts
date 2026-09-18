@@ -840,6 +840,8 @@ export function mapEstimate(raw: unknown): Estimate | null {
       personDisplayName(record.customerId) ||
       trimmed(record.customerName) ||
       undefined,
+    customerPhone: customerNameParts(record).phone || undefined,
+    customerEmail: customerNameParts(record).email || undefined,
     requestId: crmIdOf(record.requestId) || undefined,
     jobId: crmIdOf(record.jobId) || undefined,
     serviceId: crmIdOf(record.serviceId) || undefined,

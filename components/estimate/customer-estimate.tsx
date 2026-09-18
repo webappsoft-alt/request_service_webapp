@@ -14,9 +14,14 @@ import {
   type EstimateApproval,
   type EstimateShareSnapshot,
 } from "@/components/portal/use-estimate-share";
-import { getData, postData, showApiErrorToast } from "@/components/api/apiFuntions";
+import {
+  getData,
+  postData,
+  showApiErrorToast,
+} from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { rememberCustomerEstimateToken } from "@/lib/booking/customer-estimates-store";
 import { formatDate, formatMoney } from "@/lib/format";
 
@@ -55,7 +60,8 @@ function mapPublicEstimateToSnapshot(
   const estimate = asRecord(root?.data) ?? root;
   if (!estimate) return null;
 
-  const provider = asRecord(estimate.providerId) ?? asRecord(estimate.provider) ?? {};
+  const provider =
+    asRecord(estimate.providerId) ?? asRecord(estimate.provider) ?? {};
   const location = asRecord(provider.location) ?? {};
   const snapshotCustomer =
     asRecord(estimate.customerSnapshot) ??
@@ -66,7 +72,8 @@ function mapPublicEstimateToSnapshot(
     asRecord(estimate.propertyAddress) ??
     asRecord(snapshotCustomer.address) ??
     asRecord(estimate.address) ??
-    (Array.isArray(snapshotCustomer.addresses) && asRecord(snapshotCustomer.addresses[0])) ??
+    (Array.isArray(snapshotCustomer.addresses) &&
+      asRecord(snapshotCustomer.addresses[0])) ??
     {};
 
   const companySignature = asRecord(estimate.signature);
@@ -78,30 +85,31 @@ function mapPublicEstimateToSnapshot(
 
   if (!estimateId) return null;
 
-  const items = (Array.isArray(estimate.items) ? estimate.items : []).map((entry) => {
-    const item = asRecord(entry) ?? {};
-    const kindRaw = stringValue(item.kind || item.type).toLowerCase();
-    const quantity = Math.max(0, numberValue(item.quantity, 1));
-    const unitPrice = numberValue(item.unitPrice);
-    return {
-      description: stringValue(item.description) || "Line item",
-      kind: (kindRaw === "material" || kindRaw === "materials" ? "materials" : "labor") as
-        | "labor"
-        | "materials",
-      quantity,
-      unit: stringValue(item.unit) || (kindRaw === "labor" ? "hr" : "ea"),
-      unitPrice,
-      total: numberValue(item.total, Math.round(quantity * unitPrice)),
-    };
-  });
+  const items = (Array.isArray(estimate.items) ? estimate.items : []).map(
+    (entry) => {
+      const item = asRecord(entry) ?? {};
+      const kindRaw = stringValue(item.kind || item.type).toLowerCase();
+      const quantity = Math.max(0, numberValue(item.quantity, 1));
+      const unitPrice = numberValue(item.unitPrice);
+      return {
+        description: stringValue(item.description) || "Line item",
+        kind: (kindRaw === "material" || kindRaw === "materials"
+          ? "materials"
+          : "labor") as "labor" | "materials",
+        quantity,
+        unit: stringValue(item.unit) || (kindRaw === "labor" ? "hr" : "ea"),
+        unitPrice,
+        total: numberValue(item.total, Math.round(quantity * unitPrice)),
+      };
+    },
+  );
 
   const companySignedBy =
     stringValue(companySignature?.signedBy) ||
     stringValue(estimate.companySignedBy) ||
     stringValue(provider.companyName);
   const companySignedAt =
-    toIso(companySignature?.signedAt) ||
-    toIso(estimate.companySignedAt);
+    toIso(companySignature?.signedAt) || toIso(estimate.companySignedAt);
   const companySignatureDataUrl =
     stringValue(companySignature?.imageBase64) ||
     stringValue(companySignature?.signature) ||
@@ -110,7 +118,9 @@ function mapPublicEstimateToSnapshot(
   const snapshot: EstimateShareSnapshot = {
     token,
     estimateId,
-    number: stringValue(estimate.number) || `EST-${estimateId.slice(-4).toUpperCase()}`,
+    number:
+      stringValue(estimate.number) ||
+      `EST-${estimateId.slice(-4).toUpperCase()}`,
     companyName: stringValue(provider.companyName) || "Service company",
     companyEmail: stringValue(provider.email),
     companyPhone: stringValue(provider.phone),
@@ -118,23 +128,37 @@ function mapPublicEstimateToSnapshot(
     companyCity: stringValue(location.city),
     companyState: stringValue(location.state),
     companyZip: stringValue(location.zip),
-    licensed: Boolean(asRecord(provider.profile)?.licensed ?? provider.licensed),
+    licensed: Boolean(
+      asRecord(provider.profile)?.licensed ?? provider.licensed,
+    ),
     insured: Boolean(asRecord(provider.profile)?.insured ?? provider.insured),
     customerName:
-      [stringValue(snapshotCustomer.firstName), stringValue(snapshotCustomer.lastName)]
+      [
+        stringValue(snapshotCustomer.firstName),
+        stringValue(snapshotCustomer.lastName),
+      ]
         .filter(Boolean)
         .join(" ")
         .trim() ||
       stringValue(snapshotCustomer.companyName) ||
       stringValue(estimate.customerName) ||
       "Customer",
-    customerEmail: stringValue(snapshotCustomer.email) || stringValue(estimate.customerEmail) || undefined,
-    customerPhone: stringValue(snapshotCustomer.phone) || stringValue(estimate.customerPhone) || undefined,
+    customerEmail:
+      stringValue(snapshotCustomer.email) ||
+      stringValue(estimate.customerEmail) ||
+      undefined,
+    customerPhone:
+      stringValue(snapshotCustomer.phone) ||
+      stringValue(estimate.customerPhone) ||
+      undefined,
     street: stringValue(address.street),
     city: stringValue(address.city),
     state: stringValue(address.state),
     zip: stringValue(address.zip),
-    issuedAt: toIso(estimate.issuedAt) || toIso(estimate.createdAt) || new Date().toISOString(),
+    issuedAt:
+      toIso(estimate.issuedAt) ||
+      toIso(estimate.createdAt) ||
+      new Date().toISOString(),
     expiresAt: toIso(estimate.expiresAt) || undefined,
     notes: stringValue(estimate.notes) || undefined,
     terms: stringValue(estimate.terms) || undefined,
@@ -148,9 +172,13 @@ function mapPublicEstimateToSnapshot(
     companySignatureDataUrl: companySignatureDataUrl || undefined,
   };
 
-  const signedAt = toIso(approvalRaw?.signedAt) || toIso(approvalRaw?.approvedAt);
-  const signedBy = stringValue(approvalRaw?.signedBy) || stringValue(approvalRaw?.name);
-  const approvalImage = stringValue(approvalRaw?.signatureImageBase64) || stringValue(approvalRaw?.signature);
+  const signedAt =
+    toIso(approvalRaw?.signedAt) || toIso(approvalRaw?.approvedAt);
+  const signedBy =
+    stringValue(approvalRaw?.signedBy) || stringValue(approvalRaw?.name);
+  const approvalImage =
+    stringValue(approvalRaw?.signatureImageBase64) ||
+    stringValue(approvalRaw?.signature);
 
   const approval =
     signedAt || signedBy || stringValue(estimate.status) === "accepted"
@@ -170,7 +198,9 @@ export function CustomerEstimatePage({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<EstimateShareSnapshot | null>(null);
-  const [approval, setApproval] = useState<EstimateApproval | undefined>(undefined);
+  const [approval, setApproval] = useState<EstimateApproval | undefined>(
+    undefined,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -185,7 +215,9 @@ export function CustomerEstimatePage({ token }: { token: string }) {
       if (mapped) {
         rememberCustomerEstimateToken(token);
         setSnapshot(mapped.snapshot);
-        setApproval(mapped.approval || share.approvalOf(mapped.snapshot.estimateId));
+        setApproval(
+          mapped.approval || share.approvalOf(mapped.snapshot.estimateId),
+        );
         setLoading(false);
         return;
       }
@@ -232,19 +264,14 @@ export function CustomerEstimatePage({ token }: { token: string }) {
     };
     share.approve(snapshot, signedBy, signatureImageBase64);
     setApproval(nextApproval);
-    toast.success("Estimate signed and approved! The company has been notified.");
+    toast.success(
+      "Estimate signed and approved! The company has been notified.",
+    );
     void load();
   }
 
   if (loading) {
-    return (
-      <main id="main-content" className="min-h-svh bg-[#eef1f5] px-4 py-16">
-        <div className="mx-auto max-w-lg rounded-md border border-black/15 bg-card p-8 text-center shadow-sm">
-          <div className="mx-auto mb-3 size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm font-medium text-muted-foreground">Loading estimate…</p>
-        </div>
-      </main>
-    );
+    return <EstimateDocumentSkeleton />;
   }
 
   if (!snapshot) {
@@ -262,14 +289,21 @@ export function CustomerEstimatePage({ token }: { token: string }) {
   }
 
   return (
-    <main id="main-content" className="min-h-svh bg-[#eef1f5] px-4 py-6 sm:py-10 print:min-h-0 print:bg-white print:p-0 print:m-0">
-      <div className="mx-auto max-w-4xl space-y-4 print:max-w-none print:space-y-0 print:p-0 print:m-0">
+    <main
+      id="main-content"
+      className="min-h-svh bg-[#eef1f5] px-4 py-6 sm:py-10 print:min-h-0 print:bg-white print:p-0 print:m-0"
+    >
+      <div className="mx-auto w-full max-w-[8.5in] space-y-4 print:max-w-none print:space-y-0 print:p-0 print:m-0">
         {/* Top bar with quick actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-black/10 bg-card px-4 py-3 shadow-sm print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-black/10 bg-card px-4 py-3 print:hidden">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">{snapshot.companyName}</span>
+            <span className="text-sm font-semibold">
+              {snapshot.companyName}
+            </span>
             <span className="text-muted-foreground">·</span>
-            <span className="text-sm text-muted-foreground">{snapshot.number}</span>
+            <span className="text-sm text-muted-foreground">
+              {snapshot.number}
+            </span>
             {approval ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
                 <CheckCircle2 className="size-3.5" /> Approved
@@ -305,11 +339,15 @@ export function CustomerEstimatePage({ token }: { token: string }) {
         />
 
         {approval ? (
-          <div className="mx-auto flex max-w-[8.5in] items-center gap-2.5 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow-sm">
+          <div className="mx-auto flex max-w-[8.5in] items-center gap-2.5 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 print:hidden">
             <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
             <div className="text-xs sm:text-sm">
-              <span className="font-semibold text-emerald-900">Signed & Approved</span> by {approval.signedBy} on{" "}
-              {formatDate(approval.signedAt.slice(0, 10))}. The service company has received your approval and can proceed with scheduling.
+              <span className="font-semibold text-emerald-900">
+                Signed & Approved
+              </span>{" "}
+              by {approval.signedBy} on{" "}
+              {formatDate(approval.signedAt.slice(0, 10))}. The service company
+              has received your approval and can proceed with scheduling.
             </div>
           </div>
         ) : null}
@@ -331,9 +369,13 @@ function CustomerSignSlot({
 
   return (
     <div>
-      <SignaturePadField name={snapshot.customerName} pad={pad} showNameInput={false} />
-      <p className="hidden print:block mt-2 text-[11px] text-muted-foreground">Customer signs to approve this estimate</p>
-      <div className="print:hidden">
+      <SignaturePadField
+        name={snapshot.customerName}
+        pad={pad}
+        showNameInput={false}
+        caption="Customer signs to approve this estimate"
+      />
+      <div>
         <label className="mt-3 flex items-start gap-2 text-[11px] leading-4 text-foreground cursor-pointer">
           <input
             type="checkbox"
@@ -342,32 +384,211 @@ function CustomerSignSlot({
             onChange={(event) => setAgreed(event.target.checked)}
           />
           <span>
-            I have read pages 1 and 2 and authorize <strong>{snapshot.companyName}</strong> to proceed for{" "}
+            I have read pages 1 and 2 and authorize{" "}
+            <strong>{snapshot.companyName}</strong> to proceed for{" "}
             <strong>{formatMoney(snapshot.total)}</strong>.
           </span>
         </label>
-        <Button
-          className="mt-3 w-full sm:w-auto"
-          size="sm"
-          disabled={!agreed || busy}
-          onClick={() => {
-            const image = pad.dirty ? pad.toImage() : typedSignature(snapshot.customerName);
-            if (!image) {
-              toast.error("Please provide a signature.");
-              return;
-            }
-            setBusy(true);
-            void Promise.resolve(onSign(snapshot.customerName, image)).finally(() => setBusy(false));
-          }}
-        >
-          {busy ? "Signing…" : `Sign and approve ${snapshot.number}`}
-        </Button>
+        <div className="print:hidden">
+          <Button
+            className="mt-3 w-full sm:w-auto"
+            size="sm"
+            disabled={!agreed || busy}
+            onClick={() => {
+              const image = pad.dirty
+                ? pad.toImage()
+                : typedSignature(snapshot.customerName);
+              if (!image) {
+                toast.error("Please provide a signature.");
+                return;
+              }
+              setBusy(true);
+              void Promise.resolve(
+                onSign(snapshot.customerName, image),
+              ).finally(() => setBusy(false));
+            }}
+          >
+            {busy ? "Signing…" : `Sign and approve ${snapshot.number}`}
+          </Button>
+        </div>
       </div>
     </div>
   );
 }
 
-export function EstimateDocument({ snapshot }: { snapshot: EstimateShareSnapshot }) {
+export function EstimateDocument({
+  snapshot,
+}: {
+  snapshot: EstimateShareSnapshot;
+}) {
   return <EstimatePdfDocument snapshot={snapshot} />;
 }
 
+export function EstimateDocumentSkeleton() {
+  return (
+    <main
+      id="main-content"
+      className="min-h-svh bg-[#eef1f5] px-4 py-6 sm:py-10"
+    >
+      <div className="mx-auto w-full max-w-[8.5in] space-y-4">
+        {/* Top bar skeleton */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-black/10 bg-card px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-32" />
+            <span className="text-muted-foreground">·</span>
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-28 rounded-full" />
+          </div>
+          <Skeleton className="h-8 w-24 rounded-md" />
+        </div>
+
+        {/* Page 1 Skeleton */}
+        <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+          <div className="min-h-[10.4in] px-8 py-7">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Skeleton className="size-14 rounded-[4px]" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-56" />
+                  <Skeleton className="h-3 w-36" />
+                  <Skeleton className="h-2.5 w-28" />
+                </div>
+              </div>
+              <div className="space-y-1.5 text-right">
+                <Skeleton className="ml-auto h-3 w-16" />
+                <Skeleton className="ml-auto h-6 w-24" />
+                <Skeleton className="ml-auto h-3 w-20" />
+              </div>
+            </div>
+
+            {/* Prepared by / Customer */}
+            <div className="mt-6 grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <Skeleton className="h-2.5 w-20" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-48" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+              <div className="space-y-1.5">
+                <Skeleton className="h-2.5 w-20" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-48" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+
+            {/* Meta bar */}
+            <div className="mt-6 grid grid-cols-3 gap-3 border border-black/10 bg-[#f8fafc] px-3 py-2.5">
+              <div className="space-y-1">
+                <Skeleton className="h-2.5 w-16" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+              <div className="space-y-1">
+                <Skeleton className="h-2.5 w-16" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+              <div className="space-y-1">
+                <Skeleton className="h-2.5 w-16" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            </div>
+
+            {/* Work details table */}
+            <div className="mt-6 space-y-2">
+              <Skeleton className="h-3 w-24" />
+              <div className="overflow-hidden rounded-[2px] border border-black/10">
+                <div className="flex h-8 items-center justify-between bg-[#e8eef5] px-2">
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-12" />
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <div className="divide-y divide-black/8 bg-white">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="flex h-10 items-center justify-between px-2"
+                    >
+                      <Skeleton className="h-3.5 w-44" />
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-3 w-12" />
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-3.5 w-20" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Subtotal */}
+            <div className="mt-4 ml-auto w-56 space-y-2">
+              <div className="flex justify-between">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+              <div className="flex justify-between">
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+              <div className="flex justify-between border-t border-black/10 pt-2">
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </div>
+          </div>
+          <footer className="flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2">
+            <Skeleton className="h-3 w-36" />
+            <Skeleton className="h-3 w-16" />
+          </footer>
+        </article>
+
+        {/* Page 2 Skeleton */}
+        <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+          <div className="min-h-[10.4in] space-y-6 px-8 py-7">
+            {/* Header compact */}
+            <div className="flex items-start justify-between border-b border-black/10 pb-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-10 rounded-[4px]" />
+                <Skeleton className="h-4 w-36" />
+              </div>
+              <Skeleton className="h-4 w-24" />
+            </div>
+
+            {/* Terms and conditions */}
+            <div className="space-y-3">
+              <Skeleton className="h-3 w-36" />
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <Skeleton key={i} className="h-4 w-full" />
+                ))}
+              </div>
+            </div>
+
+            {/* Signatures */}
+            <div className="mt-8 grid gap-6 pt-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-36" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-36" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-8 w-44 rounded-md" />
+              </div>
+            </div>
+          </div>
+          <footer className="flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2">
+            <Skeleton className="h-3 w-36" />
+            <Skeleton className="h-3 w-16" />
+          </footer>
+        </article>
+      </div>
+    </main>
+  );
+}

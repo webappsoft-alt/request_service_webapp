@@ -1031,7 +1031,7 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
                   {item.name}
                 </a>
                 <p className="text-xs text-muted-foreground">
-                  {fileSize(item.size)} · {stamp(item.addedAt)}
+                  {stamp(item.addedAt)}
                 </p>
               </div>
               <Button size="sm" variant="outline" asChild>

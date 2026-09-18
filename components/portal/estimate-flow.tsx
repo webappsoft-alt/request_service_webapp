@@ -179,7 +179,7 @@ export function EstimateStageBanner({
       case "site_visit":
         return {
           title: "Technician on site",
-          body: "Capture photos and findings on Site visit, price Line items, then click Finalize estimate. After that you can Share.",
+          body: "Capture findings and photos on the Site visit tab and save the inspection. Once field notes are saved, you can price line items and finalize.",
         };
       case "inspected":
         return {

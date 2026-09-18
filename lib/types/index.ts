@@ -161,6 +161,8 @@ export interface Estimate {
   providerId: string;
   customerId: string;
   customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
   requestId?: string;
   jobId?: string;
   serviceId?: string;

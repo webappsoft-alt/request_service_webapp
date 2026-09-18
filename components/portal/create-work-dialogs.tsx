@@ -2,21 +2,23 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
+import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
+import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { fetchCustomers } from "@/store/customersSlice";
-import { fetchEstimates, invalidateEstimatesCache } from "@/store/estimatesSlice";
-import { createEstimate as createEstimateApi } from "@/lib/api/crm-client";
-import { writeCostLines, type JobCostLine } from "@/components/portal/use-job-costing";
+import { invalidateEstimatesCache, fetchEstimates } from "@/store/estimatesSlice";
+import { createCustomerJob, updateCustomerJob } from "@/store/customersSlice";
+import { createEstimate as createEstimateApi, getEstimate } from "@/lib/api/crm-client";
+import { seedJobLines, writeCostLines, type JobCostLine } from "@/components/portal/use-job-costing";
 import { writeSiteVisit } from "@/components/portal/use-job-file";
 import {
   addressFrom,
@@ -36,13 +38,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { CRM_API_EVENT } from "@/components/portal/crm-data-provider";
@@ -50,10 +45,11 @@ import { createRequest } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel, type PortalRequest } from "@/lib/data/portal";
 import { formatMoney } from "@/lib/format";
-import type { Estimate, JobStatus } from "@/lib/types";
+import type { Estimate, Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   detectCurrentLocation,
   hasLocation,
@@ -71,6 +67,7 @@ export function CreateEstimateDialog({
   requestId,
   requestName,
   requestNotes,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -78,13 +75,20 @@ export function CreateEstimateDialog({
   requestId?: string;
   requestName?: string;
   requestNotes?: string;
+  onCreated?: (estimate: Estimate) => void;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
   const customerLocation = useAppSelector((state) => state.location);
   const { session, provider, estimates } = usePortalWorkspace();
-  const { customers, loading: customersLoading } = useCrmDirectory();
-  const { employees, loading: crewLoading } = usePortalCrew();
+  const { customers } = useCrmDirectory();
+  const { employees } = usePortalCrew();
   const records = usePortalRecords();
   const all = records.mergeEstimates(estimates);
   const first = customers[0];
@@ -92,6 +96,7 @@ export function CreateEstimateDialog({
   const [path, setPath] = useState<EstimatePath>("site_visit");
   const [name, setName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(customerId ?? first?.id ?? "");
+  const [customerLabel, setCustomerLabel] = useState("");
   const customer = customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = customer?.addresses[0];
   const [street, setStreet] = useState(address?.street || customerLocation.address || "");
@@ -110,6 +115,33 @@ export function CreateEstimateDialog({
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const hasEstimateName = Boolean(name.trim());
   const technician = employees.find((item) => item.id === employeeId);
+  // Opened from customer detail → always bind to that customer id.
+  const boundCustomerId = (customerId || "").trim();
+  const lockedCustomer = Boolean(boundCustomerId);
+
+  const customerPaging = usePaginatedCrmOptions(
+    open && useApi && !lockedCustomer ? "customer" : null,
+    open && useApi && !lockedCustomer,
+  );
+  const assigneePaging = usePaginatedCrmOptions(
+    open && useApi && tab === "visit" ? "assignee" : null,
+    open && useApi && tab === "visit",
+  );
+
+  const customerOptions = useMemo(
+    () =>
+      useApi
+        ? customerPaging.options
+        : customers.map((item) => ({ id: item.id, label: crmCustomerName(item) })),
+    [useApi, customerPaging.options, customers],
+  );
+  const technicianOptions = useMemo(() => {
+    const rows = useApi
+      ? assigneePaging.options
+      : employees.map((item) => ({ id: item.id, label: employeeName(item) }));
+    return [{ id: "", label: "Assign later" }, ...rows];
+  }, [useApi, assigneePaging.options, employees]);
+
   const nextTab = (current: EstimateTab): EstimateTab => {
     if (current === "customer") return path === "site_visit" ? "visit" : "scope";
     if (current === "visit" || current === "scope") return "review";
@@ -129,23 +161,17 @@ export function CreateEstimateDialog({
     setSaving(false);
     setLines([]);
     if (requestNotes) setNotes(requestNotes);
-    if (customerId) pickCustomer(customerId);
-    if (customers.length === 0) {
-      void dispatch(fetchCustomers({ force: true, limit: 100 }));
+    if (boundCustomerId) {
+      pickCustomer(boundCustomerId);
     }
-  }, [customerId, open, requestName, requestNotes, customers.length, dispatch]);
+  }, [boundCustomerId, open, requestName, requestNotes]);
 
   useEffect(() => {
-    if (!open) return;
-    if (customerId) {
-      pickCustomer(customerId);
-    } else if (
-      (!selectedCustomer || !customers.some((c) => c.id === selectedCustomer)) &&
-      customers[0]?.id
-    ) {
-      pickCustomer(customers[0].id);
-    }
-  }, [customerId, customers, open, selectedCustomer]);
+    if (!open || lockedCustomer) return;
+    if (selectedCustomer) return;
+    const firstOption = customerOptions[0];
+    if (firstOption) pickCustomer(firstOption.id, firstOption);
+  }, [open, lockedCustomer, selectedCustomer, customerOptions]);
 
   // Auto-detect location if empty and not yet attempted
   useEffect(() => {
@@ -175,8 +201,13 @@ export function CreateEstimateDialog({
     }
   }, [customerLocation, customers, open, selectedCustomer, street, city, state, zip]);
 
-  function pickCustomer(id: string) {
+  function pickCustomer(id: string, option?: { id: string; label: string }) {
     setSelectedCustomer(id);
+    if (option?.label) setCustomerLabel(option.label);
+    else {
+      const match = customers.find((item) => item.id === id);
+      if (match) setCustomerLabel(crmCustomerName(match));
+    }
     const next = customers.find((item) => item.id === id);
     const nextAddress = next?.addresses[0];
     if (nextAddress && (nextAddress.street || nextAddress.city || nextAddress.zip)) {
@@ -196,12 +227,14 @@ export function CreateEstimateDialog({
     setStreet(address.formattedAddress || address.streetAddress);
     setCity(address.city || "");
     setState(address.state || "");
-    setZip(address.zipCode || "");
+    // Keep ZIP manually editable when Places has no postal code.
+    if (address.zipCode) setZip(address.zipCode);
     dispatch(setLocationFromPlace(address));
   }
 
   async function create() {
-    const customerIdValue = selectedCustomer || customers[0]?.id || "";
+    // Prefer the customer id from the detail page URL / props.
+    const customerIdValue = (boundCustomerId || selectedCustomer || "").trim();
     if (!customerIdValue || !name.trim() || saving) {
       if (!customerIdValue || !name.trim()) {
         toast.error("Customer and estimate name are required.");
@@ -216,7 +249,8 @@ export function CreateEstimateDialog({
         title: name.trim(),
         providerId: provider.id,
         customerId: customerIdValue,
-        customerName: customer ? crmCustomerName(customer) : undefined,
+        customerName:
+          customerLabel || (customer ? crmCustomerName(customer) : undefined),
         requestId,
         address: addressFrom(street, city, state, zip),
         status: path === "site_visit" ? "site_visit" : "draft",
@@ -265,6 +299,7 @@ export function CreateEstimateDialog({
       }
       dispatch(invalidateEstimatesCache());
       void dispatch(fetchEstimates({ force: true }));
+      onCreated?.(saved);
       onOpenChange(false);
       toast.success(`${saved.number || "Estimate"} created.`);
       router.push(`/pro/dashboard/estimates/${saved.id}${path === "site_visit" ? "?tab=visit" : ""}`);
@@ -337,74 +372,34 @@ export function CreateEstimateDialog({
                 <p className="mt-1 text-xs text-muted-foreground">Price the quote now, finalize, and send it for signature.</p>
               </button>
             </div>
-            <Field
-              label="Customer"
-              action={
-                <button
-                  type="button"
-                  onClick={() => setCreateCustomerOpen(true)}
-                  className="text-xs font-medium text-primary hover:underline cursor-pointer"
-                >
-                  + New customer
-                </button>
-              }
-            >
-              <Select
-                disabled={customersLoading && customers.length === 0}
-                value={selectedCustomer || undefined}
-                onValueChange={(val) => {
-                  if (val === "__new_customer__") {
-                    setCreateCustomerOpen(true);
-                    return;
-                  }
-                  pickCustomer(val);
-                }}
+            {!lockedCustomer ? (
+              <Field
+                label="Customer"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setCreateCustomerOpen(true)}
+                    className="text-xs font-medium text-primary hover:underline cursor-pointer"
+                  >
+                    + New customer
+                  </button>
+                }
               >
-                <SelectTrigger className="w-full" loading={customersLoading && customers.length === 0}>
-                  <SelectValue placeholder={customersLoading && customers.length === 0 ? "Loading customers…" : "Select customer"} />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  align="start"
-                  className="z-[100] w-[var(--radix-select-trigger-width)]"
-                >
-                  {customersLoading && customers.length === 0 ? (
-                    <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                      <Loader2 className="size-3.5 animate-spin" />
-                      <span>Loading customers…</span>
-                    </div>
-                  ) : customers.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-muted-foreground">
-                      <p className="font-medium text-foreground">No customers found</p>
-                      <p className="mt-0.5 text-[11px]">Create your first customer to continue.</p>
-                      <button
-                        type="button"
-                        onClick={() => setCreateCustomerOpen(true)}
-                        className="mt-2 inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 cursor-pointer"
-                      >
-                        + Add Customer
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {customers.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {crmCustomerName(item)}
-                        </SelectItem>
-                      ))}
-                      <div className="border-t border-border p-1 mt-1">
-                        <SelectItem
-                          value="__new_customer__"
-                          className="text-primary font-medium focus:text-primary focus:bg-primary/10"
-                        >
-                          + Add new customer
-                        </SelectItem>
-                      </div>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </Field>
+                <PaginatedEntitySelect
+                  id="estimate-customer"
+                  value={selectedCustomer}
+                  options={customerOptions}
+                  selectedLabel={customerLabel}
+                  placeholder="Select customer"
+                  emptyLabel="No customers found. Add a customer to continue."
+                  loading={useApi ? customerPaging.loading : false}
+                  loadingMore={useApi ? customerPaging.loadingMore : false}
+                  hasMore={useApi ? customerPaging.hasMore : false}
+                  onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+                  onChange={(id, option) => pickCustomer(id, option)}
+                />
+              </Field>
+            ) : null}
             <Field label="Estimate name">
               <Input
                 value={name}
@@ -414,10 +409,20 @@ export function CreateEstimateDialog({
               />
             </Field>
             <Field label="Issued">
-              <Input type="date" value={issuedAt} onChange={(event) => setIssuedAt(event.target.value)} />
+              <Input
+                type="date"
+                value={issuedAt}
+                placeholder="mm/dd/yyyy"
+                onChange={(event) => setIssuedAt(event.target.value)}
+              />
             </Field>
             <Field label="Expires">
-              <Input type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
+              <Input
+                type="date"
+                value={expiresAt}
+                placeholder="mm/dd/yyyy"
+                onChange={(event) => setExpiresAt(event.target.value)}
+              />
             </Field>
             <Field label="Job address" className="sm:col-span-2">
               <AddressAutocomplete
@@ -429,49 +434,51 @@ export function CreateEstimateDialog({
               />
             </Field>
             <Field label="City">
-              <Input value={city} onChange={(event) => setCity(event.target.value)} />
+              <Input
+                value={city}
+                placeholder="City"
+                onChange={(event) => setCity(event.target.value)}
+              />
+            </Field>
+            <Field label="State">
+              <Input
+                value={state}
+                placeholder="State"
+                onChange={(event) => setState(event.target.value)}
+              />
             </Field>
             <Field label="ZIP">
-              <Input value={zip} onChange={(event) => setZip(event.target.value)} />
+              <Input
+                value={zip}
+                placeholder="ZIP / postal code"
+                onChange={(event) => setZip(event.target.value)}
+              />
             </Field>
           </div>
         ) : null}
         {tab === "visit" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Technician">
-              <Select
-                disabled={crewLoading}
-                value={crewLoading ? undefined : (employeeId || "__unassigned__")}
-                onValueChange={(value) => setEmployeeId(value === "__unassigned__" ? "" : value)}
-              >
-                <SelectTrigger className="w-full" loading={crewLoading}>
-                  <SelectValue placeholder={crewLoading ? "Loading technicians…" : "Assign later"} />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  align="start"
-                  className="z-[100] w-[var(--radix-select-trigger-width)]"
-                >
-                  {crewLoading ? (
-                    <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                      <Loader2 className="size-3.5 animate-spin" />
-                      <span>Loading technicians…</span>
-                    </div>
-                  ) : (
-                    <>
-                      <SelectItem value="__unassigned__">Assign later</SelectItem>
-                      {employees.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {employeeName(item)}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
+              <PaginatedEntitySelect
+                id="estimate-technician"
+                value={employeeId}
+                options={technicianOptions}
+                placeholder="Assign later"
+                emptyLabel="No technicians found."
+                loading={useApi ? assigneePaging.loading : false}
+                loadingMore={useApi ? assigneePaging.loadingMore : false}
+                hasMore={useApi ? assigneePaging.hasMore : false}
+                onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+                onChange={(id) => setEmployeeId(id)}
+              />
             </Field>
             <Field label="Visit date">
-              <Input type="date" value={visitedAt} onChange={(event) => setVisitedAt(event.target.value)} />
+              <Input
+                type="date"
+                value={visitedAt}
+                placeholder="mm/dd/yyyy"
+                onChange={(event) => setVisitedAt(event.target.value)}
+              />
             </Field>
             <Field label="Access / site notes" className="sm:col-span-2">
               <Textarea
@@ -490,13 +497,24 @@ export function CreateEstimateDialog({
         {tab === "review" ? (
           <div className="grid gap-3">
             <p className="text-sm text-muted-foreground">
-              {name} for {customer ? crmCustomerName(customer) : "customer"} · {street || "No street"}
+              {name} for {customerLabel || (customer ? crmCustomerName(customer) : "customer")} ·{" "}
+              {street || "No street"}
             </p>
             <Field label="Notes">
-              <Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
+              <Textarea
+                rows={3}
+                placeholder="Optional notes for this estimate"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
             </Field>
             <Field label="Terms">
-              <Textarea rows={3} value={terms} onChange={(event) => setTerms(event.target.value)} />
+              <Textarea
+                rows={3}
+                placeholder="Payment and validity terms"
+                value={terms}
+                onChange={(event) => setTerms(event.target.value)}
+              />
             </Field>
           </div>
         ) : null}
@@ -535,14 +553,27 @@ export function CreateJobDialog({
   onOpenChange,
   customerId,
   estimate,
+  job,
+  onCreated,
+  onUpdated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customerId?: string;
   estimate?: Estimate;
+  /** When set, dialog edits this job (PUT) instead of creating. */
+  job?: Job | null;
+  onCreated?: (job: Job) => void;
+  onUpdated?: (job: Job) => void;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
   const customerLocation = useAppSelector((state) => state.location);
   const { session, provider, estimates, jobs } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
@@ -551,22 +582,35 @@ export function CreateJobDialog({
   const allEstimates = records.mergeEstimates(estimates);
   const allJobs = records.mergeJobs(jobs);
   const first = customers[0];
+  const isEdit = Boolean(job?.id);
   const [tab, setTab] = useState<JobTab>("customer");
   const [sourceId, setSourceId] = useState(estimate?.id ?? "");
-  const source = allEstimates.find((item) => item.id === sourceId);
+  const [linkedEstimate, setLinkedEstimate] = useState<Estimate | null>(estimate ?? null);
+  const source = linkedEstimate ?? allEstimates.find((item) => item.id === sourceId);
   const [name, setName] = useState(source?.items[0]?.description.replace(/ labor$/i, "") ?? "Service visit");
-  const [selectedCustomer, setSelectedCustomer] = useState(estimate?.customerId ?? customerId ?? first?.id ?? "");
+  const [selectedCustomer, setSelectedCustomer] = useState(
+    customerId ?? estimate?.customerId ?? first?.id ?? "",
+  );
+  const [customerLabel, setCustomerLabel] = useState("");
   const customer = customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = source?.propertyAddress ?? customer?.addresses[0];
   const [street, setStreet] = useState(address?.street || customerLocation.address || "");
   const [city, setCity] = useState(address?.city || customerLocation.city || "");
   const [state, setState] = useState(address?.state || customerLocation.state || "CO");
   const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
+  const [latitude, setLatitude] = useState<number | null>(
+    address?.latitude ?? customerLocation.latitude ?? null,
+  );
+  const [longitude, setLongitude] = useState<number | null>(
+    address?.longitude ?? customerLocation.longitude ?? null,
+  );
   const [start, setStart] = useState(todayISO());
   const [due, setDue] = useState("");
   const [status, setStatus] = useState<JobStatus>("unscheduled");
   const [employeeId, setEmployeeId] = useState("");
+  const [employeeLabel, setEmployeeLabel] = useState("");
   const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
   const [lines, setLines] = useState<JobCostLine[]>(() =>
     source
       ? source.items.map((item) => ({
@@ -579,36 +623,127 @@ export function CreateJobDialog({
         }))
       : [],
   );
+  // Opened from customer detail / estimate detail / edit → customer is fixed from that page.
+  const boundCustomerId = (customerId || estimate?.customerId || job?.customerId || "").trim();
+  const lockedCustomer = Boolean(boundCustomerId);
+  const estimateFilter = useMemo(
+    () => (boundCustomerId ? { customerId: boundCustomerId } : {}),
+    [boundCustomerId],
+  );
 
-  const assignedTo = useMemo(() => {
+  const customerPaging = usePaginatedCrmOptions(
+    open && useApi && !lockedCustomer ? "customer" : null,
+    open && useApi && !lockedCustomer,
+  );
+  const estimatePaging = usePaginatedCrmOptions(
+    open && useApi && tab === "customer" ? "estimate" : null,
+    open && useApi && tab === "customer",
+    undefined,
+    estimateFilter,
+  );
+  const assigneePaging = usePaginatedCrmOptions(
+    open && useApi && tab === "schedule" ? "assignee" : null,
+    open && useApi && tab === "schedule",
+  );
+
+  const customerOptions = useMemo(
+    () =>
+      useApi
+        ? customerPaging.options
+        : customers.map((item) => ({ id: item.id, label: crmCustomerName(item) })),
+    [useApi, customerPaging.options, customers],
+  );
+  const estimateOptions = useMemo(() => {
+    const localRows = boundCustomerId
+      ? allEstimates.filter((item) => item.customerId === boundCustomerId)
+      : allEstimates;
+    const rows = useApi
+      ? estimatePaging.options
+      : localRows.map((item) => ({ id: item.id, label: item.number || item.id }));
+    return [{ id: "", label: "New job (creates a draft quote)" }, ...rows];
+  }, [useApi, estimatePaging.options, allEstimates, boundCustomerId]);
+  const technicianOptions = useMemo(() => {
+    const rows = useApi
+      ? assigneePaging.options
+      : employees.map((item) => ({ id: item.id, label: employeeName(item) }));
+    return [{ id: "", label: "Unassigned" }, ...rows];
+  }, [useApi, assigneePaging.options, employees]);
+  const statusOptions = useMemo(
+    () => JOB_STATUSES.map((item) => ({ id: item, label: jobStatusLabel(item) })),
+    [],
+  );
+
+  const assignedTo = employeeLabel || (() => {
     const match = employees.find((item) => item.id === employeeId);
     return match ? employeeName(match) : "";
-  }, [employeeId, employees]);
+  })();
 
   useEffect(() => {
     if (!open) {
       setTab("customer");
       return;
     }
-    if (estimate?.id) pickSource(estimate.id);
-  }, [estimate, open]);
+    // Always bind to the customer from the detail page URL / props.
+    if (boundCustomerId && !job?.id) {
+      setSelectedCustomer(boundCustomerId);
+      const match = customers.find((item) => item.id === boundCustomerId);
+      if (match) setCustomerLabel(crmCustomerName(match));
+    }
+    // Prefill from estimate only when creating (not editing).
+    if (!job?.id && estimate?.id) void pickSource(estimate.id);
+  }, [estimate, open, boundCustomerId, customers, job?.id]);
+
+  // Hydrate edit form once per open+job — do not re-run on customers/employees
+  // changes or typing will be wiped on every keystroke.
+  useEffect(() => {
+    if (!open || !job?.id) return;
+    setSelectedCustomer(job.customerId);
+    const cust = customers.find((item) => item.id === job.customerId);
+    if (cust) setCustomerLabel(crmCustomerName(cust));
+    setSourceId(job.estimateId || "");
+    setLinkedEstimate(null);
+    setName(job.title?.trim() || job.number || "Service visit");
+    setStreet(job.address?.street || "");
+    setCity(job.address?.city || "");
+    setState(job.address?.state || "");
+    setZip(job.address?.zip || "");
+    setLatitude(job.address?.latitude ?? null);
+    setLongitude(job.address?.longitude ?? null);
+    setStart((job.scheduledAt || todayISO()).slice(0, 10));
+    setDue(job.dueAt ? job.dueAt.slice(0, 10) : "");
+    setStatus(job.status || "unscheduled");
+    setNotes(job.notes || "");
+    setLines(seedJobLines(job));
+    const assigned = (job.assignedTo || "").trim();
+    const matchEmp = employees.find(
+      (item) => item.id === assigned || employeeName(item) === assigned,
+    );
+    setEmployeeId(matchEmp?.id || "");
+    setEmployeeLabel(matchEmp ? employeeName(matchEmp) : assigned);
+    // Intentionally only when dialog opens or the edited job id changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per open
+  }, [open, job?.id]);
 
   useEffect(() => {
-    if (!open || selectedCustomer || !customers[0]) return;
-    setSelectedCustomer(estimate?.customerId ?? customerId ?? customers[0].id);
-  }, [customerId, customers, estimate, open, selectedCustomer]);
+    if (!open || lockedCustomer || selectedCustomer || job?.id) return;
+    const firstOption = customerOptions[0];
+    if (firstOption) {
+      setSelectedCustomer(firstOption.id);
+      setCustomerLabel(firstOption.label);
+    }
+  }, [open, lockedCustomer, selectedCustomer, customerOptions, job?.id]);
 
   // Auto-detect location if empty and not yet attempted
   useEffect(() => {
-    if (!open) return;
+    if (!open || job?.id) return;
     if (customerLocation.detectAttempted || customerLocation.detecting) return;
     if (hasLocation(customerLocation)) return;
     void dispatch(detectCurrentLocation());
-  }, [customerLocation.detectAttempted, customerLocation.detecting, customerLocation, dispatch, open]);
+  }, [customerLocation.detectAttempted, customerLocation.detecting, customerLocation, dispatch, open, job?.id]);
 
   // When location finishes detecting or is available, prefill if fields are empty
   useEffect(() => {
-    if (!open || sourceId) return;
+    if (!open || sourceId || job?.id) return;
     if (!hasLocation(customerLocation)) return;
     const currentCustomer = customers.find((item) => item.id === selectedCustomer);
     const custAddr = currentCustomer?.addresses[0];
@@ -618,23 +753,34 @@ export function CreateJobDialog({
     if (!custAddr?.city && !city) {
       setCity(customerLocation.city || "");
     }
-    if (!custAddr?.state && (!state || state === "CO")) {
-      setState(customerLocation.state || "CO");
+    if (!custAddr?.state && !state) {
+      setState(customerLocation.state || "");
     }
     if (!custAddr?.zip && !zip) {
       setZip(customerLocation.zip || "");
     }
-  }, [customerLocation, customers, open, selectedCustomer, sourceId, street, city, state, zip]);
+    if (latitude == null && customerLocation.latitude != null) {
+      setLatitude(customerLocation.latitude);
+    }
+    if (longitude == null && customerLocation.longitude != null) {
+      setLongitude(customerLocation.longitude);
+    }
+  }, [customerLocation, customers, open, selectedCustomer, sourceId, street, city, state, zip, job?.id, latitude, longitude]);
 
-  function pickSource(id: string) {
-    setSourceId(id);
-    const next = allEstimates.find((item) => item.id === id);
-    if (!next) return;
-    setSelectedCustomer(next.customerId);
-    setStreet(next.propertyAddress.street);
-    setCity(next.propertyAddress.city);
-    setState(next.propertyAddress.state);
-    setZip(next.propertyAddress.zip);
+  function applyEstimateSource(next: Estimate) {
+    setLinkedEstimate(next);
+    // Never overwrite the customer when creating from a customer detail page.
+    if (!boundCustomerId) {
+      setSelectedCustomer(next.customerId);
+      const match = customers.find((item) => item.id === next.customerId);
+      if (match) setCustomerLabel(crmCustomerName(match));
+    }
+    setStreet(next.propertyAddress.street || "");
+    setCity(next.propertyAddress.city || "");
+    setState(next.propertyAddress.state || "");
+    setZip(next.propertyAddress.zip || "");
+    setLatitude(next.propertyAddress.latitude ?? null);
+    setLongitude(next.propertyAddress.longitude ?? null);
     setName(next.items[0]?.description.replace(/ labor$/i, "") ?? name);
     setLines(
       next.items.map((item) => ({
@@ -648,63 +794,196 @@ export function CreateJobDialog({
     );
   }
 
+  async function pickSource(id: string) {
+    setSourceId(id);
+    if (!id) {
+      setLinkedEstimate(null);
+      return;
+    }
+    const local = allEstimates.find((item) => item.id === id);
+    if (local) {
+      if (boundCustomerId && local.customerId && local.customerId !== boundCustomerId) {
+        toast.error("That estimate belongs to a different customer.");
+        setSourceId("");
+        setLinkedEstimate(null);
+        return;
+      }
+      applyEstimateSource(local);
+      return;
+    }
+    try {
+      const remote = await getEstimate(id);
+      if (!remote) return;
+      if (boundCustomerId && remote.customerId && remote.customerId !== boundCustomerId) {
+        toast.error("That estimate belongs to a different customer.");
+        setSourceId("");
+        setLinkedEstimate(null);
+        return;
+      }
+      applyEstimateSource(remote);
+    } catch {
+      toast.error("Could not load that estimate.");
+    }
+  }
+
   function applyJobAddress(address: PlaceAddress) {
     setStreet(address.formattedAddress || address.streetAddress);
     setCity(address.city || "");
     setState(address.state || "");
-    setZip(address.zipCode || "");
+    // Keep ZIP editable — only fill when Places returns one.
+    if (address.zipCode) setZip(address.zipCode);
+    setLatitude(address.latitude);
+    setLongitude(address.longitude);
     dispatch(setLocationFromPlace(address));
   }
 
-  function create() {
-    if (!selectedCustomer || !name.trim()) {
-      toast.error("Customer and job name are required.");
-      setTab("customer");
+  async function create() {
+    // Prefer the customer id from the detail page URL / props.
+    const jobCustomerId = (boundCustomerId || selectedCustomer).trim();
+    if (!jobCustomerId || !name.trim() || saving) {
+      if (!jobCustomerId || !name.trim()) {
+        toast.error("Customer and job name are required.");
+        setTab("customer");
+      }
       return;
     }
-    const workLines = filledWorkLines(lines);
-    const linked =
-      source ??
-      buildEstimate({
-        number: nextRecordNumber("EST", allEstimates.map((item) => item.number)),
+    setSaving(true);
+    try {
+      const workLines = filledWorkLines(lines);
+      const jobCoords = {
+        latitude: latitude ?? customerLocation.latitude ?? null,
+        longitude: longitude ?? customerLocation.longitude ?? null,
+      };
+
+      if (isEdit && job) {
+        const nextJob = buildJob({
+          id: job.id,
+          number: job.number,
+          title: name.trim(),
+          providerId: job.providerId || provider.id,
+          customerId: jobCustomerId,
+          estimateId: job.estimateId || source?.id || undefined,
+          serviceId: job.serviceId,
+          address: addressFrom(street, city, state, zip, job.address?.id, jobCoords),
+          assignedTo: employeeId || assignedTo || undefined,
+          scheduledAt: start,
+          dueAt: due || undefined,
+          // Status has a separate PATCH /jobs/:id/status endpoint — do not change it here.
+          status: job.status,
+          notes,
+          lines: workLines,
+        });
+        let saved: Job;
+        if (useApi) {
+          saved = await dispatch(
+            updateCustomerJob({
+              id: job.id,
+              job: { ...nextJob, changeOrders: job.changeOrders, createdAt: job.createdAt },
+              employees,
+              customerId: jobCustomerId,
+            }),
+          ).unwrap();
+        } else {
+          saved = { ...nextJob, changeOrders: job.changeOrders, createdAt: job.createdAt };
+          toast.error("Sign in as a provider to update jobs.");
+          return;
+        }
+        writeCostLines(session?.email, saved.id, workLines);
+        onUpdated?.(saved);
+        onOpenChange(false);
+        toast.success(`${saved.number || "Job"} updated.`);
+        return;
+      }
+
+      let estimateId = source?.id || "";
+
+      // Offline / local-only path still keeps a draft quote on file.
+      if (!source && !useApi) {
+        const linked = buildEstimate({
+          number: nextRecordNumber(
+            "EST",
+            allEstimates.map((item) => item.number),
+          ),
+          providerId: provider.id,
+          customerId: jobCustomerId,
+          customerName:
+            customerLabel || (customer ? crmCustomerName(customer) : undefined),
+          address: addressFrom(street, city, state, zip, undefined, jobCoords),
+          status: "accepted",
+          notes,
+          lines: workLines,
+        });
+        records.addEstimate(linked);
+        estimateId = linked.id;
+      }
+
+      const createdJob = buildJob({
+        number: nextRecordNumber(
+          "JOB",
+          allJobs.map((item) => item.number),
+        ),
+        title: name.trim(),
         providerId: provider.id,
-        customerId: selectedCustomer,
-        customerName: customer ? crmCustomerName(customer) : undefined,
-        address: addressFrom(street, city, state, zip),
-        status: "accepted",
+        customerId: jobCustomerId,
+        estimateId: estimateId || undefined,
+        address: addressFrom(street, city, state, zip, undefined, jobCoords),
+        // Prefer employee id so POST assignedEmployees resolves correctly.
+        assignedTo: employeeId || assignedTo || undefined,
+        scheduledAt: start,
+        dueAt: due || undefined,
+        status,
         notes,
         lines: workLines,
       });
-    if (!source) records.addEstimate(linked);
-    const job = buildJob({
-      number: nextRecordNumber("JOB", allJobs.map((item) => item.number)),
-      providerId: provider.id,
-      customerId: selectedCustomer,
-      estimateId: linked.id,
-      address: addressFrom(street, city, state, zip),
-      assignedTo,
-      scheduledAt: start,
-      dueAt: due || undefined,
-      status,
-      notes,
-      lines: workLines,
-    });
-    records.addJob(job);
-    records.linkRecords("estimate", linked.id, job.id);
-    records.setStatus("estimate", linked.id, "accepted");
-    writeCostLines(session?.email, linked.id, workLines);
-    writeCostLines(session?.email, job.id, workLines);
-    onOpenChange(false);
-    toast.success(`${job.number} created.`);
-    router.push(`/pro/dashboard/jobs/${job.id}`);
+
+      let saved: Job;
+      if (useApi) {
+        // MD: POST /api/provider/jobs { customerId, estimateId?, title, items, scheduledAt, ... }
+        saved = await dispatch(
+          createCustomerJob({ job: createdJob, employees }),
+        ).unwrap();
+      } else {
+        const created = await Promise.resolve(records.addJob(createdJob));
+        saved = created ?? createdJob;
+        if (estimateId) {
+          records.linkRecords("estimate", estimateId, saved.id);
+          records.setStatus("estimate", estimateId, "accepted");
+        }
+      }
+
+      if (estimateId) {
+        writeCostLines(session?.email, estimateId, workLines);
+      }
+      writeCostLines(session?.email, saved.id, workLines);
+      onCreated?.(saved);
+      onOpenChange(false);
+      toast.success(`${saved.number || "Job"} created.`);
+      router.push(`/pro/dashboard/jobs/${saved.id}`);
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : isEdit
+              ? "Could not update this job."
+              : "Could not create this job.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Create job</DialogTitle>
-          <DialogDescription>Open field work from a written estimate, or start a job and keep a quote on file.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit job" : "Create job"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update schedule, status, and line items for this job."
+              : "Open field work from a written estimate, or start a job and keep a quote on file."}
+          </DialogDescription>
         </DialogHeader>
         <WizardTabs
           value={tab}
@@ -717,28 +996,48 @@ export function CreateJobDialog({
         />
         {tab === "customer" ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="From estimate">
-              <NativeSelect className="w-full" value={sourceId} onChange={(event) => pickSource(event.target.value)}>
-                <NativeSelectOption value="">New job (creates a draft quote)</NativeSelectOption>
-                {allEstimates.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {item.number}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </Field>
-            <Field label="Customer">
-              <NativeSelect className="w-full" value={selectedCustomer} onChange={(event) => setSelectedCustomer(event.target.value)}>
-                {!customers.length ? <NativeSelectOption value="">No customers found</NativeSelectOption> : null}
-                {customers.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {crmCustomerName(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </Field>
+            {!isEdit ? (
+              <Field label="From estimate">
+                <PaginatedEntitySelect
+                  id="job-from-estimate"
+                  value={sourceId}
+                  options={estimateOptions}
+                  placeholder="Select estimate"
+                  emptyLabel="No estimates found."
+                  loading={useApi ? estimatePaging.loading : false}
+                  loadingMore={useApi ? estimatePaging.loadingMore : false}
+                  hasMore={useApi ? estimatePaging.hasMore : false}
+                  onLoadMore={useApi ? estimatePaging.loadMore : () => {}}
+                  onChange={(id) => void pickSource(id)}
+                />
+              </Field>
+            ) : null}
+            {!lockedCustomer && !sourceId && !isEdit ? (
+              <Field label="Customer">
+                <PaginatedEntitySelect
+                  id="job-customer"
+                  value={selectedCustomer}
+                  options={customerOptions}
+                  selectedLabel={customerLabel}
+                  placeholder="Select customer"
+                  emptyLabel="No customers found. Add a customer to continue."
+                  loading={useApi ? customerPaging.loading : false}
+                  loadingMore={useApi ? customerPaging.loadingMore : false}
+                  hasMore={useApi ? customerPaging.hasMore : false}
+                  onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+                  onChange={(id, option) => {
+                    setSelectedCustomer(id);
+                    if (option?.label) setCustomerLabel(option.label);
+                  }}
+                />
+              </Field>
+            ) : null}
             <Field label="Job name">
-              <Input value={name} onChange={(event) => setName(event.target.value)} />
+              <Input
+                value={name}
+                placeholder="Enter job name"
+                onChange={(event) => setName(event.target.value)}
+              />
             </Field>
             <Field label="Job address" className="sm:col-span-2">
               <AddressAutocomplete
@@ -750,43 +1049,78 @@ export function CreateJobDialog({
               />
             </Field>
             <Field label="City">
-              <Input value={city} onChange={(event) => setCity(event.target.value)} />
+              <Input
+                value={city}
+                placeholder="City"
+                onChange={(event) => setCity(event.target.value)}
+              />
             </Field>
             <Field label="State">
-              <Input value={state} onChange={(event) => setState(event.target.value)} />
+              <Input
+                value={state}
+                placeholder="State"
+                onChange={(event) => setState(event.target.value)}
+              />
             </Field>
             <Field label="ZIP">
-              <Input value={zip} onChange={(event) => setZip(event.target.value)} />
+              <Input
+                value={zip}
+                placeholder="ZIP / postal code"
+                onChange={(event) => setZip(event.target.value)}
+              />
             </Field>
           </div>
         ) : null}
         {tab === "schedule" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Start">
-              <Input type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+              <Input
+                type="date"
+                value={start}
+                placeholder="mm/dd/yyyy"
+                onChange={(event) => setStart(event.target.value)}
+              />
             </Field>
             <Field label="Due">
-              <Input type="date" value={due} onChange={(event) => setDue(event.target.value)} />
+              <Input
+                type="date"
+                value={due}
+                placeholder="mm/dd/yyyy"
+                onChange={(event) => setDue(event.target.value)}
+              />
             </Field>
             <Field label="Technician">
-              <NativeSelect className="w-full" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-                <NativeSelectOption value="">Unassigned</NativeSelectOption>
-                {employees.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {employeeName(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <PaginatedEntitySelect
+                id="job-technician"
+                value={employeeId}
+                options={technicianOptions}
+                placeholder="Unassigned"
+                emptyLabel="No technicians found."
+                loading={useApi ? assigneePaging.loading : false}
+                loadingMore={useApi ? assigneePaging.loadingMore : false}
+                hasMore={useApi ? assigneePaging.hasMore : false}
+                onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+                onChange={(id, option) => {
+                  setEmployeeId(id);
+                  setEmployeeLabel(option?.label && id ? option.label : "");
+                }}
+              />
             </Field>
-            <Field label="Status">
-              <NativeSelect className="w-full" value={status} onChange={(event) => setStatus(event.target.value as JobStatus)}>
-                {JOB_STATUSES.map((item) => (
-                  <NativeSelectOption key={item} value={item}>
-                    {jobStatusLabel(item)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </Field>
+            {!isEdit ? (
+              <Field label="Status">
+                <PaginatedEntitySelect
+                  id="job-status"
+                  value={status}
+                  options={statusOptions}
+                  selectedLabel={jobStatusLabel(status)}
+                  placeholder="Select status"
+                  emptyLabel="No statuses available."
+                  hasMore={false}
+                  onLoadMore={() => {}}
+                  onChange={(id) => setStatus(id as JobStatus)}
+                />
+              </Field>
+            ) : null}
             <div className="sm:col-span-2">
               <LineEditor lines={lines} onChange={setLines} />
             </div>
@@ -794,7 +1128,12 @@ export function CreateJobDialog({
         ) : null}
         {tab === "review" ? (
           <Field label="Notes">
-            <Textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} />
+            <Textarea
+              rows={4}
+              placeholder="Optional job notes"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
           </Field>
         ) : null}
         <DialogFooter>
@@ -808,8 +1147,14 @@ export function CreateJobDialog({
             </Button>
           )}
           {tab === "review" ? (
-            <Button data-action="submit-job" onClick={create}>
-              Create job
+            <Button data-action="submit-job" disabled={saving} onClick={() => void create()}>
+              {saving
+                ? isEdit
+                  ? "Saving…"
+                  : "Creating…"
+                : isEdit
+                  ? "Save changes"
+                  : "Create job"}
             </Button>
           ) : (
             <Button onClick={() => setTab(tab === "customer" ? "schedule" : "review")}>Continue</Button>
@@ -901,6 +1246,12 @@ export function CreateLeadDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
   const customerLocation = useAppSelector((state) => state.location);
   const { provider, requests } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
@@ -908,6 +1259,7 @@ export function CreateLeadDialog({
   const all = records.mergeRequests(requests);
   const first = customers[0];
   const [customerId, setCustomerId] = useState(first?.id ?? "");
+  const [customerLabel, setCustomerLabel] = useState("");
   const [serviceName, setServiceName] = useState("");
   const [details, setDetails] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
@@ -915,19 +1267,34 @@ export function CreateLeadDialog({
   const customer = customers.find((item) => item.id === customerId) ?? first;
   const address = customer?.addresses[0];
 
+  const customerPaging = usePaginatedCrmOptions(
+    open && useApi ? "customer" : null,
+    open && useApi,
+  );
+  const customerOptions = useMemo(
+    () =>
+      useApi
+        ? customerPaging.options
+        : customers.map((item) => ({ id: item.id, label: crmCustomerName(item) })),
+    [useApi, customerPaging.options, customers],
+  );
+
   useEffect(() => {
     if (!open) return;
-    setCustomerId(customers[0]?.id ?? "");
     setServiceName("");
     setDetails("");
     setPreferredDate("");
     setPreferredTimeWindow("Morning");
-  }, [customers, open]);
+    if (!customerId && customerOptions[0]) {
+      setCustomerId(customerOptions[0].id);
+      setCustomerLabel(customerOptions[0].label);
+    }
+  }, [open, customerId, customerOptions]);
 
   const [submitting, setSubmitting] = useState(false);
 
   async function save() {
-    if (!customer || !serviceName.trim()) {
+    if (!customerId || !serviceName.trim()) {
       toast.error("Customer and service are required.");
       return;
     }
@@ -936,7 +1303,7 @@ export function CreateLeadDialog({
       let created: PortalRequest | null = null;
       try {
         created = await createRequest({
-          customerId: customer.id,
+          customerId,
           serviceName: serviceName.trim(),
           channel: "direct",
           details: details.trim() || `${serviceName.trim()} requested by phone.`,
@@ -947,10 +1314,12 @@ export function CreateLeadDialog({
         /* fallback to local storage if offline/error */
       }
 
+      const displayName =
+        customerLabel || (customer ? crmCustomerName(customer) : "Customer");
       const request: PortalRequest = created || {
         id: `req_${Date.now().toString(36)}`,
         number: nextRecordNumber("RS", all.map((item) => item.number)),
-        customerId: customer.id,
+        customerId,
         providerId: provider.id,
         categoryId: provider.categoryIds[0] ?? "plumbing",
         channel: "direct",
@@ -964,9 +1333,9 @@ export function CreateLeadDialog({
         status: "new",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        customerName: crmCustomerName(customer),
-        customerEmail: customer.email,
-        customerPhone: customer.phone ?? "",
+        customerName: displayName,
+        customerEmail: customer?.email ?? "",
+        customerPhone: customer?.phone ?? "",
         serviceName: serviceName.trim(),
         categoryName: "Service",
         neighborhood: address?.city || customerLocation.city || provider.city,
@@ -993,24 +1362,45 @@ export function CreateLeadDialog({
         </DialogHeader>
         <div className="grid gap-3">
           <Field label="Customer">
-            <NativeSelect className="w-full" value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
-              {!customers.length ? <NativeSelectOption value="">No customers found</NativeSelectOption> : null}
-              {customers.map((item) => (
-                <NativeSelectOption key={item.id} value={item.id}>
-                  {crmCustomerName(item)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            <PaginatedEntitySelect
+              id="lead-customer"
+              value={customerId}
+              options={customerOptions}
+              selectedLabel={customerLabel}
+              placeholder="Select customer"
+              emptyLabel="No customers found. Add a customer to continue."
+              loading={useApi ? customerPaging.loading : false}
+              loadingMore={useApi ? customerPaging.loadingMore : false}
+              hasMore={useApi ? customerPaging.hasMore : false}
+              onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+              onChange={(id, option) => {
+                setCustomerId(id);
+                if (option?.label) setCustomerLabel(option.label);
+              }}
+            />
           </Field>
           <Field label="Service">
-            <Input value={serviceName} placeholder="Leak detection and repair" onChange={(event) => setServiceName(event.target.value)} />
+            <Input
+              value={serviceName}
+              placeholder="Leak detection and repair"
+              onChange={(event) => setServiceName(event.target.value)}
+            />
           </Field>
           <Field label="What they asked for">
-            <Textarea value={details} onChange={(event) => setDetails(event.target.value)} />
+            <Textarea
+              value={details}
+              placeholder="Optional details from the call or walk-in"
+              onChange={(event) => setDetails(event.target.value)}
+            />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Preferred date">
-              <Input type="date" value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} />
+              <Input
+                type="date"
+                value={preferredDate}
+                placeholder="mm/dd/yyyy"
+                onChange={(event) => setPreferredDate(event.target.value)}
+              />
             </Field>
             <Field label="Window">
               <NativeSelect

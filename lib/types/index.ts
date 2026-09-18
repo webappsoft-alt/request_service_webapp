@@ -36,6 +36,9 @@ export interface ServiceAddress {
   state: string;
   zip: string;
   country: "US";
+  /** Optional geo from Places / job.location.coordinates [lng, lat]. */
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export type ServiceCategorySlug =

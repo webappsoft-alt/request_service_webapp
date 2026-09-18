@@ -61,6 +61,8 @@ import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { createContractorRecord, updateContractorRecord } from "@/store/contractorsSlice";
 import { createVendorRecord, updateVendorRecord } from "@/store/vendorsSlice";
 import { createReminderRecord } from "@/store/remindersSlice";
+import { createCustomerTask, updateCustomerTask } from "@/store/customersSlice";
+import { createTask as createTaskApi, updateTask as updateTaskApi } from "@/lib/api/crm-client";
 
 const SOURCES: CrmPersonSource[] = ["external", "phone", "referral", "walk_in", "website"];
 const TYPES: CrmCustomerType[] = ["residential", "commercial", "property_manager"];
@@ -811,12 +813,14 @@ export function CreateReminderDialog({
   subjectKind,
   subjectId,
   customerId,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
   customerId?: string;
+  onCreated?: (reminder: PortalReminder) => void;
 }) {
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
@@ -909,11 +913,14 @@ export function CreateReminderDialog({
 
     setSaving(true);
     try {
+      let saved = reminder;
       if (useApi) {
-        await dispatch(createReminderRecord(reminder)).unwrap();
+        saved = await dispatch(createReminderRecord(reminder)).unwrap();
       } else {
-        await Promise.resolve(addReminder(reminder));
+        const created = await Promise.resolve(addReminder(reminder));
+        saved = created ?? reminder;
       }
+      onCreated?.(saved);
       toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
       onOpenChange(false);
     } catch (error) {
@@ -1094,12 +1101,17 @@ export function CreateTaskDialog({
   onOpenChange,
   subjectKind,
   subjectId,
+  task,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
+  task?: PortalTask | null;
+  onCreated?: (task: PortalTask) => void;
 }) {
+  const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const useApi =
@@ -1144,17 +1156,17 @@ export function CreateTaskDialog({
 
   useEffect(() => {
     if (!open) return;
-    const nextKind = subjectKind ?? "customer";
+    const nextKind = task?.subjectKind ?? subjectKind ?? "customer";
     setKind(nextKind);
-    setSelectedId(subjectId ?? "");
-    setTitle("");
-    setNote("");
-    setAssignedEmployeeId("");
-    setPriority("normal");
-    setDueAt("");
+    setSelectedId(task?.subjectId ?? subjectId ?? "");
+    setTitle(task?.title ?? "");
+    setNote(task?.note ?? "");
+    setAssignedEmployeeId(task?.assignedEmployeeId ?? "");
+    setPriority(task?.priority ?? "normal");
+    setDueAt(task?.dueAt ?? "");
     setSaving(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, task?.id]);
 
   const fallbackChoices = lookups.options(kind);
   const recordOptions = useApi
@@ -1175,9 +1187,9 @@ export function CreateTaskDialog({
     const linkedId = subjectId ?? selectedId;
     if (!title.trim() || !linkedId) return;
 
-    const task: PortalTask = {
-      id: `task_${provider.id}_new_${Date.now()}`,
-      number: `TSK-${401 + tasks.length}`,
+    const payload: PortalTask = {
+      id: task?.id ?? `task_${provider.id}_new_${Date.now()}`,
+      number: task?.number ?? `TSK-${401 + tasks.length}`,
       title: title.trim(),
       note: note.trim(),
       subjectKind: linkedKind,
@@ -1185,21 +1197,53 @@ export function CreateTaskDialog({
       customerId: linkedKind === "customer" ? linkedId : undefined,
       assignedEmployeeId: assignedEmployeeId || undefined,
       priority,
-      status: "open",
+      status: task?.status ?? "open",
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: task?.createdAt ?? new Date().toISOString().slice(0, 10),
     };
 
     setSaving(true);
     try {
-      const created = await Promise.resolve(addTask(task));
-      const saved = created ?? task;
+      let saved: PortalTask;
+      if (task?.id && useApi) {
+        if (linkedKind === "customer" && linkedId) {
+          saved = await dispatch(
+            updateCustomerTask({ id: task.id, task: payload, customerId: linkedId }),
+          ).unwrap();
+        } else {
+          const updated = await updateTaskApi(task.id, payload);
+          saved = updated ?? payload;
+        }
+      } else if (task?.id) {
+        saved = payload;
+      } else if (useApi) {
+        // MD: POST /api/provider/tasks with customerId (and subject fields).
+        if (linkedKind === "customer" && linkedId) {
+          saved = await dispatch(createCustomerTask(payload)).unwrap();
+        } else {
+          const created = await createTaskApi(payload);
+          if (!created) throw new Error("Could not create this task.");
+          saved = created;
+        }
+      } else {
+        const created = await Promise.resolve(addTask(payload));
+        saved = created ?? payload;
+      }
+      onCreated?.(saved);
       toast.success(
-        `${saved.number} added on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`,
+        task?.id
+          ? `${saved.number} updated.`
+          : `${saved.number} added on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`,
       );
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this task.");
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not save this task.",
+      );
     } finally {
       setSaving(false);
     }
@@ -1223,7 +1267,7 @@ export function CreateTaskDialog({
     >
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>Create task</DialogTitle>
+          <DialogTitle>{task ? "Edit task" : "Create task"}</DialogTitle>
           <DialogDescription>
             Office or field work linked to a customer, lead, job, estimate, employee, contractor, or vendor.
           </DialogDescription>
@@ -1370,9 +1414,11 @@ export function CreateTaskDialog({
 export function SetTaskButton({
   subjectKind,
   subjectId,
+  onCreated,
 }: {
   subjectKind: ReminderSubjectKind;
   subjectId: string;
+  onCreated?: (task: PortalTask) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1380,7 +1426,13 @@ export function SetTaskButton({
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         Create task
       </Button>
-      <CreateTaskDialog open={open} onOpenChange={setOpen} subjectKind={subjectKind} subjectId={subjectId} />
+      <CreateTaskDialog
+        open={open}
+        onOpenChange={setOpen}
+        subjectKind={subjectKind}
+        subjectId={subjectId}
+        onCreated={onCreated}
+      />
     </>
   );
 }

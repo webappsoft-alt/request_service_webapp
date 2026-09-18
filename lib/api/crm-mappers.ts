@@ -18,9 +18,11 @@ import type {
   ChangeOrder,
   Customer,
   Estimate,
+  EstimateActivity,
   EstimateAttachmentItem,
   EstimateItem,
   EstimateItemType,
+  EstimateLog,
   EstimateSiteVisitRecord,
   Invoice,
   InvoiceItem,
@@ -258,6 +260,7 @@ function getListPayload(response: unknown): unknown[] {
     if (Array.isArray(nested.tasks)) return nested.tasks;
     if (Array.isArray(nested.reminders)) return nested.reminders;
     if (Array.isArray(nested.requests)) return nested.requests;
+    if (Array.isArray(nested.activities)) return nested.activities;
     if (Array.isArray(nested.results)) return nested.results;
     if (Array.isArray(nested.rows)) return nested.rows;
     if (Array.isArray(nested.list)) return nested.list;
@@ -270,6 +273,7 @@ function getListPayload(response: unknown): unknown[] {
   if (Array.isArray(root.tasks)) return root.tasks;
   if (Array.isArray(root.reminders)) return root.reminders;
   if (Array.isArray(root.requests)) return root.requests;
+  if (Array.isArray(root.activities)) return root.activities;
   if (Array.isArray(root.results)) return root.results;
   if (Array.isArray(root.rows)) return root.rows;
   if (Array.isArray(root.list)) return root.list;
@@ -283,12 +287,14 @@ function getEntityPayload(response: unknown): unknown {
   if (data !== undefined && data !== null) {
     const dataRec = asRecord(data);
     if (dataRec?.estimate !== undefined) return dataRec.estimate;
+    if (dataRec?.activity !== undefined) return dataRec.activity;
     if (dataRec?.customer !== undefined) return dataRec.customer;
     if (dataRec?.job !== undefined) return dataRec.job;
     if (dataRec?.invoice !== undefined) return dataRec.invoice;
     return data;
   }
   if (root.estimate !== undefined) return root.estimate;
+  if (root.activity !== undefined) return root.activity;
   if (root.customer !== undefined) return root.customer;
   if (root.job !== undefined) return root.job;
   if (root.invoice !== undefined || root.payments !== undefined) {
@@ -705,8 +711,52 @@ export function mapEstimate(raw: unknown): Estimate | null {
     attachments: mapEstimateAttachments(record.attachments),
     siteVisit: mapEstimateSiteVisit(record.siteVisit),
     signature: mapApprovalSignature(record.approval ?? record.signature),
+    logs: asArray(record.logs)
+      .map((entry, idx) => mapEstimateLog(entry, idx))
+      .filter((item): item is EstimateLog => Boolean(item)),
+    activities: asArray(record.activities)
+      .map(mapEstimateActivity)
+      .filter((item): item is EstimateActivity => Boolean(item)),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
+  };
+}
+
+export function mapEstimateLog(raw: unknown, index: number): EstimateLog | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = crmIdOf(record) || `log_${index + 1}`;
+  return {
+    id,
+    actor:
+      displayNameFromRecord(record.actor ?? record.user ?? record.createdBy) ||
+      trimmed(record.actor) ||
+      "System",
+    action: trimmed(record.action || record.title || "Estimate updated"),
+    details: trimmed(record.details || record.detail || record.notes) || undefined,
+    timestamp: toIsoString(record.timestamp || record.at || record.createdAt || record.date) || new Date().toISOString(),
+  };
+}
+
+export function mapEstimateActivity(raw: unknown): EstimateActivity | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+
+  const id = crmIdOf(record);
+  if (!id) return null;
+
+  return {
+    id,
+    estimateId: crmIdOf(record.estimateId) || undefined,
+    title: trimmed(record.title) || "Activity",
+    description: stringValue(record.description ?? record.html ?? record.note ?? record.detail ?? ""),
+    actor:
+      displayNameFromRecord(record.actor ?? record.user ?? record.createdBy ?? record.author) ||
+      trimmed(record.actor) ||
+      trimmed(record.actorName) ||
+      "Desk",
+    createdAt: toIsoString(record.timestamp ?? record.createdAt ?? record.at ?? record.date) || new Date().toISOString(),
+    updatedAt: toIsoString(record.updatedAt) || undefined,
   };
 }
 

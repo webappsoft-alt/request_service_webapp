@@ -19,6 +19,7 @@ import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type Costin
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { useEstimateActivities } from "@/components/portal/use-estimate-activities";
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
 import {
   useJobFile,
@@ -47,7 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { updateEstimate as updateEstimateApi, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
+import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
@@ -201,10 +202,26 @@ export function JobSummaryTab({
   const { lines, mix } = useJobCosting(job);
   const sheet = jobMoneySheet(mix);
   const file = useJobFile(job, estimate, invoice, technician);
+  const isEstimate = noun === "estimate" && Boolean(estimate?.id);
+  const estimateActivities = useEstimateActivities(estimate?.id, isEstimate, estimate?.activities);
+
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<JobActivity | null>(null);
+  const [editing, setEditing] = useState<{ id: string; title: string; html: string } | null>(null);
+  const [saving, setSaving] = useState(false);
   const laborLines = lines.filter((line) => line.kind === "labor");
   const materialLines = lines.filter((line) => line.kind === "materials");
+
+  const activities: Array<{ id: string; title: string; html: string; actor: string; at: string }> = isEstimate
+    ? estimateActivities.activities.map((item) => ({
+        id: item.id,
+        title: item.title,
+        html: item.description,
+        actor: item.actor || "Desk",
+        at: item.createdAt,
+      }))
+    : file.activities;
+
+  const loadingActivities = isEstimate && estimateActivities.loading;
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
@@ -257,19 +274,29 @@ export function JobSummaryTab({
           </Button>
         }
       >
-        {file.activities.length ? (
+        {loadingActivities ? (
+          <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+            <Loader2 className="mr-2 size-4 animate-spin" />
+            Loading activities…
+          </div>
+        ) : activities.length ? (
           <ul className="space-y-3">
-            {file.activities.map((item) => (
+            {activities.map((item) => (
               <ActivityCard
                 key={item.id}
                 item={item}
+                deleting={estimateActivities.deletingId === item.id}
                 onEdit={() => {
-                  setEditing(item);
+                  setEditing({ id: item.id, title: item.title, html: item.html });
                   setOpen(true);
                 }}
-                onDelete={() => {
-                  file.removeActivity(item.id);
-                  toast.success("Activity deleted.");
+                onDelete={async () => {
+                  if (isEstimate) {
+                    await estimateActivities.deleteActivity(item.id);
+                  } else {
+                    file.removeActivity(item.id);
+                    toast.success("Activity deleted.");
+                  }
                 }}
               />
             ))}
@@ -281,13 +308,36 @@ export function JobSummaryTab({
       <ActivityDialog
         open={open}
         activity={editing}
+        saving={saving || (isEstimate && estimateActivities.saving)}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) setEditing(null);
         }}
-        onSave={(title, html) => {
-          if (editing) file.updateActivity(editing.id, title, html);
-          else file.addActivity(title, html);
+        onSave={async (title, html) => {
+          if (isEstimate) {
+            setSaving(true);
+            try {
+              if (editing) {
+                await estimateActivities.updateActivity(editing.id, title, html);
+              } else {
+                await estimateActivities.addActivity(title, html);
+              }
+              setOpen(false);
+              setEditing(null);
+            } finally {
+              setSaving(false);
+            }
+          } else {
+            if (editing) {
+              file.updateActivity(editing.id, title, html);
+              toast.success("Activity updated.");
+            } else {
+              file.addActivity(title, html);
+              toast.success("Activity posted.");
+            }
+            setOpen(false);
+            setEditing(null);
+          }
         }}
       />
     </div>
@@ -571,6 +621,15 @@ export function JobLogsTab({
   noun?: CostingNoun;
 }) {
   const { logs } = useJobFile(job, estimate, invoice, technician);
+  const apiLogs = (estimate?.logs ?? []).map((log) => ({
+    id: log.id,
+    title: log.action || "Estimate updated",
+    detail: log.details || "",
+    actor: log.actor || "System",
+    at: log.timestamp,
+  }));
+  const displayLogs = noun === "estimate" && apiLogs.length > 0 ? apiLogs : logs;
+
   return (
     <div>
       <h2 className="text-base font-semibold">{noun === "estimate" ? "Estimate log" : noun === "invoice" ? "Invoice log" : "Job log"}</h2>
@@ -582,8 +641,8 @@ export function JobLogsTab({
             : "Every change on this job is recorded here."}
       </p>
       <ol className="mt-4 space-y-0">
-        {logs.map((item, index) => (
-          <LogRow key={item.id} item={item} last={index === logs.length - 1} />
+        {displayLogs.map((item, index) => (
+          <LogRow key={item.id} item={item} last={index === displayLogs.length - 1} />
         ))}
       </ol>
     </div>
@@ -729,10 +788,7 @@ export function JobAttachmentsTab({
       }))
       .filter((item) => Boolean(item.attachment));
 
-    const updated = await updateEstimateApi(estimate.id, {
-      ...estimate,
-      attachments: attachmentPayload,
-    });
+    const updated = await updateEstimateAttachments(estimate.id, attachmentPayload);
     if (updated) {
       crm.patchEstimate(estimate.id, updated);
     } else {
@@ -1071,24 +1127,36 @@ function MoneyRow({ label, value, strong }: { label: string; value: number; stro
 
 function ActivityCard({
   item,
+  deleting = false,
   onEdit,
   onDelete,
 }: {
-  item: JobActivity;
+  item: {
+    id: string;
+    title: string;
+    actor?: string;
+    at?: string;
+    createdAt?: string;
+    html?: string;
+    description?: string;
+  };
+  deleting?: boolean;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete: () => void | Promise<void>;
 }) {
+  const timestamp = item.at || item.createdAt || "";
+  const content = item.html ?? item.description ?? "";
   return (
     <li className="rounded-[4px] border border-black/10 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium">{item.title}</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {item.actor} · {stamp(item.at)}
+            {item.actor || "Desk"} · {timestamp ? stamp(timestamp) : "Just now"}
           </p>
         </div>
         <div className="flex shrink-0 gap-1">
-          <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" onClick={onEdit}>
+          <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" disabled={deleting} onClick={onEdit}>
             <Pencil />
           </Button>
           <Button
@@ -1096,13 +1164,16 @@ function ActivityCard({
             className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             size="icon-sm"
             variant="ghost"
+            disabled={deleting}
             onClick={onDelete}
           >
-            <Trash2 />
+            {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 />}
           </Button>
         </div>
       </div>
-      <div className="job-activity-html mt-2 text-sm" dangerouslySetInnerHTML={{ __html: safeHtml(item.html) }} />
+      {content ? (
+        <div className="job-activity-html mt-2 text-sm" dangerouslySetInnerHTML={{ __html: safeHtml(content) }} />
+      ) : null}
     </li>
   );
 }
@@ -1128,22 +1199,25 @@ function LogRow({ item, last }: { item: JobLog; last: boolean }) {
 function ActivityDialog({
   open,
   activity,
+  saving = false,
   onOpenChange,
   onSave,
 }: {
   open: boolean;
-  activity?: JobActivity | null;
+  activity?: { id?: string; title: string; html?: string; description?: string } | null;
+  saving?: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (title: string, html: string) => void;
+  onSave: (title: string, html: string) => Promise<void> | void;
 }) {
   const [title, setTitle] = useState("");
   const [html, setHtml] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const frame = window.requestAnimationFrame(() => {
       setTitle(activity?.title ?? "");
-      setHtml(activity?.html ?? "");
+      setHtml(activity?.html ?? activity?.description ?? "");
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activity, open]);
@@ -1152,6 +1226,8 @@ function ActivityDialog({
     setTitle("");
     setHtml("");
   }
+
+  const isBusy = saving || submitting;
 
   return (
     <Dialog
@@ -1165,13 +1241,18 @@ function ActivityDialog({
         <DialogHeader>
           <DialogTitle>{activity ? "Edit activity" : "Add activity"}</DialogTitle>
           <DialogDescription>
-            {activity ? "Update the title or note. The change is written to the log." : "Title plus a rich note. It posts to this job and the log."}
+            {activity ? "Update the title or note. The change is written to the log." : "Title plus a rich note. It posts to this record."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <label className="grid gap-1.5 text-sm">
             Title
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Site note, customer call, follow-up…" />
+            <Input
+              disabled={isBusy}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Site note, customer call, follow-up…"
+            />
           </label>
           <div className="grid gap-1.5 text-sm">
             <span>Description</span>
@@ -1179,22 +1260,29 @@ function ActivityDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={isBusy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
-            onClick={() => {
+            disabled={isBusy}
+            onClick={async () => {
               if (!title.trim()) {
                 toast.error("Add a title.");
                 return;
               }
-              onSave(title.trim(), html);
-              reset();
-              onOpenChange(false);
-              toast.success(activity ? "Activity updated." : "Activity posted.");
+              setSubmitting(true);
+              try {
+                await onSave(title.trim(), html);
+                reset();
+              } catch {
+                // error toasted by caller
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
-            {activity ? "Save changes" : "Post activity"}
+            {isBusy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : null}
+            {isBusy ? "Saving…" : activity ? "Save changes" : "Post activity"}
           </Button>
         </DialogFooter>
       </DialogContent>

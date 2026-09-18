@@ -9,6 +9,7 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useJobFile, type EstimateSettingsDraft } from "@/components/portal/use-job-file";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { estimateAsJob } from "@/components/portal/work-builders";
+import { JobSummaryTab } from "@/components/portal/job-file";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -247,20 +248,17 @@ export function EstimateSettingsTab({
     const chosenCustomer = customers.find((item) => item.id === settingsDraft.customerId);
     const customerName = chosenCustomer ? crmCustomerName(chosenCustomer) : estimate.customerName;
     if (apiReady) {
-      const updated = await updateEstimateApi(estimate.id, {
-        ...estimate,
+      const updated = await updateEstimateSettingsApi(estimate.id, {
         title: settingsDraft.name.trim() || estimate.title,
         customerId: settingsDraft.customerId,
-        customerName,
         propertyAddress: {
-          ...estimate.propertyAddress,
           street: settingsDraft.street,
           city: settingsDraft.city,
           state: settingsDraft.state,
           zip: settingsDraft.zip,
         },
         issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
-        expiresAt: settingsDraft.expiresAt || undefined,
+        expiresAt: settingsDraft.expiresAt || null,
         status: settingsDraft.status,
         notes: settingsDraft.notes || "",
         terms: settingsDraft.terms || "",
@@ -500,4 +498,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
+}
+
+export function EstimateSummaryTab({
+  estimate,
+  job,
+}: {
+  estimate: Estimate;
+  job?: Job;
+}) {
+  const asJob = job ?? estimateAsJob(estimate);
+  return <JobSummaryTab job={asJob} estimate={estimate} technician="" noun="estimate" />;
 }

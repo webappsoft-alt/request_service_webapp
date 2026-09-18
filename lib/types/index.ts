@@ -178,8 +178,28 @@ export interface Estimate {
   attachments?: EstimateAttachmentItem[] | string[];
   siteVisit?: EstimateSiteVisitRecord;
   signature?: EstimateSignature;
+  logs?: EstimateLog[];
+  activities?: EstimateActivity[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EstimateLog {
+  id: string;
+  actor: string;
+  action: string;
+  details?: string;
+  timestamp: string;
+}
+
+export interface EstimateActivity {
+  id: string;
+  estimateId?: string;
+  title: string;
+  description: string;
+  actor?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface EstimateAttachmentItem {

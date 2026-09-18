@@ -32,6 +32,8 @@ import {
   type JobAttachment,
 } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
+import { useAppDispatch } from "@/store/hooks";
+import { fetchTeam } from "@/store/teamSlice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -245,9 +247,16 @@ export function EstimateSiteVisitTab({
   locked: boolean;
   onSave: (visit: EstimateSiteVisit) => void | Promise<void>;
 }) {
+  const dispatch = useAppDispatch();
   const { employees, loading: crewLoading } = usePortalCrew();
   const crm = useCrmApiData();
   const loading = crewLoading || (crm.enabled && !crm.ready);
+
+  useEffect(() => {
+    if (employees.length === 0) {
+      void dispatch(fetchTeam({ force: true, limit: 100 }));
+    }
+  }, [employees.length, dispatch]);
   const { siteVisit, saveSiteVisit, actor } = useJobFile(
     asJob,
     estimate,
@@ -466,21 +475,16 @@ export function EstimateSiteVisitTab({
 
   return (
     <div data-site-visit-form className="space-y-4">
-      <div className="roundedlg border border-black/10 bg-card p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="inline-flex items-center gap-2 text-base font-semibold">
-              <Camera className="size-4 text-primary" />
-              Site inspection
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              What the technician saw on site. Photos and notes stay with this
-              estimate until the office finalizes the quote.
-            </p>
-          </div>
+      <div className="rounded-lg border border-black/10 bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="inline-flex items-center gap-2 text-base font-semibold">
+            <Camera className="size-4 text-primary" />
+            Site inspection
+          </h2>
           {locked ? null : (
             <Button
               size="sm"
+              className="shrink-0"
               disabled={savingNotes}
               onClick={async () => {
                 try {
@@ -501,6 +505,10 @@ export function EstimateSiteVisitTab({
             </Button>
           )}
         </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          What the technician saw on site. Photos and notes stay with this
+          estimate until the office finalizes the quote.
+        </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="Technician">
             <Select

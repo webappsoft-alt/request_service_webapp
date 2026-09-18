@@ -15,6 +15,7 @@ import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { fetchCustomers } from "@/store/customersSlice";
 import { fetchEstimates, invalidateEstimatesCache } from "@/store/estimatesSlice";
+import { fetchTeam } from "@/store/teamSlice";
 import { createEstimate as createEstimateApi } from "@/lib/api/crm-client";
 import { writeCostLines, type JobCostLine } from "@/components/portal/use-job-costing";
 import { writeSiteVisit } from "@/components/portal/use-job-file";
@@ -131,7 +132,17 @@ export function CreateEstimateDialog({
     if (customers.length === 0) {
       void dispatch(fetchCustomers({ force: true, limit: 100 }));
     }
-  }, [customerId, open, requestName, requestNotes, customers.length, dispatch]);
+    if (employees.length === 0) {
+      void dispatch(fetchTeam({ force: true, limit: 100 }));
+    }
+  }, [customerId, open, requestName, requestNotes, customers.length, employees.length, dispatch]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (tab === "visit" && employees.length === 0) {
+      void dispatch(fetchTeam({ force: true, limit: 100 }));
+    }
+  }, [open, tab, employees.length, dispatch]);
 
   useEffect(() => {
     if (!open) return;
@@ -438,19 +449,19 @@ export function CreateEstimateDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Technician">
               <Select
-                disabled={crewLoading}
-                value={crewLoading ? undefined : (employeeId || "__unassigned__")}
+                disabled={crewLoading && employees.length === 0}
+                value={crewLoading && employees.length === 0 ? undefined : (employeeId || "__unassigned__")}
                 onValueChange={(value) => setEmployeeId(value === "__unassigned__" ? "" : value)}
               >
-                <SelectTrigger className="w-full" loading={crewLoading}>
-                  <SelectValue placeholder={crewLoading ? "Loading technicians…" : "Assign later"} />
+                <SelectTrigger className="w-full" loading={crewLoading && employees.length === 0}>
+                  <SelectValue placeholder={crewLoading && employees.length === 0 ? "Loading technicians…" : "Assign later"} />
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
                   align="start"
                   className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  {crewLoading ? (
+                  {crewLoading && employees.length === 0 ? (
                     <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3.5 animate-spin" />
                       <span>Loading technicians…</span>
@@ -589,7 +600,13 @@ export function CreateJobDialog({
       return;
     }
     if (estimate?.id) pickSource(estimate.id);
-  }, [estimate, open]);
+    if (customers.length === 0) {
+      void dispatch(fetchCustomers({ force: true, limit: 100 }));
+    }
+    if (employees.length === 0) {
+      void dispatch(fetchTeam({ force: true, limit: 100 }));
+    }
+  }, [estimate, open, customers.length, employees.length, dispatch]);
 
   useEffect(() => {
     if (!open || selectedCustomer || !customers[0]) return;

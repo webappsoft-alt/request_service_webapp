@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -92,6 +92,10 @@ export function EstimatesView() {
   const [actionLoading, setActionLoading] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<EstimateRow | null>(null);
   const [archiving, setArchiving] = useState(false);
+  // Controlled search input — updated immediately on keypress
+  const [searchInput, setSearchInput] = useState("");
+  // Debounce timer ref — fires the API call 500ms after the user stops typing
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const useApi =
     auth.hydrated &&
@@ -121,13 +125,14 @@ export function EstimatesView() {
 
   const allRequests = useMemo(() => records.mergeRequests(requests), [records, requests]);
 
+  // Initial load + status/page changes
   useEffect(() => {
     if (!useApi) return;
     let cancelled = false;
     setActionLoading(true);
     void dispatch(
       fetchEstimates({
-        status: statusParam || undefined,
+        status: statusParam,
         force: true,
       }),
     ).finally(() => {
@@ -136,7 +141,35 @@ export function EstimatesView() {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, useApi, statusParam, page, search]);
+  }, [dispatch, useApi, statusParam, page]);
+
+  // Debounced search handler — fires API 500ms after user stops typing
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      if (!useApi) return;
+      searchDebounceRef.current = setTimeout(() => {
+        dispatch(setEstimatesSearch(value));
+        void dispatch(
+          fetchEstimates({
+            search: value,
+            status: statusParam,
+            page: 1,
+            force: true,
+          }),
+        );
+      }, 500);
+    },
+    [dispatch, useApi, statusParam],
+  );
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!useApi || !error || loading) return;
@@ -171,6 +204,15 @@ export function EstimatesView() {
         countLabel="Estimates"
         searchPlaceholder="Search quotes"
         loading={tableLoading}
+        serverPagination={useApi ? {
+          page,
+          pageSize: limit,
+          total,
+          totalPages,
+          onPageChange: (p) => dispatch(setEstimatesPage(p)),
+          search: searchInput,
+          onSearchChange: handleSearchChange,
+        } : undefined}
         toolbar={
           <div className="w-40 sm:w-44">
             <Select
@@ -351,7 +393,22 @@ export function EstimatesView() {
                     onSelect: async () => {
                       try {
                         let linkUrl = "";
-                        if (useApi) {
+
+                        // 1. Use shareToken already present on the row (fastest, no API call)
+                        if (row.shareToken) {
+                          linkUrl = shareUrlFor(row.shareToken);
+                        }
+
+                        // 2. Fall back to locally-cached snapshot token
+                        if (!linkUrl) {
+                          const localToken = share.snapshotForEstimate(row.id)?.token;
+                          if (localToken) {
+                            linkUrl = shareUrlFor(localToken);
+                          }
+                        }
+
+                        // 3. Last resort: call the API to generate / fetch the token
+                        if (!linkUrl && useApi) {
                           try {
                             const res = await shareEstimate(row.id);
                             if (res?.shareToken) {
@@ -362,17 +419,10 @@ export function EstimatesView() {
                                 : shareUrlFor(res.shareUrl.replace(/^\//, ""));
                             }
                           } catch {
-                            // fallback
+                            // ignore — show error below
                           }
                         }
-                        if (!linkUrl) {
-                          const token =
-                            row.shareToken ||
-                            share.snapshotForEstimate(row.id)?.token;
-                          if (token) {
-                            linkUrl = shareUrlFor(token);
-                          }
-                        }
+
                         if (linkUrl) {
                           await navigator.clipboard.writeText(linkUrl);
                           toast.success("Customer link copied to clipboard.");

@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchCustomers } from "@/store/customersSlice";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  fetchCustomers,
+  upsertCustomerTask,
+  upsertCustomerReminder,
+  removeCustomerTaskLocal,
+  removeCustomerReminderLocal,
+} from "@/store/customersSlice";
+import { upsertTaskItem, removeTaskItemLocal, fetchTasks } from "@/store/tasksSlice";
+import { upsertReminderItem, removeReminderItemLocal, fetchReminders } from "@/store/remindersSlice";
 import {
   archiveCustomer,
   createContractor as createContractorApi,
@@ -36,6 +43,7 @@ import {
   type PortalTask,
   type PortalVendor,
 } from "@/lib/data/crm-people";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 const EVENT = "rs-crm-directory";
 
@@ -116,6 +124,10 @@ export function useCrmDirectory() {
   const dispatch = useAppDispatch();
   const reduxCustomers = useAppSelector((state) => state.customers?.items ?? []);
   const reduxLoading = useAppSelector((state) => state.customers?.loading ?? false);
+  const reduxTasks = useAppSelector((state) => state.tasks?.items ?? []);
+  const reduxCustomerTasks = useAppSelector((state) => state.customers?.tasks?.items ?? []);
+  const reduxReminders = useAppSelector((state) => state.reminders?.items ?? []);
+  const reduxCustomerReminders = useAppSelector((state) => state.customers?.reminders?.items ?? []);
   const { session, provider, employees } = usePortalWorkspace();
   const crm = useCrmApiData();
   const key = storageKey(session?.email);
@@ -163,11 +175,16 @@ export function useCrmDirectory() {
     return [...seedCustomers, ...local];
   }, [apiReady, crm.customers, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
 
+  const initFetchedRef = useRef(false);
+
   useEffect(() => {
-    if (crm.enabled && customers.length === 0 && !reduxLoading) {
+    if (crm.enabled && !initFetchedRef.current) {
+      initFetchedRef.current = true;
       void dispatch(fetchCustomers({ limit: 100, force: true }));
+      void dispatch(fetchTasks({ limit: 100 }));
+      void dispatch(fetchReminders());
     }
-  }, [crm.enabled, customers.length, dispatch, reduxLoading]);
+  }, [crm.enabled, dispatch]);
 
   const loading = crm.enabled && customers.length === 0 && (reduxLoading || !crm.ready);
   const contractors = useMemo(
@@ -212,26 +229,57 @@ export function useCrmDirectory() {
       suppressSeedData,
     ],
   );
-  const reminders = useMemo(
-    () =>
-      apiReady
-        ? crm.reminders
-        : suppressSeedData
-          ? store.reminders.filter((item) => !store.deleted.includes(`reminder:${item.id}`))
-          : [...seedReminders, ...store.reminders].filter(
-              (item) => !store.deleted.includes(`reminder:${item.id}`),
-            ),
-    [apiReady, crm.reminders, seedReminders, store.reminders, store.deleted, suppressSeedData],
-  );
-  const tasks = useMemo(
-    () =>
-      apiReady
-        ? crm.tasks
-        : suppressSeedData
-          ? store.tasks.filter((item) => !store.deleted.includes(`task:${item.id}`))
-          : [...seedTasks, ...store.tasks].filter((item) => !store.deleted.includes(`task:${item.id}`)),
-    [apiReady, crm.tasks, seedTasks, store.tasks, store.deleted, suppressSeedData],
-  );
+  const reminders = useMemo(() => {
+    const pool = [
+      ...(crm.reminders || []),
+      ...(reduxReminders || []),
+      ...(reduxCustomerReminders || []),
+      ...(store.reminders || []),
+    ];
+    const map = new Map<string, PortalReminder>();
+    for (const item of pool) {
+      if (item && item.id && !map.has(item.id) && !store.deleted.includes(`reminder:${item.id}`)) {
+        map.set(item.id, item);
+      }
+    }
+    if (map.size > 0) return Array.from(map.values());
+    if (suppressSeedData) return [];
+    return seedReminders.filter((item) => !store.deleted.includes(`reminder:${item.id}`));
+  }, [
+    crm.reminders,
+    reduxReminders,
+    reduxCustomerReminders,
+    store.reminders,
+    store.deleted,
+    suppressSeedData,
+    seedReminders,
+  ]);
+
+  const tasks = useMemo(() => {
+    const pool = [
+      ...(crm.tasks || []),
+      ...(reduxTasks || []),
+      ...(reduxCustomerTasks || []),
+      ...(store.tasks || []),
+    ];
+    const map = new Map<string, PortalTask>();
+    for (const item of pool) {
+      if (item && item.id && !map.has(item.id) && !store.deleted.includes(`task:${item.id}`)) {
+        map.set(item.id, item);
+      }
+    }
+    if (map.size > 0) return Array.from(map.values());
+    if (suppressSeedData) return [];
+    return seedTasks.filter((item) => !store.deleted.includes(`task:${item.id}`));
+  }, [
+    crm.tasks,
+    reduxTasks,
+    reduxCustomerTasks,
+    store.tasks,
+    store.deleted,
+    suppressSeedData,
+    seedTasks,
+  ]);
   const notes = useMemo(
     () =>
       (suppressSeedData || apiReady
@@ -319,36 +367,51 @@ export function useCrmDirectory() {
 
   const addReminder = useCallback(
     (reminder: PortalReminder) => {
-      if (apiReady) {
+      crm.addReminder(reminder);
+      const current = readStore(key);
+      writeStore(key, {
+        ...current,
+        reminders: [reminder, ...current.reminders.filter((r) => r.id !== reminder.id)],
+      });
+      if (crm.enabled) {
         return (async () => {
           const created = await createReminderApi(reminder);
+          const finalReminder = created || reminder;
+          crm.addReminder(finalReminder);
+          dispatch(upsertReminderItem(finalReminder));
+          if (finalReminder.customerId) {
+            dispatch(upsertCustomerReminder({ customerId: finalReminder.customerId, item: finalReminder }));
+          }
           void crm.refresh({ silent: true });
-          return created;
+          return finalReminder;
         })();
       }
-      const current = readStore(key);
-      writeStore(key, { ...current, reminders: [...current.reminders, reminder] });
       return reminder;
     },
-    [apiReady, crm, key],
+    [crm, dispatch, key],
   );
 
   const addTask = useCallback(
     (task: PortalTask) => {
-      // Match addCustomer: hit the API whenever the provider session is live —
-      // do not wait for the full CRM snapshot (create was skipping POST).
+      crm.addTask(task);
+      const current = readStore(key);
+      writeStore(key, { ...current, tasks: [task, ...current.tasks.filter((t) => t.id !== task.id)] });
       if (crm.enabled) {
         return (async () => {
           const created = await createTaskApi(task);
+          const finalTask = created || task;
+          crm.addTask(finalTask);
+          dispatch(upsertTaskItem(finalTask));
+          if (finalTask.customerId) {
+            dispatch(upsertCustomerTask({ customerId: finalTask.customerId, item: finalTask }));
+          }
           void crm.refresh({ silent: true });
-          return created;
+          return finalTask;
         })();
       }
-      const current = readStore(key);
-      writeStore(key, { ...current, tasks: [...current.tasks, task] });
       return task;
     },
-    [crm, key],
+    [crm, dispatch, key],
   );
 
   const addNote = useCallback(
@@ -394,7 +457,7 @@ export function useCrmDirectory() {
 
   const remove = useCallback(
     (kind: "customer" | "contractor" | "vendor" | "reminder" | "task" | "note", id: string) => {
-      if (apiReady) {
+      if (crm.enabled) {
         return (async () => {
           switch (kind) {
             case "customer":
@@ -407,9 +470,15 @@ export function useCrmDirectory() {
               await deleteVendorApi(id);
               break;
             case "reminder":
+              crm.removeReminder(id);
+              dispatch(removeReminderItemLocal(id));
+              dispatch(removeCustomerReminderLocal(id));
               await deleteReminderApi(id);
               break;
             case "task":
+              crm.removeTask(id);
+              dispatch(removeTaskItemLocal(id));
+              dispatch(removeCustomerTaskLocal(id));
               await deleteTaskApi(id);
               break;
             case "note":
@@ -420,7 +489,7 @@ export function useCrmDirectory() {
             }
           }
           if (kind !== "note") {
-            await crm.refresh();
+            await crm.refresh({ silent: true });
             return;
           }
           const current = readStore(key);
@@ -440,7 +509,7 @@ export function useCrmDirectory() {
         deleted: current.deleted.includes(nextKey) ? current.deleted : [...current.deleted, nextKey],
       });
     },
-    [apiReady, crm, key],
+    [crm, dispatch, key],
   );
 
   const updateContractor = useCallback(
@@ -493,42 +562,56 @@ export function useCrmDirectory() {
 
   const setReminderStatus = useCallback(
     (id: string, status: PortalReminder["status"]) => {
-      if (apiReady) {
-        return (async () => {
-          const updated = await updateReminderStatusApi(id, status);
-          crm.patchReminder(id, { status: updated?.status ?? status });
-          void crm.refresh({ silent: true });
-          return updated;
-        })();
-      }
+      crm.patchReminder(id, { status });
       const current = readStore(key);
       const inStore = current.reminders.some((item) => item.id === id);
       const nextReminders = inStore
         ? current.reminders.map((item) => (item.id === id ? { ...item, status } : item))
         : [...current.reminders, ...seedReminders.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
       writeStore(key, { ...current, reminders: nextReminders });
-    },
-    [apiReady, crm, key, seedReminders],
-  );
-
-  const setTaskStatus = useCallback(
-    (id: string, status: PortalTask["status"]) => {
-      if (apiReady) {
+      if (crm.enabled) {
         return (async () => {
-          const updated = await updateTaskStatusApi(id, status);
-          crm.patchTask(id, { status: updated?.status ?? status });
+          const updated = await updateReminderStatusApi(id, status);
+          if (updated) {
+            crm.patchReminder(id, updated);
+            dispatch(upsertReminderItem(updated));
+            if (updated.customerId) {
+              dispatch(upsertCustomerReminder({ customerId: updated.customerId, item: updated }));
+            }
+          }
           void crm.refresh({ silent: true });
           return updated;
         })();
       }
+    },
+    [crm, dispatch, key, seedReminders],
+  );
+
+  const setTaskStatus = useCallback(
+    (id: string, status: PortalTask["status"]) => {
+      crm.patchTask(id, { status });
       const current = readStore(key);
       const inStore = current.tasks.some((item) => item.id === id);
       const nextTasks = inStore
         ? current.tasks.map((item) => (item.id === id ? { ...item, status } : item))
         : [...current.tasks, ...seedTasks.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
       writeStore(key, { ...current, tasks: nextTasks });
+      if (crm.enabled) {
+        return (async () => {
+          const updated = await updateTaskStatusApi(id, status);
+          if (updated) {
+            crm.patchTask(id, updated);
+            dispatch(upsertTaskItem(updated));
+            if (updated.customerId) {
+              dispatch(upsertCustomerTask({ customerId: updated.customerId, item: updated }));
+            }
+          }
+          void crm.refresh({ silent: true });
+          return updated;
+        })();
+      }
     },
-    [apiReady, crm, key, seedTasks],
+    [crm, dispatch, key, seedTasks],
   );
 
   return {

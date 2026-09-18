@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { usePortalRecords, type PortalRecordKind } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
@@ -31,47 +31,38 @@ export function ConfirmArchiveDialog({
   kind?: PortalRecordKind;
   number?: string;
   loading?: boolean;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => void;
 }) {
-  const displayTitle = title || `Archive ${kind}?`;
-  const displayDescription =
-    description ||
-    (number
-      ? `Are you sure you want to archive ${number}? It will be moved to your archived ${kind}s.`
-      : `Are you sure you want to archive this ${kind}?`);
-
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!loading) onOpenChange(next);
-      }}
-    >
-      <DialogContent showCloseButton={!loading} className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{displayTitle}</DialogTitle>
-          <DialogDescription>{displayDescription}</DialogDescription>
+          <DialogTitle>{title || `Archive ${kind}`}</DialogTitle>
+          <DialogDescription>
+            {description ||
+              `Are you sure you want to archive ${number ? `${kind} ${number}` : `this ${kind}`}? It will be hidden from the active board.`}
+          </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="mt-4 flex flex-row items-center justify-end gap-2">
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button
             type="button"
             variant="outline"
-            disabled={loading}
             onClick={() => onOpenChange(false)}
+            disabled={loading}
           >
             Cancel
           </Button>
           <Button
             type="button"
             variant="destructive"
-            disabled={loading}
             onClick={onConfirm}
+            disabled={loading}
           >
             {loading ? (
-              <>
-                <Loader2 className="mr-2 size-3.5 animate-spin" />
-                Archiving…
-              </>
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin" />
+                Archiving...
+              </span>
             ) : (
               `Archive ${kind}`
             )}
@@ -92,6 +83,7 @@ export function archiveRowAction(
   if (records.isArchived(kind, id)) {
     return {
       label: "Restore",
+      icon: <ArchiveRestore className="size-3.5 text-muted-foreground" />,
       onSelect: () => {
         records.unarchive(kind, id);
         toast.success(`${number} restored.`);
@@ -100,6 +92,7 @@ export function archiveRowAction(
   }
   return {
     label: "Archive",
+    icon: <Archive className="size-3.5 text-muted-foreground" />,
     onSelect: () => {
       if (onTriggerArchive) {
         onTriggerArchive(id, number);

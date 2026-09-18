@@ -33,6 +33,7 @@ import teamReducer from "./teamSlice";
 import contractorsReducer from "./contractorsSlice";
 import vendorsReducer from "./vendorsSlice";
 import remindersReducer from "./remindersSlice";
+import tasksReducer from "./tasksSlice";
 import {
   contractorNotesModule,
   customerNotesModule,
@@ -73,6 +74,7 @@ const rootReducer = combineReducers({
   contractors: contractorsReducer,
   vendors: vendorsReducer,
   reminders: remindersReducer,
+  tasks: tasksReducer,
   customerNotes: customerNotesModule.reducer,
   estimateNotes: estimateNotesModule.reducer,
   requestNotes: requestNotesModule.reducer,

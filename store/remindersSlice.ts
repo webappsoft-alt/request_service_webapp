@@ -11,6 +11,7 @@ import {
   updateReminderStatus,
 } from "@/lib/api/crm-client";
 import type { PortalReminder } from "@/lib/data/crm-people";
+import { deleteCustomerReminder } from "./customersSlice";
 
 /** List page size for GET /provider/reminders */
 export const REMINDERS_DEFAULT_LIMIT = 10;
@@ -148,6 +149,19 @@ const remindersSlice = createSlice({
     clearRemindersError(state) {
       state.error = null;
     },
+    upsertReminderItem(state, action: PayloadAction<PortalReminder>) {
+      state.pagesCache = {};
+      state.items = [
+        action.payload,
+        ...state.items.filter((item) => item.id !== action.payload.id),
+      ];
+      state.total = Math.max(state.total, state.items.length);
+    },
+    removeReminderItemLocal(state, action: PayloadAction<string>) {
+      state.pagesCache = {};
+      state.items = state.items.filter((item) => item.id !== action.payload);
+      state.total = Math.max(0, state.total - 1);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -199,6 +213,11 @@ const remindersSlice = createSlice({
         state.pagesCache = {};
         state.items = state.items.filter((item) => item.id !== action.payload);
         state.total = Math.max(0, state.total - 1);
+      })
+      .addCase(deleteCustomerReminder.fulfilled, (state, action) => {
+        state.pagesCache = {};
+        state.items = state.items.filter((item) => item.id !== action.payload.id);
+        state.total = Math.max(0, state.total - 1);
       });
   },
 });
@@ -209,6 +228,8 @@ export const {
   setRemindersStatus,
   invalidateRemindersCache,
   clearRemindersError,
+  upsertReminderItem,
+  removeReminderItemLocal,
 } = remindersSlice.actions;
 
 export default remindersSlice.reducer;

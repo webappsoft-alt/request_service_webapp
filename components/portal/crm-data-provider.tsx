@@ -60,12 +60,15 @@ type CrmApiContextValue = {
   inboxSummary: CrmInboxSummary;
   /** Full CRM snapshot refresh (explicit / after mutations). */
   refresh: (options?: { silent?: boolean }) => Promise<void>;
-  /**
-   * Load the full CRM snapshot once if it is not ready yet.
-   * Call from pages that need directory data — not from Customers list
-   * (that page uses its own Redux `customers` slice).
-   */
   ensureLoaded: () => Promise<void>;
+  /** Apply a local task addition immediately (e.g. after create API succeeds). */
+  addTask: (task: PortalTask) => void;
+  /** Apply a local reminder addition immediately (e.g. after create API succeeds). */
+  addReminder: (reminder: PortalReminder) => void;
+  /** Remove a local task immediately (e.g. after delete API succeeds). */
+  removeTask: (id: string) => void;
+  /** Remove a local reminder immediately (e.g. after delete API succeeds). */
+  removeReminder: (id: string) => void;
   /** Apply a local task update immediately (e.g. after status API succeeds). */
   patchTask: (id: string, patch: Partial<PortalTask>) => void;
   /** Apply a local reminder update immediately (e.g. after status API succeeds). */
@@ -74,6 +77,8 @@ type CrmApiContextValue = {
   patchCustomer: (id: string, patch: Partial<PortalCustomerCrm>) => void;
   /** Apply a local estimate update immediately (e.g. after save/update API succeeds). */
   patchEstimate: (id: string, patch: Partial<Estimate>) => void;
+  /** Apply a local request/lead update immediately (e.g. after status API succeeds). */
+  patchRequest: (id: string, patch: Partial<PortalRequest>) => void;
 };
 
 const EMPTY_VALUE: CrmApiContextValue = {
@@ -98,10 +103,15 @@ const EMPTY_VALUE: CrmApiContextValue = {
   inboxSummary: EMPTY_INBOX_SUMMARY,
   refresh: async () => {},
   ensureLoaded: async () => {},
+  addTask: () => {},
+  addReminder: () => {},
+  removeTask: () => {},
+  removeReminder: () => {},
   patchTask: () => {},
   patchReminder: () => {},
   patchCustomer: () => {},
   patchEstimate: () => {},
+  patchRequest: () => {},
 };
 
 type CrmDataState = Omit<
@@ -109,10 +119,15 @@ type CrmDataState = Omit<
   | "enabled"
   | "refresh"
   | "ensureLoaded"
+  | "addTask"
+  | "addReminder"
+  | "removeTask"
+  | "removeReminder"
   | "patchTask"
   | "patchReminder"
   | "patchCustomer"
   | "patchEstimate"
+  | "patchRequest"
 >;
 
 const CrmApiDataContext = createContext<CrmApiContextValue>(EMPTY_VALUE);
@@ -228,6 +243,34 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     await refresh();
   }, [enabled, refresh]);
 
+  const addTask = useCallback((task: PortalTask) => {
+    setState((current) => ({
+      ...current,
+      tasks: [task, ...current.tasks.filter((item) => item.id !== task.id)],
+    }));
+  }, []);
+
+  const addReminder = useCallback((reminder: PortalReminder) => {
+    setState((current) => ({
+      ...current,
+      reminders: [reminder, ...current.reminders.filter((item) => item.id !== reminder.id)],
+    }));
+  }, []);
+
+  const removeTask = useCallback((id: string) => {
+    setState((current) => ({
+      ...current,
+      tasks: current.tasks.filter((item) => item.id !== id),
+    }));
+  }, []);
+
+  const removeReminder = useCallback((id: string) => {
+    setState((current) => ({
+      ...current,
+      reminders: current.reminders.filter((item) => item.id !== id),
+    }));
+  }, []);
+
   const patchTask = useCallback((id: string, patch: Partial<PortalTask>) => {
     setState((current) => ({
       ...current,
@@ -259,6 +302,15 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     setState((current) => ({
       ...current,
       estimates: current.estimates.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    }));
+  }, []);
+
+  const patchRequest = useCallback((id: string, patch: Partial<PortalRequest>) => {
+    setState((current) => ({
+      ...current,
+      requests: current.requests.map((item) =>
         item.id === id ? { ...item, ...patch } : item,
       ),
     }));
@@ -313,20 +365,16 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     if (!enabled) return;
     let debounceId = 0;
     const onExternalRefresh = () => {
-      // Only refresh if snapshot was already loaded (mutations / realtime).
-      // Never bootstrap the full dump from a stray event while on Customers.
-      if (!readyRef.current) {
+      // Keep badge counters fresh. Full snapshot is NEVER auto-fired from
+      // background events — individual tabs manage only their own data.
+      window.clearTimeout(debounceId);
+      debounceId = window.setTimeout(() => {
         void getInboxSummary({ silent: true })
           .then((inboxSummary) => {
             if (!mountedRef.current) return;
             setState((current) => ({ ...current, inboxSummary }));
           })
           .catch(() => undefined);
-        return;
-      }
-      window.clearTimeout(debounceId);
-      debounceId = window.setTimeout(() => {
-        void refresh({ silent: true });
       }, 300);
     };
 
@@ -343,10 +391,21 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      if (detail?.type === "CHAT_READ_RECEIPT" && detail.payload?.readBy === "provider") {
+        setState((current) => ({
+          ...current,
+          inboxSummary: {
+            ...current.inboxSummary,
+            unreadChats: Math.max(0, (current.inboxSummary?.unreadChats || 1) - 1),
+            total: Math.max(0, (current.inboxSummary?.total || 1) - 1),
+          },
+        }));
+        return;
+      }
+
       // Do NOT trigger full CRM snapshot refresh for chat/presence/typing events!
       // Chat messages, read receipts, typing, and presence are handled in real-time
-      // by the chat socket listeners directly. Triggering a full CRM snapshot refresh
-      // would overwrite live chat messages with the snapshot's stale/cached chat state.
+      // by the chat socket listeners directly.
       const isChatEvent =
         detail?.type === "CHAT_MESSAGE" ||
         detail?.type === "CHAT_TYPING" ||
@@ -360,14 +419,24 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       }
     };
 
+    const onLeadStatus = (event: Event) => {
+      const custom = event as CustomEvent<{ id?: string; status?: string }>;
+      const detail = custom?.detail;
+      if (detail?.id && detail?.status) {
+        patchRequest(detail.id, { status: detail.status as PortalRequest["status"] });
+      }
+    };
+
     window.addEventListener(EVENT_NAME, onExternalRefresh);
     window.addEventListener("rs-realtime", onRealtimeMessage);
+    window.addEventListener("rs-lead-status", onLeadStatus);
     return () => {
       window.clearTimeout(debounceId);
       window.removeEventListener(EVENT_NAME, onExternalRefresh);
       window.removeEventListener("rs-realtime", onRealtimeMessage);
+      window.removeEventListener("rs-lead-status", onLeadStatus);
     };
-  }, [enabled, refresh]);
+  }, [enabled, patchRequest, refresh]);
 
   const value = useMemo<CrmApiContextValue>(
     () => ({
@@ -375,17 +444,27 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       ...state,
       refresh,
       ensureLoaded,
+      addTask,
+      addReminder,
+      removeTask,
+      removeReminder,
       patchTask,
       patchReminder,
       patchCustomer,
       patchEstimate,
+      patchRequest,
     }),
     [
       enabled,
       ensureLoaded,
+      addTask,
+      addReminder,
+      removeTask,
+      removeReminder,
       patchCustomer,
       patchEstimate,
       patchReminder,
+      patchRequest,
       patchTask,
       refresh,
       state,

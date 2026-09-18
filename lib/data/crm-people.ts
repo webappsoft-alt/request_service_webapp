@@ -126,13 +126,21 @@ export type ReminderSubjectKind =
 
 export const REMINDER_SUBJECT_KINDS: ReminderSubjectKind[] = [
   "customer",
-  "employee",
+  "job",
+  "estimate",
   "contractor",
   "vendor",
-  "estimate",
+  "employee",
   "request",
-  "job",
   "invoice",
+];
+
+export const CRM_TASK_SUBJECT_KINDS: ReminderSubjectKind[] = [
+  "customer",
+  "job",
+  "estimate",
+  "contractor",
+  "vendor",
 ];
 
 export type PortalReminder = {
@@ -144,6 +152,8 @@ export type PortalReminder = {
   note: string;
   dueAt: string;
   assignedEmployeeId?: string;
+  assignedContractorId?: string;
+  assignedVendorId?: string;
   status: CrmReminderStatus;
   createdAt: string;
 };
@@ -153,10 +163,13 @@ export type PortalTask = {
   number: string;
   title: string;
   note: string;
+  jobId?: string;
   customerId?: string;
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
   assignedEmployeeId?: string;
+  assignedContractorId?: string;
+  assignedVendorId?: string;
   priority: CrmTaskPriority;
   status: CrmTaskStatus;
   dueAt: string;
@@ -451,10 +464,15 @@ export function taskSubject(task: PortalTask): { kind: ReminderSubjectKind; id: 
   if (task.subjectKind && task.subjectId) {
     return { kind: task.subjectKind, id: task.subjectId };
   }
+  if (task.jobId) {
+    return { kind: "job", id: task.jobId };
+  }
   return { kind: "customer", id: task.customerId ?? "" };
 }
 
 export function taskMatches(task: PortalTask, kind: ReminderSubjectKind, id: string) {
+  if (kind === "job" && task.jobId === id) return true;
+  if (kind === "customer" && task.customerId === id) return true;
   const subject = taskSubject(task);
   return subject.kind === kind && subject.id === id;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
@@ -39,7 +39,9 @@ import type {
   CrmCustomerType,
   CrmEntityKind,
   CrmPersonSource,
+  CrmReminderStatus,
   CrmTaskPriority,
+  CrmTaskStatus,
   PortalContractor,
   PortalCustomerCrm,
   PortalNote,
@@ -49,8 +51,11 @@ import type {
   ReminderSubjectKind,
 } from "@/lib/data/crm-people";
 import {
+  CRM_TASK_SUBJECT_KINDS,
+  crmReminderStatusLabel,
   crmSourceLabel,
   crmTaskPriorityLabel,
+  crmTaskStatusLabel,
   crmTypeLabel,
   REMINDER_SUBJECT_KINDS,
   reminderSubjectKindLabel,
@@ -60,8 +65,18 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { createContractorRecord, updateContractorRecord } from "@/store/contractorsSlice";
 import { createVendorRecord, updateVendorRecord } from "@/store/vendorsSlice";
-import { createReminderRecord } from "@/store/remindersSlice";
-import { createCustomerTask, updateCustomerTask } from "@/store/customersSlice";
+import { createReminderRecord, upsertReminderItem } from "@/store/remindersSlice";
+import {
+  createCustomerTask,
+  updateCustomerTask,
+  upsertCustomerTask,
+  upsertCustomerReminder,
+} from "@/store/customersSlice";
+import {
+  createTaskRecord,
+  updateTaskRecord,
+  upsertTaskItem,
+} from "@/store/tasksSlice";
 import { createTask as createTaskApi, updateTask as updateTaskApi } from "@/lib/api/crm-client";
 
 const SOURCES: CrmPersonSource[] = ["external", "phone", "referral", "walk_in", "website"];
@@ -807,6 +822,10 @@ export function CreateVendorDialog({
   );
 }
 
+const REMINDER_STATUSES: CrmReminderStatus[] = ["open", "done"];
+const TASK_PRIORITIES: CrmTaskPriority[] = ["low", "normal", "high", "urgent"];
+const TASK_STATUSES: CrmTaskStatus[] = ["open", "in_progress", "blocked", "done"];
+
 export function CreateReminderDialog({
   open,
   onOpenChange,
@@ -833,20 +852,28 @@ export function CreateReminderDialog({
   const { employees: crewEmployees } = usePortalCrew();
   const crm = useCrmApiData();
   const lookups = useReminderLookups();
-  const lockedKind = subjectKind ?? (customerId ? "customer" : undefined);
-  const lockedId = subjectId ?? customerId;
-  const [kind, setKind] = useState<ReminderSubjectKind>(lockedKind ?? "customer");
-  const [selectedId, setSelectedId] = useState(lockedId ?? "");
+
+  const resolveKind = (sk?: ReminderSubjectKind): ReminderSubjectKind => {
+    if (sk && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(sk)) return sk;
+    return "customer";
+  };
+
+  const initialKind = resolveKind(subjectKind ?? (customerId ? "customer" : undefined));
+  const initialId = subjectId ?? customerId ?? "";
+
+  const [kind, setKind] = useState<ReminderSubjectKind>(initialKind);
+  const [selectedId, setSelectedId] = useState(initialId);
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
+  const [status, setStatus] = useState<CrmReminderStatus>("open");
   const [saving, setSaving] = useState(false);
   const [lookupsLoading, setLookupsLoading] = useState(false);
 
   const recordPaging = usePaginatedCrmOptions(
-    open && useApi && !lockedId ? kind : null,
-    open && useApi && !lockedId,
+    open && useApi ? kind : null,
+    open && useApi,
   );
   const assigneePaging = usePaginatedCrmOptions(
     open && useApi ? "assignee" : null,
@@ -868,21 +895,33 @@ export function CreateReminderDialog({
 
   useEffect(() => {
     if (!open) return;
-    const nextKind = lockedKind ?? "customer";
+    const nextKind = resolveKind(subjectKind ?? (customerId ? "customer" : undefined));
+    const nextId = subjectId ?? customerId ?? "";
     setKind(nextKind);
-    setSelectedId(lockedId ?? "");
+    setSelectedId(nextId);
     setTitle("");
     setNote("");
     setDueAt("");
     setAssignedEmployeeId("");
+    setStatus("open");
     setSaving(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, subjectKind, subjectId, customerId]);
 
   const fallbackChoices = lookups.options(kind);
-  const recordOptions = useApi
+  const baseRecordOptions = useApi
     ? recordPaging.options
     : fallbackChoices.map((item) => ({ id: item.id, label: item.label }));
+
+  const recordOptions = useMemo(() => {
+    if (!selectedId) return baseRecordOptions;
+    if (baseRecordOptions.some((opt) => opt.id === selectedId)) return baseRecordOptions;
+    const fallbackLabel = lookups.label(kind, selectedId);
+    return [
+      { id: selectedId, label: fallbackLabel || `Selected ${reminderSubjectKindLabel(kind)}` },
+      ...baseRecordOptions,
+    ];
+  }, [baseRecordOptions, selectedId, lookups, kind]);
+
   const assigneeOptions = useApi
     ? assigneePaging.options
     : crewEmployees.map((item) => ({ id: item.id, label: employeeName(item) }));
@@ -894,8 +933,8 @@ export function CreateReminderDialog({
 
   async function save() {
     if (saving) return;
-    const linkedKind = lockedKind ?? kind;
-    const linkedId = lockedId ?? selectedId;
+    const linkedKind = kind;
+    const linkedId = selectedId;
     if (!title.trim() || !linkedId) return;
 
     const reminder: PortalReminder = {
@@ -907,7 +946,7 @@ export function CreateReminderDialog({
       note: note.trim(),
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
       assignedEmployeeId: assignedEmployeeId || undefined,
-      status: "open",
+      status,
       createdAt: new Date().toISOString().slice(0, 10),
     };
 
@@ -916,9 +955,15 @@ export function CreateReminderDialog({
       let saved = reminder;
       if (useApi) {
         saved = await dispatch(createReminderRecord(reminder)).unwrap();
+        crm.addReminder(saved);
+        if (saved.customerId) {
+          dispatch(upsertCustomerReminder({ customerId: saved.customerId, item: saved }));
+        }
+        if (crm.enabled) void crm.refresh({ silent: true });
       } else {
         const created = await Promise.resolve(addReminder(reminder));
         saved = created ?? reminder;
+        crm.addReminder(saved);
       }
       onCreated?.(saved);
       toast.success(`Reminder set on this ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
@@ -936,7 +981,7 @@ export function CreateReminderDialog({
     }
   }
 
-  const linkedReady = Boolean(lockedId ?? selectedId);
+  const linkedReady = Boolean(selectedId);
   const recordLoading = useApi
     ? recordPaging.loading && recordOptions.length === 0
     : lookupsLoading && recordOptions.length === 0;
@@ -956,66 +1001,58 @@ export function CreateReminderDialog({
         <DialogHeader>
           <DialogTitle>Set reminder</DialogTitle>
           <DialogDescription>
-            Link a follow-up to a customer, employee, contractor, vendor, estimate, lead, or job.
+            Link a follow-up to a customer, job, estimate, contractor, or vendor.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
-          {lockedKind && lockedId ? (
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel>Linked to</FieldLabel>
-              <p className="text-sm font-medium">
-                {reminderSubjectKindLabel(lockedKind)} · {lookups.label(lockedKind, lockedId)}
-              </p>
-            </Field>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="rem-kind">Type</FieldLabel>
-                <Select
-                  value={kind}
-                  onValueChange={(value) => changeKind(value as ReminderSubjectKind)}
+              <FieldLabel htmlFor="rem-kind">Link to type</FieldLabel>
+              <Select
+                value={kind}
+                onValueChange={(value) => changeKind(value as ReminderSubjectKind)}
+              >
+                <SelectTrigger id="rem-kind" className="w-full">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  <SelectTrigger id="rem-kind" className="w-full">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    align="start"
-                    className="z-[100] w-[var(--radix-select-trigger-width)]"
-                  >
-                    {REMINDER_SUBJECT_KINDS.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {reminderSubjectKindLabel(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="rem-subject">Record</FieldLabel>
-                <PaginatedEntitySelect
-                  id="rem-subject"
-                  value={selectedId}
-                  options={recordOptions}
-                  loading={recordLoading}
-                  loadingMore={useApi ? recordPaging.loadingMore : false}
-                  hasMore={useApi ? recordPaging.hasMore : false}
-                  onLoadMore={useApi ? recordPaging.loadMore : () => {}}
-                  onChange={(id) => setSelectedId(id)}
-                  placeholder={recordLoading ? "Loading records…" : "Select record"}
-                  emptyLabel="No records found"
-                  disabled={recordLoading}
-                />
-              </Field>
-            </div>
-          )}
+                  {CRM_TASK_SUBJECT_KINDS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {reminderSubjectKindLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="rem-subject">Target {reminderSubjectKindLabel(kind)}</FieldLabel>
+              <PaginatedEntitySelect
+                id="rem-subject"
+                value={selectedId}
+                options={recordOptions}
+                loading={recordLoading}
+                loadingMore={useApi ? recordPaging.loadingMore : false}
+                hasMore={useApi ? recordPaging.hasMore : false}
+                onLoadMore={useApi ? recordPaging.loadMore : () => {}}
+                onChange={(id) => setSelectedId(id)}
+                placeholder={recordLoading ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…` : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`}
+                emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
+                disabled={recordLoading}
+              />
+            </Field>
+          </div>
+
           <Field>
             <FieldLabel htmlFor="rem-title">Title</FieldLabel>
             <Input
               id="rem-title"
               value={title}
               onChange={(change) => setTitle(change.target.value)}
-              placeholder="Follow up on estimate"
+              placeholder="e.g. Follow up on estimate review"
             />
           </Field>
           <Field className="w-full">
@@ -1025,23 +1062,10 @@ export function CreateReminderDialog({
               className="w-full min-h-24"
               value={note}
               onChange={(change) => setNote(change.target.value)}
-              placeholder="Call back after the site visit…"
+              placeholder="Call back after the site visit or check status…"
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="rem-due">Due</FieldLabel>
-              <Input
-                id="rem-due"
-                type="date"
-                min={todayISO()}
-                value={dueAt}
-                onChange={(change) => {
-                  const next = change.target.value;
-                  setDueAt(next && next < todayISO() ? todayISO() : next);
-                }}
-              />
-            </Field>
             <Field>
               <FieldLabel htmlFor="rem-emp">Assigned</FieldLabel>
               <PaginatedEntitySelect
@@ -1058,7 +1082,42 @@ export function CreateReminderDialog({
                 disabled={assigneeLoading}
               />
             </Field>
+            <Field>
+              <FieldLabel htmlFor="rem-status">Status</FieldLabel>
+              <Select
+                value={status}
+                onValueChange={(value) => setStatus(value as CrmReminderStatus)}
+              >
+                <SelectTrigger id="rem-status" className="w-full">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {REMINDER_STATUSES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {crmReminderStatusLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
+          <Field>
+            <FieldLabel htmlFor="rem-due">Due date</FieldLabel>
+            <Input
+              id="rem-due"
+              type="date"
+              min={todayISO()}
+              value={dueAt}
+              onChange={(change) => {
+                const next = change.target.value;
+                setDueAt(next && next < todayISO() ? todayISO() : next);
+              }}
+            />
+          </Field>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
@@ -1094,8 +1153,6 @@ export function SetReminderButton({
   );
 }
 
-const TASK_PRIORITIES: CrmTaskPriority[] = ["low", "normal", "high", "urgent"];
-
 export function CreateTaskDialog({
   open,
   onOpenChange,
@@ -1122,20 +1179,29 @@ export function CreateTaskDialog({
   const { employees: crewEmployees } = usePortalCrew();
   const crm = useCrmApiData();
   const lookups = useReminderLookups();
-  const [kind, setKind] = useState<ReminderSubjectKind>(subjectKind ?? "customer");
-  const [selectedId, setSelectedId] = useState(subjectId ?? "");
+
+  const resolveKind = (sk?: ReminderSubjectKind, t?: PortalTask | null): ReminderSubjectKind => {
+    if (t?.subjectKind && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(t.subjectKind)) return t.subjectKind;
+    if (t?.jobId) return "job";
+    if (t?.customerId) return "customer";
+    if (sk && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(sk)) return sk;
+    return "customer";
+  };
+
+  const [kind, setKind] = useState<ReminderSubjectKind>("customer");
+  const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [assignedEmployeeId, setAssignedEmployeeId] = useState("");
   const [priority, setPriority] = useState<CrmTaskPriority>("normal");
+  const [status, setStatus] = useState<CrmTaskStatus>("open");
   const [dueAt, setDueAt] = useState("");
   const [saving, setSaving] = useState(false);
   const [lookupsLoading, setLookupsLoading] = useState(false);
 
-  const locked = Boolean(subjectKind && subjectId);
   const recordPaging = usePaginatedCrmOptions(
-    open && useApi && !locked ? kind : null,
-    open && useApi && !locked,
+    open && useApi ? kind : null,
+    open && useApi,
   );
   const assigneePaging = usePaginatedCrmOptions(
     open && useApi ? "assignee" : null,
@@ -1156,22 +1222,34 @@ export function CreateTaskDialog({
 
   useEffect(() => {
     if (!open) return;
-    const nextKind = task?.subjectKind ?? subjectKind ?? "customer";
+    const nextKind = resolveKind(subjectKind, task);
+    const nextId = task?.subjectId ?? task?.jobId ?? task?.customerId ?? subjectId ?? "";
     setKind(nextKind);
-    setSelectedId(task?.subjectId ?? subjectId ?? "");
+    setSelectedId(nextId);
     setTitle(task?.title ?? "");
     setNote(task?.note ?? "");
     setAssignedEmployeeId(task?.assignedEmployeeId ?? "");
     setPriority(task?.priority ?? "normal");
-    setDueAt(task?.dueAt ?? "");
+    setStatus(task?.status ?? "open");
+    setDueAt(task?.dueAt ? task.dueAt.slice(0, 10) : "");
     setSaving(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, task?.id]);
+  }, [open, task, subjectKind, subjectId]);
 
   const fallbackChoices = lookups.options(kind);
-  const recordOptions = useApi
+  const baseRecordOptions = useApi
     ? recordPaging.options
     : fallbackChoices.map((item) => ({ id: item.id, label: item.label }));
+
+  const recordOptions = useMemo(() => {
+    if (!selectedId) return baseRecordOptions;
+    if (baseRecordOptions.some((opt) => opt.id === selectedId)) return baseRecordOptions;
+    const fallbackLabel = lookups.label(kind, selectedId);
+    return [
+      { id: selectedId, label: fallbackLabel || `Selected ${reminderSubjectKindLabel(kind)}` },
+      ...baseRecordOptions,
+    ];
+  }, [baseRecordOptions, selectedId, lookups, kind]);
+
   const assigneeOptions = useApi
     ? assigneePaging.options
     : crewEmployees.map((item) => ({ id: item.id, label: employeeName(item) }));
@@ -1183,8 +1261,8 @@ export function CreateTaskDialog({
 
   async function save() {
     if (saving) return;
-    const linkedKind = subjectKind ?? kind;
-    const linkedId = subjectId ?? selectedId;
+    const linkedKind = kind;
+    const linkedId = selectedId;
     if (!title.trim() || !linkedId) return;
 
     const payload: PortalTask = {
@@ -1192,12 +1270,13 @@ export function CreateTaskDialog({
       number: task?.number ?? `TSK-${401 + tasks.length}`,
       title: title.trim(),
       note: note.trim(),
+      jobId: linkedKind === "job" ? linkedId : undefined,
       subjectKind: linkedKind,
       subjectId: linkedId,
       customerId: linkedKind === "customer" ? linkedId : undefined,
       assignedEmployeeId: assignedEmployeeId || undefined,
       priority,
-      status: task?.status ?? "open",
+      status: status || task?.status || "open",
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
       createdAt: task?.createdAt ?? new Date().toISOString().slice(0, 10),
     };
@@ -1210,24 +1289,34 @@ export function CreateTaskDialog({
           saved = await dispatch(
             updateCustomerTask({ id: task.id, task: payload, customerId: linkedId }),
           ).unwrap();
+          dispatch(upsertTaskItem(saved));
         } else {
-          const updated = await updateTaskApi(task.id, payload);
-          saved = updated ?? payload;
+          saved = await dispatch(updateTaskRecord({ id: task.id, task: payload })).unwrap();
+          if (saved.customerId) {
+            dispatch(upsertCustomerTask({ customerId: saved.customerId, item: saved }));
+          }
         }
+        crm.patchTask(task.id, saved);
+        if (crm.enabled) void crm.refresh({ silent: true });
       } else if (task?.id) {
         saved = payload;
+        crm.patchTask(task.id, payload);
       } else if (useApi) {
-        // MD: POST /api/provider/tasks with customerId (and subject fields).
         if (linkedKind === "customer" && linkedId) {
           saved = await dispatch(createCustomerTask(payload)).unwrap();
+          dispatch(upsertTaskItem(saved));
         } else {
-          const created = await createTaskApi(payload);
-          if (!created) throw new Error("Could not create this task.");
-          saved = created;
+          saved = await dispatch(createTaskRecord(payload)).unwrap();
+          if (saved.customerId) {
+            dispatch(upsertCustomerTask({ customerId: saved.customerId, item: saved }));
+          }
         }
+        crm.addTask(saved);
+        if (crm.enabled) void crm.refresh({ silent: true });
       } else {
         const created = await Promise.resolve(addTask(payload));
         saved = created ?? payload;
+        crm.addTask(saved);
       }
       onCreated?.(saved);
       toast.success(
@@ -1249,7 +1338,7 @@ export function CreateTaskDialog({
     }
   }
 
-  const linkedReady = Boolean(subjectId ?? selectedId);
+  const linkedReady = Boolean(selectedId);
   const recordLoading = useApi
     ? recordPaging.loading && recordOptions.length === 0
     : lookupsLoading && recordOptions.length === 0;
@@ -1269,66 +1358,58 @@ export function CreateTaskDialog({
         <DialogHeader>
           <DialogTitle>{task ? "Edit task" : "Create task"}</DialogTitle>
           <DialogDescription>
-            Office or field work linked to a customer, lead, job, estimate, employee, contractor, or vendor.
+            Office or field work linked to a customer, job, estimate, contractor, or vendor.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
-          {locked ? (
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel>Linked to</FieldLabel>
-              <p className="text-sm font-medium">
-                {reminderSubjectKindLabel(subjectKind!)} · {lookups.label(subjectKind!, subjectId!)}
-              </p>
-            </Field>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="task-kind">Type</FieldLabel>
-                <Select
-                  value={kind}
-                  onValueChange={(value) => changeKind(value as ReminderSubjectKind)}
+              <FieldLabel htmlFor="task-kind">Link to type</FieldLabel>
+              <Select
+                value={kind}
+                onValueChange={(value) => changeKind(value as ReminderSubjectKind)}
+              >
+                <SelectTrigger id="task-kind" className="w-full">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  <SelectTrigger id="task-kind" className="w-full">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    align="start"
-                    className="z-[100] w-[var(--radix-select-trigger-width)]"
-                  >
-                    {REMINDER_SUBJECT_KINDS.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {reminderSubjectKindLabel(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="task-subject">Record</FieldLabel>
-                <PaginatedEntitySelect
-                  id="task-subject"
-                  value={selectedId}
-                  options={recordOptions}
-                  loading={recordLoading}
-                  loadingMore={useApi ? recordPaging.loadingMore : false}
-                  hasMore={useApi ? recordPaging.hasMore : false}
-                  onLoadMore={useApi ? recordPaging.loadMore : () => {}}
-                  onChange={(id) => setSelectedId(id)}
-                  placeholder={recordLoading ? "Loading records…" : "Select record"}
-                  emptyLabel="No records found"
-                  disabled={recordLoading}
-                />
-              </Field>
-            </div>
-          )}
+                  {CRM_TASK_SUBJECT_KINDS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {reminderSubjectKindLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="task-subject">Target {reminderSubjectKindLabel(kind)}</FieldLabel>
+              <PaginatedEntitySelect
+                id="task-subject"
+                value={selectedId}
+                options={recordOptions}
+                loading={recordLoading}
+                loadingMore={useApi ? recordPaging.loadingMore : false}
+                hasMore={useApi ? recordPaging.hasMore : false}
+                onLoadMore={useApi ? recordPaging.loadMore : () => {}}
+                onChange={(id) => setSelectedId(id)}
+                placeholder={recordLoading ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…` : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`}
+                emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
+                disabled={recordLoading}
+              />
+            </Field>
+          </div>
+
           <Field>
             <FieldLabel htmlFor="task-title">Title</FieldLabel>
             <Input
               id="task-title"
               value={title}
               onChange={(change) => setTitle(change.target.value)}
-              placeholder="Order parts, call customer…"
+              placeholder="e.g. Order parts, call customer, check unit…"
             />
           </Field>
           <Field className="w-full">
@@ -1381,19 +1462,43 @@ export function CreateTaskDialog({
               </Select>
             </Field>
           </div>
-          <Field>
-            <FieldLabel htmlFor="task-due">Due</FieldLabel>
-            <Input
-              id="task-due"
-              type="date"
-              min={todayISO()}
-              value={dueAt}
-              onChange={(change) => {
-                const next = change.target.value;
-                setDueAt(next && next < todayISO() ? todayISO() : next);
-              }}
-            />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="task-status">Status</FieldLabel>
+              <Select
+                value={status}
+                onValueChange={(value) => setStatus(value as CrmTaskStatus)}
+              >
+                <SelectTrigger id="task-status" className="w-full">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {TASK_STATUSES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {crmTaskStatusLabel(item)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="task-due">Due date</FieldLabel>
+              <Input
+                id="task-due"
+                type="date"
+                min={todayISO()}
+                value={dueAt}
+                onChange={(change) => {
+                  const next = change.target.value;
+                  setDueAt(next && next < todayISO() ? todayISO() : next);
+                }}
+              />
+            </Field>
+          </div>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>

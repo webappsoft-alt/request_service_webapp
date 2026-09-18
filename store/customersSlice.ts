@@ -984,7 +984,64 @@ const customersSlice = createSlice({
       .addCase(deleteCustomerReminder.fulfilled, (state, action) => {
         removeTabItem(state.reminders, action.payload.id);
         state.timeline = emptyTabList();
-      });
+      })
+      .addMatcher(
+        (action): action is PayloadAction<PortalTask> =>
+          action.type === "tasks/create/fulfilled" || action.type === "tasks/update/fulfilled",
+        (state, action) => {
+          const customerId =
+            action.payload.customerId ||
+            (action.payload.subjectKind === "customer" ? action.payload.subjectId : "") ||
+            "";
+          if (customerId) upsertTabItem(state.tasks, action.payload, customerId);
+          state.timeline = emptyTabList();
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<PortalTask> => action.type === "tasks/patchStatus/fulfilled",
+        (state, action) => {
+          const customerId =
+            action.payload.customerId ||
+            (action.payload.subjectKind === "customer" ? action.payload.subjectId : "") ||
+            "";
+          if (customerId) upsertTabItem(state.tasks, action.payload, customerId);
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<string> => action.type === "tasks/delete/fulfilled",
+        (state, action) => {
+          removeTabItem(state.tasks, action.payload);
+          state.timeline = emptyTabList();
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<PortalReminder> => action.type === "reminders/create/fulfilled",
+        (state, action) => {
+          const customerId =
+            action.payload.customerId ||
+            (action.payload.subjectKind === "customer" ? action.payload.subjectId : "") ||
+            "";
+          if (customerId) upsertTabItem(state.reminders, action.payload, customerId);
+          state.timeline = emptyTabList();
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<PortalReminder> => action.type === "reminders/patchStatus/fulfilled",
+        (state, action) => {
+          const customerId =
+            action.payload.customerId ||
+            (action.payload.subjectKind === "customer" ? action.payload.subjectId : "") ||
+            "";
+          if (customerId) upsertTabItem(state.reminders, action.payload, customerId);
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<string> => action.type === "reminders/delete/fulfilled",
+        (state, action) => {
+          removeTabItem(state.reminders, action.payload);
+          state.timeline = emptyTabList();
+        },
+      );
   },
 });
 

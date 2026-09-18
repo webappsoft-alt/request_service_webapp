@@ -3,22 +3,31 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { FilePlus2, FileText, MessageSquare } from "lucide-react";
+import {
+  Briefcase,
+  CheckCircle2,
+  Eye,
+  FileCheck,
+  FilePlus2,
+  FileText,
+  MessageSquare,
+  PhoneCall,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { archiveRowAction } from "@/components/portal/archive-control";
 import { CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { Button } from "@/components/ui/button";
 import { FilterTabs } from "@/components/portal/filter-tabs";
-import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { PortalDataTable, type PortalTableAction } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
-import { CRM_API_EVENT } from "@/components/portal/crm-data-provider";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { useChatThreads } from "@/components/portal/use-chat-threads";
-import { listRequests, updateRequestStatus } from "@/lib/api/crm-client";
+import { listRequests } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
@@ -101,15 +110,29 @@ function matchesFilter(request: PortalRequest, status: string) {
 export function RequestsView() {
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "";
-  const { requests } = usePortalWorkspace();
+  const { requests, estimates, jobs } = usePortalWorkspace();
   const crm = useCrmApiData();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
-  const { threads } = useChatThreads();
   const [open, setOpen] = useState(false);
   const [apiItems, setApiItems] = useState<PortalRequest[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
+
+  const updateLeadStatus = useCallback(
+    async (id: string, newStatus: RequestStatus, message: string) => {
+      setApiItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item)),
+      );
+      try {
+        await records.setStatus("request", id, newStatus);
+        toast.success(message);
+      } catch {
+        toast.error("Failed to update status.");
+      }
+    },
+    [records],
+  );
 
   const loadLeads = useCallback(async () => {
     let cancelled = false;
@@ -140,14 +163,55 @@ export function RequestsView() {
   }, [loadLeads]);
 
   useEffect(() => {
-    const handleRefresh = () => {
-      void loadLeads();
+    const handleLeadStatus = (event: Event) => {
+      const custom = event as CustomEvent<{ id?: string; status?: string }>;
+      const detail = custom?.detail;
+      if (detail?.id && detail?.status) {
+        setApiItems((prev) =>
+          prev.map((item) =>
+            item.id === detail.id
+              ? { ...item, status: detail.status as PortalRequest["status"] }
+              : item,
+          ),
+        );
+      }
     };
-    window.addEventListener(CRM_API_EVENT, handleRefresh);
-    window.addEventListener("rs-realtime", handleRefresh);
+
+    const handleRealtime = (event: Event) => {
+      const custom = event as CustomEvent<{ type?: string; payload?: any }>;
+      const detail = custom?.detail;
+      const type = detail?.type;
+
+      if (type === "LEAD_STATUS_UPDATED" || type === "REQUEST_STATUS_UPDATED") {
+        const id = String(detail?.payload?.id || detail?.payload?.requestId || "").trim();
+        const nextStatus = String(detail?.payload?.status || "").trim();
+        if (id && nextStatus) {
+          setApiItems((prev) =>
+            prev.map((item) =>
+              item.id === id
+                ? { ...item, status: nextStatus as PortalRequest["status"] }
+                : item,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Only refetch list on actual lead creation/mutation events, NOT on chat messages/typing/presence
+      if (
+        type === "LEAD_CREATED" ||
+        type === "ESTIMATE_ACCEPTED" ||
+        type === "ORDER_UPDATED"
+      ) {
+        void loadLeads();
+      }
+    };
+
+    window.addEventListener("rs-lead-status", handleLeadStatus);
+    window.addEventListener("rs-realtime", handleRealtime);
     return () => {
-      window.removeEventListener(CRM_API_EVENT, handleRefresh);
-      window.removeEventListener("rs-realtime", handleRefresh);
+      window.removeEventListener("rs-lead-status", handleLeadStatus);
+      window.removeEventListener("rs-realtime", handleRealtime);
     };
   }, [loadLeads]);
 
@@ -228,15 +292,8 @@ export function RequestsView() {
             searchValue: (row) => `${row.customerName} ${row.customerEmail}`,
             exportValue: (row) => row.customerName,
             cell: (row) => {
-              const matchedThread = threads.find(
-                (t) =>
-                  t.id === row.chatThreadId ||
-                  (row.id && t.requestId === row.id) ||
-                  (row.customerEmail &&
-                    t.customerEmail?.toLowerCase() === row.customerEmail.toLowerCase()),
-              );
-              const chatHref = matchedThread?.id
-                ? `/pro/dashboard/messages?thread=${matchedThread.id}`
+              const chatHref = row.chatThreadId
+                ? `/pro/dashboard/messages?thread=${row.chatThreadId}`
                 : `/pro/dashboard/requests/${row.id}?tab=messages`;
 
               return (
@@ -257,7 +314,7 @@ export function RequestsView() {
                       <MessageSquare className="size-2.5" />
                       {row.unreadMessagesCount} new
                     </Link>
-                  ) : row.hasActiveChat || row.chatThreadId || matchedThread ? (
+                  ) : row.hasActiveChat || row.chatThreadId ? (
                     <Link
                       href={chatHref}
                       title="Open chat conversation"
@@ -334,18 +391,32 @@ export function RequestsView() {
           },
         ]}
         actions={(row) => {
-          const matchedThread = threads.find(
-            (t) =>
-              t.id === row.chatThreadId ||
-              (row.id && t.requestId === row.id) ||
-              (row.customerEmail &&
-                t.customerEmail?.toLowerCase() === row.customerEmail.toLowerCase()),
-          );
-          const chatHref = matchedThread?.id
-            ? `/pro/dashboard/messages?thread=${matchedThread.id}`
+          const chatHref = row.chatThreadId
+            ? `/pro/dashboard/messages?thread=${row.chatThreadId}`
             : `/pro/dashboard/requests/${row.id}?tab=messages`;
 
-          return [
+          const relatedEstimate =
+            crm.estimates.find((e) => e.requestId === row.id) ??
+            estimates.find((e) => e.requestId === row.id);
+          const relatedJob = relatedEstimate
+            ? (crm.jobs.find((j) => j.estimateId === relatedEstimate.id) ??
+               jobs.find((j) => j.estimateId === relatedEstimate.id))
+            : undefined;
+
+          const estimateHref = relatedEstimate
+            ? `/pro/dashboard/estimates/${relatedEstimate.id}`
+            : `/pro/dashboard/requests/${row.id}?tab=estimates`;
+          const jobHref = relatedJob
+            ? `/pro/dashboard/jobs/${relatedJob.id}`
+            : `/pro/dashboard/requests/${row.id}?tab=jobs`;
+
+          const hasEstimate =
+            Boolean(relatedEstimate) ||
+            row.status === "estimate_sent" ||
+            row.status === "accepted" ||
+            row.status === "converted_to_job";
+
+          const baseActions: PortalTableAction<PortalRequest>[] = [
             {
               label: "View",
               href: `/pro/dashboard/requests/${row.id}`,
@@ -359,102 +430,198 @@ export function RequestsView() {
               icon: <MessageSquare className="size-3.5 text-[#003F7D]" />,
               quick: true,
             },
-            {
-              label: "Convert to Estimate",
-              href: `/pro/dashboard/requests/${row.id}?convert=1`,
-              icon: <FilePlus2 className="size-3.5" />,
-            },
-          ...(row.status === "viewed"
-            ? []
-            : [
+          ];
+
+          const statusActions: PortalTableAction<PortalRequest>[] = [];
+
+          switch (row.status) {
+            case "new":
+              statusActions.push(
                 {
                   label: "Mark viewed",
-                  onSelect: async () => {
-                    records.setStatus("request", row.id, "viewed");
-                    setApiItems((prev) =>
-                      prev.map((item) => (item.id === row.id ? { ...item, status: "viewed" } : item)),
-                    );
-                    try {
-                      await updateRequestStatus(row.id, "viewed");
-                      crm.refresh({ silent: true });
-                    } catch {
-                      /* handled */
-                    }
-                    toast.success("Request marked as viewed.");
-                  },
+                  icon: <Eye className="size-3.5" />,
+                  onSelect: () =>
+                    updateLeadStatus(row.id, "viewed", "Request marked as viewed."),
                 },
-              ]),
-          ...(row.status === "contacted"
-            ? []
-            : [
                 {
                   label: "Mark contacted",
-                  onSelect: async () => {
-                    records.setStatus("request", row.id, "contacted");
-                    setApiItems((prev) =>
-                      prev.map((item) => (item.id === row.id ? { ...item, status: "contacted" } : item)),
-                    );
-                    try {
-                      await updateRequestStatus(row.id, "contacted");
-                      crm.refresh({ silent: true });
-                    } catch {
-                      /* handled */
-                    }
-                    toast.success("Request marked as contacted.");
-                  },
+                  icon: <PhoneCall className="size-3.5" />,
+                  onSelect: () =>
+                    updateLeadStatus(row.id, "contacted", "Request marked as contacted."),
                 },
-              ]),
-          ...(row.status === "estimate_sent"
-            ? []
-            : [
                 {
-                  label: "Mark estimate sent",
-                  onSelect: async () => {
-                    records.setStatus("request", row.id, "estimate_sent");
-                    setApiItems((prev) =>
-                      prev.map((item) => (item.id === row.id ? { ...item, status: "estimate_sent" } : item)),
-                    );
-                    try {
-                      await updateRequestStatus(row.id, "estimate_sent");
-                      crm.refresh({ silent: true });
-                    } catch {
-                      /* handled */
-                    }
-                    toast.success("Request marked estimate sent.");
-                  },
+                  label: "Convert to Estimate",
+                  href: `/pro/dashboard/requests/${row.id}?convert=1`,
+                  icon: <FilePlus2 className="size-3.5 text-[#003F7D]" />,
                 },
-              ]),
-          ...(row.status === "declined"
-            ? []
-            : [
                 {
                   label: "Decline",
-                  onSelect: async () => {
-                    records.setStatus("request", row.id, "declined");
-                    setApiItems((prev) =>
-                      prev.map((item) => (item.id === row.id ? { ...item, status: "declined" } : item)),
-                    );
-                    try {
-                      await updateRequestStatus(row.id, "declined");
-                      crm.refresh({ silent: true });
-                    } catch {
-                      /* handled */
-                    }
-                    toast.success("Request declined.");
-                  },
+                  icon: <XCircle className="size-3.5 text-red-500" />,
+                  onSelect: () =>
+                    updateLeadStatus(row.id, "declined", "Request declined."),
                 },
-              ]),
-          archiveRowAction(records, "request", row.id, row.number),
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => {
-              records.remove("request", row.id);
-              toast.success(`${row.number} removed from this board.`);
-            },
-          },
-        ];
-      }}
+              );
+              break;
+
+            case "viewed":
+              statusActions.push(
+                {
+                  label: "Mark contacted",
+                  icon: <PhoneCall className="size-3.5" />,
+                  onSelect: () =>
+                    updateLeadStatus(row.id, "contacted", "Request marked as contacted."),
+                },
+                {
+                  label: "Convert to Estimate",
+                  href: `/pro/dashboard/requests/${row.id}?convert=1`,
+                  icon: <FilePlus2 className="size-3.5 text-[#003F7D]" />,
+                },
+                {
+                  label: "Decline",
+                  icon: <XCircle className="size-3.5 text-red-500" />,
+                  onSelect: () =>
+                    updateLeadStatus(row.id, "declined", "Request declined."),
+                },
+              );
+              break;
+
+            case "contacted":
+              if (hasEstimate) {
+                statusActions.push(
+                  {
+                    label: "View Estimate",
+                    href: estimateHref,
+                    icon: <FileCheck className="size-3.5 text-emerald-600" />,
+                  },
+                  {
+                    label: "Mark estimate sent",
+                    icon: <FileCheck className="size-3.5 text-emerald-600" />,
+                    onSelect: () =>
+                      updateLeadStatus(
+                        row.id,
+                        "estimate_sent",
+                        "Request marked estimate sent.",
+                      ),
+                  },
+                );
+              } else {
+                statusActions.push({
+                  label: "Convert to Estimate",
+                  href: `/pro/dashboard/requests/${row.id}?convert=1`,
+                  icon: <FilePlus2 className="size-3.5 text-[#003F7D]" />,
+                });
+              }
+              statusActions.push({
+                label: "Decline",
+                icon: <XCircle className="size-3.5 text-red-500" />,
+                onSelect: () =>
+                  updateLeadStatus(row.id, "declined", "Request declined."),
+              });
+              break;
+
+            case "estimate_sent":
+              statusActions.push(
+                {
+                  label: "View Estimate",
+                  href: estimateHref,
+                  icon: <FileCheck className="size-3.5 text-emerald-600" />,
+                },
+                {
+                  label: "Mark accepted",
+                  icon: <CheckCircle2 className="size-3.5 text-emerald-600" />,
+                  onSelect: () =>
+                    updateLeadStatus(
+                      row.id,
+                      "accepted",
+                      "Proposal marked as accepted by customer.",
+                    ),
+                },
+                {
+                  label: "Convert to Job",
+                  href: relatedEstimate
+                    ? `/pro/dashboard/estimates/${relatedEstimate.id}`
+                    : `/pro/dashboard/requests/${row.id}?tab=jobs`,
+                  icon: <Briefcase className="size-3.5 text-[#003F7D]" />,
+                },
+                {
+                  label: "Decline",
+                  icon: <XCircle className="size-3.5 text-red-500" />,
+                  onSelect: () =>
+                    updateLeadStatus(row.id, "declined", "Lead marked as declined."),
+                },
+              );
+              break;
+
+            case "accepted":
+              statusActions.push(
+                {
+                  label: "View Estimate",
+                  href: estimateHref,
+                  icon: <FileCheck className="size-3.5 text-emerald-600" />,
+                },
+                {
+                  label: "Convert to Job",
+                  href: relatedEstimate
+                    ? `/pro/dashboard/estimates/${relatedEstimate.id}`
+                    : `/pro/dashboard/requests/${row.id}?tab=jobs`,
+                  icon: <Briefcase className="size-3.5 text-[#003F7D]" />,
+                },
+                {
+                  label: "Mark closed",
+                  icon: <CheckCircle2 className="size-3.5 text-slate-500" />,
+                  onSelect: () =>
+                    updateLeadStatus(row.id, "closed", "Lead closed."),
+                },
+              );
+              break;
+
+            case "converted_to_job":
+              statusActions.push({
+                label: "View Job",
+                href: jobHref,
+                icon: <Briefcase className="size-3.5 text-[#003F7D]" />,
+              });
+              if (hasEstimate) {
+                statusActions.push({
+                  label: "View Estimate",
+                  href: estimateHref,
+                  icon: <FileText className="size-3.5" />,
+                });
+              }
+              statusActions.push({
+                label: "Mark closed",
+                icon: <CheckCircle2 className="size-3.5 text-slate-500" />,
+                onSelect: () =>
+                  updateLeadStatus(row.id, "closed", "Lead closed."),
+              });
+              break;
+
+            case "declined":
+            case "closed":
+              statusActions.push({
+                label: "Reopen lead",
+                icon: <RotateCcw className="size-3.5 text-blue-600" />,
+                onSelect: () =>
+                  updateLeadStatus(row.id, "contacted", "Lead reopened as active."),
+              });
+              break;
+
+            default:
+              statusActions.push({
+                label: "Mark contacted",
+                icon: <PhoneCall className="size-3.5" />,
+                onSelect: () =>
+                  updateLeadStatus(row.id, "contacted", "Request marked as contacted."),
+              });
+              break;
+          }
+
+          return [
+            ...baseActions,
+            ...statusActions,
+            archiveRowAction(records, "request", row.id, row.number),
+          ];
+        }}
       />
       <CreateLeadDialog open={open} onOpenChange={setOpen} />
     </PortalPage>

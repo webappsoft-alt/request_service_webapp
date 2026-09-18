@@ -115,10 +115,13 @@ function buildGetRequestKey(
 }
 
 function endpointRoot(endpoint: string): string {
-  return String(endpoint || "")
+  const clean = String(endpoint || "")
     .replace(/^\/+/, "")
-    .split("?")[0]
-    .replace(/\/[a-f\d]{24}$/i, "");
+    .split("?")[0];
+  return clean
+    .replace(/\/(status|convert-to-estimate|archive|unarchive|accept|decline|cancel|close|complete|send)(\/.*)?$/i, "")
+    .replace(/\/[a-f\d]{24}(\/.*)?$/i, "")
+    .replace(/\/[a-zA-Z0-9_-]{20,}(\/.*)?$/i, "");
 }
 
 /** Drop cached GETs for this resource after POST/PUT/PATCH/DELETE. */

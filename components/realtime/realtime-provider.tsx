@@ -145,7 +145,9 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onRealtime("chat:presence", handlePresence),
       onRealtime("LEAD_CREATED", (payload) => {
         broadcastRealtime({ type: "LEAD_CREATED", payload });
-        window.dispatchEvent(new Event("rs-crm-api"));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
         toast.message("New quote request", {
           description: payload.number
             ? `${payload.number} just arrived in Leads.`
@@ -174,6 +176,72 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onRealtime("ORDER_UPDATED", (payload) => {
         broadcastRealtime({ type: "ORDER_UPDATED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));
+      }),
+      onRealtime("LEAD_STATUS_UPDATED", (payload) => {
+        const id = String(payload?.id || payload?.requestId || "").trim();
+        const status = String(payload?.status || "").trim();
+        if (!id || !status) return;
+        broadcastRealtime({ type: "LEAD_STATUS_UPDATED", payload: { id, status, number: payload?.number } });
+        window.dispatchEvent(new CustomEvent("rs-lead-status", { detail: { id, status } }));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
+      }),
+      onRealtime("REQUEST_STATUS_UPDATED", (payload) => {
+        const id = String(payload?.id || payload?.requestId || "").trim();
+        const status = String(payload?.status || "").trim();
+        if (!id || !status) return;
+        broadcastRealtime({ type: "REQUEST_STATUS_UPDATED", payload: { id, status, number: payload?.number } });
+        window.dispatchEvent(new CustomEvent("rs-lead-status", { detail: { id, status } }));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
+      }),
+      onRealtime("LEAD_UPDATED", (payload: any) => {
+        const id = String(payload?.id || payload?._id || "").trim();
+        const status = String(payload?.status || "").trim();
+        if (id && status) {
+          broadcastRealtime({ type: "LEAD_STATUS_UPDATED", payload: { id, status } });
+          window.dispatchEvent(new CustomEvent("rs-lead-status", { detail: { id, status } }));
+          window.dispatchEvent(
+            new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+          );
+        } else {
+          broadcastRealtime({ type: "LEAD_UPDATED", payload });
+        }
+      }),
+      onRealtime("REQUEST_UPDATED", (payload: any) => {
+        const id = String(payload?.id || payload?._id || "").trim();
+        const status = String(payload?.status || "").trim();
+        if (id && status) {
+          broadcastRealtime({ type: "REQUEST_STATUS_UPDATED", payload: { id, status } });
+          window.dispatchEvent(new CustomEvent("rs-lead-status", { detail: { id, status } }));
+          window.dispatchEvent(
+            new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+          );
+        } else {
+          broadcastRealtime({ type: "REQUEST_UPDATED", payload });
+        }
+      }),
+      onRealtime("lead:status", (payload: any) => {
+        const id = String(payload?.id || payload?.requestId || "").trim();
+        const status = String(payload?.status || "").trim();
+        if (!id || !status) return;
+        broadcastRealtime({ type: "LEAD_STATUS_UPDATED", payload: { id, status } });
+        window.dispatchEvent(new CustomEvent("rs-lead-status", { detail: { id, status } }));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
+      }),
+      onRealtime("request:status", (payload: any) => {
+        const id = String(payload?.id || payload?.requestId || "").trim();
+        const status = String(payload?.status || "").trim();
+        if (!id || !status) return;
+        broadcastRealtime({ type: "REQUEST_STATUS_UPDATED", payload: { id, status } });
+        window.dispatchEvent(new CustomEvent("rs-lead-status", { detail: { id, status } }));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
       }),
     ];
 

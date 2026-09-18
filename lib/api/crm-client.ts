@@ -37,6 +37,7 @@ import {
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
 import type { ChatThread } from "@/lib/booking/chat-store";
+import { emitLeadStatusChange } from "@/lib/realtime/socket";
 
 type CrmRequestOptions = {
   silent?: boolean;
@@ -415,37 +416,54 @@ function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
 }
 
 function reminderPayload(reminder: PortalReminder) {
-  return {
-    customerId: reminder.customerId || null,
-    subjectKind: reminder.subjectKind || "customer",
-    subjectId: reminder.subjectId || null,
-    assignedEmployeeId: reminder.assignedEmployeeId || null,
+  const payload: Record<string, unknown> = {
     title: reminder.title,
-    note: reminder.note || "",
-    dueAt: reminder.dueAt,
-    status: reminder.status,
+    status: reminder.status || "open",
   };
+  if (reminder.dueAt) {
+    payload.dueAt = reminder.dueAt.includes("T")
+      ? reminder.dueAt
+      : new Date(reminder.dueAt).toISOString();
+  }
+  const customerId = reminder.customerId || (reminder.subjectKind === "customer" ? reminder.subjectId : undefined);
+  if (customerId) payload.customerId = customerId;
+  const validSubjectKinds = ["job", "customer", "estimate", "contractor", "vendor"];
+  if (reminder.subjectKind && validSubjectKinds.includes(reminder.subjectKind)) {
+    payload.subjectKind = reminder.subjectKind;
+    if (reminder.subjectId) payload.subjectId = reminder.subjectId;
+  }
+  if (reminder.assignedEmployeeId) payload.assignedEmployeeId = reminder.assignedEmployeeId;
+  if (reminder.assignedContractorId) payload.assignedContractorId = reminder.assignedContractorId;
+  if (reminder.assignedVendorId) payload.assignedVendorId = reminder.assignedVendorId;
+  if (reminder.note) payload.note = reminder.note;
+  return payload;
 }
 
 function taskPayload(task: PortalTask) {
-  const subjectKind = normalizeStatus(task.subjectKind, [
-    "job",
-    "customer",
-    "estimate",
-    "contractor",
-    "vendor",
-  ] as const, "customer");
-  return {
-    customerId: task.customerId || null,
-    subjectKind,
-    subjectId: task.subjectId || null,
-    assignedEmployeeId: task.assignedEmployeeId || null,
+  const payload: Record<string, unknown> = {
     title: task.title,
-    note: task.note || "",
-    priority: task.priority,
-    status: task.status,
-    dueAt: task.dueAt || null,
+    priority: task.priority || "normal",
+    status: task.status || "open",
   };
+  if (task.note) payload.note = task.note;
+  if (task.dueAt) {
+    payload.dueAt = task.dueAt.includes("T")
+      ? task.dueAt
+      : new Date(task.dueAt).toISOString();
+  }
+  const jobId = task.jobId || (task.subjectKind === "job" ? task.subjectId : undefined);
+  if (jobId) payload.jobId = jobId;
+  const customerId = task.customerId || (task.subjectKind === "customer" ? task.subjectId : undefined);
+  if (customerId) payload.customerId = customerId;
+  if (task.assignedEmployeeId) payload.assignedEmployeeId = task.assignedEmployeeId;
+  if (task.assignedContractorId) payload.assignedContractorId = task.assignedContractorId;
+  if (task.assignedVendorId) payload.assignedVendorId = task.assignedVendorId;
+  const validSubjectKinds = ["job", "customer", "estimate", "contractor", "vendor"];
+  if (task.subjectKind && validSubjectKinds.includes(task.subjectKind)) {
+    payload.subjectKind = task.subjectKind;
+    if (task.subjectId) payload.subjectId = task.subjectId;
+  }
+  return payload;
 }
 
 function invoicePayload(invoice: Invoice) {
@@ -469,6 +487,7 @@ async function listMapped<T>(
 ) {
   const response = await getData(endpoint, { page: 1, limit: DEFAULT_LIST_LIMIT }, {
     silent: options.silent ?? true,
+    force: options.force ?? false,
   });
   return mapCrmList(response, mapper).items;
 }
@@ -478,12 +497,19 @@ export type CrmListQuery = {
   limit?: number;
   search?: string;
   status?: string;
+  jobId?: string;
   customerId?: string;
+  employeeId?: string;
+  contractorId?: string;
+  vendorId?: string;
+  subjectId?: string;
   trade?: string;
   role?: string;
   active?: boolean;
   category?: string;
   assignedEmployeeId?: string;
+  assignedContractorId?: string;
+  assignedVendorId?: string;
   subjectKind?: string;
   priority?: string;
   kind?: string;
@@ -492,6 +518,7 @@ export type CrmListQuery = {
   type?: string;
   silent?: boolean;
   force?: boolean;
+  requestId?: string;
 };
 
 function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT) {
@@ -500,11 +527,19 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   const params: Record<string, string | number | boolean> = { page, limit };
   const search = query.search?.trim();
   const status = query.status?.trim();
+  const jobId = query.jobId?.trim();
   const customerId = query.customerId?.trim();
+  const employeeId = query.employeeId?.trim();
+  const contractorId = query.contractorId?.trim();
+  const vendorId = query.vendorId?.trim();
+  const subjectId = query.subjectId?.trim();
+  const requestId = query.requestId?.trim();
   const trade = query.trade?.trim();
   const role = query.role?.trim();
   const category = query.category?.trim();
   const assignedEmployeeId = query.assignedEmployeeId?.trim();
+  const assignedContractorId = query.assignedContractorId?.trim();
+  const assignedVendorId = query.assignedVendorId?.trim();
   const subjectKind = query.subjectKind?.trim();
   const priority = query.priority?.trim();
   const kind = query.kind?.trim();
@@ -513,11 +548,19 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   const type = query.type?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
+  if (jobId) params.jobId = jobId;
   if (customerId) params.customerId = customerId;
+  if (employeeId) params.employeeId = employeeId;
+  if (contractorId) params.contractorId = contractorId;
+  if (vendorId) params.vendorId = vendorId;
+  if (subjectId) params.subjectId = subjectId;
+  if (requestId) params.requestId = requestId;
   if (trade) params.trade = trade;
   if (role) params.role = role;
   if (category) params.category = category;
   if (assignedEmployeeId) params.assignedEmployeeId = assignedEmployeeId;
+  if (assignedContractorId) params.assignedContractorId = assignedContractorId;
+  if (assignedVendorId) params.assignedVendorId = assignedVendorId;
   if (subjectKind) params.subjectKind = subjectKind;
   if (priority) params.priority = priority;
   if (kind) params.kind = kind;
@@ -794,7 +837,20 @@ export async function createRequest(request: Partial<PortalRequest>) {
 
 export async function updateRequestStatus(id: string, status: PortalRequest["status"]) {
   const response = await patchData(providerCrmApi.requestStatus(id), { status });
-  return mapCrmEntity(response, mapPortalRequest);
+  const mapped = mapCrmEntity(response, mapPortalRequest);
+  try {
+    emitLeadStatusChange(id, status);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("rs-lead-status", {
+          detail: { id, status },
+        }),
+      );
+    }
+  } catch {
+    /* non-blocking */
+  }
+  return mapped;
 }
 
 export async function convertRequestToEstimate(
@@ -879,9 +935,11 @@ export async function queryEstimates(query: CrmListQuery = {}) {
   const search = query.search?.trim();
   const status = query.status?.trim();
   const customerId = query.customerId?.trim();
+  const requestId = query.requestId?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
   if (customerId) params.customerId = customerId;
+  if (requestId) params.requestId = requestId;
   const response = await getData(providerCrmApi.estimates, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,
@@ -1238,11 +1296,13 @@ export async function queryTasks(query: CrmListQuery = {}) {
 
 export async function createTask(task: PortalTask) {
   const response = await postData(providerCrmApi.tasks, taskPayload(task));
+  invalidateGetCache(providerCrmApi.tasks);
   return mapCrmEntity(response, mapPortalTask);
 }
 
 export async function updateTask(id: string, task: PortalTask) {
   const response = await putData(providerCrmApi.task(id), taskPayload(task));
+  invalidateGetCache(providerCrmApi.tasks);
   return mapCrmEntity(response, mapPortalTask);
 }
 
@@ -1253,14 +1313,16 @@ export async function updateTaskStatus(id: string, status: PortalTask["status"])
 }
 
 export async function deleteTask(id: string) {
-  return deleteData(providerCrmApi.task(id), { silent: false });
+  const result = await deleteData(providerCrmApi.task(id), { silent: false });
+  invalidateGetCache(providerCrmApi.tasks);
+  return result;
 }
 
 export async function listReminders(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.reminders, mapPortalReminder, options);
 }
 
-/** Paginated reminders — MD: page/limit/status/assignedEmployeeId/subjectKind/search only. */
+/** Paginated reminders — page/limit/status/customerId/employeeId/contractorId/vendorId/subjectId/assignedEmployeeId/assignedContractorId/assignedVendorId/subjectKind/search. */
 export async function queryReminders(query: CrmListQuery = {}) {
   const params = buildListParams(query);
   const response = await getData(providerCrmApi.reminders, params, {
@@ -1272,6 +1334,7 @@ export async function queryReminders(query: CrmListQuery = {}) {
 
 export async function createReminder(reminder: PortalReminder) {
   const response = await postData(providerCrmApi.reminders, reminderPayload(reminder));
+  invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }
 
@@ -1282,7 +1345,9 @@ export async function updateReminderStatus(id: string, status: PortalReminder["s
 }
 
 export async function deleteReminder(id: string) {
-  return deleteData(providerCrmApi.reminder(id), { silent: false });
+  const result = await deleteData(providerCrmApi.reminder(id), { silent: false });
+  invalidateGetCache(providerCrmApi.reminders);
+  return result;
 }
 
 export async function listInvoices(options?: CrmRequestOptions) {

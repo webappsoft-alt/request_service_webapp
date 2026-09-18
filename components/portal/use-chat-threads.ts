@@ -73,7 +73,8 @@ function mergeThreads(existing: ChatThread[], incoming: ChatThread[]): ChatThrea
   return result.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
 }
 
-export function useChatThreads() {
+export function useChatThreads(options?: { enabled?: boolean }) {
+  const isEnabled = options?.enabled ?? true;
   const { session, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
   const auth = useAppSelector(selectAuth);
@@ -89,8 +90,6 @@ export function useChatThreads() {
   const [apiThreads, setApiThreads] = useState<ChatThread[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const inFlightRef = useRef(false);
-  const crmEnsureLoadedRef = useRef(crm.ensureLoaded);
-  crmEnsureLoadedRef.current = crm.ensureLoaded;
 
   const threads = useSyncExternalStore(
     subscribeChat,
@@ -100,7 +99,7 @@ export function useChatThreads() {
 
   const fetchThreads = useCallback(
     async (options?: { silent?: boolean; force?: boolean }) => {
-      if (!isLive) return;
+      if (!isLive || !isEnabled) return;
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
@@ -116,11 +115,11 @@ export function useChatThreads() {
         setInitialLoading(false);
       }
     },
-    [isLive],
+    [isLive, isEnabled],
   );
 
   useEffect(() => {
-    if (!isLive) {
+    if (!isLive || !isEnabled) {
       if (auth.hydrated) {
         setInitialLoading(false);
       }
@@ -128,7 +127,6 @@ export function useChatThreads() {
     }
 
     void fetchThreads({ silent: true, force: true });
-    void crmEnsureLoadedRef.current();
 
     let debounceTimer = 0;
     const onRefresh = () => {
@@ -311,9 +309,39 @@ export function useChatThreads() {
     (threadId: string) => {
       if (isLive) {
         setApiThreads((prev) =>
-          prev.map((t) => (t.id === threadId ? { ...t, unreadForProvider: 0 } : t)),
+          prev.map((t) =>
+            t.id === threadId
+              ? {
+                  ...t,
+                  unreadForProvider: 0,
+                  messages: t.messages.map((m) =>
+                    m.from !== "provider" ? { ...m, isRead: true, status: "read" as const } : m,
+                  ),
+                }
+              : t,
+          ),
         );
-        void markProviderChatRead(threadId).catch(() => undefined);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("rs-realtime", {
+              detail: {
+                type: "CHAT_READ_RECEIPT",
+                payload: { threadId, readBy: "provider", unreadForProvider: 0 },
+              },
+            }),
+          );
+        }
+        void markProviderChatRead(threadId)
+          .then(() => {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("rs-realtime", {
+                  detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+                }),
+              );
+            }
+          })
+          .catch(() => undefined);
         return;
       }
       markChatRead(email, threadId, "provider");

@@ -327,7 +327,7 @@ function getPagination(response: unknown, count: number) {
   const nested = asRecord(root.data) ?? {};
   const pagination = asRecord(root.pagination) ?? asRecord(nested.pagination) ?? root;
   const page = Math.max(1, numberValue(pagination.page, 1));
-  const limit = Math.max(1, numberValue(pagination.limit, count || 100));
+  const limit = Math.max(1, numberValue(pagination.limit, count || 10));
   const total = Math.max(0, numberValue(pagination.total, numberValue(nested.total, count)));
   const totalPages = Math.max(
     1,
@@ -1234,10 +1234,13 @@ export function mapPortalTask(raw: unknown): PortalTask | null {
     number: trimmed(record.number) || makeTaskNumber(id),
     title: trimmed(record.title) || "Task",
     note: trimmed(record.note),
+    jobId: crmIdOf(record.jobId) || undefined,
     customerId: crmIdOf(record.customerId) || undefined,
     subjectKind: trimmed(record.subjectKind) as PortalTask["subjectKind"],
     subjectId: crmIdOf(record.subjectId) || undefined,
     assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || undefined,
+    assignedContractorId: crmIdOf(record.assignedContractorId) || undefined,
+    assignedVendorId: crmIdOf(record.assignedVendorId) || undefined,
     priority:
       trimmed(record.priority) === "low" ||
       trimmed(record.priority) === "high" ||
@@ -1271,6 +1274,8 @@ export function mapPortalReminder(raw: unknown): PortalReminder | null {
     note: trimmed(record.note),
     dueAt: toIsoString(record.dueAt) || toIsoString(record.createdAt),
     assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || undefined,
+    assignedContractorId: crmIdOf(record.assignedContractorId) || undefined,
+    assignedVendorId: crmIdOf(record.assignedVendorId) || undefined,
     status: trimmed(record.status) === "done" ? "done" : "open",
     createdAt: toIsoString(record.createdAt),
   };

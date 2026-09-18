@@ -17,7 +17,7 @@ import {
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ArchiveBadge, ConfirmArchiveDialog } from "@/components/portal/archive-control";
+import { ArchiveBadge, ArchiveButton, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import {
   NotesPanel,
   CreateNoteDialogForSubject,
@@ -268,7 +268,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     approval ||
     estimate.signature ||
     estimate.status === "accepted" ||
-    estimate.status === "approved" ||
+    (estimate.status as string) === "approved" ||
     estimate.status === "converted_to_job",
   );
   const canShare = estimateCanShare(estimate.status);

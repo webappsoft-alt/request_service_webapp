@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
+  Archive,
+  ArchiveRestore,
   Bell,
   Briefcase,
   Building2,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   Clock,
   ExternalLink,
@@ -25,10 +28,14 @@ import {
   MessageSquare,
   NotebookPen,
   Phone,
+  PhoneCall,
   Receipt,
+  RotateCcw,
+  Search,
   Settings,
   UserRound,
   Wallet,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ArchiveBadge } from "@/components/portal/archive-control";
@@ -45,6 +52,7 @@ import { ConvertLeadToEstimateDialog } from "@/components/portal/convert-lead-to
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { PortalPagination } from "@/components/portal/portal-pagination";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
 import { FileNotices } from "@/components/portal/task-banner";
@@ -54,7 +62,7 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
-import { getRequest, updateRequestStatus } from "@/lib/api/crm-client";
+import { getCustomer, getRequest, queryEstimates, queryJobs, queryTasks, queryReminders } from "@/lib/api/crm-client";
 import { ensureProviderChatThread } from "@/lib/api/chat-client";
 import { subscribeRealtime, useRealtime } from "@/components/realtime/realtime-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -80,6 +88,9 @@ import {
   crmTaskStatusLabel,
   reminderMatches,
   taskMatches,
+  type PortalCustomerCrm,
+  type PortalReminder,
+  type PortalTask,
 } from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
@@ -95,7 +106,7 @@ import {
   type PortalTimeWindow,
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
-import type { RequestStatus, ServiceAddress } from "@/lib/types";
+import type { Estimate, Job, RequestStatus, ServiceAddress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -154,6 +165,35 @@ function leadFlowIndex(status: RequestStatus, hasEstimate: boolean, hasJob: bool
   return 0;
 }
 
+function getAvailableLeadStatuses(
+  status: RequestStatus,
+  hasEstimate: boolean,
+  hasJob: boolean,
+): RequestStatus[] {
+  if (hasJob || status === "converted_to_job") {
+    return ["converted_to_job", "closed"];
+  }
+  if (status === "accepted") {
+    return ["accepted", "converted_to_job", "declined", "closed"];
+  }
+  if (hasEstimate || status === "estimate_sent") {
+    return ["estimate_sent", "accepted", "converted_to_job", "declined"];
+  }
+  if (status === "contacted") {
+    return ["contacted", "estimate_sent", "declined"];
+  }
+  if (status === "viewed") {
+    return ["viewed", "contacted", "estimate_sent", "declined"];
+  }
+  if (status === "declined") {
+    return ["declined", "contacted"];
+  }
+  if (status === "closed") {
+    return ["closed", "contacted"];
+  }
+  return ["new", "viewed", "contacted", "estimate_sent", "declined"];
+}
+
 function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: boolean) {
   if (hasJob || status === "converted_to_job") return "This lead became a job. The signed scope is on the jobs board.";
   if (status === "declined") return "They passed. Keep the file for history or reopen it if they call back.";
@@ -178,16 +218,33 @@ export function RequestDetailView({ id }: { id: string }) {
   const { customers, reminders, tasks, setReminderStatus, setTaskStatus } = useCrmDirectory();
   const { events, employees, assign, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
-  const chat = useChatThreads();
   const searchParams = useSearchParams();
   const tab = (searchParams.get("tab") ?? "summary") as LeadTab;
+  const chat = useChatThreads({ enabled: tab === "messages" });
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [reminderSearch, setReminderSearch] = useState("");
+  const [taskPage, setTaskPage] = useState(1);
+  const [reminderPage, setReminderPage] = useState(1);
+  const TASK_PAGE_SIZE = 10;
+  const REMINDER_PAGE_SIZE = 10;
   const [apiLead, setApiLead] = useState<PortalRequest | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
+  const [apiCustomer, setApiCustomer] = useState<PortalCustomerCrm | null>(null);
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [apiEstimates, setApiEstimates] = useState<Estimate[] | null>(null);
+  const [estimatesLoading, setEstimatesLoading] = useState(false);
+  const [apiJobs, setApiJobs] = useState<Job[] | null>(null);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [apiTasks, setApiTasks] = useState<PortalTask[] | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [apiReminders, setApiReminders] = useState<PortalReminder[] | null>(null);
+  const [remindersLoading, setRemindersLoading] = useState(false);
+  const loadedTabsRef = useRef<{ customer?: string; estimates?: string; jobs?: string; tasks?: string; reminders?: string }>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -196,8 +253,14 @@ export function RequestDetailView({ id }: { id: string }) {
       .then((item) => {
         if (!cancelled && item) {
           setApiLead(item);
-          // Backend GET auto-transitions status to "viewed", refresh counters
-          crm.refresh({ silent: true });
+          // Backend GET auto-transitions status to "viewed", refresh badge counters
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("rs-realtime", {
+                detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+              }),
+            );
+          }
         }
       })
       .catch(() => undefined)
@@ -210,23 +273,307 @@ export function RequestDetailView({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    if (searchParams.get("convert") === "1") {
-      setEstimateOpen(true);
-    }
-  }, [searchParams]);
+    const handleLeadStatus = (event: Event) => {
+      const custom = event as CustomEvent<{ id?: string; status?: string }>;
+      const detail = custom?.detail;
+      if (detail?.id === id && detail?.status) {
+        setApiLead((prev) =>
+          prev ? { ...prev, status: detail.status as PortalRequest["status"] } : prev,
+        );
+      }
+    };
+    window.addEventListener("rs-lead-status", handleLeadStatus);
+    return () => {
+      window.removeEventListener("rs-lead-status", handleLeadStatus);
+    };
+  }, [id]);
 
   const allRequests = records.mergeRequests(requests);
   const request = apiLead || allRequests.find((item) => item.id === id);
+
+  useEffect(() => {
+    if (searchParams.get("convert") === "1" && request?.status !== "estimate_sent" && request?.status !== "accepted" && request?.status !== "converted_to_job") {
+      setEstimateOpen(true);
+    }
+  }, [searchParams, request?.status]);
   const pending = useCrmRecordPending() || (apiLoading && !request);
   const allEstimates = records.mergeEstimates(estimates);
   const allJobs = records.mergeJobs(jobs);
-  const relatedEstimates = allEstimates.filter((item) => item.requestId === id);
-  const relatedJobs = allJobs.filter((item) => relatedEstimates.some((estimate) => estimate.id === item.estimateId));
+
+  const customer = apiCustomer || customers.find((item) => item.id === request?.customerId);
+  const baseEstimates = apiEstimates !== null ? apiEstimates : allEstimates;
+  const relatedEstimates = baseEstimates.filter(
+    (item) =>
+      item.requestId === id ||
+      (request?.customerId && item.customerId === request.customerId && item.requestId === id),
+  );
+  const baseJobs = apiJobs !== null ? apiJobs : allJobs;
+  const relatedJobs = baseJobs.filter(
+    (item) =>
+      relatedEstimates.some((estimate) => estimate.id === item.estimateId) ||
+      (item as { requestId?: string }).requestId === id,
+  );
   const estimate = relatedEstimates[0];
   const job = relatedJobs[0];
-  const customer = customers.find((item) => item.id === request?.customerId);
-  const relatedReminders = reminders.filter((item) => reminderMatches(item, "request", id));
-  const relatedTasks = tasks.filter((item) => taskMatches(item, "request", id));
+
+  const refreshEstimates = useCallback(() => {
+    setEstimatesLoading(true);
+    void queryEstimates({
+      customerId: request?.customerId || undefined,
+      requestId: id,
+      limit: 50,
+      force: true,
+      silent: true,
+    })
+      .then((result) => {
+        if (result?.items) setApiEstimates(result.items);
+      })
+      .catch(() => undefined)
+      .finally(() => setEstimatesLoading(false));
+  }, [id, request?.customerId]);
+
+  const refreshJobs = useCallback(() => {
+    setJobsLoading(true);
+    void queryJobs({
+      customerId: request?.customerId || undefined,
+      requestId: id,
+      limit: 50,
+      force: true,
+      silent: true,
+    })
+      .then((result) => {
+        if (result?.items) setApiJobs(result.items);
+      })
+      .catch(() => undefined)
+      .finally(() => setJobsLoading(false));
+  }, [id, request?.customerId]);
+
+  const refreshTasks = useCallback(() => {
+    setTasksLoading(true);
+    void queryTasks({
+      customerId: request?.customerId || undefined,
+      limit: 100,
+      force: true,
+      silent: true,
+    })
+      .then((result) => {
+        if (result?.items) {
+          setApiTasks(result.items);
+          result.items.forEach((t) => crm.addTask?.(t));
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => setTasksLoading(false));
+  }, [request?.customerId, crm]);
+
+  const refreshReminders = useCallback(() => {
+    setRemindersLoading(true);
+    void queryReminders({
+      customerId: request?.customerId || undefined,
+      limit: 100,
+      force: true,
+      silent: true,
+    })
+      .then((result) => {
+        if (result?.items) {
+          setApiReminders(result.items);
+          result.items.forEach((r) => crm.addReminder?.(r));
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => setRemindersLoading(false));
+  }, [request?.customerId, crm]);
+
+  // Fetch data per tab or when lead status indicates estimate/job exists
+  useEffect(() => {
+    let cancelled = false;
+
+    // 1. Customer tab active -> fetch customer if linked
+    if (tab === "customer" && request?.customerId) {
+      if (loadedTabsRef.current.customer !== request.customerId) {
+        loadedTabsRef.current.customer = request.customerId;
+        setCustomerLoading(true);
+        void getCustomer(request.customerId)
+          .then((cust) => {
+            if (!cancelled && cust) setApiCustomer(cust);
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            if (!cancelled) setCustomerLoading(false);
+          });
+      }
+    }
+
+    // 2. Estimates tab active OR status indicates estimate exists -> fetch estimates for this lead
+    const shouldFetchEstimates =
+      tab === "estimates" ||
+      request?.status === "estimate_sent" ||
+      request?.status === "accepted" ||
+      request?.status === "converted_to_job";
+
+    if (shouldFetchEstimates && (id || request?.customerId)) {
+      if (loadedTabsRef.current.estimates !== id) {
+        loadedTabsRef.current.estimates = id;
+        setEstimatesLoading(true);
+        void queryEstimates({
+          customerId: request?.customerId || undefined,
+          requestId: id,
+          limit: 50,
+          force: true,
+          silent: true,
+        })
+          .then((result) => {
+            if (!cancelled && result?.items) setApiEstimates(result.items);
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            if (!cancelled) setEstimatesLoading(false);
+          });
+      }
+    }
+
+    // 3. Jobs tab active -> fetch jobs for this lead
+    if (tab === "jobs" && (id || request?.customerId)) {
+      if (loadedTabsRef.current.jobs !== id) {
+        loadedTabsRef.current.jobs = id;
+        setJobsLoading(true);
+        void queryJobs({
+          customerId: request?.customerId || undefined,
+          requestId: id,
+          limit: 50,
+          force: true,
+          silent: true,
+        })
+          .then((result) => {
+            if (!cancelled && result?.items) setApiJobs(result.items);
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            if (!cancelled) setJobsLoading(false);
+          });
+      }
+    }
+
+    // 4. Tasks: fetch on lead load or when tab is active
+    if (id && loadedTabsRef.current.tasks !== id) {
+      loadedTabsRef.current.tasks = id;
+      setTasksLoading(true);
+      void queryTasks({
+        customerId: request?.customerId || undefined,
+        limit: 100,
+        force: true,
+        silent: true,
+      })
+        .then((result) => {
+          if (!cancelled && result?.items) {
+            setApiTasks(result.items);
+            result.items.forEach((t) => crm.addTask?.(t));
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setTasksLoading(false);
+        });
+    }
+
+    // 5. Reminders: fetch on lead load or when tab is active
+    if (id && loadedTabsRef.current.reminders !== id) {
+      loadedTabsRef.current.reminders = id;
+      setRemindersLoading(true);
+      void queryReminders({
+        customerId: request?.customerId || undefined,
+        limit: 100,
+        force: true,
+        silent: true,
+      })
+        .then((result) => {
+          if (!cancelled && result?.items) {
+            setApiReminders(result.items);
+            result.items.forEach((r) => crm.addReminder?.(r));
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setRemindersLoading(false);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, id, request?.customerId, crm]);
+
+  const allReminders = useMemo(() => {
+    const pool = [...(apiReminders || []), ...reminders];
+    const map = new Map<string, PortalReminder>();
+    for (const item of pool) {
+      if (item?.id && !map.has(item.id)) map.set(item.id, item);
+    }
+    return Array.from(map.values());
+  }, [apiReminders, reminders]);
+
+  const allTasks = useMemo(() => {
+    const pool = [...(apiTasks || []), ...tasks];
+    const map = new Map<string, PortalTask>();
+    for (const item of pool) {
+      if (item?.id && !map.has(item.id)) map.set(item.id, item);
+    }
+    return Array.from(map.values());
+  }, [apiTasks, tasks]);
+
+  const relatedReminders = useMemo(() => {
+    return allReminders.filter(
+      (item) =>
+        reminderMatches(item, "request", id) ||
+        (request?.customerId &&
+          (item.customerId === request.customerId || reminderMatches(item, "customer", request.customerId))) ||
+        (item.subjectKind === "estimate" && relatedEstimates.some((e) => e.id === item.subjectId)) ||
+        (item.subjectKind === "job" && relatedJobs.some((j) => j.id === item.subjectId)),
+    );
+  }, [allReminders, id, request?.customerId, relatedEstimates, relatedJobs]);
+
+  const relatedTasks = useMemo(() => {
+    return allTasks.filter(
+      (item) =>
+        taskMatches(item, "request", id) ||
+        (request?.customerId &&
+          (item.customerId === request.customerId || taskMatches(item, "customer", request.customerId))) ||
+        (item.jobId && relatedJobs.some((j) => j.id === item.jobId)) ||
+        (item.subjectKind === "job" && relatedJobs.some((j) => j.id === item.subjectId)) ||
+        (item.subjectKind === "estimate" && relatedEstimates.some((e) => e.id === item.subjectId)),
+    );
+  }, [allTasks, id, request?.customerId, relatedJobs, relatedEstimates]);
+
+  const filteredTasks = useMemo(() => {
+    if (!taskSearch.trim()) return relatedTasks;
+    const q = taskSearch.toLowerCase().trim();
+    return relatedTasks.filter(
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.note.toLowerCase().includes(q) ||
+        item.number.toLowerCase().includes(q),
+    );
+  }, [relatedTasks, taskSearch]);
+
+  const paginatedTasks = useMemo(() => {
+    const start = (taskPage - 1) * TASK_PAGE_SIZE;
+    return filteredTasks.slice(start, start + TASK_PAGE_SIZE);
+  }, [filteredTasks, taskPage]);
+
+  const filteredReminders = useMemo(() => {
+    if (!reminderSearch.trim()) return relatedReminders;
+    const q = reminderSearch.toLowerCase().trim();
+    return relatedReminders.filter(
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.note.toLowerCase().includes(q),
+    );
+  }, [relatedReminders, reminderSearch]);
+
+  const paginatedReminders = useMemo(() => {
+    const start = (reminderPage - 1) * REMINDER_PAGE_SIZE;
+    return filteredReminders.slice(start, start + REMINDER_PAGE_SIZE);
+  }, [filteredReminders, reminderPage]);
   const event = events.find((item) => item.kind === "request" && item.recordId === id);
   const requestEvent: PortalCalendarEvent = event ?? {
     id: `cal_${id}`,
@@ -247,11 +594,14 @@ export function RequestDetailView({ id }: { id: string }) {
       (item) => item.customerEmail.toLowerCase() === (request?.customerEmail ?? "").toLowerCase(),
     );
 
+  const viewedMarkedRef = useRef<Record<string, boolean>>({});
+
   useEffect(() => {
-    if (request?.status === "new") records.setStatus("request", request.id, "viewed");
-    // Mark seen once when the file opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request?.id, request?.status]);
+    if (request?.id && request?.status === "new" && !viewedMarkedRef.current[request.id]) {
+      viewedMarkedRef.current[request.id] = true;
+      records.setStatus("request", request.id, "viewed");
+    }
+  }, [request?.id, request?.status, records]);
 
   useEffect(() => {
     if (tab === "messages" && thread?.unreadForProvider) chat.markRead(thread.id);
@@ -320,7 +670,13 @@ export function RequestDetailView({ id }: { id: string }) {
         requestId: request.id,
       });
       await chat.refresh();
-      crm.refresh({ silent: true });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", {
+            detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+          }),
+        );
+      }
       toast.success(`Chat started with ${request.customerName}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not start chat");
@@ -347,8 +703,13 @@ export function RequestDetailView({ id }: { id: string }) {
     );
   }
 
-  const hasEstimate = relatedEstimates.length > 0;
-  const hasJob = relatedJobs.length > 0;
+  const hasEstimate =
+    relatedEstimates.length > 0 ||
+    request.status === "estimate_sent" ||
+    request.status === "accepted" ||
+    request.status === "converted_to_job";
+  const hasJob =
+    relatedJobs.length > 0 || request.status === "converted_to_job";
   const lead = request;
   const customerLabel = customer ? crmCustomerName(customer) : lead.customerName;
   const lost = lead.status === "declined" || lead.status === "closed";
@@ -364,27 +725,43 @@ export function RequestDetailView({ id }: { id: string }) {
   };
 
   async function markContacted() {
-    records.setStatus("request", lead.id, "contacted");
     setApiLead((prev) => (prev ? { ...prev, status: "contacted" } : prev));
     try {
-      await updateRequestStatus(lead.id, "contacted");
-      crm.refresh({ silent: true });
+      await records.setStatus("request", lead.id, "contacted");
+      toast.success("Lead marked contacted.");
     } catch {
-      /* handled */
+      toast.error("Failed to update status.");
     }
-    toast.success("Lead marked contacted.");
+  }
+
+  async function markAccepted() {
+    setApiLead((prev) => (prev ? { ...prev, status: "accepted" } : prev));
+    try {
+      await records.setStatus("request", lead.id, "accepted");
+      toast.success("Lead marked accepted.");
+    } catch {
+      toast.error("Failed to update status.");
+    }
+  }
+
+  async function reopenLead() {
+    setApiLead((prev) => (prev ? { ...prev, status: "contacted" } : prev));
+    try {
+      await records.setStatus("request", lead.id, "contacted");
+      toast.success("Lead reopened as active.");
+    } catch {
+      toast.error("Failed to reopen lead.");
+    }
   }
 
   async function declineLead() {
-    records.setStatus("request", lead.id, "declined");
     setApiLead((prev) => (prev ? { ...prev, status: "declined" } : prev));
     try {
-      await updateRequestStatus(lead.id, "declined");
-      crm.refresh({ silent: true });
+      await records.setStatus("request", lead.id, "declined");
+      toast.success("Lead declined.");
     } catch {
-      /* handled */
+      toast.error("Failed to decline lead.");
     }
-    toast.success("Lead declined.");
   }
 
   function moveEvent(move: CalendarMove) {
@@ -422,11 +799,21 @@ export function RequestDetailView({ id }: { id: string }) {
             </Button>
             {hasJob ? (
               <Button size="sm" asChild>
-                <Link href={`/pro/dashboard/jobs/${job.id}`}>Open {job.number}</Link>
+                <Link href={job ? `/pro/dashboard/jobs/${job.id}` : `/pro/dashboard/requests/${request.id}?tab=jobs`}>
+                  {job?.number ? `Open ${job.number}` : "Open job"}
+                </Link>
+              </Button>
+            ) : estimate ? (
+              <Button size="sm" asChild>
+                <Link href={`/pro/dashboard/estimates/${estimate.id}`}>
+                  {estimate.number ? `Open ${estimate.number}` : "Open estimate"}
+                </Link>
               </Button>
             ) : hasEstimate ? (
               <Button size="sm" asChild>
-                <Link href={`/pro/dashboard/estimates/${estimate.id}`}>Open {estimate.number}</Link>
+                <Link href={`/pro/dashboard/requests/${request.id}?tab=estimates`}>
+                  View estimate
+                </Link>
               </Button>
             ) : (
               <Button size="sm" onClick={() => setEstimateOpen(true)}>
@@ -448,28 +835,47 @@ export function RequestDetailView({ id }: { id: string }) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
                 {request.status === "new" || request.status === "viewed" ? (
-                  <DropdownMenuItem onSelect={markContacted}>
+                  <DropdownMenuItem onSelect={markContacted} className="gap-2 cursor-pointer text-xs">
+                    <PhoneCall className="size-3.5 text-muted-foreground" />
                     Mark contacted
                   </DropdownMenuItem>
                 ) : null}
-                <DropdownMenuItem onSelect={() => setAssignOpen(true)}>
+                {request.status === "estimate_sent" ? (
+                  <DropdownMenuItem onSelect={markAccepted} className="gap-2 cursor-pointer text-xs text-emerald-600 focus:text-emerald-600 font-medium">
+                    <CheckCircle2 className="size-3.5 text-emerald-600" />
+                    Mark accepted
+                  </DropdownMenuItem>
+                ) : null}
+                {lost ? (
+                  <DropdownMenuItem onSelect={reopenLead} className="gap-2 cursor-pointer text-xs text-blue-600 focus:text-blue-600">
+                    <RotateCcw className="size-3.5 text-blue-600" />
+                    Reopen lead
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={() => setAssignOpen(true)} className="gap-2 cursor-pointer text-xs">
+                  <CalendarDays className="size-3.5 text-muted-foreground" />
                   Schedule visit
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setTaskOpen(true)}>
+                <DropdownMenuItem onSelect={() => setTaskOpen(true)} className="gap-2 cursor-pointer text-xs">
+                  <ListTodo className="size-3.5 text-muted-foreground" />
                   Create task
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setNoteOpen(true)}>
+                <DropdownMenuItem onSelect={() => setNoteOpen(true)} className="gap-2 cursor-pointer text-xs">
+                  <NotebookPen className="size-3.5 text-muted-foreground" />
                   Add note
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)} className="gap-2 cursor-pointer text-xs">
+                  <Bell className="size-3.5 text-muted-foreground" />
                   Set reminder
                 </DropdownMenuItem>
                 {!lost ? (
-                  <DropdownMenuItem onSelect={declineLead} className="text-red-600 focus:text-red-600">
+                  <DropdownMenuItem onSelect={declineLead} className="gap-2 cursor-pointer text-xs text-red-600 focus:text-red-600">
+                    <XCircle className="size-3.5 text-red-500" />
                     Decline
                   </DropdownMenuItem>
                 ) : null}
                 <DropdownMenuItem
+                  className="gap-2 cursor-pointer text-xs"
                   onSelect={() => {
                     if (isArchived) {
                       records.unarchive("request", request.id);
@@ -480,6 +886,11 @@ export function RequestDetailView({ id }: { id: string }) {
                     }
                   }}
                 >
+                  {isArchived ? (
+                    <ArchiveRestore className="size-3.5 text-muted-foreground" />
+                  ) : (
+                    <Archive className="size-3.5 text-muted-foreground" />
+                  )}
                   {isArchived ? "Restore" : "Archive"}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -701,6 +1112,13 @@ export function RequestDetailView({ id }: { id: string }) {
                 </div>
               );
             case "customer":
+              if (customerLoading && !customer) {
+                return (
+                  <div className="flex min-h-[16rem] items-center justify-center rounded-lg border border-black/10 bg-card p-6">
+                    <CenteredSpinner label="Loading customer details..." />
+                  </div>
+                );
+              }
               return (
                 <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
                   <header className="flex items-center justify-between border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
@@ -709,7 +1127,7 @@ export function RequestDetailView({ id }: { id: string }) {
                       <div>
                         <h2 className="text-lg font-semibold tracking-tight">{customerLabel}</h2>
                         <p className="mt-0.5 text-sm text-muted-foreground">
-                          {request.customerPhone} · {request.customerEmail}
+                          {customer?.phone || request.customerPhone} · {customer?.email || request.customerEmail}
                         </p>
                       </div>
                     </div>
@@ -721,12 +1139,28 @@ export function RequestDetailView({ id }: { id: string }) {
                   </header>
                   <div className="grid sm:grid-cols-2">
                     <InfoRow icon={UserRound} label="Customer name" value={customerLabel} />
-                    <InfoRow icon={Phone} label="Phone" value={request.customerPhone} />
-                    <InfoRow icon={Mail} label="Email" value={<span className="text-primary">{request.customerEmail}</span>} />
+                    <InfoRow icon={Phone} label="Phone" value={customer?.phone || request.customerPhone} />
+                    <InfoRow
+                      icon={Mail}
+                      label="Email"
+                      value={<span className="text-primary">{customer?.email || request.customerEmail}</span>}
+                    />
                     <InfoRow
                       icon={MapPin}
                       label="Service area"
-                      value={formatLocation(request.neighborhood || request.city || "", request.state || "", request.zip)}
+                      value={
+                        customer?.addresses?.[0]
+                          ? `${customer.addresses[0].street ? `${customer.addresses[0].street}, ` : ""}${formatLocation(
+                              customer.addresses[0].city || request.city || "",
+                              customer.addresses[0].state || request.state || "",
+                              customer.addresses[0].zip || request.zip,
+                            )}`
+                          : formatLocation(
+                              request.neighborhood || request.city || "",
+                              request.state || "",
+                              request.zip,
+                            )
+                      }
                     />
                     {customer ? (
                       <>
@@ -741,6 +1175,8 @@ export function RequestDetailView({ id }: { id: string }) {
               return (
                 <QualifyTab
                   request={request}
+                  hasEstimate={hasEstimate}
+                  hasJob={hasJob}
                   onSave={(patch) => {
                     records.updateRequest(request.id, patch);
                     toast.success("Lead details saved.");
@@ -756,17 +1192,26 @@ export function RequestDetailView({ id }: { id: string }) {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
-                      {relatedEstimates.length ? `${relatedEstimates.length} estimate${relatedEstimates.length === 1 ? "" : "s"} from this lead` : "No estimate yet"}
+                      {estimatesLoading
+                        ? "Loading estimates..."
+                        : relatedEstimates.length
+                          ? `${relatedEstimates.length} estimate${relatedEstimates.length === 1 ? "" : "s"} from this lead`
+                          : hasEstimate
+                            ? "Estimate proposal created for this lead"
+                            : "No estimate yet"}
                     </p>
-                    <Button size="sm" onClick={() => setEstimateOpen(true)}>
-                      {hasEstimate ? "Another estimate" : "Create estimate"}
-                    </Button>
+                    {!hasEstimate ? (
+                      <Button size="sm" onClick={() => setEstimateOpen(true)}>
+                        Create estimate
+                      </Button>
+                    ) : null}
                   </div>
-                  {relatedEstimates.length ? (
+                  {estimatesLoading || relatedEstimates.length ? (
                     <PortalDataTable
                       filename={`${request.number}-estimates`}
                       countLabel="Estimates"
                       searchPlaceholder="Search estimates"
+                      loading={estimatesLoading}
                       rows={relatedEstimates}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
@@ -801,22 +1246,24 @@ export function RequestDetailView({ id }: { id: string }) {
                 </div>
               );
             case "jobs":
-              return relatedJobs.length ? (
+              return jobsLoading || relatedJobs.length ? (
                 <PortalDataTable
                   filename={`${request.number}-jobs`}
                   countLabel="Jobs"
                   searchPlaceholder="Search jobs"
+                  loading={jobsLoading}
                   rows={relatedJobs}
                   rowKey={(row) => row.id}
                   rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
+                  empty="No job yet. The customer signs the estimate, then this lead becomes a job."
                   columns={jobBoardColumns({
-                    estimates: allEstimates,
+                    estimates: baseEstimates,
                     requests: allRequests,
                     invoices,
                     events,
                     employeeLabel,
                     customerName: (customerId) => {
-                      const match = customers.find((item) => item.id === customerId);
+                      const match = (apiCustomer && apiCustomer.id === customerId) ? apiCustomer : customers.find((item) => item.id === customerId);
                       return match ? crmCustomerName(match) : getPortalCustomerName(provider, customerId);
                     },
                   })}
@@ -856,31 +1303,163 @@ export function RequestDetailView({ id }: { id: string }) {
               );
             case "tasks":
               return (
-                <LinkedList
-                  empty="Create a task against this lead — call back, qualify, or pull a permit."
-                  items={relatedTasks.map((item) => ({
-                    id: item.id,
-                    href: `/pro/dashboard/tasks/${item.id}`,
-                    title: `${item.number} · ${item.title}`,
-                    detail: `Due ${formatDate(item.dueAt)} · ${item.note}`,
-                    pill: crmTaskStatusLabel(item.status),
-                    action: item.status === "done" ? undefined : () => setTaskStatus(item.id, "done"),
-                  }))}
-                />
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold">Tasks ({relatedTasks.length})</h3>
+                    <div className="flex items-center gap-2">
+                      {relatedTasks.length > 0 ? (
+                        <div className="relative w-44 sm:w-60">
+                          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                          <Input
+                            value={taskSearch}
+                            onChange={(e) => {
+                              setTaskSearch(e.target.value);
+                              setTaskPage(1);
+                            }}
+                            placeholder="Search tasks…"
+                            className="h-8 pl-8 text-xs"
+                          />
+                        </div>
+                      ) : null}
+                      <Button size="sm" onClick={() => setTaskOpen(true)}>
+                        + Create task
+                      </Button>
+                    </div>
+                  </div>
+
+                  {tasksLoading && relatedTasks.length === 0 ? (
+                    <div className="rounded-lg border border-black/10 bg-card p-12 text-center">
+                      <CenteredSpinner className="mx-auto" />
+                    </div>
+                  ) : relatedTasks.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-8 text-center">
+                      <ListTodo className="mx-auto size-8 text-muted-foreground/60" />
+                      <h4 className="mt-2 text-sm font-semibold">No tasks yet</h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Create a task against this lead — call back, qualify, or pull a permit.
+                      </p>
+                      <Button size="sm" className="mt-4" onClick={() => setTaskOpen(true)}>
+                        + Create task
+                      </Button>
+                    </div>
+                  ) : filteredTasks.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-6 text-center">
+                      <p className="text-sm text-muted-foreground">No tasks match &quot;{taskSearch}&quot;</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          setTaskSearch("");
+                          setTaskPage(1);
+                        }}
+                      >
+                        Clear search
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <LinkedList
+                        empty="No tasks found."
+                        items={paginatedTasks.map((item) => ({
+                          id: item.id,
+                          href: `/pro/dashboard/tasks/${item.id}`,
+                          title: `${item.number} · ${item.title}`,
+                          detail: `Due ${formatDate(item.dueAt)}${item.note ? ` · ${item.note}` : ""}`,
+                          pill: crmTaskStatusLabel(item.status),
+                          action: item.status === "done" ? undefined : () => void setTaskStatus(item.id, "done"),
+                        }))}
+                      />
+                      <PortalPagination
+                        page={taskPage}
+                        pageSize={TASK_PAGE_SIZE}
+                        total={filteredTasks.length}
+                        onPageChange={setTaskPage}
+                        itemName="tasks"
+                      />
+                    </>
+                  )}
+                </div>
               );
             case "reminders":
               return (
-                <LinkedList
-                  empty="Set a reminder so this inbound request does not sit."
-                  items={relatedReminders.map((item) => ({
-                    id: item.id,
-                    href: `/pro/dashboard/reminders/${item.id}`,
-                    title: item.title,
-                    detail: `Due ${formatDate(item.dueAt)} · ${item.note}`,
-                    pill: crmReminderStatusLabel(item.status),
-                    action: item.status === "open" ? () => setReminderStatus(item.id, "done") : undefined,
-                  }))}
-                />
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold">Reminders ({relatedReminders.length})</h3>
+                    <div className="flex items-center gap-2">
+                      {relatedReminders.length > 0 ? (
+                        <div className="relative w-44 sm:w-60">
+                          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                          <Input
+                            value={reminderSearch}
+                            onChange={(e) => {
+                              setReminderSearch(e.target.value);
+                              setReminderPage(1);
+                            }}
+                            placeholder="Search reminders…"
+                            className="h-8 pl-8 text-xs"
+                          />
+                        </div>
+                      ) : null}
+                      <Button size="sm" onClick={() => setReminderOpen(true)}>
+                        + Set reminder
+                      </Button>
+                    </div>
+                  </div>
+
+                  {remindersLoading && relatedReminders.length === 0 ? (
+                    <div className="rounded-lg border border-black/10 bg-card p-12 text-center">
+                      <CenteredSpinner className="mx-auto" />
+                    </div>
+                  ) : relatedReminders.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-8 text-center">
+                      <Bell className="mx-auto size-8 text-muted-foreground/60" />
+                      <h4 className="mt-2 text-sm font-semibold">No reminders yet</h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Set a reminder so this inbound request does not sit.
+                      </p>
+                      <Button size="sm" className="mt-4" onClick={() => setReminderOpen(true)}>
+                        + Set reminder
+                      </Button>
+                    </div>
+                  ) : filteredReminders.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-6 text-center">
+                      <p className="text-sm text-muted-foreground">No reminders match &quot;{reminderSearch}&quot;</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          setReminderSearch("");
+                          setReminderPage(1);
+                        }}
+                      >
+                        Clear search
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <LinkedList
+                        empty="No reminders found."
+                        items={paginatedReminders.map((item) => ({
+                          id: item.id,
+                          href: `/pro/dashboard/reminders/${item.id}`,
+                          title: item.title,
+                          detail: `Due ${formatDate(item.dueAt)}${item.note ? ` · ${item.note}` : ""}`,
+                          pill: crmReminderStatusLabel(item.status),
+                          action: item.status === "open" ? () => void setReminderStatus(item.id, "done") : undefined,
+                        }))}
+                      />
+                      <PortalPagination
+                        page={reminderPage}
+                        pageSize={REMINDER_PAGE_SIZE}
+                        total={filteredReminders.length}
+                        onPageChange={setReminderPage}
+                        itemName="reminders"
+                      />
+                    </>
+                  )}
+                </div>
               );
             case "messages": {
               const customerName = thread?.customerName || customerLabel || request.customerName;
@@ -1072,7 +1651,14 @@ export function RequestDetailView({ id }: { id: string }) {
         onConverted={(estimateId) => {
           setApiLead((prev) => (prev ? { ...prev, status: "estimate_sent" } : prev));
           records.setStatus("request", lead.id, "estimate_sent");
-          crm.refresh({ silent: true });
+          refreshEstimates();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("rs-realtime", {
+                detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+              }),
+            );
+          }
         }}
       />
       <AssignEventDialog
@@ -1091,14 +1677,30 @@ export function RequestDetailView({ id }: { id: string }) {
       <CreateTaskDialog
         open={taskOpen}
         onOpenChange={setTaskOpen}
-        subjectKind="request"
-        subjectId={request.id}
+        subjectKind={request.customerId ? "customer" : undefined}
+        subjectId={request.customerId || undefined}
+        onCreated={(saved) => {
+          if (saved) {
+            setApiTasks((prev) => [saved, ...(prev || []).filter((t) => t.id !== saved.id)]);
+            crm.addTask?.(saved);
+          }
+          refreshTasks();
+          if (crm.enabled) void crm.refresh({ silent: true });
+        }}
       />
       <CreateReminderDialog
         open={reminderOpen}
         onOpenChange={setReminderOpen}
-        subjectKind="request"
-        subjectId={request.id}
+        subjectKind={request.customerId ? "customer" : undefined}
+        subjectId={request.customerId || undefined}
+        onCreated={(saved) => {
+          if (saved) {
+            setApiReminders((prev) => [saved, ...(prev || []).filter((r) => r.id !== saved.id)]);
+            crm.addReminder?.(saved);
+          }
+          refreshReminders();
+          if (crm.enabled) void crm.refresh({ silent: true });
+        }}
       />
       <CreateNoteDialog
         open={noteOpen}
@@ -1158,10 +1760,14 @@ function LeadPipeline({
 
 function QualifyTab({
   request,
+  hasEstimate,
+  hasJob,
   onSave,
   onStatus,
 }: {
   request: PortalRequest;
+  hasEstimate?: boolean;
+  hasJob?: boolean;
   onSave: (patch: {
     serviceName: string;
     details: string;
@@ -1174,6 +1780,10 @@ function QualifyTab({
   onStatus: (status: RequestStatus) => void;
 }) {
   const { customers } = useCrmDirectory();
+  const availableStatuses = useMemo(
+    () => getAvailableLeadStatuses(request.status, Boolean(hasEstimate), Boolean(hasJob)),
+    [request.status, hasEstimate, hasJob],
+  );
   const [draft, setDraft] = useState({
     serviceName: request.serviceName,
     details: request.details,
@@ -1224,7 +1834,7 @@ function QualifyTab({
         <label className="grid gap-1.5 text-sm">
           <span className="font-medium">Status</span>
           <NativeSelect className="w-full" value={request.status} onChange={(event) => onStatus(event.target.value as RequestStatus)}>
-            {LEAD_STATUSES.map((status) => (
+            {availableStatuses.map((status: RequestStatus) => (
               <NativeSelectOption key={status} value={status}>
                 {requestStatusLabel(status)}
               </NativeSelectOption>

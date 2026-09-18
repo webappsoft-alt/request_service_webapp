@@ -123,16 +123,14 @@ export function MessagesView() {
 
   useEffect(() => {
     if (!selected?.id) return;
-    const lastMsg = selected.messages.at(-1);
-    const hasUnread = (selected.unreadForProvider ?? 0) > 0;
-    const isNewIncoming = lastMsg && lastMsg.from !== "provider" && !lastMsg.isRead;
+    const hasUnread =
+      (selected.unreadForProvider ?? 0) > 0 ||
+      selected.messages.some((m) => m.from !== "provider" && !m.isRead);
 
-    if (hasUnread || isNewIncoming || lastMarkedThreadIdRef.current !== selected.id) {
+    if (hasUnread || lastMarkedThreadIdRef.current !== selected.id) {
       lastMarkedThreadIdRef.current = selected.id;
       markThreadReadCallbackRef.current(selected.id);
-      if (hasUnread || isNewIncoming) {
-        markReadCallbackRef.current(selected.id);
-      }
+      markReadCallbackRef.current(selected.id);
     }
   }, [selected?.id, selected?.messages?.length, selected?.unreadForProvider]);
 

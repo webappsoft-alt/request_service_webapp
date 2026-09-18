@@ -38,11 +38,11 @@ export function usePortalInbox() {
   }, [chat.threads, newLeads]);
 
   const newLeadCount = crm.enabled
-    ? (crm.inboxSummary.newLeads || newLeads.length)
+    ? (crm.inboxSummary.newLeads ?? newLeads.length)
     : newLeads.length;
-  const unreadChats = crm.enabled
-    ? (crm.inboxSummary.unreadChats || chat.unread)
-    : chat.unread;
+  const unreadChats = chat.threads.length > 0
+    ? chat.unread
+    : (crm.enabled ? (crm.inboxSummary.unreadChats ?? chat.unread) : chat.unread);
 
   return {
     newLeads: newLeadCount,

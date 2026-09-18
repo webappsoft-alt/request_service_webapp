@@ -186,12 +186,23 @@ export function usePortalRecords() {
     (kind: PortalRecordKind, id: string, status: string) => {
       if (crm.enabled && kind === "request") {
         return (async () => {
+          const nextStatus = status as PortalRequest["status"];
+          crm.patchRequest(id, { status: nextStatus });
+          const current = readStore(key);
+          writeStore(key, {
+            ...current,
+            status: { ...current.status, [recordKey(kind, id)]: status },
+          });
           const updated = await updateRequestStatus(
             id,
-            status as PortalRequest["status"],
+            nextStatus,
           );
-          if (crm.ready) {
-            await crm.refresh({ silent: true });
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("rs-realtime", {
+                detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+              }),
+            );
           }
           return updated;
         })();

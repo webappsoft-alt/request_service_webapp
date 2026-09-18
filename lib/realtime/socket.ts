@@ -76,6 +76,36 @@ export type RealtimeEvents = {
     customerName?: string;
   };
   ORDER_UPDATED: Record<string, unknown>;
+  LEAD_STATUS_UPDATED: {
+    id: string;
+    status: string;
+    requestId?: string;
+    number?: string;
+  };
+  REQUEST_STATUS_UPDATED: {
+    id: string;
+    status: string;
+    requestId?: string;
+    number?: string;
+  };
+  LEAD_UPDATED: {
+    id: string;
+    status?: string;
+    [key: string]: unknown;
+  };
+  REQUEST_UPDATED: {
+    id: string;
+    status?: string;
+    [key: string]: unknown;
+  };
+  "lead:status": {
+    id: string;
+    status: string;
+  };
+  "request:status": {
+    id: string;
+    status: string;
+  };
 };
 
 function socketBaseUrl() {
@@ -211,3 +241,12 @@ export function onRealtime<E extends keyof RealtimeEvents>(
     socket?.off(event as string, listener);
   };
 }
+
+export function emitLeadStatusChange(id: string, status: string) {
+  if (!socket || !id) return;
+  socket.emit("lead:status", { id, status });
+  socket.emit("request:status", { id, status });
+  socket.emit("LEAD_STATUS_UPDATED", { id, status });
+  socket.emit("REQUEST_STATUS_UPDATED", { id, status });
+}
+

@@ -17,7 +17,7 @@ import {
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ArchiveBadge } from "@/components/portal/archive-control";
+import { ArchiveBadge, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import {
   NotesPanel,
   CreateNoteDialogForSubject,
@@ -105,6 +105,7 @@ import {
   getEstimate,
   getJob,
   updateEstimate as updateEstimateApi,
+  updateEstimateArchive as updateEstimateArchiveApi,
   updateEstimateSiteVisit,
 } from "@/lib/api/crm-client";
 import {
@@ -168,6 +169,9 @@ export function EstimateDetailView({ id }: { id: string }) {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [fetched, setFetched] = useState<Estimate | null>(null);
   const [fetching, setFetching] = useState(false);
   const [statusOverride, setStatusOverride] = useState<
@@ -575,18 +579,41 @@ export function EstimateDetailView({ id }: { id: string }) {
                 ) : null}
                 {records.isArchived("estimate", estimate.id) ? (
                   <DropdownMenuItem
-                    onSelect={() => {
-                      records.restore("estimate", estimate.id);
-                      toast.success(`${estimate.number} restored.`);
+                    disabled={restoring}
+                    onSelect={async () => {
+                      setRestoring(true);
+                      try {
+                        if (apiReady) {
+                          const updated = await updateEstimateArchiveApi(estimate.id, false);
+                          if (updated) {
+                            crm.patchEstimate(estimate.id, updated);
+                            setFetched(updated);
+                          } else {
+                            crm.patchEstimate(estimate.id, { isArchived: false, isArchieved: false });
+                          }
+                          if (crm.ready) {
+                            void crm.refresh({ silent: true });
+                          }
+                        }
+                        records.unarchive("estimate", estimate.id);
+                        toast.success(`${estimate.number} restored.`);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not restore this estimate.",
+                        );
+                      } finally {
+                        setRestoring(false);
+                      }
                     }}
                   >
-                    Restore estimate
+                    {restoring ? "Restoring…" : "Restore estimate"}
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem
                     onSelect={() => {
-                      records.archive("estimate", estimate.id);
-                      toast.success(`${estimate.number} archived.`);
+                      setArchiveOpen(true);
                     }}
                   >
                     Archive estimate
@@ -895,6 +922,43 @@ export function EstimateDetailView({ id }: { id: string }) {
         onOpenChange={setNoteOpen}
         subjectKind="estimate"
         subjectId={estimate.id}
+      />
+      <ConfirmArchiveDialog
+        open={archiveOpen}
+        onOpenChange={(open) => {
+          if (!archiving) setArchiveOpen(open);
+        }}
+        kind="estimate"
+        number={estimate.number}
+        loading={archiving}
+        onConfirm={async () => {
+          setArchiving(true);
+          try {
+            if (apiReady) {
+              const updated = await updateEstimateArchiveApi(estimate.id, true);
+              if (updated) {
+                crm.patchEstimate(estimate.id, updated);
+                setFetched(updated);
+              } else {
+                crm.patchEstimate(estimate.id, { isArchived: true, isArchieved: true });
+              }
+              if (crm.ready) {
+                void crm.refresh({ silent: true });
+              }
+            }
+            records.archive("estimate", estimate.id);
+            toast.success(`${estimate.number} archived.`);
+            setArchiveOpen(false);
+          } catch (error) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : "Could not archive this estimate.",
+            );
+          } finally {
+            setArchiving(false);
+          }
+        }}
       />
     </>
   );

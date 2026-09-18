@@ -4,10 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { archiveRowAction } from "@/components/portal/archive-control";
+import {
+  archiveRowAction,
+  ConfirmArchiveDialog,
+} from "@/components/portal/archive-control";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
 import { buildEstimateSnapshot } from "@/components/portal/share-estimate-panel";
-import { shareUrlFor, useEstimateShare } from "@/components/portal/use-estimate-share";
+import {
+  shareTokenFor,
+  shareUrlFor,
+  useEstimateShare,
+} from "@/components/portal/use-estimate-share";
+import { showApiErrorToast } from "@/components/api/apiFuntions";
 import { FilterTabs } from "@/components/portal/filter-tabs";
 import { ApplyPaymentDialog } from "@/components/portal/invoice-file";
 import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
@@ -33,10 +41,14 @@ import {
   setEstimatesSearch,
   setEstimatesStatus,
 } from "@/store/estimatesSlice";
-import { queryEstimates } from "@/lib/api/crm-client";
+import {
+  deleteEstimate,
+  queryEstimates,
+  shareEstimate,
+  updateEstimateStatus,
+} from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -78,6 +90,8 @@ export function EstimatesView() {
   const share = useEstimateShare();
   const [createOpen, setCreateOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<EstimateRow | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   const useApi =
     auth.hydrated &&
@@ -152,39 +166,50 @@ export function EstimatesView() {
       }
     >
       <CreateEstimateDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <div className="mb-3 px-0">
-        <Field className="w-full max-w-xs gap-1.5">
-          <FieldLabel htmlFor="estimates-status-filter">Status</FieldLabel>
-          <Select
-            disabled={tableLoading}
-            value={statusParam || "__all__"}
-            onValueChange={(value) => {
-              const next = value === "__all__" ? "" : value;
-              router.replace(next ? `/pro/dashboard/estimates?status=${next}` : "/pro/dashboard/estimates");
-            }}
-          >
-            <SelectTrigger id="estimates-status-filter" className="w-full" loading={tableLoading}>
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
-            >
-              {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
-                <SelectItem key={option.label} value={option.value || "__all__"}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      </div>
       <PortalDataTable
         filename="estimates"
         countLabel="Estimates"
         searchPlaceholder="Search quotes"
         loading={tableLoading}
+        toolbar={
+          <div className="w-40 sm:w-44">
+            <Select
+              disabled={tableLoading}
+              value={statusParam || "__all__"}
+              onValueChange={(value) => {
+                const next = value === "__all__" ? "" : value;
+                router.replace(
+                  next
+                    ? `/pro/dashboard/estimates?status=${next}`
+                    : "/pro/dashboard/estimates",
+                );
+              }}
+            >
+              <SelectTrigger
+                id="estimates-status-filter"
+                aria-label="Filter by status"
+                className="h-8.5 w-full text-xs"
+                loading={tableLoading}
+              >
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="end"
+                className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[160px]"
+              >
+                {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
+                  <SelectItem
+                    key={option.label}
+                    value={option.value || "__all__"}
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
@@ -298,98 +323,216 @@ export function EstimatesView() {
             cell: (row) => <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />,
           },
         ]}
-        actions={(row) => [
-          { label: "View", href: `/pro/dashboard/estimates/${row.id}` },
-          {
-            label: "Copy customer link",
-            onSelect: () => {
-              if (!estimateCanShare(row.status)) {
-                toast.error("Finalize this estimate before sending it to the customer.");
-                return;
-              }
-              const snapshot = buildEstimateSnapshot(row, {
-                email: session?.email,
-                companyName: provider.companyName,
-                companyEmail: provider.email,
-                companyPhone: provider.phone,
-                customerName: row.customerName || estimateCustomerName(row, customers, allRequests),
-              });
-              share.saveSnapshot(snapshot);
-              records.setStatus("estimate", row.id, "sent");
-              dispatch(patchEstimateLocally({ id: row.id, patch: { status: "sent" } }));
-              void navigator.clipboard.writeText(shareUrlFor(snapshot.token));
-              toast.success("Customer link copied.");
-            },
-          },
-          ...(row.status === "site_visit"
-            ? [{ label: "Open site visit", href: `/pro/dashboard/estimates/${row.id}?tab=visit` }]
-            : []),
-          ...(row.status === "site_visit" ||
-          row.status === "inspected" ||
-          row.status === "draft" ||
-          row.status === "changes_requested"
-            ? [
-                {
-                  label: "Finalize",
-                  onSelect: () => {
-                    records.setStatus("estimate", row.id, "finalized");
-                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "finalized" } }));
-                    toast.success(`${row.number} finalized.`);
+        actions={(row) => {
+          const isSent = row.status === "sent";
+          const isAccepted = row.status === "accepted";
+          const isFinalized = row.status === "finalized";
+          const isDraftLike =
+            row.status === "draft" ||
+            row.status === "site_visit" ||
+            row.status === "inspected" ||
+            row.status === "changes_requested";
+          const isRejected = row.status === "rejected";
+
+          return [
+            { label: "View", href: `/pro/dashboard/estimates/${row.id}` },
+            ...(row.status === "site_visit"
+              ? [
+                  {
+                    label: "Open site visit",
+                    href: `/pro/dashboard/estimates/${row.id}?tab=visit`,
                   },
-                },
-              ]
-            : []),
-          ...(estimateCanShare(row.status) && row.status !== "sent"
-            ? [
-                {
-                  label: "Mark sent",
-                  onSelect: () => {
-                    records.setStatus("estimate", row.id, "sent");
-                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "sent" } }));
-                    toast.success("Estimate marked sent.");
+                ]
+              : []),
+            ...(isSent || isAccepted
+              ? [
+                  {
+                    label: "Copy customer link",
+                    onSelect: async () => {
+                      try {
+                        let linkUrl = "";
+                        if (useApi) {
+                          try {
+                            const res = await shareEstimate(row.id);
+                            if (res?.shareUrl) {
+                              linkUrl = res.shareUrl;
+                            } else if (res?.shareToken) {
+                              linkUrl = shareUrlFor(res.shareToken);
+                            }
+                          } catch {
+                            // fallback
+                          }
+                        }
+                        if (!linkUrl) {
+                          const token =
+                            row.shareToken ||
+                            share.snapshotForEstimate(row.id)?.token ||
+                            shareTokenFor(row.id);
+                          linkUrl = shareUrlFor(token);
+                        }
+                        await navigator.clipboard.writeText(linkUrl);
+                        toast.success("Customer link copied to clipboard.");
+                      } catch {
+                        toast.error("Could not copy link to clipboard.");
+                      }
+                    },
                   },
-                },
-              ]
-            : []),
-          ...(row.status === "accepted"
-            ? []
-            : [
-                {
-                  label: "Mark accepted",
-                  onSelect: () => {
-                    records.setStatus("estimate", row.id, "accepted");
-                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "accepted" } }));
-                    toast.success("Estimate marked accepted.");
+                ]
+              : []),
+            ...(isDraftLike || isRejected
+              ? [
+                  {
+                    label: "Finalize",
+                    onSelect: async () => {
+                      try {
+                        if (useApi) {
+                          await updateEstimateStatus(row.id, "finalized");
+                        }
+                        records.setStatus("estimate", row.id, "finalized");
+                        dispatch(
+                          patchEstimateLocally({
+                            id: row.id,
+                            patch: { status: "finalized" },
+                          }),
+                        );
+                        toast.success(`${row.number} finalized.`);
+                      } catch (err) {
+                        showApiErrorToast(err, "Failed to finalize estimate.");
+                      }
+                    },
                   },
-                },
-              ]),
-          ...(row.status === "rejected"
-            ? []
-            : [
-                {
-                  label: "Mark rejected",
-                  onSelect: () => {
-                    records.setStatus("estimate", row.id, "rejected");
-                    dispatch(patchEstimateLocally({ id: row.id, patch: { status: "rejected" } }));
-                    toast.success("Estimate marked rejected.");
+                ]
+              : []),
+            ...(isFinalized
+              ? [
+                  {
+                    label: "Mark sent",
+                    onSelect: async () => {
+                      try {
+                        if (useApi) {
+                          await updateEstimateStatus(row.id, "sent");
+                        }
+                        records.setStatus("estimate", row.id, "sent");
+                        dispatch(
+                          patchEstimateLocally({
+                            id: row.id,
+                            patch: { status: "sent" },
+                          }),
+                        );
+                        toast.success("Estimate marked sent.");
+                      } catch (err) {
+                        showApiErrorToast(
+                          err,
+                          "Failed to mark estimate as sent.",
+                        );
+                      }
+                    },
                   },
-                },
-              ]),
-          {
-            label: "Convert to job",
-            href: `/pro/dashboard/estimates/${row.id}`,
-          },
-          archiveRowAction(records, "estimate", row.id, row.number),
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => {
-              records.remove("estimate", row.id);
-              dispatch(removeEstimateLocally(row.id));
-              toast.success(`${row.number} removed from this board.`);
-            },
-          },
-        ]}
+                ]
+              : []),
+            ...(isSent
+              ? [
+                  {
+                    label: "Mark accepted",
+                    onSelect: async () => {
+                      try {
+                        if (useApi) {
+                          await updateEstimateStatus(row.id, "accepted");
+                        }
+                        records.setStatus("estimate", row.id, "accepted");
+                        dispatch(
+                          patchEstimateLocally({
+                            id: row.id,
+                            patch: { status: "accepted" },
+                          }),
+                        );
+                        toast.success("Estimate marked accepted.");
+                      } catch (err) {
+                        showApiErrorToast(
+                          err,
+                          "Failed to mark estimate as accepted.",
+                        );
+                      }
+                    },
+                  },
+                ]
+              : []),
+            ...(isFinalized || isSent
+              ? [
+                  {
+                    label: "Mark rejected",
+                    onSelect: async () => {
+                      try {
+                        if (useApi) {
+                          await updateEstimateStatus(row.id, "rejected");
+                        }
+                        records.setStatus("estimate", row.id, "rejected");
+                        dispatch(
+                          patchEstimateLocally({
+                            id: row.id,
+                            patch: { status: "rejected" },
+                          }),
+                        );
+                        toast.success("Estimate marked rejected.");
+                      } catch (err) {
+                        showApiErrorToast(
+                          err,
+                          "Failed to mark estimate as rejected.",
+                        );
+                      }
+                    },
+                  },
+                ]
+              : []),
+            ...(isAccepted
+              ? [
+                  {
+                    label: "Convert to job",
+                    href: `/pro/dashboard/estimates/${row.id}`,
+                  },
+                ]
+              : []),
+            archiveRowAction(
+              records,
+              "estimate",
+              row.id,
+              row.number,
+              () => setArchiveTarget(row),
+            ),
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving) setArchiveTarget(null);
+        }}
+        kind="estimate"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={async () => {
+          if (!archiveTarget) return;
+          setArchiving(true);
+          try {
+            await records.archive("estimate", archiveTarget.id);
+            dispatch(
+              patchEstimateLocally({
+                id: archiveTarget.id,
+                patch: { isArchived: true, isArchieved: true },
+              }),
+            );
+            toast.success(`${archiveTarget.number} archived.`);
+            setArchiveTarget(null);
+          } catch (error) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : "Could not archive this estimate.",
+            );
+          } finally {
+            setArchiving(false);
+          }
+        }}
       />
     </PortalPage>
   );

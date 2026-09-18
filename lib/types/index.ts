@@ -180,6 +180,8 @@ export interface Estimate {
   attachments?: EstimateAttachmentItem[] | string[];
   siteVisit?: EstimateSiteVisitRecord;
   signature?: EstimateSignature;
+  isArchived?: boolean;
+  isArchieved?: boolean;
   logs?: EstimateLog[];
   activities?: EstimateActivity[];
   createdAt: string;

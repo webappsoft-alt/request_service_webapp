@@ -900,6 +900,19 @@ export async function updateEstimateStatus(id: string, status: Estimate["status"
   return mapCrmEntity(response, mapEstimate);
 }
 
+export async function updateEstimateArchive(id: string, isArchived: boolean) {
+  const response = await putData(
+    providerCrmApi.estimate(id),
+    { isArchived, isArchieved: isArchived },
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapEstimate);
+}
+
+export async function deleteEstimate(id: string) {
+  return deleteData(providerCrmApi.estimate(id), { silent: false });
+}
+
 export async function finalizeEstimate(id: string, estimate?: Estimate) {
   try {
     return await updateEstimateStatus(id, "finalized");

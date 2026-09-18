@@ -135,14 +135,14 @@ export function CreateEstimateDialog({
       void dispatch(fetchCustomers({ force: true, limit: 100 }));
     }
     if (employees.length === 0) {
-      void dispatch(fetchTeam({ force: true, limit: 100 }));
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
     }
   }, [customerId, open, requestName, requestNotes, customers.length, employees.length, dispatch]);
 
   useEffect(() => {
     if (!open) return;
     if (tab === "visit" && employees.length === 0) {
-      void dispatch(fetchTeam({ force: true, limit: 100 }));
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
     }
   }, [open, tab, employees.length, dispatch]);
 
@@ -471,11 +471,20 @@ export function CreateEstimateDialog({
                   ) : (
                     <>
                       <SelectItem value="__unassigned__">Assign later</SelectItem>
-                      {employees.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {employeeName(item)}
-                        </SelectItem>
-                      ))}
+                      {employees
+                        .filter((item) => {
+                          const role = String(item.role || "").toLowerCase().trim();
+                          return (
+                            item.active !== false &&
+                            (role === "technician" || role === "tech" || !role)
+                          );
+                        })
+                        .map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {employeeName(item)}
+                            {item.trade ? ` · ${item.trade}` : ""}
+                          </SelectItem>
+                        ))}
                     </>
                   )}
                 </SelectContent>

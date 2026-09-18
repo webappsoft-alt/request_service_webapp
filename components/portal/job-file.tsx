@@ -555,16 +555,18 @@ export function JobSettingsTab({
               className="z-[100] w-[var(--radix-select-trigger-width)]"
             >
               <SelectItem value="__unassigned__">Unassigned</SelectItem>
-              {employees.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {employeeName(item)}
-                </SelectItem>
-              ))}
-              {contractors
-                .filter((item) => item.status === "active")
+              {employees
+                .filter((item) => {
+                  const role = String(item.role || "").toLowerCase().trim();
+                  return (
+                    item.active !== false &&
+                    (role === "technician" || role === "tech" || !role)
+                  );
+                })
                 .map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.companyName} · contractor
+                    {employeeName(item)}
+                    {item.trade ? ` · ${item.trade}` : ""}
                   </SelectItem>
                 ))}
             </SelectContent>

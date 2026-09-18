@@ -179,11 +179,9 @@ export function EstimateDetailView({ id }: { id: string }) {
 
   if (!estimate) {
     return pending || fetching || crm.refreshing ? (
-      <PortalPage title="Loading estimate…">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-8 animate-spin text-primary" />
-        </div>
-      </PortalPage>
+      <div className="flex min-h-[50vh] items-center justify-center py-12">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
     ) : (
       <Missing title="Estimate not found" href="/pro/dashboard/estimates" />
     );
@@ -720,11 +718,9 @@ export function JobDetailView({ id }: { id: string }) {
 
   if (!job) {
     return pending || fetching || crm.refreshing ? (
-      <PortalPage title="Loading job…">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-8 animate-spin text-primary" />
-        </div>
-      </PortalPage>
+      <div className="flex min-h-[50vh] items-center justify-center py-12">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
     ) : (
       <Missing title="Job not found" href="/pro/dashboard/jobs" />
     );
@@ -1025,11 +1021,9 @@ export function InvoiceDetailView({ id }: { id: string }) {
 
   if (!invoice) {
     return pending ? (
-      <PortalPage title="Loading invoice…">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-8 animate-spin text-primary" />
-        </div>
-      </PortalPage>
+      <div className="flex min-h-[50vh] items-center justify-center py-12">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
     ) : (
       <Missing title="Invoice not found" href="/pro/dashboard/invoices" />
     );
@@ -1170,11 +1164,9 @@ export function PaymentDetailView({ id }: { id: string }) {
 
   if (!payment) {
     return pending ? (
-      <PortalPage title="Loading payment…">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-8 animate-spin text-primary" />
-        </div>
-      </PortalPage>
+      <div className="flex min-h-[50vh] items-center justify-center py-12">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
     ) : (
       <Missing title="Payment not found" href="/pro/dashboard/payments" />
     );

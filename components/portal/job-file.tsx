@@ -47,7 +47,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
@@ -422,29 +421,33 @@ export function JobSettingsTab({
     };
     try {
       file.saveSettings(next);
-      if (apiReady) {
-        await updateJobApi(
-          job.id,
-          {
-            ...job,
-            customerId: next.customerId || job.customerId,
-            status: next.status,
-            notes: next.notes,
-            scheduledAt: next.start || job.scheduledAt,
-            dueAt: next.due || job.dueAt,
-            assignedTo: next.assignedTo || job.assignedTo,
-            address: {
-              ...job.address,
-              street: next.street || job.address.street,
-              city: next.city || job.address.city,
-              state: next.state || job.address.state,
-              zip: next.zip || job.address.zip,
+      if (job?.id) {
+        try {
+          await updateJobApi(
+            job.id,
+            {
+              ...job,
+              customerId: next.customerId || job.customerId,
+              status: next.status,
+              notes: next.notes,
+              scheduledAt: next.start || job.scheduledAt,
+              dueAt: next.due || job.dueAt,
+              assignedTo: next.assignedTo || job.assignedTo,
+              address: {
+                ...job.address,
+                street: next.street || job.address.street,
+                city: next.city || job.address.city,
+                state: next.state || job.address.state,
+                zip: next.zip || job.address.zip,
+              },
             },
-          },
-          employees,
-        );
-        await updateJobStatusApi(job.id, next.status, next.notes);
-        await crm.refresh();
+            employees,
+          );
+          await updateJobStatusApi(job.id, next.status, next.notes);
+          void crm.refresh({ silent: true });
+        } catch {
+          records.setStatus("job", job.id, next.status);
+        }
       } else {
         records.setStatus("job", job.id, next.status);
       }
@@ -783,7 +786,7 @@ export function JobAttachmentsTab({
   }
 
   async function persistEstimateAttachments(nextAttachments: JobAttachment[]) {
-    if (!estimate || !apiReady) return;
+    if (!estimate?.id) return;
     const attachmentPayload = nextAttachments
       .map((item) => ({
         name: (item.name || "").trim() || "Attachment",
@@ -791,14 +794,16 @@ export function JobAttachmentsTab({
       }))
       .filter((item) => Boolean(item.attachment));
 
+    const updatedEstimate: Estimate = {
+      ...estimate,
+      attachments: attachmentPayload,
+    };
+
+    crm.patchEstimate(estimate.id, updatedEstimate);
+
     const updated = await updateEstimateAttachments(estimate.id, attachmentPayload);
     if (updated) {
       crm.patchEstimate(estimate.id, updated);
-    } else {
-      crm.patchEstimate(estimate.id, { attachments: attachmentPayload });
-    }
-    if (crm.ready) {
-      void crm.refresh({ silent: true });
     }
     return updated;
   }
@@ -807,9 +812,7 @@ export function JobAttachmentsTab({
     if (!estimate) return;
     setSaving(true);
     try {
-      if (apiReady) {
-        await persistEstimateAttachments(attachments);
-      }
+      await persistEstimateAttachments(attachments);
       setLastSavedUrls(attachments.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
       toast.success("Attachments saved.");
     } catch (error) {
@@ -862,7 +865,7 @@ export function JobAttachmentsTab({
     try {
       const remaining = attachments.filter((item) => item.id !== file.id);
       removeAttachment(file.id);
-      if (estimate && apiReady) {
+      if (estimate) {
         await persistEstimateAttachments(remaining);
       }
       setLastSavedUrls(remaining.map((item) => (item.dataUrl || "").trim()).filter(Boolean));
@@ -871,7 +874,7 @@ export function JobAttachmentsTab({
       const message =
         error instanceof Error && error.message.trim()
           ? error.message
-          : "Could not update attachments on server.";
+          : "Could not update attachments.";
       toast.error(message);
     } finally {
       setDeletingId(null);

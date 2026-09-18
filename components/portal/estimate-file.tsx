@@ -247,7 +247,30 @@ export function EstimateSettingsTab({
     file.saveEstimateSettings(settingsDraft);
     const chosenCustomer = customers.find((item) => item.id === settingsDraft.customerId);
     const customerName = chosenCustomer ? crmCustomerName(chosenCustomer) : estimate.customerName;
-    if (apiReady) {
+
+    const patchedEstimate: Estimate = {
+      ...estimate,
+      title: settingsDraft.name.trim() || estimate.title,
+      customerId: settingsDraft.customerId,
+      customerName,
+      propertyAddress: {
+        ...estimate.propertyAddress,
+        street: settingsDraft.street,
+        city: settingsDraft.city,
+        state: settingsDraft.state,
+        zip: settingsDraft.zip,
+      },
+      issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
+      expiresAt: settingsDraft.expiresAt || undefined,
+      status: settingsDraft.status,
+      notes: settingsDraft.notes || undefined,
+      terms: settingsDraft.terms || undefined,
+    };
+    crm.patchEstimate(estimate.id, patchedEstimate);
+    records.setStatus("estimate", estimate.id, settingsDraft.status);
+    onSave?.(patchedEstimate);
+
+    if (estimate?.id) {
       const updated = await updateEstimateSettingsApi(estimate.id, {
         title: settingsDraft.name.trim() || estimate.title,
         customerId: settingsDraft.customerId,
@@ -266,33 +289,7 @@ export function EstimateSettingsTab({
       if (updated) {
         crm.patchEstimate(estimate.id, updated);
         onSave?.(updated);
-      } else {
-        const patchedEstimate: Estimate = {
-          ...estimate,
-          title: settingsDraft.name.trim() || estimate.title,
-          customerId: settingsDraft.customerId,
-          customerName,
-          propertyAddress: {
-            ...estimate.propertyAddress,
-            street: settingsDraft.street,
-            city: settingsDraft.city,
-            state: settingsDraft.state,
-            zip: settingsDraft.zip,
-          },
-          issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
-          expiresAt: settingsDraft.expiresAt || undefined,
-          status: settingsDraft.status,
-          notes: settingsDraft.notes || undefined,
-          terms: settingsDraft.terms || undefined,
-        };
-        crm.patchEstimate(estimate.id, patchedEstimate);
-        onSave?.(patchedEstimate);
       }
-      if (crm.ready) {
-        void crm.refresh({ silent: true });
-      }
-    } else {
-      records.setStatus("estimate", estimate.id, settingsDraft.status);
     }
   }
 

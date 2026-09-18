@@ -183,6 +183,8 @@ export interface Estimate {
   attachments?: EstimateAttachmentItem[] | string[];
   siteVisit?: EstimateSiteVisitRecord;
   signature?: EstimateSignature;
+  shareToken?: string;
+  shareUrl?: string;
   isArchived?: boolean;
   isArchieved?: boolean;
   logs?: EstimateLog[];

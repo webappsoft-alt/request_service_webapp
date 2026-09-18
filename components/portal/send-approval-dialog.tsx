@@ -51,6 +51,7 @@ export function SendApprovalDialog({
   const snapshot = useMemo(
     () =>
       buildEstimateSnapshot(estimate, {
+        token: estimate.shareToken || undefined,
         email: session?.email,
         companyName: provider.companyName,
         companyEmail: provider.email,
@@ -99,7 +100,10 @@ export function SendApprovalDialog({
                   if (!shared.shareToken) throw new Error("The CRM did not return a share link.");
                   token = shared.shareToken;
                   viaApi = true;
-                  crm.patchEstimate(estimate.id, { status: "sent" });
+                  crm.patchEstimate(estimate.id, {
+                    status: "sent",
+                    shareToken: token || undefined,
+                  });
                   const next = { ...signed, token };
                   share.saveSnapshot(next);
                   const url = shareUrlFor(token);

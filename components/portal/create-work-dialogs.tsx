@@ -15,10 +15,22 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { invalidateEstimatesCache, fetchEstimates } from "@/store/estimatesSlice";
+import {
+  invalidateEstimatesCache,
+  fetchEstimates,
+} from "@/store/estimatesSlice";
 import { createCustomerJob, updateCustomerJob } from "@/store/customersSlice";
-import { createEstimate as createEstimateApi, getEstimate } from "@/lib/api/crm-client";
-import { seedJobLines, writeCostLines, type JobCostLine } from "@/components/portal/use-job-costing";
+import { fetchTeam } from "@/store/teamSlice";
+import {
+  createEstimate as createEstimateApi,
+  getEstimate,
+  createRequest,
+} from "@/lib/api/crm-client";
+import {
+  seedJobLines,
+  writeCostLines,
+  type JobCostLine,
+} from "@/components/portal/use-job-costing";
 import { writeSiteVisit } from "@/components/portal/use-job-file";
 import {
   addressFrom,
@@ -38,12 +50,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { CRM_API_EVENT } from "@/components/portal/crm-data-provider";
-import { createRequest } from "@/lib/api/crm-client";
 import { crmCustomerName } from "@/lib/data/crm-people";
-import { employeeName, JOB_STATUSES, jobStatusLabel, type PortalRequest } from "@/lib/data/portal";
+import {
+  employeeName,
+  JOB_STATUSES,
+  jobStatusLabel,
+  type PortalRequest,
+} from "@/lib/data/portal";
 import { formatMoney } from "@/lib/format";
 import type { Estimate, Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -95,13 +114,22 @@ export function CreateEstimateDialog({
   const [tab, setTab] = useState<EstimateTab>("customer");
   const [path, setPath] = useState<EstimatePath>("site_visit");
   const [name, setName] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState(customerId ?? first?.id ?? "");
+  const [selectedCustomer, setSelectedCustomer] = useState(
+    customerId ?? first?.id ?? "",
+  );
   const [customerLabel, setCustomerLabel] = useState("");
-  const customer = customers.find((item) => item.id === selectedCustomer) ?? first;
+  const customer =
+    customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = customer?.addresses[0];
-  const [street, setStreet] = useState(address?.street || customerLocation.address || "");
-  const [city, setCity] = useState(address?.city || customerLocation.city || "");
-  const [state, setState] = useState(address?.state || customerLocation.state || "CO");
+  const [street, setStreet] = useState(
+    address?.street || customerLocation.address || "",
+  );
+  const [city, setCity] = useState(
+    address?.city || customerLocation.city || "",
+  );
+  const [state, setState] = useState(
+    address?.state || customerLocation.state || "CO",
+  );
   const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
   const [issuedAt, setIssuedAt] = useState(todayISO());
   const [expiresAt, setExpiresAt] = useState("");
@@ -109,7 +137,9 @@ export function CreateEstimateDialog({
   const [visitedAt, setVisitedAt] = useState(todayISO());
   const [accessNotes, setAccessNotes] = useState("");
   const [notes, setNotes] = useState("");
-  const [terms, setTerms] = useState("Valid for 30 days. Materials may change after site inspection.");
+  const [terms, setTerms] = useState(
+    "Valid for 30 days. Materials may change after site inspection.",
+  );
   const [lines, setLines] = useState<JobCostLine[]>([]);
   const [saving, setSaving] = useState(false);
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
@@ -135,7 +165,10 @@ export function CreateEstimateDialog({
     () =>
       useApi
         ? customerPaging.options
-        : customers.map((item) => ({ id: item.id, label: crmCustomerName(item) })),
+        : customers.map((item) => ({
+            id: item.id,
+            label: crmCustomerName(item),
+          })),
     [useApi, customerPaging.options, customers],
   );
   const technicianOptions = useMemo(() => {
@@ -146,7 +179,7 @@ export function CreateEstimateDialog({
             const role = String(item.role || "").toLowerCase().trim();
             return (
               item.active !== false &&
-              (role === "technician" || role === "tech" || !role)
+              (role === "technician" || role === "tech")
             );
           })
           .map((item) => ({
@@ -157,7 +190,8 @@ export function CreateEstimateDialog({
   }, [useApi, assigneePaging.options, employees]);
 
   const nextTab = (current: EstimateTab): EstimateTab => {
-    if (current === "customer") return path === "site_visit" ? "visit" : "scope";
+    if (current === "customer")
+      return path === "site_visit" ? "visit" : "scope";
     if (current === "visit" || current === "scope") return "review";
     return "review";
   };
@@ -181,7 +215,15 @@ export function CreateEstimateDialog({
     if (!useApi && employees.length === 0) {
       void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
     }
-  }, [boundCustomerId, open, requestName, requestNotes, useApi, employees.length, dispatch]);
+  }, [
+    boundCustomerId,
+    open,
+    requestName,
+    requestNotes,
+    useApi,
+    employees.length,
+    dispatch,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -203,13 +245,21 @@ export function CreateEstimateDialog({
     if (customerLocation.detectAttempted || customerLocation.detecting) return;
     if (hasLocation(customerLocation)) return;
     void dispatch(detectCurrentLocation());
-  }, [customerLocation.detectAttempted, customerLocation.detecting, customerLocation, dispatch, open]);
+  }, [
+    customerLocation.detectAttempted,
+    customerLocation.detecting,
+    customerLocation,
+    dispatch,
+    open,
+  ]);
 
   // When location finishes detecting or is available, prefill if fields are empty
   useEffect(() => {
     if (!open) return;
     if (!hasLocation(customerLocation)) return;
-    const currentCustomer = customers.find((item) => item.id === selectedCustomer);
+    const currentCustomer = customers.find(
+      (item) => item.id === selectedCustomer,
+    );
     const custAddr = currentCustomer?.addresses[0];
     if (!custAddr?.street && !street) {
       setStreet(customerLocation.address || "");
@@ -223,7 +273,16 @@ export function CreateEstimateDialog({
     if (!custAddr?.zip && !zip) {
       setZip(customerLocation.zip || "");
     }
-  }, [customerLocation, customers, open, selectedCustomer, street, city, state, zip]);
+  }, [
+    customerLocation,
+    customers,
+    open,
+    selectedCustomer,
+    street,
+    city,
+    state,
+    zip,
+  ]);
 
   function pickCustomer(id: string, option?: { id: string; label: string }) {
     setSelectedCustomer(id);
@@ -234,7 +293,10 @@ export function CreateEstimateDialog({
     }
     const next = customers.find((item) => item.id === id);
     const nextAddress = next?.addresses[0];
-    if (nextAddress && (nextAddress.street || nextAddress.city || nextAddress.zip)) {
+    if (
+      nextAddress &&
+      (nextAddress.street || nextAddress.city || nextAddress.zip)
+    ) {
       setStreet(nextAddress.street || "");
       setCity(nextAddress.city || "");
       setState(nextAddress.state || "CO");
@@ -269,7 +331,10 @@ export function CreateEstimateDialog({
     setSaving(true);
     try {
       const estimate = buildEstimate({
-        number: nextRecordNumber("EST", all.map((item) => item.number)),
+        number: nextRecordNumber(
+          "EST",
+          all.map((item) => item.number),
+        ),
         title: name.trim(),
         providerId: provider.id,
         customerId: customerIdValue,
@@ -301,14 +366,18 @@ export function CreateEstimateDialog({
       const saved = created ?? estimate;
       if (!saved?.id) throw new Error("Could not create this estimate.");
       if (requestId) records.setStatus("request", requestId, "estimate_sent");
-      writeCostLines(session?.email, saved.id, saved.items.map((item) => ({
-        id: item.id,
-        description: item.description,
-        kind: item.type === "labor" ? "labor" : "materials",
-        quantity: item.quantity,
-        unit: item.unit,
-        unitPrice: item.unitPrice,
-      })));
+      writeCostLines(
+        session?.email,
+        saved.id,
+        saved.items.map((item) => ({
+          id: item.id,
+          description: item.description,
+          kind: item.type === "labor" ? "labor" : "materials",
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+        })),
+      );
       if (path === "site_visit") {
         writeSiteVisit(session?.email, saved.id, {
           employeeId,
@@ -326,9 +395,15 @@ export function CreateEstimateDialog({
       onCreated?.(saved);
       onOpenChange(false);
       toast.success(`${saved.number || "Estimate"} created.`);
-      router.push(`/pro/dashboard/estimates/${saved.id}${path === "site_visit" ? "?tab=visit" : ""}`);
+      router.push(
+        `/pro/dashboard/estimates/${saved.id}${path === "site_visit" ? "?tab=visit" : ""}`,
+      );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create this estimate.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not create this estimate.",
+      );
     } finally {
       setSaving(false);
     }
@@ -337,239 +412,263 @@ export function CreateEstimateDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Create estimate</DialogTitle>
-          <DialogDescription>
-            Send a technician for a site visit, or write the quote in the office. The customer signs the finalized estimate
-            before the job starts.
-          </DialogDescription>
-        </DialogHeader>
-        <WizardTabs
-          value={tab}
-          onChange={setTab}
-          options={
-            path === "site_visit"
-              ? [
-                  { id: "customer", label: "Customer" },
-                  { id: "visit", label: "Site visit" },
-                  { id: "review", label: "Review" },
-                ]
-              : [
-                  { id: "customer", label: "Customer" },
-                  { id: "scope", label: "Line items" },
-                  { id: "review", label: "Review" },
-                ]
-          }
-        />
-        {tab === "customer" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
-              <button
-                type="button"
-                className={cn(
-                  "rounded-[4px] border px-3 py-3 text-left",
-                  path === "site_visit" ? "border-[#003F7D] bg-[#e8eef5]" : "border-black/15 bg-card",
-                )}
-                onClick={() => {
-                  setPath("site_visit");
-                  setTab((current) => (current === "scope" ? "visit" : current));
-                }}
-              >
-                <p className="text-sm font-semibold">Site visit first</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Send a technician to inspect, take photos, then finalize in the office.
-                </p>
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "rounded-[4px] border px-3 py-3 text-left",
-                  path === "office" ? "border-[#003F7D] bg-[#e8eef5]" : "border-black/15 bg-card",
-                )}
-                onClick={() => {
-                  setPath("office");
-                  setTab((current) => (current === "visit" ? "scope" : current));
-                }}
-              >
-                <p className="text-sm font-semibold">Write in the office</p>
-                <p className="mt-1 text-xs text-muted-foreground">Price the quote now, finalize, and send it for signature.</p>
-              </button>
-            </div>
-            {!lockedCustomer ? (
-              <Field
-                label="Customer"
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setCreateCustomerOpen(true)}
-                    className="text-xs font-medium text-primary hover:underline cursor-pointer"
-                  >
-                    + New customer
-                  </button>
-                }
-              >
-                <PaginatedEntitySelect
-                  id="estimate-customer"
-                  value={selectedCustomer}
-                  options={customerOptions}
-                  selectedLabel={customerLabel}
-                  placeholder="Select customer"
-                  emptyLabel="No customers found. Add a customer to continue."
-                  loading={useApi ? customerPaging.loading : false}
-                  loadingMore={useApi ? customerPaging.loadingMore : false}
-                  hasMore={useApi ? customerPaging.hasMore : false}
-                  onLoadMore={useApi ? customerPaging.loadMore : () => {}}
-                  onChange={(id, option) => pickCustomer(id, option)}
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create estimate</DialogTitle>
+            <DialogDescription>
+              Send a technician for a site visit, or write the quote in the
+              office. The customer signs the finalized estimate before the job
+              starts.
+            </DialogDescription>
+          </DialogHeader>
+          <WizardTabs
+            value={tab}
+            onChange={setTab}
+            options={
+              path === "site_visit"
+                ? [
+                    { id: "customer", label: "Customer" },
+                    { id: "visit", label: "Site visit" },
+                    { id: "review", label: "Review" },
+                  ]
+                : [
+                    { id: "customer", label: "Customer" },
+                    { id: "scope", label: "Line items" },
+                    { id: "review", label: "Review" },
+                  ]
+            }
+          />
+          {tab === "customer" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded-[4px] border px-3 py-3 text-left",
+                    path === "site_visit"
+                      ? "border-[#003F7D] bg-[#e8eef5]"
+                      : "border-black/15 bg-card",
+                  )}
+                  onClick={() => {
+                    setPath("site_visit");
+                    setTab((current) =>
+                      current === "scope" ? "visit" : current,
+                    );
+                  }}
+                >
+                  <p className="text-sm font-semibold">Site visit first</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Send a technician to inspect, take photos, then finalize in
+                    the office.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded-[4px] border px-3 py-3 text-left",
+                    path === "office"
+                      ? "border-[#003F7D] bg-[#e8eef5]"
+                      : "border-black/15 bg-card",
+                  )}
+                  onClick={() => {
+                    setPath("office");
+                    setTab((current) =>
+                      current === "visit" ? "scope" : current,
+                    );
+                  }}
+                >
+                  <p className="text-sm font-semibold">Write in the office</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Price the quote now, finalize, and send it for signature.
+                  </p>
+                </button>
+              </div>
+              {!lockedCustomer ? (
+                <Field
+                  label="Customer"
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setCreateCustomerOpen(true)}
+                      className="text-xs font-medium text-primary hover:underline cursor-pointer"
+                    >
+                      + New customer
+                    </button>
+                  }
+                >
+                  <PaginatedEntitySelect
+                    id="estimate-customer"
+                    value={selectedCustomer}
+                    options={customerOptions}
+                    selectedLabel={customerLabel}
+                    placeholder="Select customer"
+                    emptyLabel="No customers found. Add a customer to continue."
+                    loading={useApi ? customerPaging.loading : false}
+                    loadingMore={useApi ? customerPaging.loadingMore : false}
+                    hasMore={useApi ? customerPaging.hasMore : false}
+                    onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+                    onChange={(id, option) => pickCustomer(id, option)}
+                  />
+                </Field>
+              ) : null}
+              <Field label="Estimate name">
+                <Input
+                  value={name}
+                  placeholder="Enter estimate name"
+                  required
+                  onChange={(event) => setName(event.target.value)}
                 />
               </Field>
-            ) : null}
-            <Field label="Estimate name">
-              <Input
-                value={name}
-                placeholder="Enter estimate name"
-                required
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-            <Field label="Issued">
-              <Input
-                type="date"
-                value={issuedAt}
-                placeholder="mm/dd/yyyy"
-                onChange={(event) => setIssuedAt(event.target.value)}
-              />
-            </Field>
-            <Field label="Expires">
-              <Input
-                type="date"
-                value={expiresAt}
-                placeholder="mm/dd/yyyy"
-                onChange={(event) => setExpiresAt(event.target.value)}
-              />
-            </Field>
-            <Field label="Job address" className="sm:col-span-2">
-              <AddressAutocomplete
-                id="estimate-job-address"
-                value={street}
-                onChange={setStreet}
-                onSelect={applyJobAddress}
-                placeholder="Start typing a street address…"
-              />
-            </Field>
-            <Field label="City">
-              <Input
-                value={city}
-                placeholder="City"
-                onChange={(event) => setCity(event.target.value)}
-              />
-            </Field>
-            <Field label="State">
-              <Input
-                value={state}
-                placeholder="State"
-                onChange={(event) => setState(event.target.value)}
-              />
-            </Field>
-            <Field label="ZIP">
-              <Input
-                value={zip}
-                placeholder="ZIP / postal code"
-                onChange={(event) => setZip(event.target.value)}
-              />
-            </Field>
-          </div>
-        ) : null}
-        {tab === "visit" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Technician">
-              <PaginatedEntitySelect
-                id="estimate-technician"
-                value={employeeId}
-                options={technicianOptions}
-                placeholder="Assign later"
-                emptyLabel="No technicians found."
-                loading={useApi ? assigneePaging.loading : false}
-                loadingMore={useApi ? assigneePaging.loadingMore : false}
-                hasMore={useApi ? assigneePaging.hasMore : false}
-                onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
-                onChange={(id) => setEmployeeId(id)}
-              />
-            </Field>
-            <Field label="Visit date">
-              <Input
-                type="date"
-                value={visitedAt}
-                placeholder="mm/dd/yyyy"
-                onChange={(event) => setVisitedAt(event.target.value)}
-              />
-            </Field>
-            <Field label="Access / site notes" className="sm:col-span-2">
-              <Textarea
-                rows={3}
-                placeholder="Gate code, pets, parking, who to ask for"
-                value={accessNotes}
-                onChange={(event) => setAccessNotes(event.target.value)}
-              />
-            </Field>
-            <p className="sm:col-span-2 text-sm text-muted-foreground">
-              Photos and findings are captured on the estimate after the technician is on site.
-            </p>
-          </div>
-        ) : null}
-        {tab === "scope" ? <LineEditor lines={lines} onChange={setLines} /> : null}
-        {tab === "review" ? (
-          <div className="grid gap-3">
-            <p className="text-sm text-muted-foreground">
-              {name} for {customerLabel || (customer ? crmCustomerName(customer) : "customer")} ·{" "}
-              {street || "No street"}
-            </p>
-            <Field label="Notes">
-              <Textarea
-                rows={3}
-                placeholder="Optional notes for this estimate"
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-              />
-            </Field>
-            <Field label="Terms">
-              <Textarea
-                rows={3}
-                placeholder="Payment and validity terms"
-                value={terms}
-                onChange={(event) => setTerms(event.target.value)}
-              />
-            </Field>
-          </div>
-        ) : null}
-        <DialogFooter>
-          {tab !== "customer" ? (
-            <Button variant="outline" onClick={() => setTab(prevTab(tab))}>
-              Back
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-          )}
+              <Field label="Issued">
+                <Input
+                  type="date"
+                  value={issuedAt}
+                  placeholder="mm/dd/yyyy"
+                  onChange={(event) => setIssuedAt(event.target.value)}
+                />
+              </Field>
+              <Field label="Expires">
+                <Input
+                  type="date"
+                  value={expiresAt}
+                  placeholder="mm/dd/yyyy"
+                  onChange={(event) => setExpiresAt(event.target.value)}
+                />
+              </Field>
+              <Field label="Job address" className="sm:col-span-2">
+                <AddressAutocomplete
+                  id="estimate-job-address"
+                  value={street}
+                  onChange={setStreet}
+                  onSelect={applyJobAddress}
+                  placeholder="Start typing a street address…"
+                />
+              </Field>
+              <Field label="City">
+                <Input
+                  value={city}
+                  placeholder="City"
+                  onChange={(event) => setCity(event.target.value)}
+                />
+              </Field>
+              <Field label="State">
+                <Input
+                  value={state}
+                  placeholder="State"
+                  onChange={(event) => setState(event.target.value)}
+                />
+              </Field>
+              <Field label="ZIP">
+                <Input
+                  value={zip}
+                  placeholder="ZIP / postal code"
+                  onChange={(event) => setZip(event.target.value)}
+                />
+              </Field>
+            </div>
+          ) : null}
+          {tab === "visit" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Technician">
+                <PaginatedEntitySelect
+                  id="estimate-technician"
+                  value={employeeId}
+                  options={technicianOptions}
+                  placeholder="Assign later"
+                  emptyLabel="No technicians found."
+                  loading={useApi ? assigneePaging.loading : false}
+                  loadingMore={useApi ? assigneePaging.loadingMore : false}
+                  hasMore={useApi ? assigneePaging.hasMore : false}
+                  onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+                  onChange={(id) => setEmployeeId(id)}
+                />
+              </Field>
+              <Field label="Visit date">
+                <Input
+                  type="date"
+                  value={visitedAt}
+                  placeholder="mm/dd/yyyy"
+                  onChange={(event) => setVisitedAt(event.target.value)}
+                />
+              </Field>
+              <Field label="Access / site notes" className="sm:col-span-2">
+                <Textarea
+                  rows={3}
+                  placeholder="Gate code, pets, parking, who to ask for"
+                  value={accessNotes}
+                  onChange={(event) => setAccessNotes(event.target.value)}
+                />
+              </Field>
+              <p className="sm:col-span-2 text-sm text-muted-foreground">
+                Photos and findings are captured on the estimate after the
+                technician is on site.
+              </p>
+            </div>
+          ) : null}
+          {tab === "scope" ? (
+            <LineEditor lines={lines} onChange={setLines} />
+          ) : null}
           {tab === "review" ? (
-            <Button data-action="submit-estimate" disabled={!hasEstimateName || saving} onClick={create}>
-              {saving ? "Creating…" : "Create estimate"}
-            </Button>
-          ) : (
-            <Button disabled={!hasEstimateName} onClick={() => setTab(nextTab(tab))}>
-              Continue
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <CreateCustomerDialog
-      open={createCustomerOpen}
-      onOpenChange={setCreateCustomerOpen}
-    />
-  </>
-);
+            <div className="grid gap-3">
+              <p className="text-sm text-muted-foreground">
+                {name} for{" "}
+                {customerLabel ||
+                  (customer ? crmCustomerName(customer) : "customer")}{" "}
+                · {street || "No street"}
+              </p>
+              <Field label="Notes">
+                <Textarea
+                  rows={3}
+                  placeholder="Optional notes for this estimate"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                />
+              </Field>
+              <Field label="Terms">
+                <Textarea
+                  rows={3}
+                  placeholder="Payment and validity terms"
+                  value={terms}
+                  onChange={(event) => setTerms(event.target.value)}
+                />
+              </Field>
+            </div>
+          ) : null}
+          <DialogFooter>
+            {tab !== "customer" ? (
+              <Button variant="outline" onClick={() => setTab(prevTab(tab))}>
+                Back
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+            )}
+            {tab === "review" ? (
+              <Button
+                data-action="submit-estimate"
+                disabled={!hasEstimateName || saving}
+                onClick={create}
+              >
+                {saving ? "Creating…" : "Create estimate"}
+              </Button>
+            ) : (
+              <Button
+                disabled={!hasEstimateName}
+                onClick={() => setTab(nextTab(tab))}
+              >
+                Continue
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <CreateCustomerDialog
+        open={createCustomerOpen}
+        onOpenChange={setCreateCustomerOpen}
+      />
+    </>
+  );
 }
 
 export function CreateJobDialog({
@@ -609,18 +708,30 @@ export function CreateJobDialog({
   const isEdit = Boolean(job?.id);
   const [tab, setTab] = useState<JobTab>("customer");
   const [sourceId, setSourceId] = useState(estimate?.id ?? "");
-  const [linkedEstimate, setLinkedEstimate] = useState<Estimate | null>(estimate ?? null);
-  const source = linkedEstimate ?? allEstimates.find((item) => item.id === sourceId);
-  const [name, setName] = useState(source?.items[0]?.description.replace(/ labor$/i, "") ?? "Service visit");
+  const [linkedEstimate, setLinkedEstimate] = useState<Estimate | null>(
+    estimate ?? null,
+  );
+  const source =
+    linkedEstimate ?? allEstimates.find((item) => item.id === sourceId);
+  const [name, setName] = useState(
+    source?.items[0]?.description.replace(/ labor$/i, "") ?? "Service visit",
+  );
   const [selectedCustomer, setSelectedCustomer] = useState(
     customerId ?? estimate?.customerId ?? first?.id ?? "",
   );
   const [customerLabel, setCustomerLabel] = useState("");
-  const customer = customers.find((item) => item.id === selectedCustomer) ?? first;
+  const customer =
+    customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = source?.propertyAddress ?? customer?.addresses[0];
-  const [street, setStreet] = useState(address?.street || customerLocation.address || "");
-  const [city, setCity] = useState(address?.city || customerLocation.city || "");
-  const [state, setState] = useState(address?.state || customerLocation.state || "CO");
+  const [street, setStreet] = useState(
+    address?.street || customerLocation.address || "",
+  );
+  const [city, setCity] = useState(
+    address?.city || customerLocation.city || "",
+  );
+  const [state, setState] = useState(
+    address?.state || customerLocation.state || "CO",
+  );
   const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
   const [latitude, setLatitude] = useState<number | null>(
     address?.latitude ?? customerLocation.latitude ?? null,
@@ -648,7 +759,12 @@ export function CreateJobDialog({
       : [],
   );
   // Opened from customer detail / estimate detail / edit → customer is fixed from that page.
-  const boundCustomerId = (customerId || estimate?.customerId || job?.customerId || "").trim();
+  const boundCustomerId = (
+    customerId ||
+    estimate?.customerId ||
+    job?.customerId ||
+    ""
+  ).trim();
   const lockedCustomer = Boolean(boundCustomerId);
   const estimateFilter = useMemo(
     () => (boundCustomerId ? { customerId: boundCustomerId } : {}),
@@ -677,7 +793,10 @@ export function CreateJobDialog({
     () =>
       useApi
         ? customerPaging.options
-        : customers.map((item) => ({ id: item.id, label: crmCustomerName(item) })),
+        : customers.map((item) => ({
+            id: item.id,
+            label: crmCustomerName(item),
+          })),
     [useApi, customerPaging.options, customers],
   );
   const estimateOptions = useMemo(() => {
@@ -686,7 +805,10 @@ export function CreateJobDialog({
       : allEstimates;
     const rows = useApi
       ? estimatePaging.options
-      : localRows.map((item) => ({ id: item.id, label: item.number || item.id }));
+      : localRows.map((item) => ({
+          id: item.id,
+          label: item.number || item.id,
+        }));
     return [{ id: "", label: "New job (creates a draft quote)" }, ...rows];
   }, [useApi, estimatePaging.options, allEstimates, boundCustomerId]);
   const technicianOptions = useMemo(() => {
@@ -697,7 +819,7 @@ export function CreateJobDialog({
             const role = String(item.role || "").toLowerCase().trim();
             return (
               item.active !== false &&
-              (role === "technician" || role === "tech" || !role)
+              (role === "technician" || role === "tech")
             );
           })
           .map((item) => ({
@@ -707,14 +829,17 @@ export function CreateJobDialog({
     return [{ id: "", label: "Unassigned" }, ...rows];
   }, [useApi, assigneePaging.options, employees]);
   const statusOptions = useMemo(
-    () => JOB_STATUSES.map((item) => ({ id: item, label: jobStatusLabel(item) })),
+    () =>
+      JOB_STATUSES.map((item) => ({ id: item, label: jobStatusLabel(item) })),
     [],
   );
 
-  const assignedTo = employeeLabel || (() => {
-    const match = employees.find((item) => item.id === employeeId);
-    return match ? employeeName(match) : "";
-  })();
+  const assignedTo =
+    employeeLabel ||
+    (() => {
+      const match = employees.find((item) => item.id === employeeId);
+      return match ? employeeName(match) : "";
+    })();
 
   useEffect(() => {
     if (!open) {
@@ -729,7 +854,10 @@ export function CreateJobDialog({
     }
     // Prefill from estimate only when creating (not editing).
     if (!job?.id && estimate?.id) void pickSource(estimate.id);
-  }, [estimate, open, boundCustomerId, customers, job?.id]);
+    if (!useApi && employees.length === 0) {
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
+    }
+  }, [estimate, open, boundCustomerId, customers, job?.id, useApi, employees.length, dispatch]);
 
   // Hydrate edit form once per open+job — do not re-run on customers/employees
   // changes or typing will be wiped on every keystroke.
@@ -777,13 +905,22 @@ export function CreateJobDialog({
     if (customerLocation.detectAttempted || customerLocation.detecting) return;
     if (hasLocation(customerLocation)) return;
     void dispatch(detectCurrentLocation());
-  }, [customerLocation.detectAttempted, customerLocation.detecting, customerLocation, dispatch, open, job?.id]);
+  }, [
+    customerLocation.detectAttempted,
+    customerLocation.detecting,
+    customerLocation,
+    dispatch,
+    open,
+    job?.id,
+  ]);
 
   // When location finishes detecting or is available, prefill if fields are empty
   useEffect(() => {
     if (!open || sourceId || job?.id) return;
     if (!hasLocation(customerLocation)) return;
-    const currentCustomer = customers.find((item) => item.id === selectedCustomer);
+    const currentCustomer = customers.find(
+      (item) => item.id === selectedCustomer,
+    );
     const custAddr = currentCustomer?.addresses[0];
     if (!custAddr?.street && !street) {
       setStreet(customerLocation.address || "");
@@ -803,7 +940,20 @@ export function CreateJobDialog({
     if (longitude == null && customerLocation.longitude != null) {
       setLongitude(customerLocation.longitude);
     }
-  }, [customerLocation, customers, open, selectedCustomer, sourceId, street, city, state, zip, job?.id, latitude, longitude]);
+  }, [
+    customerLocation,
+    customers,
+    open,
+    selectedCustomer,
+    sourceId,
+    street,
+    city,
+    state,
+    zip,
+    job?.id,
+    latitude,
+    longitude,
+  ]);
 
   function applyEstimateSource(next: Estimate) {
     setLinkedEstimate(next);
@@ -840,7 +990,11 @@ export function CreateJobDialog({
     }
     const local = allEstimates.find((item) => item.id === id);
     if (local) {
-      if (boundCustomerId && local.customerId && local.customerId !== boundCustomerId) {
+      if (
+        boundCustomerId &&
+        local.customerId &&
+        local.customerId !== boundCustomerId
+      ) {
         toast.error("That estimate belongs to a different customer.");
         setSourceId("");
         setLinkedEstimate(null);
@@ -852,7 +1006,11 @@ export function CreateJobDialog({
     try {
       const remote = await getEstimate(id);
       if (!remote) return;
-      if (boundCustomerId && remote.customerId && remote.customerId !== boundCustomerId) {
+      if (
+        boundCustomerId &&
+        remote.customerId &&
+        remote.customerId !== boundCustomerId
+      ) {
         toast.error("That estimate belongs to a different customer.");
         setSourceId("");
         setLinkedEstimate(null);
@@ -903,7 +1061,14 @@ export function CreateJobDialog({
           customerId: jobCustomerId,
           estimateId: job.estimateId || source?.id || undefined,
           serviceId: job.serviceId,
-          address: addressFrom(street, city, state, zip, job.address?.id, jobCoords),
+          address: addressFrom(
+            street,
+            city,
+            state,
+            zip,
+            job.address?.id,
+            jobCoords,
+          ),
           assignedTo: techId || undefined,
           scheduledAt: start,
           dueAt: due || undefined,
@@ -917,13 +1082,21 @@ export function CreateJobDialog({
           saved = await dispatch(
             updateCustomerJob({
               id: job.id,
-              job: { ...nextJob, changeOrders: job.changeOrders, createdAt: job.createdAt },
+              job: {
+                ...nextJob,
+                changeOrders: job.changeOrders,
+                createdAt: job.createdAt,
+              },
               employees,
               customerId: jobCustomerId,
             }),
           ).unwrap();
         } else {
-          saved = { ...nextJob, changeOrders: job.changeOrders, createdAt: job.createdAt };
+          saved = {
+            ...nextJob,
+            changeOrders: job.changeOrders,
+            createdAt: job.createdAt,
+          };
           toast.error("Sign in as a provider to update jobs.");
           return;
         }
@@ -1178,7 +1351,10 @@ export function CreateJobDialog({
         ) : null}
         <DialogFooter>
           {tab !== "customer" ? (
-            <Button variant="outline" onClick={() => setTab(tab === "review" ? "schedule" : "customer")}>
+            <Button
+              variant="outline"
+              onClick={() => setTab(tab === "review" ? "schedule" : "customer")}
+            >
               Back
             </Button>
           ) : (
@@ -1187,7 +1363,11 @@ export function CreateJobDialog({
             </Button>
           )}
           {tab === "review" ? (
-            <Button data-action="submit-job" disabled={saving} onClick={() => void create()}>
+            <Button
+              data-action="submit-job"
+              disabled={saving}
+              onClick={() => void create()}
+            >
               {saving
                 ? isEdit
                   ? "Saving…"
@@ -1197,7 +1377,11 @@ export function CreateJobDialog({
                   : "Create job"}
             </Button>
           ) : (
-            <Button onClick={() => setTab(tab === "customer" ? "schedule" : "review")}>Continue</Button>
+            <Button
+              onClick={() => setTab(tab === "customer" ? "schedule" : "review")}
+            >
+              Continue
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
@@ -1205,26 +1389,43 @@ export function CreateJobDialog({
   );
 }
 
-function LineEditor({ lines, onChange }: { lines: JobCostLine[]; onChange: (lines: JobCostLine[]) => void }) {
+function LineEditor({
+  lines,
+  onChange,
+}: {
+  lines: JobCostLine[];
+  onChange: (lines: JobCostLine[]) => void;
+}) {
   function patch(id: string, next: Partial<JobCostLine>) {
-    onChange(lines.map((line) => (line.id === id ? { ...line, ...next } : line)));
+    onChange(
+      lines.map((line) => (line.id === id ? { ...line, ...next } : line)),
+    );
   }
 
   return (
     <div className="space-y-2">
       {lines.map((line) => (
-        <div key={line.id} className="grid grid-cols-[1fr_4.5rem_5.5rem_auto_auto] items-center gap-2">
+        <div
+          key={line.id}
+          className="grid grid-cols-[1fr_4.5rem_5.5rem_auto_auto] items-center gap-2"
+        >
           <Input
-            placeholder={line.kind === "labor" ? "Additional labor" : "Additional material"}
+            placeholder={
+              line.kind === "labor" ? "Additional labor" : "Additional material"
+            }
             value={line.description}
-            onChange={(event) => patch(line.id, { description: event.target.value })}
+            onChange={(event) =>
+              patch(line.id, { description: event.target.value })
+            }
           />
           <Input
             type="number"
             min={0}
             step="0.25"
             value={line.quantity}
-            onChange={(event) => patch(line.id, { quantity: Number(event.target.value) || 0 })}
+            onChange={(event) =>
+              patch(line.id, { quantity: Number(event.target.value) || 0 })
+            }
           />
           <Input
             type="number"
@@ -1232,15 +1433,21 @@ function LineEditor({ lines, onChange }: { lines: JobCostLine[]; onChange: (line
             placeholder="0"
             step="1"
             value={line.unitPrice ? line.unitPrice : ""}
-            onChange={(event) => patch(line.id, { unitPrice: Number(event.target.value) || 0 })}
+            onChange={(event) =>
+              patch(line.id, { unitPrice: Number(event.target.value) || 0 })
+            }
           />
-          <span className="text-sm tabular-nums">{formatMoney(line.quantity * line.unitPrice)}</span>
+          <span className="text-sm tabular-nums">
+            {formatMoney(line.quantity * line.unitPrice)}
+          </span>
           <Button
             aria-label={`Remove ${line.description || line.kind}`}
             className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             size="icon-sm"
             variant="ghost"
-            onClick={() => onChange(lines.filter((item) => item.id !== line.id))}
+            onClick={() =>
+              onChange(lines.filter((item) => item.id !== line.id))
+            }
           >
             <Trash2 />
           </Button>
@@ -1253,7 +1460,14 @@ function LineEditor({ lines, onChange }: { lines: JobCostLine[]; onChange: (line
           onClick={() =>
             onChange([
               ...lines,
-              { id: `line_${Date.now()}`, description: "", kind: "labor", quantity: 1, unit: "hr", unitPrice: 0 },
+              {
+                id: `line_${Date.now()}`,
+                description: "",
+                kind: "labor",
+                quantity: 1,
+                unit: "hr",
+                unitPrice: 0,
+              },
             ])
           }
         >
@@ -1265,7 +1479,14 @@ function LineEditor({ lines, onChange }: { lines: JobCostLine[]; onChange: (line
           onClick={() =>
             onChange([
               ...lines,
-              { id: `line_m_${Date.now()}`, description: "", kind: "materials", quantity: 1, unit: "ea", unitPrice: 0 },
+              {
+                id: `line_m_${Date.now()}`,
+                description: "",
+                kind: "materials",
+                quantity: 1,
+                unit: "ea",
+                unitPrice: 0,
+              },
             ])
           }
         >
@@ -1315,7 +1536,10 @@ export function CreateLeadDialog({
     () =>
       useApi
         ? customerPaging.options
-        : customers.map((item) => ({ id: item.id, label: crmCustomerName(item) })),
+        : customers.map((item) => ({
+            id: item.id,
+            label: crmCustomerName(item),
+          })),
     [useApi, customerPaging.options, customers],
   );
 
@@ -1346,7 +1570,8 @@ export function CreateLeadDialog({
           customerId,
           serviceName: serviceName.trim(),
           channel: "direct",
-          details: details.trim() || `${serviceName.trim()} requested by phone.`,
+          details:
+            details.trim() || `${serviceName.trim()} requested by phone.`,
           preferredDate: preferredDate || undefined,
           preferredTimeWindow: preferredTimeWindow || "morning",
         });
@@ -1358,7 +1583,10 @@ export function CreateLeadDialog({
         customerLabel || (customer ? crmCustomerName(customer) : "Customer");
       const request: PortalRequest = created || {
         id: `req_${Date.now().toString(36)}`,
-        number: nextRecordNumber("RS", all.map((item) => item.number)),
+        number: nextRecordNumber(
+          "RS",
+          all.map((item) => item.number),
+        ),
         customerId,
         providerId: provider.id,
         categoryId: provider.categoryIds[0] ?? "plumbing",
@@ -1398,7 +1626,10 @@ export function CreateLeadDialog({
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>Create lead</DialogTitle>
-          <DialogDescription>Log a phone, walk-in, or referral request before you write the estimate.</DialogDescription>
+          <DialogDescription>
+            Log a phone, walk-in, or referral request before you write the
+            estimate.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <Field label="Customer">
@@ -1458,10 +1689,17 @@ export function CreateLeadDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
             Cancel
           </Button>
-          <Button disabled={!serviceName.trim() || !customerId || submitting} onClick={save}>
+          <Button
+            disabled={!serviceName.trim() || !customerId || submitting}
+            onClick={save}
+          >
             {submitting ? "Saving…" : "Save lead"}
           </Button>
         </DialogFooter>
@@ -1488,7 +1726,9 @@ function WizardTabs<T extends string>({
           onClick={() => onChange(option.id)}
           className={cn(
             "rounded-[4px] px-3 py-1.5 text-sm",
-            value === option.id ? "bg-[#e8eef5] font-semibold text-[#003F7D]" : "text-muted-foreground",
+            value === option.id
+              ? "bg-[#e8eef5] font-semibold text-[#003F7D]"
+              : "text-muted-foreground",
           )}
         >
           {option.label}

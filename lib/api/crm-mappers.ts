@@ -945,6 +945,8 @@ export function mapEstimate(raw: unknown): Estimate | null {
     attachments: mapEstimateAttachments(record.attachments),
     siteVisit: mapEstimateSiteVisit(record.siteVisit),
     signature: mapApprovalSignature(record.approval ?? record.signature),
+    shareToken: trimmed(record.shareToken || record.token || record.share_token) || undefined,
+    shareUrl: trimmed(record.shareUrl || record.customerUrl || record.publicUrl) || undefined,
     isArchived: record.isArchived !== undefined || record.isArchieved !== undefined
       ? Boolean(record.isArchived ?? record.isArchieved)
       : undefined,

@@ -354,10 +354,12 @@ export function EstimatesView() {
                         if (useApi) {
                           try {
                             const res = await shareEstimate(row.id);
-                            if (res?.shareUrl) {
-                              linkUrl = res.shareUrl;
-                            } else if (res?.shareToken) {
+                            if (res?.shareToken) {
                               linkUrl = shareUrlFor(res.shareToken);
+                            } else if (res?.shareUrl) {
+                              linkUrl = res.shareUrl.startsWith("http")
+                                ? res.shareUrl
+                                : shareUrlFor(res.shareUrl.replace(/^\//, ""));
                             }
                           } catch {
                             // fallback
@@ -366,12 +368,17 @@ export function EstimatesView() {
                         if (!linkUrl) {
                           const token =
                             row.shareToken ||
-                            share.snapshotForEstimate(row.id)?.token ||
-                            shareTokenFor(row.id);
-                          linkUrl = shareUrlFor(token);
+                            share.snapshotForEstimate(row.id)?.token;
+                          if (token) {
+                            linkUrl = shareUrlFor(token);
+                          }
                         }
-                        await navigator.clipboard.writeText(linkUrl);
-                        toast.success("Customer link copied to clipboard.");
+                        if (linkUrl) {
+                          await navigator.clipboard.writeText(linkUrl);
+                          toast.success("Customer link copied to clipboard.");
+                        } else {
+                          toast.error("Share token is not available for this estimate.");
+                        }
                       } catch {
                         toast.error("Could not copy link to clipboard.");
                       }

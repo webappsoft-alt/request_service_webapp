@@ -72,20 +72,29 @@ export function EstimateShareTab({
     };
   }, []);
 
-  const displayUrl = url || (snapshot?.token ? shareUrlFor(snapshot.token) : "");
+  const displayUrl =
+    url ||
+    (estimate.shareToken
+      ? shareUrlFor(estimate.shareToken)
+      : snapshot?.token
+        ? shareUrlFor(snapshot.token)
+        : "");
 
   async function publish() {
     if (!ready) {
       toast.error("Finalize the estimate in the office before sending it to the customer.");
       return "";
     }
-    let token = snapshot?.token;
-    let href = snapshot?.token ? shareUrlFor(snapshot.token) : "";
+    let token = estimate.shareToken || snapshot?.token;
+    let href = token ? shareUrlFor(token) : "";
     if (apiReady) {
       const shared = await shareEstimateApi(estimate.id);
       token = shared.shareToken || token;
       href = token ? shareUrlFor(token) : href;
-      crm.patchEstimate(estimate.id, { status: "sent" });
+      crm.patchEstimate(estimate.id, {
+        status: "sent",
+        shareToken: token || undefined,
+      });
       if (shared.emailSent) {
         toast.success(
           shared.emailTo

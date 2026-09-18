@@ -107,7 +107,7 @@ export function buildEstimateSnapshot(
     companySignatureDataUrl?: string;
   },
 ): EstimateShareSnapshot {
-  const token = extras.token || shareTokenFor(estimate.id);
+  const token = extras.token || estimate.shareToken || shareTokenFor(estimate.id);
   const stored = readCostLines(extras.email, estimateAsJob(estimate));
   const lines = stored.length
     ? stored

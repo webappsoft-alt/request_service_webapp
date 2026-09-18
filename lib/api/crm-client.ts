@@ -1022,15 +1022,37 @@ export async function finalizeEstimate(id: string, estimate?: Estimate) {
 
 export async function shareEstimate(id: string) {
   const response = await postData(providerCrmApi.estimateShare(id), undefined, { silent: false });
-  const payload = ((response as { data?: unknown })?.data ?? response) as Partial<CrmEstimateShareResult>;
+  const raw = ((response as { data?: unknown })?.data ?? response) as Record<string, unknown> | null;
+  const payload = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const nestedEst = (payload.estimate && typeof payload.estimate === "object" ? payload.estimate : {}) as Record<string, unknown>;
+
+  const shareToken = String(
+    payload.shareToken ??
+    payload.token ??
+    payload.share_token ??
+    nestedEst.shareToken ??
+    nestedEst.token ??
+    nestedEst.share_token ??
+    ""
+  ).trim();
+
+  const shareUrl = String(
+    payload.shareUrl ??
+    payload.customerUrl ??
+    payload.publicUrl ??
+    nestedEst.shareUrl ??
+    nestedEst.customerUrl ??
+    ""
+  ).trim();
+
   return {
-    estimateId: String(payload.estimateId ?? id),
-    shareToken: String(payload.shareToken ?? ""),
-    shareUrl: String(payload.shareUrl ?? ""),
+    estimateId: String(payload.estimateId ?? payload.id ?? payload._id ?? nestedEst.id ?? nestedEst._id ?? id),
+    shareToken,
+    shareUrl: shareUrl || (shareToken ? `/${shareToken}` : ""),
     absoluteShareUrl: payload.absoluteShareUrl
       ? String(payload.absoluteShareUrl)
       : undefined,
-    status: String(payload.status ?? ""),
+    status: String(payload.status ?? nestedEst.status ?? ""),
     emailSent: Boolean(payload.emailSent),
     emailTo: payload.emailTo == null ? null : String(payload.emailTo),
     emailSkippedReason: payload.emailSkippedReason

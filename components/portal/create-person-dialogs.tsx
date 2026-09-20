@@ -695,6 +695,12 @@ export function CreateVendorDialog({
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   function reset() {
@@ -703,6 +709,12 @@ export function CreateVendorDialog({
     setContact("");
     setEmail("");
     setPhone("");
+    setStreet("");
+    setCity("");
+    setState("");
+    setZip("");
+    setLatitude(null);
+    setLongitude(null);
     setSaving(false);
   }
 
@@ -717,8 +729,23 @@ export function CreateVendorDialog({
     setContact(vendor.contact);
     setEmail(vendor.email);
     setPhone(vendor.phone);
+    setStreet(vendor.street || "");
+    setCity(vendor.city || "");
+    setState(vendor.state || "");
+    setZip(vendor.zip || "");
+    setLatitude(vendor.latitude ?? null);
+    setLongitude(vendor.longitude ?? null);
     setSaving(false);
   }, [open, vendor]);
+
+  function applyVendorAddress(address: PlaceAddress) {
+    setStreet(address.formattedAddress || address.streetAddress || "");
+    setCity(address.city || "");
+    setState(address.state || "");
+    if (address.zipCode) setZip(address.zipCode);
+    setLatitude(address.latitude);
+    setLongitude(address.longitude);
+  }
 
   async function save() {
     if (saving) return;
@@ -728,6 +755,12 @@ export function CreateVendorDialog({
       contact: contact.trim() || "Accounts",
       email: email.trim() || "orders@vendor.local",
       phone: phone.trim() || "(000) 000-0000",
+      street: street.trim(),
+      city: city.trim() || provider.city,
+      state: state.trim() || provider.state,
+      zip: zip.trim(),
+      latitude,
+      longitude,
     };
     if (!patch.name) return;
 
@@ -748,8 +781,6 @@ export function CreateVendorDialog({
           id: `ven_${provider.id}_new_${Date.now()}`,
           number: `VND-${310 + vendors.length}`,
           ...patch,
-          city: provider.city,
-          state: provider.state,
           accountNumber: `ACC-${vendors.length + 1}`,
           terms: "Net 30",
           balance: 0,
@@ -804,21 +835,61 @@ export function CreateVendorDialog({
             <FieldLabel htmlFor="ven-contact">Contact</FieldLabel>
             <Input id="ven-contact" value={contact} onChange={(change) => setContact(change.target.value)} placeholder="Accounts receivable" />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="ven-email">Email</FieldLabel>
+            <Input id="ven-email" value={email} onChange={(change) => setEmail(change.target.value)} placeholder="orders@vendor.com" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="ven-phone">Phone</FieldLabel>
+            <AuthPhoneInput
+              id="ven-phone"
+              value={phone}
+              onChange={setPhone}
+              placeholder="(555) 123-4567"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="ven-location">Location</FieldLabel>
+            <AddressAutocomplete
+              id="ven-location"
+              value={street}
+              onChange={setStreet}
+              onSelect={applyVendorAddress}
+              placeholder="Start typing a street address…"
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-3">
             <Field>
-              <FieldLabel htmlFor="ven-email">Email</FieldLabel>
-              <Input id="ven-email" value={email} onChange={(change) => setEmail(change.target.value)} placeholder="orders@vendor.com" />
+              <FieldLabel htmlFor="ven-city">City</FieldLabel>
+              <Input
+                id="ven-city"
+                value={city}
+                onChange={(change) => setCity(change.target.value)}
+                placeholder="Austin"
+              />
             </Field>
             <Field>
-              <FieldLabel htmlFor="ven-phone">Phone</FieldLabel>
-              <AuthPhoneInput
-                id="ven-phone"
-                value={phone}
-                onChange={setPhone}
-                placeholder="(555) 123-4567"
+              <FieldLabel htmlFor="ven-state">State</FieldLabel>
+              <Input
+                id="ven-state"
+                value={state}
+                onChange={(change) => setState(change.target.value)}
+                placeholder="TX"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ven-zip">ZIP</FieldLabel>
+              <Input
+                id="ven-zip"
+                value={zip}
+                onChange={(change) => setZip(change.target.value)}
+                placeholder="78701"
               />
             </Field>
           </div>
+          <p className="text-xs text-muted-foreground">
+            City, state, and ZIP fill in when you pick an address.
+          </p>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
@@ -983,6 +1054,7 @@ export function CreateReminderDialog({
         assignedEmployeeId ||
         (linkedKind === "employee" ? linkedId : undefined),
       assignedContractorId: linkedKind === "contractor" ? linkedId : undefined,
+      assignedVendorId: linkedKind === "vendor" ? linkedId : undefined,
       status,
       createdAt: reminder?.createdAt ?? new Date().toISOString().slice(0, 10),
     };

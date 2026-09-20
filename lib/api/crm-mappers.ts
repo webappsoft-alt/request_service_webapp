@@ -306,6 +306,8 @@ function getEntityPayload(response: unknown): unknown {
     if (dataRec?.activity !== undefined) return dataRec.activity;
     if (dataRec?.customer !== undefined) return dataRec.customer;
     if (dataRec?.employee !== undefined) return dataRec.employee;
+    if (dataRec?.vendor !== undefined) return dataRec.vendor;
+    if (dataRec?.contractor !== undefined) return dataRec.contractor;
     if (dataRec?.job !== undefined) return dataRec.job;
     if (dataRec?.invoice !== undefined) return dataRec.invoice;
     return data;
@@ -820,24 +822,125 @@ export function mapPortalVendor(raw: unknown): PortalVendor | null {
   const id = crmIdOf(record);
   if (!id) return null;
 
+  const location = asRecord(record.location);
+  const coordinates = Array.isArray(location?.coordinates)
+    ? location.coordinates
+    : null;
+  const lng = coordinates && Number.isFinite(Number(coordinates[0])) ? Number(coordinates[0]) : null;
+  const lat = coordinates && Number.isFinite(Number(coordinates[1])) ? Number(coordinates[1]) : null;
+
   return {
     id,
     number: trimmed(record.number) || `VEN-${id.slice(-4).toUpperCase()}`,
-    name: trimmed(record.name) || "Vendor",
+    name: trimmed(record.name) || trimmed(record.vendorName) || "Vendor",
     category: trimmed(record.category),
-    contact: trimmed(record.contact),
+    contact: trimmed(record.contact) || trimmed(record.contactName),
     email: trimmed(record.email),
     phone: trimmed(record.phone),
-    city: trimmed(record.city),
-    state: trimmed(record.state),
-    accountNumber: trimmed(record.accountNumber),
+    city: trimmed(location?.city) || trimmed(record.city),
+    state: trimmed(location?.state) || trimmed(record.state),
+    street: trimmed(location?.address) || undefined,
+    zip: trimmed(location?.zip) || undefined,
+    latitude: lat,
+    longitude: lng,
+    accountNumber: trimmed(record.accountNumber) || trimmed(record.accountNo),
     terms: trimmed(record.terms) || "Net 30",
     balance: numberValue(record.balance),
     status:
       trimmed(record.status) === "inactive" || trimmed(record.status) === "on_stop"
         ? (trimmed(record.status) as PortalVendor["status"])
         : "active",
+    inventory: mapVendorInventory(record.inventory),
+    purchaseOrders: mapVendorPurchaseOrders(record.purchaseOrders),
+    attachments: mapEmployeeAttachments(record.attachments),
+    totalSkus: numberValue(record.totalSkus, 0) || undefined,
+    inventoryOnHandValue: numberValue(record.inventoryOnHandValue, 0) || undefined,
     createdAt: toIsoString(record.createdAt),
+  };
+}
+
+function mapVendorInventory(raw: unknown): import("@/lib/data/crm-people").PortalVendorInventoryItem[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((entry) => mapPortalVendorInventoryItem(entry))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  return items.length ? items : undefined;
+}
+
+export function mapPortalVendorInventoryItem(
+  raw: unknown,
+): import("@/lib/data/crm-people").PortalVendorInventoryItem | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = crmIdOf(record);
+  if (!id) return null;
+  const onHandCount = numberValue(record.onHandCount ?? record.onHand, 0);
+  const reorderPoint = numberValue(record.reorderPoint ?? record.reorderAt, 0);
+  const unitCost = numberValue(record.unitCost ?? record.cost, 0);
+  const statusRaw = trimmed(record.status);
+  const status =
+    statusRaw === "out_of_stock" || statusRaw === "low_stock" || statusRaw === "in_stock"
+      ? statusRaw
+      : onHandCount === 0
+        ? "out_of_stock"
+        : onHandCount <= reorderPoint
+          ? "low_stock"
+          : "in_stock";
+  return {
+    id,
+    sku: trimmed(record.sku),
+    name: trimmed(record.name) || trimmed(record.item),
+    unit: trimmed(record.unit) || "ea",
+    onHandCount,
+    reorderPoint,
+    unitCost,
+    location: trimmed(record.location),
+    totalValue: numberValue(record.totalValue, onHandCount * unitCost),
+    status,
+  };
+}
+
+function mapVendorPurchaseOrders(
+  raw: unknown,
+): import("@/lib/data/crm-people").PortalVendorPurchaseOrder[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((entry) => mapPortalVendorPurchaseOrder(entry))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  return items.length ? items : undefined;
+}
+
+export function mapPortalVendorPurchaseOrder(
+  raw: unknown,
+): import("@/lib/data/crm-people").PortalVendorPurchaseOrder | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const id = crmIdOf(record);
+  if (!id) return null;
+  const statusRaw = trimmed(record.status);
+  const status =
+    statusRaw === "draft" ||
+    statusRaw === "issued" ||
+    statusRaw === "partially_received" ||
+    statusRaw === "received" ||
+    statusRaw === "cancelled"
+      ? statusRaw
+      : "issued";
+  return {
+    id,
+    poNumber: trimmed(record.poNumber) || trimmed(record.number) || `PO-${id.slice(-4)}`,
+    amount: numberValue(record.amount),
+    description: trimmed(record.description) || trimmed(record.whatWasOrdered),
+    jobId: (() => {
+      const rawJob = record.jobId;
+      if (!rawJob) return undefined;
+      if (typeof rawJob === "string") return trimmed(rawJob) || undefined;
+      return crmIdOf(rawJob) || undefined;
+    })(),
+    status,
+    issuedAt: toIsoString(record.issuedAt) || undefined,
+    receivedAt: toIsoString(record.receivedAt) || undefined,
+    notes: trimmed(record.notes) || undefined,
   };
 }
 

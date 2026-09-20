@@ -69,19 +69,18 @@ function DialogContent({
         : typeof (event as { composedPath?: () => EventTarget[] }).composedPath === "function"
           ? (event as { composedPath: () => EventTarget[] }).composedPath()
           : []
-    if (
-      path.some(
-        (node) =>
-          node instanceof Element && node.closest("[data-paginated-entity-menu]"),
+    const matchesPortaledUi = (node: EventTarget) =>
+      node instanceof Element &&
+      Boolean(
+        node.closest(
+          "[data-paginated-entity-menu], .rs-phone-dropdown, .rs-phone-input .country-list, .rs-phone-input .flag-dropdown",
+        ),
       )
-    ) {
+    if (path.some(matchesPortaledUi)) {
       return true
     }
     const target = (original?.target ?? event.target) as EventTarget | null
-    return (
-      target instanceof Element &&
-      Boolean(target.closest("[data-paginated-entity-menu]"))
-    )
+    return Boolean(target && matchesPortaledUi(target))
   }
 
   return (

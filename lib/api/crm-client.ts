@@ -32,6 +32,8 @@ import {
   mapPortalRequest,
   mapPortalTask,
   mapPortalVendor,
+  mapPortalVendorInventoryItem,
+  mapPortalVendorPurchaseOrder,
   mapScheduleEvent,
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
@@ -343,15 +345,45 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
 }
 
 function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
-  return {
-    companyName: vendor.name || "",
-    name: vendor.name || "",
-    contact: vendor.contact || "",
-    contactName: vendor.contact || "",
-    category: vendor.category || "",
-    email: vendor.email || "",
-    terms: vendor.terms || "Net 30",
-  };
+  const payload: Record<string, unknown> = {};
+  if (vendor.name !== undefined) {
+    payload.name = vendor.name || "";
+    payload.vendorName = vendor.name || "";
+  }
+  if (vendor.category !== undefined) payload.category = vendor.category || "";
+  if (vendor.contact !== undefined) payload.contact = vendor.contact || "";
+  if (vendor.email !== undefined) payload.email = vendor.email || "";
+  if (vendor.phone !== undefined) payload.phone = vendor.phone || "";
+  const hasLocationFields =
+    vendor.street !== undefined ||
+    vendor.city !== undefined ||
+    vendor.state !== undefined ||
+    vendor.zip !== undefined ||
+    vendor.latitude !== undefined ||
+    vendor.longitude !== undefined;
+  if (hasLocationFields) {
+    const location = mapJobLocationForApi({
+      id: "vendor_loc",
+      street: vendor.street || "",
+      city: vendor.city || "",
+      state: vendor.state || "",
+      zip: vendor.zip || "",
+      country: "US",
+      latitude: vendor.latitude ?? null,
+      longitude: vendor.longitude ?? null,
+    });
+    payload.location = location;
+    payload.city = location.city || "";
+    payload.state = location.state || "";
+  }
+  if (vendor.status !== undefined) payload.status = vendor.status || "active";
+  if (vendor.accountNumber !== undefined) {
+    payload.accountNumber = vendor.accountNumber || "";
+    payload.accountNo = vendor.accountNumber || "";
+  }
+  if (vendor.terms !== undefined) payload.terms = vendor.terms || "Net 30";
+  if (vendor.balance !== undefined) payload.balance = vendor.balance ?? 0;
+  return payload;
 }
 
 function requestPayload(request: Partial<PortalRequest>) {
@@ -495,7 +527,10 @@ function reminderPayload(reminder: PortalReminder) {
     reminder.assignedContractorId ||
     (reminder.subjectKind === "contractor" ? reminder.subjectId : undefined);
   if (assignedContractorId) payload.assignedContractorId = assignedContractorId;
-  if (reminder.assignedVendorId) payload.assignedVendorId = reminder.assignedVendorId;
+  const assignedVendorId =
+    reminder.assignedVendorId ||
+    (reminder.subjectKind === "vendor" ? reminder.subjectId : undefined);
+  if (assignedVendorId) payload.assignedVendorId = assignedVendorId;
   if (reminder.note) payload.note = reminder.note;
   return payload;
 }
@@ -968,7 +1003,20 @@ export async function getVendor(id: string) {
     silent: true,
     force: true,
   });
-  return mapCrmEntity(response, mapPortalVendor);
+  const mapped = mapCrmEntity(response, mapPortalVendor);
+  if (!mapped) return null;
+  const root = (response as { data?: { stats?: Record<string, unknown> } })?.data;
+  const stats = root?.stats;
+  if (!stats) return mapped;
+  return {
+    ...mapped,
+    totalSkus:
+      typeof stats.totalSkus === "number" ? stats.totalSkus : mapped.totalSkus,
+    inventoryOnHandValue:
+      typeof stats.totalOnHandValue === "number"
+        ? stats.totalOnHandValue
+        : mapped.inventoryOnHandValue,
+  };
 }
 
 export async function updateVendor(id: string, patch: Partial<PortalVendor>) {
@@ -978,6 +1026,169 @@ export async function updateVendor(id: string, patch: Partial<PortalVendor>) {
 
 export async function deleteVendor(id: string) {
   return deleteData(providerCrmApi.vendor(id), { silent: false });
+}
+
+export async function listVendorInventory(
+  vendorId: string,
+  query: CrmListQuery = {},
+) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.vendorInventory(vendorId), params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  const list = mapCrmList(response, mapPortalVendorInventoryItem);
+  const data = (response as { stats?: { totalSkus?: number; totalOnHandValue?: number } })?.stats
+    ?? (response as { data?: { stats?: { totalSkus?: number; totalOnHandValue?: number } } })?.data?.stats;
+  return {
+    ...list,
+    stats: {
+      totalSkus: data?.totalSkus ?? list.items.length,
+      totalOnHandValue:
+        data?.totalOnHandValue ??
+        list.items.reduce((sum, item) => sum + (item.totalValue ?? item.onHandCount * item.unitCost), 0),
+    },
+  };
+}
+
+export async function addVendorInventoryItem(
+  vendorId: string,
+  item: {
+    sku: string;
+    name: string;
+    unit?: string;
+    onHandCount?: number;
+    reorderPoint?: number;
+    unitCost?: number;
+    location?: string;
+  },
+) {
+  const response = await postData(providerCrmApi.vendorInventory(vendorId), {
+    sku: item.sku,
+    item: item.name,
+    name: item.name,
+    unit: item.unit || "ea",
+    onHand: item.onHandCount ?? 0,
+    reorderAt: item.reorderPoint ?? 0,
+    cost: item.unitCost ?? 0,
+    location: item.location || "",
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorInventory(vendorId));
+  // Prefer refreshed vendor; fall back to mapping single item response.
+  const vendor = await getVendor(vendorId);
+  if (vendor) return vendor;
+  const mapped = mapCrmEntity(response, mapPortalVendor);
+  return mapped;
+}
+
+export async function receiveVendorInventory(
+  vendorId: string,
+  skuId: string,
+  quantity: number,
+) {
+  await postData(providerCrmApi.vendorInventoryReceive(vendorId, skuId), {
+    quantity,
+    receivedCount: quantity,
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorInventory(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function deleteVendorInventoryItem(vendorId: string, skuId: string) {
+  await deleteData(providerCrmApi.vendorInventoryItem(vendorId, skuId), { silent: false });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorInventory(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function listVendorOrders(vendorId: string, query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.vendorOrders(vendorId), params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalVendorPurchaseOrder);
+}
+
+export async function createVendorOrder(
+  vendorId: string,
+  order: {
+    poNumber?: string;
+    amount: number;
+    description: string;
+    jobId?: string;
+    status?: string;
+  },
+) {
+  await postData(providerCrmApi.vendorOrders(vendorId), {
+    poNumber: order.poNumber,
+    amount: order.amount,
+    description: order.description,
+    whatWasOrdered: order.description,
+    jobId: order.jobId || null,
+    status: order.status || "issued",
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorOrders(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function updateVendorOrder(
+  vendorId: string,
+  orderId: string,
+  patch: { status?: string; amount?: number; description?: string; jobId?: string | null },
+) {
+  await putData(providerCrmApi.vendorOrder(vendorId, orderId), patch);
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorOrders(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function deleteVendorOrder(vendorId: string, orderId: string) {
+  await deleteData(providerCrmApi.vendorOrder(vendorId, orderId), { silent: false });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorOrders(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function listVendorJobs(vendorId: string, query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.vendorJobs(vendorId), params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapJob);
+}
+
+export async function addVendorAttachment(
+  vendorId: string,
+  attachment: {
+    name: string;
+    url: string;
+    fileType?: string;
+    sizeBytes?: number;
+    category?: string;
+  },
+) {
+  await postData(providerCrmApi.vendorAttachments(vendorId), {
+    name: attachment.name,
+    url: attachment.url,
+    fileType: attachment.fileType || "",
+    sizeBytes: attachment.sizeBytes ?? 0,
+    category: attachment.category || "other",
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function deleteVendorAttachment(vendorId: string, attachmentId: string) {
+  await deleteData(providerCrmApi.vendorAttachment(vendorId, attachmentId), {
+    silent: false,
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  return getVendor(vendorId);
 }
 
 export async function listRequests(options?: CrmRequestOptions) {

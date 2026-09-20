@@ -101,6 +101,17 @@ export const providerCrmApi = {
     `provider/contractors/${id}/attachments/${attachmentId}`,
   vendors: "provider/vendors",
   vendor: (id: string) => `provider/vendors/${id}`,
+  vendorInventory: (id: string) => `provider/vendors/${id}/inventory`,
+  vendorInventoryItem: (id: string, skuId: string) =>
+    `provider/vendors/${id}/inventory/${skuId}`,
+  vendorInventoryReceive: (id: string, skuId: string) =>
+    `provider/vendors/${id}/inventory/${skuId}/receive`,
+  vendorOrders: (id: string) => `provider/vendors/${id}/orders`,
+  vendorOrder: (id: string, orderId: string) => `provider/vendors/${id}/orders/${orderId}`,
+  vendorJobs: (id: string) => `provider/vendors/${id}/jobs`,
+  vendorAttachments: (id: string) => `provider/vendors/${id}/attachments`,
+  vendorAttachment: (id: string, attachmentId: string) =>
+    `provider/vendors/${id}/attachments/${attachmentId}`,
   requests: "provider/requests",
   requestsSummary: "provider/requests/summary",
   request: (id: string) => `provider/requests/${id}`,

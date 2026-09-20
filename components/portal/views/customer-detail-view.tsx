@@ -45,7 +45,6 @@ import { CustomerLocationMapLazy } from "@/components/portal/customer-location-m
 import { ApplyPaymentDialog } from "@/components/portal/invoice-file";
 import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
 import { jobBoardColumns } from "@/components/portal/job-columns";
-import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
@@ -1558,11 +1557,6 @@ function CustomerInvoicesPanel({
 
   return (
     <div>
-      <LocalFilterTabs
-        value={filter}
-        onChange={onFilterChange}
-        options={withArchiveFilter(INVOICE_BOARD_FILTERS)}
-      />
       <PortalDataTable
         filename={`${customerNumber}-invoices`}
         countLabel="Invoices"
@@ -1573,6 +1567,38 @@ function CustomerInvoicesPanel({
           filter && filter !== "archived"
             ? "No invoices match this status."
             : "No invoices yet."
+        }
+        toolbar={
+          <div className="flex items-center gap-2">
+            <Field className="w-40 gap-0 sm:w-44">
+              <FieldLabel htmlFor="invoice-status-filter" className="sr-only">
+                Status
+              </FieldLabel>
+              <Select
+                value={filter || "__all__"}
+                onValueChange={(value) =>
+                  onFilterChange(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="invoice-status-filter"
+                  className="h-8.5 w-full text-xs"
+                >
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent position="popper" align="end">
+                  {withArchiveFilter(INVOICE_BOARD_FILTERS).map((option) => (
+                    <SelectItem
+                      key={option.label}
+                      value={option.value || "__all__"}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -1639,20 +1665,19 @@ function CustomerHistoryPanel({
 }) {
   const dispatch = useAppDispatch();
   const tab = useAppSelector((state) => state.customers?.timeline);
-  const [page, setPage] = useState(1);
-  const filterKey = customerTabFilterKey({ page });
+  const filterKey = customerTabFilterKey({});
 
   useEffect(() => {
     if (!customerId) return;
     void dispatch(
       fetchCustomerTimeline({
         customerId,
-        page,
+        page: 1,
         limit: 10,
         force: true,
       }),
     );
-  }, [customerId, dispatch, page]);
+  }, [customerId, dispatch]);
 
   const useApiEvents = Boolean(
     tab?.customerId === customerId && (tab.loaded || tab.loading || tab.items.length > 0),
@@ -1666,16 +1691,22 @@ function CustomerHistoryPanel({
   const paid = dossier?.totalPaid ?? localPaid;
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
   const total = useApiEvents ? (tab?.total ?? events.length) : events.length;
-  const totalPages = useApiEvents
-    ? Math.max(1, tab?.totalPages ?? 1)
-    : Math.max(1, Math.ceil(events.length / 10));
-  const currentPage = useApiEvents ? (tab?.page ?? page) : page;
-  const from = total === 0 ? 0 : (currentPage - 1) * 10 + 1;
-  const to = Math.min(currentPage * 10, total);
+  const totalPages = useApiEvents ? Math.max(1, tab?.totalPages ?? 1) : 1;
+  const currentPage = useApiEvents ? (tab?.page ?? 1) : 1;
+  const hasMore = useApiEvents && currentPage < totalPages;
+  const loadingMore = Boolean(useApiEvents && tab?.loading && tab.items.length > 0);
 
-  function goToPage(next: number) {
-    const bounded = Math.min(Math.max(1, next), totalPages);
-    setPage(bounded);
+  function loadMore() {
+    if (!hasMore || loadingMore) return;
+    void dispatch(
+      fetchCustomerTimeline({
+        customerId,
+        page: currentPage + 1,
+        limit: 10,
+        append: true,
+        force: true,
+      }),
+    );
   }
 
   return (
@@ -1739,32 +1770,16 @@ function CustomerHistoryPanel({
             })}
           </ol>
         )}
-        {useApiEvents && total > 0 ? (
-          <div className="flex flex-col gap-3 border-t border-black/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              Showing {from}–{to} of {total}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1 || Boolean(tab?.loading)}
-                onClick={() => goToPage(currentPage - 1)}
-              >
-                Previous
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages || Boolean(tab?.loading)}
-                onClick={() => goToPage(currentPage + 1)}
-              >
-                Next
-              </Button>
-            </div>
+        {hasMore ? (
+          <div className="flex justify-center border-t border-black/10 px-3 py-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loadingMore}
+              onClick={loadMore}
+            >
+              {loadingMore ? "Loading…" : "See more"}
+            </Button>
           </div>
         ) : null}
       </div>
@@ -1774,6 +1789,7 @@ function CustomerHistoryPanel({
 
 function CustomerTasksPanel({ customerId }: { customerId: string }) {
   const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
   const tab = useAppSelector((state) => state.customers?.tasks);
   const filterKey = customerTabFilterKey({});
   const [editing, setEditing] = useState<PortalTask | null>(null);
@@ -1797,6 +1813,10 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
       const result = await dispatch(patchCustomerTaskStatus({ id: item.id, status: nextStatus, customerId }));
       if (patchCustomerTaskStatus.rejected.match(result)) {
         toast.error(typeof result.payload === "string" ? result.payload : "Could not update task.");
+        return;
+      }
+      if (patchCustomerTaskStatus.fulfilled.match(result)) {
+        crm.patchTask(item.id, result.payload ?? { status: nextStatus });
       }
     } finally {
       setBusyTaskId(null);
@@ -1933,6 +1953,7 @@ function CustomerRemindersPanel({
   onSetReminder: () => void;
 }) {
   const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
   const tab = useAppSelector((state) => state.customers?.reminders);
   const filterKey = customerTabFilterKey({});
   const [editing, setEditing] = useState<PortalReminder | null>(null);
@@ -1959,6 +1980,10 @@ function CustomerRemindersPanel({
         toast.error(
           typeof result.payload === "string" ? result.payload : "Could not update reminder.",
         );
+        return;
+      }
+      if (patchCustomerReminderStatus.fulfilled.match(result)) {
+        crm.patchReminder(item.id, result.payload ?? { status: nextStatus });
       }
     } finally {
       setBusyReminderId(null);

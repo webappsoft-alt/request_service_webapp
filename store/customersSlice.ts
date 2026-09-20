@@ -172,6 +172,8 @@ type CustomerTabArg = {
   limit?: number;
   force?: boolean;
   type?: string;
+  /** When true, append page results instead of replacing (history "See more"). */
+  append?: boolean;
 };
 
 function tabCacheKey(arg: {
@@ -496,7 +498,7 @@ export const fetchCustomerReminders = createAsyncThunk<
 );
 
 export const fetchCustomerTimeline = createAsyncThunk<
-  { customerId: string; filterKey: string; items: CustomerTimelineEvent[]; page: number; total: number; totalPages: number },
+  { customerId: string; filterKey: string; items: CustomerTimelineEvent[]; page: number; total: number; totalPages: number; append: boolean },
   CustomerTabArg,
   { state: { customers: CustomersState }; rejectValue: string }
 >(
@@ -512,11 +514,13 @@ export const fetchCustomerTimeline = createAsyncThunk<
       });
       return {
         customerId: arg.customerId,
-        filterKey: tabCacheKey(arg),
+        // Stable key (no page) so "See more" can append without clearing the list.
+        filterKey: tabCacheKey({ ...arg, page: 1 }),
         items: result.items,
         page: result.page,
         total: result.total,
         totalPages: result.totalPages,
+        append: Boolean(arg.append),
       };
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
@@ -936,9 +940,31 @@ const customersSlice = createSlice({
         setTabRejected(state.reminders, action.payload || "Failed to load reminders.");
       })
       .addCase(fetchCustomerTimeline.pending, (state, action) => {
-        setTabPending(state.timeline, action.meta.arg.customerId, tabCacheKey(action.meta.arg));
+        const filterKey = tabCacheKey({ ...action.meta.arg, page: 1 });
+        if (action.meta.arg.append) {
+          // Keep existing rows visible; button shows loading.
+          state.timeline.error = null;
+          state.timeline.loading = true;
+          state.timeline.customerId = action.meta.arg.customerId;
+          state.timeline.filterKey = filterKey;
+          return;
+        }
+        setTabPending(state.timeline, action.meta.arg.customerId, filterKey);
       })
       .addCase(fetchCustomerTimeline.fulfilled, (state, action) => {
+        if (action.payload.append && state.timeline.customerId === action.payload.customerId) {
+          const seen = new Set(state.timeline.items.map((item) => item.id));
+          const extra = action.payload.items.filter((item) => !seen.has(item.id));
+          state.timeline.items = [...state.timeline.items, ...extra];
+          state.timeline.page = action.payload.page;
+          state.timeline.total = action.payload.total;
+          state.timeline.totalPages = action.payload.totalPages;
+          state.timeline.loading = false;
+          state.timeline.loaded = true;
+          state.timeline.error = null;
+          state.timeline.filterKey = action.payload.filterKey;
+          return;
+        }
         setTabFulfilled(state.timeline, action.payload);
       })
       .addCase(fetchCustomerTimeline.rejected, (state, action) => {

@@ -4,7 +4,13 @@ import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "re
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { PortalCalendarEvent, PortalEmployee, PortalEventKind, PortalTimeWindow } from "@/lib/data/portal";
 import {
   calendarEventKindLabel,
@@ -23,7 +29,7 @@ const VIEWS = ["day", "week", "month"] as const;
 const DAY_START = 7 * 60;
 const DAY_END = 19 * 60;
 const SLOT = 30;
-const SLOT_PX = 32;
+const SLOT_PX = 44;
 const SLOTS = Array.from({ length: (DAY_END - DAY_START) / SLOT }, (_, index) => DAY_START + index * SLOT);
 
 export type CalendarView = (typeof VIEWS)[number];
@@ -373,44 +379,51 @@ export function EventCalendar({
             </button>
           ))}
         </div>
-        <NativeSelect
-          className="w-40"
-          value={kindFilter}
-          onChange={(change) => {
-            const next = change.target.value;
+        <Select
+          value={kindFilter || "__all__"}
+          onValueChange={(value) => {
             setKindFilter(
-              next === "job" ||
-                next === "estimate" ||
-                next === "request" ||
-                next === "invoice" ||
-                next === "task"
-                ? next
+              value === "job" ||
+                value === "estimate" ||
+                value === "request" ||
+                value === "invoice" ||
+                value === "task"
+                ? value
                 : "",
             );
           }}
         >
-          <NativeSelectOption value="">All work</NativeSelectOption>
-          {KINDS.map((kind) => (
-            <NativeSelectOption key={kind} value={kind}>
-              {calendarEventKindLabel(kind)}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger size="sm" className="w-40">
+            <SelectValue placeholder="All work" />
+          </SelectTrigger>
+          <SelectContent position="popper" align="end">
+            <SelectItem value="__all__">All work</SelectItem>
+            {KINDS.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {calendarEventKindLabel(kind)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {employees && !lockEmployeeId ? (
-          <NativeSelect
-            className="w-48"
-            value={employeeFilter}
-            onChange={(change) => setEmployeeFilter(change.target.value)}
+          <Select
+            value={employeeFilter || "__all__"}
+            onValueChange={(value) => setEmployeeFilter(value === "__all__" ? "" : value)}
           >
-            <NativeSelectOption value="">Everyone</NativeSelectOption>
-            {employees
-              .filter((item) => item.active !== false)
-              .map((item) => (
-                <NativeSelectOption key={item.id} value={item.id}>
-                  {item.firstName} {item.lastName}
-                </NativeSelectOption>
-              ))}
-          </NativeSelect>
+            <SelectTrigger size="sm" className="w-48">
+              <SelectValue placeholder="Everyone" />
+            </SelectTrigger>
+            <SelectContent position="popper" align="end">
+              <SelectItem value="__all__">Everyone</SelectItem>
+              {employees
+                .filter((item) => item.active !== false)
+                .map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.firstName} {item.lastName}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         ) : null}
         {toolbar}
       </div>
@@ -769,6 +782,15 @@ function TimedBlock({
     drag.dataTransfer.effectAllowed = "move";
   }
 
+  const blockHeight = displayHeight || height;
+  const showDetails = blockHeight >= SLOT_PX * 1.5;
+  const timeLabel = `${formatClock(times.start)}–${formatClock(end)}`;
+  const service = eventService(event);
+  const secondary =
+    showDetails && service && service !== event.title
+      ? `${timeLabel} · ${service}`
+      : timeLabel;
+
   return (
     <div
       draggable={draftEnd == null}
@@ -777,17 +799,21 @@ function TimedBlock({
         click.stopPropagation();
         onOpen?.(event);
       }}
-      style={{ top, height: displayHeight || height }}
+      style={{ top, height: blockHeight }}
       className={cn(
-        "absolute inset-x-1 z-20 flex cursor-grab flex-col overflow-hidden rounded-md px-2 py-1 text-left active:cursor-grabbing",
+        "absolute inset-x-1 z-20 cursor-grab overflow-hidden rounded-md px-2 py-1 pr-2 pb-2.5 text-left active:cursor-grabbing",
         calendarEventTone(event.kind),
       )}
-      title={`${calendarEventKindLabel(event.kind)} · ${event.title} · ${formatClock(times.start)}–${formatClock(end)}`}
+      title={`${calendarEventKindLabel(event.kind)} · ${event.title} · ${timeLabel}`}
     >
-      <span className="truncate text-[11px] font-medium">{event.title}</span>
-      <span className="truncate text-[10px] font-normal opacity-90">
-        {formatClock(times.start)}–{formatClock(end)} · {eventService(event)}
-      </span>
+      <div className="min-h-0 overflow-hidden">
+        <span className="block truncate text-[11px] leading-tight font-medium">{event.title}</span>
+        {blockHeight >= 36 ? (
+          <span className="mt-0.5 block truncate text-[10px] leading-tight font-normal opacity-90">
+            {secondary}
+          </span>
+        ) : null}
+      </div>
       <span
         onPointerDown={(pointer) => {
           pointer.preventDefault();
@@ -812,7 +838,7 @@ function TimedBlock({
           handle.addEventListener("pointermove", move);
           handle.addEventListener("pointerup", up);
         }}
-        className="mt-auto h-2 w-full cursor-s-resize rounded-sm bg-white/45"
+        className="absolute inset-x-1 bottom-0.5 h-1.5 cursor-s-resize rounded-sm bg-white/45"
         aria-label="Extend time"
         title="Drag down to add 30-minute slots"
       />

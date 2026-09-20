@@ -230,15 +230,16 @@ export function useCrmDirectory() {
     ],
   );
   const reminders = useMemo(() => {
+    // Later sources win so Redux / local patches override a stale CRM snapshot.
     const pool = [
+      ...(store.reminders || []),
       ...(crm.reminders || []),
       ...(reduxReminders || []),
       ...(reduxCustomerReminders || []),
-      ...(store.reminders || []),
     ];
     const map = new Map<string, PortalReminder>();
     for (const item of pool) {
-      if (item && item.id && !map.has(item.id) && !store.deleted.includes(`reminder:${item.id}`)) {
+      if (item && item.id && !store.deleted.includes(`reminder:${item.id}`)) {
         map.set(item.id, item);
       }
     }
@@ -256,15 +257,16 @@ export function useCrmDirectory() {
   ]);
 
   const tasks = useMemo(() => {
+    // Later sources win so Redux / local patches override a stale CRM snapshot.
     const pool = [
+      ...(store.tasks || []),
       ...(crm.tasks || []),
       ...(reduxTasks || []),
       ...(reduxCustomerTasks || []),
-      ...(store.tasks || []),
     ];
     const map = new Map<string, PortalTask>();
     for (const item of pool) {
-      if (item && item.id && !map.has(item.id) && !store.deleted.includes(`task:${item.id}`)) {
+      if (item && item.id && !store.deleted.includes(`task:${item.id}`)) {
         map.set(item.id, item);
       }
     }

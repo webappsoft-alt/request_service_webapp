@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -20,6 +21,9 @@ import {
 import { employeeName, getPortalCustomerName } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/store/hooks";
+import { patchCustomerReminderStatus } from "@/store/customersSlice";
+import { patchReminderStatus } from "@/store/remindersSlice";
 
 export function useReminderLookups() {
   const { customers, contractors, vendors } = useCrmDirectory();
@@ -101,7 +105,9 @@ export function useReminderLookups() {
 }
 
 export function OpenReminderBanner({ kind, id }: { kind: ReminderSubjectKind; id: string }) {
-  const { reminders, setReminderStatus } = useCrmDirectory();
+  const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
+  const { reminders } = useCrmDirectory();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const open = openRemindersFor(reminders, kind, id);
   if (!open.length) return null;
@@ -111,9 +117,26 @@ export function OpenReminderBanner({ kind, id }: { kind: ReminderSubjectKind; id
     if (pendingId) return;
     setPendingId(reminderId);
     try {
-      await Promise.resolve(setReminderStatus(reminderId, "done"));
+      const updated =
+        kind === "customer" && id
+          ? await dispatch(
+              patchCustomerReminderStatus({ id: reminderId, status: "done", customerId: id }),
+            ).unwrap()
+          : await dispatch(patchReminderStatus({ id: reminderId, status: "done" })).unwrap();
+      if (updated) {
+        crm.patchReminder(reminderId, updated);
+      } else {
+        crm.patchReminder(reminderId, { status: "done" });
+      }
+      toast.success("Reminder marked done.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update this reminder.");
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not update this reminder.",
+      );
     } finally {
       setPendingId(null);
     }

@@ -1004,12 +1004,6 @@ export function CreateReminderDialog({
   }
 
   const linkedReady = Boolean(selectedId);
-  const recordLoading = useApi
-    ? recordPaging.loading && recordOptions.length === 0
-    : lookupsLoading && recordOptions.length === 0;
-  const assigneeLoading = useApi
-    ? assigneePaging.loading && assigneeOptions.length === 0
-    : lookupsLoading && assigneeOptions.length === 0;
 
   return (
     <Dialog
@@ -1051,19 +1045,23 @@ export function CreateReminderDialog({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="rem-subject">Target {reminderSubjectKindLabel(kind)}</FieldLabel>
+              <FieldLabel>Target {reminderSubjectKindLabel(kind)}</FieldLabel>
               <PaginatedEntitySelect
                 id="rem-subject"
                 value={selectedId}
                 options={recordOptions}
-                loading={recordLoading}
+                loading={useApi ? recordPaging.loading : lookupsLoading}
                 loadingMore={useApi ? recordPaging.loadingMore : false}
                 hasMore={useApi ? recordPaging.hasMore : false}
                 onLoadMore={useApi ? recordPaging.loadMore : () => {}}
                 onChange={(id) => setSelectedId(id)}
-                placeholder={recordLoading ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…` : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`}
+                placeholder={
+                  (useApi ? recordPaging.loading : lookupsLoading) && recordOptions.length === 0
+                    ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…`
+                    : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`
+                }
                 emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
-                disabled={recordLoading}
+                disabled={(useApi ? recordPaging.loading : lookupsLoading) && !selectedId}
               />
             </Field>
           </div>
@@ -1089,19 +1087,23 @@ export function CreateReminderDialog({
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="rem-emp">Assigned</FieldLabel>
+              <FieldLabel>Assigned</FieldLabel>
               <PaginatedEntitySelect
                 id="rem-emp"
                 value={assignedEmployeeId}
                 options={assigneeOptions}
-                loading={assigneeLoading}
+                loading={useApi ? assigneePaging.loading : lookupsLoading}
                 loadingMore={useApi ? assigneePaging.loadingMore : false}
                 hasMore={useApi ? assigneePaging.hasMore : false}
                 onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
                 onChange={(id) => setAssignedEmployeeId(id)}
-                placeholder={assigneeLoading ? "Loading assignees…" : "Select assignee"}
+                placeholder={
+                  (useApi ? assigneePaging.loading : lookupsLoading) && assigneeOptions.length === 0
+                    ? "Loading assignees…"
+                    : "Select assignee"
+                }
                 emptyLabel="No employees found"
-                disabled={assigneeLoading}
+                disabled={(useApi ? assigneePaging.loading : lookupsLoading) && !assignedEmployeeId}
               />
             </Field>
             <Field>
@@ -1363,12 +1365,6 @@ export function CreateTaskDialog({
   }
 
   const linkedReady = Boolean(selectedId);
-  const recordLoading = useApi
-    ? recordPaging.loading && recordOptions.length === 0
-    : lookupsLoading && recordOptions.length === 0;
-  const assigneeLoading = useApi
-    ? assigneePaging.loading && assigneeOptions.length === 0
-    : lookupsLoading && assigneeOptions.length === 0;
 
   return (
     <Dialog
@@ -1410,19 +1406,23 @@ export function CreateTaskDialog({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="task-subject">Target {reminderSubjectKindLabel(kind)}</FieldLabel>
+              <FieldLabel>Target {reminderSubjectKindLabel(kind)}</FieldLabel>
               <PaginatedEntitySelect
                 id="task-subject"
                 value={selectedId}
                 options={recordOptions}
-                loading={recordLoading}
+                loading={useApi ? recordPaging.loading : lookupsLoading}
                 loadingMore={useApi ? recordPaging.loadingMore : false}
                 hasMore={useApi ? recordPaging.hasMore : false}
                 onLoadMore={useApi ? recordPaging.loadMore : () => {}}
                 onChange={(id) => setSelectedId(id)}
-                placeholder={recordLoading ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…` : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`}
+                placeholder={
+                  (useApi ? recordPaging.loading : lookupsLoading) && recordOptions.length === 0
+                    ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…`
+                    : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`
+                }
                 emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
-                disabled={recordLoading}
+                disabled={(useApi ? recordPaging.loading : lookupsLoading) && !selectedId}
               />
             </Field>
           </div>
@@ -1448,19 +1448,23 @@ export function CreateTaskDialog({
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="task-emp">Assigned</FieldLabel>
+              <FieldLabel>Assigned</FieldLabel>
               <PaginatedEntitySelect
                 id="task-emp"
                 value={assignedEmployeeId}
                 options={assigneeOptions}
-                loading={assigneeLoading}
+                loading={useApi ? assigneePaging.loading : lookupsLoading}
                 loadingMore={useApi ? assigneePaging.loadingMore : false}
                 hasMore={useApi ? assigneePaging.hasMore : false}
                 onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
                 onChange={(id) => setAssignedEmployeeId(id)}
-                placeholder={assigneeLoading ? "Loading assignees…" : "Select assignee"}
+                placeholder={
+                  (useApi ? assigneePaging.loading : lookupsLoading) && assigneeOptions.length === 0
+                    ? "Loading assignees…"
+                    : "Select assignee"
+                }
                 emptyLabel="No employees found"
-                disabled={assigneeLoading}
+                disabled={(useApi ? assigneePaging.loading : lookupsLoading) && !assignedEmployeeId}
               />
             </Field>
             <Field>

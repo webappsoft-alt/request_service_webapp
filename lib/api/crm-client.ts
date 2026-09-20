@@ -468,12 +468,26 @@ function reminderPayload(reminder: PortalReminder) {
   }
   const customerId = reminder.customerId || (reminder.subjectKind === "customer" ? reminder.subjectId : undefined);
   if (customerId) payload.customerId = customerId;
-  const validSubjectKinds = ["job", "customer", "estimate", "contractor", "vendor"];
+  // Match backend CrmReminder subjectKind enum (includes employee / request / invoice).
+  const validSubjectKinds = [
+    "job",
+    "customer",
+    "estimate",
+    "contractor",
+    "vendor",
+    "employee",
+    "request",
+    "invoice",
+  ];
   if (reminder.subjectKind && validSubjectKinds.includes(reminder.subjectKind)) {
     payload.subjectKind = reminder.subjectKind;
     if (reminder.subjectId) payload.subjectId = reminder.subjectId;
   }
-  if (reminder.assignedEmployeeId) payload.assignedEmployeeId = reminder.assignedEmployeeId;
+  // Employee-profile reminders: default assignee to the linked employee when omitted.
+  const assignedEmployeeId =
+    reminder.assignedEmployeeId ||
+    (reminder.subjectKind === "employee" ? reminder.subjectId : undefined);
+  if (assignedEmployeeId) payload.assignedEmployeeId = assignedEmployeeId;
   if (reminder.assignedContractorId) payload.assignedContractorId = reminder.assignedContractorId;
   if (reminder.assignedVendorId) payload.assignedVendorId = reminder.assignedVendorId;
   if (reminder.note) payload.note = reminder.note;
@@ -801,6 +815,39 @@ export async function deleteEmployee(id: string) {
     requiresReassignment: Boolean(payload?.requiresReassignment),
     pendingTasksCount: Number(payload?.pendingTasksCount ?? 0),
   } satisfies DeleteEmployeeResult & { id: string };
+}
+
+/** POST /api/provider/team/:id/attachments */
+export async function addEmployeeAttachment(
+  employeeId: string,
+  attachment: {
+    name: string;
+    url: string;
+    fileType?: string;
+    sizeBytes?: number;
+    category?: string;
+  },
+) {
+  const response = await postData(providerCrmApi.teamMemberAttachments(employeeId), {
+    name: attachment.name,
+    url: attachment.url,
+    fileType: attachment.fileType || "",
+    sizeBytes: attachment.sizeBytes ?? 0,
+    category: attachment.category || "other",
+  });
+  const mapped = mapCrmEntity(response, mapPortalEmployee);
+  if (mapped) return mapped;
+  const detail = await getEmployeeDetail(employeeId);
+  return detail?.employee ?? null;
+}
+
+/** DELETE /api/provider/team/:id/attachments/:attachmentId */
+export async function deleteEmployeeAttachment(employeeId: string, attachmentId: string) {
+  await deleteData(providerCrmApi.teamMemberAttachment(employeeId, attachmentId), {
+    silent: false,
+  });
+  const detail = await getEmployeeDetail(employeeId);
+  return detail?.employee ?? null;
 }
 
 export async function listContractors(options?: CrmRequestOptions) {

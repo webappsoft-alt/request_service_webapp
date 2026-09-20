@@ -46,6 +46,7 @@ import { ApplyPaymentDialog } from "@/components/portal/invoice-file";
 import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
 import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -1969,9 +1970,9 @@ function CustomerRemindersPanel({
   const rows = selectCustomerTabRows(tab, customerId, filterKey, relatedReminders);
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
 
-  async function toggleReminder(item: PortalReminder) {
+  async function setReminderStatus(item: PortalReminder, nextStatus: PortalReminder["status"]) {
+    if (item.status === nextStatus || busyReminderId === item.id) return;
     setBusyReminderId(item.id);
-    const nextStatus = item.status === "open" ? "done" : "open";
     try {
       const result = await dispatch(
         patchCustomerReminderStatus({ id: item.id, status: nextStatus, customerId }),
@@ -2010,69 +2011,76 @@ function CustomerRemindersPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {listLoading || !rows.length ? "\u00a0" : `${rows.length} reminders`}
-        </p>
-        <Button size="sm" onClick={onSetReminder}>
-          Set reminder
-        </Button>
-      </div>
-      {listLoading ? (
-        <CenteredSpinner label="Loading reminders" className="min-h-[12rem]" />
-      ) : rows.length ? (
-        rows.map((item) => (
-          <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
-            <div className="min-w-0">
-              <Link
-                href={`/pro/dashboard/reminders/${item.id}`}
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                {item.title}
-              </Link>
-              <p className="text-xs text-muted-foreground">
-                Due {formatDate(item.dueAt)} · {item.note}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busyReminderId === item.id}
-                onClick={() => void toggleReminder(item)}
-              >
-                {busyReminderId === item.id ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  crmReminderStatusLabel(item.status)
-                )}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline">
-                    Actions
-                    <ChevronDown className="size-3.5" aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setEditing(item)}>Edit</DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/pro/dashboard/reminders/${item.id}`}>Open</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={() => setDeleteTarget(item)}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        ))
-      ) : (
-        <Empty title="No reminders yet">Set a reminder to follow up on this customer.</Empty>
-      )}
+      <PortalDataTable
+        filename="customer-reminders"
+        countLabel="Reminders"
+        searchPlaceholder="Search reminders"
+        loading={listLoading}
+        busyRowIds={busyReminderId ? [busyReminderId] : []}
+        empty="No reminders yet. Set a reminder to follow up on this customer."
+        rows={rows}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
+        toolbar={
+          <Button size="sm" onClick={onSetReminder}>
+            Set reminder
+          </Button>
+        }
+        columns={[
+          {
+            id: "reminder",
+            header: "Reminder",
+            sortValue: (row) => row.title,
+            searchValue: (row) => `${row.title} ${row.note}`,
+            exportValue: (row) => row.title,
+            cell: (row) => (
+              <div className="min-w-0">
+                <Link
+                  href={`/pro/dashboard/reminders/${row.id}`}
+                  className="font-medium text-primary hover:underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {row.title}
+                </Link>
+                {row.note ? (
+                  <p className="truncate text-xs text-muted-foreground">{row.note}</p>
+                ) : null}
+              </div>
+            ),
+          },
+          {
+            id: "due",
+            header: "Due",
+            sortValue: (row) => row.dueAt,
+            searchValue: (row) => formatDate(row.dueAt),
+            exportValue: (row) => formatDate(row.dueAt),
+            cell: (row) => formatDate(row.dueAt),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            searchValue: (row) => crmReminderStatusLabel(row.status),
+            exportValue: (row) => crmReminderStatusLabel(row.status),
+            cell: (row) => (
+              <ReminderStatusSelect
+                value={row.status}
+                disabled={busyReminderId === row.id}
+                onChange={(next) => void setReminderStatus(row, next)}
+              />
+            ),
+          },
+        ]}
+        actions={(row) => [
+          { label: "Open", href: `/pro/dashboard/reminders/${row.id}` },
+          { label: "Edit", onSelect: () => setEditing(row) },
+          {
+            label: "Delete",
+            variant: "destructive",
+            onSelect: () => setDeleteTarget(row),
+          },
+        ]}
+      />
       <CreateReminderDialog
         open={Boolean(editing)}
         reminder={editing}

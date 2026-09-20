@@ -456,8 +456,12 @@ export function reminderSubject(reminder: PortalReminder): { kind: ReminderSubje
 }
 
 export function reminderMatches(reminder: PortalReminder, kind: ReminderSubjectKind, id: string) {
+  if (!id) return false;
   const subject = reminderSubject(reminder);
-  return subject.kind === kind && subject.id === id;
+  if (subject.kind === kind && subject.id === id) return true;
+  // Employee profile banners / lists: also match reminders assigned to this employee.
+  if (kind === "employee" && reminder.assignedEmployeeId === id) return true;
+  return false;
 }
 
 export function openRemindersFor(reminders: PortalReminder[], kind: ReminderSubjectKind, id: string) {

@@ -91,6 +91,9 @@ export const providerCrmApi = {
   customerTimeline: (id: string) => `provider/customers/${id}/timeline`,
   team: "provider/team",
   teamMember: (id: string) => `provider/team/${id}`,
+  teamMemberAttachments: (id: string) => `provider/team/${id}/attachments`,
+  teamMemberAttachment: (id: string, attachmentId: string) =>
+    `provider/team/${id}/attachments/${attachmentId}`,
   contractors: "provider/contractors",
   contractor: (id: string) => `provider/contractors/${id}`,
   vendors: "provider/vendors",

@@ -162,6 +162,16 @@ export type PortalEmployeeWorkingHours = {
   active: boolean;
 };
 
+export type PortalEmployeeAttachment = {
+  id: string;
+  name: string;
+  url: string;
+  fileType?: string;
+  sizeBytes?: number;
+  category?: string;
+  uploadedAt?: string;
+};
+
 export type PortalEmployee = {
   id: string;
   firstName: string;
@@ -178,6 +188,7 @@ export type PortalEmployee = {
   emergencyName?: string;
   emergencyPhone?: string;
   workingHours?: PortalEmployeeWorkingHours[];
+  attachments?: PortalEmployeeAttachment[];
 };
 
 /** Nested on GET /api/provider/team/:id → data.activeAssignments */

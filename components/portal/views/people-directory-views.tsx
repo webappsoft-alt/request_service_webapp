@@ -13,6 +13,7 @@ import {
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import { FilterTabs } from "@/components/portal/filter-tabs";
 import { ReminderSubjectLink, useReminderLookups } from "@/components/portal/reminder-banner";
+import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
@@ -603,17 +604,22 @@ export function RemindersView() {
     dispatch(setRemindersPage(nextPage));
   }
 
-  const handleToggleStatus = async (row: PortalReminder) => {
-    const next = row.status === "open" ? "done" : "open";
+  const handleSetStatus = async (row: PortalReminder, next: PortalReminder["status"]) => {
+    if (row.status === next) return;
     setBusyStatusRowIds((prev) => [...prev, row.id]);
     try {
       await dispatch(patchReminderStatus({ id: row.id, status: next })).unwrap();
-      toast.success(`Reminder marked as ${next}.`);
+      toast.success(`Reminder marked as ${crmReminderStatusLabel(next)}.`);
     } catch (err) {
       toast.error(typeof err === "string" ? err : "Failed to update reminder status.");
     } finally {
       setBusyStatusRowIds((prev) => prev.filter((id) => id !== row.id));
     }
+  };
+
+  const handleToggleStatus = async (row: PortalReminder) => {
+    const next = row.status === "open" ? "done" : "open";
+    await handleSetStatus(row, next);
   };
 
   const confirmDeleteReminder = async () => {
@@ -765,13 +771,10 @@ export function RemindersView() {
             searchValue: (row) => crmReminderStatusLabel(row.status),
             exportValue: (row) => crmReminderStatusLabel(row.status),
             cell: (row) => (
-              <StatusPill
-                label={
-                  row.status === "open" && reminderIsOverdue(row)
-                    ? "Overdue"
-                    : crmReminderStatusLabel(row.status)
-                }
-                tone={row.status === "done" ? "success" : reminderIsOverdue(row) ? "danger" : "warning"}
+              <ReminderStatusSelect
+                value={row.status}
+                disabled={busyStatusRowIds.includes(row.id)}
+                onChange={(next) => void handleSetStatus(row, next)}
               />
             ),
           },

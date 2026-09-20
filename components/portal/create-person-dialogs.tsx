@@ -867,9 +867,11 @@ export function CreateReminderDialog({
   const lookups = useReminderLookups();
 
   const resolveKind = (sk?: ReminderSubjectKind, r?: PortalReminder | null): ReminderSubjectKind => {
-    if (r?.subjectKind && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(r.subjectKind)) return r.subjectKind;
+    if (r?.subjectKind && (REMINDER_SUBJECT_KINDS as readonly string[]).includes(r.subjectKind)) {
+      return r.subjectKind;
+    }
     if (r?.customerId) return "customer";
-    if (sk && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(sk)) return sk;
+    if (sk && (REMINDER_SUBJECT_KINDS as readonly string[]).includes(sk)) return sk;
     return "customer";
   };
 
@@ -918,7 +920,10 @@ export function CreateReminderDialog({
       setTitle(reminder.title ?? "");
       setNote(reminder.note ?? "");
       setDueAt(reminder.dueAt ? reminder.dueAt.slice(0, 10) : "");
-      setAssignedEmployeeId(reminder.assignedEmployeeId ?? "");
+      setAssignedEmployeeId(
+        reminder.assignedEmployeeId ??
+          (nextKind === "employee" && nextId ? nextId : ""),
+      );
       setStatus(reminder.status ?? "open");
       setSaving(false);
       return;
@@ -930,7 +935,7 @@ export function CreateReminderDialog({
     setTitle("");
     setNote("");
     setDueAt("");
-    setAssignedEmployeeId("");
+    setAssignedEmployeeId(nextKind === "employee" && nextId ? nextId : "");
     setStatus("open");
     setSaving(false);
   }, [open, reminder, subjectKind, subjectId, customerId]);
@@ -957,6 +962,7 @@ export function CreateReminderDialog({
   function changeKind(next: ReminderSubjectKind) {
     setKind(next);
     setSelectedId("");
+    if (next !== "employee") setAssignedEmployeeId("");
   }
 
   async function save() {
@@ -973,7 +979,9 @@ export function CreateReminderDialog({
       title: title.trim(),
       note: note.trim(),
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
-      assignedEmployeeId: assignedEmployeeId || undefined,
+      assignedEmployeeId:
+        assignedEmployeeId ||
+        (linkedKind === "employee" ? linkedId : undefined),
       status,
       createdAt: reminder?.createdAt ?? new Date().toISOString().slice(0, 10),
     };
@@ -1017,7 +1025,7 @@ export function CreateReminderDialog({
         <DialogHeader>
           <DialogTitle>{reminder ? "Edit reminder" : "Set reminder"}</DialogTitle>
           <DialogDescription>
-            Link a follow-up to a customer, job, estimate, contractor, or vendor.
+            Link a follow-up to a customer, employee, job, estimate, contractor, or vendor.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -1036,7 +1044,15 @@ export function CreateReminderDialog({
                   align="start"
                   className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  {CRM_TASK_SUBJECT_KINDS.map((item) => (
+                  {REMINDER_SUBJECT_KINDS.filter(
+                    (item) =>
+                      item === "customer" ||
+                      item === "employee" ||
+                      item === "job" ||
+                      item === "estimate" ||
+                      item === "contractor" ||
+                      item === "vendor",
+                  ).map((item) => (
                     <SelectItem key={item} value={item}>
                       {reminderSubjectKindLabel(item)}
                     </SelectItem>
@@ -1171,9 +1187,11 @@ export function CreateReminderDialog({
 export function SetReminderButton({
   subjectKind,
   subjectId,
+  onCreated,
 }: {
   subjectKind: ReminderSubjectKind;
   subjectId: string;
+  onCreated?: (reminder: PortalReminder) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1181,7 +1199,13 @@ export function SetReminderButton({
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         Set reminder
       </Button>
-      <CreateReminderDialog open={open} onOpenChange={setOpen} subjectKind={subjectKind} subjectId={subjectId} />
+      <CreateReminderDialog
+        open={open}
+        onOpenChange={setOpen}
+        subjectKind={subjectKind}
+        subjectId={subjectId}
+        onCreated={onCreated}
+      />
     </>
   );
 }

@@ -16,6 +16,7 @@ import type {
   PortalEmployeeAssignmentJob,
   PortalEmployeeAssignmentSchedule,
   PortalEmployeeAssignmentTask,
+  PortalEmployeeAttachment,
   PortalEmployeeDetail,
   PortalEmployeeWorkingHours,
   PortalEventKind,
@@ -635,6 +636,49 @@ function mapEmployeeWorkingHours(raw: unknown): PortalEmployeeWorkingHours[] | u
   return items.length ? items : undefined;
 }
 
+function mapEmployeeAttachments(raw: unknown): PortalEmployeeAttachment[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((entry, index): PortalEmployeeAttachment | null => {
+      const record = asRecord(entry);
+      if (!record) return null;
+      const rawId = record.id ?? record._id;
+      const idFromObject =
+        rawId && typeof rawId === "object" && typeof (rawId as { toString?: () => string }).toString === "function"
+          ? String((rawId as { toString: () => string }).toString()).trim()
+          : "";
+      const id =
+        crmIdOf(record) ||
+        (typeof rawId === "string" ? rawId.trim() : "") ||
+        (idFromObject && idFromObject !== "[object Object]" ? idFromObject : "") ||
+        `att_${index}`;
+      const name =
+        trimmed(record.name) ||
+        trimmed(record.fileName) ||
+        trimmed(record.filename) ||
+        "Attachment";
+      const url =
+        trimmed(record.url) ||
+        trimmed(record.attachment) ||
+        trimmed(record.path) ||
+        trimmed(record.fileUrl) ||
+        trimmed(record.file) ||
+        trimmed(record.dataUrl);
+      if (!url) return null;
+      return {
+        id,
+        name,
+        url,
+        fileType: trimmed(record.fileType) || trimmed(record.mimeType) || undefined,
+        sizeBytes: numberValue(record.sizeBytes ?? record.fileSize, 0) || undefined,
+        category: trimmed(record.category) || undefined,
+        uploadedAt: toIsoString(record.uploadedAt) || undefined,
+      };
+    })
+    .filter((item): item is PortalEmployeeAttachment => Boolean(item));
+  return items;
+}
+
 export function mapPortalEmployee(raw: unknown): PortalEmployee | null {
   const record = asRecord(raw);
   if (!record) return null;
@@ -665,6 +709,7 @@ export function mapPortalEmployee(raw: unknown): PortalEmployee | null {
     emergencyName: trimmed(record.emergencyName) || undefined,
     emergencyPhone: trimmed(record.emergencyPhone) || undefined,
     workingHours: mapEmployeeWorkingHours(record.workingHours),
+    attachments: mapEmployeeAttachments(record.attachments),
   };
 }
 

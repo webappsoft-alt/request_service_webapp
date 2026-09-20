@@ -491,11 +491,12 @@ function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
   };
 }
 
-function reminderPayload(reminder: PortalReminder) {
-  const payload: Record<string, unknown> = {
-    title: reminder.title,
-    status: reminder.status || "open",
-  };
+function reminderPayload(reminder: PortalReminder | Partial<PortalReminder>) {
+  const payload: Record<string, unknown> = {};
+  if (reminder.title !== undefined) payload.title = reminder.title;
+  if (reminder.status !== undefined) payload.status = reminder.status || "open";
+  if (reminder.note !== undefined) payload.note = reminder.note || "";
+  if (reminder.isArchived !== undefined) payload.isArchived = Boolean(reminder.isArchived);
   if (reminder.dueAt) {
     payload.dueAt = reminder.dueAt.includes("T")
       ? reminder.dueAt
@@ -531,7 +532,6 @@ function reminderPayload(reminder: PortalReminder) {
     reminder.assignedVendorId ||
     (reminder.subjectKind === "vendor" ? reminder.subjectId : undefined);
   if (assignedVendorId) payload.assignedVendorId = assignedVendorId;
-  if (reminder.note) payload.note = reminder.note;
   return payload;
 }
 
@@ -1743,7 +1743,7 @@ export async function createReminder(reminder: PortalReminder) {
   return mapCrmEntity(response, mapPortalReminder);
 }
 
-export async function updateReminder(id: string, reminder: PortalReminder) {
+export async function updateReminder(id: string, reminder: PortalReminder | Partial<PortalReminder>) {
   const payload = reminderPayload(reminder);
   let response;
   try {
@@ -1751,6 +1751,12 @@ export async function updateReminder(id: string, reminder: PortalReminder) {
   } catch {
     response = await patchData(providerCrmApi.reminder(id), payload);
   }
+  invalidateGetCache(providerCrmApi.reminders);
+  return mapCrmEntity(response, mapPortalReminder);
+}
+
+export async function updateReminderArchive(id: string, isArchived: boolean) {
+  const response = await patchData(providerCrmApi.reminder(id), { isArchived });
   invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }

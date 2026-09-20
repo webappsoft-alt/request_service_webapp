@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCircle2, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   CreateContractorDialog,
@@ -11,7 +11,6 @@ import {
   CreateVendorDialog,
 } from "@/components/portal/create-person-dialogs";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
-import { FilterTabs } from "@/components/portal/filter-tabs";
 import { ReminderSubjectLink, useReminderLookups } from "@/components/portal/reminder-banner";
 import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
@@ -31,6 +30,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   crmReminderStatusLabel,
   crmStatusLabel,
   reminderIsOverdue,
@@ -40,7 +46,6 @@ import {
   type PortalReminder,
   type PortalVendor,
 } from "@/lib/data/crm-people";
-import { withArchiveFilter } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -64,15 +69,25 @@ import {
   clearRemindersError,
   deleteReminderRecord,
   fetchReminders,
+  patchReminderArchive,
   patchReminderStatus,
   REMINDERS_DEFAULT_LIMIT,
+  setRemindersListFilter,
   setRemindersPage,
   setRemindersSearch,
-  setRemindersStatus,
+  type ReminderListFilter,
 } from "@/store/remindersSlice";
 import { fetchTeam } from "@/store/teamSlice";
 
 const SEARCH_DEBOUNCE_MS = 400;
+
+const REMINDER_STATUS_FILTERS: Array<{ value: ReminderListFilter; label: string }> = [
+  { value: "", label: "All" },
+  { value: "open", label: "Open" },
+  { value: "done", label: "Done" },
+  { value: "overdue", label: "Overdue" },
+  { value: "archived", label: "Archived" },
+];
 
 function useProviderApi() {
   const auth = useAppSelector(selectAuth);
@@ -505,15 +520,21 @@ export function VendorsView() {
 
 export function RemindersView() {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const useApi = useProviderApi();
   const { employees: crewEmployees } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const employees = useApi && teamItems.length > 0 ? teamItems : crewEmployees;
   const lookups = useReminderLookups();
   const searchParams = useSearchParams();
-  const statusParam = searchParams.get("status") ?? "";
-  const overdueOnly = statusParam === "overdue";
-  const archivedOnly = statusParam === "archived";
+  const statusParam = (searchParams.get("status") ?? "") as ReminderListFilter;
+  const listFilter: ReminderListFilter =
+    statusParam === "open" ||
+    statusParam === "done" ||
+    statusParam === "overdue" ||
+    statusParam === "archived"
+      ? statusParam
+      : "";
 
   const [open, setOpen] = useState(false);
   const [editingReminder, setEditingReminder] = useState<PortalReminder | null>(null);
@@ -552,9 +573,8 @@ export function RemindersView() {
 
   useEffect(() => {
     if (!useApi) return;
-    const targetStatus = overdueOnly || archivedOnly ? "" : statusParam;
-    dispatch(setRemindersStatus(targetStatus));
-  }, [dispatch, useApi, statusParam, overdueOnly, archivedOnly]);
+    dispatch(setRemindersListFilter(listFilter));
+  }, [dispatch, useApi, listFilter]);
 
   useEffect(() => {
     if (!useApi) return;
@@ -565,7 +585,7 @@ export function RemindersView() {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, useApi, page, search, slice?.status]);
+  }, [dispatch, useApi, page, search, slice?.status, slice?.isArchived]);
 
   useEffect(() => {
     return () => {
@@ -580,10 +600,17 @@ export function RemindersView() {
   }, [dispatch, error, loading, useApi]);
 
   let rows = items;
-  if (overdueOnly) {
-    rows = rows.filter((item) => reminderIsOverdue(item) && item.status !== "done");
-  } else if (!useApi && statusParam) {
-    rows = rows.filter((item) => item.status === statusParam);
+  if (!useApi) {
+    if (listFilter === "archived") {
+      rows = rows.filter((item) => item.isArchived);
+    } else {
+      rows = rows.filter((item) => !item.isArchived);
+      if (listFilter === "overdue") {
+        rows = rows.filter((item) => reminderIsOverdue(item));
+      } else if (listFilter === "open" || listFilter === "done") {
+        rows = rows.filter((item) => item.status === listFilter);
+      }
+    }
   }
 
   const tableLoading = actionLoading || (useApi ? loading && items.length === 0 : false);
@@ -601,6 +628,17 @@ export function RemindersView() {
     if (nextPage === page) return;
     setActionLoading(true);
     dispatch(setRemindersPage(nextPage));
+  }
+
+  function onStatusFilterChange(next: string) {
+    const filter = (next === "all" ? "" : next) as ReminderListFilter;
+    const href =
+      filter === ""
+        ? "/pro/dashboard/reminders"
+        : `/pro/dashboard/reminders?status=${filter}`;
+    setActionLoading(true);
+    dispatch(setRemindersListFilter(filter));
+    router.push(href);
   }
 
   const handleSetStatus = async (row: PortalReminder, next: PortalReminder["status"]) => {
@@ -621,6 +659,21 @@ export function RemindersView() {
     await handleSetStatus(row, next);
   };
 
+  const handleToggleArchive = async (row: PortalReminder) => {
+    const nextArchived = !row.isArchived;
+    setBusyStatusRowIds((prev) => [...prev, row.id]);
+    try {
+      await dispatch(
+        patchReminderArchive({ id: row.id, isArchived: nextArchived }),
+      ).unwrap();
+      toast.success(nextArchived ? "Reminder archived." : "Reminder restored.");
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to update archive.");
+    } finally {
+      setBusyStatusRowIds((prev) => prev.filter((id) => id !== row.id));
+    }
+  };
+
   const confirmDeleteReminder = async () => {
     if (!deletingReminder) return;
     setDeleteLoading(true);
@@ -635,10 +688,12 @@ export function RemindersView() {
     }
   };
 
+  const filterSelectValue = listFilter === "" ? "all" : listFilter;
+
   return (
     <PortalPage
       eyebrow="People / Reminders"
-      title={`Reminders (${useApi ? (overdueOnly ? rows.length : total) : rows.length})`}
+      title={`Reminders (${useApi ? total : rows.length})`}
       description="Follow-ups linked to a customer, employee, contractor, vendor, estimate, lead, or job."
       actions={
         <Button size="sm" onClick={() => { setEditingReminder(null); setOpen(true); }}>
@@ -646,19 +701,6 @@ export function RemindersView() {
         </Button>
       }
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <FilterTabs
-          baseHref="/pro/dashboard/reminders"
-          value={statusParam}
-          options={withArchiveFilter([
-            { value: "", label: "All" },
-            { value: "open", label: "Open" },
-            { value: "done", label: "Done" },
-            { value: "overdue", label: "Overdue" },
-          ])}
-        />
-      </div>
-
       <PortalDataTable
         filename="reminders"
         countLabel="Reminders"
@@ -672,10 +714,29 @@ export function RemindersView() {
         empty={
           search
             ? "No reminders match this search."
-            : "No reminders yet. Set your first reminder."
+            : listFilter === "archived"
+              ? "No archived reminders."
+              : "No reminders yet. Set your first reminder."
+        }
+        toolbar={
+          <Select value={filterSelectValue} onValueChange={onStatusFilterChange}>
+            <SelectTrigger className="h-8.5 w-[9.5rem] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent position="popper" className="z-[100]">
+              {REMINDER_STATUS_FILTERS.map((option) => (
+                <SelectItem
+                  key={option.value || "all"}
+                  value={option.value || "all"}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         }
         serverPagination={
-          useApi && !overdueOnly
+          useApi
             ? {
                 page,
                 pageSize: limit,
@@ -772,7 +833,7 @@ export function RemindersView() {
             cell: (row) => (
               <ReminderStatusSelect
                 value={row.status}
-                disabled={busyStatusRowIds.includes(row.id)}
+                disabled={busyStatusRowIds.includes(row.id) || Boolean(row.isArchived)}
                 onChange={(next) => void handleSetStatus(row, next)}
               />
             ),
@@ -780,18 +841,27 @@ export function RemindersView() {
         ]}
         actions={(row) => [
           { label: "Open file", href: `/pro/dashboard/reminders/${row.id}` },
-          // {
-          //   label: "Edit reminder",
-          //   icon: <Pencil className="size-3.5" />,
-          //   onSelect: () => {
-          //     setEditingReminder(row);
-          //     setOpen(true);
-          //   },
-          // },
+          {
+            label: "Edit reminder",
+            icon: <Pencil className="size-3.5" />,
+            onSelect: () => {
+              setEditingReminder(row);
+              setOpen(true);
+            },
+          },
           {
             label: row.status === "open" ? "Mark done" : "Reopen",
             icon: row.status === "open" ? <CheckCircle2 className="size-3.5" /> : <RotateCcw className="size-3.5" />,
             onSelect: () => void handleToggleStatus(row),
+          },
+          {
+            label: row.isArchived ? "Restore" : "Archive",
+            icon: row.isArchived ? (
+              <ArchiveRestore className="size-3.5" />
+            ) : (
+              <Archive className="size-3.5" />
+            ),
+            onSelect: () => void handleToggleArchive(row),
           },
           {
             label: "Delete",
@@ -843,6 +913,7 @@ export function ReminderDetailView({ id }: { id: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [archiveUpdating, setArchiveUpdating] = useState(false);
 
   useEffect(() => {
     if (!useApi) return;
@@ -866,7 +937,7 @@ export function ReminderDetailView({ id }: { id: string }) {
   const overdue = reminderIsOverdue(reminder);
 
   async function toggleStatus() {
-    if (statusUpdating) return;
+    if (statusUpdating || reminder!.isArchived) return;
     const next = reminder!.status === "open" ? "done" : "open";
     setStatusUpdating(true);
     try {
@@ -876,6 +947,23 @@ export function ReminderDetailView({ id }: { id: string }) {
       toast.error(typeof err === "string" ? err : "Failed to update reminder status.");
     } finally {
       setStatusUpdating(false);
+    }
+  }
+
+  async function toggleArchive() {
+    if (archiveUpdating) return;
+    const nextArchived = !reminder!.isArchived;
+    setArchiveUpdating(true);
+    try {
+      await dispatch(
+        patchReminderArchive({ id: reminder!.id, isArchived: nextArchived }),
+      ).unwrap();
+      toast.success(nextArchived ? "Reminder archived." : "Reminder restored.");
+      if (nextArchived) router.push("/pro/dashboard/reminders?status=archived");
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to update archive.");
+    } finally {
+      setArchiveUpdating(false);
     }
   }
 
@@ -905,8 +993,22 @@ export function ReminderDetailView({ id }: { id: string }) {
         ]}
         badge={
           <StatusPill
-            label={overdue ? "Overdue" : crmReminderStatusLabel(reminder.status)}
-            tone={reminder.status === "done" ? "success" : overdue ? "danger" : "warning"}
+            label={
+              reminder.isArchived
+                ? "Archived"
+                : overdue
+                  ? "Overdue"
+                  : crmReminderStatusLabel(reminder.status)
+            }
+            tone={
+              reminder.isArchived
+                ? "neutral"
+                : reminder.status === "done"
+                  ? "success"
+                  : overdue
+                    ? "danger"
+                    : "warning"
+            }
           />
         }
         actions={
@@ -915,7 +1017,12 @@ export function ReminderDetailView({ id }: { id: string }) {
               <Pencil className="size-3.5" />
               Edit
             </Button>
-            <Button size="sm" onClick={() => void toggleStatus()} disabled={statusUpdating} className="gap-1.5">
+            <Button
+              size="sm"
+              onClick={() => void toggleStatus()}
+              disabled={statusUpdating || Boolean(reminder.isArchived)}
+              className="gap-1.5"
+            >
               {statusUpdating ? (
                 <>
                   <Loader2 className="mr-1.5 size-4 animate-spin" />
@@ -932,6 +1039,22 @@ export function ReminderDetailView({ id }: { id: string }) {
                   Reopen
                 </>
               )}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void toggleArchive()}
+              disabled={archiveUpdating}
+              className="gap-1.5"
+            >
+              {archiveUpdating ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : reminder.isArchived ? (
+                <ArchiveRestore className="size-3.5" />
+              ) : (
+                <Archive className="size-3.5" />
+              )}
+              {reminder.isArchived ? "Restore" : "Archive"}
             </Button>
             <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)} className="gap-1.5">
               <Trash2 className="size-3.5" />

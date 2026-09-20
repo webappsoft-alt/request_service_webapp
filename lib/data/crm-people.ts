@@ -198,6 +198,7 @@ export type PortalReminder = {
   assignedVendorId?: string;
   assignedVendorName?: string;
   status: CrmReminderStatus;
+  isArchived?: boolean;
   createdAt: string;
 };
 
@@ -510,11 +511,13 @@ export function reminderMatches(reminder: PortalReminder, kind: ReminderSubjectK
 }
 
 export function openRemindersFor(reminders: PortalReminder[], kind: ReminderSubjectKind, id: string) {
-  return reminders.filter((item) => item.status === "open" && reminderMatches(item, kind, id));
+  return reminders.filter(
+    (item) => item.status === "open" && !item.isArchived && reminderMatches(item, kind, id),
+  );
 }
 
 export function reminderIsOverdue(reminder: PortalReminder, today = new Date().toISOString().slice(0, 10)) {
-  return reminder.status === "open" && reminder.dueAt < today;
+  return reminder.status === "open" && !reminder.isArchived && reminder.dueAt < today;
 }
 
 export function taskSubject(task: PortalTask): { kind: ReminderSubjectKind; id: string } {

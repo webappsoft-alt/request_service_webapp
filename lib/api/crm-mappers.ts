@@ -1493,6 +1493,7 @@ export function mapPortalReminder(raw: unknown): PortalReminder | null {
     assignedVendorId: crmIdOf(record.assignedVendorId) || undefined,
     assignedVendorName: assignedVendorName || undefined,
     status: trimmed(record.status) === "done" ? "done" : "open",
+    isArchived: Boolean(record.isArchived ?? record.isArchieved),
     createdAt: toIsoString(record.createdAt),
   };
 }

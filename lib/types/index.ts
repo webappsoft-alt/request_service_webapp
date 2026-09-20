@@ -322,6 +322,8 @@ export interface Invoice {
   amountPaid: number;
   balanceDue: number;
   items: InvoiceItem[];
+  /** Soft-archive — independent of lifecycle status. */
+  isArchived?: boolean;
   createdAt: string;
   updatedAt: string;
 }

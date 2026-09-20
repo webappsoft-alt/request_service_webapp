@@ -585,18 +585,19 @@ function taskPayload(task: PortalTask) {
   return payload;
 }
 
-function invoicePayload(invoice: Invoice) {
-  return {
-    customerId: invoice.customerId,
-    jobId: invoice.jobId || null,
-    status: invoice.status,
-    issuedAt: invoice.issuedAt,
-    dueAt: invoice.dueAt || undefined,
-    items: invoiceItemsToApi(invoice.items),
-    discount: invoice.discount,
-    notes: "",
-    terms: "",
-  };
+function invoicePayload(invoice: Invoice | Partial<Invoice>) {
+  const payload: Record<string, unknown> = {};
+  if (invoice.customerId !== undefined) payload.customerId = invoice.customerId;
+  if (invoice.jobId !== undefined) payload.jobId = invoice.jobId || null;
+  if (invoice.status !== undefined) payload.status = invoice.status;
+  if (invoice.issuedAt !== undefined) payload.issuedAt = invoice.issuedAt;
+  if (invoice.dueAt !== undefined) payload.dueAt = invoice.dueAt || undefined;
+  if (invoice.items !== undefined) payload.items = invoiceItemsToApi(invoice.items);
+  if (invoice.discount !== undefined) payload.discount = invoice.discount;
+  if (invoice.isArchived !== undefined) payload.isArchived = Boolean(invoice.isArchived);
+  payload.notes = "";
+  payload.terms = "";
+  return payload;
 }
 
 async function listMapped<T>(
@@ -1800,17 +1801,44 @@ export async function createInvoice(invoice: Invoice) {
   return mapCrmEntity(response, mapInvoice);
 }
 
-export async function updateInvoice(id: string, invoice: Invoice) {
+export async function updateInvoice(id: string, invoice: Invoice | Partial<Invoice>) {
   const response = await putData(providerCrmApi.invoice(id), invoicePayload(invoice));
+  invalidateGetCache(providerCrmApi.invoices);
+  invalidateGetCache(providerCrmApi.invoice(id));
+  return mapCrmEntity(response, mapInvoice);
+}
+
+export async function updateInvoiceArchive(id: string, isArchived: boolean) {
+  const response = await putData(
+    providerCrmApi.invoice(id),
+    { isArchived },
+    { silent: false },
+  );
+  invalidateGetCache(providerCrmApi.invoices);
+  invalidateGetCache(providerCrmApi.invoice(id));
   return mapCrmEntity(response, mapInvoice);
 }
 
 export async function sendInvoice(id: string) {
-  return postData(providerCrmApi.invoiceSend(id), undefined, { silent: false });
+  const response = await postData(providerCrmApi.invoiceSend(id), undefined, { silent: false });
+  invalidateGetCache(providerCrmApi.invoices);
+  invalidateGetCache(providerCrmApi.invoice(id));
+  const data =
+    response && typeof response === "object" && "data" in response
+      ? (response as { data?: { invoice?: unknown } }).data
+      : undefined;
+  if (data?.invoice) {
+    return mapInvoice(data.invoice);
+  }
+  const detail = await getInvoiceWithPayments(id);
+  return detail.invoice;
 }
 
 export async function getInvoiceWithPayments(id: string) {
-  const response = await getData(providerCrmApi.invoice(id), undefined, { silent: true });
+  const response = await getData(providerCrmApi.invoice(id), undefined, {
+    silent: true,
+    force: true,
+  });
   return mapInvoiceWithPayments(response);
 }
 
@@ -1822,10 +1850,24 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
     notes: "",
     transactionReference: "",
   });
+  invalidateGetCache(providerCrmApi.invoices);
+  invalidateGetCache(providerCrmApi.invoice(invoiceId));
+  const data =
+    response && typeof response === "object" && "data" in response
+      ? ((response as { data?: unknown }).data as Record<string, unknown> | undefined)
+      : (response as Record<string, unknown> | undefined);
+  const paymentRaw = data && typeof data === "object" ? data.payment ?? data : response;
+  const invoiceRaw = data && typeof data === "object" ? data.invoice ?? data : response;
   return {
-    payment: mapCrmEntity((response as { data?: unknown })?.data ? response : response, mapPayment),
-    invoice: mapCrmEntity((response as { data?: { invoice?: unknown } })?.data?.invoice ?? response, mapInvoice),
+    payment: mapPayment(paymentRaw),
+    invoice: mapInvoice(invoiceRaw),
   };
+}
+
+export async function deleteInvoice(id: string) {
+  const result = await deleteData(providerCrmApi.invoice(id), { silent: false });
+  invalidateGetCache(providerCrmApi.invoices);
+  return result;
 }
 
 export async function listPayments(options?: CrmRequestOptions) {

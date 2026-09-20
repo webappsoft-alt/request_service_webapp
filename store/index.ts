@@ -35,6 +35,7 @@ import vendorsReducer from "./vendorsSlice";
 import remindersReducer from "./remindersSlice";
 import tasksReducer from "./tasksSlice";
 import jobsReducer from "./jobsSlice";
+import invoicesReducer from "./invoicesSlice";
 import requestsReducer from "./requestsSlice";
 import {
   contractorNotesModule,
@@ -78,6 +79,7 @@ const rootReducer = combineReducers({
   reminders: remindersReducer,
   tasks: tasksReducer,
   jobs: jobsReducer,
+  invoices: invoicesReducer,
   requests: requestsReducer,
   customerNotes: customerNotesModule.reducer,
   estimateNotes: estimateNotesModule.reducer,
@@ -144,6 +146,7 @@ function needsReducerHotReplace(state: RootState) {
     state.reminders === undefined ||
     state.tasks === undefined ||
     state.jobs === undefined ||
+    state.invoices === undefined ||
     state.requests === undefined ||
     state.customerNotes === undefined ||
     state.estimateNotes === undefined ||

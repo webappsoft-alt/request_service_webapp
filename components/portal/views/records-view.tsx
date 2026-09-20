@@ -20,6 +20,7 @@ import {
 } from "@/components/portal/use-estimate-share";
 import { showApiErrorToast } from "@/components/api/apiFuntions";
 import { FilterTabs } from "@/components/portal/filter-tabs";
+import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import { ApplyPaymentDialog } from "@/components/portal/invoice-file";
 import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
 import { jobBoardColumns } from "@/components/portal/job-columns";
@@ -52,6 +53,17 @@ import {
   deleteJobRecord,
   JOBS_DEFAULT_LIMIT,
 } from "@/store/jobsSlice";
+import {
+  clearInvoicesError,
+  deleteInvoiceRecord,
+  fetchInvoices,
+  INVOICES_DEFAULT_LIMIT,
+  patchInvoiceArchive,
+  patchInvoiceStatus,
+  setInvoicesListFilter,
+  setInvoicesPage,
+  setInvoicesSearch,
+} from "@/store/invoicesSlice";
 import {
   deleteEstimate,
   queryEstimates,
@@ -843,19 +855,107 @@ export function JobsView() {
 
 
 export function InvoicesView() {
-  const status = useSearchParams().get("status") ?? "";
+  const dispatch = useAppDispatch();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status") ?? "";
+  const archivedOnly = statusParam === "archived";
+  const listFilter =
+    statusParam === "payments"
+      ? ""
+      : (statusParam as
+          | ""
+          | "unpaid"
+          | "paid"
+          | "overdue"
+          | "draft"
+          | "partially_paid"
+          | "cancelled"
+          | "archived");
+
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+
   const { invoices, jobs, estimates, requests, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const [paying, setPaying] = useState<Invoice | null>(null);
-  const archivedOnly = status === "archived";
+  const [deleting, setDeleting] = useState<Invoice | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Invoice | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [busyIds, setBusyIds] = useState<string[]>([]);
+  const [actionLoading, setActionLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const slice = useAppSelector((state) => state.invoices);
+  const {
+    items,
+    page,
+    limit,
+    total,
+    totalPages,
+    search,
+    loading,
+    error,
+  } = slice ?? {
+    items: [],
+    page: 1,
+    limit: INVOICES_DEFAULT_LIMIT,
+    total: 0,
+    totalPages: 1,
+    search: "",
+    loading: true,
+    error: null,
+  };
+  const [searchInput, setSearchInput] = useState(search);
+
   const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
   const allEstimates = useMemo(
     () => records.mergeEstimates(estimates),
     [records, estimates],
   );
-  const rows = useMemo(
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    if (!useApi) return;
+    dispatch(setInvoicesListFilter(listFilter));
+  }, [dispatch, useApi, listFilter]);
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setActionLoading(true);
+    void dispatch(fetchInvoices()).finally(() => {
+      if (!cancelled) setActionLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, useApi, page, search, slice?.status, slice?.isArchived]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!useApi || !error || loading) return;
+    toast.error(error);
+    dispatch(clearInvoicesError());
+  }, [dispatch, error, loading, useApi]);
+
+  const localRows = useMemo(
     () =>
       records
         .listed("invoice", records.mergeInvoices(invoices), archivedOnly)
@@ -864,36 +964,149 @@ export function InvoicesView() {
           status: records.statusOf("invoice", item.id, item.status),
         }))
         .filter(
-          (item) => archivedOnly || invoiceMatchesBoardFilter(item, status),
+          (item) => archivedOnly || invoiceMatchesBoardFilter(item, statusParam),
         ),
-    [archivedOnly, invoices, records, status],
+    [archivedOnly, invoices, records, statusParam],
   );
+
+  const rows = useApi ? items : localRows;
+  const tableLoading =
+    actionLoading || (useApi && loading && items.length === 0);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (!useApi) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setActionLoading(true);
+      dispatch(setInvoicesSearch(value.trim()));
+    }, 350);
+  }
+
+  function onPageChange(nextPage: number) {
+    if (!useApi || nextPage === page) return;
+    setActionLoading(true);
+    dispatch(setInvoicesPage(nextPage));
+  }
+
+  async function handleSetStatus(row: Invoice, next: Invoice["status"]) {
+    if (row.status === next) return;
+    setBusyIds((prev) => [...prev, row.id]);
+    try {
+      if (useApi) {
+        await dispatch(patchInvoiceStatus({ id: row.id, status: next })).unwrap();
+      } else {
+        await records.setStatus("invoice", row.id, next);
+      }
+      toast.success(`Invoice marked ${next.replaceAll("_", " ")}.`);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to update invoice status.");
+    } finally {
+      setBusyIds((prev) => prev.filter((id) => id !== row.id));
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setDeleteLoading(true);
+    try {
+      if (useApi) {
+        await dispatch(deleteInvoiceRecord(deleting.id)).unwrap();
+      } else {
+        records.remove("invoice", deleting.id);
+      }
+      toast.success(`${deleting.number} deleted.`);
+      setDeleting(null);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Could not delete invoice.");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   return (
     <PortalPage
       eyebrow="Billing"
-      title="Invoices"
+      title={`Invoices${useApi ? ` (${total})` : ""}`}
       description="Each invoice keeps the original estimate plus approved extras."
     >
-      <FilterTabs
-        baseHref="/pro/dashboard/invoices"
-        value={status}
-        options={withArchiveFilter([
-          ...INVOICE_BOARD_FILTERS,
-          {
-            value: "payments",
-            label: "Payments",
-            href: "/pro/dashboard/payments",
-          },
-        ])}
-      />
       <PortalDataTable
         filename="invoices"
         countLabel="Invoices"
         searchPlaceholder="Search by invoice # or job #"
+        loading={tableLoading}
+        busyRowIds={busyIds}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/invoices/${row.id}`}
+        pageSize={useApi ? limit : undefined}
+        empty={
+          search
+            ? "No invoices match this search."
+            : archivedOnly
+              ? "No archived invoices."
+              : statusParam
+                ? "No invoices match this status."
+                : "No records found."
+        }
+        serverPagination={
+          useApi
+            ? {
+                page,
+                pageSize: limit,
+                total,
+                totalPages,
+                onPageChange,
+                search: searchInput,
+                onSearchChange,
+              }
+            : undefined
+        }
+        toolbar={
+          <div className="h-8.5 w-40 sm:w-44">
+            <Select
+              disabled={tableLoading}
+              value={statusParam || "__all__"}
+              onValueChange={(value) => {
+                if (value === "payments") {
+                  router.replace("/pro/dashboard/payments");
+                  return;
+                }
+                const next = value === "__all__" ? "" : value;
+                router.replace(
+                  next
+                    ? `/pro/dashboard/invoices?status=${next}`
+                    : "/pro/dashboard/invoices",
+                );
+              }}
+            >
+              <SelectTrigger
+                id="invoices-status-filter"
+                aria-label="Filter by status"
+                className="h-full w-full text-xs"
+              >
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="end"
+                className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[160px]"
+              >
+                {withArchiveFilter([
+                  ...INVOICE_BOARD_FILTERS,
+                  { value: "payments", label: "Payments" },
+                ]).map((option) => (
+                  <SelectItem
+                    key={option.label}
+                    value={option.value || "__all__"}
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
         columns={invoiceBoardColumns({
           jobs: allJobs,
           estimates: allEstimates,
@@ -905,69 +1118,154 @@ export function InvoicesView() {
               : getPortalCustomerName(provider, customerId);
           },
         })}
-        actions={(row) => [
-          { label: "View", href: `/pro/dashboard/invoices/${row.id}` },
-          ...(row.balanceDue > 0
-            ? [
-                {
-                  label: "Apply payment",
-                  onSelect: () => setPaying(row),
-                },
-              ]
-            : []),
-          ...(row.jobId && allJobs.some((job) => job.id === row.jobId)
-            ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }]
-            : []),
-          ...(row.status === "sent"
-            ? []
-            : [
-                {
-                  label: "Mark sent",
-                  onSelect: () => {
-                    records.setStatus("invoice", row.id, "sent");
-                    toast.success("Invoice marked sent.");
+        actions={(row) => {
+          const archived =
+            Boolean(row.isArchived) || records.isArchived("invoice", row.id);
+          return [
+            { label: "View", href: `/pro/dashboard/invoices/${row.id}` },
+            ...(row.balanceDue > 0
+              ? [
+                  {
+                    label: "Apply payment",
+                    onSelect: () => setPaying(row),
                   },
-                },
-              ]),
-          ...(row.status === "paid"
-            ? []
-            : [
-                {
-                  label: "Mark paid",
-                  onSelect: () => {
-                    records.setStatus("invoice", row.id, "paid");
-                    toast.success("Invoice marked paid.");
+                ]
+              : []),
+            ...(row.jobId && allJobs.some((job) => job.id === row.jobId)
+              ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }]
+              : []),
+            ...(archived || row.status === "sent" || row.status === "paid"
+              ? []
+              : [
+                  {
+                    label: "Mark sent",
+                    onSelect: () => void handleSetStatus(row, "sent"),
                   },
-                },
-              ]),
-          ...(row.status === "overdue"
-            ? []
-            : [
-                {
-                  label: "Mark overdue",
-                  onSelect: () => {
-                    records.setStatus("invoice", row.id, "overdue");
-                    toast.success("Invoice marked overdue.");
+                ]),
+            ...(archived || row.status === "paid"
+              ? []
+              : [
+                  {
+                    label: "Mark paid",
+                    onSelect: () => void handleSetStatus(row, "paid"),
                   },
-                },
-              ]),
-          archiveRowAction(records, "invoice", row.id, row.number),
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => {
-              records.remove("invoice", row.id);
-              toast.success(`${row.number} removed from this board.`);
+                ]),
+            ...(archived || row.status === "overdue" || row.status === "paid"
+              ? []
+              : [
+                  {
+                    label: "Mark overdue",
+                    onSelect: () => void handleSetStatus(row, "overdue"),
+                  },
+                ]),
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        if (useApi) {
+                          await dispatch(
+                            patchInvoiceArchive({
+                              id: row.id,
+                              isArchived: false,
+                            }),
+                          ).unwrap();
+                        } else {
+                          await records.unarchive("invoice", row.id);
+                        }
+                        toast.success(`${row.number} restored.`);
+                      } catch (err) {
+                        toast.error(
+                          typeof err === "string"
+                            ? err
+                            : "Could not restore this invoice.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "invoice",
+                  row.id,
+                  row.number,
+                  () => setArchiveTarget(row),
+                ),
+            {
+              label: "Delete",
+              variant: "destructive",
+              onSelect: () => setDeleting(row),
             },
-          },
-        ]}
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="invoice"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              if (useApi) {
+                await dispatch(
+                  patchInvoiceArchive({
+                    id: archiveTarget.id,
+                    isArchived: true,
+                  }),
+                ).unwrap();
+              } else {
+                await records.archive("invoice", archiveTarget.id);
+              }
+              toast.success(`${archiveTarget.number} archived.`);
+              setArchiveTarget(null);
+            } catch (err) {
+              toast.error(
+                typeof err === "string"
+                  ? err
+                  : "Could not archive this invoice.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
+        }}
       />
       <ApplyPaymentDialog
         open={Boolean(paying)}
         onOpenChange={(open) => {
-          if (!open) setPaying(null);
+          if (!open) {
+            setPaying(null);
+          }
         }}
         invoice={paying}
+        onPaid={() => {
+          if (useApi) void dispatch(fetchInvoices({ force: true }));
+        }}
+      />
+      <DeleteConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(next) => {
+          if (!next) setDeleting(null);
+        }}
+        title="Delete Invoice"
+        description={
+          deleting
+            ? `Delete ${deleting.number}? Unpaid invoices can be removed. Invoices with payments cannot be deleted.`
+            : "Delete this invoice?"
+        }
+        loading={deleteLoading}
+        onConfirm={confirmDelete}
       />
     </PortalPage>
   );

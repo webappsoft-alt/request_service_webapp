@@ -13,6 +13,7 @@ import {
   updateEstimateStatus as updateEstimateStatusApi,
   updateEstimateArchive as updateEstimateArchiveApi,
   updateInvoice as updateInvoiceApi,
+  updateInvoiceArchive as updateInvoiceArchiveApi,
   updateJobStatus as updateJobStatusApi,
   updateRequestStatus,
   archiveCustomer as archiveCustomerApi,
@@ -171,9 +172,17 @@ export function usePortalRecords() {
           return Boolean(est.isArchived ?? est.isArchieved);
         }
       }
+      if (kind === "invoice") {
+        const inv =
+          crm.invoices.find((item) => item.id === id) ??
+          store.invoices.find((item) => item.id === id);
+        if (inv && inv.isArchived !== undefined) {
+          return Boolean(inv.isArchived);
+        }
+      }
       return false;
     },
-    [crm.estimates, store.archived],
+    [crm.estimates, crm.invoices, store.archived, store.invoices],
   );
 
   const statusOf = useCallback(
@@ -357,6 +366,35 @@ export function usePortalRecords() {
           return updated;
         })();
       }
+      if (apiReady && kind === "invoice") {
+        return (async () => {
+          const updated = await updateInvoiceArchiveApi(id, true);
+          const persisted = Boolean(updated?.isArchived);
+          if (!updated || !persisted) {
+            throw new Error("Archive did not save on the server. Restart the API and try again.");
+          }
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            archived: current.archived.includes(nextKey)
+              ? current.archived
+              : [...current.archived, nextKey],
+            invoices: [
+              updated,
+              ...current.invoices.filter((item) => item.id !== id),
+            ],
+            invoicePatches: {
+              ...current.invoicePatches,
+              [id]: { ...current.invoicePatches[id], isArchived: true },
+            },
+          });
+          if (crm.ready) {
+            void crm.refresh({ silent: true });
+          }
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const nextKey = recordKey(kind, id);
       writeStore(key, {
@@ -382,6 +420,32 @@ export function usePortalRecords() {
           writeStore(key, {
             ...current,
             archived: current.archived.filter((item) => item !== nextKey),
+          });
+          if (crm.ready) {
+            void crm.refresh({ silent: true });
+          }
+          return updated;
+        })();
+      }
+      if (apiReady && kind === "invoice") {
+        return (async () => {
+          const updated = await updateInvoiceArchiveApi(id, false);
+          if (!updated || updated.isArchived) {
+            throw new Error("Restore did not save on the server. Restart the API and try again.");
+          }
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            archived: current.archived.filter((item) => item !== nextKey),
+            invoices: [
+              updated,
+              ...current.invoices.filter((item) => item.id !== id),
+            ],
+            invoicePatches: {
+              ...current.invoicePatches,
+              [id]: { ...current.invoicePatches[id], isArchived: false },
+            },
           });
           if (crm.ready) {
             void crm.refresh({ silent: true });

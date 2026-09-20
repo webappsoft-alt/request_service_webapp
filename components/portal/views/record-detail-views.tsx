@@ -48,7 +48,13 @@ import {
   InvoicePaymentsTab,
   InvoiceSummaryTab,
 } from "@/components/portal/invoice-file";
-import { sendInvoice as sendInvoiceApi } from "@/lib/api/crm-client";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import {
+  fetchInvoiceDetail,
+  patchInvoiceArchive,
+  sendInvoiceRecord,
+} from "@/store/invoicesSlice";
 import {
   PaymentFileChrome,
   PaymentSummaryTab,
@@ -88,9 +94,7 @@ import { CenteredSpinner } from "@/components/ui/spinner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchJobDetail, upsertJobItem } from "@/store/jobsSlice";
-import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   estimateAsJob,
   filledWorkLines,
@@ -108,6 +112,7 @@ import {
   finalizeEstimate as finalizeEstimateApi,
   getEstimate,
   getJob,
+  sendInvoice as sendInvoiceApi,
   updateEstimate as updateEstimateApi,
   updateEstimateArchive as updateEstimateArchiveApi,
   updateEstimateSiteVisit,
@@ -1482,25 +1487,48 @@ export function JobDetailView({ id }: { id: string }) {
 }
 
 export function InvoiceDetailView({ id }: { id: string }) {
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+
+  const detailInvoice = useAppSelector((state) => state.invoices?.detailsCache?.[id]);
+  const detailPayments = useAppSelector(
+    (state) => state.invoices?.detailPayments?.[id] ?? [],
+  );
+  const detailLoading = useAppSelector((state) =>
+    Boolean(state.invoices?.detailLoading),
+  );
+
   const { invoices, jobs, estimates, requests, payments, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const settings = useInvoiceSettings(id);
   const seeded = records.mergeInvoices(invoices).find((item) => item.id === id);
-  const invoice = seeded
+  const workspaceInvoice = seeded
     ? {
         ...applyInvoiceSettings(seeded, settings),
         status: records.statusOf("invoice", seeded.id, seeded.status),
       }
     : undefined;
+  const invoice = useApi
+    ? detailInvoice
+      ? applyInvoiceSettings(detailInvoice, settings)
+      : workspaceInvoice
+    : workspaceInvoice;
   const allJobs = records.mergeJobs(jobs);
   const allEstimates = records.mergeEstimates(estimates);
   const job = allJobs.find((item) => item.id === invoice?.jobId);
   const estimate = allEstimates.find((item) => item.id === job?.estimateId);
-  const relatedPayments = records
-    .mergePayments(payments)
-    .filter((item) => item.invoiceId === id);
+  const relatedPayments = useApi
+    ? detailPayments.length
+      ? detailPayments
+      : records.mergePayments(payments).filter((item) => item.invoiceId === id)
+    : records.mergePayments(payments).filter((item) => item.invoiceId === id);
   const customer = customers.find((item) => item.id === invoice?.customerId);
   const customerLabel = customer
     ? crmCustomerName(customer)
@@ -1508,9 +1536,16 @@ export function InvoiceDetailView({ id }: { id: string }) {
       ? getPortalCustomerName(provider, invoice.customerId)
       : "Customer";
   const pending = useCrmRecordPending();
+  const [sending, setSending] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
+  useEffect(() => {
+    if (!useApi || !id) return;
+    void dispatch(fetchInvoiceDetail(id));
+  }, [dispatch, useApi, id]);
 
   if (!invoice) {
-    return pending ? (
+    return pending || (useApi && detailLoading) ? (
       <div className="flex min-h-[50vh] items-center justify-center py-12">
         <Loader2 className="size-8 animate-spin text-primary" />
       </div>
@@ -1523,6 +1558,41 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const service = job
     ? jobServiceLabel(job, allEstimates, requests)
     : invoice.items[0]?.description || "Service";
+  const archived =
+    Boolean(invoice.isArchived) || records.isArchived("invoice", invoice.id);
+  const invoiceId = invoice.id;
+  const invoiceNumber = invoice.number;
+
+  async function toggleArchive() {
+    if (archiving) return;
+    setArchiving(true);
+    try {
+      if (useApi) {
+        await dispatch(
+          patchInvoiceArchive({ id: invoiceId, isArchived: !archived }),
+        ).unwrap();
+      } else if (archived) {
+        await records.unarchive("invoice", invoiceId);
+      } else {
+        await records.archive("invoice", invoiceId);
+      }
+      toast.success(
+        archived ? `${invoiceNumber} restored.` : `${invoiceNumber} archived.`,
+      );
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : archived
+              ? "Could not restore this invoice."
+              : "Could not archive this invoice.",
+      );
+    } finally {
+      setArchiving(false);
+    }
+  }
 
   return (
     <RecordWorkspace
@@ -1549,7 +1619,11 @@ export function InvoiceDetailView({ id }: { id: string }) {
               className="bg-red-50 text-red-700"
             />
           ) : null}
-          <ArchiveBadge kind="invoice" id={invoice.id} />
+          {archived ? (
+            <StatusPill label="Archived" className="bg-slate-100 text-slate-700" />
+          ) : (
+            <ArchiveBadge kind="invoice" id={invoice.id} />
+          )}
         </>
       }
       actions={
@@ -1557,25 +1631,40 @@ export function InvoiceDetailView({ id }: { id: string }) {
           <Button
             size="sm"
             variant="outline"
+            disabled={sending || invoice.status === "paid" || archived}
             onClick={() => {
               void (async () => {
+                setSending(true);
                 try {
-                  await sendInvoiceApi(invoice.id);
-                  await records.setStatus("invoice", invoice.id, "sent");
+                  if (useApi) {
+                    await dispatch(sendInvoiceRecord(invoice.id)).unwrap();
+                  } else {
+                    await sendInvoiceApi(invoice.id);
+                    await records.setStatus("invoice", invoice.id, "sent");
+                  }
                   toast.success(`${invoice.number} marked sent.`);
                 } catch (error) {
                   toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not send this invoice.",
+                    typeof error === "string"
+                      ? error
+                      : error instanceof Error
+                        ? error.message
+                        : "Could not send this invoice.",
                   );
+                } finally {
+                  setSending(false);
                 }
               })();
             }}
           >
-            Send invoice
+            {sending ? "Sending…" : "Send invoice"}
           </Button>
-          <ApplyPaymentButton invoice={invoice} />
+          <ApplyPaymentButton
+            invoice={invoice}
+            onPaid={() => {
+              if (useApi) void dispatch(fetchInvoiceDetail(invoice.id));
+            }}
+          />
           {job ? (
             <Button size="sm" variant="outline" asChild>
               <Link href={`/pro/dashboard/jobs/${job.id}`}>
@@ -1583,11 +1672,20 @@ export function InvoiceDetailView({ id }: { id: string }) {
               </Link>
             </Button>
           ) : null}
-          <ArchiveButton
-            kind="invoice"
-            id={invoice.id}
-            label={invoice.number}
-          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={archiving}
+            onClick={() => void toggleArchive()}
+          >
+            {archiving
+              ? archived
+                ? "Restoring…"
+                : "Archiving…"
+              : archived
+                ? "Restore"
+                : "Archive"}
+          </Button>
         </>
       }
     >

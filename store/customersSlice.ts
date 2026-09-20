@@ -416,7 +416,9 @@ export const fetchCustomerInvoices = createAsyncThunk<
     try {
       const result = await queryInvoices({
         customerId: arg.customerId,
+        // Never send UI "archived" as status — use isArchived instead.
         status: arg.status || undefined,
+        isArchived: arg.isArchived === true,
         search: arg.search || undefined,
         page: arg.page ?? 1,
         limit: arg.limit ?? DETAIL_TAB_LIMIT,
@@ -833,6 +835,9 @@ const customersSlice = createSlice({
     removeCustomerJobLocal(state, action: PayloadAction<string>) {
       removeTabItem(state.jobs, action.payload);
     },
+    removeCustomerInvoiceLocal(state, action: PayloadAction<string>) {
+      removeTabItem(state.invoices, action.payload);
+    },
     removeCustomerTaskLocal(state, action: PayloadAction<string>) {
       removeTabItem(state.tasks, action.payload);
     },
@@ -1102,6 +1107,7 @@ export const {
   upsertCustomerReminder,
   removeCustomerEstimate,
   removeCustomerJobLocal,
+  removeCustomerInvoiceLocal,
   removeCustomerTaskLocal,
   removeCustomerReminderLocal,
 } = customersSlice.actions;

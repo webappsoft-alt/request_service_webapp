@@ -41,6 +41,9 @@ import {
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
 import type { Estimate, Invoice, InvoiceStatus, Job, Payment, PaymentMethodType } from "@/lib/types";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import { recordInvoicePaymentRecord } from "@/store/invoicesSlice";
 
 const PAYMENT_METHODS: PaymentMethodType[] = ["card", "ach", "check", "cash"];
 
@@ -94,25 +97,37 @@ export function ApplyPaymentDialog({
   open,
   onOpenChange,
   invoice,
+  onPaid,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoice?: Invoice | null;
+  /** Called after a payment is successfully recorded (API or local). */
+  onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
 }) {
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
   const records = usePortalRecords();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethodType>("check");
   const [paidAt, setPaidAt] = useState(todayISO());
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open || !invoice) return;
     setAmount(invoice.balanceDue > 0 ? String(invoice.balanceDue) : "");
     setMethod("check");
     setPaidAt(todayISO());
+    setSaving(false);
   }, [invoice, open]);
 
-  function save() {
-    if (!invoice) return;
+  async function save() {
+    if (!invoice || saving) return;
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) return;
     const applied = Math.min(value, invoice.balanceDue);
@@ -121,10 +136,8 @@ export function ApplyPaymentDialog({
       onOpenChange(false);
       return;
     }
-    const amountPaid = invoice.amountPaid + applied;
-    const balanceDue = Math.max(0, invoice.total - amountPaid);
-    const status = invoiceStatusAfterPayment(invoice.status, balanceDue);
-    records.addPayment({
+
+    const payment: Payment = {
       id: `pay_new_${Date.now()}`,
       invoiceId: invoice.id,
       amount: applied,
@@ -132,11 +145,40 @@ export function ApplyPaymentDialog({
       status: "succeeded",
       paidAt,
       createdAt: todayISO(),
-    });
-    records.patchInvoice(invoice.id, { amountPaid, balanceDue, status });
-    records.setStatus("invoice", invoice.id, status);
-    toast.success(`${formatMoney(applied)} applied to ${invoice.number}.`);
-    onOpenChange(false);
+    };
+
+    setSaving(true);
+    try {
+      if (useApi) {
+        const result = await dispatch(
+          recordInvoicePaymentRecord({ invoiceId: invoice.id, payment }),
+        ).unwrap();
+        toast.success(`${formatMoney(applied)} applied to ${invoice.number}.`);
+        onPaid?.(result);
+        onOpenChange(false);
+        return;
+      }
+
+      const amountPaid = invoice.amountPaid + applied;
+      const balanceDue = Math.max(0, invoice.total - amountPaid);
+      const status = invoiceStatusAfterPayment(invoice.status, balanceDue);
+      await records.addPayment(payment);
+      await records.patchInvoice(invoice.id, { amountPaid, balanceDue, status });
+      await records.setStatus("invoice", invoice.id, status);
+      toast.success(`${formatMoney(applied)} applied to ${invoice.number}.`);
+      onPaid?.({ invoice: { ...invoice, amountPaid, balanceDue, status }, payment });
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not apply this payment.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -171,12 +213,14 @@ export function ApplyPaymentDialog({
               step="0.01"
               type="number"
               value={amount}
+              disabled={saving}
               onChange={(change) => setAmount(change.target.value)}
             />
           </Field>
           <Field label="Method">
             <Select
               value={method}
+              disabled={saving}
               onValueChange={(val) => setMethod(val as PaymentMethodType)}
             >
               <SelectTrigger id="apply-pay-method" className="w-full">
@@ -196,15 +240,21 @@ export function ApplyPaymentDialog({
             </Select>
           </Field>
           <Field label="Payment date">
-            <Input id="apply-pay-date" type="date" value={paidAt} onChange={(change) => setPaidAt(change.target.value)} />
+            <Input
+              id="apply-pay-date"
+              type="date"
+              value={paidAt}
+              disabled={saving}
+              onChange={(change) => setPaidAt(change.target.value)}
+            />
           </Field>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={!invoice || !Number(amount)} onClick={save}>
-            Apply payment
+          <Button disabled={!invoice || !Number(amount) || saving} onClick={() => void save()}>
+            {saving ? "Applying…" : "Apply payment"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -212,7 +262,13 @@ export function ApplyPaymentDialog({
   );
 }
 
-export function ApplyPaymentButton({ invoice }: { invoice: Invoice }) {
+export function ApplyPaymentButton({
+  invoice,
+  onPaid,
+}: {
+  invoice: Invoice;
+  onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
+}) {
   const [open, setOpen] = useState(false);
   if (invoice.balanceDue <= 0) return null;
   return (
@@ -220,7 +276,12 @@ export function ApplyPaymentButton({ invoice }: { invoice: Invoice }) {
       <Button size="sm" onClick={() => setOpen(true)}>
         Apply payment
       </Button>
-      <ApplyPaymentDialog open={open} onOpenChange={setOpen} invoice={invoice} />
+      <ApplyPaymentDialog
+        open={open}
+        onOpenChange={setOpen}
+        invoice={invoice}
+        onPaid={onPaid}
+      />
     </>
   );
 }

@@ -57,7 +57,7 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { buildInvoice, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
-import { convertJobToInvoice as convertJobToInvoiceApi, updateEstimateArchive, updateJobArchive } from "@/lib/api/crm-client";
+import { convertJobToInvoice as convertJobToInvoiceApi, updateEstimateArchive, updateInvoiceArchive, updateJobArchive } from "@/lib/api/crm-client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
@@ -146,6 +146,7 @@ import {
   upsertCustomerTask,
   removeCustomerEstimate,
   removeCustomerJobLocal,
+  removeCustomerInvoiceLocal,
 } from "@/store/customersSlice";
 import { useRouter } from "next/navigation";
 
@@ -517,10 +518,12 @@ export function CustomerDetailView({ id }: { id: string }) {
                   onPayingChange={setPaying}
                   onPaymentClosed={() => {
                     void dispatch(fetchCustomerDetail(customer.id));
+                    const archivedOnly = invoiceFilter === "archived";
                     void dispatch(
                       fetchCustomerInvoices({
                         customerId: customer.id,
-                        status: invoiceFilter || undefined,
+                        status: archivedOnly ? undefined : invoiceFilter || undefined,
+                        isArchived: archivedOnly,
                         force: true,
                       }),
                     );
@@ -1530,31 +1533,32 @@ function CustomerInvoicesPanel({
   const records = usePortalRecords();
   const tab = useAppSelector((state) => state.customers?.invoices);
   const archivedOnly = filter === "archived";
-  const useApi = !archivedOnly;
-  const filterKey = customerTabFilterKey({ status: filter || undefined });
+  // UI "archived" maps to isArchived — never send it as status.
+  const statusFilter = archivedOnly ? undefined : filter || undefined;
+  const filterKey = customerTabFilterKey({
+    status: statusFilter,
+    isArchived: archivedOnly,
+  });
+  const [archiveTarget, setArchiveTarget] = useState<Invoice | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!useApi || !customerId) return;
+    if (!customerId) return;
     void dispatch(
       fetchCustomerInvoices({
         customerId,
-        status: filter || undefined,
+        status: statusFilter,
+        isArchived: archivedOnly,
         force: true,
       }),
     );
-  }, [customerId, dispatch, filter, useApi]);
+  }, [customerId, dispatch, statusFilter, archivedOnly]);
 
-  const fallbackRows = relatedInvoices.filter((item) => {
-    const archived = records.isArchived("invoice", item.id);
-    if (filter === "archived") return archived;
-    return !archived && invoiceMatchesBoardFilter(item, filter);
-  });
-  const rows = useApi
-    ? selectCustomerTabRows(tab, customerId, filterKey, fallbackRows).filter(
-        (item) => !records.isArchived("invoice", item.id),
-      )
-    : fallbackRows;
-  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const rows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
+    (item) => item.customerId === customerId,
+  );
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
 
   return (
     <div>
@@ -1565,9 +1569,11 @@ function CustomerInvoicesPanel({
         loading={listLoading}
         pageSize={10}
         empty={
-          filter && filter !== "archived"
-            ? "No invoices match this status."
-            : "No invoices yet."
+          archivedOnly
+            ? "No archived invoices."
+            : filter
+              ? "No invoices match this status."
+              : "No invoices yet."
         }
         toolbar={
           <div className="flex items-center gap-2">
@@ -1614,22 +1620,114 @@ function CustomerInvoicesPanel({
             return match ? crmCustomerName(match) : getPortalCustomerName(provider, id);
           },
         })}
-        actions={(row) => [
-          { label: "Open", href: `/pro/dashboard/invoices/${row.id}` },
-          { label: "Edit", href: `/pro/dashboard/invoices/${row.id}` },
-          ...(row.balanceDue > 0
-            ? [
-                {
-                  label: "Apply payment",
-                  onSelect: () => onPayingChange(row),
-                },
-              ]
-            : []),
-          ...(relatedJobs.some((job) => job.id === row.jobId)
-            ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }]
-            : []),
-          archiveRowAction(records, "invoice", row.id, row.number),
-        ]}
+        actions={(row) => {
+          const archived = Boolean(row.isArchived);
+          return [
+            { label: "Open", href: `/pro/dashboard/invoices/${row.id}` },
+            { label: "Edit", href: `/pro/dashboard/invoices/${row.id}` },
+            ...(row.balanceDue > 0 && !archived
+              ? [
+                  {
+                    label: "Apply payment",
+                    onSelect: () => onPayingChange(row),
+                  },
+                ]
+              : []),
+            ...(relatedJobs.some((job) => job.id === row.jobId)
+              ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }]
+              : []),
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  icon: (
+                    <ArchiveRestore className="size-3.5 text-muted-foreground" />
+                  ),
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        const updated = await updateInvoiceArchive(row.id, false);
+                        if (!updated || updated.isArchived) {
+                          throw new Error(
+                            "Restore did not save. Check the API and try again.",
+                          );
+                        }
+                        dispatch(removeCustomerInvoiceLocal(row.id));
+                        void dispatch(
+                          fetchCustomerInvoices({
+                            customerId,
+                            status: statusFilter,
+                            isArchived: archivedOnly,
+                            force: true,
+                          }),
+                        );
+                        void dispatch(
+                          fetchCustomerTimeline({ customerId, force: true }),
+                        );
+                        toast.success(`${row.number} restored.`);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not restore this invoice.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "invoice",
+                  row.id,
+                  row.number,
+                  () => setArchiveTarget(row),
+                ),
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="invoice"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              const updated = await updateInvoiceArchive(archiveTarget.id, true);
+              if (!updated || !updated.isArchived) {
+                throw new Error("Archive did not save. Check the API and try again.");
+              }
+              dispatch(removeCustomerInvoiceLocal(archiveTarget.id));
+              void dispatch(
+                fetchCustomerInvoices({
+                  customerId,
+                  status: statusFilter,
+                  isArchived: archivedOnly,
+                  force: true,
+                }),
+              );
+              void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+              toast.success(`${archiveTarget.number} archived.`);
+              setArchiveTarget(null);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Could not archive this invoice.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
+        }}
       />
       <ApplyPaymentDialog
         open={Boolean(paying)}

@@ -1350,6 +1350,7 @@ export function mapInvoice(raw: unknown): Invoice | null {
     amountPaid: numberValue(record.amountPaid),
     balanceDue: numberValue(record.balanceDue, Math.max(0, numberValue(record.total) - numberValue(record.amountPaid))),
     items: mapInvoiceItems(id, record.items),
+    isArchived: Boolean(record.isArchived ?? record.isArchieved),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
   };

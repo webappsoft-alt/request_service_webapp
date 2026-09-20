@@ -282,6 +282,8 @@ export interface Job {
   changeOrders: ChangeOrder[];
   attachments?: string[];
   invoiceId?: string;
+  /** Soft-archive — independent of lifecycle status. */
+  isArchived?: boolean;
   createdAt: string;
   updatedAt: string;
 }

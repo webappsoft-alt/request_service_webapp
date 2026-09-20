@@ -51,10 +51,39 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onPointerDownOutside,
+  onInteractOutside,
+  onFocusOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  function isPortaledSelectEvent(event: {
+    target: EventTarget | null
+    detail?: { originalEvent?: Event }
+  }) {
+    const original = event.detail?.originalEvent
+    const path =
+      original && "composedPath" in original && typeof original.composedPath === "function"
+        ? original.composedPath()
+        : typeof (event as { composedPath?: () => EventTarget[] }).composedPath === "function"
+          ? (event as { composedPath: () => EventTarget[] }).composedPath()
+          : []
+    if (
+      path.some(
+        (node) =>
+          node instanceof Element && node.closest("[data-paginated-entity-menu]"),
+      )
+    ) {
+      return true
+    }
+    const target = (original?.target ?? event.target) as EventTarget | null
+    return (
+      target instanceof Element &&
+      Boolean(target.closest("[data-paginated-entity-menu]"))
+    )
+  }
+
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -67,6 +96,27 @@ function DialogContent({
           "flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0",
         )}
         {...props}
+        onPointerDownOutside={(event) => {
+          if (isPortaledSelectEvent(event)) {
+            event.preventDefault()
+            return
+          }
+          onPointerDownOutside?.(event)
+        }}
+        onInteractOutside={(event) => {
+          if (isPortaledSelectEvent(event)) {
+            event.preventDefault()
+            return
+          }
+          onInteractOutside?.(event)
+        }}
+        onFocusOutside={(event) => {
+          if (isPortaledSelectEvent(event)) {
+            event.preventDefault()
+            return
+          }
+          onFocusOutside?.(event)
+        }}
       >
         <div
           data-slot="dialog-scroll"

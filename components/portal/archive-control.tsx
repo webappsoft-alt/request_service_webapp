@@ -43,7 +43,7 @@ export function ConfirmArchiveDialog({
               `Are you sure you want to archive ${number ? `${kind} ${number}` : `this ${kind}`}? It will be hidden from the active board.`}
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:justify-end sm:gap-3">
           <Button
             type="button"
             variant="outline"

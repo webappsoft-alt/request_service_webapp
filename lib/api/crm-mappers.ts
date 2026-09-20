@@ -1138,6 +1138,10 @@ export function mapJob(raw: unknown): Job | null {
     changeOrders: mapChangeOrders(id, record.changeOrders),
     attachments: toStringArray(record.attachments),
     invoiceId: crmIdOf(record.invoiceId) || undefined,
+    isArchived:
+      record.isArchived !== undefined
+        ? Boolean(record.isArchived)
+        : undefined,
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
   };

@@ -1423,13 +1423,6 @@ export function CreateJobDialog({
                 onChange={(event) => setCity(event.target.value)}
               />
             </Field>
-            <Field label="State">
-              <Input
-                value={state}
-                placeholder="State"
-                onChange={(event) => setState(event.target.value)}
-              />
-            </Field>
             <Field label="ZIP">
               <Input
                 value={zip}

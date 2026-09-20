@@ -57,7 +57,7 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { buildInvoice, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
-import { convertJobToInvoice as convertJobToInvoiceApi } from "@/lib/api/crm-client";
+import { convertJobToInvoice as convertJobToInvoiceApi, updateEstimateArchive, updateJobArchive } from "@/lib/api/crm-client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
@@ -145,6 +145,7 @@ import {
   upsertCustomerReminder,
   upsertCustomerTask,
   removeCustomerEstimate,
+  removeCustomerJobLocal,
 } from "@/store/customersSlice";
 import { useRouter } from "next/navigation";
 
@@ -599,7 +600,13 @@ export function CustomerDetailView({ id }: { id: string }) {
         customerId={customer.id}
         onCreated={(item) => {
           dispatch(upsertCustomerEstimate({ customerId: customer.id, item }));
-          void dispatch(fetchCustomerEstimates({ customerId: customer.id, force: true }));
+          void dispatch(
+            fetchCustomerEstimates({
+              customerId: customer.id,
+              isArchived: false,
+              force: true,
+            }),
+          );
           void dispatch(fetchCustomerTimeline({ customerId: customer.id, force: true }));
         }}
       />
@@ -637,37 +644,35 @@ function CustomerEstimatesPanel({
   const records = usePortalRecords();
   const tab = useAppSelector((state) => state.customers?.estimates);
   const archivedOnly = filter === "archived";
-  const useApi = !archivedOnly;
-  const filterKey = customerTabFilterKey({ status: filter || undefined });
+  // UI "archived" maps to isArchived — never send it as status.
+  const statusFilter = archivedOnly ? undefined : filter || undefined;
+  const filterKey = customerTabFilterKey({
+    status: statusFilter,
+    isArchived: archivedOnly,
+  });
   const [editEstimate, setEditEstimate] = useState<Estimate | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Estimate | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!useApi || !customerId) return;
-    // MD: GET /api/provider/estimates?customerId=:id&status=&page=1&limit=10
+    if (!customerId) return;
+    // GET /api/provider/estimates?customerId=&status=&isArchived=
     void dispatch(
       fetchCustomerEstimates({
         customerId,
-        status: filter || undefined,
+        status: statusFilter,
+        isArchived: archivedOnly,
         force: true,
       }),
     );
-  }, [customerId, dispatch, filter, useApi]);
+  }, [customerId, dispatch, statusFilter, archivedOnly]);
 
-  // API-only for live statuses — never fall back to the workspace-wide estimate list.
-  const apiRows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
+  // Always load from API (including Archived via isArchived=true).
+  const rows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
     (item) => item.customerId === customerId,
   );
-  const rows = useApi
-    ? apiRows
-    : relatedEstimates.filter(
-        (item) =>
-          item.customerId === customerId &&
-          matchesArchiveFilter(records, "estimate", item, filter),
-      );
-  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
 
   return (
     <div>
@@ -683,9 +688,11 @@ function CustomerEstimatesPanel({
         loading={listLoading}
         pageSize={10}
         empty={
-          filter && filter !== "archived"
-            ? "No estimates match this status."
-            : "No estimates yet."
+          archivedOnly
+            ? "No archived estimates."
+            : filter
+              ? "No estimates match this status."
+              : "No estimates yet."
         }
         toolbar={
           <div className="flex items-center gap-2">
@@ -806,9 +813,8 @@ function CustomerEstimatesPanel({
           },
         ]}
         actions={(row) => {
-          const archived =
-            records.isArchived("estimate", row.id) ||
-            Boolean(row.isArchived ?? row.isArchieved);
+          // Prefer API flag — local archive store can be stale and show Restore wrongly.
+          const archived = Boolean(row.isArchived ?? row.isArchieved);
           return [
             { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
             {
@@ -827,21 +833,16 @@ function CustomerEstimatesPanel({
                     void (async () => {
                       setRestoringId(row.id);
                       try {
-                        await records.unarchive("estimate", row.id);
-                        dispatch(
-                          upsertCustomerEstimate({
-                            customerId,
-                            item: {
-                              ...row,
-                              isArchived: false,
-                              isArchieved: false,
-                            },
-                          }),
-                        );
+                        const updated = await updateEstimateArchive(row.id, false);
+                        if (!updated || (updated.isArchived ?? updated.isArchieved)) {
+                          throw new Error("Restore did not save. Check the API and try again.");
+                        }
+                        dispatch(removeCustomerEstimate(row.id));
                         void dispatch(
                           fetchCustomerEstimates({
                             customerId,
-                            status: filter || undefined,
+                            status: statusFilter,
+                            isArchived: archivedOnly,
                             force: true,
                           }),
                         );
@@ -884,12 +885,16 @@ function CustomerEstimatesPanel({
           void (async () => {
             setArchiving(true);
             try {
-              await records.archive("estimate", archiveTarget.id);
+              const updated = await updateEstimateArchive(archiveTarget.id, true);
+              if (!updated || !(updated.isArchived ?? updated.isArchieved)) {
+                throw new Error("Archive did not save. Check the API and try again.");
+              }
               dispatch(removeCustomerEstimate(archiveTarget.id));
               void dispatch(
                 fetchCustomerEstimates({
                   customerId,
-                  status: filter || undefined,
+                  status: statusFilter,
+                  isArchived: archivedOnly,
                   force: true,
                 }),
               );
@@ -920,7 +925,8 @@ function CustomerEstimatesPanel({
           void dispatch(
             fetchCustomerEstimates({
               customerId,
-              status: filter || undefined,
+              status: statusFilter,
+              isArchived: archivedOnly,
               force: true,
             }),
           );
@@ -969,8 +975,11 @@ function CustomerJobsPanel({
   const { assign, employees } = usePortalCrew();
   const tab = useAppSelector((state) => state.customers?.jobs);
   const archivedOnly = filter === "archived";
-  const useApi = !archivedOnly;
-  const filterKey = customerTabFilterKey({ status: filter || undefined });
+  const statusFilter = archivedOnly ? undefined : filter || undefined;
+  const filterKey = customerTabFilterKey({
+    status: statusFilter,
+    isArchived: archivedOnly,
+  });
   const [deleteTarget, setDeleteTarget] = useState<Job | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editJob, setEditJob] = useState<Job | null>(null);
@@ -979,27 +988,26 @@ function CustomerJobsPanel({
   const [statusJob, setStatusJob] = useState<Job | null>(null);
   const [nextStatus, setNextStatus] = useState<JobStatus>("unscheduled");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Job | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!useApi || !customerId) return;
+    if (!customerId) return;
     void dispatch(
       fetchCustomerJobs({
         customerId,
-        status: filter || undefined,
+        status: statusFilter,
+        isArchived: archivedOnly,
         force: true,
       }),
     );
-  }, [customerId, dispatch, filter, useApi]);
+  }, [customerId, dispatch, statusFilter, archivedOnly]);
 
-  const rows = useApi
-    ? selectCustomerTabRows(
-        tab,
-        customerId,
-        filterKey,
-        relatedJobs.filter((item) => matchesArchiveFilter(records, "job", item, filter)),
-      )
-    : relatedJobs.filter((item) => matchesArchiveFilter(records, "job", item, filter));
-  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const rows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
+    (item) => item.customerId === customerId,
+  );
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
   const allInvoices = records.mergeInvoices(invoices);
 
   const calendarEvent = (() => {
@@ -1140,11 +1148,6 @@ function CustomerJobsPanel({
           Create job
         </Button>
       </div>
-      <LocalFilterTabs
-        value={filter}
-        onChange={onFilterChange}
-        options={withArchiveFilter(JOB_STATUS_FILTERS)}
-      />
       <PortalDataTable
         filename={`${customerNumber}-jobs`}
         countLabel="Jobs"
@@ -1152,7 +1155,43 @@ function CustomerJobsPanel({
         loading={listLoading}
         pageSize={10}
         empty={
-          filter && filter !== "archived" ? "No jobs match this status." : "No jobs yet."
+          archivedOnly
+            ? "No archived jobs."
+            : filter
+              ? "No jobs match this status."
+              : "No jobs yet."
+        }
+        toolbar={
+          <div className="flex items-center gap-2">
+            <Field className="w-40 gap-0 sm:w-44">
+              <FieldLabel htmlFor="job-status-filter" className="sr-only">
+                Status
+              </FieldLabel>
+              <Select
+                value={filter || "__all__"}
+                onValueChange={(value) =>
+                  onFilterChange(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="job-status-filter"
+                  className="h-8.5 w-full text-xs"
+                >
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent position="popper" align="end">
+                  {withArchiveFilter(JOB_STATUS_FILTERS).map((option) => (
+                    <SelectItem
+                      key={option.label}
+                      value={option.value || "__all__"}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -1169,29 +1208,123 @@ function CustomerJobsPanel({
           },
           onChangeStatus: openStatusModal,
         })}
-        actions={(row) => [
-          { label: "Open", href: `/pro/dashboard/jobs/${row.id}` },
-          {
-            label: "Edit",
-            onSelect: () => setEditJob(row),
-          },
-          {
-            label: convertingId === row.id ? "Converting…" : "Convert to invoice",
-            onSelect: () => {
-              void convertToInvoice(row);
+        actions={(row) => {
+          const archived = Boolean(row.isArchived);
+          return [
+            { label: "Open", href: `/pro/dashboard/jobs/${row.id}` },
+            {
+              label: "Edit",
+              onSelect: () => setEditJob(row),
             },
-          },
-          {
-            label: "Calendar",
-            onSelect: () => setCalendarJob(row),
-          },
-          archiveRowAction(records, "job", row.id, row.number),
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => setDeleteTarget(row),
-          },
-        ]}
+            {
+              label: convertingId === row.id ? "Converting…" : "Convert to invoice",
+              onSelect: () => {
+                void convertToInvoice(row);
+              },
+            },
+            {
+              label: "Calendar",
+              onSelect: () => setCalendarJob(row),
+            },
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  icon: (
+                    <ArchiveRestore className="size-3.5 text-muted-foreground" />
+                  ),
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        const updated = await updateJobArchive(row.id, false);
+                        if (!updated || updated.isArchived) {
+                          throw new Error(
+                            "Restore did not save. Check the API and try again.",
+                          );
+                        }
+                        dispatch(removeCustomerJobLocal(row.id));
+                        void dispatch(
+                          fetchCustomerJobs({
+                            customerId,
+                            status: statusFilter,
+                            isArchived: archivedOnly,
+                            force: true,
+                          }),
+                        );
+                        void dispatch(
+                          fetchCustomerTimeline({ customerId, force: true }),
+                        );
+                        toast.success(`${row.number} restored.`);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not restore this job.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "job",
+                  row.id,
+                  row.number,
+                  () => setArchiveTarget(row),
+                ),
+            {
+              label: "Delete",
+              variant: "destructive",
+              onSelect: () => setDeleteTarget(row),
+            },
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="job"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              const updated = await updateJobArchive(archiveTarget.id, true);
+              if (!updated || !updated.isArchived) {
+                throw new Error(
+                  "Archive did not save. Check the API and try again.",
+                );
+              }
+              dispatch(removeCustomerJobLocal(archiveTarget.id));
+              void dispatch(
+                fetchCustomerJobs({
+                  customerId,
+                  status: statusFilter,
+                  isArchived: archivedOnly,
+                  force: true,
+                }),
+              );
+              void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+              toast.success(`${archiveTarget.number} archived.`);
+              setArchiveTarget(null);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Could not archive this job.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
+        }}
       />
       <CreateJobDialog
         open={Boolean(editJob)}
@@ -1202,7 +1335,14 @@ function CustomerJobsPanel({
         job={editJob}
         onUpdated={(item) => {
           dispatch(upsertCustomerJob({ customerId, item }));
-          void dispatch(fetchCustomerJobs({ customerId, force: true }));
+          void dispatch(
+            fetchCustomerJobs({
+              customerId,
+              status: statusFilter,
+              isArchived: archivedOnly,
+              force: true,
+            }),
+          );
           void dispatch(fetchCustomerSchedule({ customerId, force: true }));
           void dispatch(fetchCustomerTimeline({ customerId, force: true }));
           setEditJob(null);
@@ -1220,7 +1360,14 @@ function CustomerJobsPanel({
         onSave={async (assignment) => {
           await assign(assignment);
           toast.success("Schedule updated.");
-          void dispatch(fetchCustomerJobs({ customerId, force: true }));
+          void dispatch(
+            fetchCustomerJobs({
+              customerId,
+              status: statusFilter,
+              isArchived: archivedOnly,
+              force: true,
+            }),
+          );
           void dispatch(fetchCustomerSchedule({ customerId, force: true }));
           void dispatch(fetchCustomerTimeline({ customerId, force: true }));
           setCalendarJob(null);

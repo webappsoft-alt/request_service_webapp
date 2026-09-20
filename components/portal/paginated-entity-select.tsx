@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import { ChevronDownIcon } from "lucide-react";
 import { SelectLoadingDots } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
@@ -32,9 +40,17 @@ function isNearBottom(el: HTMLElement, threshold = 72) {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
 }
 
+function isInsideMenu(node: EventTarget | null) {
+  return (
+    node instanceof Element &&
+    Boolean(node.closest("[data-paginated-entity-menu]"))
+  );
+}
+
 /**
- * Single-select dropdown with infinite scroll (same pattern as category select).
- * Appends pages via onLoadMore; does not replace existing options.
+ * Single-select with infinite scroll.
+ * Menu is portaled to body (avoids dialog overflow clip) and marked so Dialog
+ * does not treat clicks as "outside".
  */
 export function PaginatedEntitySelect({
   id,
@@ -54,14 +70,22 @@ export function PaginatedEntitySelect({
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const onChangeRef = useRef(onChange);
   const onLoadMoreRef = useRef(onLoadMore);
   const loadingMoreRef = useRef(Boolean(loadingMore));
   const hasMoreRef = useRef(Boolean(hasMore));
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
 
+  onChangeRef.current = onChange;
   onLoadMoreRef.current = onLoadMore;
   loadingMoreRef.current = Boolean(loadingMore);
   hasMoreRef.current = Boolean(hasMore);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const busy = Boolean(loading || loadingMore);
   const selected = options.find((item) => item.id === value);
@@ -76,16 +100,67 @@ export function PaginatedEntitySelect({
     onLoadMoreRef.current();
   }
 
+  function selectOption(option: PaginatedEntityOption) {
+    onChangeRef.current(option.id, option);
+    setOpen(false);
+  }
+
+  function updateMenuPosition() {
+    const trigger = rootRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const maxH = 192;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
+    const spaceAbove = rect.top - gap - 8;
+    const openUp = spaceBelow < Math.min(maxH, 140) && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(
+      96,
+      Math.min(maxH, openUp ? spaceAbove : spaceBelow),
+    );
+
+    setMenuStyle({
+      position: "fixed",
+      left: rect.left,
+      width: Math.max(rect.width, 160),
+      zIndex: 200000,
+      maxHeight,
+      pointerEvents: "auto",
+      ...(openUp
+        ? { bottom: window.innerHeight - rect.top + gap, top: "auto" }
+        : { top: rect.bottom + gap, bottom: "auto" }),
+    });
+  }
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+  }, [open, options.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onReposition() {
+      updateMenuPosition();
+    }
+    window.addEventListener("resize", onReposition);
+    document.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      document.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     function onDocPointer(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      if (isInsideMenu(event.target)) return;
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
+    // Bubble phase so option handlers run first.
     document.addEventListener("mousedown", onDocPointer);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -105,7 +180,6 @@ export function PaginatedEntitySelect({
     return () => el.removeEventListener("scroll", onScroll);
   }, [open, options.length]);
 
-  // Short lists that don't scroll still need a first "load more" when hasMore.
   useEffect(() => {
     if (!open || loadingMore || !hasMore) return;
     const el = listRef.current;
@@ -134,8 +208,76 @@ export function PaginatedEntitySelect({
     return () => observer.disconnect();
   }, [open, options.length, hasMore, loadingMore]);
 
+  const menu = open ? (
+    <div
+      id={listId}
+      role="listbox"
+      aria-labelledby={id}
+      ref={listRef}
+      style={menuStyle}
+      data-paginated-entity-menu=""
+      data-lenis-prevent=""
+      className="overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
+      onWheel={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      {loading && options.length === 0 ? (
+        <div className="flex min-h-48 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+          <Spinner size="sm" label="Loading" />
+          <p className="text-xs text-muted-foreground">Loading…</p>
+        </div>
+      ) : null}
+
+      {!loading && !loadingMore && options.length === 0 ? (
+        <div className="flex min-h-48 flex-col items-center justify-center gap-1 px-4 py-6 text-center">
+          <p className="text-sm font-medium text-foreground">No results</p>
+          <p className="max-w-[14rem] text-xs text-muted-foreground">
+            {emptyLabel}
+          </p>
+        </div>
+      ) : null}
+
+      {options.map((option) => {
+        const active = option.id === value;
+        return (
+          <div
+            key={option.id || "__empty__"}
+            role="option"
+            tabIndex={-1}
+            data-paginated-option=""
+            aria-selected={active}
+            className={cn(
+              "flex w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-muted/60",
+              active && "bg-muted font-medium",
+            )}
+            onMouseDown={(event) => {
+              // mousedown (not click): Dialog may swallow click on portaled nodes.
+              event.preventDefault();
+              event.stopPropagation();
+              selectOption(option);
+            }}
+          >
+            {option.label}
+          </div>
+        );
+      })}
+
+      {loadingMore ? (
+        <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+          <SelectLoadingDots />
+          <span>Loading more…</span>
+        </div>
+      ) : null}
+
+      {!loadingMore && hasMore ? (
+        <div aria-hidden className="h-1 w-full" data-paginated-sentinel="" />
+      ) : null}
+    </div>
+  ) : null;
+
   return (
-    <div ref={rootRef} className={cn("relative z-[1200] w-full", className)}>
+    <div ref={rootRef} className={cn("relative w-full", className)}>
       <button
         id={id}
         type="button"
@@ -174,69 +316,7 @@ export function PaginatedEntitySelect({
         </span>
       </button>
 
-      {open ? (
-        <div
-          id={listId}
-          role="listbox"
-          aria-labelledby={id}
-          ref={listRef}
-          className="absolute z-[1300] mt-1 max-h-48 w-full overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
-        >
-          {loading && options.length === 0 ? (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
-              <Spinner size="sm" label="Loading" />
-              <p className="text-xs text-muted-foreground">Loading…</p>
-            </div>
-          ) : null}
-
-          {!loading && !loadingMore && options.length === 0 ? (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-1 px-4 py-6 text-center">
-              <p className="text-sm font-medium text-foreground">No results</p>
-              <p className="max-w-[14rem] text-xs text-muted-foreground">
-                {emptyLabel}
-              </p>
-            </div>
-          ) : null}
-
-          {options.map((option) => {
-            const active = option.id === value;
-            return (
-              <button
-                key={option.id || "__empty__"}
-                type="button"
-                role="option"
-                data-paginated-option=""
-                aria-selected={active}
-                className={cn(
-                  "flex w-full px-3 py-2 text-left text-sm hover:bg-muted/60",
-                  active && "bg-muted font-medium",
-                )}
-                onClick={() => {
-                  onChange(option.id, option);
-                  setOpen(false);
-                }}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-
-          {loadingMore ? (
-            <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
-              <SelectLoadingDots />
-              <span>Loading more…</span>
-            </div>
-          ) : null}
-
-          {!loadingMore && hasMore ? (
-            <div
-              aria-hidden
-              className="h-1 w-full"
-              data-paginated-sentinel=""
-            />
-          ) : null}
-        </div>
-      ) : null}
+      {mounted && menu ? createPortal(menu, document.body) : null}
     </div>
   );
 }

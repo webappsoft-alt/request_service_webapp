@@ -165,6 +165,8 @@ export type FetchCustomersArg = {
 type CustomerTabArg = {
   customerId: string;
   status?: string;
+  /** Soft-archive filter — independent of lifecycle `status`. */
+  isArchived?: boolean;
   search?: string;
   page?: number;
   limit?: number;
@@ -172,13 +174,23 @@ type CustomerTabArg = {
   type?: string;
 };
 
-function tabCacheKey(arg: { status?: string; search?: string; page?: number; type?: string }) {
-  return `${arg.status?.trim() || ""}|${arg.search?.trim() || ""}|${arg.type?.trim() || ""}|${arg.page ?? 1}`;
+function tabCacheKey(arg: {
+  status?: string;
+  isArchived?: boolean;
+  search?: string;
+  page?: number;
+  type?: string;
+}) {
+  const base = `${arg.status?.trim() || ""}|${arg.search?.trim() || ""}|${arg.type?.trim() || ""}|${arg.page ?? 1}`;
+  if (arg.isArchived === true) return `archived|${base}`;
+  if (arg.isArchived === false) return `active|${base}`;
+  return base;
 }
 
 
 export function customerTabFilterKey(arg: {
   status?: string;
+  isArchived?: boolean;
   search?: string;
   page?: number;
   type?: string;
@@ -313,7 +325,9 @@ export const fetchCustomerEstimates = createAsyncThunk<
       const page = arg.page ?? 1;
       const result = await queryEstimates({
         customerId: arg.customerId,
+        // Never send UI "archived" as status — use isArchived instead.
         status: arg.status || undefined,
+        isArchived: arg.isArchived === true,
         search: arg.search || undefined,
         page,
         limit: arg.limit ?? DETAIL_TAB_LIMIT,
@@ -345,6 +359,7 @@ export const fetchCustomerJobs = createAsyncThunk<
       const result = await queryJobs({
         customerId: arg.customerId,
         status: arg.status || undefined,
+        isArchived: arg.isArchived === true,
         search: arg.search || undefined,
         page: arg.page ?? 1,
         limit: arg.limit ?? DETAIL_TAB_LIMIT,

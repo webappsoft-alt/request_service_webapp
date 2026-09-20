@@ -340,11 +340,11 @@ export function usePortalRecords() {
       if (apiReady && kind === "estimate") {
         return (async () => {
           const updated = await updateEstimateArchiveApi(id, true);
-          if (updated) {
-            crm.patchEstimate(id, updated);
-          } else {
-            crm.patchEstimate(id, { isArchived: true, isArchieved: true });
+          const persisted = Boolean(updated?.isArchived ?? updated?.isArchieved);
+          if (!updated || !persisted) {
+            throw new Error("Archive did not save on the server. Restart the API and try again.");
           }
+          crm.patchEstimate(id, updated);
           const current = readStore(key);
           const nextKey = recordKey(kind, id);
           writeStore(key, {
@@ -372,11 +372,11 @@ export function usePortalRecords() {
       if (apiReady && kind === "estimate") {
         return (async () => {
           const updated = await updateEstimateArchiveApi(id, false);
-          if (updated) {
-            crm.patchEstimate(id, updated);
-          } else {
-            crm.patchEstimate(id, { isArchived: false, isArchieved: false });
+          const stillArchived = Boolean(updated?.isArchived ?? updated?.isArchieved);
+          if (!updated || stillArchived) {
+            throw new Error("Restore did not save on the server. Restart the API and try again.");
           }
+          crm.patchEstimate(id, updated);
           const current = readStore(key);
           const nextKey = recordKey(kind, id);
           writeStore(key, {

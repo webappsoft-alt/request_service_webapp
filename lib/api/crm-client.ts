@@ -553,6 +553,8 @@ export type CrmListQuery = {
   limit?: number;
   search?: string;
   status?: string;
+  /** Soft-archive filter — independent of lifecycle `status`. */
+  isArchived?: boolean;
   jobId?: string;
   customerId?: string;
   employeeId?: string;
@@ -604,6 +606,7 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   const type = query.type?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
+  if (typeof query.isArchived === "boolean") params.isArchived = query.isArchived;
   if (jobId) params.jobId = jobId;
   if (customerId) params.customerId = customerId;
   if (employeeId) params.employeeId = employeeId;
@@ -1019,17 +1022,19 @@ export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
 }
 
-/** Paginated estimates list — supports `status`, `customerId`, and `search`. */
+/** Paginated estimates list — supports `status`, `isArchived`, `customerId`, and `search`. */
 export async function queryEstimates(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
-  const params: Record<string, string | number> = { page, limit };
+  const params: Record<string, string | number | boolean> = { page, limit };
   const search = query.search?.trim();
   const status = query.status?.trim();
   const customerId = query.customerId?.trim();
   const requestId = query.requestId?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
+  // Always send archive flag so active boards never mix archived rows.
+  params.isArchived = query.isArchived === true;
   if (customerId) params.customerId = customerId;
   if (requestId) params.requestId = requestId;
   const response = await getData(providerCrmApi.estimates, params, {
@@ -1131,7 +1136,7 @@ export async function updateEstimateStatus(id: string, status: Estimate["status"
 export async function updateEstimateArchive(id: string, isArchived: boolean) {
   const response = await putData(
     providerCrmApi.estimate(id),
-    { isArchived, isArchieved: isArchived },
+    { isArchived },
     { silent: false },
   );
   return mapCrmEntity(response, mapEstimate);
@@ -1333,9 +1338,11 @@ export async function listJobs(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.jobs, mapJob, options);
 }
 
-/** Paginated jobs — page/limit/search. */
+/** Paginated jobs — page/limit/search/status/isArchived. */
 export async function queryJobs(query: CrmListQuery = {}) {
   const params = buildListParams(query);
+  // Always send archive flag so active boards never mix archived rows.
+  params.isArchived = query.isArchived === true;
   const response = await getData(providerCrmApi.jobs, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,
@@ -1355,6 +1362,15 @@ export async function updateJob(id: string, job: Job, employees: PortalEmployee[
 
 export async function updateJobStatus(id: string, status: Job["status"], notes = "") {
   const response = await putData(providerCrmApi.jobStatus(id), { status, notes });
+  return mapCrmEntity(response, mapJob);
+}
+
+export async function updateJobArchive(id: string, isArchived: boolean) {
+  const response = await putData(
+    providerCrmApi.job(id),
+    { isArchived },
+    { silent: false },
+  );
   return mapCrmEntity(response, mapJob);
 }
 

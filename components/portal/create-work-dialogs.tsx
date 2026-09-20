@@ -24,6 +24,7 @@ import { fetchTeam } from "@/store/teamSlice";
 import {
   createEstimate as createEstimateApi,
   getEstimate,
+  updateEstimate as updateEstimateApi,
   createRequest,
 } from "@/lib/api/crm-client";
 import {
@@ -86,7 +87,9 @@ export function CreateEstimateDialog({
   requestId,
   requestName,
   requestNotes,
+  estimate,
   onCreated,
+  onUpdated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -94,7 +97,10 @@ export function CreateEstimateDialog({
   requestId?: string;
   requestName?: string;
   requestNotes?: string;
+  /** When set, dialog edits this estimate (PUT) instead of creating. */
+  estimate?: Estimate | null;
   onCreated?: (estimate: Estimate) => void;
+  onUpdated?: (estimate: Estimate) => void;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -111,6 +117,7 @@ export function CreateEstimateDialog({
   const records = usePortalRecords();
   const all = records.mergeEstimates(estimates);
   const first = customers[0];
+  const isEdit = Boolean(estimate?.id);
   const [tab, setTab] = useState<EstimateTab>("customer");
   const [path, setPath] = useState<EstimatePath>("site_visit");
   const [name, setName] = useState("");
@@ -145,8 +152,8 @@ export function CreateEstimateDialog({
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const hasEstimateName = Boolean(name.trim());
   const technician = employees.find((item) => item.id === employeeId);
-  // Opened from customer detail → always bind to that customer id.
-  const boundCustomerId = (customerId || "").trim();
+  // Opened from customer detail / edit → always bind to that customer id.
+  const boundCustomerId = (customerId || estimate?.customerId || "").trim();
   const lockedCustomer = Boolean(boundCustomerId);
 
   const technicianFilter = useMemo(() => ({ role: "technician" }), []);
@@ -155,8 +162,8 @@ export function CreateEstimateDialog({
     open && useApi && !lockedCustomer,
   );
   const assigneePaging = usePaginatedCrmOptions(
-    open && useApi && tab === "visit" ? "assignee" : null,
-    open && useApi && tab === "visit",
+    open && useApi && path === "site_visit" ? "assignee" : null,
+    open && useApi && path === "site_visit",
     undefined,
     technicianFilter,
   );
@@ -205,10 +212,20 @@ export function CreateEstimateDialog({
       setTab("customer");
       return;
     }
+    // Edit mode hydrates in a separate effect — don't wipe the form.
+    if (estimate?.id) return;
     setName("");
     setSaving(false);
     setLines([]);
+    setPath("site_visit");
+    setIssuedAt(todayISO());
+    setExpiresAt("");
+    setEmployeeId("");
+    setVisitedAt(todayISO());
+    setAccessNotes("");
+    setTerms("Valid for 30 days. Materials may change after site inspection.");
     if (requestNotes) setNotes(requestNotes);
+    else setNotes("");
     if (boundCustomerId) {
       pickCustomer(boundCustomerId);
     }
@@ -223,7 +240,74 @@ export function CreateEstimateDialog({
     useApi,
     employees.length,
     dispatch,
+    estimate?.id,
   ]);
+
+  // Hydrate edit form once per open+estimate — fetch full detail when possible.
+  useEffect(() => {
+    if (!open || !estimate?.id) return;
+    let cancelled = false;
+
+    function applySource(source: Estimate) {
+      setSelectedCustomer(source.customerId);
+      const cust = customers.find((item) => item.id === source.customerId);
+      if (cust) setCustomerLabel(crmCustomerName(cust));
+      else if (source.customerName) setCustomerLabel(source.customerName);
+      setName(source.title?.trim() || "");
+      setStreet(source.propertyAddress?.street || "");
+      setCity(source.propertyAddress?.city || "");
+      setState(source.propertyAddress?.state || "CO");
+      setZip(source.propertyAddress?.zip || "");
+      setIssuedAt((source.issuedAt || todayISO()).slice(0, 10));
+      setExpiresAt(source.expiresAt ? source.expiresAt.slice(0, 10) : "");
+      setNotes(source.notes || "");
+      setTerms(
+        source.terms ||
+          "Valid for 30 days. Materials may change after site inspection.",
+      );
+      const siteVisit =
+        source.status === "site_visit" || Boolean(source.siteVisit);
+      setPath(siteVisit ? "site_visit" : "office");
+      setEmployeeId(source.siteVisit?.employeeId || "");
+      setVisitedAt(
+        (source.siteVisit?.visitedAt || todayISO()).slice(0, 10),
+      );
+      setAccessNotes(source.siteVisit?.accessNotes || "");
+      setLines(
+        (source.items || []).map((item) => ({
+          id: item.id,
+          description: item.description,
+          kind: item.type === "labor" ? "labor" : "materials",
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+        })),
+      );
+      setSaving(false);
+      setTab("customer");
+    }
+
+    applySource(estimate);
+    void (async () => {
+      try {
+        const detail = await getEstimate(estimate.id);
+        if (!cancelled && detail) applySource(detail);
+      } catch {
+        /* keep list-row hydrate */
+      }
+      if (!cancelled && !useApi && employees.length === 0) {
+        void dispatch(
+          fetchTeam({ role: "technician", force: true, limit: 100 }),
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally only when dialog opens or the edited estimate id changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per open
+  }, [open, estimate?.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -233,15 +317,15 @@ export function CreateEstimateDialog({
   }, [open, tab, useApi, employees.length, dispatch]);
 
   useEffect(() => {
-    if (!open || lockedCustomer) return;
+    if (!open || lockedCustomer || isEdit) return;
     if (selectedCustomer) return;
     const firstOption = customerOptions[0];
     if (firstOption) pickCustomer(firstOption.id, firstOption);
-  }, [open, lockedCustomer, selectedCustomer, customerOptions]);
+  }, [open, lockedCustomer, selectedCustomer, customerOptions, isEdit]);
 
   // Auto-detect location if empty and not yet attempted
   useEffect(() => {
-    if (!open) return;
+    if (!open || isEdit) return;
     if (customerLocation.detectAttempted || customerLocation.detecting) return;
     if (hasLocation(customerLocation)) return;
     void dispatch(detectCurrentLocation());
@@ -251,11 +335,12 @@ export function CreateEstimateDialog({
     customerLocation,
     dispatch,
     open,
+    isEdit,
   ]);
 
   // When location finishes detecting or is available, prefill if fields are empty
   useEffect(() => {
-    if (!open) return;
+    if (!open || isEdit) return;
     if (!hasLocation(customerLocation)) return;
     const currentCustomer = customers.find(
       (item) => item.id === selectedCustomer,
@@ -282,6 +367,7 @@ export function CreateEstimateDialog({
     city,
     state,
     zip,
+    isEdit,
   ]);
 
   function pickCustomer(id: string, option?: { id: string; label: string }) {
@@ -330,7 +416,83 @@ export function CreateEstimateDialog({
     }
     setSaving(true);
     try {
-      const estimate = buildEstimate({
+      const siteVisitPayload =
+        path === "site_visit"
+          ? {
+              employeeId,
+              technician: technician ? employeeName(technician) : "",
+              visitedAt,
+              accessNotes,
+              findings: estimate?.siteVisit?.findings || "",
+              recommendations: estimate?.siteVisit?.recommendations || "",
+              measurements: estimate?.siteVisit?.measurements || "",
+              photos: estimate?.siteVisit?.photos || [],
+            }
+          : estimate?.siteVisit;
+
+      if (isEdit && estimate) {
+        const nextEstimate = buildEstimate({
+          id: estimate.id,
+          number: estimate.number,
+          title: name.trim(),
+          providerId: estimate.providerId || provider.id,
+          customerId: customerIdValue,
+          customerName:
+            customerLabel ||
+            (customer ? crmCustomerName(customer) : estimate.customerName),
+          requestId: estimate.requestId || requestId,
+          address: addressFrom(
+            street,
+            city,
+            state,
+            zip,
+            estimate.propertyAddress?.id,
+          ),
+          // Status has dedicated endpoints — keep existing on update.
+          status: estimate.status,
+          issuedAt,
+          expiresAt: expiresAt || undefined,
+          notes,
+          terms,
+          siteVisit: siteVisitPayload,
+          lines,
+        });
+        const updated = await updateEstimateApi(estimate.id, {
+          ...nextEstimate,
+          discount: estimate.discount,
+          attachments: estimate.attachments,
+          signature: estimate.signature,
+          shareToken: estimate.shareToken,
+          shareUrl: estimate.shareUrl,
+          isArchived: estimate.isArchived,
+          isArchieved: estimate.isArchieved,
+          createdAt: estimate.createdAt,
+        });
+        const saved = updated ?? nextEstimate;
+        writeCostLines(
+          session?.email,
+          saved.id,
+          saved.items.map((item) => ({
+            id: item.id,
+            description: item.description,
+            kind: item.type === "labor" ? "labor" : "materials",
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+          })),
+        );
+        if (path === "site_visit" && siteVisitPayload) {
+          writeSiteVisit(session?.email, saved.id, siteVisitPayload);
+        }
+        dispatch(invalidateEstimatesCache());
+        void dispatch(fetchEstimates({ force: true }));
+        onUpdated?.(saved);
+        onOpenChange(false);
+        toast.success(`${saved.number || "Estimate"} updated.`);
+        return;
+      }
+
+      const estimateDraft = buildEstimate({
         number: nextRecordNumber(
           "EST",
           all.map((item) => item.number),
@@ -347,23 +509,11 @@ export function CreateEstimateDialog({
         expiresAt: expiresAt || undefined,
         notes,
         terms,
-        siteVisit:
-          path === "site_visit"
-            ? {
-                employeeId,
-                technician: technician ? employeeName(technician) : "",
-                visitedAt,
-                accessNotes,
-                findings: "",
-                recommendations: "",
-                measurements: "",
-                photos: [],
-              }
-            : undefined,
+        siteVisit: path === "site_visit" ? siteVisitPayload : undefined,
         lines,
       });
-      const created = await createEstimateApi(estimate);
-      const saved = created ?? estimate;
+      const created = await createEstimateApi(estimateDraft);
+      const saved = created ?? estimateDraft;
       if (!saved?.id) throw new Error("Could not create this estimate.");
       if (requestId) records.setStatus("request", requestId, "estimate_sent");
       writeCostLines(
@@ -378,17 +528,8 @@ export function CreateEstimateDialog({
           unitPrice: item.unitPrice,
         })),
       );
-      if (path === "site_visit") {
-        writeSiteVisit(session?.email, saved.id, {
-          employeeId,
-          technician: technician ? employeeName(technician) : "",
-          visitedAt,
-          accessNotes,
-          findings: "",
-          recommendations: "",
-          measurements: "",
-          photos: [],
-        });
+      if (path === "site_visit" && siteVisitPayload) {
+        writeSiteVisit(session?.email, saved.id, siteVisitPayload);
       }
       dispatch(invalidateEstimatesCache());
       void dispatch(fetchEstimates({ force: true }));
@@ -402,7 +543,9 @@ export function CreateEstimateDialog({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Could not create this estimate.",
+          : isEdit
+            ? "Could not update this estimate."
+            : "Could not create this estimate.",
       );
     } finally {
       setSaving(false);
@@ -414,11 +557,13 @@ export function CreateEstimateDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create estimate</DialogTitle>
+            <DialogTitle>
+              {isEdit ? "Edit estimate" : "Create estimate"}
+            </DialogTitle>
             <DialogDescription>
-              Send a technician for a site visit, or write the quote in the
-              office. The customer signs the finalized estimate before the job
-              starts.
+              {isEdit
+                ? "Update the estimate details. Changes are saved without leaving this customer."
+                : "Send a technician for a site visit, or write the quote in the office. The customer signs the finalized estimate before the job starts."}
             </DialogDescription>
           </DialogHeader>
           <WizardTabs
@@ -575,6 +720,11 @@ export function CreateEstimateDialog({
                   value={employeeId}
                   options={technicianOptions}
                   placeholder="Assign later"
+                  selectedLabel={
+                    technician
+                      ? employeeName(technician)
+                      : estimate?.siteVisit?.technician || undefined
+                  }
                   emptyLabel="No technicians found."
                   loading={useApi ? assigneePaging.loading : false}
                   loadingMore={useApi ? assigneePaging.loadingMore : false}
@@ -650,7 +800,13 @@ export function CreateEstimateDialog({
                 disabled={!hasEstimateName || saving}
                 onClick={create}
               >
-                {saving ? "Creating…" : "Create estimate"}
+                {saving
+                  ? isEdit
+                    ? "Saving…"
+                    : "Creating…"
+                  : isEdit
+                    ? "Save estimate"
+                    : "Create estimate"}
               </Button>
             ) : (
               <Button

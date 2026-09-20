@@ -15,17 +15,42 @@ function toneFor(name: string) {
 
 export function CrmMark({
   name,
-  photoKey: _photoKey,
+  photoKey,
+  photoUrl,
   kind = "company",
   size = "lg",
 }: {
   name: string;
+  /** @deprecated Prefer photoUrl — kept for call-site compatibility. */
   photoKey?: string;
+  /** Customer/user profile image URL (avatarUrl). */
+  photoUrl?: string;
   kind?: "company" | "person";
   size?: "sm" | "md" | "lg";
 }) {
   const initials = initialsFrom(name);
   const box = size === "sm" ? "size-9" : size === "md" ? "size-11" : "size-14";
+  const imageUrl = (photoUrl || photoKey || "").trim();
+  const looksLikeUrl =
+    imageUrl.startsWith("http://") ||
+    imageUrl.startsWith("https://") ||
+    imageUrl.startsWith("/") ||
+    imageUrl.startsWith("data:");
+
+  if (looksLikeUrl) {
+    return (
+      <span
+        className={cn(
+          "relative grid shrink-0 place-items-center overflow-hidden rounded-md border border-black/10 bg-muted shadow-[0_6px_16px_rgba(4,26,54,0.12)]",
+          box,
+        )}
+        aria-hidden="true"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imageUrl} alt="" className="size-full object-cover" />
+      </span>
+    );
+  }
 
   return (
     <span

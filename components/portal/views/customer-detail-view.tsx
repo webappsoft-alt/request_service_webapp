@@ -22,9 +22,10 @@ import {
   Shield,
   UserRound,
   Wallet,
+  ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
-import { archiveRowAction, matchesArchiveFilter } from "@/components/portal/archive-control";
+import { archiveRowAction, ConfirmArchiveDialog, matchesArchiveFilter } from "@/components/portal/archive-control";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import {
   CreateReminderDialog,
@@ -143,6 +144,7 @@ import {
   upsertCustomerJob,
   upsertCustomerReminder,
   upsertCustomerTask,
+  removeCustomerEstimate,
 } from "@/store/customersSlice";
 import { useRouter } from "next/navigation";
 
@@ -338,7 +340,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                       <CrmMark
                         name={name}
                         kind={customer.entityKind === "company" ? "company" : "person"}
-                        photoKey={customer.firstName}
+                        photoUrl={customer.avatarUrl}
                       />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -637,6 +639,10 @@ function CustomerEstimatesPanel({
   const archivedOnly = filter === "archived";
   const useApi = !archivedOnly;
   const filterKey = customerTabFilterKey({ status: filter || undefined });
+  const [editEstimate, setEditEstimate] = useState<Estimate | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Estimate | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!useApi || !customerId) return;
@@ -665,29 +671,7 @@ function CustomerEstimatesPanel({
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <Field className="w-full max-w-xs gap-1.5">
-          <FieldLabel htmlFor="estimate-status-filter">Status</FieldLabel>
-          <Select
-            value={filter || "__all__"}
-            onValueChange={(value) => onFilterChange(value === "__all__" ? "" : value)}
-          >
-            <SelectTrigger id="estimate-status-filter" className="w-full">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
-            >
-              {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
-                <SelectItem key={option.label} value={option.value || "__all__"}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+      <div className="mb-3 flex justify-end">
         <Button size="sm" onClick={onCreate}>
           Create estimate
         </Button>
@@ -702,6 +686,38 @@ function CustomerEstimatesPanel({
           filter && filter !== "archived"
             ? "No estimates match this status."
             : "No estimates yet."
+        }
+        toolbar={
+          <div className="flex items-center gap-2">
+            <Field className="w-40 gap-0 sm:w-44">
+              <FieldLabel htmlFor="estimate-status-filter" className="sr-only">
+                Status
+              </FieldLabel>
+              <Select
+                value={filter || "__all__"}
+                onValueChange={(value) =>
+                  onFilterChange(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="estimate-status-filter"
+                  className="h-8.5 w-full text-xs"
+                >
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent position="popper" align="end">
+                  {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
+                    <SelectItem
+                      key={option.label}
+                      value={option.value || "__all__"}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -718,6 +734,14 @@ function CustomerEstimatesPanel({
                 {row.number}
               </Link>
             ),
+          },
+          {
+            id: "name",
+            header: "Estimate name",
+            sortValue: (row) => row.title?.trim() || "",
+            searchValue: (row) => row.title?.trim() || "",
+            exportValue: (row) => row.title?.trim() || "",
+            cell: (row) => row.title?.trim() || "—",
           },
           {
             id: "street",
@@ -781,12 +805,128 @@ function CustomerEstimatesPanel({
             ),
           },
         ]}
-        actions={(row) => [
-          { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
-          { label: "Edit", href: `/pro/dashboard/estimates/${row.id}` },
-          { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
-          archiveRowAction(records, "estimate", row.id, row.number),
-        ]}
+        actions={(row) => {
+          const archived =
+            records.isArchived("estimate", row.id) ||
+            Boolean(row.isArchived ?? row.isArchieved);
+          return [
+            { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
+            {
+              label: "Edit",
+              onSelect: () => setEditEstimate(row),
+            },
+            { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  icon: (
+                    <ArchiveRestore className="size-3.5 text-muted-foreground" />
+                  ),
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        await records.unarchive("estimate", row.id);
+                        dispatch(
+                          upsertCustomerEstimate({
+                            customerId,
+                            item: {
+                              ...row,
+                              isArchived: false,
+                              isArchieved: false,
+                            },
+                          }),
+                        );
+                        void dispatch(
+                          fetchCustomerEstimates({
+                            customerId,
+                            status: filter || undefined,
+                            force: true,
+                          }),
+                        );
+                        void dispatch(
+                          fetchCustomerTimeline({ customerId, force: true }),
+                        );
+                        toast.success(`${row.number} restored.`);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not restore this estimate.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "estimate",
+                  row.id,
+                  row.number,
+                  () => setArchiveTarget(row),
+                ),
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="estimate"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              await records.archive("estimate", archiveTarget.id);
+              dispatch(removeCustomerEstimate(archiveTarget.id));
+              void dispatch(
+                fetchCustomerEstimates({
+                  customerId,
+                  status: filter || undefined,
+                  force: true,
+                }),
+              );
+              void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+              toast.success(`${archiveTarget.number} archived.`);
+              setArchiveTarget(null);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Could not archive this estimate.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
+        }}
+      />
+      <CreateEstimateDialog
+        open={Boolean(editEstimate)}
+        onOpenChange={(next) => {
+          if (!next) setEditEstimate(null);
+        }}
+        customerId={customerId}
+        estimate={editEstimate}
+        onUpdated={(item) => {
+          dispatch(upsertCustomerEstimate({ customerId, item }));
+          void dispatch(
+            fetchCustomerEstimates({
+              customerId,
+              status: filter || undefined,
+              force: true,
+            }),
+          );
+          void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+          setEditEstimate(null);
+        }}
       />
     </div>
   );

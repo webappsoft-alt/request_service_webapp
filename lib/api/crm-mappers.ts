@@ -411,6 +411,12 @@ export function mapPortalCustomerCrm(raw: unknown): PortalCustomerCrm | null {
     lastName: trimmed(record.lastName),
     email: trimmed(record.email),
     phone: trimmed(record.phone) || undefined,
+    avatarUrl:
+      trimmed(record.avatarUrl) ||
+      trimmed(record.avatar) ||
+      trimmed(asRecord(record.linkedUser)?.avatarUrl) ||
+      trimmed(asRecord(record.linkedUser)?.avatar) ||
+      undefined,
     addresses: serviceAddresses,
     createdAt,
     updatedAt,

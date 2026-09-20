@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDownIcon } from "lucide-react";
+import { SelectLoadingDots } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -62,14 +63,13 @@ export function PaginatedEntitySelect({
   loadingMoreRef.current = Boolean(loadingMore);
   hasMoreRef.current = Boolean(hasMore);
 
+  const busy = Boolean(loading || loadingMore);
   const selected = options.find((item) => item.id === value);
   const label = selected
     ? selected.label
     : value && selectedLabel
       ? selectedLabel
-      : loading && !options.length
-        ? "Loading…"
-        : placeholder;
+      : placeholder;
 
   function tryLoadMore() {
     if (!hasMoreRef.current || loadingMoreRef.current) return;
@@ -105,6 +105,7 @@ export function PaginatedEntitySelect({
     return () => el.removeEventListener("scroll", onScroll);
   }, [open, options.length]);
 
+  // Short lists that don't scroll still need a first "load more" when hasMore.
   useEffect(() => {
     if (!open || loadingMore || !hasMore) return;
     const el = listRef.current;
@@ -142,6 +143,8 @@ export function PaginatedEntitySelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
+        aria-busy={busy || undefined}
+        data-loading={busy ? "" : undefined}
         onClick={() => {
           if (disabled) return;
           setOpen((current) => !current);
@@ -153,14 +156,22 @@ export function PaginatedEntitySelect({
           !selected && !selectedLabel && "text-muted-foreground",
         )}
       >
-        <span className="line-clamp-1 flex-1">{label}</span>
-        <ChevronDownIcon
-          className={cn(
-            "size-4 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180",
-          )}
-          aria-hidden
-        />
+        <span className="line-clamp-1 min-w-0 flex-1">{label}</span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {busy ? (
+            <>
+              <SelectLoadingDots />
+              <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
+            </>
+          ) : null}
+          <ChevronDownIcon
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </span>
       </button>
 
       {open ? (
@@ -171,17 +182,19 @@ export function PaginatedEntitySelect({
           ref={listRef}
           className="absolute z-[1300] mt-1 max-h-48 w-full overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
         >
-          {loading && !options.length ? (
+          {loading && options.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
               <Spinner size="sm" label="Loading" />
               <p className="text-xs text-muted-foreground">Loading…</p>
             </div>
           ) : null}
 
-          {!loading && !loadingMore && !options.length ? (
+          {!loading && !loadingMore && options.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-1 px-4 py-6 text-center">
               <p className="text-sm font-medium text-foreground">No results</p>
-              <p className="max-w-[14rem] text-xs text-muted-foreground">{emptyLabel}</p>
+              <p className="max-w-[14rem] text-xs text-muted-foreground">
+                {emptyLabel}
+              </p>
             </div>
           ) : null}
 
@@ -209,9 +222,18 @@ export function PaginatedEntitySelect({
           })}
 
           {loadingMore ? (
-            <div className="flex items-center justify-center py-2">
-              <Spinner size="sm" label="Loading more" />
+            <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+              <SelectLoadingDots />
+              <span>Loading more…</span>
             </div>
+          ) : null}
+
+          {!loadingMore && hasMore ? (
+            <div
+              aria-hidden
+              className="h-1 w-full"
+              data-paginated-sentinel=""
+            />
           ) : null}
         </div>
       ) : null}

@@ -22,6 +22,8 @@ export interface Customer {
   lastName: string;
   email: string;
   phone?: string;
+  /** Profile image from linked user account (avatarUrl / profile.avatar). */
+  avatarUrl?: string;
   addresses: ServiceAddress[];
   createdAt: string;
   updatedAt: string;

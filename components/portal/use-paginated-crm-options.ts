@@ -180,10 +180,12 @@ export function usePaginatedCrmOptions(
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const inFlightPageRef = useRef<number | null>(null);
+  const optionsRef = useRef<PaginatedEntityOption[]>([]);
   const kindRef = useRef(kind);
   const filtersRef = useRef(filters);
   kindRef.current = kind;
   filtersRef.current = filters;
+  optionsRef.current = options;
   const filterKey = `${filters.customerId?.trim() || ""}|${filters.role?.trim() || ""}`;
 
   const loadPage = useCallback(
@@ -205,16 +207,22 @@ export function usePaginatedCrmOptions(
         );
         if (kindRef.current !== activeKind) return;
 
-        setOptions((prev) => {
-          if (!append) return result.items;
-          const seen = new Set(prev.map((item) => item.id));
+        if (!append) {
+          optionsRef.current = result.items;
+          setOptions(result.items);
+          setHasMore(result.items.length >= pageSize);
+        } else {
+          const seen = new Set(optionsRef.current.map((item) => item.id));
           const next = result.items.filter((item) => !seen.has(item.id));
-          return [...prev, ...next];
-        });
+          const merged = [...optionsRef.current, ...next];
+          optionsRef.current = merged;
+          setOptions(merged);
+          setHasMore(result.items.length >= pageSize && next.length > 0);
+        }
         setPage(result.page);
-        setHasMore(result.page < result.totalPages && result.items.length > 0);
       } catch {
         if (kindRef.current === activeKind && !append) {
+          optionsRef.current = [];
           setOptions([]);
           setHasMore(false);
         }
@@ -230,6 +238,7 @@ export function usePaginatedCrmOptions(
   );
 
   useEffect(() => {
+    optionsRef.current = [];
     setOptions([]);
     setPage(0);
     setHasMore(false);

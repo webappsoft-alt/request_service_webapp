@@ -92,10 +92,13 @@ export function CreateCustomerDialog({
   open,
   onOpenChange,
   customer = null,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customer?: PortalCustomerCrm | null;
+  /** Fired after a successful create/update — not when the dialog is dismissed. */
+  onSaved?: () => void;
 }) {
   const { addCustomer, updateCustomer, provider, customers } = useCrmDirectory();
   const isEdit = Boolean(customer);
@@ -206,6 +209,7 @@ export function CreateCustomerDialog({
           `${companyName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim() || "Customer"} updated.`,
         );
         reset();
+        onSaved?.();
         onOpenChange(false);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not update this customer.");
@@ -261,6 +265,7 @@ export function CreateCustomerDialog({
       `${nextCustomer.companyName ?? `${nextCustomer.firstName} ${nextCustomer.lastName}`} added to the directory.`,
     );
     reset();
+    onSaved?.();
     onOpenChange(false);
   }
 

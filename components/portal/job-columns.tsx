@@ -15,6 +15,9 @@ import {
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Estimate, Invoice, Job } from "@/lib/types";
 
+/** Set to true to show the Change status column again. */
+const SHOW_JOB_CHANGE_STATUS_COLUMN = false;
+
 export function jobBoardColumns({
   estimates,
   requests,
@@ -152,7 +155,8 @@ export function jobBoardColumns({
       exportValue: (row) => jobStatusLabel(row.status),
       cell: (row) => <StatusPill label={jobStatusLabel(row.status)} className={jobStatusTone(row.status)} />,
     },
-    ...(onChangeStatus
+    // Hidden for now — set to true to show the Change status column again.
+    ...(onChangeStatus && SHOW_JOB_CHANGE_STATUS_COLUMN
       ? [
           {
             id: "change-status",

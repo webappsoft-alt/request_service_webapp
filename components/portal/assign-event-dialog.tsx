@@ -88,7 +88,7 @@ function formatAssignError(error: unknown): string {
     const [, label, startRaw, endRaw] = match;
     const start = formatClockMinutes(Number(startRaw));
     const end = formatClockMinutes(Number(endRaw));
-    return `This technician already has ${label} booked (${start}–${end}). Pick another time or technician.`;
+    return `This person already has ${label} booked (${start}–${end}). Pick another time or assignee.`;
   }
   if (/schedule collision/i.test(raw)) {
     return raw.replace(
@@ -232,8 +232,8 @@ export function AssignEventDialog({
             {event ? "Assign on calendar" : "Schedule a visit"}
           </DialogTitle>
           <DialogDescription>
-            Put a job, estimate visit, or request on the calendar and give it to
-            a technician or contractor.
+            Put a job, estimate visit, or request on the calendar and assign it
+            to a team member or contractor.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -322,14 +322,14 @@ export function AssignEventDialog({
             </Select>
           </Field>
           <Field>
-            <FieldLabel htmlFor="crew-tech">Technician</FieldLabel>
+            <FieldLabel>Assign to</FieldLabel>
             <PaginatedEntitySelect
-              id="crew-tech"
+              id="crew-assign"
               value={employeeId}
               selectedLabel={employeeLabel}
               options={technicianOptions}
-              placeholder="Select technician"
-              emptyLabel="No technicians found."
+              placeholder="Select person"
+              emptyLabel="No people found."
               loading={useApi ? assigneePaging.loading : false}
               loadingMore={useApi ? assigneePaging.loadingMore : false}
               hasMore={useApi ? assigneePaging.hasMore : false}

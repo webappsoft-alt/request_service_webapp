@@ -1,3 +1,4 @@
+import { PortalSuspense } from "@/components/portal/portal-suspense";
 import { TeamMemberView } from "@/components/portal/views/team-view";
 import type { PageParams } from "@/lib/page-props";
 import { portalMetadata } from "@/lib/portal-meta";
@@ -10,5 +11,9 @@ export const metadata = portalMetadata(
 
 export default async function TeamMemberPage({ params }: PageParams<{ id: string }>) {
   const { id } = await params;
-  return <TeamMemberView id={id} />;
+  return (
+    <PortalSuspense>
+      <TeamMemberView id={id} />
+    </PortalSuspense>
+  );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
+  Bell,
   Briefcase,
   Banknote,
   CalendarDays,
@@ -27,12 +28,20 @@ import {
   uploadAnyFile,
   validateAttachmentFile,
 } from "@/components/api/uploadFile";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
-import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/portal/create-person-dialogs";
+import {
+  AddNoteButton,
+  CreateReminderDialog,
+  SetReminderButton,
+  SetTaskButton,
+} from "@/components/portal/create-person-dialogs";
+import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
@@ -50,9 +59,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CenteredSpinner } from "@/components/ui/spinner";
-import { crmTaskStatusLabel } from "@/lib/data/crm-people";
+import {
+  crmReminderStatusLabel,
+  crmTaskStatusLabel,
+  type PortalReminder,
+} from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
   employeeName,
@@ -75,15 +94,21 @@ import {
   clearTeamDetail,
   bindTeamDetailEmployee,
   deleteTeamMember,
+  deleteEmployeeReminder,
   fetchEmployeeEstimates,
   fetchEmployeeJobs,
+  fetchEmployeeReminders,
   fetchEmployeeSchedule,
   fetchEmployeeTasks,
   fetchTeamMember,
+  patchEmployeeReminderStatus,
   selectTeamTabRows,
   selectTeamTabShowLoader,
   teamTabFilterKey,
   updateTeamMember,
+  addTeamMemberAttachment,
+  removeTeamMemberAttachment,
+  upsertEmployeeReminder,
   upsertEmployeeTask,
 } from "@/store/teamSlice";
 import { useRouter } from "next/navigation";
@@ -173,6 +198,7 @@ export function TeamMemberView({ id }: { id: string }) {
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
   useEffect(() => {
     if (!crm.enabled) return;
@@ -271,6 +297,7 @@ export function TeamMemberView({ id }: { id: string }) {
           { id: "jobs", label: "Jobs", icon: Briefcase },
           { id: "estimates", label: "Estimates", icon: FileText },
           { id: "tasks", label: "Tasks", icon: ListTodo },
+          { id: "reminders", label: "Reminders", icon: Bell },
           { id: "notes", label: "Notes", icon: NotebookPen },
           { id: "attachments", label: "Attachments", icon: Paperclip },
         ]}
@@ -291,7 +318,15 @@ export function TeamMemberView({ id }: { id: string }) {
                 void dispatch(fetchEmployeeTasks({ employeeId: employee.id, force: true }));
               }}
             />
-            <SetReminderButton subjectKind="employee" subjectId={employee.id} />
+            <SetReminderButton
+              subjectKind="employee"
+              subjectId={employee.id}
+              onCreated={(item) => {
+                dispatch(upsertEmployeeReminder({ employeeId: employee.id, item }));
+                void dispatch(fetchEmployeeReminders({ employeeId: employee.id, force: true }));
+                if (crm.enabled) crm.addReminder(item);
+              }}
+            />
             <AddNoteButton subjectKind="employee" subjectId={employee.id} />
             <Button size="sm" asChild>
               <Link href={`/pro/dashboard/schedule?employeeId=${employee.id}`}>Open calendar</Link>
@@ -333,6 +368,13 @@ export function TeamMemberView({ id }: { id: string }) {
               );
             case "tasks":
               return <EmployeeTasksTab employeeId={employee.id} />;
+            case "reminders":
+              return (
+                <EmployeeRemindersTab
+                  employeeId={employee.id}
+                  onSetReminder={() => setReminderOpen(true)}
+                />
+              );
             case "notes":
               return <NotesPanel kind="employee" id={employee.id} />;
             case "attachments":
@@ -342,6 +384,17 @@ export function TeamMemberView({ id }: { id: string }) {
           }
         }}
       </RecordWorkspace>
+      <CreateReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        subjectKind="employee"
+        subjectId={employee.id}
+        onCreated={(item) => {
+          dispatch(upsertEmployeeReminder({ employeeId: employee.id, item }));
+          void dispatch(fetchEmployeeReminders({ employeeId: employee.id, force: true }));
+          if (crm.enabled) crm.addReminder(item);
+        }}
+      />
       <AssignEventDialog
         open={Boolean(editing)}
         onOpenChange={(open) => {
@@ -393,10 +446,37 @@ function EmployeeSettingsTab({
   onSave: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
 }) {
   const [draft, setDraft] = useState(employee);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraft(employee);
   }, [employee]);
+
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await Promise.resolve(
+        onSave({
+          firstName: draft.firstName,
+          lastName: draft.lastName,
+          role: draft.role,
+          trade: draft.trade,
+          email: draft.email,
+          phone: draft.phone,
+          active: draft.active,
+          hireDate: hireDateApiValue(hireDateInputValue(draft.hireDate) || ""),
+          emergencyName: draft.emergencyName,
+          emergencyPhone: draft.emergencyPhone,
+        }),
+      );
+      toast.success("Employee settings saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save employee settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -405,30 +485,15 @@ function EmployeeSettingsTab({
           <h2 className="text-base font-semibold">Employee settings</h2>
           <p className="mt-1 text-sm text-muted-foreground">Name, role, trade, and contact. Changes apply across jobs and the calendar.</p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            void Promise.resolve(
-              onSave({
-                firstName: draft.firstName,
-                lastName: draft.lastName,
-                role: draft.role,
-                trade: draft.trade,
-                email: draft.email,
-                phone: draft.phone,
-                active: draft.active,
-                hireDate: hireDateApiValue(hireDateInputValue(draft.hireDate) || ""),
-                emergencyName: draft.emergencyName,
-                emergencyPhone: draft.emergencyPhone,
-              }),
-            )
-              .then(() => toast.success("Employee settings saved."))
-              .catch((error) =>
-                toast.error(error instanceof Error ? error.message : "Could not save employee settings."),
-              );
-          }}
-        >
-          Save settings
+        <Button size="sm" disabled={saving} onClick={() => void save()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save settings"
+          )}
         </Button>
       </div>
       <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
@@ -439,17 +504,21 @@ function EmployeeSettingsTab({
           <Input value={draft.lastName} onChange={(event) => setDraft({ ...draft, lastName: event.target.value })} />
         </Field>
         <Field label="Role">
-          <NativeSelect
-            className="w-full"
+          <Select
             value={draft.role}
-            onChange={(event) => setDraft({ ...draft, role: event.target.value as PortalEmployeeRole })}
+            onValueChange={(value) => setDraft({ ...draft, role: value as PortalEmployeeRole })}
           >
-            {ROLES.map((role) => (
-              <NativeSelectOption key={role} value={role}>
-                {employeeRoleLabel(role)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {ROLES.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {employeeRoleLabel(role)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Trade">
           <Input value={draft.trade} onChange={(event) => setDraft({ ...draft, trade: event.target.value })} />
@@ -458,17 +527,25 @@ function EmployeeSettingsTab({
           <Input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
         </Field>
         <Field label="Phone">
-          <Input value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} />
+          <AuthPhoneInput
+            value={draft.phone}
+            onChange={(phone) => setDraft({ ...draft, phone })}
+            placeholder="(555) 123-4567"
+          />
         </Field>
         <Field label="Status">
-          <NativeSelect
-            className="w-full"
+          <Select
             value={draft.active ? "active" : "inactive"}
-            onChange={(event) => setDraft({ ...draft, active: event.target.value === "active" })}
+            onValueChange={(value) => setDraft({ ...draft, active: value === "active" })}
           >
-            <NativeSelectOption value="active">Active</NativeSelectOption>
-            <NativeSelectOption value="inactive">Inactive</NativeSelectOption>
-          </NativeSelect>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Hire date">
           <Input
@@ -477,7 +554,7 @@ function EmployeeSettingsTab({
             onChange={(event) => setDraft({ ...draft, hireDate: event.target.value })}
           />
         </Field>
-        <Field label="Emergency contact">
+        <Field label="Emergency contact name">
           <Input
             value={draft.emergencyName ?? ""}
             placeholder="Name"
@@ -485,10 +562,10 @@ function EmployeeSettingsTab({
           />
         </Field>
         <Field label="Emergency phone">
-          <Input
+          <AuthPhoneInput
             value={draft.emergencyPhone ?? ""}
-            placeholder="Phone"
-            onChange={(event) => setDraft({ ...draft, emergencyPhone: event.target.value })}
+            onChange={(emergencyPhone) => setDraft({ ...draft, emergencyPhone })}
+            placeholder="(555) 123-4567"
           />
         </Field>
       </div>
@@ -511,6 +588,7 @@ export function EmployeeAvailabilityTab({
       ? availabilityFromWorkingHours(employee.workingHours)
       : defaultAvailability(),
   );
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDays(
@@ -526,6 +604,20 @@ export function EmployeeAvailabilityTab({
     setDays((current) => current.map((item) => (item.day === day ? { ...item, ...next } : item)));
   }
 
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const workingHours = workingHoursFromAvailability(days);
+      await Promise.resolve(onSave?.({ workingHours }));
+      toast.success("Availability saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save availability.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -533,18 +625,15 @@ export function EmployeeAvailabilityTab({
           <h2 className="text-base font-semibold">Availability</h2>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            const workingHours = workingHoursFromAvailability(days);
-            void Promise.resolve(onSave?.({ workingHours }))
-              .then(() => toast.success("Availability saved."))
-              .catch((error) =>
-                toast.error(error instanceof Error ? error.message : "Could not save availability."),
-              );
-          }}
-        >
-          Save hours
+        <Button size="sm" disabled={saving || !onSave} onClick={() => void save()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save hours"
+          )}
         </Button>
       </div>
       <div className="overflow-hidden rounded-[4px] border border-black/10">
@@ -562,14 +651,18 @@ export function EmployeeAvailabilityTab({
               <tr key={item.day} className="border-t border-black/10">
                 <td className="px-3 py-2 font-medium">{weekdayLabel(item.day)}</td>
                 <td className="px-3 py-2">
-                  <NativeSelect
-                    className="w-36"
+                  <Select
                     value={item.off ? "off" : "on"}
-                    onChange={(event) => patch(item.day, { off: event.target.value === "off" })}
+                    onValueChange={(value) => patch(item.day, { off: value === "off" })}
                   >
-                    <NativeSelectOption value="on">Available</NativeSelectOption>
-                    <NativeSelectOption value="off">Off</NativeSelectOption>
-                  </NativeSelect>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectItem value="on">Available</SelectItem>
+                      <SelectItem value="off">Off</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </td>
                 <td className="px-3 py-2">
                   <Input
@@ -610,6 +703,7 @@ export function EmployeePayTab({
     overtimeRate: employee.overtimeRate ?? 0,
     travelRate: employee.travelRate ?? 0,
   });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setPay({
@@ -628,6 +722,19 @@ export function EmployeePayTab({
     }, 0);
   }, [employee.workingHours]);
 
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await Promise.resolve(onSave(pay));
+      toast.success("Pay rate saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save pay rates.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -635,17 +742,15 @@ export function EmployeePayTab({
           <h2 className="text-base font-semibold">Per hour price</h2>
           <p className="mt-1 text-sm text-muted-foreground">Labor rate for this employee on jobs, estimates, and overtime.</p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            void Promise.resolve(onSave(pay))
-              .then(() => toast.success("Pay rate saved."))
-              .catch((error) =>
-                toast.error(error instanceof Error ? error.message : "Could not save pay rates."),
-              );
-          }}
-        >
-          Save rates
+        <Button size="sm" disabled={saving} onClick={() => void save()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save rates"
+          )}
         </Button>
       </div>
       <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-3">
@@ -992,6 +1097,177 @@ function EmployeeTasksTab({ employeeId }: { employeeId: string }) {
   );
 }
 
+function EmployeeRemindersTab({
+  employeeId,
+  onSetReminder,
+}: {
+  employeeId: string;
+  onSetReminder: () => void;
+}) {
+  const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
+  const filterKey = teamTabFilterKey({});
+  const tab = useAppSelector((state) => state.team?.reminders);
+  const [editing, setEditing] = useState<PortalReminder | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PortalReminder | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [busyReminderId, setBusyReminderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!employeeId) return;
+    void dispatch(fetchEmployeeReminders({ employeeId, force: true }));
+  }, [dispatch, employeeId]);
+
+  const rows = selectTeamTabRows(tab, employeeId, filterKey, []);
+  const listLoading = selectTeamTabShowLoader(tab, employeeId, filterKey);
+
+  async function setReminderStatus(item: PortalReminder, nextStatus: PortalReminder["status"]) {
+    if (item.status === nextStatus || busyReminderId === item.id) return;
+    setBusyReminderId(item.id);
+    try {
+      const result = await dispatch(
+        patchEmployeeReminderStatus({ id: item.id, status: nextStatus, employeeId }),
+      );
+      if (patchEmployeeReminderStatus.rejected.match(result)) {
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not update reminder.",
+        );
+        return;
+      }
+      if (patchEmployeeReminderStatus.fulfilled.match(result)) {
+        crm.patchReminder(item.id, result.payload ?? { status: nextStatus });
+      }
+    } finally {
+      setBusyReminderId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const result = await dispatch(
+        deleteEmployeeReminder({ id: deleteTarget.id, employeeId }),
+      );
+      if (deleteEmployeeReminder.rejected.match(result)) {
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not delete this reminder.",
+        );
+        return;
+      }
+      crm.removeReminder(deleteTarget.id);
+      toast.success("Reminder removed.");
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <PortalDataTable
+        filename="employee-reminders"
+        countLabel="Reminders"
+        searchPlaceholder="Search reminders"
+        loading={listLoading}
+        busyRowIds={busyReminderId ? [busyReminderId] : []}
+        empty="No reminders yet. Set a reminder to follow up on this employee."
+        rows={rows}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
+        toolbar={
+          <Button size="sm" onClick={onSetReminder}>
+            Set reminder
+          </Button>
+        }
+        columns={[
+          {
+            id: "reminder",
+            header: "Reminder",
+            sortValue: (row) => row.title,
+            searchValue: (row) => `${row.title} ${row.note}`,
+            exportValue: (row) => row.title,
+            cell: (row) => (
+              <div className="min-w-0">
+                <Link
+                  href={`/pro/dashboard/reminders/${row.id}`}
+                  className="font-medium text-primary hover:underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {row.title}
+                </Link>
+                {row.note ? (
+                  <p className="truncate text-xs text-muted-foreground">{row.note}</p>
+                ) : null}
+              </div>
+            ),
+          },
+          {
+            id: "due",
+            header: "Due",
+            sortValue: (row) => row.dueAt,
+            searchValue: (row) => formatDate(row.dueAt),
+            exportValue: (row) => formatDate(row.dueAt),
+            cell: (row) => formatDate(row.dueAt),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            searchValue: (row) => crmReminderStatusLabel(row.status),
+            exportValue: (row) => crmReminderStatusLabel(row.status),
+            cell: (row) => (
+              <ReminderStatusSelect
+                value={row.status}
+                disabled={busyReminderId === row.id}
+                onChange={(next) => void setReminderStatus(row, next)}
+              />
+            ),
+          },
+        ]}
+        actions={(row) => [
+          { label: "Open", href: `/pro/dashboard/reminders/${row.id}` },
+          { label: "Edit", onSelect: () => setEditing(row) },
+          {
+            label: "Delete",
+            variant: "destructive",
+            onSelect: () => setDeleteTarget(row),
+          },
+        ]}
+      />
+      <CreateReminderDialog
+        open={Boolean(editing)}
+        reminder={editing}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null);
+        }}
+        subjectKind="employee"
+        subjectId={employeeId}
+        onCreated={(item) => {
+          dispatch(upsertEmployeeReminder({ employeeId, item }));
+          void dispatch(fetchEmployeeReminders({ employeeId, force: true }));
+          if (crm.enabled) crm.addReminder(item);
+        }}
+      />
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(next) => {
+          if (!next && !deleting) setDeleteTarget(null);
+        }}
+        title="Delete reminder?"
+        description={
+          deleteTarget
+            ? `This will permanently remove “${deleteTarget.title}”.`
+            : "This will permanently remove this reminder."
+        }
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
+    </div>
+  );
+}
+
 function stamp(value: string) {
   const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
   return new Intl.DateTimeFormat("en-US", {
@@ -1009,10 +1285,40 @@ function fileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee }) {
-  const file = useEmployeeFile(employee);
+export function EmployeeAttachmentsTab({
+  employee,
+  useApi = true,
+}: {
+  employee: PortalEmployee;
+  /** When false (e.g. vendor reuse), attachments API is not available. */
+  useApi?: boolean;
+}) {
+  const dispatch = useAppDispatch();
+  const detail = useAppSelector((state) => state.team?.detail ?? null);
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const liveEmployee = detail?.id === employee.id ? detail : employee;
+  const attachments = (liveEmployee.attachments ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    type: item.fileType || "application/octet-stream",
+    size: item.sizeBytes ?? 0,
+    dataUrl: item.url,
+    addedAt: item.uploadedAt || "",
+  }));
+
+  if (!useApi) {
+    return (
+      <div>
+        <h2 className="text-base font-semibold">Attachments</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Document uploads for this record are not available yet.
+        </p>
+      </div>
+    );
+  }
 
   async function readFiles(list: FileList | File[]) {
     if (uploading) return;
@@ -1033,17 +1339,24 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
         const response = await uploadAnyFile(fileItem);
         const url = extractUploadedUrl(response.data);
         if (!url) throw new Error(`Could not upload ${fileItem.name}.`);
-        file.addAttachments([
-          {
-            id: `att_${Date.now()}_${fileItem.name}`,
-            name: fileItem.name,
-            type: fileItem.type || "application/octet-stream",
-            size: fileItem.size,
-            dataUrl: url,
-            addedAt: new Date().toISOString(),
-            actor: file.actor,
-          },
-        ]);
+
+        const result = await dispatch(
+          addTeamMemberAttachment({
+            id: employee.id,
+            attachment: {
+              name: fileItem.name,
+              url,
+              fileType: fileItem.type || "application/octet-stream",
+              sizeBytes: fileItem.size,
+              category: "other",
+            },
+          }),
+        );
+        if (addTeamMemberAttachment.rejected.match(result)) {
+          throw new Error(
+            typeof result.payload === "string" ? result.payload : `Could not attach ${fileItem.name}.`,
+          );
+        }
         toast.success(`${fileItem.name} attached.`);
       }
     } catch (error) {
@@ -1056,6 +1369,26 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
       toast.error(message || "Could not upload that file.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function removeAttachment(id: string, name: string) {
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      const result = await dispatch(
+        removeTeamMemberAttachment({ id: employee.id, attachmentId: id }),
+      );
+      if (removeTeamMemberAttachment.rejected.match(result)) {
+        throw new Error(
+          typeof result.payload === "string" ? result.payload : "Could not remove attachment.",
+        );
+      }
+      toast.success(`${name} removed.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove attachment.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -1107,9 +1440,9 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
           }}
         />
       </label>
-      {file.attachments.length ? (
+      {attachments.length ? (
         <ul className="mt-4 divide-y divide-black/10 border border-black/10">
-          {file.attachments.map((item) => (
+          {attachments.map((item) => (
             <li key={item.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">
                 {item.type.startsWith("image/") ? (
@@ -1132,7 +1465,7 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
                   {item.name}
                 </a>
                 <p className="text-xs text-muted-foreground">
-                  {stamp(item.addedAt)}
+                  {item.addedAt ? stamp(item.addedAt) : fileSize(item.size)}
                 </p>
               </div>
               <Button size="sm" variant="outline" asChild>
@@ -1151,12 +1484,10 @@ export function EmployeeAttachmentsTab({ employee }: { employee: PortalEmployee 
                 variant="ghost"
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 aria-label={`Delete ${item.name}`}
-                onClick={() => {
-                  file.removeAttachment(item.id);
-                  toast.success("Attachment removed.");
-                }}
+                disabled={deletingId === item.id || uploading}
+                onClick={() => void removeAttachment(item.id, item.name)}
               >
-                <Trash2 />
+                {deletingId === item.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 />}
               </Button>
             </li>
           ))}
@@ -1180,9 +1511,9 @@ function PayStat({ label, value, hint }: { label: string; value: string; hint: s
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="grid gap-1.5 text-sm">
+    <div className="grid gap-1.5 text-sm">
       <span className="font-medium">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }

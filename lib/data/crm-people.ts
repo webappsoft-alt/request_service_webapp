@@ -93,8 +93,37 @@ export type PortalContractor = {
   zip: string;
   status: CrmDirectoryStatus;
   hourlyRate: number;
+  overtimeRate?: number;
+  travelRate?: number;
   insuranceExpires: string;
+  workingHours?: import("@/lib/data/portal").PortalEmployeeWorkingHours[];
+  attachments?: import("@/lib/data/portal").PortalEmployeeAttachment[];
   createdAt: string;
+};
+
+export type PortalVendorInventoryItem = {
+  id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  onHandCount: number;
+  reorderPoint: number;
+  unitCost: number;
+  location: string;
+  totalValue?: number;
+  status?: "in_stock" | "low_stock" | "out_of_stock";
+};
+
+export type PortalVendorPurchaseOrder = {
+  id: string;
+  poNumber: string;
+  amount: number;
+  description: string;
+  jobId?: string;
+  status: "draft" | "issued" | "partially_received" | "received" | "cancelled";
+  issuedAt?: string;
+  receivedAt?: string;
+  notes?: string;
 };
 
 export type PortalVendor = {
@@ -107,10 +136,20 @@ export type PortalVendor = {
   phone: string;
   city: string;
   state: string;
+  /** Street / formatted address from Places — sent as location.address */
+  street?: string;
+  zip?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   accountNumber: string;
   terms: string;
   balance: number;
   status: CrmDirectoryStatus;
+  inventory?: PortalVendorInventoryItem[];
+  purchaseOrders?: PortalVendorPurchaseOrder[];
+  attachments?: import("@/lib/data/portal").PortalEmployeeAttachment[];
+  totalSkus?: number;
+  inventoryOnHandValue?: number;
   createdAt: string;
 };
 
@@ -159,6 +198,7 @@ export type PortalReminder = {
   assignedVendorId?: string;
   assignedVendorName?: string;
   status: CrmReminderStatus;
+  isArchived?: boolean;
   createdAt: string;
 };
 
@@ -416,6 +456,10 @@ export function contractorAsEmployee(contractor: PortalContractor): PortalEmploy
     trade: contractor.trade,
     active: contractor.status === "active",
     hourlyRate: contractor.hourlyRate,
+    overtimeRate: contractor.overtimeRate,
+    travelRate: contractor.travelRate,
+    workingHours: contractor.workingHours,
+    attachments: contractor.attachments,
   };
 }
 
@@ -456,16 +500,24 @@ export function reminderSubject(reminder: PortalReminder): { kind: ReminderSubje
 }
 
 export function reminderMatches(reminder: PortalReminder, kind: ReminderSubjectKind, id: string) {
+  if (!id) return false;
   const subject = reminderSubject(reminder);
-  return subject.kind === kind && subject.id === id;
+  if (subject.kind === kind && subject.id === id) return true;
+  // Employee / contractor profile banners: also match reminders assigned to this person.
+  if (kind === "employee" && reminder.assignedEmployeeId === id) return true;
+  if (kind === "contractor" && reminder.assignedContractorId === id) return true;
+  if (kind === "vendor" && reminder.assignedVendorId === id) return true;
+  return false;
 }
 
 export function openRemindersFor(reminders: PortalReminder[], kind: ReminderSubjectKind, id: string) {
-  return reminders.filter((item) => item.status === "open" && reminderMatches(item, kind, id));
+  return reminders.filter(
+    (item) => item.status === "open" && !item.isArchived && reminderMatches(item, kind, id),
+  );
 }
 
 export function reminderIsOverdue(reminder: PortalReminder, today = new Date().toISOString().slice(0, 10)) {
-  return reminder.status === "open" && reminder.dueAt < today;
+  return reminder.status === "open" && !reminder.isArchived && reminder.dueAt < today;
 }
 
 export function taskSubject(task: PortalTask): { kind: ReminderSubjectKind; id: string } {

@@ -338,20 +338,15 @@ export function CustomersView() {
       />
       <CreateCustomerDialog
         open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) refreshList();
-        }}
+        onOpenChange={setOpen}
       />
       <CreateCustomerDialog
         open={Boolean(editing)}
         customer={editing}
         onOpenChange={(next) => {
-          if (!next) {
-            setEditing(null);
-            refreshList();
-          }
+          if (!next) setEditing(null);
         }}
+        onSaved={refreshList}
       />
     </PortalPage>
   );

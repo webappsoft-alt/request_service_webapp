@@ -775,6 +775,7 @@
   width: 100% !important;
   font-family: inherit;
   position: relative;
+  overflow: visible !important;
 }
 
 .rs-phone-input .rs-phone-field {
@@ -824,6 +825,7 @@
   border: none !important;
   border-radius: 0.5rem 0 0 0.5rem !important;
   background: transparent !important;
+  overflow: visible !important;
   z-index: 2;
 }
 
@@ -868,10 +870,9 @@
   box-shadow: 0 12px 40px -16px rgb(15 23 42 / 25%) !important;
   background: var(--card) !important;
   color: var(--foreground) !important;
-  margin-top: 0.35rem !important;
   width: 18rem !important;
-  max-height: 16rem !important;
-  z-index: 60 !important;
+  max-height: min(15rem, 40dvh) !important;
+  z-index: 10000 !important;
 }
 
 .rs-phone-input .rs-phone-dropdown .country {
@@ -899,8 +900,28 @@
   color: var(--foreground) !important;
 }
 
-.rs-phone-input .react-tel-input .flag-dropdown.open {
-  z-index: 61 !important;
+.rs-phone-input .react-tel-input .flag-dropdown.open,
+.rs-phone-input .rs-phone-button.open {
+  z-index: 10001 !important;
+}
+
+/*
+ * Dialog shells clip absolute country lists. The list only mounts while open.
+ * Also raise the sticky footer stacking so the list can paint above it.
+ */
+[data-slot="dialog-content"]:has(.rs-phone-dropdown),
+[data-slot="dialog-content"]:has(.rs-phone-input .country-list) {
+  overflow: visible !important;
+}
+
+[data-slot="dialog-scroll"]:has(.rs-phone-dropdown),
+[data-slot="dialog-scroll"]:has(.rs-phone-input .country-list) {
+  overflow: visible !important;
+}
+
+[data-slot="dialog-content"]:has(.rs-phone-dropdown) [data-slot="dialog-footer"],
+[data-slot="dialog-content"]:has(.rs-phone-input .country-list) [data-slot="dialog-footer"] {
+  z-index: 1;
 }
 
 .rs-phone-input .react-tel-input.disabled .rs-phone-field,

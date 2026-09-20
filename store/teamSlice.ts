@@ -7,16 +7,21 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import {
   createEmployee,
   deleteEmployee,
+  addEmployeeAttachment,
+  deleteEmployeeAttachment,
   getEmployeeDetail,
   queryEstimates,
   queryJobs,
+  queryReminders,
   querySchedule,
   queryTasks,
   queryTeam,
   updateEmployee,
+  updateReminderStatus,
+  deleteReminder,
   type DeleteEmployeeResult,
 } from "@/lib/api/crm-client";
-import type { PortalTask } from "@/lib/data/crm-people";
+import type { PortalReminder, PortalTask } from "@/lib/data/crm-people";
 import type {
   PortalCalendarEvent,
   PortalEmployee,
@@ -81,6 +86,7 @@ type TeamState = {
   jobs: TabListState<Job>;
   estimates: TabListState<Estimate>;
   tasks: TabListState<PortalTask>;
+  reminders: TabListState<PortalReminder>;
   schedule: TabListState<PortalCalendarEvent>;
 };
 
@@ -103,6 +109,7 @@ const initialState: TeamState = {
   jobs: emptyTabList(),
   estimates: emptyTabList(),
   tasks: emptyTabList(),
+  reminders: emptyTabList(),
   schedule: emptyTabList(),
 };
 
@@ -133,9 +140,9 @@ export function selectTeamTabShowLoader<T>(
   const sameView = tab.employeeId === employeeId && tab.filterKey === filterKey;
   // Different employee/filter (or unbound) → show loader until this view binds.
   if (!sameView) return true;
-  // Same as customer tabs: spinner only when empty + loading. If rows exist,
-  // keep them visible while the GET refreshes in the background.
-  return Boolean(tab.loading && tab.items.length === 0);
+  // Cached tab (including empty lists): keep UI visible while GET refreshes.
+  // Spinner only on the first load for this employee/filter.
+  return Boolean(tab.loading && !tab.loaded);
 }
 
 /** Prefer Redux tab rows whenever they belong to this employee (including empty loaded lists). */
@@ -157,8 +164,8 @@ function setTabPending<T>(tab: TabListState<T>, employeeId: string, filterKey: s
     tab.items = [];
     tab.loaded = false;
   }
-  // Same as customer tabs: only flip loading when there is nothing to show yet.
-  if (tab.items.length === 0) {
+  // Only flip loading when this view has never successfully loaded yet.
+  if (!tab.loaded) {
     tab.loading = true;
   }
   tab.error = null;
@@ -193,6 +200,30 @@ function setTabRejected<T>(tab: TabListState<T>, message: string) {
   tab.error = message;
 }
 
+function upsertTabItem<T extends { id: string }>(
+  tab: TabListState<T>,
+  item: T,
+  employeeId: string,
+) {
+  if (!tab.loaded || tab.employeeId !== employeeId) return;
+  const index = tab.items.findIndex((row) => row.id === item.id);
+  if (index >= 0) {
+    tab.items[index] = item;
+  } else {
+    tab.items = [item, ...tab.items];
+    tab.total = (tab.total || 0) + 1;
+  }
+  tab.loading = false;
+  tab.error = null;
+}
+
+function removeTabItem<T extends { id: string }>(tab: TabListState<T>, id: string) {
+  const next = tab.items.filter((row) => row.id !== id);
+  if (next.length === tab.items.length) return;
+  tab.items = next;
+  tab.total = Math.max(0, (tab.total || 0) - 1);
+}
+
 type EmployeeTabArg = {
   employeeId: string;
   status?: string;
@@ -221,6 +252,10 @@ function applyDetail(state: TeamState, payload: PortalEmployeeDetail) {
         emergencyName: payload.employee.emergencyName ?? cached.emergencyName,
         emergencyPhone: payload.employee.emergencyPhone ?? cached.emergencyPhone,
         workingHours: payload.employee.workingHours ?? cached.workingHours,
+        attachments:
+          payload.employee.attachments !== undefined
+            ? payload.employee.attachments
+            : cached.attachments,
       }
     : payload.employee;
   state.detail = employee;
@@ -318,6 +353,147 @@ export const updateTeamMember = createAsyncThunk<
     const detail = await getEmployeeDetail(id);
     if (!detail) return rejectWithValue("Employee was updated but could not be read.");
     return detail;
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
+export const addTeamMemberAttachment = createAsyncThunk<
+  PortalEmployeeDetail,
+  {
+    id: string;
+    attachment: {
+      name: string;
+      url: string;
+      fileType?: string;
+      sizeBytes?: number;
+      category?: string;
+    };
+  },
+  { rejectValue: string }
+>("team/addAttachment", async ({ id, attachment }, { rejectWithValue }) => {
+  try {
+    const saved = await addEmployeeAttachment(id, attachment);
+    const detail = await getEmployeeDetail(id);
+    if (!detail?.employee) {
+      if (saved) {
+        return {
+          employee: saved,
+          activeAssignments: { jobs: [], tasks: [], schedule: [] },
+        };
+      }
+      return rejectWithValue("Attachment saved but employee could not be read.");
+    }
+    const savedCount = saved?.attachments?.length ?? 0;
+    const detailCount = detail.employee.attachments?.length ?? 0;
+    if (saved && savedCount > detailCount) {
+      return {
+        ...detail,
+        employee: { ...detail.employee, attachments: saved.attachments },
+      };
+    }
+    // If GET mapped empty but we just posted, keep at least the new file on the profile.
+    if (
+      savedCount === 0 &&
+      detailCount === 0 &&
+      attachment.url
+    ) {
+      const optimistic = [
+        ...(detail.employee.attachments ?? []),
+        {
+          id: `att_${Date.now()}`,
+          name: attachment.name,
+          url: attachment.url,
+          fileType: attachment.fileType,
+          sizeBytes: attachment.sizeBytes,
+          category: attachment.category,
+          uploadedAt: new Date().toISOString(),
+        },
+      ];
+      return {
+        ...detail,
+        employee: { ...detail.employee, attachments: optimistic },
+      };
+    }
+    return detail;
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
+export const removeTeamMemberAttachment = createAsyncThunk<
+  PortalEmployeeDetail,
+  { id: string; attachmentId: string },
+  { rejectValue: string }
+>("team/removeAttachment", async ({ id, attachmentId }, { rejectWithValue }) => {
+  try {
+    await deleteEmployeeAttachment(id, attachmentId);
+    const detail = await getEmployeeDetail(id);
+    if (!detail) return rejectWithValue("Attachment removed but employee could not be read.");
+    return detail;
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
+export const fetchEmployeeReminders = createAsyncThunk<
+  {
+    employeeId: string;
+    filterKey: string;
+    items: PortalReminder[];
+    page: number;
+    total: number;
+    totalPages: number;
+  },
+  EmployeeTabArg,
+  { state: { team: TeamState }; rejectValue: string }
+>("team/fetchReminders", async (arg, { rejectWithValue }) => {
+  const filterKey = tabCacheKey(arg);
+  try {
+    const result = await queryReminders({
+      employeeId: arg.employeeId,
+      status: arg.status || undefined,
+      search: arg.search || undefined,
+      page: arg.page ?? 1,
+      limit: arg.limit ?? DETAIL_TAB_LIMIT,
+      force: true,
+      silent: true,
+    });
+    return {
+      employeeId: arg.employeeId,
+      filterKey,
+      items: result.items,
+      page: result.page,
+      total: result.total,
+      totalPages: result.totalPages,
+    };
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
+export const patchEmployeeReminderStatus = createAsyncThunk<
+  PortalReminder,
+  { id: string; status: PortalReminder["status"]; employeeId: string },
+  { rejectValue: string }
+>("team/patchReminderStatus", async ({ id, status }, { rejectWithValue }) => {
+  try {
+    const updated = await updateReminderStatus(id, status);
+    if (!updated) return rejectWithValue("Reminder status was updated but could not be read.");
+    return updated;
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
+export const deleteEmployeeReminder = createAsyncThunk<
+  string,
+  { id: string; employeeId: string },
+  { rejectValue: string }
+>("team/deleteReminder", async ({ id }, { rejectWithValue }) => {
+  try {
+    await deleteReminder(id);
+    return id;
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }
@@ -494,10 +670,9 @@ const teamSlice = createSlice({
       state.detailAssignments = EMPTY_ASSIGNMENTS;
       state.detailError = null;
       state.detailLoading = false;
-      state.jobs = emptyTabList();
-      state.estimates = emptyTabList();
-      state.tasks = emptyTabList();
-      state.schedule = emptyTabList();
+      // Keep Jobs/Estimates/Tasks/Schedule caches so remounts / tab switches
+      // can show existing rows while the GET refreshes (customer pattern).
+      // Wrong-employee caches are dropped in bindTeamDetailEmployee / fetch pending.
     },
     /** Drop tab caches that do not belong to this employee (employee switch). */
     bindTeamDetailEmployee(state, action: PayloadAction<string>) {
@@ -510,6 +685,9 @@ const teamSlice = createSlice({
       }
       if (state.tasks.employeeId && state.tasks.employeeId !== employeeId) {
         state.tasks = emptyTabList();
+      }
+      if (state.reminders.employeeId && state.reminders.employeeId !== employeeId) {
+        state.reminders = emptyTabList();
       }
       if (state.schedule.employeeId && state.schedule.employeeId !== employeeId) {
         state.schedule = emptyTabList();
@@ -525,6 +703,12 @@ const teamSlice = createSlice({
           state.tasks.total += 1;
         }
       }
+    },
+    upsertEmployeeReminder(
+      state,
+      action: PayloadAction<{ employeeId: string; item: PortalReminder }>,
+    ) {
+      upsertTabItem(state.reminders, action.payload.item, action.payload.employeeId);
     },
   },
   extraReducers: (builder) => {
@@ -552,13 +736,18 @@ const teamSlice = createSlice({
       .addCase(fetchTeamMember.pending, (state, action) => {
         const nextId = action.meta.arg;
         const previousId = state.detail?.id;
-        state.detailLoading = true;
+        // Only block the shell when we have nothing to show for this employee.
+        const hasCachedProfile =
+          state.detail?.id === nextId ||
+          state.items.some((item) => item.id === nextId);
+        state.detailLoading = !hasCachedProfile;
         state.detailError = null;
         // Switching employees must never reuse the previous employee's tab caches.
         if (previousId && previousId !== nextId) {
           state.jobs = emptyTabList();
           state.estimates = emptyTabList();
           state.tasks = emptyTabList();
+          state.reminders = emptyTabList();
           state.schedule = emptyTabList();
         } else if (!previousId) {
           if (state.jobs.employeeId && state.jobs.employeeId !== nextId) state.jobs = emptyTabList();
@@ -566,6 +755,9 @@ const teamSlice = createSlice({
             state.estimates = emptyTabList();
           }
           if (state.tasks.employeeId && state.tasks.employeeId !== nextId) state.tasks = emptyTabList();
+          if (state.reminders.employeeId && state.reminders.employeeId !== nextId) {
+            state.reminders = emptyTabList();
+          }
           if (state.schedule.employeeId && state.schedule.employeeId !== nextId) {
             state.schedule = emptyTabList();
           }
@@ -608,6 +800,12 @@ const teamSlice = createSlice({
         state.mutating = false;
         state.error = action.payload || "Failed to update employee.";
       })
+      .addCase(addTeamMemberAttachment.fulfilled, (state, action) => {
+        applyDetail(state, action.payload);
+      })
+      .addCase(removeTeamMemberAttachment.fulfilled, (state, action) => {
+        applyDetail(state, action.payload);
+      })
       .addCase(deleteTeamMember.fulfilled, (state, action) => {
         state.pagesCache = {};
         const id = action.payload.id;
@@ -645,6 +843,25 @@ const teamSlice = createSlice({
       .addCase(fetchEmployeeTasks.rejected, (state, action) => {
         setTabRejected(state.tasks, action.payload || "Failed to load tasks.");
       })
+      .addCase(fetchEmployeeReminders.pending, (state, action) => {
+        setTabPending(state.reminders, action.meta.arg.employeeId, tabCacheKey(action.meta.arg));
+      })
+      .addCase(fetchEmployeeReminders.fulfilled, (state, action) => {
+        setTabFulfilled(state.reminders, action.payload);
+      })
+      .addCase(fetchEmployeeReminders.rejected, (state, action) => {
+        setTabRejected(state.reminders, action.payload || "Failed to load reminders.");
+      })
+      .addCase(patchEmployeeReminderStatus.fulfilled, (state, action) => {
+        const employeeId =
+          action.payload.assignedEmployeeId ||
+          (action.payload.subjectKind === "employee" ? action.payload.subjectId : "") ||
+          "";
+        if (employeeId) upsertTabItem(state.reminders, action.payload, employeeId);
+      })
+      .addCase(deleteEmployeeReminder.fulfilled, (state, action) => {
+        removeTabItem(state.reminders, action.payload);
+      })
       .addCase(fetchEmployeeSchedule.pending, (state, action) => {
         setTabPending(state.schedule, action.meta.arg.employeeId, tabCacheKey(action.meta.arg));
       })
@@ -653,7 +870,35 @@ const teamSlice = createSlice({
       })
       .addCase(fetchEmployeeSchedule.rejected, (state, action) => {
         setTabRejected(state.schedule, action.payload || "Failed to load schedule.");
-      });
+      })
+      .addMatcher(
+        (action): action is PayloadAction<PortalReminder> =>
+          action.type === "reminders/create/fulfilled" || action.type === "reminders/update/fulfilled",
+        (state, action) => {
+          const employeeId =
+            action.payload.assignedEmployeeId ||
+            (action.payload.subjectKind === "employee" ? action.payload.subjectId : "") ||
+            "";
+          if (employeeId) upsertTabItem(state.reminders, action.payload, employeeId);
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<PortalReminder> =>
+          action.type === "reminders/patchStatus/fulfilled",
+        (state, action) => {
+          const employeeId =
+            action.payload.assignedEmployeeId ||
+            (action.payload.subjectKind === "employee" ? action.payload.subjectId : "") ||
+            "";
+          if (employeeId) upsertTabItem(state.reminders, action.payload, employeeId);
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<string> => action.type === "reminders/delete/fulfilled",
+        (state, action) => {
+          removeTabItem(state.reminders, action.payload);
+        },
+      );
   },
 });
 
@@ -666,6 +911,7 @@ export const {
   clearTeamDetail,
   bindTeamDetailEmployee,
   upsertEmployeeTask,
+  upsertEmployeeReminder,
 } = teamSlice.actions;
 
 export default teamSlice.reducer;

@@ -32,6 +32,8 @@ import {
   mapPortalRequest,
   mapPortalTask,
   mapPortalVendor,
+  mapPortalVendorInventoryItem,
+  mapPortalVendorPurchaseOrder,
   mapScheduleEvent,
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
@@ -334,22 +336,55 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
   if (contractor.license !== undefined) payload.license = contractor.license || "";
   if (contractor.status !== undefined) payload.status = contractor.status || "active";
   if (contractor.hourlyRate !== undefined) payload.hourlyRate = contractor.hourlyRate ?? 0;
+  if (contractor.overtimeRate !== undefined) payload.overtimeRate = contractor.overtimeRate ?? 0;
+  if (contractor.travelRate !== undefined) payload.travelRate = contractor.travelRate ?? 0;
   if (contractor.insuranceExpires !== undefined) {
     payload.insuranceExpires = contractor.insuranceExpires || new Date().toISOString();
   }
+  if (contractor.workingHours !== undefined) payload.workingHours = contractor.workingHours;
   return payload;
 }
 
 function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
-  return {
-    companyName: vendor.name || "",
-    name: vendor.name || "",
-    contact: vendor.contact || "",
-    contactName: vendor.contact || "",
-    category: vendor.category || "",
-    email: vendor.email || "",
-    terms: vendor.terms || "Net 30",
-  };
+  const payload: Record<string, unknown> = {};
+  if (vendor.name !== undefined) {
+    payload.name = vendor.name || "";
+    payload.vendorName = vendor.name || "";
+  }
+  if (vendor.category !== undefined) payload.category = vendor.category || "";
+  if (vendor.contact !== undefined) payload.contact = vendor.contact || "";
+  if (vendor.email !== undefined) payload.email = vendor.email || "";
+  if (vendor.phone !== undefined) payload.phone = vendor.phone || "";
+  const hasLocationFields =
+    vendor.street !== undefined ||
+    vendor.city !== undefined ||
+    vendor.state !== undefined ||
+    vendor.zip !== undefined ||
+    vendor.latitude !== undefined ||
+    vendor.longitude !== undefined;
+  if (hasLocationFields) {
+    const location = mapJobLocationForApi({
+      id: "vendor_loc",
+      street: vendor.street || "",
+      city: vendor.city || "",
+      state: vendor.state || "",
+      zip: vendor.zip || "",
+      country: "US",
+      latitude: vendor.latitude ?? null,
+      longitude: vendor.longitude ?? null,
+    });
+    payload.location = location;
+    payload.city = location.city || "";
+    payload.state = location.state || "";
+  }
+  if (vendor.status !== undefined) payload.status = vendor.status || "active";
+  if (vendor.accountNumber !== undefined) {
+    payload.accountNumber = vendor.accountNumber || "";
+    payload.accountNo = vendor.accountNumber || "";
+  }
+  if (vendor.terms !== undefined) payload.terms = vendor.terms || "Net 30";
+  if (vendor.balance !== undefined) payload.balance = vendor.balance ?? 0;
+  return payload;
 }
 
 function normalizeTimeWindow(val?: string): "morning" | "afternoon" | "all_day" {
@@ -464,11 +499,12 @@ function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
   };
 }
 
-function reminderPayload(reminder: PortalReminder) {
-  const payload: Record<string, unknown> = {
-    title: reminder.title,
-    status: reminder.status || "open",
-  };
+function reminderPayload(reminder: PortalReminder | Partial<PortalReminder>) {
+  const payload: Record<string, unknown> = {};
+  if (reminder.title !== undefined) payload.title = reminder.title;
+  if (reminder.status !== undefined) payload.status = reminder.status || "open";
+  if (reminder.note !== undefined) payload.note = reminder.note || "";
+  if (reminder.isArchived !== undefined) payload.isArchived = Boolean(reminder.isArchived);
   if (reminder.dueAt) {
     payload.dueAt = reminder.dueAt.includes("T")
       ? reminder.dueAt
@@ -476,15 +512,34 @@ function reminderPayload(reminder: PortalReminder) {
   }
   const customerId = reminder.customerId || (reminder.subjectKind === "customer" ? reminder.subjectId : undefined);
   if (customerId) payload.customerId = customerId;
-  const validSubjectKinds = ["job", "customer", "estimate", "contractor", "vendor"];
+  // Match backend CrmReminder subjectKind enum (includes employee / request / invoice).
+  const validSubjectKinds = [
+    "job",
+    "customer",
+    "estimate",
+    "contractor",
+    "vendor",
+    "employee",
+    "request",
+    "invoice",
+  ];
   if (reminder.subjectKind && validSubjectKinds.includes(reminder.subjectKind)) {
     payload.subjectKind = reminder.subjectKind;
     if (reminder.subjectId) payload.subjectId = reminder.subjectId;
   }
-  if (reminder.assignedEmployeeId) payload.assignedEmployeeId = reminder.assignedEmployeeId;
-  if (reminder.assignedContractorId) payload.assignedContractorId = reminder.assignedContractorId;
-  if (reminder.assignedVendorId) payload.assignedVendorId = reminder.assignedVendorId;
-  if (reminder.note) payload.note = reminder.note;
+  // Employee-profile reminders: default assignee to the linked employee when omitted.
+  const assignedEmployeeId =
+    reminder.assignedEmployeeId ||
+    (reminder.subjectKind === "employee" ? reminder.subjectId : undefined);
+  if (assignedEmployeeId) payload.assignedEmployeeId = assignedEmployeeId;
+  const assignedContractorId =
+    reminder.assignedContractorId ||
+    (reminder.subjectKind === "contractor" ? reminder.subjectId : undefined);
+  if (assignedContractorId) payload.assignedContractorId = assignedContractorId;
+  const assignedVendorId =
+    reminder.assignedVendorId ||
+    (reminder.subjectKind === "vendor" ? reminder.subjectId : undefined);
+  if (assignedVendorId) payload.assignedVendorId = assignedVendorId;
   return payload;
 }
 
@@ -561,6 +616,8 @@ export type CrmListQuery = {
   limit?: number;
   search?: string;
   status?: string;
+  /** Soft-archive filter — independent of lifecycle `status`. */
+  isArchived?: boolean;
   jobId?: string;
   customerId?: string;
   employeeId?: string;
@@ -612,6 +669,7 @@ function buildListParams(query: CrmListQuery, defaultLimit = DEFAULT_LIST_LIMIT)
   const type = query.type?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
+  if (typeof query.isArchived === "boolean") params.isArchived = query.isArchived;
   if (jobId) params.jobId = jobId;
   if (customerId) params.customerId = customerId;
   if (employeeId) params.employeeId = employeeId;
@@ -808,6 +866,39 @@ export async function deleteEmployee(id: string) {
   } satisfies DeleteEmployeeResult & { id: string };
 }
 
+/** POST /api/provider/team/:id/attachments */
+export async function addEmployeeAttachment(
+  employeeId: string,
+  attachment: {
+    name: string;
+    url: string;
+    fileType?: string;
+    sizeBytes?: number;
+    category?: string;
+  },
+) {
+  const response = await postData(providerCrmApi.teamMemberAttachments(employeeId), {
+    name: attachment.name,
+    url: attachment.url,
+    fileType: attachment.fileType || "",
+    sizeBytes: attachment.sizeBytes ?? 0,
+    category: attachment.category || "other",
+  });
+  const mapped = mapCrmEntity(response, mapPortalEmployee);
+  if (mapped) return mapped;
+  const detail = await getEmployeeDetail(employeeId);
+  return detail?.employee ?? null;
+}
+
+/** DELETE /api/provider/team/:id/attachments/:attachmentId */
+export async function deleteEmployeeAttachment(employeeId: string, attachmentId: string) {
+  await deleteData(providerCrmApi.teamMemberAttachment(employeeId, attachmentId), {
+    silent: false,
+  });
+  const detail = await getEmployeeDetail(employeeId);
+  return detail?.employee ?? null;
+}
+
 export async function listContractors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.contractors, mapPortalContractor, options);
 }
@@ -865,6 +956,37 @@ export async function deleteContractor(id: string) {
   return deleteData(providerCrmApi.contractor(id), { silent: false });
 }
 
+/** POST /api/provider/contractors/:id/attachments */
+export async function addContractorAttachment(
+  contractorId: string,
+  attachment: {
+    name: string;
+    url: string;
+    fileType?: string;
+    sizeBytes?: number;
+    category?: string;
+  },
+) {
+  const response = await postData(providerCrmApi.contractorAttachments(contractorId), {
+    name: attachment.name,
+    url: attachment.url,
+    fileType: attachment.fileType || "",
+    sizeBytes: attachment.sizeBytes ?? 0,
+    category: attachment.category || "other",
+  });
+  const mapped = mapCrmEntity(response, mapPortalContractor);
+  if (mapped) return mapped;
+  return getContractor(contractorId);
+}
+
+/** DELETE /api/provider/contractors/:id/attachments/:attachmentId */
+export async function deleteContractorAttachment(contractorId: string, attachmentId: string) {
+  await deleteData(providerCrmApi.contractorAttachment(contractorId, attachmentId), {
+    silent: false,
+  });
+  return getContractor(contractorId);
+}
+
 export async function listVendors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.vendors, mapPortalVendor, options);
 }
@@ -889,7 +1011,20 @@ export async function getVendor(id: string) {
     silent: true,
     force: true,
   });
-  return mapCrmEntity(response, mapPortalVendor);
+  const mapped = mapCrmEntity(response, mapPortalVendor);
+  if (!mapped) return null;
+  const root = (response as { data?: { stats?: Record<string, unknown> } })?.data;
+  const stats = root?.stats;
+  if (!stats) return mapped;
+  return {
+    ...mapped,
+    totalSkus:
+      typeof stats.totalSkus === "number" ? stats.totalSkus : mapped.totalSkus,
+    inventoryOnHandValue:
+      typeof stats.totalOnHandValue === "number"
+        ? stats.totalOnHandValue
+        : mapped.inventoryOnHandValue,
+  };
 }
 
 export async function updateVendor(id: string, patch: Partial<PortalVendor>) {
@@ -899,6 +1034,169 @@ export async function updateVendor(id: string, patch: Partial<PortalVendor>) {
 
 export async function deleteVendor(id: string) {
   return deleteData(providerCrmApi.vendor(id), { silent: false });
+}
+
+export async function listVendorInventory(
+  vendorId: string,
+  query: CrmListQuery = {},
+) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.vendorInventory(vendorId), params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  const list = mapCrmList(response, mapPortalVendorInventoryItem);
+  const data = (response as { stats?: { totalSkus?: number; totalOnHandValue?: number } })?.stats
+    ?? (response as { data?: { stats?: { totalSkus?: number; totalOnHandValue?: number } } })?.data?.stats;
+  return {
+    ...list,
+    stats: {
+      totalSkus: data?.totalSkus ?? list.items.length,
+      totalOnHandValue:
+        data?.totalOnHandValue ??
+        list.items.reduce((sum, item) => sum + (item.totalValue ?? item.onHandCount * item.unitCost), 0),
+    },
+  };
+}
+
+export async function addVendorInventoryItem(
+  vendorId: string,
+  item: {
+    sku: string;
+    name: string;
+    unit?: string;
+    onHandCount?: number;
+    reorderPoint?: number;
+    unitCost?: number;
+    location?: string;
+  },
+) {
+  const response = await postData(providerCrmApi.vendorInventory(vendorId), {
+    sku: item.sku,
+    item: item.name,
+    name: item.name,
+    unit: item.unit || "ea",
+    onHand: item.onHandCount ?? 0,
+    reorderAt: item.reorderPoint ?? 0,
+    cost: item.unitCost ?? 0,
+    location: item.location || "",
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorInventory(vendorId));
+  // Prefer refreshed vendor; fall back to mapping single item response.
+  const vendor = await getVendor(vendorId);
+  if (vendor) return vendor;
+  const mapped = mapCrmEntity(response, mapPortalVendor);
+  return mapped;
+}
+
+export async function receiveVendorInventory(
+  vendorId: string,
+  skuId: string,
+  quantity: number,
+) {
+  await postData(providerCrmApi.vendorInventoryReceive(vendorId, skuId), {
+    quantity,
+    receivedCount: quantity,
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorInventory(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function deleteVendorInventoryItem(vendorId: string, skuId: string) {
+  await deleteData(providerCrmApi.vendorInventoryItem(vendorId, skuId), { silent: false });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorInventory(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function listVendorOrders(vendorId: string, query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.vendorOrders(vendorId), params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapPortalVendorPurchaseOrder);
+}
+
+export async function createVendorOrder(
+  vendorId: string,
+  order: {
+    poNumber?: string;
+    amount: number;
+    description: string;
+    jobId?: string;
+    status?: string;
+  },
+) {
+  await postData(providerCrmApi.vendorOrders(vendorId), {
+    poNumber: order.poNumber,
+    amount: order.amount,
+    description: order.description,
+    whatWasOrdered: order.description,
+    jobId: order.jobId || null,
+    status: order.status || "issued",
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorOrders(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function updateVendorOrder(
+  vendorId: string,
+  orderId: string,
+  patch: { status?: string; amount?: number; description?: string; jobId?: string | null },
+) {
+  await putData(providerCrmApi.vendorOrder(vendorId, orderId), patch);
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorOrders(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function deleteVendorOrder(vendorId: string, orderId: string) {
+  await deleteData(providerCrmApi.vendorOrder(vendorId, orderId), { silent: false });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  invalidateGetCache(providerCrmApi.vendorOrders(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function listVendorJobs(vendorId: string, query: CrmListQuery = {}) {
+  const params = buildListParams(query);
+  const response = await getData(providerCrmApi.vendorJobs(vendorId), params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  return mapCrmList(response, mapJob);
+}
+
+export async function addVendorAttachment(
+  vendorId: string,
+  attachment: {
+    name: string;
+    url: string;
+    fileType?: string;
+    sizeBytes?: number;
+    category?: string;
+  },
+) {
+  await postData(providerCrmApi.vendorAttachments(vendorId), {
+    name: attachment.name,
+    url: attachment.url,
+    fileType: attachment.fileType || "",
+    sizeBytes: attachment.sizeBytes ?? 0,
+    category: attachment.category || "other",
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  return getVendor(vendorId);
+}
+
+export async function deleteVendorAttachment(vendorId: string, attachmentId: string) {
+  await deleteData(providerCrmApi.vendorAttachment(vendorId, attachmentId), {
+    silent: false,
+  });
+  invalidateGetCache(providerCrmApi.vendor(vendorId));
+  return getVendor(vendorId);
 }
 
 export async function listRequests(options?: CrmRequestOptions) {
@@ -1027,18 +1325,22 @@ export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
 }
 
-/** Paginated estimates list — supports `status`, `customerId`, and `search`. */
+/** Paginated estimates list — supports `status`, `isArchived`, `customerId`, `contractorId`, and `search`. */
 export async function queryEstimates(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
-  const params: Record<string, string | number> = { page, limit };
+  const params: Record<string, string | number | boolean> = { page, limit };
   const search = query.search?.trim();
   const status = query.status?.trim();
   const customerId = query.customerId?.trim();
+  const contractorId = query.contractorId?.trim();
   const requestId = query.requestId?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
+  // Always send archive flag so active boards never mix archived rows.
+  params.isArchived = query.isArchived === true;
   if (customerId) params.customerId = customerId;
+  if (contractorId) params.contractorId = contractorId;
   if (requestId) params.requestId = requestId;
   const response = await getData(providerCrmApi.estimates, params, {
     silent: query.silent ?? true,
@@ -1139,7 +1441,7 @@ export async function updateEstimateStatus(id: string, status: Estimate["status"
 export async function updateEstimateArchive(id: string, isArchived: boolean) {
   const response = await putData(
     providerCrmApi.estimate(id),
-    { isArchived, isArchieved: isArchived },
+    { isArchived },
     { silent: false },
   );
   return mapCrmEntity(response, mapEstimate);
@@ -1341,9 +1643,11 @@ export async function listJobs(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.jobs, mapJob, options);
 }
 
-/** Paginated jobs — page/limit/search. */
+/** Paginated jobs — page/limit/search/status/isArchived. */
 export async function queryJobs(query: CrmListQuery = {}) {
   const params = buildListParams(query);
+  // Always send archive flag so active boards never mix archived rows.
+  params.isArchived = query.isArchived === true;
   const response = await getData(providerCrmApi.jobs, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,
@@ -1363,6 +1667,15 @@ export async function updateJob(id: string, job: Job, employees: PortalEmployee[
 
 export async function updateJobStatus(id: string, status: Job["status"], notes = "") {
   const response = await putData(providerCrmApi.jobStatus(id), { status, notes });
+  return mapCrmEntity(response, mapJob);
+}
+
+export async function updateJobArchive(id: string, isArchived: boolean) {
+  const response = await putData(
+    providerCrmApi.job(id),
+    { isArchived },
+    { silent: false },
+  );
   return mapCrmEntity(response, mapJob);
 }
 
@@ -1438,7 +1751,7 @@ export async function createReminder(reminder: PortalReminder) {
   return mapCrmEntity(response, mapPortalReminder);
 }
 
-export async function updateReminder(id: string, reminder: PortalReminder) {
+export async function updateReminder(id: string, reminder: PortalReminder | Partial<PortalReminder>) {
   const payload = reminderPayload(reminder);
   let response;
   try {
@@ -1446,6 +1759,12 @@ export async function updateReminder(id: string, reminder: PortalReminder) {
   } catch {
     response = await patchData(providerCrmApi.reminder(id), payload);
   }
+  invalidateGetCache(providerCrmApi.reminders);
+  return mapCrmEntity(response, mapPortalReminder);
+}
+
+export async function updateReminderArchive(id: string, isArchived: boolean) {
+  const response = await patchData(providerCrmApi.reminder(id), { isArchived });
   invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }

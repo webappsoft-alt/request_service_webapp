@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ListTodo } from "lucide-react";
 import { toast } from "sonner";
 import { OpenReminderBanner } from "@/components/portal/reminder-banner";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +17,14 @@ import {
 } from "@/lib/data/crm-people";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/store/hooks";
+import { patchCustomerTaskStatus } from "@/store/customersSlice";
+import { patchTaskStatus } from "@/store/tasksSlice";
 
 export function OpenTaskBanner({ kind, id }: { kind: ReminderSubjectKind; id: string }) {
-  const { tasks, setTaskStatus } = useCrmDirectory();
+  const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
+  const { tasks } = useCrmDirectory();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const open = openTasksFor(tasks, kind, id);
   if (!open.length) return null;
@@ -29,9 +35,26 @@ export function OpenTaskBanner({ kind, id }: { kind: ReminderSubjectKind; id: st
     if (pendingId) return;
     setPendingId(taskId);
     try {
-      await Promise.resolve(setTaskStatus(taskId, "done"));
+      const updated =
+        kind === "customer" && id
+          ? await dispatch(
+              patchCustomerTaskStatus({ id: taskId, status: "done", customerId: id }),
+            ).unwrap()
+          : await dispatch(patchTaskStatus({ id: taskId, status: "done" })).unwrap();
+      if (updated) {
+        crm.patchTask(taskId, updated);
+      } else {
+        crm.patchTask(taskId, { status: "done" });
+      }
+      toast.success("Task marked done.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update this task.");
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not update this task.",
+      );
     } finally {
       setPendingId(null);
     }

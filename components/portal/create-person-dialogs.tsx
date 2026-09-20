@@ -92,10 +92,13 @@ export function CreateCustomerDialog({
   open,
   onOpenChange,
   customer = null,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customer?: PortalCustomerCrm | null;
+  /** Fired after a successful create/update — not when the dialog is dismissed. */
+  onSaved?: () => void;
 }) {
   const { addCustomer, updateCustomer, provider, customers } = useCrmDirectory();
   const isEdit = Boolean(customer);
@@ -206,6 +209,7 @@ export function CreateCustomerDialog({
           `${companyName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim() || "Customer"} updated.`,
         );
         reset();
+        onSaved?.();
         onOpenChange(false);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not update this customer.");
@@ -261,6 +265,7 @@ export function CreateCustomerDialog({
       `${nextCustomer.companyName ?? `${nextCustomer.firstName} ${nextCustomer.lastName}`} added to the directory.`,
     );
     reset();
+    onSaved?.();
     onOpenChange(false);
   }
 
@@ -690,6 +695,12 @@ export function CreateVendorDialog({
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   function reset() {
@@ -698,6 +709,12 @@ export function CreateVendorDialog({
     setContact("");
     setEmail("");
     setPhone("");
+    setStreet("");
+    setCity("");
+    setState("");
+    setZip("");
+    setLatitude(null);
+    setLongitude(null);
     setSaving(false);
   }
 
@@ -712,8 +729,23 @@ export function CreateVendorDialog({
     setContact(vendor.contact);
     setEmail(vendor.email);
     setPhone(vendor.phone);
+    setStreet(vendor.street || "");
+    setCity(vendor.city || "");
+    setState(vendor.state || "");
+    setZip(vendor.zip || "");
+    setLatitude(vendor.latitude ?? null);
+    setLongitude(vendor.longitude ?? null);
     setSaving(false);
   }, [open, vendor]);
+
+  function applyVendorAddress(address: PlaceAddress) {
+    setStreet(address.formattedAddress || address.streetAddress || "");
+    setCity(address.city || "");
+    setState(address.state || "");
+    if (address.zipCode) setZip(address.zipCode);
+    setLatitude(address.latitude);
+    setLongitude(address.longitude);
+  }
 
   async function save() {
     if (saving) return;
@@ -723,6 +755,12 @@ export function CreateVendorDialog({
       contact: contact.trim() || "Accounts",
       email: email.trim() || "orders@vendor.local",
       phone: phone.trim() || "(000) 000-0000",
+      street: street.trim(),
+      city: city.trim() || provider.city,
+      state: state.trim() || provider.state,
+      zip: zip.trim(),
+      latitude,
+      longitude,
     };
     if (!patch.name) return;
 
@@ -743,8 +781,6 @@ export function CreateVendorDialog({
           id: `ven_${provider.id}_new_${Date.now()}`,
           number: `VND-${310 + vendors.length}`,
           ...patch,
-          city: provider.city,
-          state: provider.state,
           accountNumber: `ACC-${vendors.length + 1}`,
           terms: "Net 30",
           balance: 0,
@@ -799,21 +835,61 @@ export function CreateVendorDialog({
             <FieldLabel htmlFor="ven-contact">Contact</FieldLabel>
             <Input id="ven-contact" value={contact} onChange={(change) => setContact(change.target.value)} placeholder="Accounts receivable" />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="ven-email">Email</FieldLabel>
+            <Input id="ven-email" value={email} onChange={(change) => setEmail(change.target.value)} placeholder="orders@vendor.com" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="ven-phone">Phone</FieldLabel>
+            <AuthPhoneInput
+              id="ven-phone"
+              value={phone}
+              onChange={setPhone}
+              placeholder="(555) 123-4567"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="ven-location">Location</FieldLabel>
+            <AddressAutocomplete
+              id="ven-location"
+              value={street}
+              onChange={setStreet}
+              onSelect={applyVendorAddress}
+              placeholder="Start typing a street address…"
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-3">
             <Field>
-              <FieldLabel htmlFor="ven-email">Email</FieldLabel>
-              <Input id="ven-email" value={email} onChange={(change) => setEmail(change.target.value)} placeholder="orders@vendor.com" />
+              <FieldLabel htmlFor="ven-city">City</FieldLabel>
+              <Input
+                id="ven-city"
+                value={city}
+                onChange={(change) => setCity(change.target.value)}
+                placeholder="Austin"
+              />
             </Field>
             <Field>
-              <FieldLabel htmlFor="ven-phone">Phone</FieldLabel>
-              <AuthPhoneInput
-                id="ven-phone"
-                value={phone}
-                onChange={setPhone}
-                placeholder="(555) 123-4567"
+              <FieldLabel htmlFor="ven-state">State</FieldLabel>
+              <Input
+                id="ven-state"
+                value={state}
+                onChange={(change) => setState(change.target.value)}
+                placeholder="TX"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ven-zip">ZIP</FieldLabel>
+              <Input
+                id="ven-zip"
+                value={zip}
+                onChange={(change) => setZip(change.target.value)}
+                placeholder="78701"
               />
             </Field>
           </div>
+          <p className="text-xs text-muted-foreground">
+            City, state, and ZIP fill in when you pick an address.
+          </p>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
@@ -856,15 +932,17 @@ export function CreateReminderDialog({
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
-  const { addReminder, provider } = useCrmDirectory();
+  const { provider } = useCrmDirectory();
   const { employees: crewEmployees } = usePortalCrew();
   const crm = useCrmApiData();
   const lookups = useReminderLookups();
 
   const resolveKind = (sk?: ReminderSubjectKind, r?: PortalReminder | null): ReminderSubjectKind => {
-    if (r?.subjectKind && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(r.subjectKind)) return r.subjectKind;
+    if (r?.subjectKind && (REMINDER_SUBJECT_KINDS as readonly string[]).includes(r.subjectKind)) {
+      return r.subjectKind;
+    }
     if (r?.customerId) return "customer";
-    if (sk && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(sk)) return sk;
+    if (sk && (REMINDER_SUBJECT_KINDS as readonly string[]).includes(sk)) return sk;
     return "customer";
   };
 
@@ -913,7 +991,10 @@ export function CreateReminderDialog({
       setTitle(reminder.title ?? "");
       setNote(reminder.note ?? "");
       setDueAt(reminder.dueAt ? reminder.dueAt.slice(0, 10) : "");
-      setAssignedEmployeeId(reminder.assignedEmployeeId ?? "");
+      setAssignedEmployeeId(
+        reminder.assignedEmployeeId ??
+          (nextKind === "employee" && nextId ? nextId : ""),
+      );
       setStatus(reminder.status ?? "open");
       setSaving(false);
       return;
@@ -925,7 +1006,7 @@ export function CreateReminderDialog({
     setTitle("");
     setNote("");
     setDueAt("");
-    setAssignedEmployeeId("");
+    setAssignedEmployeeId(nextKind === "employee" && nextId ? nextId : "");
     setStatus("open");
     setSaving(false);
   }, [open, reminder, subjectKind, subjectId, customerId]);
@@ -952,6 +1033,7 @@ export function CreateReminderDialog({
   function changeKind(next: ReminderSubjectKind) {
     setKind(next);
     setSelectedId("");
+    if (next !== "employee") setAssignedEmployeeId("");
   }
 
   async function save() {
@@ -983,7 +1065,11 @@ export function CreateReminderDialog({
       title: title.trim(),
       note: note.trim(),
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
-      assignedEmployeeId: assignedEmployeeId || undefined,
+      assignedEmployeeId:
+        assignedEmployeeId ||
+        (linkedKind === "employee" ? linkedId : undefined),
+      assignedContractorId: linkedKind === "contractor" ? linkedId : undefined,
+      assignedVendorId: linkedKind === "vendor" ? linkedId : undefined,
       status,
       createdAt: reminder?.createdAt ?? new Date().toISOString().slice(0, 10),
     };
@@ -1014,12 +1100,6 @@ export function CreateReminderDialog({
   }
 
   const linkedReady = Boolean(selectedId);
-  const recordLoading = useApi
-    ? recordPaging.loading && recordOptions.length === 0
-    : lookupsLoading && recordOptions.length === 0;
-  const assigneeLoading = useApi
-    ? assigneePaging.loading && assigneeOptions.length === 0
-    : lookupsLoading && assigneeOptions.length === 0;
 
   return (
     <Dialog
@@ -1033,7 +1113,7 @@ export function CreateReminderDialog({
         <DialogHeader>
           <DialogTitle>{reminder ? "Edit reminder" : "Set reminder"}</DialogTitle>
           <DialogDescription>
-            Link a follow-up to a customer, job, estimate, contractor, or vendor.
+            Link a follow-up to a customer, employee, job, estimate, contractor, or vendor.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -1052,7 +1132,15 @@ export function CreateReminderDialog({
                   align="start"
                   className="z-[100] w-[var(--radix-select-trigger-width)]"
                 >
-                  {CRM_TASK_SUBJECT_KINDS.map((item) => (
+                  {REMINDER_SUBJECT_KINDS.filter(
+                    (item) =>
+                      item === "customer" ||
+                      item === "employee" ||
+                      item === "job" ||
+                      item === "estimate" ||
+                      item === "contractor" ||
+                      item === "vendor",
+                  ).map((item) => (
                     <SelectItem key={item} value={item}>
                       {reminderSubjectKindLabel(item)}
                     </SelectItem>
@@ -1069,14 +1157,18 @@ export function CreateReminderDialog({
                 id="rem-subject"
                 value={selectedId}
                 options={recordOptions}
-                loading={recordLoading}
+                loading={useApi ? recordPaging.loading : lookupsLoading}
                 loadingMore={useApi ? recordPaging.loadingMore : false}
                 hasMore={useApi ? recordPaging.hasMore : false}
                 onLoadMore={useApi ? recordPaging.loadMore : () => {}}
                 onChange={(id) => setSelectedId(id)}
-                placeholder={recordLoading ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…` : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`}
+                placeholder={
+                  (useApi ? recordPaging.loading : lookupsLoading) && recordOptions.length === 0
+                    ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…`
+                    : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`
+                }
                 emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
-                disabled={recordLoading}
+                disabled={(useApi ? recordPaging.loading : lookupsLoading) && !selectedId}
               />
             </Field>
           </div>
@@ -1106,19 +1198,23 @@ export function CreateReminderDialog({
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="rem-emp">Assigned</FieldLabel>
+              <FieldLabel>Assigned</FieldLabel>
               <PaginatedEntitySelect
                 id="rem-emp"
                 value={assignedEmployeeId}
                 options={assigneeOptions}
-                loading={assigneeLoading}
+                loading={useApi ? assigneePaging.loading : lookupsLoading}
                 loadingMore={useApi ? assigneePaging.loadingMore : false}
                 hasMore={useApi ? assigneePaging.hasMore : false}
                 onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
                 onChange={(id) => setAssignedEmployeeId(id)}
-                placeholder={assigneeLoading ? "Loading assignees…" : "Select assignee"}
+                placeholder={
+                  (useApi ? assigneePaging.loading : lookupsLoading) && assigneeOptions.length === 0
+                    ? "Loading assignees…"
+                    : "Select assignee"
+                }
                 emptyLabel="No employees found"
-                disabled={assigneeLoading}
+                disabled={(useApi ? assigneePaging.loading : lookupsLoading) && !assignedEmployeeId}
               />
             </Field>
             <Field>
@@ -1188,9 +1284,11 @@ export function CreateReminderDialog({
 export function SetReminderButton({
   subjectKind,
   subjectId,
+  onCreated,
 }: {
   subjectKind: ReminderSubjectKind;
   subjectId: string;
+  onCreated?: (reminder: PortalReminder) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1198,7 +1296,13 @@ export function SetReminderButton({
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         Set reminder
       </Button>
-      <CreateReminderDialog open={open} onOpenChange={setOpen} subjectKind={subjectKind} subjectId={subjectId} />
+      <CreateReminderDialog
+        open={open}
+        onOpenChange={setOpen}
+        subjectKind={subjectKind}
+        subjectId={subjectId}
+        onCreated={onCreated}
+      />
     </>
   );
 }
@@ -1397,12 +1501,6 @@ export function CreateTaskDialog({
   }
 
   const linkedReady = Boolean(selectedId);
-  const recordLoading = useApi
-    ? recordPaging.loading && recordOptions.length === 0
-    : lookupsLoading && recordOptions.length === 0;
-  const assigneeLoading = useApi
-    ? assigneePaging.loading && assigneeOptions.length === 0
-    : lookupsLoading && assigneeOptions.length === 0;
 
   return (
     <Dialog
@@ -1452,14 +1550,18 @@ export function CreateTaskDialog({
                 id="task-subject"
                 value={selectedId}
                 options={recordOptions}
-                loading={recordLoading}
+                loading={useApi ? recordPaging.loading : lookupsLoading}
                 loadingMore={useApi ? recordPaging.loadingMore : false}
                 hasMore={useApi ? recordPaging.hasMore : false}
                 onLoadMore={useApi ? recordPaging.loadMore : () => {}}
                 onChange={(id) => setSelectedId(id)}
-                placeholder={recordLoading ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…` : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`}
+                placeholder={
+                  (useApi ? recordPaging.loading : lookupsLoading) && recordOptions.length === 0
+                    ? `Loading ${reminderSubjectKindLabel(kind).toLowerCase()}s…`
+                    : `Select ${reminderSubjectKindLabel(kind).toLowerCase()}`
+                }
                 emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
-                disabled={recordLoading}
+                disabled={(useApi ? recordPaging.loading : lookupsLoading) && !selectedId}
               />
             </Field>
           </div>
@@ -1489,19 +1591,23 @@ export function CreateTaskDialog({
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="task-emp">Assigned</FieldLabel>
+              <FieldLabel>Assigned</FieldLabel>
               <PaginatedEntitySelect
                 id="task-emp"
                 value={assignedEmployeeId}
                 options={assigneeOptions}
-                loading={assigneeLoading}
+                loading={useApi ? assigneePaging.loading : lookupsLoading}
                 loadingMore={useApi ? assigneePaging.loadingMore : false}
                 hasMore={useApi ? assigneePaging.hasMore : false}
                 onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
                 onChange={(id) => setAssignedEmployeeId(id)}
-                placeholder={assigneeLoading ? "Loading assignees…" : "Select assignee"}
+                placeholder={
+                  (useApi ? assigneePaging.loading : lookupsLoading) && assigneeOptions.length === 0
+                    ? "Loading assignees…"
+                    : "Select assignee"
+                }
                 emptyLabel="No employees found"
-                disabled={assigneeLoading}
+                disabled={(useApi ? assigneePaging.loading : lookupsLoading) && !assignedEmployeeId}
               />
             </Field>
             <Field>

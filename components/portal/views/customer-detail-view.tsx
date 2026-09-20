@@ -22,9 +22,10 @@ import {
   Shield,
   UserRound,
   Wallet,
+  ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
-import { archiveRowAction, matchesArchiveFilter } from "@/components/portal/archive-control";
+import { archiveRowAction, ConfirmArchiveDialog, matchesArchiveFilter } from "@/components/portal/archive-control";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import {
   CreateReminderDialog,
@@ -44,8 +45,8 @@ import { CustomerLocationMapLazy } from "@/components/portal/customer-location-m
 import { ApplyPaymentDialog } from "@/components/portal/invoice-file";
 import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
 import { jobBoardColumns } from "@/components/portal/job-columns";
-import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -56,7 +57,7 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { buildInvoice, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
-import { convertJobToInvoice as convertJobToInvoiceApi } from "@/lib/api/crm-client";
+import { convertJobToInvoice as convertJobToInvoiceApi, updateEstimateArchive, updateJobArchive } from "@/lib/api/crm-client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
@@ -143,6 +144,8 @@ import {
   upsertCustomerJob,
   upsertCustomerReminder,
   upsertCustomerTask,
+  removeCustomerEstimate,
+  removeCustomerJobLocal,
 } from "@/store/customersSlice";
 import { useRouter } from "next/navigation";
 
@@ -338,7 +341,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                       <CrmMark
                         name={name}
                         kind={customer.entityKind === "company" ? "company" : "person"}
-                        photoKey={customer.firstName}
+                        photoUrl={customer.avatarUrl}
                       />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -597,7 +600,13 @@ export function CustomerDetailView({ id }: { id: string }) {
         customerId={customer.id}
         onCreated={(item) => {
           dispatch(upsertCustomerEstimate({ customerId: customer.id, item }));
-          void dispatch(fetchCustomerEstimates({ customerId: customer.id, force: true }));
+          void dispatch(
+            fetchCustomerEstimates({
+              customerId: customer.id,
+              isArchived: false,
+              force: true,
+            }),
+          );
           void dispatch(fetchCustomerTimeline({ customerId: customer.id, force: true }));
         }}
       />
@@ -635,59 +644,39 @@ function CustomerEstimatesPanel({
   const records = usePortalRecords();
   const tab = useAppSelector((state) => state.customers?.estimates);
   const archivedOnly = filter === "archived";
-  const useApi = !archivedOnly;
-  const filterKey = customerTabFilterKey({ status: filter || undefined });
+  // UI "archived" maps to isArchived — never send it as status.
+  const statusFilter = archivedOnly ? undefined : filter || undefined;
+  const filterKey = customerTabFilterKey({
+    status: statusFilter,
+    isArchived: archivedOnly,
+  });
+  const [editEstimate, setEditEstimate] = useState<Estimate | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Estimate | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!useApi || !customerId) return;
-    // MD: GET /api/provider/estimates?customerId=:id&status=&page=1&limit=10
+    if (!customerId) return;
+    // GET /api/provider/estimates?customerId=&status=&isArchived=
     void dispatch(
       fetchCustomerEstimates({
         customerId,
-        status: filter || undefined,
+        status: statusFilter,
+        isArchived: archivedOnly,
         force: true,
       }),
     );
-  }, [customerId, dispatch, filter, useApi]);
+  }, [customerId, dispatch, statusFilter, archivedOnly]);
 
-  // API-only for live statuses — never fall back to the workspace-wide estimate list.
-  const apiRows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
+  // Always load from API (including Archived via isArchived=true).
+  const rows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
     (item) => item.customerId === customerId,
   );
-  const rows = useApi
-    ? apiRows
-    : relatedEstimates.filter(
-        (item) =>
-          item.customerId === customerId &&
-          matchesArchiveFilter(records, "estimate", item, filter),
-      );
-  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <Field className="w-full max-w-xs gap-1.5">
-          <FieldLabel htmlFor="estimate-status-filter">Status</FieldLabel>
-          <Select
-            value={filter || "__all__"}
-            onValueChange={(value) => onFilterChange(value === "__all__" ? "" : value)}
-          >
-            <SelectTrigger id="estimate-status-filter" className="w-full">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
-            >
-              {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
-                <SelectItem key={option.label} value={option.value || "__all__"}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+      <div className="mb-3 flex justify-end">
         <Button size="sm" onClick={onCreate}>
           Create estimate
         </Button>
@@ -699,9 +688,43 @@ function CustomerEstimatesPanel({
         loading={listLoading}
         pageSize={10}
         empty={
-          filter && filter !== "archived"
-            ? "No estimates match this status."
-            : "No estimates yet."
+          archivedOnly
+            ? "No archived estimates."
+            : filter
+              ? "No estimates match this status."
+              : "No estimates yet."
+        }
+        toolbar={
+          <div className="flex items-center gap-2">
+            <Field className="w-40 gap-0 sm:w-44">
+              <FieldLabel htmlFor="estimate-status-filter" className="sr-only">
+                Status
+              </FieldLabel>
+              <Select
+                value={filter || "__all__"}
+                onValueChange={(value) =>
+                  onFilterChange(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="estimate-status-filter"
+                  className="h-8.5 w-full text-xs"
+                >
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent position="popper" align="end">
+                  {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
+                    <SelectItem
+                      key={option.label}
+                      value={option.value || "__all__"}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -718,6 +741,14 @@ function CustomerEstimatesPanel({
                 {row.number}
               </Link>
             ),
+          },
+          {
+            id: "name",
+            header: "Estimate name",
+            sortValue: (row) => row.title?.trim() || "",
+            searchValue: (row) => row.title?.trim() || "",
+            exportValue: (row) => row.title?.trim() || "",
+            cell: (row) => row.title?.trim() || "—",
           },
           {
             id: "street",
@@ -781,12 +812,127 @@ function CustomerEstimatesPanel({
             ),
           },
         ]}
-        actions={(row) => [
-          { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
-          { label: "Edit", href: `/pro/dashboard/estimates/${row.id}` },
-          { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
-          archiveRowAction(records, "estimate", row.id, row.number),
-        ]}
+        actions={(row) => {
+          // Prefer API flag — local archive store can be stale and show Restore wrongly.
+          const archived = Boolean(row.isArchived ?? row.isArchieved);
+          return [
+            { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
+            {
+              label: "Edit",
+              onSelect: () => setEditEstimate(row),
+            },
+            { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  icon: (
+                    <ArchiveRestore className="size-3.5 text-muted-foreground" />
+                  ),
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        const updated = await updateEstimateArchive(row.id, false);
+                        if (!updated || (updated.isArchived ?? updated.isArchieved)) {
+                          throw new Error("Restore did not save. Check the API and try again.");
+                        }
+                        dispatch(removeCustomerEstimate(row.id));
+                        void dispatch(
+                          fetchCustomerEstimates({
+                            customerId,
+                            status: statusFilter,
+                            isArchived: archivedOnly,
+                            force: true,
+                          }),
+                        );
+                        void dispatch(
+                          fetchCustomerTimeline({ customerId, force: true }),
+                        );
+                        toast.success(`${row.number} restored.`);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not restore this estimate.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "estimate",
+                  row.id,
+                  row.number,
+                  () => setArchiveTarget(row),
+                ),
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="estimate"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              const updated = await updateEstimateArchive(archiveTarget.id, true);
+              if (!updated || !(updated.isArchived ?? updated.isArchieved)) {
+                throw new Error("Archive did not save. Check the API and try again.");
+              }
+              dispatch(removeCustomerEstimate(archiveTarget.id));
+              void dispatch(
+                fetchCustomerEstimates({
+                  customerId,
+                  status: statusFilter,
+                  isArchived: archivedOnly,
+                  force: true,
+                }),
+              );
+              void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+              toast.success(`${archiveTarget.number} archived.`);
+              setArchiveTarget(null);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Could not archive this estimate.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
+        }}
+      />
+      <CreateEstimateDialog
+        open={Boolean(editEstimate)}
+        onOpenChange={(next) => {
+          if (!next) setEditEstimate(null);
+        }}
+        customerId={customerId}
+        estimate={editEstimate}
+        onUpdated={(item) => {
+          dispatch(upsertCustomerEstimate({ customerId, item }));
+          void dispatch(
+            fetchCustomerEstimates({
+              customerId,
+              status: statusFilter,
+              isArchived: archivedOnly,
+              force: true,
+            }),
+          );
+          void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+          setEditEstimate(null);
+        }}
       />
     </div>
   );
@@ -829,8 +975,11 @@ function CustomerJobsPanel({
   const { assign, employees } = usePortalCrew();
   const tab = useAppSelector((state) => state.customers?.jobs);
   const archivedOnly = filter === "archived";
-  const useApi = !archivedOnly;
-  const filterKey = customerTabFilterKey({ status: filter || undefined });
+  const statusFilter = archivedOnly ? undefined : filter || undefined;
+  const filterKey = customerTabFilterKey({
+    status: statusFilter,
+    isArchived: archivedOnly,
+  });
   const [deleteTarget, setDeleteTarget] = useState<Job | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editJob, setEditJob] = useState<Job | null>(null);
@@ -839,27 +988,26 @@ function CustomerJobsPanel({
   const [statusJob, setStatusJob] = useState<Job | null>(null);
   const [nextStatus, setNextStatus] = useState<JobStatus>("unscheduled");
   const [savingStatus, setSavingStatus] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Job | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!useApi || !customerId) return;
+    if (!customerId) return;
     void dispatch(
       fetchCustomerJobs({
         customerId,
-        status: filter || undefined,
+        status: statusFilter,
+        isArchived: archivedOnly,
         force: true,
       }),
     );
-  }, [customerId, dispatch, filter, useApi]);
+  }, [customerId, dispatch, statusFilter, archivedOnly]);
 
-  const rows = useApi
-    ? selectCustomerTabRows(
-        tab,
-        customerId,
-        filterKey,
-        relatedJobs.filter((item) => matchesArchiveFilter(records, "job", item, filter)),
-      )
-    : relatedJobs.filter((item) => matchesArchiveFilter(records, "job", item, filter));
-  const listLoading = useApi && selectCustomerTabShowLoader(tab, customerId, filterKey);
+  const rows = selectCustomerTabRows(tab, customerId, filterKey, []).filter(
+    (item) => item.customerId === customerId,
+  );
+  const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
   const allInvoices = records.mergeInvoices(invoices);
 
   const calendarEvent = (() => {
@@ -1000,11 +1148,6 @@ function CustomerJobsPanel({
           Create job
         </Button>
       </div>
-      <LocalFilterTabs
-        value={filter}
-        onChange={onFilterChange}
-        options={withArchiveFilter(JOB_STATUS_FILTERS)}
-      />
       <PortalDataTable
         filename={`${customerNumber}-jobs`}
         countLabel="Jobs"
@@ -1012,7 +1155,43 @@ function CustomerJobsPanel({
         loading={listLoading}
         pageSize={10}
         empty={
-          filter && filter !== "archived" ? "No jobs match this status." : "No jobs yet."
+          archivedOnly
+            ? "No archived jobs."
+            : filter
+              ? "No jobs match this status."
+              : "No jobs yet."
+        }
+        toolbar={
+          <div className="flex items-center gap-2">
+            <Field className="w-40 gap-0 sm:w-44">
+              <FieldLabel htmlFor="job-status-filter" className="sr-only">
+                Status
+              </FieldLabel>
+              <Select
+                value={filter || "__all__"}
+                onValueChange={(value) =>
+                  onFilterChange(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="job-status-filter"
+                  className="h-8.5 w-full text-xs"
+                >
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent position="popper" align="end">
+                  {withArchiveFilter(JOB_STATUS_FILTERS).map((option) => (
+                    <SelectItem
+                      key={option.label}
+                      value={option.value || "__all__"}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -1029,29 +1208,123 @@ function CustomerJobsPanel({
           },
           onChangeStatus: openStatusModal,
         })}
-        actions={(row) => [
-          { label: "Open", href: `/pro/dashboard/jobs/${row.id}` },
-          {
-            label: "Edit",
-            onSelect: () => setEditJob(row),
-          },
-          {
-            label: convertingId === row.id ? "Converting…" : "Convert to invoice",
-            onSelect: () => {
-              void convertToInvoice(row);
+        actions={(row) => {
+          const archived = Boolean(row.isArchived);
+          return [
+            { label: "Open", href: `/pro/dashboard/jobs/${row.id}` },
+            {
+              label: "Edit",
+              onSelect: () => setEditJob(row),
             },
-          },
-          {
-            label: "Calendar",
-            onSelect: () => setCalendarJob(row),
-          },
-          archiveRowAction(records, "job", row.id, row.number),
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => setDeleteTarget(row),
-          },
-        ]}
+            {
+              label: convertingId === row.id ? "Converting…" : "Convert to invoice",
+              onSelect: () => {
+                void convertToInvoice(row);
+              },
+            },
+            {
+              label: "Calendar",
+              onSelect: () => setCalendarJob(row),
+            },
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  icon: (
+                    <ArchiveRestore className="size-3.5 text-muted-foreground" />
+                  ),
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        const updated = await updateJobArchive(row.id, false);
+                        if (!updated || updated.isArchived) {
+                          throw new Error(
+                            "Restore did not save. Check the API and try again.",
+                          );
+                        }
+                        dispatch(removeCustomerJobLocal(row.id));
+                        void dispatch(
+                          fetchCustomerJobs({
+                            customerId,
+                            status: statusFilter,
+                            isArchived: archivedOnly,
+                            force: true,
+                          }),
+                        );
+                        void dispatch(
+                          fetchCustomerTimeline({ customerId, force: true }),
+                        );
+                        toast.success(`${row.number} restored.`);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not restore this job.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "job",
+                  row.id,
+                  row.number,
+                  () => setArchiveTarget(row),
+                ),
+            {
+              label: "Delete",
+              variant: "destructive",
+              onSelect: () => setDeleteTarget(row),
+            },
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="job"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              const updated = await updateJobArchive(archiveTarget.id, true);
+              if (!updated || !updated.isArchived) {
+                throw new Error(
+                  "Archive did not save. Check the API and try again.",
+                );
+              }
+              dispatch(removeCustomerJobLocal(archiveTarget.id));
+              void dispatch(
+                fetchCustomerJobs({
+                  customerId,
+                  status: statusFilter,
+                  isArchived: archivedOnly,
+                  force: true,
+                }),
+              );
+              void dispatch(fetchCustomerTimeline({ customerId, force: true }));
+              toast.success(`${archiveTarget.number} archived.`);
+              setArchiveTarget(null);
+            } catch (error) {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Could not archive this job.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
+        }}
       />
       <CreateJobDialog
         open={Boolean(editJob)}
@@ -1062,7 +1335,14 @@ function CustomerJobsPanel({
         job={editJob}
         onUpdated={(item) => {
           dispatch(upsertCustomerJob({ customerId, item }));
-          void dispatch(fetchCustomerJobs({ customerId, force: true }));
+          void dispatch(
+            fetchCustomerJobs({
+              customerId,
+              status: statusFilter,
+              isArchived: archivedOnly,
+              force: true,
+            }),
+          );
           void dispatch(fetchCustomerSchedule({ customerId, force: true }));
           void dispatch(fetchCustomerTimeline({ customerId, force: true }));
           setEditJob(null);
@@ -1080,7 +1360,14 @@ function CustomerJobsPanel({
         onSave={async (assignment) => {
           await assign(assignment);
           toast.success("Schedule updated.");
-          void dispatch(fetchCustomerJobs({ customerId, force: true }));
+          void dispatch(
+            fetchCustomerJobs({
+              customerId,
+              status: statusFilter,
+              isArchived: archivedOnly,
+              force: true,
+            }),
+          );
           void dispatch(fetchCustomerSchedule({ customerId, force: true }));
           void dispatch(fetchCustomerTimeline({ customerId, force: true }));
           setCalendarJob(null);
@@ -1271,11 +1558,6 @@ function CustomerInvoicesPanel({
 
   return (
     <div>
-      <LocalFilterTabs
-        value={filter}
-        onChange={onFilterChange}
-        options={withArchiveFilter(INVOICE_BOARD_FILTERS)}
-      />
       <PortalDataTable
         filename={`${customerNumber}-invoices`}
         countLabel="Invoices"
@@ -1286,6 +1568,38 @@ function CustomerInvoicesPanel({
           filter && filter !== "archived"
             ? "No invoices match this status."
             : "No invoices yet."
+        }
+        toolbar={
+          <div className="flex items-center gap-2">
+            <Field className="w-40 gap-0 sm:w-44">
+              <FieldLabel htmlFor="invoice-status-filter" className="sr-only">
+                Status
+              </FieldLabel>
+              <Select
+                value={filter || "__all__"}
+                onValueChange={(value) =>
+                  onFilterChange(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="invoice-status-filter"
+                  className="h-8.5 w-full text-xs"
+                >
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent position="popper" align="end">
+                  {withArchiveFilter(INVOICE_BOARD_FILTERS).map((option) => (
+                    <SelectItem
+                      key={option.label}
+                      value={option.value || "__all__"}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -1352,20 +1666,19 @@ function CustomerHistoryPanel({
 }) {
   const dispatch = useAppDispatch();
   const tab = useAppSelector((state) => state.customers?.timeline);
-  const [page, setPage] = useState(1);
-  const filterKey = customerTabFilterKey({ page });
+  const filterKey = customerTabFilterKey({});
 
   useEffect(() => {
     if (!customerId) return;
     void dispatch(
       fetchCustomerTimeline({
         customerId,
-        page,
+        page: 1,
         limit: 10,
         force: true,
       }),
     );
-  }, [customerId, dispatch, page]);
+  }, [customerId, dispatch]);
 
   const useApiEvents = Boolean(
     tab?.customerId === customerId && (tab.loaded || tab.loading || tab.items.length > 0),
@@ -1379,16 +1692,22 @@ function CustomerHistoryPanel({
   const paid = dossier?.totalPaid ?? localPaid;
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
   const total = useApiEvents ? (tab?.total ?? events.length) : events.length;
-  const totalPages = useApiEvents
-    ? Math.max(1, tab?.totalPages ?? 1)
-    : Math.max(1, Math.ceil(events.length / 10));
-  const currentPage = useApiEvents ? (tab?.page ?? page) : page;
-  const from = total === 0 ? 0 : (currentPage - 1) * 10 + 1;
-  const to = Math.min(currentPage * 10, total);
+  const totalPages = useApiEvents ? Math.max(1, tab?.totalPages ?? 1) : 1;
+  const currentPage = useApiEvents ? (tab?.page ?? 1) : 1;
+  const hasMore = useApiEvents && currentPage < totalPages;
+  const loadingMore = Boolean(useApiEvents && tab?.loading && tab.items.length > 0);
 
-  function goToPage(next: number) {
-    const bounded = Math.min(Math.max(1, next), totalPages);
-    setPage(bounded);
+  function loadMore() {
+    if (!hasMore || loadingMore) return;
+    void dispatch(
+      fetchCustomerTimeline({
+        customerId,
+        page: currentPage + 1,
+        limit: 10,
+        append: true,
+        force: true,
+      }),
+    );
   }
 
   return (
@@ -1452,32 +1771,16 @@ function CustomerHistoryPanel({
             })}
           </ol>
         )}
-        {useApiEvents && total > 0 ? (
-          <div className="flex flex-col gap-3 border-t border-black/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              Showing {from}–{to} of {total}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1 || Boolean(tab?.loading)}
-                onClick={() => goToPage(currentPage - 1)}
-              >
-                Previous
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages || Boolean(tab?.loading)}
-                onClick={() => goToPage(currentPage + 1)}
-              >
-                Next
-              </Button>
-            </div>
+        {hasMore ? (
+          <div className="flex justify-center border-t border-black/10 px-3 py-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loadingMore}
+              onClick={loadMore}
+            >
+              {loadingMore ? "Loading…" : "See more"}
+            </Button>
           </div>
         ) : null}
       </div>
@@ -1487,6 +1790,7 @@ function CustomerHistoryPanel({
 
 function CustomerTasksPanel({ customerId }: { customerId: string }) {
   const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
   const tab = useAppSelector((state) => state.customers?.tasks);
   const filterKey = customerTabFilterKey({});
   const [editing, setEditing] = useState<PortalTask | null>(null);
@@ -1510,6 +1814,10 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
       const result = await dispatch(patchCustomerTaskStatus({ id: item.id, status: nextStatus, customerId }));
       if (patchCustomerTaskStatus.rejected.match(result)) {
         toast.error(typeof result.payload === "string" ? result.payload : "Could not update task.");
+        return;
+      }
+      if (patchCustomerTaskStatus.fulfilled.match(result)) {
+        crm.patchTask(item.id, result.payload ?? { status: nextStatus });
       }
     } finally {
       setBusyTaskId(null);
@@ -1646,6 +1954,7 @@ function CustomerRemindersPanel({
   onSetReminder: () => void;
 }) {
   const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
   const tab = useAppSelector((state) => state.customers?.reminders);
   const filterKey = customerTabFilterKey({});
   const [editing, setEditing] = useState<PortalReminder | null>(null);
@@ -1661,9 +1970,9 @@ function CustomerRemindersPanel({
   const rows = selectCustomerTabRows(tab, customerId, filterKey, relatedReminders);
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
 
-  async function toggleReminder(item: PortalReminder) {
+  async function setReminderStatus(item: PortalReminder, nextStatus: PortalReminder["status"]) {
+    if (item.status === nextStatus || busyReminderId === item.id) return;
     setBusyReminderId(item.id);
-    const nextStatus = item.status === "open" ? "done" : "open";
     try {
       const result = await dispatch(
         patchCustomerReminderStatus({ id: item.id, status: nextStatus, customerId }),
@@ -1672,6 +1981,10 @@ function CustomerRemindersPanel({
         toast.error(
           typeof result.payload === "string" ? result.payload : "Could not update reminder.",
         );
+        return;
+      }
+      if (patchCustomerReminderStatus.fulfilled.match(result)) {
+        crm.patchReminder(item.id, result.payload ?? { status: nextStatus });
       }
     } finally {
       setBusyReminderId(null);
@@ -1698,69 +2011,76 @@ function CustomerRemindersPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {listLoading || !rows.length ? "\u00a0" : `${rows.length} reminders`}
-        </p>
-        <Button size="sm" onClick={onSetReminder}>
-          Set reminder
-        </Button>
-      </div>
-      {listLoading ? (
-        <CenteredSpinner label="Loading reminders" className="min-h-[12rem]" />
-      ) : rows.length ? (
-        rows.map((item) => (
-          <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
-            <div className="min-w-0">
-              <Link
-                href={`/pro/dashboard/reminders/${item.id}`}
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                {item.title}
-              </Link>
-              <p className="text-xs text-muted-foreground">
-                Due {formatDate(item.dueAt)} · {item.note}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busyReminderId === item.id}
-                onClick={() => void toggleReminder(item)}
-              >
-                {busyReminderId === item.id ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  crmReminderStatusLabel(item.status)
-                )}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline">
-                    Actions
-                    <ChevronDown className="size-3.5" aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setEditing(item)}>Edit</DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/pro/dashboard/reminders/${item.id}`}>Open</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={() => setDeleteTarget(item)}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        ))
-      ) : (
-        <Empty title="No reminders yet">Set a reminder to follow up on this customer.</Empty>
-      )}
+      <PortalDataTable
+        filename="customer-reminders"
+        countLabel="Reminders"
+        searchPlaceholder="Search reminders"
+        loading={listLoading}
+        busyRowIds={busyReminderId ? [busyReminderId] : []}
+        empty="No reminders yet. Set a reminder to follow up on this customer."
+        rows={rows}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
+        toolbar={
+          <Button size="sm" onClick={onSetReminder}>
+            Set reminder
+          </Button>
+        }
+        columns={[
+          {
+            id: "reminder",
+            header: "Reminder",
+            sortValue: (row) => row.title,
+            searchValue: (row) => `${row.title} ${row.note}`,
+            exportValue: (row) => row.title,
+            cell: (row) => (
+              <div className="min-w-0">
+                <Link
+                  href={`/pro/dashboard/reminders/${row.id}`}
+                  className="font-medium text-primary hover:underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {row.title}
+                </Link>
+                {row.note ? (
+                  <p className="truncate text-xs text-muted-foreground">{row.note}</p>
+                ) : null}
+              </div>
+            ),
+          },
+          {
+            id: "due",
+            header: "Due",
+            sortValue: (row) => row.dueAt,
+            searchValue: (row) => formatDate(row.dueAt),
+            exportValue: (row) => formatDate(row.dueAt),
+            cell: (row) => formatDate(row.dueAt),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            searchValue: (row) => crmReminderStatusLabel(row.status),
+            exportValue: (row) => crmReminderStatusLabel(row.status),
+            cell: (row) => (
+              <ReminderStatusSelect
+                value={row.status}
+                disabled={busyReminderId === row.id}
+                onChange={(next) => void setReminderStatus(row, next)}
+              />
+            ),
+          },
+        ]}
+        actions={(row) => [
+          { label: "Open", href: `/pro/dashboard/reminders/${row.id}` },
+          { label: "Edit", onSelect: () => setEditing(row) },
+          {
+            label: "Delete",
+            variant: "destructive",
+            onSelect: () => setDeleteTarget(row),
+          },
+        ]}
+      />
       <CreateReminderDialog
         open={Boolean(editing)}
         reminder={editing}

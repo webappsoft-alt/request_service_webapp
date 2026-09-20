@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } 
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { PortalCalendarEvent, PortalEmployee, PortalEventKind, PortalTimeWindow } from "@/lib/data/portal";
 import {
   calendarEventKindLabel,
@@ -23,7 +29,7 @@ const VIEWS = ["day", "week", "month"] as const;
 const DAY_START = 6 * 60;   // 6:00 AM
 const DAY_END = 24 * 60;    // midnight (00:00 next day)
 const SLOT = 30;
-const SLOT_PX = 32;
+const SLOT_PX = 44;
 const SLOTS = Array.from({ length: (DAY_END - DAY_START) / SLOT }, (_, index) => DAY_START + index * SLOT);
 
 export type CalendarView = (typeof VIEWS)[number];
@@ -404,44 +410,51 @@ export function EventCalendar({
             </button>
           ))}
         </div>
-        <NativeSelect
-          className="w-40"
-          value={kindFilter}
-          onChange={(change) => {
-            const next = change.target.value;
+        <Select
+          value={kindFilter || "__all__"}
+          onValueChange={(value) => {
             setKindFilter(
-              next === "job" ||
-                next === "estimate" ||
-                next === "request" ||
-                next === "invoice" ||
-                next === "task"
-                ? next
+              value === "job" ||
+                value === "estimate" ||
+                value === "request" ||
+                value === "invoice" ||
+                value === "task"
+                ? value
                 : "",
             );
           }}
         >
-          <NativeSelectOption value="">All work</NativeSelectOption>
-          {KINDS.map((kind) => (
-            <NativeSelectOption key={kind} value={kind}>
-              {calendarEventKindLabel(kind)}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger size="sm" className="w-40">
+            <SelectValue placeholder="All work" />
+          </SelectTrigger>
+          <SelectContent position="popper" align="end">
+            <SelectItem value="__all__">All work</SelectItem>
+            {KINDS.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {calendarEventKindLabel(kind)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {employees && !lockEmployeeId ? (
-          <NativeSelect
-            className="w-48"
-            value={employeeFilter}
-            onChange={(change) => setEmployeeFilter(change.target.value)}
+          <Select
+            value={employeeFilter || "__all__"}
+            onValueChange={(value) => setEmployeeFilter(value === "__all__" ? "" : value)}
           >
-            <NativeSelectOption value="">Everyone</NativeSelectOption>
-            {employees
-              .filter((item) => item.active !== false)
-              .map((item) => (
-                <NativeSelectOption key={item.id} value={item.id}>
-                  {item.firstName} {item.lastName}
-                </NativeSelectOption>
-              ))}
-          </NativeSelect>
+            <SelectTrigger size="sm" className="w-48">
+              <SelectValue placeholder="Everyone" />
+            </SelectTrigger>
+            <SelectContent position="popper" align="end">
+              <SelectItem value="__all__">Everyone</SelectItem>
+              {employees
+                .filter((item) => item.active !== false)
+                .map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.firstName} {item.lastName}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         ) : null}
         {toolbar}
       </div>
@@ -893,6 +906,15 @@ function TimedBar({
     );
     drag.dataTransfer.effectAllowed = "move";
   }
+
+  const blockHeight = displayHeight || height;
+  const showDetails = blockHeight >= SLOT_PX * 1.5;
+  const timeLabel = `${formatClock(times.start)}–${formatClock(end)}`;
+  const service = eventService(event);
+  const secondary =
+    showDetails && service && service !== event.title
+      ? `${timeLabel} · ${service}`
+      : timeLabel;
 
   return (
     <div

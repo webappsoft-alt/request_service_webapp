@@ -96,6 +96,9 @@ export const providerCrmApi = {
     `provider/team/${id}/attachments/${attachmentId}`,
   contractors: "provider/contractors",
   contractor: (id: string) => `provider/contractors/${id}`,
+  contractorAttachments: (id: string) => `provider/contractors/${id}/attachments`,
+  contractorAttachment: (id: string, attachmentId: string) =>
+    `provider/contractors/${id}/attachments/${attachmentId}`,
   vendors: "provider/vendors",
   vendor: (id: string) => `provider/vendors/${id}`,
   requests: "provider/requests",

@@ -1,35 +1,47 @@
 "use client";
 
-import { useEffect, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Banknote,
+  Bell,
   Briefcase,
   CalendarDays,
+  ChevronDown,
   Clock,
+  Eye,
   FileText,
   Film,
   ImageIcon,
+  ListTodo,
+  Loader2,
   Music,
   NotebookPen,
   Paperclip,
   Settings,
   Shield,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ATTACHMENT_ACCEPT_ATTRIBUTE,
+  extractUploadedUrl,
+  uploadAnyFile,
   validateAttachmentFile,
 } from "@/components/api/uploadFile";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
-import { AddNoteButton, SetReminderButton, SetTaskButton } from "@/components/portal/create-person-dialogs";
-import { NotesPanel } from "@/components/portal/notes-panel";
-import { FileNotices } from "@/components/portal/task-banner";
+import {
+  CreateReminderDialog,
+  CreateTaskDialog,
+} from "@/components/portal/create-person-dialogs";
+import { CreateNoteDialogForSubject, NotesPanel } from "@/components/portal/notes-panel";
+import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
+import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -44,14 +56,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import {
   contractorAsEmployee,
+  crmReminderStatusLabel,
   crmStatusLabel,
-  type CrmDirectoryStatus,
+  crmTaskStatusLabel,
   type PortalContractor,
+  type PortalReminder,
+  type PortalTask,
 } from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
@@ -68,21 +88,26 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
+  addContractorMemberAttachment,
   bindContractorDetail,
   clearContractorDetail,
   contractorsTabFilterKey,
   deleteContractorRecord,
+  deleteContractorReminder,
   fetchContractorDetail,
   fetchContractorEstimates,
   fetchContractorJobs,
+  fetchContractorReminders,
   fetchContractorSchedule,
+  fetchContractorTasks,
+  patchContractorReminderStatus,
+  removeContractorMemberAttachment,
   selectContractorsTabRows,
   selectContractorsTabShowLoader,
-  setContractorAvailability,
   updateContractorRecord,
+  upsertContractorReminder,
+  upsertContractorTask,
 } from "@/store/contractorsSlice";
-
-const DIRECTORY_STATUSES: CrmDirectoryStatus[] = ["active", "inactive", "on_stop"];
 
 function insuranceDateInput(value?: string) {
   if (!value) return "";
@@ -112,15 +137,15 @@ export function ContractorDetailView({ id }: { id: string }) {
   const detail = useAppSelector((state) => state.contractors?.detail ?? null);
   const detailLoading = useAppSelector((state) => Boolean(state.contractors?.detailLoading));
   const detailError = useAppSelector((state) => state.contractors?.detailError ?? null);
-  const sessionHours = useAppSelector(
-    (state) => state.contractors?.availabilityById?.[id] as PortalEmployeeWorkingHours[] | undefined,
-  );
   const contractor =
     (detail?.id === id ? detail : null) ?? sliceItems.find((item) => item.id === id);
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
 
   useEffect(() => {
     if (!crm.enabled) return;
@@ -183,10 +208,7 @@ export function ContractorDetailView({ id }: { id: string }) {
   }
 
   const expired = isInsuranceExpired(contractor);
-  const asEmployee = {
-    ...contractorAsEmployee(contractor),
-    workingHours: sessionHours,
-  };
+  const asEmployee = contractorAsEmployee(contractor);
   const partner = contractor;
 
   function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
@@ -217,6 +239,8 @@ export function ContractorDetailView({ id }: { id: string }) {
           { id: "schedule", label: "Schedule", icon: CalendarDays },
           { id: "jobs", label: "Jobs", icon: Briefcase },
           { id: "estimates", label: "Estimates", icon: FileText },
+          { id: "tasks", label: "Tasks", icon: ListTodo },
+          { id: "reminders", label: "Reminders", icon: Bell },
           { id: "notes", label: "Notes", icon: NotebookPen },
           { id: "attachments", label: "Attachments", icon: Paperclip },
         ]}
@@ -235,21 +259,15 @@ export function ContractorDetailView({ id }: { id: string }) {
           </>
         }
         notice={
-          <>
-            <FileNotices kind="contractor" id={contractor.id} />
-            {expired ? (
-              <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-                Insurance expired on {formatDate(contractor.insuranceExpires.slice(0, 10))}. New
-                dispatches are locked.
-              </div>
-            ) : null}
-          </>
+          expired ? (
+            <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              Insurance expired on {formatDate(contractor.insuranceExpires.slice(0, 10))}. New
+              dispatches are locked.
+            </div>
+          ) : null
         }
         actions={
           <>
-            <SetTaskButton subjectKind="contractor" subjectId={contractor.id} />
-            <SetReminderButton subjectKind="contractor" subjectId={contractor.id} />
-            <AddNoteButton subjectKind="contractor" subjectId={contractor.id} />
             <Button
               size="sm"
               disabled={expired}
@@ -258,9 +276,20 @@ export function ContractorDetailView({ id }: { id: string }) {
             >
               Assign job
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setRemoveOpen(true)}>
-              Remove
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  More actions
+                  <ChevronDown className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem onSelect={() => setTaskOpen(true)}>Create task</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNoteOpen(true)}>Add note</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>Set reminder</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setRemoveOpen(true)}>Remove</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       >
@@ -277,14 +306,9 @@ export function ContractorDetailView({ id }: { id: string }) {
                 <EmployeeAvailabilityTab
                   employee={asEmployee}
                   description="Working hours used when assigning this contractor on the calendar."
-                  onSave={(patch) => {
+                  onSave={async (patch) => {
                     if (!patch.workingHours) return;
-                    dispatch(
-                      setContractorAvailability({
-                        contractorId: contractor.id,
-                        workingHours: patch.workingHours,
-                      }),
-                    );
+                    await saveContractor({ workingHours: patch.workingHours });
                   }}
                 />
               );
@@ -303,15 +327,52 @@ export function ContractorDetailView({ id }: { id: string }) {
               return (
                 <ContractorEstimatesTab contractorId={contractor.id} customers={customers} />
               );
+            case "tasks":
+              return <ContractorTasksTab contractorId={contractor.id} />;
+            case "reminders":
+              return (
+                <ContractorRemindersTab
+                  contractorId={contractor.id}
+                  onSetReminder={() => setReminderOpen(true)}
+                />
+              );
             case "notes":
               return <NotesPanel kind="contractor" id={contractor.id} />;
             case "attachments":
-              return <ContractorAttachmentsTab />;
+              return <ContractorAttachmentsTab contractor={contractor} />;
             default:
               return <ContractorSettingsTab contractor={contractor} onSave={saveContractor} />;
           }
         }}
       </RecordWorkspace>
+      <CreateReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        subjectKind="contractor"
+        subjectId={contractor.id}
+        onCreated={(item) => {
+          dispatch(upsertContractorReminder({ contractorId: contractor.id, item }));
+          void dispatch(fetchContractorReminders({ contractorId: contractor.id, force: true }));
+          if (crm.enabled) crm.addReminder(item);
+        }}
+      />
+      <CreateTaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        subjectKind="contractor"
+        subjectId={contractor.id}
+        onCreated={(item) => {
+          dispatch(upsertContractorTask({ contractorId: contractor.id, item }));
+          void dispatch(fetchContractorTasks({ contractorId: contractor.id, force: true }));
+          if (crm.enabled) crm.addTask(item);
+        }}
+      />
+      <CreateNoteDialogForSubject
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        subjectKind="contractor"
+        subjectId={contractor.id}
+      />
       <AssignEventDialog
         open={Boolean(editing) || assignOpen}
         onOpenChange={(open) => {
@@ -365,10 +426,36 @@ function ContractorSettingsTab({
   onSave: (patch: Partial<PortalContractor>) => void | Promise<unknown>;
 }) {
   const [draft, setDraft] = useState(contractor);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraft(contractor);
   }, [contractor]);
+
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await Promise.resolve(
+        onSave({
+          companyName: draft.companyName,
+          trade: draft.trade,
+          firstName: draft.firstName,
+          lastName: draft.lastName,
+          email: draft.email,
+          phone: draft.phone,
+          city: draft.city,
+          zip: draft.zip,
+          license: draft.license,
+        }),
+      );
+      toast.success("Contractor settings saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -379,31 +466,15 @@ function ContractorSettingsTab({
             Outside crew you send to a job. Contact and company live here.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            void Promise.resolve(
-              onSave({
-                companyName: draft.companyName,
-                trade: draft.trade,
-                firstName: draft.firstName,
-                lastName: draft.lastName,
-                email: draft.email,
-                phone: draft.phone,
-                city: draft.city,
-                state: draft.state,
-                zip: draft.zip,
-                license: draft.license,
-                status: draft.status,
-              }),
-            )
-              .then(() => toast.success("Contractor settings saved."))
-              .catch((error) =>
-                toast.error(error instanceof Error ? error.message : "Could not save settings."),
-              );
-          }}
-        >
-          Save settings
+        <Button size="sm" disabled={saving} onClick={() => void save()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save settings"
+          )}
         </Button>
       </div>
       <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
@@ -455,32 +526,11 @@ function ContractorSettingsTab({
             onChange={(event) => setDraft({ ...draft, city: event.target.value })}
           />
         </Field>
-        <Field label="State">
-          <Input
-            value={draft.state}
-            onChange={(event) => setDraft({ ...draft, state: event.target.value })}
-          />
-        </Field>
         <Field label="ZIP">
           <Input
             value={draft.zip}
             onChange={(event) => setDraft({ ...draft, zip: event.target.value })}
           />
-        </Field>
-        <Field label="Status">
-          <NativeSelect
-            className="w-full"
-            value={draft.status}
-            onChange={(event) =>
-              setDraft({ ...draft, status: event.target.value as CrmDirectoryStatus })
-            }
-          >
-            {DIRECTORY_STATUSES.map((status) => (
-              <NativeSelectOption key={status} value={status}>
-                {crmStatusLabel(status)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
         </Field>
       </div>
     </div>
@@ -498,6 +548,7 @@ function ContractorComplianceTab({
     license: contractor.license,
     insuranceExpires: insuranceDateInput(contractor.insuranceExpires),
   });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraft({
@@ -508,6 +559,29 @@ function ContractorComplianceTab({
 
   const expired = isInsuranceExpired(contractor);
 
+  async function save() {
+    if (saving) return;
+    const insuranceExpires = insuranceApiValue(draft.insuranceExpires);
+    if (!insuranceExpires) {
+      toast.error("Insurance expiration date is required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await Promise.resolve(
+        onSave({
+          license: draft.license,
+          insuranceExpires,
+        }),
+      );
+      toast.success("Compliance saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save compliance.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -517,27 +591,15 @@ function ContractorComplianceTab({
             License and insurance required before they go on a customer site.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            const insuranceExpires = insuranceApiValue(draft.insuranceExpires);
-            if (!insuranceExpires) {
-              toast.error("Insurance expiration date is required.");
-              return;
-            }
-            void Promise.resolve(
-              onSave({
-                license: draft.license,
-                insuranceExpires,
-              }),
-            )
-              .then(() => toast.success("Compliance saved."))
-              .catch((error) =>
-                toast.error(error instanceof Error ? error.message : "Could not save compliance."),
-              );
-          }}
-        >
-          Save compliance
+        <Button size="sm" disabled={saving} onClick={() => void save()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save compliance"
+          )}
         </Button>
       </div>
       {expired ? (
@@ -572,11 +634,41 @@ function ContractorPayTab({
   contractor: PortalContractor;
   onSave: (patch: Partial<PortalContractor>) => void | Promise<unknown>;
 }) {
-  const [hourlyRate, setHourlyRate] = useState(contractor.hourlyRate ?? 0);
+  const [pay, setPay] = useState({
+    hourlyRate: contractor.hourlyRate ?? 0,
+    overtimeRate: contractor.overtimeRate ?? 0,
+    travelRate: contractor.travelRate ?? 0,
+  });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setHourlyRate(contractor.hourlyRate ?? 0);
-  }, [contractor.id, contractor.hourlyRate]);
+    setPay({
+      hourlyRate: contractor.hourlyRate ?? 0,
+      overtimeRate: contractor.overtimeRate ?? 0,
+      travelRate: contractor.travelRate ?? 0,
+    });
+  }, [contractor.id, contractor.hourlyRate, contractor.overtimeRate, contractor.travelRate]);
+
+  const weekHours = useMemo(() => {
+    const hours = contractor.workingHours ?? [];
+    return hours.reduce((total, day: PortalEmployeeWorkingHours) => {
+      if (!day.active) return total;
+      return total + Math.max(0, day.endMinutes - day.startMinutes) / 60;
+    }, 0);
+  }, [contractor.workingHours]);
+
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await Promise.resolve(onSave(pay));
+      toast.success("Pay rate saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save pay rate.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -587,37 +679,57 @@ function ContractorPayTab({
             Quoted hourly rate for this contractor on jobs and estimates.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            void Promise.resolve(onSave({ hourlyRate }))
-              .then(() => toast.success("Pay rate saved."))
-              .catch((error) =>
-                toast.error(error instanceof Error ? error.message : "Could not save pay rate."),
-              );
-          }}
-        >
-          Save rates
+        <Button size="sm" disabled={saving} onClick={() => void save()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save rates"
+          )}
         </Button>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
+      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-3">
         <Field label="Hourly rate">
           <Input
             type="number"
             min="0"
             step="0.5"
-            value={hourlyRate || ""}
+            value={pay.hourlyRate || ""}
             placeholder="0"
-            onChange={(event) => setHourlyRate(Number(event.target.value) || 0)}
+            onChange={(event) => setPay({ ...pay, hourlyRate: Number(event.target.value) || 0 })}
           />
         </Field>
-        <div className="rounded-[4px] border border-black/10 bg-[#f7f9fc] px-3 py-2">
-          <p className="text-[11px] font-semibold tracking-[0.12em] text-[#003F7D] uppercase">
-            Straight time
-          </p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(hourlyRate)}</p>
-          <p className="text-xs text-muted-foreground">Per hour</p>
-        </div>
+        <Field label="Overtime rate">
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            value={pay.overtimeRate || ""}
+            placeholder="0"
+            onChange={(event) => setPay({ ...pay, overtimeRate: Number(event.target.value) || 0 })}
+          />
+        </Field>
+        <Field label="Travel / trip">
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            value={pay.travelRate || ""}
+            placeholder="0"
+            onChange={(event) => setPay({ ...pay, travelRate: Number(event.target.value) || 0 })}
+          />
+        </Field>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <PayStat label="Straight time" value={formatMoney(pay.hourlyRate)} hint="Per hour" />
+        <PayStat label="Typical week" value={`${weekHours} hrs`} hint="From availability" />
+        <PayStat
+          label="Weekly labor"
+          value={formatMoney(pay.hourlyRate * weekHours)}
+          hint="Hours × rate"
+        />
       </div>
     </div>
   );
@@ -855,12 +967,275 @@ function ContractorEstimatesTab({
   );
 }
 
-function ContractorAttachmentsTab() {
-  const [over, setOver] = useState(false);
+function ContractorTasksTab({ contractorId }: { contractorId: string }) {
+  const dispatch = useAppDispatch();
+  const filterKey = contractorsTabFilterKey({});
+  const tab = useAppSelector((state) => state.contractors?.tasks);
 
-  function rejectUpload(list: FileList | File[]) {
+  useEffect(() => {
+    void dispatch(fetchContractorTasks({ contractorId, force: true }));
+  }, [dispatch, contractorId]);
+
+  const rows = selectContractorsTabRows(tab, contractorId, filterKey, []);
+  const listLoading = selectContractorsTabShowLoader(tab, contractorId, filterKey);
+
+  return (
+    <PortalDataTable
+      filename="contractor-tasks"
+      countLabel="Tasks"
+      searchPlaceholder="Search tasks"
+      loading={listLoading}
+      empty="No tasks for this contractor yet. Create one from More actions."
+      rows={rows}
+      rowKey={(row) => row.id}
+      rowHref={(row) => `/pro/dashboard/tasks/${row.id}`}
+      columns={[
+        {
+          id: "number",
+          header: "Task",
+          sortValue: (row: PortalTask) => row.number || row.title,
+          searchValue: (row: PortalTask) => `${row.number ?? ""} ${row.title ?? ""}`,
+          exportValue: (row: PortalTask) => row.number || row.id,
+          cell: (row: PortalTask) => (
+            <div>
+              <Link
+                href={`/pro/dashboard/tasks/${row.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {row.number || row.id}
+              </Link>
+              {row.title ? <p className="text-xs text-muted-foreground">{row.title}</p> : null}
+            </div>
+          ),
+        },
+        {
+          id: "due",
+          header: "Due",
+          sortValue: (row: PortalTask) => row.dueAt ?? "",
+          searchValue: (row: PortalTask) => (row.dueAt ? formatDate(row.dueAt) : ""),
+          exportValue: (row: PortalTask) => (row.dueAt ? formatDate(row.dueAt) : ""),
+          cell: (row: PortalTask) => (row.dueAt ? formatDate(row.dueAt) : "—"),
+        },
+        {
+          id: "status",
+          header: "Status",
+          sortValue: (row: PortalTask) => row.status,
+          searchValue: (row: PortalTask) => crmTaskStatusLabel(row.status),
+          exportValue: (row: PortalTask) => row.status,
+          cell: (row: PortalTask) => <StatusPill label={crmTaskStatusLabel(row.status)} />,
+        },
+      ]}
+    />
+  );
+}
+
+function ContractorRemindersTab({
+  contractorId,
+  onSetReminder,
+}: {
+  contractorId: string;
+  onSetReminder: () => void;
+}) {
+  const dispatch = useAppDispatch();
+  const crm = useCrmApiData();
+  const filterKey = contractorsTabFilterKey({});
+  const tab = useAppSelector((state) => state.contractors?.reminders);
+  const [editing, setEditing] = useState<PortalReminder | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PortalReminder | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [busyReminderId, setBusyReminderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!contractorId) return;
+    void dispatch(fetchContractorReminders({ contractorId, force: true }));
+  }, [dispatch, contractorId]);
+
+  const rows = selectContractorsTabRows(tab, contractorId, filterKey, []);
+  const listLoading = selectContractorsTabShowLoader(tab, contractorId, filterKey);
+
+  async function setReminderStatus(item: PortalReminder, nextStatus: PortalReminder["status"]) {
+    if (item.status === nextStatus || busyReminderId === item.id) return;
+    setBusyReminderId(item.id);
+    try {
+      const result = await dispatch(
+        patchContractorReminderStatus({ id: item.id, status: nextStatus, contractorId }),
+      );
+      if (patchContractorReminderStatus.rejected.match(result)) {
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not update reminder.",
+        );
+        return;
+      }
+      if (patchContractorReminderStatus.fulfilled.match(result)) {
+        crm.patchReminder(item.id, result.payload ?? { status: nextStatus });
+      }
+    } finally {
+      setBusyReminderId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const result = await dispatch(
+        deleteContractorReminder({ id: deleteTarget.id, contractorId }),
+      );
+      if (deleteContractorReminder.rejected.match(result)) {
+        toast.error(
+          typeof result.payload === "string" ? result.payload : "Could not delete this reminder.",
+        );
+        return;
+      }
+      crm.removeReminder(deleteTarget.id);
+      toast.success("Reminder removed.");
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <PortalDataTable
+        filename="contractor-reminders"
+        countLabel="Reminders"
+        searchPlaceholder="Search reminders"
+        loading={listLoading}
+        busyRowIds={busyReminderId ? [busyReminderId] : []}
+        empty="No reminders yet. Set a reminder to follow up on this contractor."
+        rows={rows}
+        rowKey={(row) => row.id}
+        rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
+        toolbar={
+          <Button size="sm" onClick={onSetReminder}>
+            Set reminder
+          </Button>
+        }
+        columns={[
+          {
+            id: "reminder",
+            header: "Reminder",
+            sortValue: (row) => row.title,
+            searchValue: (row) => `${row.title} ${row.note}`,
+            exportValue: (row) => row.title,
+            cell: (row) => (
+              <div className="min-w-0">
+                <Link
+                  href={`/pro/dashboard/reminders/${row.id}`}
+                  className="font-medium text-primary hover:underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {row.title}
+                </Link>
+                {row.note ? (
+                  <p className="truncate text-xs text-muted-foreground">{row.note}</p>
+                ) : null}
+              </div>
+            ),
+          },
+          {
+            id: "due",
+            header: "Due",
+            sortValue: (row) => row.dueAt,
+            searchValue: (row) => formatDate(row.dueAt),
+            exportValue: (row) => formatDate(row.dueAt),
+            cell: (row) => formatDate(row.dueAt),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            searchValue: (row) => crmReminderStatusLabel(row.status),
+            exportValue: (row) => crmReminderStatusLabel(row.status),
+            cell: (row) => (
+              <ReminderStatusSelect
+                value={row.status}
+                disabled={busyReminderId === row.id}
+                onChange={(next) => void setReminderStatus(row, next)}
+              />
+            ),
+          },
+        ]}
+        actions={(row) => [
+          { label: "Open", href: `/pro/dashboard/reminders/${row.id}` },
+          { label: "Edit", onSelect: () => setEditing(row) },
+          {
+            label: "Delete",
+            variant: "destructive",
+            onSelect: () => setDeleteTarget(row),
+          },
+        ]}
+      />
+      <CreateReminderDialog
+        open={Boolean(editing)}
+        reminder={editing}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null);
+        }}
+        subjectKind="contractor"
+        subjectId={contractorId}
+        onCreated={(item) => {
+          dispatch(upsertContractorReminder({ contractorId, item }));
+          void dispatch(fetchContractorReminders({ contractorId, force: true }));
+          if (crm.enabled) crm.addReminder(item);
+        }}
+      />
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(next) => {
+          if (!next && !deleting) setDeleteTarget(null);
+        }}
+        title="Delete reminder?"
+        description={
+          deleteTarget
+            ? `This will permanently remove “${deleteTarget.title}”.`
+            : "This will permanently remove this reminder."
+        }
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
+    </div>
+  );
+}
+
+function stamp(value: string) {
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+function fileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ContractorAttachmentsTab({ contractor }: { contractor: PortalContractor }) {
+  const dispatch = useAppDispatch();
+  const detail = useAppSelector((state) => state.contractors?.detail ?? null);
+  const [over, setOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const liveContractor = detail?.id === contractor.id ? detail : contractor;
+  const attachments = (liveContractor.attachments ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    type: item.fileType || "application/octet-stream",
+    size: item.sizeBytes ?? 0,
+    dataUrl: item.url,
+    addedAt: item.uploadedAt || "",
+  }));
+
+  async function readFiles(list: FileList | File[]) {
+    if (uploading) return;
     const files = Array.from(list);
     if (!files.length) return;
+
     for (const fileItem of files) {
       const check = validateAttachmentFile(fileItem);
       if (!check.valid) {
@@ -868,56 +1243,185 @@ function ContractorAttachmentsTab() {
         return;
       }
     }
-    toast.error("Contractor attachments API is not available yet.");
+
+    setUploading(true);
+    try {
+      for (const fileItem of files) {
+        const response = await uploadAnyFile(fileItem);
+        const url = extractUploadedUrl(response.data);
+        if (!url) throw new Error(`Could not upload ${fileItem.name}.`);
+
+        const result = await dispatch(
+          addContractorMemberAttachment({
+            id: contractor.id,
+            attachment: {
+              name: fileItem.name,
+              url,
+              fileType: fileItem.type || "application/octet-stream",
+              sizeBytes: fileItem.size,
+              category: "other",
+            },
+          }),
+        );
+        if (addContractorMemberAttachment.rejected.match(result)) {
+          throw new Error(
+            typeof result.payload === "string"
+              ? result.payload
+              : `Could not attach ${fileItem.name}.`,
+          );
+        }
+        toast.success(`${fileItem.name} attached.`);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : error && typeof error === "object" && "message" in error
+            ? String((error as { message?: unknown }).message || "").trim()
+            : "";
+      toast.error(message || "Could not upload that file.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeAttachment(id: string, name: string) {
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      const result = await dispatch(
+        removeContractorMemberAttachment({ id: contractor.id, attachmentId: id }),
+      );
+      if (removeContractorMemberAttachment.rejected.match(result)) {
+        throw new Error(
+          typeof result.payload === "string" ? result.payload : "Could not remove attachment.",
+        );
+      }
+      toast.success(`${name} removed.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove attachment.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function onDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setOver(false);
+    if (event.dataTransfer.files.length) void readFiles(event.dataTransfer.files);
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">Attachments</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          W-9, COI, licenses, and trade documents for this contractor.
-        </p>
-      </div>
+    <div>
+      <h2 className="text-base font-semibold">Attachments</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        W-9, COI, licenses, and trade documents for this contractor.
+      </p>
       <label
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed border-black/20 bg-card px-4 py-10 text-center transition-colors",
-          over ? "border-primary bg-primary/5" : "",
+          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
+          over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+          uploading && "pointer-events-none opacity-60",
         )}
-        onDragOver={(event: DragEvent) => {
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragOver={(event) => {
           event.preventDefault();
           setOver(true);
         }}
         onDragLeave={() => setOver(false)}
-        onDrop={(event: DragEvent) => {
-          event.preventDefault();
-          setOver(false);
-          if (event.dataTransfer.files?.length) rejectUpload(event.dataTransfer.files);
-        }}
+        onDrop={onDrop}
       >
-        <Upload className="size-5 text-muted-foreground" />
-        <span className="text-sm font-medium">Drop files or click to upload</span>
-        <span className="text-xs text-muted-foreground">PDF, images, and common office files</span>
+        {uploading ? (
+          <Loader2 className="size-6 animate-spin text-primary" />
+        ) : (
+          <Upload className="size-6 text-primary" />
+        )}
+        <p className="text-sm font-medium">
+          {uploading ? "Uploading files…" : "Drop files here or browse"}
+        </p>
+        <p className="text-xs text-muted-foreground">Images, PDF, Video, and Audio up to 500 MB</p>
         <input
-          type="file"
           className="sr-only"
-          accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
+          type="file"
           multiple
+          accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
+          disabled={uploading}
           onChange={(event) => {
-            if (event.target.files?.length) rejectUpload(event.target.files);
+            if (event.target.files?.length) void readFiles(event.target.files);
             event.target.value = "";
           }}
         />
       </label>
-      <div className="rounded-[4px] border border-black/10 px-4 py-8 text-center text-sm text-muted-foreground">
-        <div className="mx-auto mb-2 flex justify-center gap-2 text-muted-foreground/70">
-          <FileText className="size-4" />
-          <ImageIcon className="size-4" />
-          <Film className="size-4" />
-          <Music className="size-4" />
-        </div>
-        No documents yet. Upload support requires the contractor attachments API.
-      </div>
+      {attachments.length ? (
+        <ul className="mt-4 divide-y divide-black/10 border border-black/10">
+          {attachments.map((item) => (
+            <li key={item.id} className="flex items-center gap-3 px-3 py-3">
+              <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">
+                {item.type.startsWith("image/") ? (
+                  <ImageIcon className="size-4" />
+                ) : item.type.startsWith("video/") ? (
+                  <Film className="size-4" />
+                ) : item.type.startsWith("audio/") ? (
+                  <Music className="size-4" />
+                ) : (
+                  <FileText className="size-4" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <a
+                  href={item.dataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block truncate text-sm font-medium hover:text-primary hover:underline"
+                >
+                  {item.name}
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  {item.addedAt ? stamp(item.addedAt) : fileSize(item.size)}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" asChild>
+                <a
+                  href={item.dataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Preview ${item.name} in a new tab`}
+                >
+                  <Eye className="size-3.5" />
+                  Preview
+                </a>
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                aria-label={`Delete ${item.name}`}
+                disabled={deletingId === item.id || uploading}
+                onClick={() => void removeAttachment(item.id, item.name)}
+              >
+                {deletingId === item.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 />}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-4 text-sm text-muted-foreground">No documents yet for this contractor.</p>
+      )}
+    </div>
+  );
+}
+
+function PayStat({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <div className="rounded-[4px] border border-black/10 bg-[#f8fafc] px-4 py-3">
+      <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold">{value}</p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }

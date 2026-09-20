@@ -93,7 +93,11 @@ export type PortalContractor = {
   zip: string;
   status: CrmDirectoryStatus;
   hourlyRate: number;
+  overtimeRate?: number;
+  travelRate?: number;
   insuranceExpires: string;
+  workingHours?: import("@/lib/data/portal").PortalEmployeeWorkingHours[];
+  attachments?: import("@/lib/data/portal").PortalEmployeeAttachment[];
   createdAt: string;
 };
 
@@ -416,6 +420,10 @@ export function contractorAsEmployee(contractor: PortalContractor): PortalEmploy
     trade: contractor.trade,
     active: contractor.status === "active",
     hourlyRate: contractor.hourlyRate,
+    overtimeRate: contractor.overtimeRate,
+    travelRate: contractor.travelRate,
+    workingHours: contractor.workingHours,
+    attachments: contractor.attachments,
   };
 }
 
@@ -459,8 +467,9 @@ export function reminderMatches(reminder: PortalReminder, kind: ReminderSubjectK
   if (!id) return false;
   const subject = reminderSubject(reminder);
   if (subject.kind === kind && subject.id === id) return true;
-  // Employee profile banners / lists: also match reminders assigned to this employee.
+  // Employee / contractor profile banners: also match reminders assigned to this person.
   if (kind === "employee" && reminder.assignedEmployeeId === id) return true;
+  if (kind === "contractor" && reminder.assignedContractorId === id) return true;
   return false;
 }
 

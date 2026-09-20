@@ -1060,9 +1060,9 @@ function contractorColumns() {
       id: "city",
       header: "City",
       sortValue: (row: PortalContractor) => row.city,
-      searchValue: (row: PortalContractor) => `${row.city} ${row.state} ${row.zip}`,
-      exportValue: (row: PortalContractor) => `${row.city}, ${row.state}`,
-      cell: (row: PortalContractor) => `${row.city}, ${row.state}`,
+      searchValue: (row: PortalContractor) => `${row.city} ${row.zip}`,
+      exportValue: (row: PortalContractor) => [row.city, row.zip].filter(Boolean).join(" "),
+      cell: (row: PortalContractor) => [row.city, row.zip].filter(Boolean).join(" ") || "—",
     },
     {
       id: "rate",

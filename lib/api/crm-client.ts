@@ -333,9 +333,12 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
   if (contractor.license !== undefined) payload.license = contractor.license || "";
   if (contractor.status !== undefined) payload.status = contractor.status || "active";
   if (contractor.hourlyRate !== undefined) payload.hourlyRate = contractor.hourlyRate ?? 0;
+  if (contractor.overtimeRate !== undefined) payload.overtimeRate = contractor.overtimeRate ?? 0;
+  if (contractor.travelRate !== undefined) payload.travelRate = contractor.travelRate ?? 0;
   if (contractor.insuranceExpires !== undefined) {
     payload.insuranceExpires = contractor.insuranceExpires || new Date().toISOString();
   }
+  if (contractor.workingHours !== undefined) payload.workingHours = contractor.workingHours;
   return payload;
 }
 
@@ -488,7 +491,10 @@ function reminderPayload(reminder: PortalReminder) {
     reminder.assignedEmployeeId ||
     (reminder.subjectKind === "employee" ? reminder.subjectId : undefined);
   if (assignedEmployeeId) payload.assignedEmployeeId = assignedEmployeeId;
-  if (reminder.assignedContractorId) payload.assignedContractorId = reminder.assignedContractorId;
+  const assignedContractorId =
+    reminder.assignedContractorId ||
+    (reminder.subjectKind === "contractor" ? reminder.subjectId : undefined);
+  if (assignedContractorId) payload.assignedContractorId = assignedContractorId;
   if (reminder.assignedVendorId) payload.assignedVendorId = reminder.assignedVendorId;
   if (reminder.note) payload.note = reminder.note;
   return payload;
@@ -907,6 +913,37 @@ export async function deleteContractor(id: string) {
   return deleteData(providerCrmApi.contractor(id), { silent: false });
 }
 
+/** POST /api/provider/contractors/:id/attachments */
+export async function addContractorAttachment(
+  contractorId: string,
+  attachment: {
+    name: string;
+    url: string;
+    fileType?: string;
+    sizeBytes?: number;
+    category?: string;
+  },
+) {
+  const response = await postData(providerCrmApi.contractorAttachments(contractorId), {
+    name: attachment.name,
+    url: attachment.url,
+    fileType: attachment.fileType || "",
+    sizeBytes: attachment.sizeBytes ?? 0,
+    category: attachment.category || "other",
+  });
+  const mapped = mapCrmEntity(response, mapPortalContractor);
+  if (mapped) return mapped;
+  return getContractor(contractorId);
+}
+
+/** DELETE /api/provider/contractors/:id/attachments/:attachmentId */
+export async function deleteContractorAttachment(contractorId: string, attachmentId: string) {
+  await deleteData(providerCrmApi.contractorAttachment(contractorId, attachmentId), {
+    silent: false,
+  });
+  return getContractor(contractorId);
+}
+
 export async function listVendors(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.vendors, mapPortalVendor, options);
 }
@@ -1069,7 +1106,7 @@ export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
 }
 
-/** Paginated estimates list — supports `status`, `isArchived`, `customerId`, and `search`. */
+/** Paginated estimates list — supports `status`, `isArchived`, `customerId`, `contractorId`, and `search`. */
 export async function queryEstimates(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -1077,12 +1114,14 @@ export async function queryEstimates(query: CrmListQuery = {}) {
   const search = query.search?.trim();
   const status = query.status?.trim();
   const customerId = query.customerId?.trim();
+  const contractorId = query.contractorId?.trim();
   const requestId = query.requestId?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
   // Always send archive flag so active boards never mix archived rows.
   params.isArchived = query.isArchived === true;
   if (customerId) params.customerId = customerId;
+  if (contractorId) params.contractorId = contractorId;
   if (requestId) params.requestId = requestId;
   const response = await getData(providerCrmApi.estimates, params, {
     silent: query.silent ?? true,

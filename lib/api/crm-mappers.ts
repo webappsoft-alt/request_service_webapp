@@ -804,7 +804,11 @@ export function mapPortalContractor(raw: unknown): PortalContractor | null {
         ? (trimmed(record.status) as PortalContractor["status"])
         : "active",
     hourlyRate: numberValue(record.hourlyRate),
+    overtimeRate: numberValue(record.overtimeRate, 0) || undefined,
+    travelRate: numberValue(record.travelRate, 0) || undefined,
     insuranceExpires: toIsoString(record.insuranceExpires),
+    workingHours: mapEmployeeWorkingHours(record.workingHours),
+    attachments: mapEmployeeAttachments(record.attachments),
     createdAt: toIsoString(record.createdAt),
   };
 }

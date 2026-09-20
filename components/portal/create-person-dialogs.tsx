@@ -982,6 +982,7 @@ export function CreateReminderDialog({
       assignedEmployeeId:
         assignedEmployeeId ||
         (linkedKind === "employee" ? linkedId : undefined),
+      assignedContractorId: linkedKind === "contractor" ? linkedId : undefined,
       status,
       createdAt: reminder?.createdAt ?? new Date().toISOString().slice(0, 10),
     };

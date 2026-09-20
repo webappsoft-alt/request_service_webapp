@@ -3,7 +3,7 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import { extractErrorMessage } from "@/components/api/apiFuntions";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import {
   createTask,
   deleteTask,
@@ -12,11 +12,6 @@ import {
   updateTaskStatus,
 } from "@/lib/api/crm-client";
 import type { PortalTask } from "@/lib/data/crm-people";
-import {
-  createCustomerTask,
-  updateCustomerTask,
-  deleteCustomerTask,
-} from "./customersSlice";
 
 /** List page size for GET /provider/tasks */
 export const TASKS_DEFAULT_LIMIT = 20;
@@ -303,26 +298,39 @@ const tasksSlice = createSlice({
         state.items = state.items.filter((item) => item.id !== action.payload);
         state.total = Math.max(0, state.total - 1);
       })
-      .addCase(createCustomerTask.fulfilled, (state, action) => {
-        state.pagesCache = {};
-        state.items = [
-          action.payload,
-          ...state.items.filter((item) => item.id !== action.payload.id),
-        ];
-        state.total += 1;
-      })
-      .addCase(updateCustomerTask.fulfilled, (state, action) => {
-        state.pagesCache = {};
-        const updated = action.payload;
-        state.items = state.items.map((item) =>
-          item.id === updated.id ? { ...item, ...updated } : item,
-        );
-      })
-      .addCase(deleteCustomerTask.fulfilled, (state, action) => {
-        state.pagesCache = {};
-        state.items = state.items.filter((item) => item.id !== action.payload.id);
-        state.total = Math.max(0, state.total - 1);
-      });
+      // Listen by action type — avoid importing customersSlice (circular with store/index).
+      .addMatcher(
+        (action): action is PayloadAction<PortalTask> =>
+          action.type === "customers/createTask/fulfilled",
+        (state, action) => {
+          state.pagesCache = {};
+          state.items = [
+            action.payload,
+            ...state.items.filter((item) => item.id !== action.payload.id),
+          ];
+          state.total += 1;
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<PortalTask> =>
+          action.type === "customers/updateTask/fulfilled",
+        (state, action) => {
+          state.pagesCache = {};
+          const updated = action.payload;
+          state.items = state.items.map((item) =>
+            item.id === updated.id ? { ...item, ...updated } : item,
+          );
+        },
+      )
+      .addMatcher(
+        (action): action is PayloadAction<{ id: string; customerId: string }> =>
+          action.type === "customers/deleteTask/fulfilled",
+        (state, action) => {
+          state.pagesCache = {};
+          state.items = state.items.filter((item) => item.id !== action.payload.id);
+          state.total = Math.max(0, state.total - 1);
+        },
+      );
   },
 });
 

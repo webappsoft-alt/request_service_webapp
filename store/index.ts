@@ -138,6 +138,7 @@ function needsReducerHotReplace(state: RootState) {
     state.contractors === undefined ||
     state.vendors === undefined ||
     state.reminders === undefined ||
+    state.tasks === undefined ||
     state.customerNotes === undefined ||
     state.estimateNotes === undefined ||
     state.requestNotes === undefined ||

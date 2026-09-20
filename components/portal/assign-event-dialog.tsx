@@ -122,10 +122,11 @@ export function AssignEventDialog({
 }) {
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
+  const role = String(user?.role || auth.role || "").toLowerCase();
   const useApi =
     auth.hydrated &&
     Boolean(auth.token) &&
-    (user?.role === "provider" || auth.role === "provider");
+    (!role || role === "provider" || role === "pro" || role === "admin");
   const { contractors } = useCrmDirectory();
   const assigneePaging = usePaginatedCrmOptions(open && useApi ? "assignee" : null, open && useApi);
 

@@ -81,10 +81,11 @@ function subscribe(onStoreChange: () => void) {
 export function usePortalCrew() {
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
+  const role = String(user?.role || auth.role || "").toLowerCase();
   const canCallApi =
     auth.hydrated &&
     Boolean(auth.token) &&
-    (user?.role === "provider" || auth.role === "provider");
+    (!role || role === "provider" || role === "pro" || role === "admin");
   const reduxTeam = useAppSelector((state) => state.team?.items ?? []);
   const reduxLoading = useAppSelector((state) => state.team?.loading ?? false);
   const workspace = usePortalWorkspace();
@@ -152,7 +153,10 @@ export function usePortalCrew() {
         status: task.status,
       };
     });
-    return [...workspace.calendarEvents, ...taskEvents].map((event) => {
+    const base = [...workspace.calendarEvents, ...taskEvents];
+    // Live CRM: never overlay stale localStorage schedule assignments.
+    if (canCallApi) return base;
+    return base.map((event) => {
       const override = store.assignments.find(
         (item) => item.kind === event.kind && item.recordId === event.recordId,
       );
@@ -167,7 +171,7 @@ export function usePortalCrew() {
         employeeId: override.employeeId,
       };
     });
-  }, [store.assignments, tasks, workspace.calendarEvents, workspace.customers]);
+  }, [canCallApi, store.assignments, tasks, workspace.calendarEvents, workspace.customers]);
 
   const assign = useCallback(
     async (assignment: PortalAssignment) => {
@@ -349,16 +353,7 @@ export function usePortalCrew() {
         return;
       }
 
-      const current = readStore(key);
-      writeStore(key, {
-        ...current,
-        assignments: [
-          ...current.assignments.filter(
-            (item) => !(item.kind === assignment.kind && item.recordId === assignment.recordId),
-          ),
-          assignment,
-        ],
-      });
+      throw new Error("Sign in to update the schedule on the server.");
     },
     [apiReady, canCallApi, contractors, crm, events, key, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
   );
@@ -452,19 +447,15 @@ export function usePortalCrew() {
 
   const removeSchedule = useCallback(
     (scheduleId: string) => {
-      if (apiReady) {
+      if (canCallApi) {
         return (async () => {
           await deleteScheduleApi(scheduleId);
-          await crm.refresh();
+          if (apiReady) await crm.refresh();
         })();
       }
-      const current = readStore(key);
-      writeStore(key, {
-        ...current,
-        assignments: current.assignments.filter((item) => item.recordId !== scheduleId),
-      });
+      throw new Error("Sign in to remove schedule items from the server.");
     },
-    [apiReady, crm, key],
+    [apiReady, canCallApi, crm],
   );
 
   const employeeById = useCallback(

@@ -151,21 +151,35 @@ export function EventCalendar({
   events: propEvents,
   employeeLabel,
   employees,
+  memberOptions,
   onMove,
   onEventOpen,
   toolbar,
   initialEmployeeId = "",
   lockEmployeeId = "",
+  serverFiltered = false,
+  employeeFilter: controlledEmployeeFilter,
+  onEmployeeFilterChange,
+  kindFilter: controlledKindFilter,
+  onKindFilterChange,
 }: {
   events: PortalCalendarEvent[];
   employeeLabel: (id?: string) => string;
   employees?: PortalEmployee[];
+  /** Prefer this for Everyone dropdown (employees + contractors from API). */
+  memberOptions?: Array<{ id: string; label: string }>;
   onMove: (event: PortalCalendarEvent, move: CalendarMove) => void;
   onEventOpen?: (event: PortalCalendarEvent) => void;
   toolbar?: ReactNode;
   initialEmployeeId?: string;
   /** When set, calendar stays scoped to this employee (hides Everyone filter). */
   lockEmployeeId?: string;
+  /** Parent already filtered via API — skip client member/kind filtering. */
+  serverFiltered?: boolean;
+  employeeFilter?: string;
+  onEmployeeFilterChange?: (employeeId: string) => void;
+  kindFilter?: PortalEventKind | "";
+  onKindFilterChange?: (kind: PortalEventKind | "") => void;
 }) {
   const [localEvents, setLocalEvents] = useState<PortalCalendarEvent[]>(propEvents);
 
@@ -182,19 +196,43 @@ export function EventCalendar({
   const start = parseIso(firstDated);
   const [view, setView] = useState<CalendarView>("day");
   const [cursor, setCursor] = useState({ year: start.getFullYear(), month: start.getMonth() });
-  const [kindFilter, setKindFilter] = useState<PortalEventKind | "">("");
-  const [employeeFilter, setEmployeeFilter] = useState(
+  const [kindFilterInternal, setKindFilterInternal] = useState<PortalEventKind | "">("");
+  const [employeeFilterInternal, setEmployeeFilterInternal] = useState(
     lockEmployeeId || initialEmployeeId,
   );
   const [selectedDay, setSelectedDay] = useState(firstDated);
   const [overDay, setOverDay] = useState<string | null>(null);
 
+  const kindFilter = controlledKindFilter !== undefined ? controlledKindFilter : kindFilterInternal;
+  const setKindFilter = (value: PortalEventKind | "") => {
+    if (onKindFilterChange) onKindFilterChange(value);
+    else setKindFilterInternal(value);
+  };
+  const employeeFilter =
+    controlledEmployeeFilter !== undefined ? controlledEmployeeFilter : employeeFilterInternal;
+  const setEmployeeFilter = (value: string) => {
+    if (onEmployeeFilterChange) onEmployeeFilterChange(value);
+    else setEmployeeFilterInternal(value);
+  };
+
   useEffect(() => {
     const next = lockEmployeeId || initialEmployeeId;
     if (next) setEmployeeFilter(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync from URL/lock props
   }, [initialEmployeeId, lockEmployeeId]);
 
+  const everyoneOptions = useMemo(() => {
+    if (memberOptions?.length) return memberOptions;
+    return (employees ?? [])
+      .filter((item) => item.active !== false)
+      .map((item) => ({
+        id: item.id,
+        label: `${item.firstName} ${item.lastName}`.trim() || item.id,
+      }));
+  }, [employees, memberOptions]);
+
   const visible = useMemo(() => {
+    if (serverFiltered) return localEvents;
     const locked = lockEmployeeId.trim();
     const employeeId = locked || employeeFilter.trim();
     const kind = kindFilter;
@@ -206,7 +244,7 @@ export function EventCalendar({
       }
       return true;
     });
-  }, [employeeFilter, localEvents, kindFilter, lockEmployeeId]);
+  }, [employeeFilter, localEvents, kindFilter, lockEmployeeId, serverFiltered]);
 
   const cells = useMemo(() => {
     const first = new Date(cursor.year, cursor.month, 1);
@@ -436,23 +474,21 @@ export function EventCalendar({
             ))}
           </SelectContent>
         </Select>
-        {employees && !lockEmployeeId ? (
+        {!lockEmployeeId ? (
           <Select
             value={employeeFilter || "__all__"}
             onValueChange={(value) => setEmployeeFilter(value === "__all__" ? "" : value)}
           >
-            <SelectTrigger size="sm" className="w-48">
+            <SelectTrigger size="sm" className="w-52">
               <SelectValue placeholder="Everyone" />
             </SelectTrigger>
             <SelectContent position="popper" align="end">
               <SelectItem value="__all__">Everyone</SelectItem>
-              {employees
-                .filter((item) => item.active !== false)
-                .map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.firstName} {item.lastName}
-                  </SelectItem>
-                ))}
+              {everyoneOptions.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         ) : null}
@@ -466,7 +502,7 @@ export function EventCalendar({
             <button
               key={kind}
               type="button"
-              onClick={() => setKindFilter((current) => (current === kind ? "" : kind))}
+              onClick={() => setKindFilter(kindFilter === kind ? "" : kind)}
               className={cn(
                 "rounded-md px-2 py-0.5 font-medium transition-opacity",
                 calendarEventTone(kind),

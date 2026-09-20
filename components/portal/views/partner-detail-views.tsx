@@ -230,7 +230,7 @@ export function VendorDetailView({ id }: { id: string }) {
           case "notes":
             return <NotesPanel kind="vendor" id={vendor.id} />;
           case "attachments":
-            return <EmployeeAttachmentsTab employee={asEmployee} />;
+            return <EmployeeAttachmentsTab employee={asEmployee} useApi={false} />;
           default:
             return <VendorSettingsTab vendor={vendor} onSave={updateVendor} />;
         }

@@ -506,7 +506,6 @@ export function VendorsView() {
 export function RemindersView() {
   const dispatch = useAppDispatch();
   const useApi = useProviderApi();
-  const { reminders: directoryReminders, remove, setReminderStatus } = useCrmDirectory();
   const { employees: crewEmployees } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const employees = useApi && teamItems.length > 0 ? teamItems : crewEmployees;
@@ -580,7 +579,7 @@ export function RemindersView() {
     dispatch(clearRemindersError());
   }, [dispatch, error, loading, useApi]);
 
-  let rows = useApi ? items : directoryReminders;
+  let rows = items;
   if (overdueOnly) {
     rows = rows.filter((item) => reminderIsOverdue(item) && item.status !== "done");
   } else if (!useApi && statusParam) {
@@ -830,12 +829,12 @@ export function ReminderDetailView({ id }: { id: string }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const useApi = useProviderApi();
-  const { reminders: directoryReminders, setReminderStatus, remove } = useCrmDirectory();
   const { employees: crewEmployees } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const reminderItems = useAppSelector((state) => state.reminders?.items ?? []);
+  const remindersLoading = useAppSelector((state) => Boolean(state.reminders?.loading));
   const employees = useApi && teamItems.length > 0 ? teamItems : crewEmployees;
-  const reminders = useApi && reminderItems.length > 0 ? reminderItems : directoryReminders;
+  const reminders = reminderItems;
   const lookups = useReminderLookups();
   const reminder = reminders.find((item) => item.id === id);
   const pending = useCrmRecordPending();
@@ -852,7 +851,7 @@ export function ReminderDetailView({ id }: { id: string }) {
   }, [dispatch, useApi]);
 
   if (!reminder) {
-    if (pending || (useApi && !reminderItems.length)) {
+    if (pending || (useApi && remindersLoading)) {
       return (
         <div className="border border-black/15 bg-card p-6">
           <h1 className="text-lg font-semibold">Loading reminder…</h1>

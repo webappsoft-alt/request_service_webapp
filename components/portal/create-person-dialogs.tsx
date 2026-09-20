@@ -861,7 +861,7 @@ export function CreateReminderDialog({
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
-  const { addReminder, provider } = useCrmDirectory();
+  const { provider } = useCrmDirectory();
   const { employees: crewEmployees } = usePortalCrew();
   const crm = useCrmApiData();
   const lookups = useReminderLookups();

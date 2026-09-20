@@ -33,7 +33,6 @@ import {
   getCrmCustomers,
   getPortalContractors,
   getPortalNotes,
-  getPortalReminders,
   getPortalTasks,
   getPortalVendors,
   type PortalContractor,
@@ -152,10 +151,6 @@ export function useCrmDirectory() {
     () => (suppressSeedData ? [] : getPortalVendors(provider)),
     [provider, suppressSeedData],
   );
-  const seedReminders = useMemo(
-    () => (suppressSeedData ? [] : getPortalReminders(provider)),
-    [provider, suppressSeedData],
-  );
   const seedTasks = useMemo(
     () => (suppressSeedData ? [] : getPortalTasks(provider)),
     [provider, suppressSeedData],
@@ -230,31 +225,14 @@ export function useCrmDirectory() {
     ],
   );
   const reminders = useMemo(() => {
-    // Later sources win so Redux / local patches override a stale CRM snapshot.
-    const pool = [
-      ...(store.reminders || []),
-      ...(crm.reminders || []),
-      ...(reduxReminders || []),
-      ...(reduxCustomerReminders || []),
-    ];
+    // API / Redux only — no localStorage or seed demo reminders.
+    const pool = [...(crm.reminders || []), ...(reduxReminders || []), ...(reduxCustomerReminders || [])];
     const map = new Map<string, PortalReminder>();
     for (const item of pool) {
-      if (item && item.id && !store.deleted.includes(`reminder:${item.id}`)) {
-        map.set(item.id, item);
-      }
+      if (item?.id) map.set(item.id, item);
     }
-    if (map.size > 0) return Array.from(map.values());
-    if (suppressSeedData) return [];
-    return seedReminders.filter((item) => !store.deleted.includes(`reminder:${item.id}`));
-  }, [
-    crm.reminders,
-    reduxReminders,
-    reduxCustomerReminders,
-    store.reminders,
-    store.deleted,
-    suppressSeedData,
-    seedReminders,
-  ]);
+    return Array.from(map.values());
+  }, [crm.reminders, reduxReminders, reduxCustomerReminders]);
 
   const tasks = useMemo(() => {
     // Later sources win so Redux / local patches override a stale CRM snapshot.
@@ -369,28 +347,22 @@ export function useCrmDirectory() {
 
   const addReminder = useCallback(
     (reminder: PortalReminder) => {
-      if (crm.enabled) {
-        return (async () => {
-          const created = await createReminderApi(reminder);
-          const finalReminder = created || reminder;
-          crm.addReminder(finalReminder);
-          dispatch(upsertReminderItem(finalReminder));
-          if (finalReminder.customerId) {
-            dispatch(upsertCustomerReminder({ customerId: finalReminder.customerId, item: finalReminder }));
-          }
-          void crm.refresh({ silent: true });
-          return finalReminder;
-        })();
+      if (!crm.enabled) {
+        return Promise.reject(new Error("Sign in as a provider to manage reminders."));
       }
-      crm.addReminder(reminder);
-      const current = readStore(key);
-      writeStore(key, {
-        ...current,
-        reminders: [reminder, ...current.reminders.filter((r) => r.id !== reminder.id)],
-      });
-      return reminder;
+      return (async () => {
+        const created = await createReminderApi(reminder);
+        const finalReminder = created || reminder;
+        crm.addReminder(finalReminder);
+        dispatch(upsertReminderItem(finalReminder));
+        if (finalReminder.customerId) {
+          dispatch(upsertCustomerReminder({ customerId: finalReminder.customerId, item: finalReminder }));
+        }
+        void crm.refresh({ silent: true });
+        return finalReminder;
+      })();
     },
-    [crm, dispatch, key],
+    [crm, dispatch],
   );
 
   const addTask = useCallback(
@@ -459,6 +431,25 @@ export function useCrmDirectory() {
 
   const remove = useCallback(
     (kind: "customer" | "contractor" | "vendor" | "reminder" | "task" | "note", id: string) => {
+      if (kind === "reminder" || kind === "task") {
+        if (!crm.enabled) {
+          return Promise.reject(new Error("Sign in as a provider to manage this record."));
+        }
+        return (async () => {
+          if (kind === "reminder") {
+            crm.removeReminder(id);
+            dispatch(removeReminderItemLocal(id));
+            dispatch(removeCustomerReminderLocal(id));
+            await deleteReminderApi(id);
+          } else {
+            crm.removeTask(id);
+            dispatch(removeTaskItemLocal(id));
+            dispatch(removeCustomerTaskLocal(id));
+            await deleteTaskApi(id);
+          }
+          await crm.refresh({ silent: true });
+        })();
+      }
       if (crm.enabled) {
         return (async () => {
           switch (kind) {
@@ -471,18 +462,6 @@ export function useCrmDirectory() {
             case "vendor":
               await deleteVendorApi(id);
               break;
-            case "reminder":
-              crm.removeReminder(id);
-              dispatch(removeReminderItemLocal(id));
-              dispatch(removeCustomerReminderLocal(id));
-              await deleteReminderApi(id);
-              break;
-            case "task":
-              crm.removeTask(id);
-              dispatch(removeTaskItemLocal(id));
-              dispatch(removeCustomerTaskLocal(id));
-              await deleteTaskApi(id);
-              break;
             case "note":
               break;
             default: {
@@ -492,7 +471,6 @@ export function useCrmDirectory() {
           }
           if (kind !== "note") {
             await crm.refresh({ silent: true });
-            return;
           }
         })();
       }
@@ -556,30 +534,24 @@ export function useCrmDirectory() {
 
   const setReminderStatus = useCallback(
     (id: string, status: PortalReminder["status"]) => {
-      if (crm.enabled) {
-        return (async () => {
-          crm.patchReminder(id, { status });
-          const updated = await updateReminderStatusApi(id, status);
-          if (updated) {
-            crm.patchReminder(id, updated);
-            dispatch(upsertReminderItem(updated));
-            if (updated.customerId) {
-              dispatch(upsertCustomerReminder({ customerId: updated.customerId, item: updated }));
-            }
-          }
-          void crm.refresh({ silent: true });
-          return updated;
-        })();
+      if (!crm.enabled) {
+        return Promise.reject(new Error("Sign in as a provider to manage reminders."));
       }
-      crm.patchReminder(id, { status });
-      const current = readStore(key);
-      const inStore = current.reminders.some((item) => item.id === id);
-      const nextReminders = inStore
-        ? current.reminders.map((item) => (item.id === id ? { ...item, status } : item))
-        : [...current.reminders, ...seedReminders.filter((item) => item.id === id).map((item) => ({ ...item, status }))];
-      writeStore(key, { ...current, reminders: nextReminders });
+      return (async () => {
+        crm.patchReminder(id, { status });
+        const updated = await updateReminderStatusApi(id, status);
+        if (updated) {
+          crm.patchReminder(id, updated);
+          dispatch(upsertReminderItem(updated));
+          if (updated.customerId) {
+            dispatch(upsertCustomerReminder({ customerId: updated.customerId, item: updated }));
+          }
+        }
+        void crm.refresh({ silent: true });
+        return updated;
+      })();
     },
-    [crm, dispatch, key, seedReminders],
+    [crm, dispatch],
   );
 
   const setTaskStatus = useCallback(

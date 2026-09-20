@@ -378,7 +378,7 @@ export function TeamMemberView({ id }: { id: string }) {
             case "notes":
               return <NotesPanel kind="employee" id={employee.id} />;
             case "attachments":
-              return <EmployeeAttachmentsTab employee={employee} useApi />;
+              return <EmployeeAttachmentsTab employee={employee} />;
             default:
               return <EmployeeSettingsTab employee={employee} onSave={saveEmployee} />;
           }
@@ -1287,33 +1287,38 @@ function fileSize(bytes: number) {
 
 export function EmployeeAttachmentsTab({
   employee,
-  useApi = false,
+  useApi = true,
 }: {
   employee: PortalEmployee;
-  /** When true, list/upload/delete via team attachment APIs. */
+  /** When false (e.g. vendor reuse), attachments API is not available. */
   useApi?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const detail = useAppSelector((state) => state.team?.detail ?? null);
-  const file = useEmployeeFile(employee);
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const liveEmployee = detail?.id === employee.id ? detail : employee;
-  const apiAttachments = liveEmployee.attachments ?? [];
-  const localAttachments = file.attachments;
-  const attachments = useApi
-    ? apiAttachments.map((item) => ({
-        id: item.id,
-        name: item.name,
-        type: item.fileType || "application/octet-stream",
-        size: item.sizeBytes ?? 0,
-        dataUrl: item.url,
-        addedAt: item.uploadedAt || "",
-        actor: "",
-      }))
-    : localAttachments;
+  const attachments = (liveEmployee.attachments ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    type: item.fileType || "application/octet-stream",
+    size: item.sizeBytes ?? 0,
+    dataUrl: item.url,
+    addedAt: item.uploadedAt || "",
+  }));
+
+  if (!useApi) {
+    return (
+      <div>
+        <h2 className="text-base font-semibold">Attachments</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Document uploads for this record are not available yet.
+        </p>
+      </div>
+    );
+  }
 
   async function readFiles(list: FileList | File[]) {
     if (uploading) return;
@@ -1335,36 +1340,22 @@ export function EmployeeAttachmentsTab({
         const url = extractUploadedUrl(response.data);
         if (!url) throw new Error(`Could not upload ${fileItem.name}.`);
 
-        if (useApi) {
-          const result = await dispatch(
-            addTeamMemberAttachment({
-              id: employee.id,
-              attachment: {
-                name: fileItem.name,
-                url,
-                fileType: fileItem.type || "application/octet-stream",
-                sizeBytes: fileItem.size,
-                category: "other",
-              },
-            }),
-          );
-          if (addTeamMemberAttachment.rejected.match(result)) {
-            throw new Error(
-              typeof result.payload === "string" ? result.payload : `Could not attach ${fileItem.name}.`,
-            );
-          }
-        } else {
-          file.addAttachments([
-            {
-              id: `att_${Date.now()}_${fileItem.name}`,
+        const result = await dispatch(
+          addTeamMemberAttachment({
+            id: employee.id,
+            attachment: {
               name: fileItem.name,
-              type: fileItem.type || "application/octet-stream",
-              size: fileItem.size,
-              dataUrl: url,
-              addedAt: new Date().toISOString(),
-              actor: file.actor,
+              url,
+              fileType: fileItem.type || "application/octet-stream",
+              sizeBytes: fileItem.size,
+              category: "other",
             },
-          ]);
+          }),
+        );
+        if (addTeamMemberAttachment.rejected.match(result)) {
+          throw new Error(
+            typeof result.payload === "string" ? result.payload : `Could not attach ${fileItem.name}.`,
+          );
         }
         toast.success(`${fileItem.name} attached.`);
       }
@@ -1385,17 +1376,13 @@ export function EmployeeAttachmentsTab({
     if (deletingId) return;
     setDeletingId(id);
     try {
-      if (useApi) {
-        const result = await dispatch(
-          removeTeamMemberAttachment({ id: employee.id, attachmentId: id }),
+      const result = await dispatch(
+        removeTeamMemberAttachment({ id: employee.id, attachmentId: id }),
+      );
+      if (removeTeamMemberAttachment.rejected.match(result)) {
+        throw new Error(
+          typeof result.payload === "string" ? result.payload : "Could not remove attachment.",
         );
-        if (removeTeamMemberAttachment.rejected.match(result)) {
-          throw new Error(
-            typeof result.payload === "string" ? result.payload : "Could not remove attachment.",
-          );
-        }
-      } else {
-        file.removeAttachment(id);
       }
       toast.success(`${name} removed.`);
     } catch (error) {

@@ -46,12 +46,17 @@ import {
   setEstimatesStatus,
 } from "@/store/estimatesSlice";
 import {
+  clearJobsError,
+  convertJobToInvoiceRecord,
+  deleteJobRecord,
   fetchJobs,
   invalidateJobsCache,
-  setJobsPage,
-  patchJobStatus,
-  deleteJobRecord,
   JOBS_DEFAULT_LIMIT,
+  patchJobArchive,
+  patchJobStatus,
+  setJobsListFilter,
+  setJobsPage,
+  setJobsSearch,
 } from "@/store/jobsSlice";
 import {
   clearInvoicesError,
@@ -96,7 +101,7 @@ import {
   withArchiveFilter,
 } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { Estimate, Invoice } from "@/lib/types";
+import type { Estimate, Invoice, Job } from "@/lib/types";
 
 type EstimateRow = Estimate & { customerName: string };
 
@@ -642,8 +647,11 @@ export function EstimatesView() {
 }
 
 export function JobsView() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const statusParam = searchParams.get("status") ?? "";
+  const archivedOnly = statusParam === "archived";
+  const listFilter = statusParam as "" | Job["status"] | "archived";
   const dispatch = useAppDispatch();
   const { provider, estimates, requests, invoices } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
@@ -651,8 +659,12 @@ export function JobsView() {
   const records = usePortalRecords();
   const [createOpen, setCreateOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Job | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
-  // ── Redux state ──────────────────────────────────────────────────────────
+  const slice = useAppSelector((s) => s.jobs);
   const {
     items: reduxItems,
     loading,
@@ -660,46 +672,83 @@ export function JobsView() {
     totalPages,
     page,
     search: reduxSearch,
-    status: reduxStatus,
     error,
-  } = useAppSelector((s) => s.jobs);
+  } = slice ?? {
+    items: [],
+    loading: true,
+    total: 0,
+    totalPages: 1,
+    page: 1,
+    search: "",
+    error: null,
+  };
 
-  // Controlled search input with debounce
   const [searchInput, setSearchInput] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load & refresh ────────────────────────────────────────────────────────
   useEffect(() => {
-    dispatch(fetchJobs({ status: statusParam, page: 1, search: "" }));
-  }, [dispatch, statusParam]);
+    setSearchInput(reduxSearch);
+  }, [reduxSearch]);
 
-  // Debounced search dispatch
+  useEffect(() => {
+    dispatch(setJobsListFilter(listFilter));
+  }, [dispatch, listFilter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setActionLoading(true);
+    void dispatch(fetchJobs()).finally(() => {
+      if (!cancelled) setActionLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, page, reduxSearch, slice?.status, slice?.isArchived]);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!error || loading) return;
+    toast.error(error);
+    dispatch(clearJobsError());
+  }, [dispatch, error, loading]);
+
   const handleSearch = (value: string) => {
     setSearchInput(value);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      dispatch(fetchJobs({ search: value, status: statusParam, page: 1 }));
+      setActionLoading(true);
+      dispatch(setJobsSearch(value.trim()));
     }, 350);
   };
 
   const handlePageChange = (newPage: number) => {
+    if (newPage === page) return;
+    setActionLoading(true);
     dispatch(setJobsPage(newPage));
-    dispatch(fetchJobs({ page: newPage, search: reduxSearch, status: statusParam }));
   };
 
   const handleStatusAction = async (
     id: string,
-    status: string,
+    status: Job["status"],
     label: string,
   ) => {
     setActionLoading(true);
     try {
-      await dispatch(
-        patchJobStatus({ id, status: status as Parameters<typeof patchJobStatus>[0]["status"] }),
-      ).unwrap();
+      await dispatch(patchJobStatus({ id, status })).unwrap();
       toast.success(label);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update job status.");
+      toast.error(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+            ? err.message
+            : "Could not update job status.",
+      );
     } finally {
       setActionLoading(false);
     }
@@ -711,13 +760,49 @@ export function JobsView() {
       await dispatch(deleteJobRecord(id)).unwrap();
       toast.success(`${number} deleted. The source estimate can be converted again.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not delete this job.");
+      toast.error(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+            ? err.message
+            : "Could not delete this job.",
+      );
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Merge Redux items with workspace data (workspace may contain items from snapshot)
+  async function handleConvert(row: Job) {
+    if (convertingId) return;
+    if (row.invoiceId) {
+      router.push(`/pro/dashboard/invoices/${row.invoiceId}`);
+      return;
+    }
+    if (row.status === "invoiced" || row.status === "paid") {
+      toast.error("This job is marked invoiced but has no invoice link yet.");
+      router.push(`/pro/dashboard/jobs/${row.id}`);
+      return;
+    }
+    setConvertingId(row.id);
+    try {
+      const { invoice } = await dispatch(
+        convertJobToInvoiceRecord(row.id),
+      ).unwrap();
+      toast.success(`${invoice.number || "Invoice"} drafted from ${row.number}.`);
+      router.push(`/pro/dashboard/invoices/${invoice.id}`);
+    } catch (err) {
+      toast.error(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+            ? err.message
+            : "Could not convert this job.",
+      );
+    } finally {
+      setConvertingId(null);
+    }
+  }
+
   const allEstimates = useMemo(
     () => records.mergeEstimates(estimates),
     [records, estimates],
@@ -727,19 +812,13 @@ export function JobsView() {
     [records, invoices],
   );
 
-  const rows = useMemo(() => {
-    const source = reduxItems.length > 0 ? reduxItems : [];
-    return source.filter((item) =>
-      statusParam === "archived"
-        ? !!(item as unknown as { isArchived?: boolean }).isArchived
-        : !statusParam || item.status === statusParam,
-    );
-  }, [reduxItems, statusParam]);
+  const rows = reduxItems;
+  const tableLoading = actionLoading || (loading && rows.length === 0);
 
   return (
     <PortalPage
       eyebrow="Field work"
-      title="Jobs"
+      title={`Jobs (${total})`}
       description="Approved estimates become jobs. Fixed services booked on the website skip the estimate and land here as work ready to start."
       actions={
         <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -753,14 +832,9 @@ export function JobsView() {
           setCreateOpen(open);
           if (!open) {
             dispatch(invalidateJobsCache());
-            dispatch(fetchJobs({ status: statusParam, page: 1, search: reduxSearch }));
+            void dispatch(fetchJobs({ force: true }));
           }
         }}
-      />
-      <FilterTabs
-        baseHref="/pro/dashboard/jobs"
-        value={statusParam}
-        options={withArchiveFilter(JOB_STATUS_FILTERS)}
       />
       <PortalDataTable
         filename="jobs"
@@ -769,7 +843,14 @@ export function JobsView() {
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
-        loading={loading}
+        loading={tableLoading}
+        empty={
+          archivedOnly
+            ? "No archived jobs."
+            : statusParam
+              ? "No jobs match this status."
+              : "No jobs yet."
+        }
         serverPagination={{
           page,
           pageSize: JOBS_DEFAULT_LIMIT,
@@ -779,6 +860,44 @@ export function JobsView() {
           search: searchInput,
           onSearchChange: handleSearch,
         }}
+        toolbar={
+          <div className="h-8.5 w-40 sm:w-52">
+            <Select
+              disabled={tableLoading}
+              value={statusParam || "__all__"}
+              onValueChange={(value) => {
+                const next = value === "__all__" ? "" : value;
+                router.replace(
+                  next
+                    ? `/pro/dashboard/jobs?status=${next}`
+                    : "/pro/dashboard/jobs",
+                );
+              }}
+            >
+              <SelectTrigger
+                id="jobs-status-filter"
+                aria-label="Filter by status"
+                className="h-full w-full text-xs"
+              >
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="end"
+                className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[160px]"
+              >
+                {withArchiveFilter(JOB_STATUS_FILTERS).map((option) => (
+                  <SelectItem
+                    key={option.label}
+                    value={option.value || "__all__"}
+                  >
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
         columns={jobBoardColumns({
           estimates: allEstimates,
           requests,
@@ -792,62 +911,141 @@ export function JobsView() {
               : getPortalCustomerName(provider, customerId);
           },
         })}
-        actions={(row) => [
-          { label: "View", href: `/pro/dashboard/jobs/${row.id}` },
-          {
-            label: "Convert to invoice",
-            href: `/pro/dashboard/jobs/${row.id}`,
-          },
-          { label: "Assign on calendar", href: "/pro/dashboard/schedule" },
-          ...(row.status === "in_progress"
-            ? []
-            : [
-                {
-                  label: "Start job",
-                  onSelect: () => {
-                    void handleStatusAction(row.id, "in_progress", "Job marked in progress.");
-                  },
+        actions={(row) => {
+          const archived = Boolean(row.isArchived) || records.isArchived("job", row.id);
+          const alreadyInvoiced = Boolean(
+            row.invoiceId || row.status === "invoiced" || row.status === "paid",
+          );
+          const isFinished =
+            row.status === "completed" ||
+            row.status === "invoiced" ||
+            row.status === "paid" ||
+            row.status === "cancelled";
+          return [
+            { label: "View", href: `/pro/dashboard/jobs/${row.id}` },
+            alreadyInvoiced
+              ? {
+                  label: row.invoiceId ? "Open invoice" : "Invoiced",
+                  href: row.invoiceId
+                    ? `/pro/dashboard/invoices/${row.invoiceId}`
+                    : `/pro/dashboard/jobs/${row.id}`,
+                }
+              : {
+                  label:
+                    convertingId === row.id ? "Converting…" : "Convert to invoice",
+                  onSelect: () => void handleConvert(row),
                 },
-              ]),
-          ...(row.status === "completed"
-            ? []
-            : [
-                {
-                  label: "Complete",
-                  onSelect: () => {
-                    void handleStatusAction(row.id, "completed", "Job marked completed.");
+            { label: "Assign on calendar", href: "/pro/dashboard/schedule" },
+            ...(archived || isFinished || row.status === "in_progress"
+              ? []
+              : [
+                  {
+                    label: "Start job",
+                    onSelect: () => {
+                      void handleStatusAction(row.id, "in_progress", "Job marked in progress.");
+                    },
                   },
-                },
-              ]),
-          ...(row.status === "on_hold"
-            ? []
-            : [
-                {
-                  label: "Put on hold",
-                  onSelect: () => {
-                    void handleStatusAction(row.id, "on_hold", "Job put on hold.");
+                ]),
+            ...(archived || isFinished
+              ? []
+              : [
+                  {
+                    label: "Complete",
+                    onSelect: () => {
+                      void handleStatusAction(row.id, "completed", "Job marked completed.");
+                    },
                   },
-                },
-              ]),
-          ...(row.status === "cancelled"
-            ? []
-            : [
-                {
-                  label: "Cancel",
-                  onSelect: () => {
-                    void handleStatusAction(row.id, "cancelled", "Job cancelled.");
+                ]),
+            ...(archived || isFinished || row.status === "on_hold"
+              ? []
+              : [
+                  {
+                    label: "Put on hold",
+                    onSelect: () => {
+                      void handleStatusAction(row.id, "on_hold", "Job put on hold.");
+                    },
                   },
-                },
-              ]),
-          archiveRowAction(records, "job", row.id, row.number),
-          {
-            label: "Delete",
-            variant: "destructive",
-            onSelect: () => {
-              void handleDelete(row.id, row.number);
+                ]),
+            ...(archived || isFinished
+              ? []
+              : [
+                  {
+                    label: "Cancel",
+                    onSelect: () => {
+                      void handleStatusAction(row.id, "cancelled", "Job cancelled.");
+                    },
+                  },
+                ]),
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        await dispatch(
+                          patchJobArchive({ id: row.id, isArchived: false }),
+                        ).unwrap();
+                        toast.success(`${row.number} restored.`);
+                      } catch (err) {
+                        toast.error(
+                          typeof err === "string"
+                            ? err
+                            : "Could not restore this job.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "job",
+                  row.id,
+                  row.number,
+                  () => setArchiveTarget(row),
+                ),
+            {
+              label: "Delete",
+              variant: "destructive",
+              onSelect: () => {
+                void handleDelete(row.id, row.number);
+              },
             },
-          },
-        ]}
+          ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="job"
+        number={archiveTarget?.number}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              await dispatch(
+                patchJobArchive({ id: archiveTarget.id, isArchived: true }),
+              ).unwrap();
+              toast.success(`${archiveTarget.number} archived.`);
+              setArchiveTarget(null);
+            } catch (err) {
+              toast.error(
+                typeof err === "string"
+                  ? err
+                  : "Could not archive this job.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
+        }}
       />
     </PortalPage>
   );

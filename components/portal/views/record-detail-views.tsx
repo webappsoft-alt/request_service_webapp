@@ -94,7 +94,14 @@ import { CenteredSpinner } from "@/components/ui/spinner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { fetchJobDetail, upsertJobItem } from "@/store/jobsSlice";
+import {
+  convertJobToInvoiceRecord,
+  deleteJobRecord,
+  fetchJobDetail,
+  patchJobArchive,
+  updateJobRecord,
+  upsertJobItem,
+} from "@/store/jobsSlice";
 import {
   estimateAsJob,
   filledWorkLines,
@@ -102,26 +109,27 @@ import {
   buildInvoice,
   buildJob,
   linesToEstimateItems,
+  linesToJobItems,
   nextRecordNumber,
   todayISO,
 } from "@/components/portal/work-builders";
 import {
   convertEstimateToJob as convertEstimateToJobApi,
-  convertJobToInvoice as convertJobToInvoiceApi,
   deleteJob as deleteJobApi,
   finalizeEstimate as finalizeEstimateApi,
   getEstimate,
   getJob,
+  getInvoiceWithPayments,
   sendInvoice as sendInvoiceApi,
   updateEstimate as updateEstimateApi,
   updateEstimateArchive as updateEstimateArchiveApi,
   updateEstimateSiteVisit,
 } from "@/lib/api/crm-client";
+import type { Estimate, Invoice, Job } from "@/lib/types";
 import {
   extractErrorMessage,
   getAuthToken,
 } from "@/components/api/apiFuntions";
-import type { Estimate, Job } from "@/lib/types";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { Button } from "@/components/ui/button";
 import {
@@ -1057,9 +1065,12 @@ export function JobDetailView({ id }: { id: string }) {
   const settings = useJobSettings(id);
   const [assignOpen, setAssignOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [resolvedInvoice, setResolvedInvoice] = useState<Invoice | null>(null);
 
   // ── Redux cache ──────────────────────────────────────────────────────────
   const cachedJob = useAppSelector((s) => s.jobs.detailsCache[id]);
@@ -1072,30 +1083,37 @@ export function JobDetailView({ id }: { id: string }) {
   // Fall back to workspace snapshot while Redux is still loading
   const listed = allJobs.find((item) => item.id === id);
   const seeded = cachedJob ?? listed ?? null;
+  const apiReady = crm.enabled && crm.ready;
 
   const job = seeded
-    ? applyJobSettings(
-        { ...seeded, status: records.statusOf("job", seeded.id, seeded.status) },
-        settings,
-      )
+    ? apiReady
+      ? { ...seeded }
+      : applyJobSettings(
+          { ...seeded, status: records.statusOf("job", seeded.id, seeded.status) },
+          settings,
+        )
     : undefined;
   const estimate = allEstimates.find((item) => item.id === job?.estimateId);
-  const invoice =
+  const workspaceInvoice =
     allInvoices.find((item) => item.id === records.linkedId("job", id)) ??
     allInvoices.find((item) => item.id === job?.invoiceId) ??
     allInvoices.find((item) => item.jobId === id);
+  const invoice = workspaceInvoice ?? resolvedInvoice ?? undefined;
   const event = events.find(
     (item) => item.kind === "job" && item.recordId === id,
   );
-  const start = settings?.start || event?.date || job?.scheduledAt;
-  const due = settings?.due || event?.endDate || job?.dueAt;
+  const start = apiReady
+    ? job?.scheduledAt || event?.date
+    : job?.scheduledAt || settings?.start || event?.date;
+  const due = apiReady
+    ? job?.dueAt || event?.endDate
+    : job?.dueAt || settings?.due || event?.endDate;
   const customer = customers.find((item) => item.id === job?.customerId);
   const customerLabel = customer
     ? crmCustomerName(customer)
     : job
       ? getPortalCustomerName(provider, job.customerId)
       : "Customer";
-  const apiReady = crm.enabled && crm.ready;
   const pending = useCrmRecordPending();
 
   // ── Fetch via Redux (cache-first: only show loading when no cached data) ──
@@ -1112,6 +1130,26 @@ export function JobDetailView({ id }: { id: string }) {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- records.cacheJob is stable; dispatch is stable
   }, [id, dispatch]);
+
+  // Resolve invoice by id when job is invoiced but invoice isn't in workspace list.
+  useEffect(() => {
+    const invoiceId = job?.invoiceId;
+    if (!invoiceId || workspaceInvoice) {
+      setResolvedInvoice(null);
+      return;
+    }
+    let cancelled = false;
+    void getInvoiceWithPayments(invoiceId)
+      .then((result) => {
+        if (!cancelled && result.invoice) setResolvedInvoice(result.invoice);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedInvoice(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [job?.invoiceId, workspaceInvoice]);
 
   if (!job) {
     // Only show spinner if no cached data exists yet
@@ -1131,14 +1169,27 @@ export function JobDetailView({ id }: { id: string }) {
   }
 
   const currentJob = job;
-  const technician =
-    settings?.assignedTo ||
-    (event ? employeeLabel(event.employeeId) : (currentJob.assignedTo ?? ""));
-  const service =
-    settings?.name || job.title || jobServiceLabel(job, allEstimates, requests);
+  const technician = apiReady
+    ? event
+      ? employeeLabel(event.employeeId)
+      : (currentJob.assignedTo ?? "")
+    : settings?.assignedTo ||
+      (event ? employeeLabel(event.employeeId) : (currentJob.assignedTo ?? ""));
+  const service = apiReady
+    ? job.title || jobServiceLabel(job, allEstimates, requests)
+    : settings?.name || job.title || jobServiceLabel(job, allEstimates, requests);
   const jobWindow = minutesForWindow("morning");
   const jobStartDate = (start || todayISO()).slice(0, 10);
   const jobEndDate = (due || start || todayISO()).slice(0, 10);
+  const resolvedEmployeeId =
+    job.assignedEmployeeId ||
+    event?.employeeId ||
+    (!apiReady ? settings?.employeeId : undefined) ||
+    employees.find(
+      (item) =>
+        employeeLabel(item.id).trim().toLowerCase() ===
+        String(job.assignedTo || "").trim().toLowerCase(),
+    )?.id;
   const jobAssignmentEvent: PortalCalendarEvent = event ?? {
     id: `cal_${job.id}`,
     kind: "job",
@@ -1151,23 +1202,31 @@ export function JobDetailView({ id }: { id: string }) {
     timeWindow: "morning",
     startMinutes: jobWindow.startMinutes,
     endMinutes: jobWindow.endMinutes,
-    employeeId:
-      settings?.employeeId || employees.find((item) => item.active)?.id,
+    employeeId: resolvedEmployeeId || employees.find((item) => item.active)?.id,
     href: `/pro/dashboard/jobs/${job.id}`,
     status: job.status,
   };
 
   async function convertToInvoice() {
+    if (converting) return;
+    const invoiceId = invoice?.id || currentJob.invoiceId;
+    if (invoiceId) {
+      router.push(`/pro/dashboard/invoices/${invoiceId}`);
+      return;
+    }
+    if (
+      currentJob.status === "invoiced" ||
+      currentJob.status === "paid"
+    ) {
+      toast.error("This job is already invoiced but the invoice could not be loaded.");
+      return;
+    }
+    setConverting(true);
     try {
-      if (invoice) {
-        router.push(`/pro/dashboard/invoices/${invoice.id}`);
-        return;
-      }
       if (apiReady) {
-        const created = await convertJobToInvoiceApi(currentJob.id);
-        if (!created?.id)
-          throw new Error("The CRM did not return the new invoice.");
-        await crm.refresh();
+        const { invoice: created } = await dispatch(
+          convertJobToInvoiceRecord(currentJob.id),
+        ).unwrap();
         toast.success(
           `${created.number || "Invoice"} drafted from ${currentJob.number}.`,
         );
@@ -1201,8 +1260,47 @@ export function JobDetailView({ id }: { id: string }) {
       router.push(`/pro/dashboard/invoices/${created.id}`);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not convert this job.",
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not convert this job.",
       );
+    } finally {
+      setConverting(false);
+    }
+  }
+
+  async function toggleJobArchive() {
+    if (archiving) return;
+    const archived =
+      Boolean(currentJob.isArchived) || records.isArchived("job", currentJob.id);
+    setArchiving(true);
+    try {
+      if (apiReady) {
+        await dispatch(
+          patchJobArchive({ id: currentJob.id, isArchived: !archived }),
+        ).unwrap();
+      } else if (archived) {
+        await records.unarchive("job", currentJob.id);
+      } else {
+        await records.archive("job", currentJob.id);
+      }
+      toast.success(
+        archived
+          ? `${currentJob.number} restored.`
+          : `${currentJob.number} archived.`,
+      );
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not update archive.",
+      );
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -1215,8 +1313,7 @@ export function JobDetailView({ id }: { id: string }) {
     setDeleting(true);
     try {
       if (apiReady) {
-        await deleteJobApi(currentJob.id);
-        await crm.refresh();
+        await dispatch(deleteJobRecord(currentJob.id)).unwrap();
       } else {
         records.remove("job", currentJob.id);
         if (currentJob.estimateId) {
@@ -1229,12 +1326,25 @@ export function JobDetailView({ id }: { id: string }) {
       router.push("/pro/dashboard/jobs");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not delete this job.",
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not delete this job.",
       );
     } finally {
       setDeleting(false);
     }
   }
+
+  const alreadyInvoiced = Boolean(
+    invoice ||
+      currentJob.invoiceId ||
+      currentJob.status === "invoiced" ||
+      currentJob.status === "paid",
+  );
+  const jobArchived =
+    Boolean(currentJob.isArchived) || records.isArchived("job", currentJob.id);
 
   return (
     <>
@@ -1256,24 +1366,33 @@ export function JobDetailView({ id }: { id: string }) {
               label={jobStatusLabel(job.status)}
               className={jobStatusTone(job.status)}
             />
-            <ArchiveBadge kind="job" id={job.id} />
+            {jobArchived ? (
+              <StatusPill label="Archived" className="bg-slate-100 text-slate-700" />
+            ) : (
+              <ArchiveBadge kind="job" id={job.id} />
+            )}
           </>
         }
         actions={
           <>
-            {invoice ? (
+            {alreadyInvoiced ? (
               <Button size="sm" variant="outline" asChild>
-                <Link href={`/pro/dashboard/invoices/${invoice.id}`}>
-                  Open {invoice.number}
+                <Link
+                  href={`/pro/dashboard/invoices/${invoice?.id || currentJob.invoiceId || ""}`}
+                >
+                  {invoice?.number
+                    ? `Open ${invoice.number}`
+                    : "Open invoice"}
                 </Link>
               </Button>
             ) : (
               <Button
                 size="sm"
                 data-action="convert-to-invoice"
-                onClick={convertToInvoice}
+                disabled={converting}
+                onClick={() => void convertToInvoice()}
               >
-                Convert to invoice
+                {converting ? "Converting…" : "Convert to invoice"}
               </Button>
             )}
             <Button
@@ -1303,25 +1422,20 @@ export function JobDetailView({ id }: { id: string }) {
                 <DropdownMenuItem onSelect={() => setReminderOpen(true)}>
                   Set reminder
                 </DropdownMenuItem>
-                {records.isArchived("job", job.id) ? (
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      records.restore("job", job.id);
-                      toast.success(`${job.number} restored.`);
-                    }}
-                  >
-                    Restore job
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      records.archive("job", job.id);
-                      toast.success(`${job.number} archived.`);
-                    }}
-                  >
-                    Archive job
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem
+                  disabled={archiving}
+                  onSelect={() => {
+                    void toggleJobArchive();
+                  }}
+                >
+                  {archiving
+                    ? jobArchived
+                      ? "Restoring…"
+                      : "Archiving…"
+                    : jobArchived
+                      ? "Restore job"
+                      : "Archive job"}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   disabled={deleting}
@@ -1354,6 +1468,37 @@ export function JobDetailView({ id }: { id: string }) {
                     estimate={estimate}
                     invoice={invoice}
                     technician={technician}
+                    preferApi={apiReady}
+                    onSave={
+                      apiReady
+                        ? async (lines) => {
+                            const filled = filledWorkLines(lines);
+                            const items = linesToJobItems(job.id, filled);
+                            try {
+                              await dispatch(
+                                updateJobRecord({
+                                  id: job.id,
+                                  employees,
+                                  job: { ...job, items },
+                                }),
+                              ).unwrap();
+                              void dispatch(fetchJobDetail(job.id));
+                              if (crm.ready) void crm.refresh({ silent: true });
+                            } catch (error) {
+                              toast.error(
+                                error instanceof Error
+                                  ? error.message
+                                  : typeof error === "string"
+                                    ? error
+                                    : "Could not save line items to server.",
+                              );
+                              throw error;
+                            }
+                          }
+                        : async (lines) => {
+                            writeCostLines(session?.email, job.id, lines);
+                          }
+                    }
                   />
                 );
               case "logs":
@@ -1390,9 +1535,10 @@ export function JobDetailView({ id }: { id: string }) {
                     invoice={invoice}
                     technician={technician}
                     service={service}
+                    customerLabel={customerLabel}
                     start={start}
                     due={due}
-                    employeeId={settings?.employeeId || event?.employeeId}
+                    employeeId={resolvedEmployeeId || event?.employeeId}
                   />
                 );
               default:

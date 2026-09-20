@@ -131,12 +131,21 @@ export function jobBoardColumns({
       exportValue: (row) => invoiceOf(row)?.number ?? "",
       cell: (row) => {
         const invoice = invoiceOf(row);
-        if (!invoice) return "—";
-        return (
-          <Link href={`/pro/dashboard/invoices/${invoice.id}`} className="text-primary hover:underline">
-            {invoice.number}
-          </Link>
-        );
+        if (invoice) {
+          return (
+            <Link href={`/pro/dashboard/invoices/${invoice.id}`} className="text-primary hover:underline">
+              {invoice.number}
+            </Link>
+          );
+        }
+        if (row.invoiceId) {
+          return (
+            <Link href={`/pro/dashboard/invoices/${row.invoiceId}`} className="text-primary hover:underline">
+              View
+            </Link>
+          );
+        }
+        return "—";
       },
     },
     {

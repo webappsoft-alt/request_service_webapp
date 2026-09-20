@@ -14,6 +14,7 @@ import {
   updateEstimateArchive as updateEstimateArchiveApi,
   updateInvoice as updateInvoiceApi,
   updateInvoiceArchive as updateInvoiceArchiveApi,
+  updateJobArchive as updateJobArchiveApi,
   updateJobStatus as updateJobStatusApi,
   updateRequestStatus,
   archiveCustomer as archiveCustomerApi,
@@ -180,9 +181,17 @@ export function usePortalRecords() {
           return Boolean(inv.isArchived);
         }
       }
+      if (kind === "job") {
+        const job =
+          crm.jobs.find((item) => item.id === id) ??
+          store.jobs.find((item) => item.id === id);
+        if (job && job.isArchived !== undefined) {
+          return Boolean(job.isArchived);
+        }
+      }
       return false;
     },
-    [crm.estimates, crm.invoices, store.archived, store.invoices],
+    [crm.estimates, crm.invoices, crm.jobs, store.archived, store.invoices, store.jobs],
   );
 
   const statusOf = useCallback(
@@ -395,6 +404,27 @@ export function usePortalRecords() {
           return updated;
         })();
       }
+      if (apiReady && kind === "job") {
+        return (async () => {
+          const updated = await updateJobArchiveApi(id, true);
+          if (!updated || !updated.isArchived) {
+            throw new Error("Archive did not save on the server. Restart the API and try again.");
+          }
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            archived: current.archived.includes(nextKey)
+              ? current.archived
+              : [...current.archived, nextKey],
+            jobs: [updated, ...current.jobs.filter((item) => item.id !== id)],
+          });
+          if (crm.ready) {
+            void crm.refresh({ silent: true });
+          }
+          return updated;
+        })();
+      }
       const current = readStore(key);
       const nextKey = recordKey(kind, id);
       writeStore(key, {
@@ -446,6 +476,25 @@ export function usePortalRecords() {
               ...current.invoicePatches,
               [id]: { ...current.invoicePatches[id], isArchived: false },
             },
+          });
+          if (crm.ready) {
+            void crm.refresh({ silent: true });
+          }
+          return updated;
+        })();
+      }
+      if (apiReady && kind === "job") {
+        return (async () => {
+          const updated = await updateJobArchiveApi(id, false);
+          if (!updated || updated.isArchived) {
+            throw new Error("Restore did not save on the server. Restart the API and try again.");
+          }
+          const current = readStore(key);
+          const nextKey = recordKey(kind, id);
+          writeStore(key, {
+            ...current,
+            archived: current.archived.filter((item) => item !== nextKey),
+            jobs: [updated, ...current.jobs.filter((item) => item.id !== id)],
           });
           if (crm.ready) {
             void crm.refresh({ silent: true });

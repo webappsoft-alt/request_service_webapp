@@ -2,7 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown, Eye, FileText, Film, ImageIcon, Loader2, Music, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  Eye,
+  FileText,
+  Film,
+  ImageIcon,
+  Loader2,
+  MapPin,
+  Music,
+  Pencil,
+  Plus,
+  Receipt,
+  Trash2,
+  Upload,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import {
@@ -30,7 +46,6 @@ import {
   type JobSettingsDraft,
 } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
-import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -49,12 +64,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
+import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateInvoiceAttachments, updateJobAttachments, assignSchedule, updateSchedule } from "@/lib/api/crm-client";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { useAppDispatch } from "@/store/hooks";
+import {
+  fetchJobDetail,
+  patchJobStatus,
+  upsertJobItem,
+  updateJobRecord,
+} from "@/store/jobsSlice";
+import { upsertInvoiceItem } from "@/store/invoicesSlice";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
-import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
+import { employeeName, JOB_STATUSES, jobStatusLabel, jobStatusTone, minutesForWindow } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney, formatShortDate } from "@/lib/format";
 import type { Estimate, Invoice, Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { StatusPill } from "@/components/portal/status-pill";
 
 export function JobFileChrome({
   job,
@@ -208,7 +233,7 @@ export function JobSummaryTab({
   noun?: CostingNoun;
   locked?: boolean;
 }) {
-  const { lines, mix } = useJobCosting(job);
+  const { lines, mix } = useJobCosting(job, { preferApi: noun === "job" });
   const sheet = jobMoneySheet(mix);
   const file = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();
@@ -240,8 +265,19 @@ export function JobSummaryTab({
       }))
     : file.activities;
 
+  const hasInvoice =
+    Boolean(invoice) ||
+    Boolean(job.invoiceId) ||
+    job.status === "invoiced" ||
+    job.status === "paid";
+  const invoiceHref = invoice?.id
+    ? `/pro/dashboard/invoices/${invoice.id}`
+    : job.invoiceId
+      ? `/pro/dashboard/invoices/${job.invoiceId}`
+      : null;
+
   return (
-    <div className="grid gap-4 xl:grid-cols-3">
+    <div className="grid gap-4 lg:grid-cols-3">
       <Panel title={noun === "estimate" ? "Quote mix" : "Cost mix"}>
         {noun === "estimate" ? (
           <EstimateCostChart labor={mix.labor} materials={mix.materials} />
@@ -271,6 +307,18 @@ export function JobSummaryTab({
         ) : invoice ? (
           <p className="mt-4 text-xs text-muted-foreground">
             {invoice.number} is on file. Materials lock after the invoice leaves draft.
+          </p>
+        ) : hasInvoice ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            {invoiceHref ? (
+              <>
+                <Link href={invoiceHref} className="font-semibold text-primary hover:underline">
+                  Open invoice
+                </Link>
+                {" · "}
+              </>
+            ) : null}
+            Materials lock after the invoice leaves draft.
           </p>
         ) : (
           <p className="mt-4 text-xs text-muted-foreground">No invoice yet. Costs can still move.</p>
@@ -367,6 +415,7 @@ export function JobMaterialsTab({
   noun = "job",
   locked: propLocked,
   onSave,
+  preferApi = false,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -375,10 +424,20 @@ export function JobMaterialsTab({
   noun?: CostingNoun;
   locked?: boolean;
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
+  preferApi?: boolean;
 }) {
   const { addLog, locked: fileLocked } = useJobFile(job, estimate, invoice, technician);
   const isLocked = propLocked ?? fileLocked;
-  return <JobCosting job={job} locked={isLocked} noun={noun} onMutate={addLog} onSave={onSave} />;
+  return (
+    <JobCosting
+      job={job}
+      locked={isLocked}
+      noun={noun}
+      onMutate={preferApi ? undefined : addLog}
+      onSave={onSave}
+      preferApi={preferApi}
+    />
+  );
 }
 
 export function JobSettingsTab({
@@ -387,6 +446,7 @@ export function JobSettingsTab({
   invoice,
   technician,
   service,
+  customerLabel,
   start,
   due,
   employeeId,
@@ -396,233 +456,550 @@ export function JobSettingsTab({
   invoice?: Invoice;
   technician: string;
   service: string;
+  customerLabel?: string;
   start?: string;
   due?: string;
   employeeId?: string;
 }) {
+  const dispatch = useAppDispatch();
   const { customers, contractors } = useCrmDirectory();
   const crm = useCrmApiData();
-  const { employees, assign, events } = usePortalCrew();
-  const records = usePortalRecords();
-  const file = useJobFile(job, estimate, invoice, technician);
+  const { employees, events } = usePortalCrew();
   const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
-  const apiReady = crm.enabled && crm.ready;
-  const defaults: JobSettingsDraft = file.settings ?? {
-    name: service,
-    customerId: job.customerId,
-    street: job.address.street,
-    city: job.address.city,
-    state: job.address.state,
-    zip: job.address.zip,
-    start: start ?? "",
-    due: due ?? "",
-    employeeId: employeeId ?? event?.employeeId ?? "",
-    assignedTo: technician,
-    status: records.statusOf("job", job.id, job.status),
-    notes: job.notes ?? "",
-  };
-  const [draft, setDraft] = useState(defaults);
+
+  function resolveEmployeeId(): string {
+    const candidates = [
+      employeeId,
+      job.assignedEmployeeId,
+      event?.employeeId,
+    ].filter(Boolean) as string[];
+    for (const id of candidates) {
+      if (employees.some((item) => item.id === id)) return id;
+      if (contractors.some((item) => item.id === id)) return id;
+    }
+    // Keep known API id even if crew list has not loaded yet.
+    if (job.assignedEmployeeId) return job.assignedEmployeeId;
+    if (employeeId) return employeeId;
+
+    const name = (technician || job.assignedTo || "").trim().toLowerCase();
+    if (!name) return "";
+    const byEmployeeName = employees.find(
+      (item) => employeeName(item).trim().toLowerCase() === name,
+    );
+    if (byEmployeeName) return byEmployeeName.id;
+    const byPartial = employees.find((item) => {
+      const label = employeeName(item).trim().toLowerCase();
+      return label.includes(name) || name.includes(label);
+    });
+    if (byPartial) return byPartial.id;
+    const byContractor = contractors.find(
+      (item) => item.companyName.trim().toLowerCase() === name,
+    );
+    if (byContractor) return byContractor.id;
+    return "";
+  }
+
+  function defaultsFromJob(): JobSettingsDraft {
+    const resolvedId = resolveEmployeeId();
+    return {
+      name: job.title || service || "",
+      customerId: job.customerId || "",
+      street: job.address?.street || "",
+      city: job.address?.city || "",
+      state: job.address?.state || "",
+      zip: job.address?.zip || "",
+      start: (start || job.scheduledAt || "").slice(0, 10),
+      due: (due || job.dueAt || "").slice(0, 10),
+      employeeId: resolvedId,
+      assignedTo: technician || job.assignedTo || "",
+      status: job.status,
+      notes: job.notes ?? "",
+    };
+  }
+
+  const [draft, setDraft] = useState<JobSettingsDraft>(defaultsFromJob);
+  const [saving, setSaving] = useState(false);
+
+  // Sync draft when the API job changes — avoid useEffect + unstable crew refs (infinite loop).
+  const syncKey = [
+    job.id,
+    job.updatedAt,
+    job.title ?? "",
+    job.customerId ?? "",
+    job.status,
+    job.scheduledAt ?? "",
+    job.dueAt ?? "",
+    job.notes ?? "",
+    job.address?.street ?? "",
+    job.address?.city ?? "",
+    job.address?.state ?? "",
+    job.address?.zip ?? "",
+    job.assignedTo ?? "",
+    job.assignedEmployeeId ?? "",
+    service,
+    start ?? "",
+    due ?? "",
+    employeeId ?? "",
+    technician,
+  ].join("|");
+  const [syncedKey, setSyncedKey] = useState(syncKey);
+  if (syncedKey !== syncKey) {
+    setSyncedKey(syncKey);
+    setDraft(defaultsFromJob());
+  }
+
   const selected = customers.find((item) => item.id === draft.customerId);
+  const customerDisplayName =
+    (selected ? crmCustomerName(selected) : "") ||
+    customerLabel?.trim() ||
+    (draft.customerId ? `Customer ${draft.customerId.slice(-6)}` : "");
+
+  const technicianOptions = useMemo(() => {
+    const base = employees.filter((item) => item.active !== false);
+    if (draft.employeeId && !base.some((item) => item.id === draft.employeeId)) {
+      const missing = employees.find((item) => item.id === draft.employeeId);
+      if (missing) return [missing, ...base];
+      return [
+        {
+          id: draft.employeeId,
+          firstName: draft.assignedTo || "Assigned",
+          lastName: "",
+          role: "technician",
+          trade: "",
+          email: "",
+          phone: "",
+          active: true,
+        } as (typeof employees)[number],
+        ...base,
+      ];
+    }
+    return base;
+  }, [employees, draft.employeeId, draft.assignedTo]);
+
+  const contractorOptions = useMemo(() => {
+    const base = contractors.filter((item) => item.status === "active");
+    if (
+      draft.employeeId &&
+      !technicianOptions.some((item) => item.id === draft.employeeId) &&
+      !base.some((item) => item.id === draft.employeeId)
+    ) {
+      const missing = contractors.find((item) => item.id === draft.employeeId);
+      if (missing) return [missing, ...base];
+    }
+    return base;
+  }, [contractors, draft.employeeId, technicianOptions]);
+
+  const assigneeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of technicianOptions) ids.add(item.id);
+    for (const item of contractorOptions) ids.add(item.id);
+    return ids;
+  }, [technicianOptions, contractorOptions]);
+
+  const statusValue = JOB_STATUSES.includes(draft.status) ? draft.status : JOB_STATUSES[0];
+  const customerInList = customers.some((item) => item.id === draft.customerId);
+  const customerValue = draft.customerId
+    ? draft.customerId
+    : "__none__";
+  const assigneeValue =
+    draft.employeeId && assigneeIds.has(draft.employeeId) ? draft.employeeId : "__unassigned__";
+
+  const addressLine = [draft.street, formatLocation(draft.city, draft.state, draft.zip)]
+    .filter(Boolean)
+    .join(", ");
+  const invoiceHref = invoice?.id
+    ? `/pro/dashboard/invoices/${invoice.id}`
+    : job.invoiceId
+      ? `/pro/dashboard/invoices/${job.invoiceId}`
+      : null;
+  const hasInvoice = Boolean(invoiceHref) || job.status === "invoiced" || job.status === "paid";
+  const assigneeLabel = (() => {
+    const tech = technicianOptions.find((item) => item.id === draft.employeeId);
+    if (tech) return employeeName(tech);
+    const contractor = contractorOptions.find((item) => item.id === draft.employeeId);
+    if (contractor) return contractor.companyName;
+    return draft.assignedTo || "Unassigned";
+  })();
 
   function patch(next: Partial<JobSettingsDraft>) {
     setDraft((current) => ({ ...current, ...next }));
   }
 
   async function save() {
+    if (saving) return;
     const tech = employees.find((item) => item.id === draft.employeeId);
     const contractor = contractors.find((item) => item.id === draft.employeeId);
+    const nextCustomerId = draft.customerId || job.customerId;
+    if (!nextCustomerId) {
+      toast.error("Select a customer before saving.");
+      return;
+    }
+    if (!draft.employeeId) {
+      toast.error("Select a technician before saving.");
+      return;
+    }
+    if (!draft.start) {
+      toast.error("Set a start date before saving.");
+      return;
+    }
     const next = {
       ...draft,
-      assignedTo: tech ? employeeName(tech) : contractor ? contractor.companyName : draft.assignedTo,
+      customerId: nextCustomerId,
+      assignedTo: tech
+        ? employeeName(tech)
+        : contractor
+          ? contractor.companyName
+          : draft.assignedTo,
     };
+    setSaving(true);
     try {
-      file.saveSettings(next);
-      if (job?.id) {
-        try {
-          await updateJobApi(
-            job.id,
-            {
-              ...job,
-              customerId: next.customerId || job.customerId,
-              status: next.status,
-              notes: next.notes,
-              scheduledAt: next.start || job.scheduledAt,
-              dueAt: next.due || job.dueAt,
-              assignedTo: next.assignedTo || job.assignedTo,
-              address: {
-                ...job.address,
-                street: next.street || job.address.street,
-                city: next.city || job.address.city,
-                state: next.state || job.address.state,
-                zip: next.zip || job.address.zip,
-              },
+      const updated = await dispatch(
+        updateJobRecord({
+          id: job.id,
+          employees,
+          job: {
+            ...job,
+            title: next.name.trim() || job.title,
+            customerId: next.customerId,
+            notes: next.notes,
+            scheduledAt: next.start || undefined,
+            dueAt: next.due || undefined,
+            assignedTo: next.employeeId || next.assignedTo || job.assignedTo,
+            assignedEmployeeId: next.employeeId || undefined,
+            address: {
+              ...job.address,
+              street: next.street || job.address.street,
+              city: next.city || job.address.city,
+              state: next.state || job.address.state,
+              zip: next.zip || job.address.zip,
             },
-            employees,
-          );
-          await updateJobStatusApi(job.id, next.status, next.notes);
-          void crm.refresh({ silent: true });
-        } catch {
-          records.setStatus("job", job.id, next.status);
+          },
+        }),
+      ).unwrap();
+      if (next.status && next.status !== updated.status) {
+        await dispatch(
+          patchJobStatus({ id: job.id, status: next.status, notes: next.notes }),
+        ).unwrap();
+      }
+
+      // Always hit schedule API so collisions return the exact server message.
+      const slot = minutesForWindow(event?.timeWindow ?? "morning");
+      const startMinutes = event?.startMinutes ?? slot.startMinutes;
+      const endMinutes = event?.endMinutes ?? slot.endMinutes;
+      const schedulePayload = {
+        title: job.number,
+        date: next.start,
+        endDate: next.due || next.start,
+        startMinutes,
+        endMinutes,
+        timeWindow: event?.timeWindow ?? ("morning" as const),
+        employeeId: contractor ? null : next.employeeId,
+        contractorId: contractor ? next.employeeId : null,
+        status: "scheduled" as const,
+      };
+      try {
+        if (event?.id && !event.id.startsWith("cal_")) {
+          await updateSchedule(event.id, schedulePayload);
+        } else {
+          await assignSchedule({
+            recordId: job.id,
+            kind: "job",
+            ...schedulePayload,
+          });
         }
-      } else {
-        records.setStatus("job", job.id, next.status);
+      } catch (calendarError) {
+        void dispatch(fetchJobDetail(job.id));
+        toast.error(extractErrorMessage(calendarError));
+        return;
       }
-      if (next.start && next.employeeId) {
-        await assign({
-          recordId: job.id,
-          kind: "job",
-          date: next.start,
-          endDate: next.due || next.start,
-          timeWindow: event?.timeWindow ?? "morning",
-          startMinutes: event?.startMinutes,
-          endMinutes: event?.endMinutes,
-          employeeId: next.employeeId,
-        });
-      }
+
+      void dispatch(fetchJobDetail(job.id));
+      if (crm.ready) void crm.refresh({ silent: true });
       toast.success("Job settings saved.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save this job.");
+      toast.error(extractErrorMessage(error));
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Job settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Everything on this job can be changed here.</p>
+    <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
+      <div data-job-settings-form className="rounded-[4px] border border-black/10 bg-card p-4">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Job settings</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Name, customer, schedule, and site address for this job.
+            </p>
+          </div>
+          <Button size="sm" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save settings"
+            )}
+          </Button>
         </div>
-        <Button size="sm" onClick={() => void save()}>
-          Save changes
-        </Button>
-      </div>
-      <div className="grid gap-4 rounded-[4px] border border-black/10 p-4 sm:grid-cols-2">
-        <Field label="Job name">
-          <Input value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
-        </Field>
-        <Field label="Status">
-          <Select
-            value={draft.status}
-            onValueChange={(value) => patch({ status: value as JobStatus })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Job name">
+            <Input value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
+          </Field>
+          <Field label="Status">
+            <Select
+              value={statusValue}
+              onValueChange={(value) => patch({ status: value as JobStatus })}
             >
-              {JOB_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {jobStatusLabel(status)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Customer">
-          <Select
-            value={draft.customerId}
-            onValueChange={(value) => patch({ customerId: value })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select customer" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="start"
+                className="z-[100] w-[var(--radix-select-trigger-width)]"
+              >
+                {JOB_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {jobStatusLabel(status)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Customer">
+            <Select
+              value={customerValue}
+              onValueChange={(value) =>
+                patch({ customerId: value === "__none__" ? "" : value })
+              }
             >
-              {customers.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {crmCustomerName(item)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Assigned technician">
-          <Select
-            value={draft.employeeId || "__unassigned__"}
-            onValueChange={(value) => patch({ employeeId: value === "__unassigned__" ? "" : value })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Unassigned" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select customer" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="start"
+                className="z-[100] w-[var(--radix-select-trigger-width)]"
+              >
+                <SelectItem value="__none__">Select customer</SelectItem>
+                {draft.customerId && !customerInList ? (
+                  <SelectItem value={draft.customerId}>{customerDisplayName}</SelectItem>
+                ) : null}
+                {customers.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {crmCustomerName(item)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Assigned technician">
+            <Select
+              value={assigneeValue}
+              onValueChange={(value) =>
+                patch({ employeeId: value === "__unassigned__" ? "" : value })
+              }
             >
-              <SelectItem value="__unassigned__">Unassigned</SelectItem>
-              {employees
-                .filter((item) => {
-                  const role = String(item.role || "").toLowerCase().trim();
-                  return (
-                    item.active !== false &&
-                    (role === "technician" || role === "tech" || !role)
-                  );
-                })
-                .map((item) => (
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                align="start"
+                className="z-[100] w-[var(--radix-select-trigger-width)]"
+              >
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                {technicianOptions.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {employeeName(item)}
                     {item.trade ? ` · ${item.trade}` : ""}
                   </SelectItem>
                 ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Start date">
-          <Input type="date" value={draft.start} onChange={(event) => patch({ start: event.target.value })} />
-        </Field>
-        <Field label="Due date">
-          <Input type="date" value={draft.due} onChange={(event) => patch({ due: event.target.value })} />
-        </Field>
-        {selected?.phone ? (
-          <Field label="Customer phone">
-            <Input readOnly value={selected.phone} />
+                {contractorOptions.map((item) => (
+                  <SelectItem key={`contractor-${item.id}`} value={item.id}>
+                    {item.companyName} · Contractor
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
-        ) : null}
-        {selected?.email ? (
-          <Field label="Customer email">
-            <Input readOnly value={selected.email} />
+          <Field label="Start date">
+            <Input type="date" value={draft.start} onChange={(event) => patch({ start: event.target.value })} />
           </Field>
-        ) : null}
-        <div className="sm:col-span-2">
-          <Field label="Job address">
-            <AddressAutocomplete
-              id="job-settings-address"
-              value={draft.street}
-              onChange={(value) => patch({ street: value })}
-              onSelect={(address: PlaceAddress) =>
-                patch({
-                  street: address.formattedAddress || address.streetAddress,
-                  city: address.city || "",
-                  state: address.state || "",
-                  zip: address.zipCode || "",
-                })
+          <Field label="Due date">
+            <Input type="date" value={draft.due} onChange={(event) => patch({ due: event.target.value })} />
+          </Field>
+          {selected?.phone ? (
+            <Field label="Customer phone">
+              <Input readOnly className="bg-muted/50" value={selected.phone} />
+            </Field>
+          ) : null}
+          {selected?.email ? (
+            <Field label="Customer email">
+              <Input readOnly className="bg-muted/50" value={selected.email} />
+            </Field>
+          ) : null}
+          <div className="sm:col-span-2">
+            <Field label="Job address">
+              <AddressAutocomplete
+                id="job-settings-address"
+                value={draft.street}
+                onChange={(value) => patch({ street: value })}
+                onSelect={(address: PlaceAddress) =>
+                  patch({
+                    street: address.formattedAddress || address.streetAddress,
+                    city: address.city || "",
+                    state: address.state || "",
+                    zip: address.zipCode || "",
+                  })
+                }
+                placeholder="Start typing a street address…"
+              />
+            </Field>
+          </div>
+          <Field label="City">
+            <Input value={draft.city} onChange={(event) => patch({ city: event.target.value })} />
+          </Field>
+          <Field label="State">
+            <Input value={draft.state} onChange={(event) => patch({ state: event.target.value })} />
+          </Field>
+          <Field label="ZIP">
+            <Input value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />
+          </Field>
+          <label className="grid gap-1.5 text-sm sm:col-span-2">
+            <span className="font-medium">Notes</span>
+            <Textarea
+              rows={4}
+              value={draft.notes}
+              onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                patch({ notes: event.target.value })
               }
-              placeholder="Start typing a street address…"
             />
-          </Field>
+          </label>
+          {estimate ? (
+            <p className="text-sm text-muted-foreground sm:col-span-2">
+              Converted from{" "}
+              <Link
+                href={`/pro/dashboard/estimates/${estimate.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {estimate.number}
+              </Link>
+              .
+            </p>
+          ) : null}
         </div>
-        <Field label="City">
-          <Input value={draft.city} onChange={(event) => patch({ city: event.target.value })} />
-        </Field>
-        <Field label="ZIP">
-          <Input value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />
-        </Field>
-        <label className="grid gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium">Notes</span>
-          <Textarea
-            rows={4}
-            value={draft.notes}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              patch({ notes: event.target.value })
-            }
-          />
-        </label>
+      </div>
+
+      <div className="grid gap-4 content-start">
+        <section className="overflow-hidden rounded-[4px] border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+          <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-4 py-3">
+            <FileText className="size-4 text-primary" aria-hidden="true" />
+            <h3 className="text-sm font-semibold">Job snapshot</h3>
+          </header>
+          <div className="space-y-3 px-4 py-4 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold tracking-tight">{job.number}</p>
+              <StatusPill label={jobStatusLabel(draft.status)} className={jobStatusTone(draft.status)} />
+            </div>
+            <p className="text-muted-foreground">{draft.name || service || "Untitled job"}</p>
+            <dl className="space-y-2.5 border-t border-black/10 pt-3">
+              <div className="flex items-start gap-2">
+                <UserRound className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                    Customer
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {draft.customerId ? (
+                      selected ? (
+                        <Link
+                          href={`/pro/dashboard/customers/${selected.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {crmCustomerName(selected)}
+                        </Link>
+                      ) : (
+                        customerDisplayName || "Linked customer"
+                      )
+                    ) : (
+                      "Not set"
+                    )}
+                  </dd>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <UserRound className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                    Technician
+                  </dt>
+                  <dd className="mt-0.5 font-medium">{assigneeLabel}</dd>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <CalendarDays className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                    Schedule
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {draft.start ? formatDate(draft.start) : "Not scheduled"}
+                    {draft.due ? ` → ${formatDate(draft.due)}` : ""}
+                  </dd>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                    Address
+                  </dt>
+                  <dd className="mt-0.5 font-medium">{addressLine || "No address yet"}</dd>
+                </div>
+              </div>
+            </dl>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-[4px] border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+          <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-4 py-3">
+            <Receipt className="size-4 text-primary" aria-hidden="true" />
+            <h3 className="text-sm font-semibold">Billing</h3>
+          </header>
+          <div className="space-y-3 px-4 py-4 text-sm">
+            {hasInvoice ? (
+              <>
+                <p className="font-medium">
+                  {invoice?.number ? `${invoice.number} is on file` : "This job has been invoiced"}
+                </p>
+                {invoiceHref ? (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={invoiceHref}>Open invoice</Link>
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-muted-foreground">
+                No invoice yet. Convert from the job header when materials are ready.
+              </p>
+            )}
+            {estimate ? (
+              <p className="text-xs text-muted-foreground border-t border-black/10 pt-3">
+                Source estimate{" "}
+                <Link
+                  href={`/pro/dashboard/estimates/${estimate.id}`}
+                  className="font-semibold text-primary hover:underline"
+                >
+                  {estimate.number}
+                </Link>
+              </p>
+            ) : null}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -696,26 +1073,64 @@ export function JobAttachmentsTab({
   locked?: boolean;
   onSave?: (updated: Estimate) => void;
 }) {
-  const { addAttachments, removeAttachment, actor } = useJobFile(job, estimate, invoice, technician);
+  const dispatch = useAppDispatch();
+  const file = useJobFile(job, estimate, invoice, technician);
+  const {
+    addAttachments,
+    replaceAttachments,
+    removeAttachment,
+    actor,
+    attachments: localAttachments,
+  } = file;
   const crm = useCrmApiData();
+  const apiReady = crm.enabled && crm.ready;
+  const preferApiAttachments = apiReady && noun === "job" && !estimate && !invoice;
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<JobAttachment[] | null>(null);
 
   const savedAttachments = useMemo<JobAttachment[]>(() => {
-    const rawList = estimate ? estimate.attachments : job?.attachments;
-    if (!rawList || !Array.isArray(rawList)) return [];
-    const prefix = estimate?.id ?? job?.id ?? "att";
-    const addedAt = estimate?.createdAt ?? job?.createdAt ?? new Date().toISOString();
-    return rawList
-      .map((item, index) => toJobAttachmentItem(item, index, prefix, addedAt))
-      .filter((item) => Boolean(item.dataUrl));
-  }, [estimate, job?.attachments, job?.id, job?.createdAt]);
+    const prefix = estimate?.id ?? invoice?.id ?? job?.id ?? "att";
+    const addedAt =
+      estimate?.createdAt ?? invoice?.createdAt ?? job?.createdAt ?? new Date().toISOString();
+
+    const fromRecord = (() => {
+      const rawList = estimate
+        ? estimate.attachments
+        : invoice
+          ? invoice.attachments
+          : job?.attachments;
+      if (!rawList || !Array.isArray(rawList)) return [] as JobAttachment[];
+      return rawList
+        .map((item, index) => toJobAttachmentItem(item, index, prefix, addedAt))
+        .filter((item) => Boolean(item.dataUrl));
+    })();
+
+    // Prefer API/Redux attachments for live jobs; LS only for offline / estimates.
+    if (!preferApiAttachments && localAttachments.length > 0) {
+      const byUrl = new Map<string, JobAttachment>();
+      for (const item of [...localAttachments, ...fromRecord]) {
+        const key = (item.dataUrl || item.id || "").trim();
+        if (!key || byUrl.has(key)) continue;
+        byUrl.set(key, item);
+      }
+      return Array.from(byUrl.values());
+    }
+    return fromRecord;
+  }, [
+    estimate,
+    invoice,
+    job?.attachments,
+    job?.id,
+    job?.createdAt,
+    localAttachments,
+    preferApiAttachments,
+  ]);
 
   useEffect(() => {
     setDraft(null);
-  }, [estimate?.id, job?.id]);
+  }, [estimate?.id, invoice?.id, job?.id]);
 
   const activeAttachments = draft ?? savedAttachments;
 
@@ -736,7 +1151,6 @@ export function JobAttachmentsTab({
   const bypassingRef = useRef(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
-  // Window beforeunload (tab close / refresh)
   useEffect(() => {
     if (!isDirty) return;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -748,7 +1162,6 @@ export function JobAttachmentsTab({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
-  // Intercept navigation or tab change when attachments have unsaved changes
   useEffect(() => {
     if (!isDirty) return;
 
@@ -758,7 +1171,6 @@ export function JobAttachmentsTab({
       const target = event.target as HTMLElement | null;
       if (!target) return;
 
-      // Allow clicks within the attachments tab, modals, dropdowns, selects, toasts
       if (
         target.closest("[data-job-attachments-tab]") ||
         target.closest("[role='dialog']") ||
@@ -812,37 +1224,68 @@ export function JobAttachmentsTab({
     }
   }
 
-  async function persistEstimateAttachments(nextAttachments: JobAttachment[]) {
-    if (!estimate?.id) return;
-    const attachmentPayload = nextAttachments
+  function attachmentPayload(nextAttachments: JobAttachment[]) {
+    return nextAttachments
       .map((item) => ({
         name: (item.name || "").trim() || "Attachment",
         attachment: (item.dataUrl || "").trim(),
       }))
       .filter((item) => Boolean(item.attachment));
+  }
 
-    const updatedEstimate: Estimate = {
-      ...estimate,
-      attachments: attachmentPayload,
-    };
-
-    crm.patchEstimate(estimate.id, updatedEstimate);
-    onSave?.(updatedEstimate);
-
-    const updated = await updateEstimateAttachments(estimate.id, attachmentPayload);
-    if (updated) {
-      crm.patchEstimate(estimate.id, updated);
-      onSave?.(updated);
-      return updated;
+  async function persistAttachments(nextAttachments: JobAttachment[]) {
+    // Local store only when API is not the source of truth.
+    if (!preferApiAttachments) {
+      replaceAttachments(nextAttachments);
     }
-    return updatedEstimate;
+
+    if (estimate?.id) {
+      const payload = attachmentPayload(nextAttachments);
+      const updatedEstimate: Estimate = {
+        ...estimate,
+        attachments: payload,
+      };
+      crm.patchEstimate(estimate.id, updatedEstimate);
+      onSave?.(updatedEstimate);
+      const updated = await updateEstimateAttachments(estimate.id, payload);
+      if (updated) {
+        crm.patchEstimate(estimate.id, updated);
+        onSave?.(updated);
+        return updated;
+      }
+      return updatedEstimate;
+    }
+
+    if (invoice?.id) {
+      const payload = attachmentPayload(nextAttachments);
+      const updated = await updateInvoiceAttachments(invoice.id, payload);
+      if (updated) {
+        dispatch(upsertInvoiceItem(updated));
+        return updated;
+      }
+      return null;
+    }
+
+    // Real job record (not invoice-as-job when invoice is present).
+    if (job?.id && noun !== "invoice") {
+      const urls = nextAttachments
+        .map((item) => (item.dataUrl || "").trim())
+        .filter(Boolean);
+      const updated = await updateJobAttachments(job.id, urls);
+      if (updated) {
+        dispatch(upsertJobItem(updated));
+        void dispatch(fetchJobDetail(job.id));
+        return updated;
+      }
+    }
+
+    return null;
   }
 
   async function handleSave() {
-    if (!estimate) return;
     setSaving(true);
     try {
-      await persistEstimateAttachments(activeAttachments);
+      await persistAttachments(activeAttachments);
       setDraft(null);
       toast.success("Attachments saved.");
     } catch (error) {
@@ -859,9 +1302,7 @@ export function JobAttachmentsTab({
   async function handleSaveAndLeave() {
     try {
       setSaving(true);
-      if (estimate) {
-        await persistEstimateAttachments(activeAttachments);
-      }
+      await persistAttachments(activeAttachments);
       setDraft(null);
       toast.success("Attachments saved.");
       executePending();
@@ -886,14 +1327,14 @@ export function JobAttachmentsTab({
     setShowUnsavedDialog(false);
   }
 
-  function handleDelete(file: JobAttachment) {
+  function handleDelete(fileItem: JobAttachment) {
     const current = draft ?? savedAttachments;
-    const remaining = current.filter((item) => item.id !== file.id && item.dataUrl !== file.dataUrl);
+    const remaining = current.filter(
+      (item) => item.id !== fileItem.id && item.dataUrl !== fileItem.dataUrl,
+    );
     setDraft(remaining);
-    if (!estimate) {
-      removeAttachment(file.id);
-    }
-    toast.success(`${file.name} removed.`);
+    removeAttachment(fileItem.id);
+    toast.success(`${fileItem.name} removed.`);
   }
 
   async function readFiles(list: FileList | File[]) {
@@ -901,9 +1342,8 @@ export function JobAttachmentsTab({
     const files = Array.from(list);
     if (!files.length) return;
 
-    // Validate all files upfront to prevent invalid requests from hitting the API
-    for (const file of files) {
-      const check = validateAttachmentFile(file);
+    for (const nextFile of files) {
+      const check = validateAttachmentFile(nextFile);
       if (!check.valid) {
         toast.error(check.error);
         return;
@@ -913,27 +1353,25 @@ export function JobAttachmentsTab({
     setUploading(true);
     try {
       const addedList: JobAttachment[] = [];
-      for (const file of files) {
-        const response = await uploadAnyFile(file);
+      for (const nextFile of files) {
+        const response = await uploadAnyFile(nextFile);
         const url = extractUploadedUrl(response.data);
-        if (!url) throw new Error(`Could not upload ${file.name}.`);
+        if (!url) throw new Error(`Could not upload ${nextFile.name}.`);
         const item: JobAttachment = {
-          id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${file.name}`,
-          name: file.name,
-          type: file.type || "application/octet-stream",
-          size: file.size,
+          id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${nextFile.name}`,
+          name: nextFile.name,
+          type: nextFile.type || "application/octet-stream",
+          size: nextFile.size,
           dataUrl: url,
           addedAt: new Date().toISOString(),
           actor,
         };
         addedList.push(item);
-        toast.success(`${file.name} attached.`);
+        toast.success(`${nextFile.name} attached.`);
       }
       const current = draft ?? savedAttachments;
       setDraft([...addedList, ...current]);
-      if (!estimate) {
-        addAttachments(addedList);
-      }
+      addAttachments(addedList);
     } catch (error) {
       const message =
         error instanceof Error && error.message.trim()
@@ -953,6 +1391,11 @@ export function JobAttachmentsTab({
     if (event.dataTransfer.files.length) void readFiles(event.dataTransfer.files);
   }
 
+  const emptyLabel =
+    locked
+      ? `No attachments on this ${noun}.`
+      : `No files on this ${noun} yet.`;
+
   return (
     <div data-job-attachments-tab>
       <div className="flex items-center justify-between gap-4">
@@ -962,12 +1405,12 @@ export function JobAttachmentsTab({
             Photos, PDFs, videos, and other {noun === "estimate" ? "quote" : noun === "invoice" ? "invoice" : "job"} files. Preview or remove anytime.
           </p>
         </div>
-        {estimate && !locked ? (
+        {!locked ? (
           <Button
             type="button"
             size="sm"
             onClick={() => void handleSave()}
-            disabled={saving || uploading}
+            disabled={saving || uploading || !isDirty}
           >
             {saving ? (
               <>
@@ -1022,14 +1465,14 @@ export function JobAttachmentsTab({
       ) : null}
       {activeAttachments.length ? (
         <ul className="mt-4 divide-y divide-black/10 border border-black/10">
-          {activeAttachments.map((file) => (
-            <li key={file.id} className="flex items-center gap-3 px-3 py-3">
+          {activeAttachments.map((fileItem) => (
+            <li key={fileItem.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-md bg-[#eef1f5] text-primary">
-                {file.type.startsWith("image/") ? (
+                {fileItem.type.startsWith("image/") ? (
                   <ImageIcon className="size-4" />
-                ) : file.type.startsWith("video/") ? (
+                ) : fileItem.type.startsWith("video/") ? (
                   <Film className="size-4" />
-                ) : file.type.startsWith("audio/") ? (
+                ) : fileItem.type.startsWith("audio/") ? (
                   <Music className="size-4" />
                 ) : (
                   <FileText className="size-4" />
@@ -1037,23 +1480,23 @@ export function JobAttachmentsTab({
               </span>
               <div className="min-w-0 flex-1">
                 <a
-                  href={file.dataUrl}
+                  href={fileItem.dataUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block truncate text-sm font-medium hover:text-primary hover:underline"
                 >
-                  {file.name}
+                  {fileItem.name}
                 </a>
                 <p className="text-xs text-muted-foreground">
-                  {stamp(file.addedAt)}
+                  {stamp(fileItem.addedAt)}
                 </p>
               </div>
               <Button size="sm" variant="outline" asChild>
                 <a
-                  href={file.dataUrl}
+                  href={fileItem.dataUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={`Preview ${file.name} in a new tab`}
+                  aria-label={`Preview ${fileItem.name} in a new tab`}
                 >
                   <Eye className="size-3.5" />
                   Preview
@@ -1064,10 +1507,10 @@ export function JobAttachmentsTab({
                   size="icon-sm"
                   variant="ghost"
                   className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  aria-label={`Delete ${file.name}`}
+                  aria-label={`Delete ${fileItem.name}`}
                   disabled={saving}
                   onClick={() => {
-                    handleDelete(file);
+                    handleDelete(fileItem);
                   }}
                 >
                   <Trash2 className="size-4" />
@@ -1077,9 +1520,7 @@ export function JobAttachmentsTab({
           ))}
         </ul>
       ) : (
-        <p className="mt-4 text-sm text-muted-foreground">
-          {locked ? "No attachments on this estimate." : "No files on this job yet."}
-        </p>
+        <p className="mt-4 text-sm text-muted-foreground">{emptyLabel}</p>
       )}
 
       <UnsavedChangesDialog

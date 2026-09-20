@@ -481,20 +481,35 @@ function estimatePayload(estimate: Estimate) {
 }
 
 function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
-  const techId = String(job.assignedTo || "").trim();
+  const techId = String(job.assignedEmployeeId || job.assignedTo || "").trim();
+  const assignedEmployees = (() => {
+    if (!techId) return resolveAssignedEmployeeIds(job, _employees);
+    if (_employees.some((employee) => employee.id === techId)) return [techId];
+    return resolveAssignedEmployeeIds({ ...job, assignedTo: techId }, _employees);
+  })();
   return {
     customerId: job.customerId,
     estimateId: job.estimateId || null,
     title: job.title || "",
     status: job.status,
-    // Always send selected technician id(s) — dialog stores id on assignedTo.
-    assignedEmployees: techId ? [techId] : resolveAssignedEmployeeIds(job, _employees),
+    assignedEmployees,
     assignedContractors: [],
     scheduledAt: job.scheduledAt || null,
     dueAt: job.dueAt || null,
     notes: job.notes || "",
     items: jobItemsToApi(job.items),
-    attachments: [],
+    attachments: Array.isArray(job.attachments)
+      ? job.attachments
+          .map((entry) => {
+            if (typeof entry === "string") return entry.trim();
+            if (entry && typeof entry === "object") {
+              const record = entry as { url?: string; dataUrl?: string; attachment?: string };
+              return String(record.url || record.dataUrl || record.attachment || "").trim();
+            }
+            return "";
+          })
+          .filter(Boolean)
+      : [],
     location: mapJobLocationForApi(job.address),
   };
 }
@@ -595,6 +610,9 @@ function invoicePayload(invoice: Invoice | Partial<Invoice>) {
   if (invoice.items !== undefined) payload.items = invoiceItemsToApi(invoice.items);
   if (invoice.discount !== undefined) payload.discount = invoice.discount;
   if (invoice.isArchived !== undefined) payload.isArchived = Boolean(invoice.isArchived);
+  if (invoice.attachments !== undefined) {
+    payload.attachments = estimateAttachmentsToApi(invoice.attachments as unknown[]);
+  }
   payload.notes = "";
   payload.terms = "";
   return payload;
@@ -1666,6 +1684,15 @@ export async function updateJob(id: string, job: Job, employees: PortalEmployee[
   return mapCrmEntity(response, mapJob);
 }
 
+export async function updateJobAttachments(id: string, attachments: string[]) {
+  const response = await putData(
+    providerCrmApi.job(id),
+    { attachments },
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapJob);
+}
+
 export async function updateJobStatus(id: string, status: Job["status"], notes = "") {
   const response = await putData(providerCrmApi.jobStatus(id), { status, notes });
   return mapCrmEntity(response, mapJob);
@@ -1812,6 +1839,20 @@ export async function updateInvoiceArchive(id: string, isArchived: boolean) {
   const response = await putData(
     providerCrmApi.invoice(id),
     { isArchived },
+    { silent: false },
+  );
+  invalidateGetCache(providerCrmApi.invoices);
+  invalidateGetCache(providerCrmApi.invoice(id));
+  return mapCrmEntity(response, mapInvoice);
+}
+
+export async function updateInvoiceAttachments(
+  id: string,
+  attachments: Array<{ name: string; attachment: string }>,
+) {
+  const response = await putData(
+    providerCrmApi.invoice(id),
+    { attachments },
     { silent: false },
   );
   invalidateGetCache(providerCrmApi.invoices);

@@ -274,6 +274,8 @@ export interface Job {
   serviceId?: string;
   address: ServiceAddress;
   assignedTo?: string;
+  /** First assigned crew member id from API (when available). */
+  assignedEmployeeId?: string;
   scheduledAt?: string;
   dueAt?: string;
   status: JobStatus;
@@ -324,6 +326,7 @@ export interface Invoice {
   items: InvoiceItem[];
   /** Soft-archive — independent of lifecycle status. */
   isArchived?: boolean;
+  attachments?: EstimateAttachmentItem[] | string[];
   createdAt: string;
   updatedAt: string;
 }

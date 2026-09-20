@@ -293,12 +293,12 @@ export function usePortalCrew() {
         // Customer/detail tabs often assign records that are not in the CRM workspace snapshot.
         const resolvedEvent =
           sourceEvent ??
-          (assignment.title
+          (assignment.recordId
             ? {
                 id: `cal_${assignment.recordId}`,
                 kind: assignment.kind,
                 recordId: assignment.recordId,
-                title: assignment.title,
+                title: assignment.title || assignment.recordId,
                 detail: "",
                 customerName: undefined,
                 date: assignment.date,

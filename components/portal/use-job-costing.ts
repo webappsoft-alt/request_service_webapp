@@ -138,7 +138,7 @@ export function copyCostLines(email: string | undefined, fromId: string, toId: s
   writeStore(key, { ...store, [toId]: lines });
 }
 
-export function useJobCosting(job: Job) {
+export function useJobCosting(job: Job, options?: { preferApi?: boolean }) {
   const { session } = usePortalWorkspace();
   const key = storageKey(session?.email);
   const store = useSyncExternalStore(
@@ -146,14 +146,16 @@ export function useJobCosting(job: Job) {
     () => readStore(key),
     () => EMPTY,
   );
-  const lines = store[job.id] ?? seedJobLines(job);
+  const seeded = seedJobLines(job);
+  const lines = options?.preferApi ? seeded : (store[job.id] ?? seeded);
   const mix = jobCostMix(lines);
 
   const commit = useCallback(
     (next: JobCostLine[]) => {
+      if (options?.preferApi) return;
       writeStore(key, { ...readStore(key), [job.id]: next });
     },
-    [job.id, key],
+    [job.id, key, options?.preferApi],
   );
 
   const updateLine = useCallback(

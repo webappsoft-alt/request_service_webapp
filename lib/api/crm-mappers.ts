@@ -1235,6 +1235,17 @@ function mapAssignedName(value: unknown): string {
   return displayNameFromRecord(value) || trimmed(value);
 }
 
+function mapAssignedEmployeeId(value: unknown): string {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const id = crmIdOf(entry);
+      if (id) return id;
+    }
+    return "";
+  }
+  return crmIdOf(value);
+}
+
 export function mapJob(raw: unknown): Job | null {
   const record = asRecord(raw);
   if (!record) return null;
@@ -1261,7 +1272,10 @@ export function mapJob(raw: unknown): Job | null {
     number: trimmed(record.number) || `JOB-${id.slice(-4).toUpperCase()}`,
     title: trimmed(record.title) || undefined,
     providerId: crmIdOf(record.providerId),
-    customerId: crmIdOf(record.customerId),
+    customerId:
+      crmIdOf(record.customerId) ||
+      crmIdOf(asRecord(record.customerSnapshot)?.id) ||
+      crmIdOf(asRecord(record.customer)?.id),
     estimateId: crmIdOf(record.estimateId),
     serviceId: crmIdOf(record.serviceId) || undefined,
     address: mapServiceAddress(addressSource, `addr_${id}`),
@@ -1269,6 +1283,10 @@ export function mapJob(raw: unknown): Job | null {
       mapAssignedName(record.assignedEmployees) ||
       mapAssignedName(record.assignedContractors) ||
       trimmed(record.assignedTo) ||
+      undefined,
+    assignedEmployeeId:
+      mapAssignedEmployeeId(record.assignedEmployees) ||
+      mapAssignedEmployeeId(record.assignedContractors) ||
       undefined,
     scheduledAt: toIsoString(record.scheduledAt) || undefined,
     dueAt: toIsoString(record.dueAt) || undefined,
@@ -1351,6 +1369,7 @@ export function mapInvoice(raw: unknown): Invoice | null {
     balanceDue: numberValue(record.balanceDue, Math.max(0, numberValue(record.total) - numberValue(record.amountPaid))),
     items: mapInvoiceItems(id, record.items),
     isArchived: Boolean(record.isArchived ?? record.isArchieved),
+    attachments: mapEstimateAttachments(record.attachments),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
   };

@@ -179,18 +179,21 @@ export function applyJobSettings(job: Job, settings?: JobSettingsDraft): Job {
   if (!settings) return job;
   return {
     ...job,
-    customerId: settings.customerId || job.customerId,
-    assignedTo: settings.assignedTo || job.assignedTo,
-    scheduledAt: settings.start || job.scheduledAt,
-    dueAt: settings.due || job.dueAt,
+    title: settings.name?.trim() ? settings.name.trim() : job.title,
+    customerId: settings.customerId?.trim() ? settings.customerId : job.customerId,
+    assignedTo: settings.assignedTo?.trim() ? settings.assignedTo : job.assignedTo,
+    scheduledAt: settings.start?.trim() ? settings.start : job.scheduledAt,
+    dueAt: settings.due?.trim() ? settings.due : job.dueAt,
     status: settings.status || job.status,
-    notes: settings.notes || job.notes,
+    notes: settings.notes !== undefined && settings.notes !== ""
+      ? settings.notes
+      : (job.notes ?? settings.notes),
     address: {
       ...job.address,
-      street: settings.street || job.address.street,
-      city: settings.city || job.address.city,
-      state: settings.state || job.address.state,
-      zip: settings.zip || job.address.zip,
+      street: settings.street?.trim() ? settings.street : job.address.street,
+      city: settings.city?.trim() ? settings.city : job.address.city,
+      state: settings.state?.trim() ? settings.state : job.address.state,
+      zip: settings.zip?.trim() ? settings.zip : job.address.zip,
     },
   };
 }
@@ -604,6 +607,17 @@ export function useJobFile(
     [actor, commit, current, estimate?.attachments, estimate?.createdAt, estimate?.id, job.attachments, job.createdAt, job.id],
   );
 
+  const replaceAttachments = useCallback(
+    (files: JobAttachment[]) => {
+      const latest = current();
+      commit({
+        ...latest,
+        attachments: files,
+      });
+    },
+    [commit, current],
+  );
+
   const removeAttachment = useCallback(
     (id: string) => {
       const latest = current();
@@ -643,14 +657,20 @@ export function useJobFile(
     activities,
     attachments: stored.attachments.length
       ? stored.attachments
-      : (estimate?.attachments ?? job.attachments ?? []).map((item, index) =>
-          toJobAttachmentItem(item, index, estimate?.id ?? job.id, estimate?.createdAt ?? job.createdAt),
+      : (estimate?.attachments ?? invoice?.attachments ?? job.attachments ?? []).map((item, index) =>
+          toJobAttachmentItem(
+            item,
+            index,
+            estimate?.id ?? invoice?.id ?? job.id,
+            estimate?.createdAt ?? invoice?.createdAt ?? job.createdAt,
+          ),
         ),
     addLog,
     addActivity,
     updateActivity,
     removeActivity,
     addAttachments,
+    replaceAttachments,
     removeAttachment,
     settings: stored.settings,
     siteVisit: stored.siteVisit ?? siteVisitFromRecord(estimate?.siteVisit),

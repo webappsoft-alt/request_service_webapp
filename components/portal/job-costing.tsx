@@ -104,14 +104,16 @@ export function JobCosting({
   noun = "job",
   onMutate,
   onSave,
+  preferApi = false,
 }: {
   job: Job;
   locked?: boolean;
   noun?: CostingNoun;
   onMutate?: (title: string, detail: string) => void;
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
+  preferApi?: boolean;
 }) {
-  const { lines, commit } = useJobCosting(job);
+  const { lines, commit } = useJobCosting(job, { preferApi });
   const [draft, setDraft] = useState<JobCostLine[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);

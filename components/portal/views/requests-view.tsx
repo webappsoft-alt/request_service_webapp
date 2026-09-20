@@ -27,7 +27,14 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { listRequests } from "@/lib/api/crm-client";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchRequests,
+  fetchRequestsSummary,
+  patchLeadStatus,
+  requestsCacheKey,
+  setRequestStatusLocal,
+} from "@/store/requestsSlice";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
@@ -108,6 +115,8 @@ function matchesFilter(request: PortalRequest, status: string) {
 }
 
 export function RequestsView() {
+  const dispatch = useAppDispatch();
+  const reduxRequests = useAppSelector((state) => state.requests);
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "";
   const { requests, estimates, jobs } = usePortalWorkspace();
@@ -115,48 +124,43 @@ export function RequestsView() {
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const [open, setOpen] = useState(false);
-  const [apiItems, setApiItems] = useState<PortalRequest[]>([]);
-  const [listLoading, setListLoading] = useState(false);
   const archivedOnly = status === "archived";
+
+  const cacheKey = requestsCacheKey(status);
+  const cachedItems = reduxRequests.pagesCache[cacheKey];
+  const items = cachedItems ?? (reduxRequests.items.length > 0 ? reduxRequests.items : []);
+  const hasCache = Boolean(cachedItems || reduxRequests.items.length > 0);
 
   const updateLeadStatus = useCallback(
     async (id: string, newStatus: RequestStatus, message: string) => {
-      setApiItems((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item)),
-      );
+      dispatch(setRequestStatusLocal({ id, status: newStatus }));
       try {
+        await dispatch(patchLeadStatus({ id, status: newStatus })).unwrap();
         await records.setStatus("request", id, newStatus);
         toast.success(message);
       } catch {
         toast.error("Failed to update status.");
       }
     },
-    [records],
+    [dispatch, records],
   );
 
   const loadLeads = useCallback(async () => {
-    let cancelled = false;
-    setListLoading(true);
     try {
-      const items = await listRequests({ silent: true, force: true });
-      if (!cancelled) {
-        setApiItems(items);
-      }
+      await Promise.allSettled([
+        dispatch(fetchRequests({ status, silent: true })).unwrap(),
+        dispatch(fetchRequestsSummary({ silent: true })).unwrap(),
+      ]);
     } catch (error) {
-      if (!cancelled) {
-        toast.error(
-          error instanceof Error && error.message
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
             ? error.message
             : "Could not load leads.",
-        );
-      }
-    } finally {
-      if (!cancelled) setListLoading(false);
+      );
     }
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [dispatch, status]);
 
   useEffect(() => {
     void loadLeads();
@@ -167,12 +171,11 @@ export function RequestsView() {
       const custom = event as CustomEvent<{ id?: string; status?: string }>;
       const detail = custom?.detail;
       if (detail?.id && detail?.status) {
-        setApiItems((prev) =>
-          prev.map((item) =>
-            item.id === detail.id
-              ? { ...item, status: detail.status as PortalRequest["status"] }
-              : item,
-          ),
+        dispatch(
+          setRequestStatusLocal({
+            id: detail.id,
+            status: detail.status as PortalRequest["status"],
+          }),
         );
       }
     };
@@ -186,12 +189,11 @@ export function RequestsView() {
         const id = String(detail?.payload?.id || detail?.payload?.requestId || "").trim();
         const nextStatus = String(detail?.payload?.status || "").trim();
         if (id && nextStatus) {
-          setApiItems((prev) =>
-            prev.map((item) =>
-              item.id === id
-                ? { ...item, status: nextStatus as PortalRequest["status"] }
-                : item,
-            ),
+          dispatch(
+            setRequestStatusLocal({
+              id,
+              status: nextStatus as PortalRequest["status"],
+            }),
           );
         }
         return;
@@ -201,7 +203,8 @@ export function RequestsView() {
       if (
         type === "LEAD_CREATED" ||
         type === "ESTIMATE_ACCEPTED" ||
-        type === "ORDER_UPDATED"
+        type === "ORDER_UPDATED" ||
+        type === "INBOX_SUMMARY_INVALIDATE"
       ) {
         void loadLeads();
       }
@@ -213,9 +216,9 @@ export function RequestsView() {
       window.removeEventListener("rs-lead-status", handleLeadStatus);
       window.removeEventListener("rs-realtime", handleRealtime);
     };
-  }, [loadLeads]);
+  }, [dispatch, loadLeads]);
 
-  const source = apiItems.length > 0 ? apiItems : records.mergeRequests(requests);
+  const source = items.length > 0 ? items : records.mergeRequests(requests);
 
   const enrichedSource: PortalRequest[] = useMemo(() => {
     return source.map((lead) => {
@@ -237,6 +240,30 @@ export function RequestsView() {
     .listed("request", enrichedSource, archivedOnly)
     .filter((request) => archivedOnly || matchesFilter(request, status));
 
+  const summary = reduxRequests.summary;
+  const newLeadsCount =
+    summary?.newLeads ??
+    source.filter((r) => r.status === "new" || r.status === "viewed").length;
+  const activeLeadsCount =
+    summary?.activeLeads ??
+    source.filter(
+      (r) =>
+        r.status === "contacted" ||
+        r.status === "estimate_sent" ||
+        r.status === "accepted",
+    ).length;
+  const convertedLeadsCount =
+    summary?.convertedLeads ??
+    source.filter(
+      (r) =>
+        r.status === "converted_to_job" ||
+        r.status === "declined" ||
+        r.status === "closed",
+    ).length;
+  const unreadChatsCount =
+    summary?.unreadChats ??
+    source.reduce((acc, r) => acc + (r.unreadMessagesCount || 0), 0);
+
   return (
     <PortalPage
       eyebrow="Work / Leads"
@@ -248,12 +275,85 @@ export function RequestsView() {
         </Button>
       }
     >
+      {/* Pipeline Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <Link
+          href="/pro/dashboard/requests?status=new"
+          className={`flex items-center justify-between p-3.5 rounded-lg border transition-all ${
+            status === "new"
+              ? "bg-[#003F7D]/5 border-[#003F7D] shadow-2xs"
+              : "bg-card border-black/10 hover:border-black/25"
+          }`}
+        >
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">New / Unseen</p>
+            <p className="text-xl font-bold text-foreground mt-0.5">{newLeadsCount}</p>
+          </div>
+          <span className="flex size-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold">
+            {newLeadsCount}
+          </span>
+        </Link>
+
+        <Link
+          href="/pro/dashboard/requests?status=contacted"
+          className={`flex items-center justify-between p-3.5 rounded-lg border transition-all ${
+            status === "contacted"
+              ? "bg-[#003F7D]/5 border-[#003F7D] shadow-2xs"
+              : "bg-card border-black/10 hover:border-black/25"
+          }`}
+        >
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Active Pipeline</p>
+            <p className="text-xl font-bold text-foreground mt-0.5">{activeLeadsCount}</p>
+          </div>
+          <span className="flex size-8 items-center justify-center rounded-full bg-blue-50 text-[#003F7D] border border-blue-200 text-xs font-bold">
+            {activeLeadsCount}
+          </span>
+        </Link>
+
+        <Link
+          href="/pro/dashboard/requests?status=closed"
+          className={`flex items-center justify-between p-3.5 rounded-lg border transition-all ${
+            status === "closed"
+              ? "bg-[#003F7D]/5 border-[#003F7D] shadow-2xs"
+              : "bg-card border-black/10 hover:border-black/25"
+          }`}
+        >
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Converted / Closed</p>
+            <p className="text-xl font-bold text-foreground mt-0.5">{convertedLeadsCount}</p>
+          </div>
+          <span className="flex size-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
+            {convertedLeadsCount}
+          </span>
+        </Link>
+
+        <Link
+          href="/pro/dashboard/messages"
+          className="flex items-center justify-between p-3.5 rounded-lg border bg-card border-black/10 hover:border-black/25 transition-all"
+        >
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Unread Chats</p>
+            <p className="text-xl font-bold text-foreground mt-0.5">{unreadChatsCount}</p>
+          </div>
+          <span
+            className={`flex size-8 items-center justify-center rounded-full text-xs font-bold ${
+              unreadChatsCount > 0
+                ? "bg-[#003F7D] text-white"
+                : "bg-slate-100 text-muted-foreground"
+            }`}
+          >
+            <MessageSquare className="size-3.5" />
+          </span>
+        </Link>
+      </div>
+
       <FilterTabs baseHref="/pro/dashboard/requests" value={status} options={withArchiveFilter(filters)} />
       <PortalDataTable
         filename="requests"
         countLabel="Leads"
         searchPlaceholder="Search leads"
-        loading={listLoading && rows.length === 0}
+        loading={reduxRequests.loading && !hasCache && rows.length === 0}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/requests/${row.id}`}

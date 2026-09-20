@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,8 +20,8 @@ import { cn } from "@/lib/utils";
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const KINDS: PortalEventKind[] = ["job", "estimate", "request", "invoice", "task"];
 const VIEWS = ["day", "week", "month"] as const;
-const DAY_START = 7 * 60;
-const DAY_END = 19 * 60;
+const DAY_START = 6 * 60;   // 6:00 AM
+const DAY_END = 24 * 60;    // midnight (00:00 next day)
 const SLOT = 30;
 const SLOT_PX = 32;
 const SLOTS = Array.from({ length: (DAY_END - DAY_START) / SLOT }, (_, index) => DAY_START + index * SLOT);
@@ -138,10 +138,11 @@ type DragPayload = {
   mode: "move" | "resize";
   span: number;
   duration: number;
+  dayOffset?: number;
 };
 
 export function EventCalendar({
-  events,
+  events: propEvents,
   employeeLabel,
   employees,
   onMove,
@@ -160,11 +161,17 @@ export function EventCalendar({
   /** When set, calendar stays scoped to this employee (hides Everyone filter). */
   lockEmployeeId?: string;
 }) {
+  const [localEvents, setLocalEvents] = useState<PortalCalendarEvent[]>(propEvents);
+
+  useEffect(() => {
+    setLocalEvents(propEvents);
+  }, [propEvents]);
+
   const today = toIso(new Date());
   const firstDated =
-    events.find((item) => item.date && item.kind === "job")?.date ??
-    events.find((item) => item.date && item.kind === "estimate")?.date ??
-    events.find((item) => item.date)?.date ??
+    localEvents.find((item) => item.date && item.kind === "job")?.date ??
+    localEvents.find((item) => item.date && item.kind === "estimate")?.date ??
+    localEvents.find((item) => item.date)?.date ??
     today;
   const start = parseIso(firstDated);
   const [view, setView] = useState<CalendarView>("day");
@@ -185,7 +192,7 @@ export function EventCalendar({
     const locked = lockEmployeeId.trim();
     const employeeId = locked || employeeFilter.trim();
     const kind = kindFilter;
-    return events.filter((item) => {
+    return localEvents.filter((item) => {
       if (kind && item.kind !== kind) return false;
       if (employeeId) {
         const eventEmployeeId = String(item.employeeId || "").trim();
@@ -193,7 +200,7 @@ export function EventCalendar({
       }
       return true;
     });
-  }, [employeeFilter, events, kindFilter, lockEmployeeId]);
+  }, [employeeFilter, localEvents, kindFilter, lockEmployeeId]);
 
   const cells = useMemo(() => {
     const first = new Date(cursor.year, cursor.month, 1);
@@ -229,6 +236,22 @@ export function EventCalendar({
   }
 
   function applyMove(item: PortalCalendarEvent, move: CalendarMove) {
+    // Optimistic instantaneous UI update for zero lag
+    setLocalEvents((prev) =>
+      prev.map((entry) => {
+        const isMatch =
+          entry.id === item.id ||
+          (entry.kind === item.kind && entry.recordId && entry.recordId === item.recordId);
+        if (!isMatch) return entry;
+        return {
+          ...entry,
+          date: move.date,
+          endDate: move.endDate,
+          startMinutes: move.startMinutes ?? entry.startMinutes,
+          endMinutes: move.endMinutes ?? entry.endMinutes,
+        };
+      }),
+    );
     onMove(item, move);
     if (move.date) setSelectedDay(move.date);
   }
@@ -237,7 +260,9 @@ export function EventCalendar({
     drag.preventDefault();
     setOverDay(null);
     const payload = readPayload(drag);
-    const item = visible.find((entry) => entry.id === payload?.id) ?? events.find((entry) => entry.id === payload?.id);
+    const item =
+      visible.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId))) ??
+      localEvents.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId)));
     if (!payload || !item) return;
     if (payload.mode === "resize") {
       const startDate = item.date ?? iso;
@@ -251,9 +276,11 @@ export function EventCalendar({
       });
       return;
     }
+    const dayOffset = payload.dayOffset ?? 0;
+    const targetStartDate = dayOffset > 0 ? addIsoDays(iso, -dayOffset) : iso;
     applyMove(item, {
-      date: iso,
-      endDate: payload.span > 1 ? addIsoDays(iso, payload.span - 1) : undefined,
+      date: targetStartDate,
+      endDate: payload.span > 1 ? addIsoDays(targetStartDate, payload.span - 1) : undefined,
       startMinutes: eventTimes(item).start,
       endMinutes: eventTimes(item).end,
     });
@@ -263,7 +290,9 @@ export function EventCalendar({
     drag.preventDefault();
     setOverDay(null);
     const payload = readPayload(drag);
-    const item = visible.find((entry) => entry.id === payload?.id) ?? events.find((entry) => entry.id === payload?.id);
+    const item =
+      visible.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId))) ??
+      localEvents.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId)));
     if (!payload || !item) return;
     const times = eventTimes(item);
     const duration = Math.max(SLOT, payload.duration || times.end - times.start);
@@ -271,7 +300,7 @@ export function EventCalendar({
       const nextEnd = snapMinutes(slotStart + SLOT, times.start + SLOT, DAY_END);
       applyMove(item, {
         date: item.date ?? iso,
-        endDate: undefined,
+        endDate: item.endDate,
         startMinutes: times.start,
         endMinutes: nextEnd,
       });
@@ -279,19 +308,21 @@ export function EventCalendar({
     }
     const nextStart = snapMinutes(slotStart, DAY_START, DAY_END - SLOT);
     const capped = Math.min(duration, DAY_END - nextStart);
+    const dayOffset = payload.dayOffset ?? 0;
+    const targetStartDate = dayOffset > 0 ? addIsoDays(iso, -dayOffset) : iso;
     applyMove(item, {
-      date: iso,
-      endDate: undefined,
+      date: targetStartDate,
+      endDate: payload.span > 1 ? addIsoDays(targetStartDate, payload.span - 1) : undefined,
       startMinutes: nextStart,
       endMinutes: nextStart + Math.max(SLOT, capped),
     });
   }
 
-  function resizeTo(item: PortalCalendarEvent, iso: string, endMinutes: number) {
+  function resizeTo(item: PortalCalendarEvent, endMinutes: number) {
     const times = eventTimes(item);
     applyMove(item, {
-      date: item.date ?? iso,
-      endDate: undefined,
+      date: item.date ?? selectedDay,
+      endDate: item.endDate,
       startMinutes: times.start,
       endMinutes: snapMinutes(endMinutes, times.start + SLOT, DAY_END),
     });
@@ -437,7 +468,7 @@ export function EventCalendar({
         <span className="text-muted-foreground">
           {view === "month"
             ? "Drag to a day. Pull the right edge to extend dates."
-            : "30-minute slots, 7 AM–7 PM. Drag to any time or date. Pull the bottom edge to extend (7 to 10 = 3 hours)."}
+            : "30-minute slots, 6 AM–midnight. Drag to any time or date. Pull the bottom edge to extend."}
         </span>
       </div>
 
@@ -514,7 +545,7 @@ export function EventCalendar({
             onDrop={(drag) => {
               drag.preventDefault();
               const payload = readPayload(drag);
-              const item = events.find((entry) => entry.id === payload?.id);
+              const item = localEvents.find((entry) => entry.id === payload?.id);
               if (!item) return;
               onMove(item, { date: "" });
             }}
@@ -620,12 +651,43 @@ function TimeGrid({
   events: PortalCalendarEvent[];
   onSelect: (iso: string) => void;
   onDropSlot: (iso: string, slotStart: number, drag: DragEvent) => void;
-  onResize: (event: PortalCalendarEvent, iso: string, endMinutes: number) => void;
+  onResize: (event: PortalCalendarEvent, endMinutes: number) => void;
   onOpen?: (event: PortalCalendarEvent) => void;
 }) {
   const columns = days.length === 1 ? "grid-cols-[72px_minmax(0,1fr)]" : "grid-cols-[72px_repeat(7,minmax(0,1fr))]";
   const height = SLOTS.length * SLOT_PX;
   const [hover, setHover] = useState<{ iso: string; slot: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to show the first event's time position (or 8 AM if no events)
+  useEffect(() => {
+    const earliest = events
+      .filter((item) => item.startMinutes != null)
+      .reduce<number | null>((min, item) => {
+        const t = item.startMinutes ?? null;
+        if (t == null) return min;
+        return min == null ? t : Math.min(min, t);
+      }, null);
+    const targetMinutes = earliest ?? 8 * 60;
+    const scrollTop = Math.max(0, ((targetMinutes - DAY_START) / SLOT) * SLOT_PX - 64);
+    scrollRef.current?.scrollTo({ top: scrollTop, behavior: "instant" });
+  }, [events]);
+
+  const timedEvents = useMemo(() => {
+    const seen = new Set<string>();
+    const startBoundary = days[0];
+    const endBoundary = days[days.length - 1];
+    return events.filter((item) => {
+      if (!item.date || isAllDay(item)) return false;
+      const start = item.date;
+      const end = eventEndDate(item) ?? start;
+      const inRange = start <= endBoundary && end >= startBoundary;
+      if (!inRange) return false;
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [events, days]);
 
   return (
     <div className="border border-black/15 bg-card">
@@ -666,20 +728,25 @@ function TimeGrid({
         })}
       </div>
 
-      <div className="max-h-[36rem] overflow-auto">
+      <div className="max-h-[42rem] overflow-auto" ref={scrollRef}>
         <div className={cn("grid", columns)}>
           <div className="relative border-r border-black/10" style={{ height }}>
-            {SLOTS.map((slot) => (
+            {SLOTS.filter((slot) => slot % 60 === 0).map((slot) => (
               <p
                 key={slot}
-                className={cn(
-                  "absolute right-2 text-[10px] leading-none",
-                  slot % 60 === 0 ? "font-medium text-foreground" : "text-muted-foreground",
-                )}
-                style={{ top: ((slot - DAY_START) / SLOT) * SLOT_PX + 2 }}
+                className="absolute right-2 text-[10px] font-medium leading-none text-foreground"
+                style={{ top: ((slot - DAY_START) / SLOT) * SLOT_PX - 5 }}
               >
                 {formatClock(slot)}
               </p>
+            ))}
+            {/* Half-hour tick marks (no label) */}
+            {SLOTS.filter((slot) => slot % 60 !== 0).map((slot) => (
+              <div
+                key={slot}
+                className="absolute right-0 h-px w-2 bg-black/20"
+                style={{ top: ((slot - DAY_START) / SLOT) * SLOT_PX }}
+              />
             ))}
             <p
               className="absolute right-2 text-[10px] font-medium leading-none text-foreground"
@@ -688,74 +755,129 @@ function TimeGrid({
               {formatClock(DAY_END)}
             </p>
           </div>
-          {days.map((iso) => {
-            const timed = events.filter((item) => eventCovers(item, iso) && !isAllDay(item));
-            return (
-              <div key={iso} className="relative border-r border-black/10 last:border-r-0" style={{ height }}>
-                {SLOTS.map((slot) => (
-                  <div
-                    key={slot}
-                    onClick={() => onSelect(iso)}
-                    onDragOver={(drag) => {
-                      drag.preventDefault();
-                      setHover({ iso, slot });
-                    }}
-                    onDragLeave={() => setHover(null)}
-                    onDrop={(drag) => {
-                      setHover(null);
-                      onDropSlot(iso, slot, drag);
-                    }}
-                    className={cn(
-                      "absolute inset-x-0 border-t",
-                      slot % 60 === 0 ? "border-black/15" : "border-dashed border-black/10",
-                      hover?.iso === iso && hover.slot === slot && "bg-primary/10",
-                    )}
-                    style={{ top: ((slot - DAY_START) / SLOT) * SLOT_PX, height: SLOT_PX }}
-                  />
-                ))}
-                {timed.map((item) => {
-                  const times = eventTimes(item);
-                  const top = ((Math.max(times.start, DAY_START) - DAY_START) / SLOT) * SLOT_PX;
-                  const heightPx = Math.max(
-                    SLOT_PX,
-                    ((Math.min(times.end, DAY_END) - Math.max(times.start, DAY_START)) / SLOT) * SLOT_PX,
-                  );
-                  return (
-                    <TimedBlock
-                      key={item.id}
-                      event={item}
-                      top={top}
-                      height={heightPx}
-                      onOpen={onOpen}
-                      onResize={(endMinutes) => onResize(item, iso, endMinutes)}
+
+          {/* Days area: background slot grid + continuous full-card bar overlay */}
+          <div
+            className={cn(
+              "relative",
+              days.length === 1 ? "col-span-1" : "col-span-7",
+            )}
+            style={{ height }}
+          >
+            {/* Background slots grid */}
+            <div
+              className={cn(
+                "absolute inset-0 grid",
+                days.length === 1 ? "grid-cols-1" : "grid-cols-7",
+              )}
+            >
+              {days.map((iso) => (
+                <div
+                  key={iso}
+                  className="relative border-r border-black/10 last:border-r-0"
+                  style={{ height }}
+                >
+                  {SLOTS.map((slot) => (
+                    <div
+                      key={slot}
+                      onClick={() => onSelect(iso)}
+                      onDragOver={(drag) => {
+                        drag.preventDefault();
+                        setHover({ iso, slot });
+                      }}
+                      onDragLeave={() => setHover(null)}
+                      onDrop={(drag) => {
+                        setHover(null);
+                        onDropSlot(iso, slot, drag);
+                      }}
+                      className={cn(
+                        "absolute inset-x-0 border-t",
+                        slot % 60 === 0
+                          ? "border-black/15"
+                          : "border-dashed border-black/10",
+                        hover?.iso === iso && hover.slot === slot && "bg-primary/10",
+                      )}
+                      style={{
+                        top: ((slot - DAY_START) / SLOT) * SLOT_PX,
+                        height: SLOT_PX,
+                      }}
                     />
-                  );
-                })}
-              </div>
-            );
-          })}
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Continuous Timed Event Bars Overlay */}
+            <div className="absolute inset-0 pointer-events-none">
+              {timedEvents.map((item) => {
+                const itemStartDate = item.date ?? days[0];
+                const itemEndDate = eventEndDate(item) ?? itemStartDate;
+
+                const rawStartIdx = days.indexOf(itemStartDate);
+                const rawEndIdx = days.indexOf(itemEndDate);
+                const effStart = rawStartIdx >= 0 ? rawStartIdx : 0;
+                const effEnd = rawEndIdx >= 0 ? rawEndIdx : days.length - 1;
+
+                if (effStart > effEnd) return null;
+
+                const leftPct = (effStart / days.length) * 100;
+                const widthPct = ((effEnd - effStart + 1) / days.length) * 100;
+
+                const times = eventTimes(item);
+                const top =
+                  ((Math.max(times.start, DAY_START) - DAY_START) / SLOT) *
+                  SLOT_PX;
+                const heightPx = Math.max(
+                  SLOT_PX,
+                  ((Math.min(times.end, DAY_END) -
+                    Math.max(times.start, DAY_START)) /
+                    SLOT) *
+                    SLOT_PX,
+                );
+
+                return (
+                  <TimedBar
+                    key={item.id}
+                    event={item}
+                    top={top}
+                    height={heightPx}
+                    leftPct={leftPct}
+                    widthPct={widthPct}
+                    onOpen={onOpen}
+                    onResize={(endMinutes) => onResize(item, endMinutes)}
+                  />
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function TimedBlock({
+function TimedBar({
   event,
   top,
   height,
+  leftPct,
+  widthPct,
   onOpen,
   onResize,
 }: {
   event: PortalCalendarEvent;
   top: number;
   height: number;
+  leftPct: number;
+  widthPct: number;
   onOpen?: (event: PortalCalendarEvent) => void;
   onResize: (endMinutes: number) => void;
 }) {
   const times = eventTimes(event);
   const duration = times.end - times.start;
-  const span = event.date && eventEndDate(event) ? diffDays(event.date, eventEndDate(event) ?? event.date) + 1 : 1;
+  const endDate = eventEndDate(event) ?? event.date;
+  const isMultiDay = Boolean(event.date && endDate && endDate > event.date);
+  const span = isMultiDay && event.date && endDate ? diffDays(event.date, endDate) + 1 : 1;
   const [draftEnd, setDraftEnd] = useState<number | null>(null);
   const end = draftEnd ?? times.end;
   const displayHeight = Math.max(
@@ -765,7 +887,10 @@ function TimedBlock({
 
   function startDrag(mode: "move" | "resize", drag: DragEvent) {
     drag.stopPropagation();
-    drag.dataTransfer.setData("text/plain", JSON.stringify({ id: event.id, mode, span, duration } satisfies DragPayload));
+    drag.dataTransfer.setData(
+      "text/plain",
+      JSON.stringify({ id: event.id, mode, span, duration } satisfies DragPayload),
+    );
     drag.dataTransfer.effectAllowed = "move";
   }
 
@@ -777,17 +902,24 @@ function TimedBlock({
         click.stopPropagation();
         onOpen?.(event);
       }}
-      style={{ top, height: displayHeight || height }}
+      style={{
+        top,
+        height: displayHeight || height,
+        left: `calc(${leftPct}% + 3px)`,
+        width: `calc(${widthPct}% - 6px)`,
+      }}
       className={cn(
-        "absolute inset-x-1 z-20 flex cursor-grab flex-col overflow-hidden rounded-md px-2 py-1 text-left active:cursor-grabbing",
+        "pointer-events-auto absolute z-20 flex cursor-grab flex-col justify-center overflow-hidden rounded-md px-2.5 py-1 text-left active:cursor-grabbing transition-shadow hover:shadow-lg shadow-sm border border-white/25",
         calendarEventTone(event.kind),
       )}
-      title={`${calendarEventKindLabel(event.kind)} · ${event.title} · ${formatClock(times.start)}–${formatClock(end)}`}
+      title={`${calendarEventKindLabel(event.kind)} · ${event.title} · ${isMultiDay ? `${formatDate(event.date!)} – ${formatDate(endDate)} · ` : ""}${formatClock(times.start)}–${formatClock(end)}`}
     >
-      <span className="truncate text-[11px] font-medium">{event.title}</span>
-      <span className="truncate text-[10px] font-normal opacity-90">
-        {formatClock(times.start)}–{formatClock(end)} · {eventService(event)}
-      </span>
+      <div className="flex items-center justify-between gap-2 overflow-hidden">
+        <span className="truncate text-xs font-semibold leading-tight">{event.title}</span>
+        <span className="truncate text-[11px] font-medium opacity-90 shrink-0">
+          {formatClock(times.start)}–{formatClock(end)}{event.detail ? ` · ${eventService(event)}` : ""}
+        </span>
+      </div>
       <span
         onPointerDown={(pointer) => {
           pointer.preventDefault();
@@ -812,9 +944,9 @@ function TimedBlock({
           handle.addEventListener("pointermove", move);
           handle.addEventListener("pointerup", up);
         }}
-        className="mt-auto h-2 w-full cursor-s-resize rounded-sm bg-white/45"
+        className="absolute bottom-0 inset-x-0 h-1.5 cursor-s-resize rounded-b-md bg-white/40 hover:bg-white/70"
         aria-label="Extend time"
-        title="Drag down to add 30-minute slots"
+        title="Drag down to extend time"
       />
     </div>
   );

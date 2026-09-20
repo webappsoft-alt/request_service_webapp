@@ -45,6 +45,14 @@ import {
   setEstimatesStatus,
 } from "@/store/estimatesSlice";
 import {
+  fetchJobs,
+  invalidateJobsCache,
+  setJobsPage,
+  patchJobStatus,
+  deleteJobRecord,
+  JOBS_DEFAULT_LIMIT,
+} from "@/store/jobsSlice";
+import {
   deleteEstimate,
   queryEstimates,
   shareEstimate,
@@ -622,13 +630,82 @@ export function EstimatesView() {
 }
 
 export function JobsView() {
-  const status = useSearchParams().get("status") ?? "";
-  const { jobs, provider, estimates, requests, invoices } =
-    usePortalWorkspace();
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status") ?? "";
+  const dispatch = useAppDispatch();
+  const { provider, estimates, requests, invoices } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const [createOpen, setCreateOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // ── Redux state ──────────────────────────────────────────────────────────
+  const {
+    items: reduxItems,
+    loading,
+    total,
+    totalPages,
+    page,
+    search: reduxSearch,
+    status: reduxStatus,
+    error,
+  } = useAppSelector((s) => s.jobs);
+
+  // Controlled search input with debounce
+  const [searchInput, setSearchInput] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Load & refresh ────────────────────────────────────────────────────────
+  useEffect(() => {
+    dispatch(fetchJobs({ status: statusParam, page: 1, search: "" }));
+  }, [dispatch, statusParam]);
+
+  // Debounced search dispatch
+  const handleSearch = (value: string) => {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      dispatch(fetchJobs({ search: value, status: statusParam, page: 1 }));
+    }, 350);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    dispatch(setJobsPage(newPage));
+    dispatch(fetchJobs({ page: newPage, search: reduxSearch, status: statusParam }));
+  };
+
+  const handleStatusAction = async (
+    id: string,
+    status: string,
+    label: string,
+  ) => {
+    setActionLoading(true);
+    try {
+      await dispatch(
+        patchJobStatus({ id, status: status as Parameters<typeof patchJobStatus>[0]["status"] }),
+      ).unwrap();
+      toast.success(label);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update job status.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string, number: string) => {
+    setActionLoading(true);
+    try {
+      await dispatch(deleteJobRecord(id)).unwrap();
+      toast.success(`${number} deleted. The source estimate can be converted again.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete this job.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Merge Redux items with workspace data (workspace may contain items from snapshot)
   const allEstimates = useMemo(
     () => records.mergeEstimates(estimates),
     [records, estimates],
@@ -637,20 +714,15 @@ export function JobsView() {
     () => records.mergeInvoices(invoices),
     [records, invoices],
   );
-  const archivedOnly = status === "archived";
-  const rows = useMemo(
-    () =>
-      records
-        .listed("job", records.mergeJobs(jobs), archivedOnly)
-        .map((item) => ({
-          ...item,
-          status: records.statusOf("job", item.id, item.status),
-        }))
-        .filter((item) =>
-          archivedOnly || !status ? true : item.status === status,
-        ),
-    [archivedOnly, jobs, records, status],
-  );
+
+  const rows = useMemo(() => {
+    const source = reduxItems.length > 0 ? reduxItems : [];
+    return source.filter((item) =>
+      statusParam === "archived"
+        ? !!(item as unknown as { isArchived?: boolean }).isArchived
+        : !statusParam || item.status === statusParam,
+    );
+  }, [reduxItems, statusParam]);
 
   return (
     <PortalPage
@@ -663,10 +735,19 @@ export function JobsView() {
         </Button>
       }
     >
-      <CreateJobDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateJobDialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) {
+            dispatch(invalidateJobsCache());
+            dispatch(fetchJobs({ status: statusParam, page: 1, search: reduxSearch }));
+          }
+        }}
+      />
       <FilterTabs
         baseHref="/pro/dashboard/jobs"
-        value={status}
+        value={statusParam}
         options={withArchiveFilter(JOB_STATUS_FILTERS)}
       />
       <PortalDataTable
@@ -676,6 +757,16 @@ export function JobsView() {
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
+        loading={loading}
+        serverPagination={{
+          page,
+          pageSize: JOBS_DEFAULT_LIMIT,
+          total,
+          totalPages,
+          onPageChange: handlePageChange,
+          search: searchInput,
+          onSearchChange: handleSearch,
+        }}
         columns={jobBoardColumns({
           estimates: allEstimates,
           requests,
@@ -702,8 +793,7 @@ export function JobsView() {
                 {
                   label: "Start job",
                   onSelect: () => {
-                    records.setStatus("job", row.id, "in_progress");
-                    toast.success("Job marked in progress.");
+                    void handleStatusAction(row.id, "in_progress", "Job marked in progress.");
                   },
                 },
               ]),
@@ -713,8 +803,7 @@ export function JobsView() {
                 {
                   label: "Complete",
                   onSelect: () => {
-                    records.setStatus("job", row.id, "completed");
-                    toast.success("Job marked completed.");
+                    void handleStatusAction(row.id, "completed", "Job marked completed.");
                   },
                 },
               ]),
@@ -724,8 +813,7 @@ export function JobsView() {
                 {
                   label: "Put on hold",
                   onSelect: () => {
-                    records.setStatus("job", row.id, "on_hold");
-                    toast.success("Job put on hold.");
+                    void handleStatusAction(row.id, "on_hold", "Job put on hold.");
                   },
                 },
               ]),
@@ -735,8 +823,7 @@ export function JobsView() {
                 {
                   label: "Cancel",
                   onSelect: () => {
-                    records.setStatus("job", row.id, "cancelled");
-                    toast.success("Job cancelled.");
+                    void handleStatusAction(row.id, "cancelled", "Job cancelled.");
                   },
                 },
               ]),
@@ -745,19 +832,7 @@ export function JobsView() {
             label: "Delete",
             variant: "destructive",
             onSelect: () => {
-              void Promise.resolve(records.remove("job", row.id))
-                .then(() => {
-                  toast.success(
-                    `${row.number} deleted. The source estimate can be converted again.`,
-                  );
-                })
-                .catch((error) => {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not delete this job.",
-                  );
-                });
+              void handleDelete(row.id, row.number);
             },
           },
         ]}
@@ -765,6 +840,7 @@ export function JobsView() {
     </PortalPage>
   );
 }
+
 
 export function InvoicesView() {
   const status = useSearchParams().get("status") ?? "";

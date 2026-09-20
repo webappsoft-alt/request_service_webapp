@@ -52,7 +52,7 @@ import {
 import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateJob as updateJobApi, updateJobStatus as updateJobStatusApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { employeeName, JOB_STATUSES, jobStatusLabel } from "@/lib/data/portal";
-import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { formatDate, formatLocation, formatMoney, formatShortDate } from "@/lib/format";
 import type { Estimate, Invoice, Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -1204,6 +1204,13 @@ function ActivityCard({
   );
 }
 
+function formatLogDetail(detail?: string) {
+  if (!detail) return "";
+  return detail.replace(/\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?/g, (match) =>
+    formatShortDate(match),
+  );
+}
+
 function LogRow({ item, last }: { item: JobLog; last: boolean }) {
   return (
     <li className="flex gap-3">
@@ -1213,7 +1220,7 @@ function LogRow({ item, last }: { item: JobLog; last: boolean }) {
       </div>
       <div className={cn("min-w-0 pb-4", last && "pb-0")}>
         <p className="text-sm font-medium">{item.title}</p>
-        <p className="text-sm text-muted-foreground">{item.detail}</p>
+        <p className="text-sm text-muted-foreground">{formatLogDetail(item.detail)}</p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
           {item.actor} · {item.at.includes("T") ? stamp(item.at) : formatDate(item.at)}
         </p>

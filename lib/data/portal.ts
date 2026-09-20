@@ -925,8 +925,10 @@ export function windowFromMinutes(start?: number, end?: number): PortalTimeWindo
 }
 
 export function formatClock(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+  // Normalize so that 24*60 (midnight end-of-day) displays as "12 AM"
+  const normalized = minutes % (24 * 60);
+  const hours = Math.floor(normalized / 60);
+  const mins = normalized % 60;
   const suffix = hours >= 12 ? "PM" : "AM";
   const hour = ((hours + 11) % 12) + 1;
   return mins ? `${hour}:${String(mins).padStart(2, "0")} ${suffix}` : `${hour} ${suffix}`;

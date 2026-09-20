@@ -958,7 +958,22 @@ export function CreateReminderDialog({
     if (saving) return;
     const linkedKind = kind;
     const linkedId = selectedId;
-    if (!title.trim() || !linkedId) return;
+    if (!linkedId) {
+      toast.error(`Please select a target ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
+      return;
+    }
+    if (!title.trim()) {
+      toast.error("Please enter a title.");
+      return;
+    }
+    if (!note.trim()) {
+      toast.error("Please enter a note.");
+      return;
+    }
+    if (!dueAt) {
+      toast.error("Please select a due date.");
+      return;
+    }
 
     const payload: PortalReminder = {
       id: reminder?.id ?? `rem_${provider.id}_new_${Date.now()}`,
@@ -1046,7 +1061,10 @@ export function CreateReminderDialog({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="rem-subject">Target {reminderSubjectKindLabel(kind)}</FieldLabel>
+              <FieldLabel htmlFor="rem-subject">
+                Target {reminderSubjectKindLabel(kind)}{" "}
+                <span className="text-destructive">*</span>
+              </FieldLabel>
               <PaginatedEntitySelect
                 id="rem-subject"
                 value={selectedId}
@@ -1064,7 +1082,9 @@ export function CreateReminderDialog({
           </div>
 
           <Field>
-            <FieldLabel htmlFor="rem-title">Title</FieldLabel>
+            <FieldLabel htmlFor="rem-title">
+              Title <span className="text-destructive">*</span>
+            </FieldLabel>
             <Input
               id="rem-title"
               value={title}
@@ -1073,7 +1093,9 @@ export function CreateReminderDialog({
             />
           </Field>
           <Field className="w-full">
-            <FieldLabel htmlFor="rem-note">Note</FieldLabel>
+            <FieldLabel htmlFor="rem-note">
+              Note <span className="text-destructive">*</span>
+            </FieldLabel>
             <Textarea
               id="rem-note"
               className="w-full min-h-24"
@@ -1123,7 +1145,9 @@ export function CreateReminderDialog({
             </Field>
           </div>
           <Field>
-            <FieldLabel htmlFor="rem-due">Due date</FieldLabel>
+            <FieldLabel htmlFor="rem-due">
+              Due date <span className="text-destructive">*</span>
+            </FieldLabel>
             <Input
               id="rem-due"
               type="date"
@@ -1141,7 +1165,7 @@ export function CreateReminderDialog({
             Cancel
           </Button>
           <Button
-            disabled={saving || !title.trim() || !linkedReady}
+            disabled={saving || !title.trim() || !note.trim() || !dueAt || !linkedReady}
             onClick={() => void save()}
           >
             {saving ? (
@@ -1292,7 +1316,22 @@ export function CreateTaskDialog({
     if (saving) return;
     const linkedKind = kind;
     const linkedId = selectedId;
-    if (!title.trim() || !linkedId) return;
+    if (!linkedId) {
+      toast.error(`Please select a target ${reminderSubjectKindLabel(linkedKind).toLowerCase()}.`);
+      return;
+    }
+    if (!title.trim()) {
+      toast.error("Please enter a task title.");
+      return;
+    }
+    if (!note.trim()) {
+      toast.error("Please enter task notes.");
+      return;
+    }
+    if (!dueAt) {
+      toast.error("Please select a due date.");
+      return;
+    }
 
     const payload: PortalTask = {
       id: task?.id ?? `task_${provider.id}_new_${Date.now()}`,
@@ -1405,7 +1444,10 @@ export function CreateTaskDialog({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="task-subject">Target {reminderSubjectKindLabel(kind)}</FieldLabel>
+              <FieldLabel htmlFor="task-subject">
+                Target {reminderSubjectKindLabel(kind)}{" "}
+                <span className="text-destructive">*</span>
+              </FieldLabel>
               <PaginatedEntitySelect
                 id="task-subject"
                 value={selectedId}
@@ -1423,7 +1465,9 @@ export function CreateTaskDialog({
           </div>
 
           <Field>
-            <FieldLabel htmlFor="task-title">Title</FieldLabel>
+            <FieldLabel htmlFor="task-title">
+              Title <span className="text-destructive">*</span>
+            </FieldLabel>
             <Input
               id="task-title"
               value={title}
@@ -1432,7 +1476,9 @@ export function CreateTaskDialog({
             />
           </Field>
           <Field className="w-full">
-            <FieldLabel htmlFor="task-note">Notes</FieldLabel>
+            <FieldLabel htmlFor="task-note">
+              Notes <span className="text-destructive">*</span>
+            </FieldLabel>
             <Textarea
               id="task-note"
               className="w-full min-h-24"
@@ -1505,7 +1551,9 @@ export function CreateTaskDialog({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="task-due">Due date</FieldLabel>
+              <FieldLabel htmlFor="task-due">
+                Due date <span className="text-destructive">*</span>
+              </FieldLabel>
               <Input
                 id="task-due"
                 type="date"
@@ -1524,7 +1572,7 @@ export function CreateTaskDialog({
             Cancel
           </Button>
           <Button
-            disabled={saving || !title.trim() || !linkedReady}
+            disabled={saving || !title.trim() || !note.trim() || !dueAt || !linkedReady}
             onClick={() => void save()}
           >
             {saving ? (

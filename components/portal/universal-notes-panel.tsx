@@ -69,9 +69,16 @@ export function CreateUniversalNoteDialog({
     if (saving || mutating) return;
     const nextTitle = title.trim();
     const nextBody = body.trim();
-    if (!nextTitle && !nextBody) return;
+    if (!nextTitle) {
+      toast.error("Please enter a note title.");
+      return;
+    }
+    if (!nextBody) {
+      toast.error("Please enter note content.");
+      return;
+    }
 
-    const content = nextBody || nextTitle;
+    const content = nextBody;
     setSaving(true);
     try {
       if (note) {
@@ -136,7 +143,9 @@ export function CreateUniversalNoteDialog({
         </DialogHeader>
         <FieldGroup className="gap-4">
           <Field>
-            <FieldLabel htmlFor="universal-note-title">Title</FieldLabel>
+            <FieldLabel htmlFor="universal-note-title">
+              Title <span className="text-destructive">*</span>
+            </FieldLabel>
             <Input
               id="universal-note-title"
               value={title}
@@ -145,7 +154,9 @@ export function CreateUniversalNoteDialog({
             />
           </Field>
           <Field className="w-full">
-            <FieldLabel htmlFor="universal-note-body">Note</FieldLabel>
+            <FieldLabel htmlFor="universal-note-body">
+              Note <span className="text-destructive">*</span>
+            </FieldLabel>
             <Textarea
               id="universal-note-body"
               className="w-full min-h-24"
@@ -165,7 +176,7 @@ export function CreateUniversalNoteDialog({
             Cancel
           </Button>
           <Button
-            disabled={saving || (!title.trim() && !body.trim())}
+            disabled={saving || !title.trim() || !body.trim()}
             onClick={() => void save()}
           >
             {saving ? "Saving…" : note ? "Save changes" : "Save note"}

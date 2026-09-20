@@ -67,6 +67,28 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { deleteTaskRecord, patchTaskStatus } from "@/store/tasksSlice";
 import { deleteReminderRecord, patchReminderStatus } from "@/store/remindersSlice";
+import {
+  fetchRequestDetail,
+  fetchLeadCustomer,
+  fetchLeadEstimates,
+  fetchLeadJobs,
+  fetchLeadTasks,
+  fetchLeadReminders,
+  fetchLeadSchedule,
+  bookLeadSchedule,
+  updateLeadSchedule,
+  deleteLeadSchedule,
+  upsertLeadScheduleLocal,
+  setLeadScheduleLocal,
+  removeLeadScheduleLocal,
+  leadTabCacheKey,
+  upsertLeadTask,
+  removeLeadTask,
+  upsertLeadReminder,
+  removeLeadReminder,
+  setRequestStatusLocal,
+  patchLeadStatus,
+} from "@/store/requestsSlice";
 import { getCustomer, getRequest, queryEstimates, queryJobs, queryTasks, queryReminders } from "@/lib/api/crm-client";
 import { ensureProviderChatThread } from "@/lib/api/chat-client";
 import { subscribeRealtime, useRealtime } from "@/components/realtime/realtime-provider";
@@ -115,6 +137,7 @@ import {
   estimateStatusTone,
   formatClock,
   getPortalCustomerName,
+  minutesForWindow,
   requestStatusLabel,
   timeWindowLabel,
   windowFromMinutes,
@@ -162,7 +185,11 @@ const LEAD_STEPS = [
   { id: "job", label: "Job" },
 ] as const;
 
-const LEAD_WINDOWS = ["Morning", "Afternoon", "Evening", "Flexible", "Any time"];
+const LEAD_WINDOWS: { value: PortalTimeWindow; label: string }[] = [
+  { value: "morning", label: "Morning" },
+  { value: "afternoon", label: "Afternoon" },
+  { value: "all_day", label: "All Day" },
+];
 const LEAD_STATUSES: RequestStatus[] = [
   "new",
   "viewed",
@@ -257,7 +284,7 @@ export function RequestDetailView({ id }: { id: string }) {
 
   const { requests, estimates, jobs, invoices, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
-  const { customers, reminders, tasks, setReminderStatus, setTaskStatus, remove } = useCrmDirectory();
+  const { customers, reminders, tasks, contractors, setReminderStatus, setTaskStatus, remove } = useCrmDirectory();
   const { events, employees: crewEmployees, assign, employeeLabel } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const allEmployees = useMemo(() => {
@@ -301,12 +328,46 @@ export function RequestDetailView({ id }: { id: string }) {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [apiReminders, setApiReminders] = useState<PortalReminder[] | null>(null);
   const [remindersLoading, setRemindersLoading] = useState(false);
-  const loadedTabsRef = useRef<{ customer?: string; estimates?: string; jobs?: string; tasks?: string; reminders?: string }>({});
+  const [apiSchedules, setApiSchedules] = useState<PortalCalendarEvent[] | null | undefined>(undefined);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [unlinkingScheduleId, setUnlinkingScheduleId] = useState<string | null>(null);
+  const [selectedScheduleForEdit, setSelectedScheduleForEdit] = useState<PortalCalendarEvent | null>(null);
+  const loadedTabsRef = useRef<{
+    customer?: string;
+    estimates?: string;
+    jobs?: string;
+    tasks?: string;
+    reminders?: string;
+    schedule?: string;
+  }>({});
+
+  const reduxRequests = useAppSelector((state) => state.requests);
+  const cachedLead = reduxRequests.detailsCache[id];
+  const allRequests = records.mergeRequests(requests);
+  const request = cachedLead || apiLead || allRequests.find((item) => item.id === id);
+
+  const tabKey = leadTabCacheKey(id, request?.customerId);
+  const cachedCustomer = request?.customerId ? reduxRequests.customerCache[request.customerId] : undefined;
+  const cachedEstimates = reduxRequests.estimatesCache[tabKey];
+  const cachedJobs = reduxRequests.jobsCache[tabKey];
+  const cachedTasks = reduxRequests.tasksCache[tabKey];
+  const cachedReminders = reduxRequests.remindersCache[tabKey];
+  const cachedSchedules = reduxRequests.scheduleCache[tabKey];
+
+  const hasCustomerCached = Boolean(cachedCustomer);
+  const hasEstimatesCached = Boolean(cachedEstimates);
+  const hasJobsCached = Boolean(cachedJobs);
+  const hasTasksCached = Boolean(cachedTasks);
+  const hasRemindersCached = Boolean(cachedReminders);
+  const hasScheduleCached = cachedSchedules !== undefined;
 
   useEffect(() => {
     let cancelled = false;
-    setApiLoading(true);
-    void getRequest(id, { silent: true })
+    if (!cachedLead) {
+      setApiLoading(true);
+    }
+    void dispatch(fetchRequestDetail(id))
+      .unwrap()
       .then((item) => {
         if (!cancelled && item) {
           setApiLead(item);
@@ -327,13 +388,19 @@ export function RequestDetailView({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, dispatch, Boolean(cachedLead)]);
 
   useEffect(() => {
     const handleLeadStatus = (event: Event) => {
       const custom = event as CustomEvent<{ id?: string; status?: string }>;
       const detail = custom?.detail;
       if (detail?.id === id && detail?.status) {
+        dispatch(
+          setRequestStatusLocal({
+            id,
+            status: detail.status as PortalRequest["status"],
+          }),
+        );
         setApiLead((prev) =>
           prev ? { ...prev, status: detail.status as PortalRequest["status"] } : prev,
         );
@@ -343,25 +410,23 @@ export function RequestDetailView({ id }: { id: string }) {
     return () => {
       window.removeEventListener("rs-lead-status", handleLeadStatus);
     };
-  }, [id]);
-
-  const allRequests = records.mergeRequests(requests);
-  const request = apiLead || allRequests.find((item) => item.id === id);
+  }, [id, dispatch]);
 
   useEffect(() => {
     if (searchParams.get("convert") === "1" && request?.status !== "estimate_sent" && request?.status !== "accepted" && request?.status !== "converted_to_job") {
       setEstimateOpen(true);
     }
   }, [searchParams, request?.status]);
-  const pending = useCrmRecordPending() || (apiLoading && !request);
+
+  const pending = useCrmRecordPending() || (!request && (apiLoading || reduxRequests.detailLoading));
   const allEstimates = records.mergeEstimates(estimates);
   const allJobs = records.mergeJobs(jobs);
 
-  const customer = apiCustomer || customers.find((item) => item.id === request?.customerId);
+  const customer = cachedCustomer || apiCustomer || customers.find((item) => item.id === request?.customerId);
   const baseEstimates = useMemo(() => {
-    if (useApi) return apiEstimates ?? [];
+    if (useApi) return cachedEstimates ?? apiEstimates ?? [];
     return allEstimates;
-  }, [useApi, apiEstimates, allEstimates]);
+  }, [useApi, cachedEstimates, apiEstimates, allEstimates]);
 
   const relatedEstimates = useMemo(() => {
     const estId = (request as { estimateId?: string })?.estimateId;
@@ -374,9 +439,9 @@ export function RequestDetailView({ id }: { id: string }) {
   }, [baseEstimates, id, request]);
 
   const baseJobs = useMemo(() => {
-    if (useApi) return apiJobs ?? [];
+    if (useApi) return cachedJobs ?? apiJobs ?? [];
     return allJobs;
-  }, [useApi, apiJobs, allJobs]);
+  }, [useApi, cachedJobs, apiJobs, allJobs]);
 
   const relatedJobs = useMemo(() => {
     const estId = (request as { estimateId?: string })?.estimateId;
@@ -395,14 +460,14 @@ export function RequestDetailView({ id }: { id: string }) {
   const job = relatedJobs[0];
 
   const refreshEstimates = useCallback(() => {
-    setEstimatesLoading(true);
-    void queryEstimates({
-      customerId: request?.customerId || undefined,
-      requestId: id,
-      limit: 20,
-      force: true,
-      silent: true,
-    })
+    if (!hasEstimatesCached) setEstimatesLoading(true);
+    void dispatch(
+      fetchLeadEstimates({
+        customerId: request?.customerId || undefined,
+        requestId: id,
+      }),
+    )
+      .unwrap()
       .then((result) => {
         if (result?.items) {
           setApiEstimates(result.items);
@@ -410,17 +475,17 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setEstimatesLoading(false));
-  }, [id, request?.customerId]);
+  }, [id, request?.customerId, dispatch, hasEstimatesCached]);
 
   const refreshJobs = useCallback(() => {
-    setJobsLoading(true);
-    void queryJobs({
-      customerId: request?.customerId || undefined,
-      requestId: id,
-      limit: 20,
-      force: true,
-      silent: true,
-    })
+    if (!hasJobsCached) setJobsLoading(true);
+    void dispatch(
+      fetchLeadJobs({
+        customerId: request?.customerId || undefined,
+        requestId: id,
+      }),
+    )
+      .unwrap()
       .then((result) => {
         if (result?.items) {
           setApiJobs(result.items);
@@ -428,16 +493,17 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setJobsLoading(false));
-  }, [id, request?.customerId]);
+  }, [id, request?.customerId, dispatch, hasJobsCached]);
 
   const refreshTasks = useCallback(() => {
-    setTasksLoading(true);
-    void queryTasks({
-      customerId: request?.customerId || undefined,
-      limit: 20,
-      force: true,
-      silent: true,
-    })
+    if (!hasTasksCached) setTasksLoading(true);
+    void dispatch(
+      fetchLeadTasks({
+        customerId: request?.customerId || undefined,
+        requestId: id,
+      }),
+    )
+      .unwrap()
       .then((result) => {
         if (result?.items) {
           setApiTasks(result.items);
@@ -445,16 +511,17 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setTasksLoading(false));
-  }, [request?.customerId]);
+  }, [id, request?.customerId, dispatch, hasTasksCached]);
 
   const refreshReminders = useCallback(() => {
-    setRemindersLoading(true);
-    void queryReminders({
-      customerId: request?.customerId || undefined,
-      limit: 20,
-      force: true,
-      silent: true,
-    })
+    if (!hasRemindersCached) setRemindersLoading(true);
+    void dispatch(
+      fetchLeadReminders({
+        customerId: request?.customerId || undefined,
+        requestId: id,
+      }),
+    )
+      .unwrap()
       .then((result) => {
         if (result?.items) {
           setApiReminders(result.items);
@@ -462,7 +529,7 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setRemindersLoading(false));
-  }, [request?.customerId]);
+  }, [id, request?.customerId, dispatch, hasRemindersCached]);
 
   // Fetch data per tab or when lead status indicates estimate/job exists
   useEffect(() => {
@@ -472,14 +539,15 @@ export function RequestDetailView({ id }: { id: string }) {
     if (tab === "customer" && request?.customerId) {
       if (loadedTabsRef.current.customer !== request.customerId) {
         loadedTabsRef.current.customer = request.customerId;
-        setCustomerLoading(true);
-        void getCustomer(request.customerId)
+        if (!cachedCustomer) setCustomerLoading(true);
+        void dispatch(fetchLeadCustomer(request.customerId))
+          .unwrap()
           .then((cust) => {
             if (!cancelled && cust) setApiCustomer(cust);
           })
           .catch(() => undefined)
           .finally(() => {
-            setCustomerLoading(false);
+            if (!cancelled) setCustomerLoading(false);
           });
       }
     }
@@ -496,22 +564,22 @@ export function RequestDetailView({ id }: { id: string }) {
     if (shouldFetchEstimates && (id || request?.customerId)) {
       if (loadedTabsRef.current.estimates !== estimatesFetchKey) {
         loadedTabsRef.current.estimates = estimatesFetchKey;
-        setEstimatesLoading(true);
-        void queryEstimates({
-          customerId: request?.customerId || undefined,
-          requestId: id,
-          limit: 20,
-          force: true,
-          silent: true,
-        })
+        if (!cachedEstimates) setEstimatesLoading(true);
+        void dispatch(
+          fetchLeadEstimates({
+            customerId: request?.customerId || undefined,
+            requestId: id,
+          }),
+        )
+          .unwrap()
           .then((result) => {
-            if (result?.items) {
+            if (!cancelled && result?.items) {
               setApiEstimates(result.items);
             }
           })
           .catch(() => undefined)
           .finally(() => {
-            setEstimatesLoading(false);
+            if (!cancelled) setEstimatesLoading(false);
           });
       }
     }
@@ -521,22 +589,22 @@ export function RequestDetailView({ id }: { id: string }) {
     if ((tab === "jobs" || request?.status === "converted_to_job") && (id || request?.customerId)) {
       if (loadedTabsRef.current.jobs !== jobsFetchKey) {
         loadedTabsRef.current.jobs = jobsFetchKey;
-        setJobsLoading(true);
-        void queryJobs({
-          customerId: request?.customerId || undefined,
-          requestId: id,
-          limit: 20,
-          force: true,
-          silent: true,
-        })
+        if (!cachedJobs) setJobsLoading(true);
+        void dispatch(
+          fetchLeadJobs({
+            customerId: request?.customerId || undefined,
+            requestId: id,
+          }),
+        )
+          .unwrap()
           .then((result) => {
-            if (result?.items) {
+            if (!cancelled && result?.items) {
               setApiJobs(result.items);
             }
           })
           .catch(() => undefined)
           .finally(() => {
-            setJobsLoading(false);
+            if (!cancelled) setJobsLoading(false);
           });
       }
     }
@@ -545,22 +613,23 @@ export function RequestDetailView({ id }: { id: string }) {
     const taskFetchKey = `${id}_${request?.customerId || "none"}`;
     if (id && loadedTabsRef.current.tasks !== taskFetchKey) {
       loadedTabsRef.current.tasks = taskFetchKey;
-      setTasksLoading(true);
-      void queryTasks({
-        customerId: request?.customerId || undefined,
-        limit: 20,
-        force: true,
-        silent: true,
-      })
+      if (!cachedTasks) setTasksLoading(true);
+      void dispatch(
+        fetchLeadTasks({
+          customerId: request?.customerId || undefined,
+          requestId: id,
+        }),
+      )
+        .unwrap()
         .then((result) => {
-          if (result?.items) {
+          if (!cancelled && result?.items) {
             setApiTasks(result.items);
             result.items.forEach((t) => crm.addTask?.(t));
           }
         })
         .catch(() => undefined)
         .finally(() => {
-          setTasksLoading(false);
+          if (!cancelled) setTasksLoading(false);
         });
     }
 
@@ -568,39 +637,76 @@ export function RequestDetailView({ id }: { id: string }) {
     const reminderFetchKey = `${id}_${request?.customerId || "none"}`;
     if (id && loadedTabsRef.current.reminders !== reminderFetchKey) {
       loadedTabsRef.current.reminders = reminderFetchKey;
-      setRemindersLoading(true);
-      void queryReminders({
-        customerId: request?.customerId || undefined,
-        limit: 20,
-        force: true,
-        silent: true,
-      })
+      if (!cachedReminders) setRemindersLoading(true);
+      void dispatch(
+        fetchLeadReminders({
+          customerId: request?.customerId || undefined,
+          requestId: id,
+        }),
+      )
+        .unwrap()
         .then((result) => {
-          if (result?.items) {
+          if (!cancelled && result?.items) {
             setApiReminders(result.items);
             result.items.forEach((r) => crm.addReminder?.(r));
           }
         })
         .catch(() => undefined)
         .finally(() => {
-          setRemindersLoading(false);
+          if (!cancelled) setRemindersLoading(false);
+        });
+    }
+
+    // 6. Schedule: fetch on lead load or when tab is active
+    const scheduleFetchKey = `${id}_${request?.customerId || "none"}`;
+    if (id && loadedTabsRef.current.schedule !== scheduleFetchKey) {
+      loadedTabsRef.current.schedule = scheduleFetchKey;
+      if (!hasScheduleCached) setScheduleLoading(true);
+      void dispatch(
+        fetchLeadSchedule({
+          requestId: id,
+          customerId: request?.customerId || undefined,
+        }),
+      )
+        .unwrap()
+        .then((result) => {
+          if (!cancelled && result?.events) {
+            setApiSchedules(result.events);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setScheduleLoading(false);
         });
     }
 
     return () => {
       cancelled = true;
     };
-  }, [tab, id, request?.customerId, crm]);
+  }, [
+    tab,
+    id,
+    request?.customerId,
+    request?.status,
+    crm,
+    dispatch,
+    Boolean(cachedCustomer),
+    Boolean(cachedEstimates),
+    Boolean(cachedJobs),
+    Boolean(cachedTasks),
+    Boolean(cachedReminders),
+    hasScheduleCached,
+  ]);
 
   const allReminders = useMemo(() => {
-    if (useApi) return apiReminders ?? [];
+    if (useApi) return cachedReminders ?? apiReminders ?? [];
     return reminders;
-  }, [useApi, apiReminders, reminders]);
+  }, [useApi, cachedReminders, apiReminders, reminders]);
 
   const allTasks = useMemo(() => {
-    if (useApi) return apiTasks ?? [];
+    if (useApi) return cachedTasks ?? apiTasks ?? [];
     return tasks;
-  }, [useApi, apiTasks, tasks]);
+  }, [useApi, cachedTasks, apiTasks, tasks]);
 
   const relatedReminders = useMemo(() => {
     return allReminders.filter(
@@ -673,6 +779,7 @@ export function RequestDetailView({ id }: { id: string }) {
     setDeleteTaskLoading(true);
     try {
       await dispatch(deleteTaskRecord(deletingTask.id)).unwrap();
+      dispatch(removeLeadTask({ key: tabKey, taskId: deletingTask.id }));
       setApiTasks((prev) => (prev ? prev.filter((t) => t.id !== deletingTask.id) : []));
       toast.success(`${deletingTask.number} removed.`);
       setDeletingTask(null);
@@ -688,6 +795,7 @@ export function RequestDetailView({ id }: { id: string }) {
     setBusyReminderRowIds((prev) => [...prev, row.id]);
     try {
       const updated = await dispatch(patchReminderStatus({ id: row.id, status: nextStatus })).unwrap();
+      dispatch(upsertLeadReminder({ key: tabKey, reminder: updated }));
       setApiReminders((prev) => (prev ? prev.map((r) => (r.id === row.id ? updated : r)) : [updated]));
       toast.success(`Reminder marked ${crmReminderStatusLabel(nextStatus).toLowerCase()}.`);
       refreshReminders();
@@ -703,6 +811,7 @@ export function RequestDetailView({ id }: { id: string }) {
     setDeleteReminderLoading(true);
     try {
       await dispatch(deleteReminderRecord(deletingReminder.id)).unwrap();
+      dispatch(removeLeadReminder({ key: tabKey, reminderId: deletingReminder.id }));
       setApiReminders((prev) => (prev ? prev.filter((r) => r.id !== deletingReminder.id) : []));
       toast.success("Reminder removed.");
       setDeletingReminder(null);
@@ -714,8 +823,33 @@ export function RequestDetailView({ id }: { id: string }) {
     }
   };
 
-  const event = events.find((item) => item.kind === "request" && item.recordId === id);
-  const requestEvent: PortalCalendarEvent = event ?? {
+  const scheduledVisits: PortalCalendarEvent[] = useMemo(() => {
+    if (cachedSchedules !== undefined) return cachedSchedules;
+    if (apiSchedules !== undefined && apiSchedules !== null) return apiSchedules;
+    return events.filter(
+      (item) => item.kind === "request" && (item.recordId === id || item.id === `cal_${id}`),
+    );
+  }, [cachedSchedules, apiSchedules, events, id]);
+
+  const handleDeleteSchedule = async (targetVisit: PortalCalendarEvent) => {
+    if (!targetVisit?.id) return;
+    setUnlinkingScheduleId(targetVisit.id);
+    try {
+      if (!targetVisit.id.startsWith("cal_")) {
+        await dispatch(deleteLeadSchedule({ id: targetVisit.id, key: tabKey })).unwrap();
+      } else {
+        dispatch(removeLeadScheduleLocal({ key: tabKey, id: targetVisit.id }));
+      }
+      setApiSchedules((prev) => (prev ? prev.filter((item) => item.id !== targetVisit.id) : []));
+      toast.success("Schedule visit unlinked.");
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Failed to unlink schedule.");
+    } finally {
+      setUnlinkingScheduleId(null);
+    }
+  };
+
+  const defaultRequestEvent: PortalCalendarEvent = {
     id: `cal_${id}`,
     kind: "request",
     recordId: id,
@@ -825,6 +959,25 @@ export function RequestDetailView({ id }: { id: string }) {
     }
   }
 
+  // NOTE: must be declared before the early return to satisfy Rules of Hooks
+  const calendarEvents = useMemo(() => {
+    const list = events.filter(
+      (item) =>
+        !(
+          item.kind === "request" &&
+          (item.recordId === id ||
+            item.id === `cal_${id}` ||
+            scheduledVisits.some((v) => v.id === item.id))
+        ),
+    );
+    if (scheduledVisits.length > 0) {
+      list.push(...scheduledVisits);
+    } else if (defaultRequestEvent.date) {
+      list.push(defaultRequestEvent);
+    }
+    return list;
+  }, [events, scheduledVisits, id, defaultRequestEvent]);
+
   if (!request) {
     if (pending) {
       return (
@@ -904,17 +1057,126 @@ export function RequestDetailView({ id }: { id: string }) {
     }
   }
 
-  function moveEvent(move: CalendarMove) {
-    assign({
-      kind: "request",
-      recordId: lead.id,
+  async function handleCalendarMove(calEvent: PortalCalendarEvent, move: CalendarMove) {
+    const fallbackWindow = minutesForWindow(calEvent.timeWindow);
+    const startMinutes = move.startMinutes ?? calEvent.startMinutes ?? fallbackWindow.startMinutes;
+    const endMinutes = move.endMinutes ?? calEvent.endMinutes ?? fallbackWindow.endMinutes;
+    const timeWin = windowFromMinutes(startMinutes, endMinutes) || calEvent.timeWindow;
+
+    const updatedEvent: PortalCalendarEvent = {
+      ...calEvent,
       date: move.date,
       endDate: move.endDate,
-      startMinutes: move.startMinutes,
-      endMinutes: move.endMinutes,
-      timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || requestEvent.timeWindow,
-      employeeId: event?.employeeId ?? "",
+      startMinutes,
+      endMinutes,
+      timeWindow: timeWin,
+    };
+
+    // 1. Instant optimistic updates in local React state and Redux cache:
+    dispatch(upsertLeadScheduleLocal({ key: tabKey, event: updatedEvent }));
+    setApiSchedules((prev) => {
+      const list = prev ? [...prev] : [];
+      const idx = list.findIndex((e) => e.id === updatedEvent.id);
+      if (idx >= 0) list[idx] = updatedEvent;
+      else list.push(updatedEvent);
+      return list;
     });
+
+    // 2. Keep portal crew in sync
+    assign({
+      kind: calEvent.kind,
+      recordId: calEvent.recordId,
+      date: move.date,
+      endDate: move.endDate,
+      startMinutes,
+      endMinutes,
+      timeWindow: timeWin,
+      employeeId: calEvent.employeeId ?? "",
+    });
+
+    const startFormatted = formatDate(move.date);
+    const effectiveEndDate = move.endDate || (calEvent.endDate && calEvent.endDate > move.date ? calEvent.endDate : undefined);
+    const endFormatted = effectiveEndDate && effectiveEndDate > move.date ? ` – ${formatDate(effectiveEndDate)}` : "";
+    const timeFormatted = move.startMinutes != null ? ` at ${formatClock(move.startMinutes)}` : "";
+    toast.success(
+      `${calEvent.title}: ${startFormatted}${endFormatted}${timeFormatted}`,
+    );
+
+    // 3. Persist to API in background:
+    const isLeadEvent =
+      calEvent.kind === "request" &&
+      (calEvent.recordId === id ||
+        calEvent.id.startsWith("cal_") ||
+        scheduledVisits.some((v) => v.id === calEvent.id));
+
+    if (isLeadEvent) {
+      try {
+        if (calEvent.id && !calEvent.id.startsWith("cal_")) {
+          const res = await dispatch(
+            updateLeadSchedule({
+              id: calEvent.id,
+              key: tabKey,
+              data: {
+                date: move.date,
+                endDate: move.endDate,
+                startMinutes,
+                endMinutes,
+                timeWindow: timeWin,
+              },
+            }),
+          ).unwrap();
+          if (res?.event) {
+            dispatch(upsertLeadScheduleLocal({ key: tabKey, event: res.event }));
+            setApiSchedules((prev) => {
+              const list = prev ? [...prev] : [];
+              const idx = list.findIndex((e) => e.id === res.event.id);
+              if (idx >= 0) list[idx] = res.event;
+              else list.push(res.event);
+              return list;
+            });
+          }
+        } else if (move.date) {
+          const res = await dispatch(
+            bookLeadSchedule({
+              key: tabKey,
+              assignment: {
+                recordId: id,
+                kind: "request",
+                title: `${request.number} · ${request.serviceName || "Visit"}`,
+                date: move.date,
+                endDate: move.endDate,
+                startMinutes,
+                endMinutes,
+                timeWindow: timeWin,
+                employeeId: calEvent.employeeId || null,
+                contractorId: null,
+                status: "scheduled",
+              },
+            }),
+          ).unwrap();
+          if (res?.event) {
+            dispatch(upsertLeadScheduleLocal({ key: tabKey, event: res.event }));
+            setApiSchedules((prev) => {
+              const list = prev ? [...prev] : [];
+              const idx = list.findIndex((e) => e.id === res.event.id);
+              if (idx >= 0) list[idx] = res.event;
+              else list.push(res.event);
+              return list;
+            });
+          }
+        }
+      } catch (err) {
+        // Rollback on network failure
+        dispatch(upsertLeadScheduleLocal({ key: tabKey, event: calEvent }));
+        setApiSchedules((prev) => {
+          const list = prev ? [...prev] : [];
+          const idx = list.findIndex((e) => e.id === calEvent.id);
+          if (idx >= 0) list[idx] = calEvent;
+          return list;
+        });
+        toast.error(typeof err === "string" ? err : "Failed to sync schedule update.");
+      }
+    }
   }
 
   return (
@@ -1131,11 +1393,15 @@ export function RequestDetailView({ id }: { id: string }) {
                           label="Date created"
                           value={formatDate(request.createdAt)}
                         />
-                        {event?.date ? (
+                        {scheduledVisits.length > 0 ? (
                           <InfoRow
                             icon={CalendarDays}
-                            label="Scheduled visit"
-                            value={`${formatDate(event.date)}${event.employeeId ? ` · ${employeeLabel(event.employeeId)}` : ""}`}
+                            label={scheduledVisits.length > 1 ? "Scheduled visits" : "Scheduled visit"}
+                            value={
+                              scheduledVisits.length === 1
+                                ? `${scheduledVisits[0].date ? formatDate(scheduledVisits[0].date) : "Date pending"}${scheduledVisits[0].employeeId ? ` · ${employeeLabel(scheduledVisits[0].employeeId)}` : ""}`
+                                : `${scheduledVisits.length} visits (${scheduledVisits.map((v) => (v.date ? formatDate(v.date) : "Date pending")).join(", ")})`
+                            }
                           />
                         ) : null}
                         {request.answers?.length ? (
@@ -1332,7 +1598,7 @@ export function RequestDetailView({ id }: { id: string }) {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
-                      {estimatesLoading
+                      {estimatesLoading && !hasEstimatesCached
                         ? "Loading estimates..."
                         : relatedEstimates.length
                           ? `${relatedEstimates.length} estimate${relatedEstimates.length === 1 ? "" : "s"} from this lead`
@@ -1346,12 +1612,12 @@ export function RequestDetailView({ id }: { id: string }) {
                       </Button>
                     ) : null}
                   </div>
-                  {estimatesLoading || relatedEstimates.length ? (
+                  {(estimatesLoading && !hasEstimatesCached) || relatedEstimates.length ? (
                     <PortalDataTable
                       filename={`${request.number}-estimates`}
                       countLabel="Estimates"
                       searchPlaceholder="Search estimates"
-                      loading={estimatesLoading}
+                      loading={estimatesLoading && !hasEstimatesCached}
                       rows={relatedEstimates}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
@@ -1386,12 +1652,12 @@ export function RequestDetailView({ id }: { id: string }) {
                 </div>
               );
             case "jobs":
-              return jobsLoading || relatedJobs.length ? (
+              return (jobsLoading && !hasJobsCached) || relatedJobs.length ? (
                 <PortalDataTable
                   filename={`${request.number}-jobs`}
                   countLabel="Jobs"
                   searchPlaceholder="Search jobs"
-                  loading={jobsLoading}
+                  loading={jobsLoading && !hasJobsCached}
                   rows={relatedJobs}
                   rowKey={(row) => row.id}
                   rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
@@ -1413,34 +1679,131 @@ export function RequestDetailView({ id }: { id: string }) {
                   No job yet. The customer signs the estimate, then this lead becomes a job.
                 </p>
               );
-            case "schedule":
+            case "schedule": {
+              const visitsCount = scheduledVisits.length;
               return (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      {event?.date
-                        ? `${formatDate(event.date)} · ${calendarEventKindLabel(event.kind)} · ${employeeLabel(event.employeeId)}`
-                        : "No visit on the calendar yet."}
-                    </p>
-                    <Button size="sm" onClick={() => setAssignOpen(true)}>
-                      Schedule visit
-                    </Button>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-semibold">Scheduled visits</h2>
+                        {visitsCount > 0 ? (
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-[#003F7D] border border-blue-200">
+                            {visitsCount} {visitsCount === 1 ? "visit" : "visits"}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Site inspection, estimate walkthrough, or intake call on the calendar.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedScheduleForEdit(null);
+                          setAssignOpen(true);
+                        }}
+                      >
+                        + Schedule visit
+                      </Button>
+                    </div>
                   </div>
+
+                  {scheduledVisits.length > 0 ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {scheduledVisits.map((v, index) => {
+                        const isUnlinkingThis = unlinkingScheduleId === v.id;
+                        const effectiveEnd =
+                          v.endDate && v.date && v.endDate > v.date ? v.endDate : undefined;
+                        return (
+                          <div
+                            key={v.id || index}
+                            className="rounded-[4px] border border-black/10 bg-card p-4 shadow-2xs hover:border-black/20 transition-colors flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 pb-2.5 mb-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <CalendarDays className="size-4 text-[#003F7D] shrink-0" />
+                                  <span className="font-semibold text-foreground text-sm truncate">
+                                    {v.date ? formatDate(v.date) : "Date pending"}
+                                    {effectiveEnd ? ` – ${formatDate(effectiveEnd)}` : ""}
+                                  </span>
+                                  {visitsCount > 1 ? (
+                                    <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                      Visit {index + 1}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {v.status ? (
+                                  <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#003F7D] border border-blue-200 capitalize">
+                                    {v.status.replace(/_/g, " ")}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="grid gap-2 text-xs mb-3">
+                                <div>
+                                  <p className="text-muted-foreground font-medium">Time slot</p>
+                                  <p className="mt-0.5 font-semibold text-foreground">
+                                    {timeWindowLabel(v.timeWindow)}
+                                    {v.startMinutes != null
+                                      ? ` · ${formatClock(v.startMinutes)}${v.endMinutes != null ? `–${formatClock(v.endMinutes)}` : ""}`
+                                      : ""}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground font-medium">
+                                    Assigned staff / technician
+                                  </p>
+                                  <p className="mt-0.5 font-semibold text-foreground">
+                                    {v.employeeId ? employeeLabel(v.employeeId) : "Unassigned"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-black/5 mt-auto">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                disabled={isUnlinkingThis}
+                                onClick={() => handleDeleteSchedule(v)}
+                              >
+                                {isUnlinkingThis ? "Unlinking..." : "Unlink visit"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  setSelectedScheduleForEdit(v);
+                                  setAssignOpen(true);
+                                }}
+                              >
+                                Reschedule
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
                   <EventCalendar
-                    events={event ? [event] : []}
+                    events={calendarEvents}
                     employees={employees}
                     employeeLabel={employeeLabel}
-                    onEventOpen={() => setAssignOpen(true)}
-                    onMove={(_, move) => moveEvent(move)}
+                    onMove={handleCalendarMove}
+                    onEventOpen={(calEvent) => {
+                      setSelectedScheduleForEdit(calEvent);
+                      setAssignOpen(true);
+                    }}
                   />
-                  {event?.startMinutes != null ? (
-                    <p className="text-sm text-muted-foreground">
-                      {timeWindowLabel(event.timeWindow)} · {formatClock(event.startMinutes)}
-                      {event.endMinutes != null ? `–${formatClock(event.endMinutes)}` : ""}
-                    </p>
-                  ) : null}
                 </div>
               );
+            }
             case "tasks":
               return (
                 <div className="space-y-4">
@@ -1471,12 +1834,12 @@ export function RequestDetailView({ id }: { id: string }) {
                       </Button>
                     </div>
                   </div>
-                  {tasksLoading || displayedTasks.length ? (
+                  {(tasksLoading && !hasTasksCached) || displayedTasks.length ? (
                     <PortalDataTable
                       filename={`${request.number}-tasks`}
                       countLabel="Tasks"
                       searchPlaceholder="Search tasks"
-                      loading={tasksLoading}
+                      loading={tasksLoading && !hasTasksCached}
                       rows={displayedTasks}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/tasks/${row.id}`}
@@ -1680,12 +2043,12 @@ export function RequestDetailView({ id }: { id: string }) {
                       + Set reminder
                     </Button>
                   </div>
-                  {remindersLoading || displayedReminders.length ? (
+                  {(remindersLoading && !hasRemindersCached) || displayedReminders.length ? (
                     <PortalDataTable
                       filename={`${request.number}-reminders`}
                       countLabel="Reminders"
                       searchPlaceholder="Search reminders"
-                      loading={remindersLoading}
+                      loading={remindersLoading && !hasRemindersCached}
                       rows={displayedReminders}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
@@ -2004,15 +2367,92 @@ export function RequestDetailView({ id }: { id: string }) {
       />
       <AssignEventDialog
         open={assignOpen}
-        onOpenChange={setAssignOpen}
-        event={requestEvent}
-        events={[requestEvent]}
+        onOpenChange={(next) => {
+          setAssignOpen(next);
+          if (!next) setSelectedScheduleForEdit(null);
+        }}
+        event={
+          selectedScheduleForEdit ?? {
+            id: `cal_${id}_new`,
+            kind: "request",
+            recordId: id,
+            title: `${request.number} · ${request.serviceName || "Visit"}`,
+            detail: request.serviceName || "Site visit",
+            customerName: request.customerName,
+            date: request.preferredDate || "",
+            timeWindow: windowFromLabel(request.preferredTimeWindow),
+            href: `/pro/dashboard/requests/${id}`,
+            status: "scheduled",
+          }
+        }
+        events={calendarEvents}
         employees={employees}
         defaultDate={request.preferredDate}
-        onSave={(assignment) => {
-          assign(assignment);
-          if (request.status === "new" || request.status === "viewed") records.setStatus("request", request.id, "contacted");
-          toast.success("Visit put on the calendar.");
+        onSave={async (assignment) => {
+          const isContractor = contractors.some((c) => c.id === assignment.employeeId);
+          try {
+            let savedEvent: PortalCalendarEvent;
+            const isEditing =
+              Boolean(selectedScheduleForEdit?.id) &&
+              !selectedScheduleForEdit!.id.startsWith("cal_");
+
+            if (isEditing) {
+              const res = await dispatch(
+                updateLeadSchedule({
+                  id: selectedScheduleForEdit!.id,
+                  key: tabKey,
+                  data: {
+                    date: assignment.date,
+                    endDate: assignment.endDate,
+                    startMinutes: assignment.startMinutes ?? 540,
+                    endMinutes: assignment.endMinutes ?? 660,
+                    timeWindow: assignment.timeWindow,
+                    employeeId: isContractor ? null : assignment.employeeId,
+                    contractorId: isContractor ? assignment.employeeId : null,
+                    status: "scheduled",
+                  },
+                }),
+              ).unwrap();
+              savedEvent = res.event;
+            } else {
+              const res = await dispatch(
+                bookLeadSchedule({
+                  key: tabKey,
+                  assignment: {
+                    recordId: request.id,
+                    kind: "request",
+                    title: `${request.number} · ${request.serviceName || "Visit"}`,
+                    date: assignment.date,
+                    endDate: assignment.endDate,
+                    startMinutes: assignment.startMinutes ?? 540,
+                    endMinutes: assignment.endMinutes ?? 660,
+                    timeWindow: assignment.timeWindow,
+                    employeeId: isContractor ? null : assignment.employeeId,
+                    contractorId: isContractor ? assignment.employeeId : null,
+                    status: "scheduled",
+                  },
+                }),
+              ).unwrap();
+              savedEvent = res.event;
+            }
+            dispatch(upsertLeadScheduleLocal({ key: tabKey, event: savedEvent }));
+            setApiSchedules((prev) => {
+              const list = prev ? [...prev] : [];
+              const idx = list.findIndex((e) => e.id === savedEvent.id);
+              if (idx >= 0) list[idx] = savedEvent;
+              else list.push(savedEvent);
+              return list;
+            });
+            assign(assignment);
+            if (request.status === "new" || request.status === "viewed") {
+              void records.setStatus("request", request.id, "contacted");
+            }
+            toast.success(isEditing ? "Visit rescheduled." : "Visit scheduled on the calendar.");
+            setSelectedScheduleForEdit(null);
+          } catch (err) {
+            // Re-throw so AssignEventDialog handles collision or error display nicely
+            throw err;
+          }
         }}
       />
       <CreateTaskDialog
@@ -2026,6 +2466,7 @@ export function RequestDetailView({ id }: { id: string }) {
         }}
         onCreated={(saved) => {
           if (saved) {
+            dispatch(upsertLeadTask({ key: tabKey, task: saved }));
             setApiTasks((prev) => [saved, ...(prev || []).filter((t) => t.id !== saved.id)]);
             crm.addTask?.(saved);
           }
@@ -2044,6 +2485,7 @@ export function RequestDetailView({ id }: { id: string }) {
         subjectId={request.customerId || undefined}
         onCreated={(saved) => {
           if (saved) {
+            dispatch(upsertLeadReminder({ key: tabKey, reminder: saved }));
             setApiReminders((prev) => [saved, ...(prev || []).filter((r) => r.id !== saved.id)]);
             crm.addReminder?.(saved);
           }
@@ -2163,11 +2605,23 @@ function QualifyTab({
     () => getAvailableLeadStatuses(request.status, Boolean(hasEstimate), Boolean(hasJob)),
     [request.status, hasEstimate, hasJob],
   );
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<{
+    serviceName: string;
+    details: string;
+    preferredDate: string;
+    preferredTimeWindow: PortalTimeWindow;
+    zip: string;
+    city: string;
+    state: string;
+  }>({
     serviceName: request.serviceName,
     details: request.details,
     preferredDate: request.preferredDate ?? "",
-    preferredTimeWindow: request.preferredTimeWindow ?? "Morning",
+    preferredTimeWindow: (request.preferredTimeWindow?.toLowerCase().startsWith("after")
+      ? "afternoon"
+      : request.preferredTimeWindow?.toLowerCase().startsWith("all")
+        ? "all_day"
+        : "morning") as PortalTimeWindow,
     zip: request.zip,
     city: request.city ?? "",
     state: request.state ?? "",
@@ -2201,13 +2655,37 @@ function QualifyTab({
             Confirm the work, the window, and where you are going before you write a quote.
           </p>
         </div>
-        <Button size="sm" onClick={() => onSave(draft)}>
+        <Button
+          size="sm"
+          disabled={!draft.serviceName.trim() || !draft.details.trim() || !draft.preferredDate || !draft.preferredTimeWindow}
+          onClick={() => {
+            if (!draft.serviceName.trim()) {
+              toast.error("Please enter a service name.");
+              return;
+            }
+            if (!draft.details.trim()) {
+              toast.error("Please enter details.");
+              return;
+            }
+            if (!draft.preferredDate) {
+              toast.error("Please select a preferred date.");
+              return;
+            }
+            if (!draft.preferredTimeWindow) {
+              toast.error("Please select a time window.");
+              return;
+            }
+            onSave(draft);
+          }}
+        >
           Save details
         </Button>
       </div>
       <div className="grid gap-3 rounded-[4px] border border-black/10 p-4 sm:grid-cols-2">
         <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">Service</span>
+          <span className="font-medium">
+            Service <span className="text-destructive">*</span>
+          </span>
           <Input value={draft.serviceName} onChange={(event) => setDraft({ ...draft, serviceName: event.target.value })} />
         </label>
         <label className="grid gap-1.5 text-sm">
@@ -2221,11 +2699,15 @@ function QualifyTab({
           </NativeSelect>
         </label>
         <label className="grid gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium">What they asked for</span>
+          <span className="font-medium">
+            What they asked for <span className="text-destructive">*</span>
+          </span>
           <Textarea value={draft.details} onChange={(event) => setDraft({ ...draft, details: event.target.value })} />
         </label>
         <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">Preferred date</span>
+          <span className="font-medium">
+            Preferred date <span className="text-destructive">*</span>
+          </span>
           <Input
             type="date"
             value={draft.preferredDate}
@@ -2233,15 +2715,17 @@ function QualifyTab({
           />
         </label>
         <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">Window</span>
+          <span className="font-medium">
+            Window <span className="text-destructive">*</span>
+          </span>
           <NativeSelect
             className="w-full"
             value={draft.preferredTimeWindow}
-            onChange={(event) => setDraft({ ...draft, preferredTimeWindow: event.target.value })}
+            onChange={(event) => setDraft({ ...draft, preferredTimeWindow: event.target.value as PortalTimeWindow })}
           >
             {LEAD_WINDOWS.map((item) => (
-              <NativeSelectOption key={item} value={item}>
-                {item}
+              <NativeSelectOption key={item.value} value={item.value}>
+                {item.label}
               </NativeSelectOption>
             ))}
           </NativeSelect>

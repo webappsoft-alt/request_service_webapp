@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { formatShortDate } from "@/lib/format";
 import type { Estimate, EstimateSiteVisitRecord, EstimateStatus, Invoice, InvoiceStatus, Job, JobStatus } from "@/lib/types";
 
 const EVENT = "rs-job-file";
@@ -291,11 +292,15 @@ function seedFile(
     },
   ];
   if (job.scheduledAt) {
+    const startStr = formatShortDate(job.scheduledAt);
+    const dueStr = job.dueAt ? formatShortDate(job.dueAt) : "";
+    const detailStr =
+      dueStr && dueStr !== startStr ? `${startStr} through ${dueStr}` : startStr;
     logs.push({
       id: `log_${job.id}_scheduled`,
       at: job.scheduledAt,
       title: "Scheduled",
-      detail: job.dueAt ? `${job.scheduledAt} through ${job.dueAt}` : job.scheduledAt,
+      detail: detailStr,
       actor: "System",
     });
   }

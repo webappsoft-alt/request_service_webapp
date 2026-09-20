@@ -13,15 +13,49 @@ const dayLabels: Record<WorkingHours["day"], string> = {
 export function formatDate(value?: string | Date | null) {
   if (!value) return "—";
   try {
-    const d =
-      typeof value === "string"
-        ? value.includes("T")
-          ? new Date(value)
-          : new Date(`${value}T00:00:00`)
-        : new Date(value);
+    let d: Date;
+    if (typeof value === "string") {
+      if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z?)?$/.test(value.trim())) {
+        const [y, m, day] = value.slice(0, 10).split("-").map(Number);
+        d = new Date(y, m - 1, day);
+      } else if (value.includes("T")) {
+        d = new Date(value);
+      } else {
+        d = new Date(`${value}T00:00:00`);
+      }
+    } else {
+      d = new Date(value);
+    }
     if (isNaN(d.getTime())) return String(value);
     return new Intl.DateTimeFormat("en-US", {
       month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(d);
+  } catch {
+    return String(value || "—");
+  }
+}
+
+export function formatShortDate(value?: string | Date | null) {
+  if (!value) return "—";
+  try {
+    let d: Date;
+    if (typeof value === "string") {
+      if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z?)?$/.test(value.trim())) {
+        const [y, m, day] = value.slice(0, 10).split("-").map(Number);
+        d = new Date(y, m - 1, day);
+      } else if (value.includes("T")) {
+        d = new Date(value);
+      } else {
+        d = new Date(`${value}T00:00:00`);
+      }
+    } else {
+      d = new Date(value);
+    }
+    if (isNaN(d.getTime())) return String(value);
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
       day: "numeric",
       year: "numeric",
     }).format(d);

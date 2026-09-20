@@ -62,7 +62,9 @@ import {
   JOB_STATUSES,
   jobStatusLabel,
   type PortalRequest,
+  type PortalTimeWindow,
 } from "@/lib/data/portal";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { formatMoney } from "@/lib/format";
 import type { Estimate, Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -1497,7 +1499,11 @@ function LineEditor({
   );
 }
 
-const LEAD_WINDOWS = ["Morning", "Afternoon", "Evening", "Flexible"];
+const LEAD_WINDOWS: { value: PortalTimeWindow; label: string }[] = [
+  { value: "morning", label: "Morning" },
+  { value: "afternoon", label: "Afternoon" },
+  { value: "all_day", label: "All Day" },
+];
 
 export function CreateLeadDialog({
   open,
@@ -1524,7 +1530,7 @@ export function CreateLeadDialog({
   const [serviceName, setServiceName] = useState("");
   const [details, setDetails] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
-  const [preferredTimeWindow, setPreferredTimeWindow] = useState("Morning");
+  const [preferredTimeWindow, setPreferredTimeWindow] = useState<PortalTimeWindow>("morning");
   const customer = customers.find((item) => item.id === customerId) ?? first;
   const address = customer?.addresses[0];
 
@@ -1548,7 +1554,7 @@ export function CreateLeadDialog({
     setServiceName("");
     setDetails("");
     setPreferredDate("");
-    setPreferredTimeWindow("Morning");
+    setPreferredTimeWindow("morning");
     if (!customerId && customerOptions[0]) {
       setCustomerId(customerOptions[0].id);
       setCustomerLabel(customerOptions[0].label);
@@ -1558,25 +1564,45 @@ export function CreateLeadDialog({
   const [submitting, setSubmitting] = useState(false);
 
   async function save() {
-    if (!customerId || !serviceName.trim()) {
-      toast.error("Customer and service are required.");
+    if (!customerId) {
+      toast.error("Please select a customer.");
       return;
     }
+    if (!serviceName.trim()) {
+      toast.error("Please enter a service name.");
+      return;
+    }
+    if (!details.trim()) {
+      toast.error("Please enter details of what the customer asked for.");
+      return;
+    }
+    if (!preferredDate) {
+      toast.error("Please select a preferred date.");
+      return;
+    }
+    if (!preferredTimeWindow) {
+      toast.error("Please select a time window.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       let created: PortalRequest | null = null;
-      try {
-        created = await createRequest({
-          customerId,
-          serviceName: serviceName.trim(),
-          channel: "direct",
-          details:
-            details.trim() || `${serviceName.trim()} requested by phone.`,
-          preferredDate: preferredDate || undefined,
-          preferredTimeWindow: preferredTimeWindow || "morning",
-        });
-      } catch {
-        /* fallback to local storage if offline/error */
+      if (useApi) {
+        try {
+          created = await createRequest({
+            customerId,
+            serviceName: serviceName.trim(),
+            channel: "direct",
+            details: details.trim(),
+            preferredDate,
+            preferredTimeWindow,
+          });
+        } catch (error) {
+          const msg = extractErrorMessage(error);
+          toast.error(msg || "Failed to create lead.");
+          return;
+        }
       }
 
       const displayName =
@@ -1594,8 +1620,8 @@ export function CreateLeadDialog({
         zip: address?.zip || customerLocation.zip || "",
         city: address?.city || customerLocation.city || provider.city,
         state: address?.state || customerLocation.state || provider.state,
-        details: details.trim() || `${serviceName.trim()} requested by phone.`,
-        preferredDate: preferredDate || undefined,
+        details: details.trim(),
+        preferredDate,
         preferredTimeWindow,
         photoUrls: [],
         status: "new",
@@ -1632,7 +1658,7 @@ export function CreateLeadDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
-          <Field label="Customer">
+          <Field label={<>Customer <span className="text-destructive">*</span></>}>
             <PaginatedEntitySelect
               id="lead-customer"
               value={customerId}
@@ -1650,22 +1676,22 @@ export function CreateLeadDialog({
               }}
             />
           </Field>
-          <Field label="Service">
+          <Field label={<>Service <span className="text-destructive">*</span></>}>
             <Input
               value={serviceName}
               placeholder="Leak detection and repair"
               onChange={(event) => setServiceName(event.target.value)}
             />
           </Field>
-          <Field label="What they asked for">
+          <Field label={<>What they asked for <span className="text-destructive">*</span></>}>
             <Textarea
               value={details}
-              placeholder="Optional details from the call or walk-in"
+              placeholder="Details from the call or walk-in"
               onChange={(event) => setDetails(event.target.value)}
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Preferred date">
+            <Field label={<>Preferred date <span className="text-destructive">*</span></>}>
               <Input
                 type="date"
                 value={preferredDate}
@@ -1673,15 +1699,15 @@ export function CreateLeadDialog({
                 onChange={(event) => setPreferredDate(event.target.value)}
               />
             </Field>
-            <Field label="Window">
+            <Field label={<>Window <span className="text-destructive">*</span></>}>
               <NativeSelect
                 className="w-full"
                 value={preferredTimeWindow}
-                onChange={(event) => setPreferredTimeWindow(event.target.value)}
+                onChange={(event) => setPreferredTimeWindow(event.target.value as PortalTimeWindow)}
               >
                 {LEAD_WINDOWS.map((item) => (
-                  <NativeSelectOption key={item} value={item}>
-                    {item}
+                  <NativeSelectOption key={item.value} value={item.value}>
+                    {item.label}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
@@ -1697,8 +1723,15 @@ export function CreateLeadDialog({
             Cancel
           </Button>
           <Button
-            disabled={!serviceName.trim() || !customerId || submitting}
-            onClick={save}
+            disabled={
+              !serviceName.trim() ||
+              !customerId ||
+              !details.trim() ||
+              !preferredDate ||
+              !preferredTimeWindow ||
+              submitting
+            }
+            onClick={() => void save()}
           >
             {submitting ? "Saving…" : "Save lead"}
           </Button>

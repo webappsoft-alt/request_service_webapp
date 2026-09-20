@@ -35,6 +35,7 @@ import {
   mapScheduleEvent,
   type CrmInboxSummary,
 } from "@/lib/api/crm-mappers";
+export type { CrmInboxSummary };
 import type { ChatThread } from "@/lib/booking/chat-store";
 import { emitLeadStatusChange } from "@/lib/realtime/socket";
 
@@ -351,13 +352,20 @@ function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
   };
 }
 
+function normalizeTimeWindow(val?: string): "morning" | "afternoon" | "all_day" {
+  const lower = (val || "").toLowerCase().trim();
+  if (lower === "afternoon") return "afternoon";
+  if (lower === "all_day" || lower === "all day" || lower === "allday" || lower === "flexible" || lower === "evening") return "all_day";
+  return "morning";
+}
+
 function requestPayload(request: Partial<PortalRequest>) {
   const payload: Record<string, unknown> = {
     customerId: request.customerId,
     serviceName: request.serviceName || "Service Inquiry",
     channel: request.channel === "marketplace" ? "marketplace" : "direct",
     details: request.details || "",
-    preferredTimeWindow: request.preferredTimeWindow || "morning",
+    preferredTimeWindow: normalizeTimeWindow(request.preferredTimeWindow),
     photos: request.photos ?? request.photoUrls ?? [],
   };
   if (request.preferredDate && request.preferredDate.trim()) {

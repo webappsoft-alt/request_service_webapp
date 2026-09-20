@@ -138,11 +138,12 @@ export function AssignEventDialog({
   const [saving, setSaving] = useState(false);
 
   const technicianOptions = useMemo(() => {
-    const employeeRows = useApi
-      ? assigneePaging.options
-      : employees
-          .filter((item) => item.active)
-          .map((item) => ({ id: item.id, label: employeeName(item) }));
+    const employeeRows =
+      useApi && assigneePaging.options.length > 0
+        ? assigneePaging.options
+        : employees
+            .filter((item) => item.active !== false)
+            .map((item) => ({ id: item.id, label: employeeName(item) }));
     const contractorRows = contractors
       .filter((item) => item.status === "active")
       .map((item) => ({

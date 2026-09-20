@@ -88,7 +88,8 @@ import { CenteredSpinner } from "@/components/ui/spinner";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchJobDetail, upsertJobItem } from "@/store/jobsSlice";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   estimateAsJob,
@@ -1041,6 +1042,7 @@ export function EstimateDetailView({ id }: { id: string }) {
 
 export function JobDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const crm = useCrmApiData();
   const { session, jobs, estimates, invoices, requests, provider } =
     usePortalWorkspace();
@@ -1053,15 +1055,19 @@ export function JobDetailView({ id }: { id: string }) {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
-  const [fetched, setFetched] = useState<Job | null>(null);
-  const [fetching, setFetching] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // ── Redux cache ──────────────────────────────────────────────────────────
+  const cachedJob = useAppSelector((s) => s.jobs.detailsCache[id]);
+  const detailLoading = useAppSelector((s) => s.jobs.detailLoading);
+  const detailError = useAppSelector((s) => s.jobs.detailError);
+
   const allJobs = records.mergeJobs(jobs);
   const allEstimates = records.mergeEstimates(estimates);
   const allInvoices = records.mergeInvoices(invoices);
+  // Fall back to workspace snapshot while Redux is still loading
   const listed = allJobs.find((item) => item.id === id);
-  // Prefer live GET /api/provider/jobs/:id over workspace list seed.
-  const seeded = fetched ?? listed;
+  const seeded = cachedJob ?? listed ?? null;
+
   const job = seeded
     ? applyJobSettings(
         { ...seeded, status: records.statusOf("job", seeded.id, seeded.status) },
@@ -1087,49 +1093,24 @@ export function JobDetailView({ id }: { id: string }) {
   const apiReady = crm.enabled && crm.ready;
   const pending = useCrmRecordPending();
 
-  useEffect(() => {
-    setFetched(null);
-    setFetchError(null);
-    setFetching(true);
-  }, [id]);
-
+  // ── Fetch via Redux (cache-first: only show loading when no cached data) ──
   useEffect(() => {
     if (!id) return;
-    let cancelled = false;
-    setFetching(true);
-    setFetchError(null);
-    // MD / CRM: GET /api/provider/jobs/:id
-    void getJob(id)
+    dispatch(fetchJobDetail(id))
+      .unwrap()
       .then((item) => {
-        if (cancelled) return;
-        if (!item) {
-          setFetched(null);
-          setFetchError("Job not found");
-          return;
-        }
-        setFetched(item);
+        // Also seed the workspace records cache for backward compatibility
         records.cacheJob(item);
       })
-      .catch((error) => {
-        if (cancelled) return;
-        setFetched(null);
-        setFetchError(
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not load this job.",
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setFetching(false);
+      .catch(() => {
+        // Error is stored in Redux state (detailError)
       });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- records.cacheJob is stable enough; avoid refetch loops
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- records.cacheJob is stable; dispatch is stable
+  }, [id, dispatch]);
 
   if (!job) {
-    if (pending || fetching || crm.refreshing) {
+    // Only show spinner if no cached data exists yet
+    if (pending || (!cachedJob && detailLoading) || crm.refreshing) {
       return (
         <div className="border border-black/15 bg-card" aria-busy="true">
           <CenteredSpinner className="min-h-[22rem]" />
@@ -1138,7 +1119,7 @@ export function JobDetailView({ id }: { id: string }) {
     }
     return (
       <Missing
-        title={fetchError || "Job not found"}
+        title={detailError || "Job not found"}
         href="/pro/dashboard/jobs"
       />
     );

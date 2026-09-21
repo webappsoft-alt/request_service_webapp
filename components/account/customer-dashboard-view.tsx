@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileText,
   MessageCircle,
+  Receipt,
   Settings,
 } from "lucide-react";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listPublicChatThreads } from "@/lib/api/chat-client";
 import { customerPaths } from "@/lib/customer-paths";
+import { formatMoney } from "@/lib/format";
 import { formatOrderMoney, orderServiceTitle } from "@/lib/orders/order-display";
 import { formatOrderStatus } from "@/lib/orders/order-status";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -29,6 +31,11 @@ import {
   selectCustomerApiEstimates,
   selectCustomerApiEstimatesLoading,
 } from "@/store/customerQuotesSlice";
+import {
+  fetchCustomerInvoices,
+  selectCustomerInvoices,
+  selectCustomerInvoicesLoading,
+} from "@/store/customerInvoicesSlice";
 
 function StatCard({
   label,
@@ -65,6 +72,8 @@ export function CustomerDashboardView() {
   const pagination = useAppSelector(selectCustomerOrdersPagination);
   const estimates = useAppSelector(selectCustomerApiEstimates);
   const estimatesLoading = useAppSelector(selectCustomerApiEstimatesLoading);
+  const invoices = useAppSelector(selectCustomerInvoices);
+  const invoicesLoading = useAppSelector(selectCustomerInvoicesLoading);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   const firstName =
@@ -74,6 +83,7 @@ export function CustomerDashboardView() {
   useEffect(() => {
     void dispatch(fetchCustomerOrders({ page: 1, limit: 5 }));
     void dispatch(fetchCustomerEstimates());
+    void dispatch(fetchCustomerInvoices());
   }, [dispatch]);
 
   useEffect(() => {
@@ -119,11 +129,19 @@ export function CustomerDashboardView() {
     [estimates],
   );
 
+  const openInvoices = useMemo(
+    () =>
+      invoices.filter((item) =>
+        ["sent", "partially_paid", "overdue"].includes(item.status),
+      ).length,
+    [invoices],
+  );
+
   return (
     <PortalPage
       eyebrow="Home"
       title={`Welcome back, ${firstName}`}
-      description="Track orders, review estimates from professionals, and message providers — without leaving your account."
+      description="Track orders, review estimates and invoices from professionals, and message providers — without leaving your account."
       actions={
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm">
@@ -162,16 +180,20 @@ export function CustomerDashboardView() {
           href={customerPaths.estimates}
         />
         <StatCard
+          label="Invoices"
+          value={invoicesLoading ? "…" : invoices.length}
+          hint={
+            openInvoices
+              ? `${openInvoices} awaiting payment`
+              : "Bills from professionals"
+          }
+          href={customerPaths.invoices}
+        />
+        <StatCard
           label="Messages"
           value={unreadMessages}
           hint={unreadMessages ? "Unread conversations" : "Chat with pros"}
           href={customerPaths.messages}
-        />
-        <StatCard
-          label="Profile"
-          value="Account"
-          hint="Update contact & password"
-          href={customerPaths.settings}
         />
       </div>
 
@@ -274,6 +296,52 @@ export function CustomerDashboardView() {
                   Request a new estimate
                 </Link>{" "}
                 to send your job details to matching professionals.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-black/10 shadow-none xl:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-black/10 pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Receipt className="size-4 text-[#003F7D]" aria-hidden />
+              Recent invoices
+            </CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href={customerPaths.invoices}>View all</Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="pt-3">
+            {invoicesLoading && !invoices.length ? (
+              <p className="text-sm text-muted-foreground">Loading invoices…</p>
+            ) : invoices.length ? (
+              <ul className="divide-y divide-black/10">
+                {invoices.slice(0, 5).map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      href={customerPaths.invoice(item.id)}
+                      className="flex items-center justify-between gap-3 py-2.5 text-sm transition-colors hover:bg-[#f7f8fa]"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">
+                          {item.number}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.provider?.companyName || "Professional"} ·{" "}
+                          {item.status}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-semibold tabular-nums text-[#003F7D]">
+                        {formatMoney(item.balanceDue || item.total)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No invoices yet. When a professional sends one, it will appear
+                here.
               </p>
             )}
           </CardContent>

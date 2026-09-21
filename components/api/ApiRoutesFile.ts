@@ -23,6 +23,10 @@ export const userApi = {
   quoteRequests: "user/quote-requests",
   /** GET customer estimates across CRM providers */
   estimates: "user/estimates",
+  /** GET customer invoices sent by providers */
+  invoices: "user/invoices",
+  /** GET one customer invoice by id */
+  invoice: (id: string) => `user/invoices/${id}`,
 } as const;
 
 /** Customer bookings & orders (Bearer JWT, role: customer). */

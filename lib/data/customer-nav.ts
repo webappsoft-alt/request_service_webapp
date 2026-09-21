@@ -5,6 +5,7 @@ import {
   Home,
   LayoutDashboard,
   MessageCircle,
+  Receipt,
   Settings,
 } from "lucide-react";
 import { customerPaths } from "@/lib/customer-paths";
@@ -40,6 +41,7 @@ export const customerNavGroups: CustomerNavGroup[] = [
     items: [
       { href: customerPaths.orders, label: "Orders", icon: ClipboardList },
       { href: customerPaths.estimates, label: "Estimates", icon: FileText },
+      { href: customerPaths.invoices, label: "Invoices", icon: Receipt },
       { href: customerPaths.messages, label: "Messages", icon: MessageCircle },
     ],
   },

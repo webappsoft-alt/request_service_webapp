@@ -8,6 +8,8 @@ export const customerPaths = {
   estimate: (token: string) => `/account/dashboard/estimates/${token}`,
   quoteRequest: (batchId: string) =>
     `/account/dashboard/estimates/requests/${batchId}`,
+  invoices: "/account/dashboard/invoices",
+  invoice: (id: string) => `/account/dashboard/invoices/${id}`,
   messages: "/account/dashboard/messages",
   settings: "/account/dashboard/settings",
   site: "/",

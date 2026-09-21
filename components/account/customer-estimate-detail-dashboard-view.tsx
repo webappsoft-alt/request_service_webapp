@@ -12,7 +12,8 @@ export function CustomerEstimateDetailDashboardView({
 }: {
   token: string;
 }) {
-  const shareToken = String(token || "").trim();
+  const key = String(token || "").trim();
+  const isEstimateId = /^[a-fA-F0-9]{24}$/.test(key);
 
   return (
     <PortalPage
@@ -29,8 +30,11 @@ export function CustomerEstimateDetailDashboardView({
       }
     >
       <div className="rounded-[4px] border border-black/10 bg-card p-3 sm:p-4">
-        {shareToken ? (
-          <CustomerEstimatePage token={shareToken} />
+        {key ? (
+          <CustomerEstimatePage
+            token={isEstimateId ? undefined : key}
+            estimateId={isEstimateId ? key : undefined}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">
             This estimate link is missing or invalid.

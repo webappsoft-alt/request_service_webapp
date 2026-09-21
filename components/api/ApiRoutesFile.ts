@@ -23,6 +23,12 @@ export const userApi = {
   quoteRequests: "user/quote-requests",
   /** GET customer estimates across CRM providers */
   estimates: "user/estimates",
+  /** GET one customer estimate by CRM id */
+  estimate: (id: string) => `user/estimates/${id}`,
+  estimateApprove: (id: string) => `user/estimates/${id}/approve`,
+  estimateReject: (id: string) => `user/estimates/${id}/reject`,
+  estimateRequestChanges: (id: string) =>
+    `user/estimates/${id}/request-changes`,
   /** GET customer invoices sent by providers */
   invoices: "user/invoices",
   /** GET one customer invoice by id */

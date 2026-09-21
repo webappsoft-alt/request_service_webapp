@@ -26,7 +26,7 @@ import {
   postData,
   showApiErrorToast,
 } from "@/components/api/apiFuntions";
-import { publicApi } from "@/components/api/ApiRoutesFile";
+import { publicApi, userApi } from "@/components/api/ApiRoutesFile";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -96,7 +96,8 @@ function mapPublicEstimateToSnapshot(
   const estimateId =
     stringValue(estimate.id) ||
     stringValue(estimate._id) ||
-    stringValue((asRecord(estimate._id) as { $oid?: string } | null)?.$oid);
+    stringValue((asRecord(estimate._id) as { $oid?: string } | null)?.$oid) ||
+    (isMongoObjectId(token) ? token.trim() : "");
 
   if (!estimateId) return null;
 
@@ -209,7 +210,23 @@ function mapPublicEstimateToSnapshot(
   return { snapshot, approval };
 }
 
-export function CustomerEstimatePage({ token }: { token: string }) {
+function isMongoObjectId(value: string) {
+  return /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+}
+
+function canCustomerSignStatus(status?: string) {
+  const value = String(status || "").toLowerCase();
+  return value === "sent" || value === "finalized";
+}
+
+export function CustomerEstimatePage({
+  token,
+  estimateId: estimateIdProp,
+}: {
+  token?: string;
+  /** Authenticated CRM estimate id (preferred over public share token). */
+  estimateId?: string;
+}) {
   const share = useEstimateShare();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -221,21 +238,49 @@ export function CustomerEstimatePage({ token }: { token: string }) {
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [changeReason, setChangeReason] = useState("");
   const [showChangeForm, setShowChangeForm] = useState(false);
+  const [accessKey, setAccessKey] = useState(
+    () => String(token || estimateIdProp || "").trim(),
+  );
+  const [viaUserApi, setViaUserApi] = useState(() =>
+    Boolean(estimateIdProp || isMongoObjectId(String(token || ""))),
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    const explicitId = String(estimateIdProp || "").trim();
+    const key = String(token || "").trim();
+    const useUserApi = Boolean(explicitId) || isMongoObjectId(key);
+    const lookupId = explicitId || (isMongoObjectId(key) ? key : "");
+    const publicToken = !useUserApi ? key : "";
+
+    if (!lookupId && !publicToken) {
+      setError("Estimate link is missing or invalid.");
+      setSnapshot(null);
+      setApproval(undefined);
+      setLoading(false);
+      return;
+    }
+
+    setViaUserApi(useUserApi);
+
     try {
-      const response = await getData(publicApi.estimate(token), undefined, {
-        token: null,
-        skipLogoutOn401: true,
-        silent: true,
-        force: true,
-      });
+      const response = useUserApi
+        ? await getData(userApi.estimate(lookupId), undefined, {
+            silent: true,
+            force: true,
+          })
+        : await getData(publicApi.estimate(publicToken), undefined, {
+            token: null,
+            skipLogoutOn401: true,
+            silent: true,
+            force: true,
+          });
 
       const root = asRecord(response);
       if (root && root.success === false) {
-        forgetCustomerEstimateToken(token);
+        if (!useUserApi) forgetCustomerEstimateToken(publicToken);
         setError(
           stringValue(root.message) ||
             "Estimate proposal not found or link has expired",
@@ -246,9 +291,26 @@ export function CustomerEstimatePage({ token }: { token: string }) {
         return;
       }
 
-      const mapped = mapPublicEstimateToSnapshot(token, response);
+      const estimate = asRecord(root?.data) ?? root;
+      const shareToken =
+        stringValue(estimate?.shareToken) || (useUserApi ? "" : publicToken);
+      const mapKey = shareToken || lookupId || publicToken;
+      const mapped = mapPublicEstimateToSnapshot(mapKey, {
+        success: true,
+        data: estimate,
+      });
       if (mapped) {
-        rememberCustomerEstimateToken(token);
+        // Prefer CRM id when viewing via authenticated API so approve/reject
+        // hit /user/estimates/:id even if a share token also exists.
+        if (useUserApi && lookupId) {
+          mapped.snapshot.estimateId = lookupId;
+        }
+        if (shareToken) rememberCustomerEstimateToken(shareToken);
+        setAccessKey(
+          useUserApi
+            ? lookupId
+            : shareToken || mapped.snapshot.estimateId || publicToken,
+        );
         setSnapshot(mapped.snapshot);
         setApproval(
           mapped.approval || share.approvalOf(mapped.snapshot.estimateId),
@@ -257,33 +319,56 @@ export function CustomerEstimatePage({ token }: { token: string }) {
         return;
       }
 
-      forgetCustomerEstimateToken(token);
+      if (!useUserApi) forgetCustomerEstimateToken(publicToken);
       setError("Estimate proposal not found or link has expired");
       setSnapshot(null);
       setApproval(undefined);
       setLoading(false);
     } catch (err) {
-      forgetCustomerEstimateToken(token);
+      if (!useUserApi && publicToken) forgetCustomerEstimateToken(publicToken);
       const message = extractErrorMessage(err);
       setError(message || "Estimate proposal not found or link has expired");
       setSnapshot(null);
       setApproval(undefined);
       setLoading(false);
     }
-  }, [token, share.approvalOf]);
+  }, [token, estimateIdProp, share.approvalOf]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const estimateId = snapshot?.estimateId || String(estimateIdProp || "").trim();
+  const canSign = Boolean(
+    snapshot && !approval && canCustomerSignStatus(snapshot.status),
+  );
+  const canRequestChanges = Boolean(
+    snapshot && !approval && canCustomerSignStatus(snapshot.status),
+  );
+  const preparing =
+    Boolean(snapshot) &&
+    !approval &&
+    !canCustomerSignStatus(snapshot?.status) &&
+    snapshot?.status !== "rejected" &&
+    snapshot?.status !== "expired" &&
+    snapshot?.status !== "accepted" &&
+    snapshot?.status !== "converted_to_job";
+
   async function approve(signedBy: string, signatureImageBase64: string) {
     if (!snapshot) return;
     try {
-      await postData(
-        publicApi.estimateApprove(token),
-        { signedBy, signatureImageBase64 },
-        { token: null, skipLogoutOn401: true },
-      );
+      if (viaUserApi && estimateId) {
+        await postData(userApi.estimateApprove(estimateId), {
+          signedBy,
+          signatureImageBase64,
+        });
+      } else {
+        await postData(
+          publicApi.estimateApprove(accessKey),
+          { signedBy, signatureImageBase64 },
+          { token: null, skipLogoutOn401: true },
+        );
+      }
     } catch (err) {
       showApiErrorToast(err, "Unable to approve this estimate.");
       return;
@@ -311,11 +396,17 @@ export function CustomerEstimatePage({ token }: { token: string }) {
     if (!confirmed) return;
     setRejecting(true);
     try {
-      await postData(
-        publicApi.estimateReject(token),
-        { reason: "Customer declined this estimate." },
-        { token: null, skipLogoutOn401: true },
-      );
+      if (viaUserApi && estimateId) {
+        await postData(userApi.estimateReject(estimateId), {
+          reason: "Customer declined this estimate.",
+        });
+      } else {
+        await postData(
+          publicApi.estimateReject(accessKey),
+          { reason: "Customer declined this estimate." },
+          { token: null, skipLogoutOn401: true },
+        );
+      }
       toast.success("Estimate declined.");
       void load();
     } catch (err) {
@@ -334,19 +425,21 @@ export function CustomerEstimatePage({ token }: { token: string }) {
     }
     setRequestingChanges(true);
     try {
-      await postData(
-        publicApi.estimateRequestChanges(token),
-        { reason },
-        { token: null, skipLogoutOn401: true },
-      );
-      toast.success(
-        "Change request sent. The professional will revise this estimate and send it again.",
-      );
+      if (viaUserApi && estimateId) {
+        await postData(userApi.estimateRequestChanges(estimateId), { reason });
+      } else {
+        await postData(
+          publicApi.estimateRequestChanges(accessKey),
+          { reason },
+          { token: null, skipLogoutOn401: true },
+        );
+      }
+      toast.success("Change request sent to the professional.");
       setShowChangeForm(false);
       setChangeReason("");
       void load();
     } catch (err) {
-      showApiErrorToast(err, "Unable to send the change request.");
+      showApiErrorToast(err, "Unable to request changes.");
     } finally {
       setRequestingChanges(false);
     }
@@ -401,6 +494,10 @@ export function CustomerEstimatePage({ token }: { token: string }) {
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
                 Changes requested
               </span>
+            ) : preparing ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                In progress
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                 <ShieldCheck className="size-3.5" /> Ready for review
@@ -408,11 +505,7 @@ export function CustomerEstimatePage({ token }: { token: string }) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {!approval &&
-            snapshot.status !== "rejected" &&
-            snapshot.status !== "expired" &&
-            snapshot.status !== "converted_to_job" &&
-            snapshot.status !== "changes_requested" ? (
+            {canRequestChanges ? (
               <>
                 <Button
                   variant="outline"
@@ -444,9 +537,19 @@ export function CustomerEstimatePage({ token }: { token: string }) {
           </div>
         </div>
 
-        {showChangeForm &&
-        !approval &&
-        snapshot.status !== "changes_requested" ? (
+        {preparing ? (
+          <div className="rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 print:hidden">
+            Your professional is still preparing this estimate
+            {snapshot.status === "site_visit"
+              ? " (site visit in progress)"
+              : ""}
+            . You can review the current draft here.{" "}
+            <strong>Review &amp; sign</strong>, request changes, and accept will
+            unlock after they send it for your approval.
+          </div>
+        ) : null}
+
+        {showChangeForm && canRequestChanges ? (
           <div className="rounded-md border border-black/10 bg-card p-4 print:hidden">
             <p className="text-sm font-medium">What should be changed?</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -494,14 +597,9 @@ export function CustomerEstimatePage({ token }: { token: string }) {
           snapshot={snapshot}
           approval={approval}
           customerSlot={
-            approval ||
-            snapshot.status === "rejected" ||
-            snapshot.status === "expired" ||
-            snapshot.status === "changes_requested"
-              ? undefined
-              : (
-                  <CustomerSignSlot snapshot={snapshot} onSign={approve} />
-                )
+            canSign ? (
+              <CustomerSignSlot snapshot={snapshot} onSign={approve} />
+            ) : undefined
           }
         />
 

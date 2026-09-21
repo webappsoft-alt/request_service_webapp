@@ -37,7 +37,14 @@ function statusVariant(status: string) {
   const value = status.toLowerCase();
   if (value === "accepted" || value === "converted_to_job")
     return "default" as const;
-  if (value === "sent" || value === "finalized" || value === "viewed")
+  if (
+    value === "sent" ||
+    value === "finalized" ||
+    value === "viewed" ||
+    value === "site_visit" ||
+    value === "inspected" ||
+    value === "draft"
+  )
     return "secondary" as const;
   if (value === "rejected" || value === "expired" || value === "declined")
     return "destructive" as const;
@@ -45,6 +52,11 @@ function statusVariant(status: string) {
 }
 
 function statusLabel(status: string) {
+  const value = status.toLowerCase();
+  if (value === "site_visit") return "Site visit";
+  if (value === "draft") return "Preparing";
+  if (value === "inspected") return "Inspected";
+  if (value === "finalized") return "Ready to send";
   return status
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -412,21 +424,33 @@ export function CustomerEstimatesDashboardView() {
                         {formatMoney(item.total)}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        {item.shareToken ? (
-                          <Button asChild size="sm">
-                            <Link href={customerPaths.estimate(item.shareToken)}>
-                              {["sent", "finalized", "changes_requested"].includes(
-                                item.status,
-                              )
-                                ? "Review & sign"
-                                : "View"}
-                            </Link>
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            No share link
-                          </span>
-                        )}
+                        {(() => {
+                          // Prefer CRM id so the account dashboard uses /user/estimates/:id
+                          // (public share-token lookup fails for unshared drafts / site visits).
+                          const href = item.id
+                            ? customerPaths.estimate(item.id)
+                            : item.shareToken
+                              ? customerPaths.estimate(item.shareToken)
+                              : customerPaths.estimates;
+                          const canReview = ["sent", "finalized"].includes(
+                            item.status,
+                          );
+                          const label = canReview
+                            ? "Review & sign"
+                            : "View";
+                          if (!item.id && !item.shareToken) {
+                            return (
+                              <span className="text-xs text-muted-foreground">
+                                Waiting for share link
+                              </span>
+                            );
+                          }
+                          return (
+                            <Button asChild size="sm">
+                              <Link href={href}>{label}</Link>
+                            </Button>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))

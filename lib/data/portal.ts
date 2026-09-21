@@ -1217,13 +1217,13 @@ export function estimateStatusTone(status: EstimateStatus) {
 export function estimateCanShare(status: EstimateStatus) {
   switch (status) {
     case "draft":
+    case "site_visit":
+    case "inspected":
     case "finalized":
     case "sent":
     case "accepted":
     case "changes_requested":
       return true;
-    case "site_visit":
-    case "inspected":
     case "rejected":
     case "expired":
     case "converted_to_job":

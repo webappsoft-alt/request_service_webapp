@@ -24,6 +24,7 @@ import { fetchTeam } from "@/store/teamSlice";
 import {
   createEstimate as createEstimateApi,
   getEstimate,
+  shareEstimate as shareEstimateApi,
   updateEstimate as updateEstimateApi,
   createRequest,
 } from "@/lib/api/crm-client";
@@ -419,6 +420,10 @@ export function CreateEstimateDialog({
       }
       return;
     }
+    if (!useApi) {
+      toast.error("Sign in as a provider to create estimates.");
+      return;
+    }
     setSaving(true);
     try {
       const siteVisitPayload =
@@ -474,6 +479,7 @@ export function CreateEstimateDialog({
           createdAt: estimate.createdAt,
         });
         const saved = updated ?? nextEstimate;
+        if (!saved?.id) throw new Error("Could not update this estimate.");
         writeCostLines(
           session?.email,
           saved.id,
@@ -519,8 +525,30 @@ export function CreateEstimateDialog({
         lines,
       });
       const created = await createEstimateApi(estimateDraft);
-      const saved = created ?? estimateDraft;
-      if (!saved?.id) throw new Error("Could not create this estimate.");
+      if (!created?.id) {
+        throw new Error("Could not create this estimate on the server.");
+      }
+      let saved = created;
+      // Office quotes with pricing: share immediately so the customer can Review & sign.
+      if (path === "office") {
+        try {
+          const shared = await shareEstimateApi(saved.id);
+          if (shared?.status || shared?.shareToken) {
+            saved = {
+              ...saved,
+              status: (shared.status as typeof saved.status) || "sent",
+              shareToken: shared.shareToken || saved.shareToken,
+              shareUrl: shared.shareUrl || saved.shareUrl,
+            };
+          }
+        } catch (shareError) {
+          toast.error(
+            shareError instanceof Error
+              ? shareError.message
+              : "Estimate created, but could not send it for approval yet.",
+          );
+        }
+      }
       writeCostLines(
         session?.email,
         saved.id,

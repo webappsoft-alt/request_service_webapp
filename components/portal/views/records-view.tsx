@@ -420,11 +420,11 @@ export function EstimatesView() {
           const isSent = row.status === "sent";
           const isAccepted = row.status === "accepted";
           const isFinalized = row.status === "finalized";
-          const isDraftLike =
+          const canFinalizeRow =
             row.status === "draft" ||
-            row.status === "site_visit" ||
             row.status === "inspected" ||
             row.status === "changes_requested";
+          const canShareRow = estimateCanShare(row.status);
           const isRejected = row.status === "rejected";
 
           return [
@@ -491,7 +491,7 @@ export function EstimatesView() {
                   },
                 ]
               : []),
-            ...(isDraftLike || isRejected
+            ...(canFinalizeRow
               ? [
                   {
                     label: "Finalize",
@@ -515,40 +515,41 @@ export function EstimatesView() {
                   },
                 ]
               : []),
-            ...(isFinalized || isDraftLike
+            ...(canShareRow
               ? [
                   {
-                    label: isFinalized ? "Send to customer" : "Share with customer",
+                    label:
+                      isFinalized || row.status === "changes_requested"
+                        ? "Send to customer"
+                        : "Share with customer",
                     onSelect: async () => {
                       try {
-                        if (useApi) {
-                          const res = await shareEstimate(row.id);
-                          const nextStatus =
-                            (res?.status as Estimate["status"]) || "sent";
-                          records.setStatus("estimate", row.id, nextStatus);
-                          dispatch(
-                            patchEstimateLocally({
-                              id: row.id,
-                              patch: {
-                                status: nextStatus,
-                                shareToken: res?.shareToken || row.shareToken,
-                              },
-                            }),
-                          );
-                          toast.success(
-                            res?.shareToken
-                              ? `${row.number} shared with the customer.`
-                              : "Estimate shared.",
-                          );
-                        } else {
-                          records.setStatus("estimate", row.id, "sent");
-                          toast.success("Estimate marked sent.");
+                        if (!useApi) {
+                          toast.error("Sign in as a provider to share estimates.");
+                          return;
                         }
-                      } catch (err) {
-                        showApiErrorToast(
-                          err,
-                          "Failed to share estimate with the customer.",
+                        const res = await shareEstimate(row.id);
+                        const token = String(res?.shareToken || "").trim();
+                        if (token) {
+                          await navigator.clipboard.writeText(shareUrlFor(token));
+                        }
+                        records.setStatus("estimate", row.id, "sent");
+                        dispatch(
+                          patchEstimateLocally({
+                            id: row.id,
+                            patch: {
+                              status: "sent",
+                              shareToken: token || row.shareToken,
+                            },
+                          }),
                         );
+                        toast.success(
+                          token
+                            ? `${row.number} sent. Customer link copied.`
+                            : `${row.number} sent to customer.`,
+                        );
+                      } catch (err) {
+                        showApiErrorToast(err, "Failed to share estimate.");
                       }
                     },
                   },

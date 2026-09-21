@@ -25,10 +25,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { getAuthToken } from "@/components/api/apiFuntions";
 import { shareEstimate } from "@/lib/api/crm-client";
 import { estimateCanShare } from "@/lib/data/portal";
 import type { PortalCustomerCrm } from "@/lib/data/crm-people";
 import type { Estimate } from "@/lib/types";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuth } from "@/store/authSlice";
 
 export type SendApprovalResult = {
   viaApi: boolean;
@@ -54,10 +57,15 @@ export function SendApprovalDialog({
   onSent: (result: SendApprovalResult) => void;
 }) {
   const crm = useCrmApiData();
+  const auth = useAppSelector(selectAuth);
   const { session, provider } = usePortalWorkspace();
   const share = useEstimateShare();
   const ready = estimateCanShare(estimate.status);
-  const apiReady = crm.enabled;
+  // Match estimate detail: send when CRM is on or a session token is already available.
+  const apiReady =
+    crm.enabled ||
+    Boolean(auth.token) ||
+    (typeof window !== "undefined" && Boolean(getAuthToken()));
 
   const snapshot = useMemo(
     () =>

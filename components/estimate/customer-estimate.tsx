@@ -216,7 +216,7 @@ function isMongoObjectId(value: string) {
 
 function canCustomerSignStatus(status?: string) {
   const value = String(status || "").toLowerCase();
-  return value === "sent" || value === "finalized";
+  return value === "sent";
 }
 
 export function CustomerEstimatePage({

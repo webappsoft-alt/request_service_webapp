@@ -1216,14 +1216,36 @@ export function estimateStatusTone(status: EstimateStatus) {
 
 export function estimateCanShare(status: EstimateStatus) {
   switch (status) {
+    case "finalized":
+    case "sent":
+    case "changes_requested":
+      return true;
     case "draft":
     case "site_visit":
     case "inspected":
+    case "accepted":
+    case "rejected":
+    case "expired":
+    case "converted_to_job":
+      return false;
+    default: {
+      const _never: never = status;
+      return _never;
+    }
+  }
+}
+
+/** Provider can finalize after office pricing or after site visit field notes are saved. */
+export function estimateCanFinalize(status: EstimateStatus) {
+  switch (status) {
+    case "draft":
+    case "inspected":
+    case "changes_requested":
+      return true;
+    case "site_visit":
     case "finalized":
     case "sent":
     case "accepted":
-    case "changes_requested":
-      return true;
     case "rejected":
     case "expired":
     case "converted_to_job":

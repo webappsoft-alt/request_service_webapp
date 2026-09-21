@@ -142,6 +142,7 @@ import {
   calendarEventKindLabel,
   employeeName,
   estimateCanConvert,
+  estimateCanFinalize,
   estimateCanShare,
   estimateDisplayName,
   estimateStatusLabel,
@@ -297,6 +298,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     estimate.status === "converted_to_job",
   );
   const canShare = estimateCanShare(estimate.status);
+  const canFinalize = estimateCanFinalize(estimate.status);
   const canConvert =
     signed && estimateCanConvert(estimate.status, Boolean(job));
   const visitLocked =
@@ -365,21 +367,34 @@ export function EstimateDetailView({ id }: { id: string }) {
 
   function openApproval() {
     if (!canShare) {
-      toast.error(
-        "Finalize the estimate in the office before sending it for approval.",
-      );
+      if (quote.status === "site_visit") {
+        toast.error(
+          "Complete the site visit and field notes before sending this estimate.",
+        );
+      } else if (quote.status === "inspected" || quote.status === "draft") {
+        toast.error(
+          "Finalize the estimate in the office before sending it for approval.",
+        );
+      } else {
+        toast.error(
+          "Finalize the estimate in the office before sending it for approval.",
+        );
+      }
       return;
     }
     setApprovalOpen(true);
   }
 
   async function finalizeEstimate() {
-    if (finalizing || canShare || quote.status === "site_visit") {
-      if (quote.status === "site_visit") {
-        toast.error(
-          "Complete and save the site inspection before finalizing the estimate.",
-        );
-      }
+    if (finalizing) return;
+    if (quote.status === "site_visit") {
+      toast.error(
+        "Complete and save the site inspection before finalizing the estimate.",
+      );
+      return;
+    }
+    if (!estimateCanFinalize(quote.status)) {
+      toast.error("This estimate cannot be finalized in its current status.");
       return;
     }
     setFinalizing(true);
@@ -580,7 +595,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     <Share2 className="size-3.5" />
                     Send for approval
                   </Button>
-                ) : estimate.status === "site_visit" ? null : (
+                ) : canFinalize ? (
                   <Button
                     size="sm"
                     disabled={finalizing}
@@ -588,7 +603,13 @@ export function EstimateDetailView({ id }: { id: string }) {
                   >
                     {finalizing ? "Finalizing…" : "Finalize estimate"}
                   </Button>
-                )}
+                ) : estimate.status === "site_visit" ? (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/pro/dashboard/estimates/${estimate.id}?tab=visit`}>
+                      Complete site visit
+                    </Link>
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="outline"

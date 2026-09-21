@@ -20,6 +20,9 @@ import { estimateCanShare } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import type { Estimate } from "@/lib/types";
 import type { PortalCustomerCrm } from "@/lib/data/crm-people";
+import { getAuthToken } from "@/components/api/apiFuntions";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuth } from "@/store/authSlice";
 
 export { buildEstimateSnapshot };
 
@@ -42,6 +45,7 @@ export function EstimateShareTab({
 }) {
   const { session, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
+  const auth = useAppSelector(selectAuth);
   const share = useEstimateShare();
   const snapshot = share.snapshotForEstimate(estimate.id);
   const localApproval = share.approvalOf(estimate.id);
@@ -61,7 +65,10 @@ export function EstimateShareTab({
   const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const ready = estimateCanShare(estimate.status);
-  const apiReady = crm.enabled;
+  const apiReady =
+    crm.enabled ||
+    Boolean(auth.token) ||
+    (typeof window !== "undefined" && Boolean(getAuthToken()));
   const waitingOnCustomer = !approval && (Boolean(snapshot) || estimate.status === "sent");
 
   useEffect(() => {
@@ -189,10 +196,17 @@ export function EstimateShareTab({
           <div className="mt-3 flex flex-col gap-2 rounded-[4px] border border-amber-200 bg-amber-50/60 p-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-amber-900">
               {estimate.status === "site_visit"
-                ? "Complete the site inspection and save field notes before finalizing this estimate."
-                : "Click Finalize estimate first. That locks the quote so you can send the customer link."}
+                ? "Site visit is still pending. Assign a team member, complete the visit, and save field notes before this estimate can be finalized or sent."
+                : estimate.status === "inspected"
+                  ? "Site visit notes are in. Add pricing on Line items, then Finalize before sending to the customer."
+                  : estimate.status === "draft"
+                    ? "Office draft. Finish pricing, then Finalize before sending the customer link."
+                    : "Finalize the estimate first so you can send the customer approval link."}
             </p>
-            {estimate.status !== "site_visit" && onFinalize ? (
+            {(estimate.status === "draft" ||
+              estimate.status === "inspected" ||
+              estimate.status === "changes_requested") &&
+            onFinalize ? (
               <Button size="sm" disabled={finalizing} onClick={onFinalize} className="shrink-0">
                 {finalizing ? "Finalizing…" : "Finalize estimate"}
               </Button>

@@ -432,9 +432,7 @@ export function CustomerEstimatesDashboardView() {
                             : item.shareToken
                               ? customerPaths.estimate(item.shareToken)
                               : customerPaths.estimates;
-                          const canReview = ["sent", "finalized"].includes(
-                            item.status,
-                          );
+                          const canReview = item.status === "sent";
                           const label = canReview
                             ? "Review & sign"
                             : "View";

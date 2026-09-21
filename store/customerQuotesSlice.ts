@@ -13,6 +13,8 @@ export type CustomerQuoteProfessional = {
   status: string;
   seen: boolean;
   firstViewedAt: string | null;
+  photos?: string[];
+  images?: string[];
   estimates: Array<{
     id: string;
     number: string;
@@ -21,6 +23,9 @@ export type CustomerQuoteProfessional = {
     shareToken: string;
     total: number;
     createdAt?: string;
+    photos?: string[];
+    images?: string[];
+    siteVisit?: unknown;
   }>;
 };
 
@@ -34,6 +39,9 @@ export type CustomerQuoteBatch = {
   channel: string;
   createdAt: string;
   details: string;
+  answers?: Array<{ id?: string; label?: string; value?: string }>;
+  photos?: string[];
+  images?: string[];
   sentToCount: number;
   seenCount: number;
   estimateCount: number;
@@ -113,6 +121,13 @@ export const fetchCustomerQuoteRequests = createAsyncThunk(
         const professionalsRaw = Array.isArray(row.professionals)
           ? row.professionals
           : [];
+        const rawPhotos = Array.isArray(row.photos)
+          ? row.photos
+          : Array.isArray(row.images)
+            ? row.images
+            : [];
+        const photos = rawPhotos.filter((p): p is string => typeof p === "string" && Boolean(p.trim()));
+
         return {
           quoteBatchId: stringValue(row.quoteBatchId) || null,
           serviceName: stringValue(row.serviceName) || "Service request",
@@ -123,12 +138,32 @@ export const fetchCustomerQuoteRequests = createAsyncThunk(
           channel: stringValue(row.channel),
           createdAt: stringValue(row.createdAt),
           details: stringValue(row.details),
+          answers: Array.isArray(row.answers)
+            ? row.answers.map((a) => {
+                const ans = asRecord(a) ?? {};
+                return {
+                  id: stringValue(ans.id),
+                  label: stringValue(ans.label),
+                  value: stringValue(ans.value),
+                };
+              })
+            : [],
+          photos,
+          images: photos,
           sentToCount: numberValue(row.sentToCount),
           seenCount: numberValue(row.seenCount),
           estimateCount: numberValue(row.estimateCount),
           professionals: professionalsRaw.map((pro) => {
             const p = asRecord(pro) ?? {};
             const estimatesRaw = Array.isArray(p.estimates) ? p.estimates : [];
+            const proPhotos = (
+              Array.isArray(p.photos)
+                ? p.photos
+                : Array.isArray(p.images)
+                  ? p.images
+                  : []
+            ).filter((x): x is string => typeof x === "string" && Boolean(x.trim()));
+
             return {
               requestId: stringValue(p.requestId),
               number: stringValue(p.number),
@@ -138,8 +173,18 @@ export const fetchCustomerQuoteRequests = createAsyncThunk(
               status: stringValue(p.status) || "new",
               seen: Boolean(p.seen),
               firstViewedAt: stringValue(p.firstViewedAt) || null,
+              photos: proPhotos,
+              images: proPhotos,
               estimates: estimatesRaw.map((est) => {
                 const e = asRecord(est) ?? {};
+                const estPhotos = (
+                  Array.isArray(e.photos)
+                    ? e.photos
+                    : Array.isArray(e.images)
+                      ? e.images
+                      : []
+                ).filter((x): x is string => typeof x === "string" && Boolean(x.trim()));
+
                 return {
                   id: stringValue(e.id),
                   number: stringValue(e.number),
@@ -148,6 +193,9 @@ export const fetchCustomerQuoteRequests = createAsyncThunk(
                   shareToken: stringValue(e.shareToken),
                   total: numberValue(e.total),
                   createdAt: stringValue(e.createdAt) || undefined,
+                  photos: estPhotos,
+                  images: estPhotos,
+                  siteVisit: e.siteVisit || undefined,
                 };
               }),
             };

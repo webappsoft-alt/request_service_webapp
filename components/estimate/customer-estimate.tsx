@@ -1,15 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   ArrowLeft,
+  Building2,
+  Calendar,
+  Camera,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
+  ExternalLink,
   FileQuestion,
+  FileText,
+  Maximize2,
   Printer,
   RotateCcw,
+  Ruler,
   ShieldCheck,
+  Sparkles,
+  User,
+  X,
 } from "lucide-react";
 import { customerPaths } from "@/lib/customer-paths";
 import { toast } from "sonner";
@@ -23,6 +36,8 @@ import {
   useEstimateShare,
   type EstimateApproval,
   type EstimateShareSnapshot,
+  type EstimateShareSiteVisit,
+  type EstimateSiteVisitPhoto,
 } from "@/components/portal/use-estimate-share";
 import {
   extractErrorMessage,
@@ -140,6 +155,120 @@ function mapPublicEstimateToSnapshot(
     stringValue(companySignature?.signature) ||
     stringValue(estimate.companySignatureDataUrl);
 
+  const siteVisitRaw = asRecord(estimate.siteVisit);
+  let siteVisit: EstimateShareSiteVisit | undefined = undefined;
+  if (siteVisitRaw) {
+    const rawPhotos = Array.isArray(siteVisitRaw.photos)
+      ? siteVisitRaw.photos
+      : [];
+    const photos: EstimateSiteVisitPhoto[] = rawPhotos
+      .map((entry, idx) => {
+        if (typeof entry === "string" && entry.trim()) {
+          return {
+            id: `photo_${idx + 1}`,
+            name: `Photo ${idx + 1}`,
+            url: entry.trim(),
+            type: "image/jpeg",
+          };
+        }
+        const p = asRecord(entry);
+        if (!p) return null;
+        const url = stringValue(p.url) || stringValue(p.dataUrl);
+        if (!url) return null;
+        return {
+          id: stringValue(p.id) || `photo_${idx + 1}`,
+          name: stringValue(p.name) || `Photo ${idx + 1}`,
+          url,
+          type: stringValue(p.type) || "image/jpeg",
+          size: numberValue(p.size),
+          addedAt: stringValue(p.addedAt),
+          actor: stringValue(p.actor),
+        };
+      })
+      .filter((item): item is EstimateSiteVisitPhoto => Boolean(item));
+
+    const technician = stringValue(siteVisitRaw.technician);
+    const visitedAt = stringValue(siteVisitRaw.visitedAt);
+    const accessNotes = stringValue(siteVisitRaw.accessNotes);
+    const findings = stringValue(siteVisitRaw.findings);
+    const recommendations = stringValue(siteVisitRaw.recommendations);
+    const measurements = stringValue(siteVisitRaw.measurements);
+    const employeeId = stringValue(siteVisitRaw.employeeId);
+
+    const hasText =
+      Boolean(technician) ||
+      Boolean(visitedAt) ||
+      Boolean(accessNotes) ||
+      Boolean(findings) ||
+      Boolean(recommendations) ||
+      Boolean(measurements);
+
+    if (hasText || photos.length > 0) {
+      siteVisit = {
+        employeeId: employeeId || undefined,
+        technician: technician || undefined,
+        visitedAt: visitedAt || undefined,
+        accessNotes: accessNotes || undefined,
+        findings: findings || undefined,
+        recommendations: recommendations || undefined,
+        measurements: measurements || undefined,
+        photos,
+      };
+    }
+  }
+
+  // Fallback: check attachments if siteVisit photos are empty
+  if (
+    Array.isArray(estimate.attachments) &&
+    (!siteVisit || siteVisit.photos.length === 0)
+  ) {
+    const attachmentPhotos: EstimateSiteVisitPhoto[] = estimate.attachments
+      .map((entry, idx) => {
+        if (typeof entry === "string" && entry.trim()) {
+          const lower = entry.toLowerCase();
+          if (
+            lower.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/) ||
+            lower.startsWith("data:image/")
+          ) {
+            return {
+              id: `attach_${idx + 1}`,
+              name: `Photo ${idx + 1}`,
+              url: entry.trim(),
+              type: "image/jpeg",
+            };
+          }
+        }
+        const a = asRecord(entry);
+        if (!a) return null;
+        const url = stringValue(a.url) || stringValue(a.dataUrl);
+        if (!url) return null;
+        const type = stringValue(a.type);
+        if (
+          type.startsWith("image/") ||
+          url.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i) ||
+          url.startsWith("data:image/")
+        ) {
+          return {
+            id: stringValue(a.id) || `attach_${idx + 1}`,
+            name: stringValue(a.name) || `Photo ${idx + 1}`,
+            url,
+            type: type || "image/jpeg",
+            size: numberValue(a.size),
+            addedAt: stringValue(a.addedAt),
+            actor: stringValue(a.actor),
+          };
+        }
+        return null;
+      })
+      .filter((item): item is EstimateSiteVisitPhoto => Boolean(item));
+
+    if (attachmentPhotos.length > 0) {
+      siteVisit = siteVisit
+        ? { ...siteVisit, photos: attachmentPhotos }
+        : { photos: attachmentPhotos };
+    }
+  }
+
   const snapshot: EstimateShareSnapshot = {
     token,
     estimateId,
@@ -196,6 +325,7 @@ function mapPublicEstimateToSnapshot(
     companySignedBy: companySignedBy || undefined,
     companySignedAt: companySignedAt || undefined,
     companySignatureDataUrl: companySignatureDataUrl || undefined,
+    siteVisit,
   };
 
   const signedAt =
@@ -378,6 +508,16 @@ export function CustomerEstimatePage({
     snapshot?.status !== "expired" &&
     snapshot?.status !== "accepted" &&
     snapshot?.status !== "converted_to_job";
+  const hasSiteVisit = Boolean(
+    snapshot?.siteVisit &&
+      (snapshot.siteVisit.photos.length > 0 ||
+        snapshot.siteVisit.findings ||
+        snapshot.siteVisit.technician ||
+        snapshot.siteVisit.accessNotes ||
+        snapshot.siteVisit.recommendations ||
+        snapshot.siteVisit.measurements ||
+        snapshot.status === "inspected"),
+  );
 
   useEffect(() => {
     if (!wantAccept || !canSign || loading) return;
@@ -590,6 +730,10 @@ export function CustomerEstimatePage({
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
                 Changes requested
               </span>
+            ) : snapshot.status === "inspected" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                <ShieldCheck className="size-3.5" /> Site Inspected
+              </span>
             ) : preparing ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
                 In progress
@@ -601,6 +745,21 @@ export function CustomerEstimatePage({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {hasSiteVisit && (snapshot.siteVisit?.photos?.length ?? 0) > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  document
+                    .getElementById("site-inspection-section")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                className="gap-1.5"
+              >
+                <Camera className="size-3.5 text-primary" />
+                <span>Photos ({snapshot.siteVisit?.photos.length})</span>
+              </Button>
+            ) : null}
             {canSign ? (
               <Button
                 size="sm"
@@ -646,7 +805,58 @@ export function CustomerEstimatePage({
           </div>
         </div>
 
-        {preparing ? (
+        {hasSiteVisit ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50/70 p-3.5 text-xs sm:text-sm text-sky-950 shadow-2xs print:hidden">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                <Camera className="size-4" />
+              </div>
+              <div>
+                <span className="font-semibold text-sky-900">
+                  {snapshot.status === "inspected"
+                    ? "Site Inspection Completed"
+                    : "Site Inspection Report Attached"}
+                </span>
+                {snapshot.siteVisit?.technician ? (
+                  <span className="text-sky-800">
+                    {" "}
+                    · Inspected by {snapshot.siteVisit.technician}
+                  </span>
+                ) : null}
+                {snapshot.siteVisit?.visitedAt ? (
+                  <span className="text-sky-700">
+                    {" "}
+                    on {formatDate(snapshot.siteVisit.visitedAt)}
+                  </span>
+                ) : null}
+                {(snapshot.siteVisit?.photos?.length ?? 0) > 0 ? (
+                  <span className="text-sky-700">
+                    {" "}
+                    ({snapshot.siteVisit?.photos.length}{" "}
+                    {snapshot.siteVisit?.photos.length === 1
+                      ? "photo"
+                      : "photos"}
+                    )
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 border-sky-300 bg-white text-xs font-medium text-sky-900 hover:bg-sky-50 hover:text-sky-950"
+              onClick={() => {
+                document
+                  .getElementById("site-inspection-section")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              View report &amp; photos ↓
+            </Button>
+          </div>
+        ) : null}
+
+        {preparing && snapshot.status !== "inspected" ? (
           <div className="rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 print:hidden">
             Your professional is still preparing this estimate
             {snapshot.status === "site_visit"
@@ -709,6 +919,14 @@ export function CustomerEstimatePage({
           </div>
         ) : null}
 
+        {/* If status is inspected or site_visit, show the inspection section first */}
+        {snapshot.status === "inspected" || snapshot.status === "site_visit" ? (
+          <CustomerSiteInspectionSection
+            siteVisit={snapshot.siteVisit}
+            status={snapshot.status}
+          />
+        ) : null}
+
         {/* 2-page document preview with signature field on page 2 */}
         <EstimatePdfDocument
           snapshot={snapshot}
@@ -719,6 +937,14 @@ export function CustomerEstimatePage({
             ) : undefined
           }
         />
+
+        {/* If status is not inspected / site_visit, show the inspection section after the proposal document */}
+        {snapshot.status !== "inspected" && snapshot.status !== "site_visit" ? (
+          <CustomerSiteInspectionSection
+            siteVisit={snapshot.siteVisit}
+            status={snapshot.status}
+          />
+        ) : null}
 
         {approval ? (
           <div className="mx-auto flex max-w-[8.5in] items-center gap-2.5 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 print:hidden">
@@ -816,6 +1042,323 @@ function CustomerSignSlot({
         </div>
       </div>
     </div>
+  );
+}
+
+function CustomerSiteInspectionSection({
+  siteVisit,
+  status,
+}: {
+  siteVisit?: EstimateShareSiteVisit;
+  status?: string;
+}) {
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+
+  const photos = siteVisit?.photos || [];
+  const hasPhotos = photos.length > 0;
+  const isInspected = status === "inspected" || status === "site_visit";
+  const hasDetails = Boolean(
+    siteVisit?.technician ||
+      siteVisit?.visitedAt ||
+      siteVisit?.accessNotes ||
+      siteVisit?.findings ||
+      siteVisit?.recommendations ||
+      siteVisit?.measurements,
+  );
+
+  useEffect(() => {
+    if (selectedPhotoIndex === null) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSelectedPhotoIndex(null);
+      } else if (event.key === "ArrowLeft") {
+        setSelectedPhotoIndex((prev) =>
+          prev !== null ? (prev - 1 + photos.length) % photos.length : 0,
+        );
+      } else if (event.key === "ArrowRight") {
+        setSelectedPhotoIndex((prev) =>
+          prev !== null ? (prev + 1) % photos.length : 0,
+        );
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPhotoIndex, photos.length]);
+
+  if (!siteVisit && !isInspected) return null;
+  if (!hasPhotos && !hasDetails && !isInspected) return null;
+
+  return (
+    <>
+      <section
+        id="site-inspection-section"
+        className="scroll-mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-xs print:m-0 print:break-before-page print:border-black/15 print:p-0 print:shadow-none"
+      >
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4 sm:px-6 print:border-black/10 print:bg-transparent">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+              <Camera className="size-4.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold tracking-tight text-foreground">
+                  Site Inspection &amp; Field Report
+                </h2>
+                {status === "inspected" ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                    <CheckCircle2 className="size-3 text-blue-600" /> Inspected
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                On-site observations, measurements, and photo documentation recorded by your professional.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {siteVisit?.technician ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground">
+                <User className="size-3.5 text-muted-foreground" />
+                <span>{siteVisit.technician}</span>
+              </span>
+            ) : null}
+            {siteVisit?.visitedAt ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground">
+                <Calendar className="size-3.5 text-muted-foreground" />
+                <span>{formatDate(siteVisit.visitedAt)}</span>
+              </span>
+            ) : null}
+            {hasPhotos ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-1 font-semibold text-primary">
+                <Camera className="size-3.5" />
+                <span>
+                  {photos.length} {photos.length === 1 ? "photo" : "photos"}
+                </span>
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="space-y-6 p-5 sm:p-6">
+          {/* Notes & details */}
+          {hasDetails ? (
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              {siteVisit?.findings ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-4 sm:col-span-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
+                    <FileText className="size-3.5 text-primary" />
+                    <span>Inspection Findings</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground">
+                    {siteVisit.findings}
+                  </p>
+                </div>
+              ) : null}
+
+              {siteVisit?.recommendations ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
+                    <Sparkles className="size-3.5 text-amber-600" />
+                    <span>Recommended Work</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground">
+                    {siteVisit.recommendations}
+                  </p>
+                </div>
+              ) : null}
+
+              {siteVisit?.measurements ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
+                    <Ruler className="size-3.5 text-emerald-600" />
+                    <span>Measurements &amp; Details</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground">
+                    {siteVisit.measurements}
+                  </p>
+                </div>
+              ) : null}
+
+              {siteVisit?.accessNotes ? (
+                <div className="rounded-lg border border-border bg-muted/20 p-4 sm:col-span-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground">
+                    <Building2 className="size-3.5 text-muted-foreground" />
+                    <span>Access &amp; Site Notes</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground">
+                    {siteVisit.accessNotes}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Photo gallery */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="size-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">
+                  Inspection Photos
+                </h3>
+                {hasPhotos ? (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    {photos.length}
+                  </span>
+                ) : null}
+              </div>
+              {hasPhotos ? (
+                <span className="hidden text-xs text-muted-foreground sm:inline print:hidden">
+                  Click any photo to enlarge
+                </span>
+              ) : null}
+            </div>
+
+            {hasPhotos ? (
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3">
+                {photos.map((photo, index) => (
+                  <div
+                    key={photo.id || index}
+                    onClick={() => setSelectedPhotoIndex(index)}
+                    className="group relative cursor-pointer overflow-hidden rounded-lg border border-border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-md print:cursor-default print:border-black/15 print:shadow-none"
+                  >
+                    <div className="relative aspect-4/3 w-full overflow-hidden bg-muted/30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.url}
+                        alt={photo.name || `Site photo ${index + 1}`}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 print:transform-none"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100 print:hidden">
+                        <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white shadow-sm backdrop-blur-xs">
+                          <Maximize2 className="size-3.5" />
+                          Enlarge
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-border bg-card p-2.5 print:border-black/10">
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {photo.name || `Photo ${index + 1}`}
+                      </p>
+                      {photo.size ? (
+                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                          {photo.size > 1024 * 1024
+                            ? `${(photo.size / (1024 * 1024)).toFixed(1)} MB`
+                            : `${Math.round(photo.size / 1024)} KB`}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+                No inspection photos attached.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Fullscreen Lightbox Modal */}
+      {selectedPhotoIndex !== null && photos[selectedPhotoIndex] && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 sm:p-6 backdrop-blur-md transition-opacity animate-in fade-in-0 duration-150 print:hidden"
+              onClick={() => setSelectedPhotoIndex(null)}
+              role="dialog"
+              aria-modal="true"
+            >
+              {/* Top controls */}
+              <div
+                className="absolute inset-x-4 top-4 z-10 flex items-center justify-between text-white sm:inset-x-6 sm:top-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md bg-white/15 px-2.5 py-1 text-xs font-medium tracking-wide">
+                    {selectedPhotoIndex + 1} of {photos.length}
+                  </span>
+                  <span className="max-w-xs truncate text-xs text-white/80 sm:max-w-md">
+                    {photos[selectedPhotoIndex].name}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={photos[selectedPhotoIndex].url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+                    title="Open full image in new tab"
+                  >
+                    <ExternalLink className="size-4" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoIndex(null)}
+                    className="cursor-pointer rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+                    aria-label="Close"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Prev button */}
+              {photos.length > 1 && (
+                <button
+                  type="button"
+                  aria-label="Previous photo"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedPhotoIndex((prev) =>
+                      prev !== null
+                        ? (prev - 1 + photos.length) % photos.length
+                        : 0,
+                    );
+                  }}
+                  className="absolute left-3 z-10 cursor-pointer rounded-full bg-white/15 p-2.5 text-white transition-colors hover:bg-white/30 sm:left-6"
+                >
+                  <ChevronLeft className="size-6" />
+                </button>
+              )}
+
+              {/* Image */}
+              <div
+                className="relative flex max-h-[85vh] max-w-[92vw] select-none items-center justify-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photos[selectedPhotoIndex].url}
+                  alt={photos[selectedPhotoIndex].name}
+                  className="max-h-[82vh] max-w-[90vw] rounded-md object-contain shadow-2xl"
+                />
+              </div>
+
+              {/* Next button */}
+              {photos.length > 1 && (
+                <button
+                  type="button"
+                  aria-label="Next photo"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedPhotoIndex((prev) =>
+                      prev !== null ? (prev + 1) % photos.length : 0,
+                    );
+                  }}
+                  className="absolute right-3 z-10 cursor-pointer rounded-full bg-white/15 p-2.5 text-white transition-colors hover:bg-white/30 sm:right-6"
+                >
+                  <ChevronRight className="size-6" />
+                </button>
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 

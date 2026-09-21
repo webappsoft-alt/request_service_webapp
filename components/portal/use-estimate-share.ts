@@ -18,6 +18,27 @@ export type EstimateShareLine = {
   total: number;
 };
 
+export type EstimateSiteVisitPhoto = {
+  id: string;
+  name: string;
+  url: string;
+  type?: string;
+  size?: number;
+  addedAt?: string;
+  actor?: string;
+};
+
+export type EstimateShareSiteVisit = {
+  employeeId?: string;
+  technician?: string;
+  visitedAt?: string;
+  accessNotes?: string;
+  findings?: string;
+  recommendations?: string;
+  measurements?: string;
+  photos: EstimateSiteVisitPhoto[];
+};
+
 export type EstimateShareSnapshot = {
   token: string;
   estimateId: string;
@@ -54,6 +75,7 @@ export type EstimateShareSnapshot = {
   companySignedBy?: string;
   companySignedAt?: string;
   companySignatureDataUrl?: string;
+  siteVisit?: EstimateShareSiteVisit;
 };
 
 export type EstimateApproval = {
@@ -163,6 +185,26 @@ export function buildEstimateSnapshot(
     companySignedBy: extras.companySignedBy,
     companySignedAt: extras.companySignedAt,
     companySignatureDataUrl: extras.companySignatureDataUrl,
+    siteVisit: estimate.siteVisit
+      ? {
+          employeeId: estimate.siteVisit.employeeId,
+          technician: estimate.siteVisit.technician,
+          visitedAt: estimate.siteVisit.visitedAt,
+          accessNotes: estimate.siteVisit.accessNotes,
+          findings: estimate.siteVisit.findings,
+          recommendations: estimate.siteVisit.recommendations,
+          measurements: estimate.siteVisit.measurements,
+          photos: (estimate.siteVisit.photos || []).map((p) => ({
+            id: p.id,
+            name: p.name,
+            url: p.url,
+            type: p.type,
+            size: p.size,
+            addedAt: p.addedAt,
+            actor: p.actor,
+          })),
+        }
+      : undefined,
   };
 }
 

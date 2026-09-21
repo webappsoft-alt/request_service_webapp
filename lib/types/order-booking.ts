@@ -187,10 +187,25 @@ export interface CompletionDetails {
 }
 
 /** List card shape from `GET /api/orders`. */
+export interface OrderScopeItem {
+  id?: string;
+  _id?: string;
+  description: string;
+  kind?: string;
+  quantity?: number;
+  unitPrice?: number;
+  total?: number;
+  taxRate?: number;
+}
+
 export interface CustomerOrderListItem {
   id: string;
   orderNumber: string;
   status: OrderStatus | string;
+  orderType?: "fixed_service" | "pro_service";
+  jobStatus?: string;
+  estimateId?: string | null;
+  invoiceId?: string | null;
   /** Fixed service id — from order.serviceId (string or populated doc). */
   serviceId?: string;
   pricing: {
@@ -226,6 +241,10 @@ export interface CustomerOrderDetail {
   id: string;
   orderNumber: string;
   status: OrderStatus | string;
+  orderType?: "fixed_service" | "pro_service";
+  jobStatus?: string;
+  estimateId?: string | null;
+  invoiceId?: string | null;
   bookingId?: string;
   customerId?: string;
   providerId?: string;
@@ -243,9 +262,29 @@ export interface CustomerOrderDetail {
   service: CustomerOrderServiceSummary | null;
   provider: CustomerOrderProviderSummary | null;
   booking: CustomerOrderBookingSummary | null;
+  items?: OrderScopeItem[];
   changeOrders: ChangeOrderItem[];
   lifecycleAudit: LifecycleAuditEntry[];
   completionDetails?: CompletionDetails | null;
+  assignedEmployees?: Array<{
+    id?: string;
+    _id?: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    avatar?: string;
+    role?: string;
+  }>;
+  assignedContractors?: Array<{
+    id?: string;
+    _id?: string;
+    companyName?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 }

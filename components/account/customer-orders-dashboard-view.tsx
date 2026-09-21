@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye } from "lucide-react";
+import { Eye, FileText, Receipt, Sparkles } from "lucide-react";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
@@ -152,19 +152,28 @@ export function CustomerOrdersDashboardView() {
             exportValue: (row) => orderServiceTitle(row),
             cell: (row) => (
               <div>
-                <Link
-                  href={customerPaths.order(row.id)}
-                  onClick={() =>
-                    dispatch(
-                      setCustomerOrderDetail(customerOrderDetailFromListItem(row)),
-                    )
-                  }
-                  className="font-medium text-primary hover:underline"
-                >
-                  {orderServiceTitle(row)}
-                </Link>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Link
+                    href={customerPaths.order(row.id)}
+                    onClick={() =>
+                      dispatch(
+                        setCustomerOrderDetail(customerOrderDetailFromListItem(row)),
+                      )
+                    }
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {orderServiceTitle(row)}
+                  </Link>
+                  {row.orderType === "pro_service" ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                      <Sparkles className="size-2.5" />
+                      Pro Service
+                    </span>
+                  ) : null}
+                </div>
                 <p className="font-mono text-xs text-muted-foreground">
                   {row.orderNumber || row.id.slice(0, 8)}
+                  {row.provider?.companyName ? ` · ${row.provider.companyName}` : ""}
                 </p>
               </div>
             ),
@@ -220,6 +229,24 @@ export function CustomerOrdersDashboardView() {
             icon: <Eye className="size-3.5" />,
             quick: true,
           },
+          ...(row.invoiceId
+            ? [
+                {
+                  label: "Invoice",
+                  href: customerPaths.invoice(row.invoiceId),
+                  icon: <Receipt className="size-3.5" />,
+                },
+              ]
+            : []),
+          ...(row.estimateId
+            ? [
+                {
+                  label: "Estimate",
+                  href: customerPaths.estimate(row.estimateId),
+                  icon: <FileText className="size-3.5" />,
+                },
+              ]
+            : []),
         ]}
       />
     </PortalPage>

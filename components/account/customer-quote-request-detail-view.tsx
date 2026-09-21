@@ -1,18 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  Camera,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   ExternalLink,
   Eye,
   HelpCircle,
   MapPin,
+  Maximize2,
   MessageSquare,
   ShieldCheck,
   Sparkles,
@@ -360,6 +365,70 @@ export function CustomerQuoteRequestDetailView() {
   const timelineSteps = useMemo(() => {
     return batch ? buildTimelineSteps(batch) : [];
   }, [batch]);
+
+  const [previewPhotoIndex, setPreviewPhotoIndex] = useState<number | null>(
+    null,
+  );
+
+  const allPhotos = useMemo<string[]>(() => {
+    if (!batch) return [];
+    const list: string[] = [];
+    const seen = new Set<string>();
+
+    const add = (url?: unknown) => {
+      if (!url || typeof url !== "string") return;
+      const clean = url.trim();
+      if (clean && !seen.has(clean)) {
+        seen.add(clean);
+        list.push(clean);
+      }
+    };
+
+    (batch.photos || []).forEach(add);
+    (batch.images || []).forEach(add);
+
+    for (const ans of batch.answers || []) {
+      if (!ans?.value) continue;
+      if (
+        ans.value.startsWith("http://") ||
+        ans.value.startsWith("https://") ||
+        ans.value.startsWith("data:image/") ||
+        ans.value.includes("/uploads/")
+      ) {
+        add(ans.value);
+      }
+    }
+
+    for (const p of batch.professionals || []) {
+      (p.photos || []).forEach(add);
+      (p.images || []).forEach(add);
+      for (const e of p.estimates || []) {
+        (e.photos || []).forEach(add);
+        (e.images || []).forEach(add);
+      }
+    }
+
+    return list;
+  }, [batch]);
+
+  useEffect(() => {
+    if (previewPhotoIndex === null) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setPreviewPhotoIndex(null);
+      } else if (event.key === "ArrowLeft") {
+        setPreviewPhotoIndex((prev) =>
+          prev !== null ? (prev - 1 + allPhotos.length) % allPhotos.length : 0,
+        );
+      } else if (event.key === "ArrowRight") {
+        setPreviewPhotoIndex((prev) =>
+          prev !== null ? (prev + 1) % allPhotos.length : 0,
+        );
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewPhotoIndex, allPhotos.length]);
 
   // Consolidate all estimates linked to this request / batch
   const consolidatedEstimates = useMemo<ConsolidatedEstimate[]>(() => {
@@ -895,6 +964,48 @@ export function CustomerQuoteRequestDetailView() {
                 </p>
               )}
             </div>
+
+            {/* Attached Photos / Site Inspection Images */}
+            {allPhotos.length > 0 ? (
+              <div className="mt-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="flex items-center gap-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                    <Camera className="size-3.5 text-primary" />
+                    Attached photos & inspection images ({allPhotos.length})
+                  </h3>
+                  <span className="text-[11px] text-muted-foreground">
+                    Click to enlarge
+                  </span>
+                </div>
+                <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+                  {allPhotos.map((photoUrl, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setPreviewPhotoIndex(idx)}
+                      className="group relative aspect-4/3 overflow-hidden rounded-lg border border-border bg-muted/40 transition-all hover:border-primary/60 hover:shadow-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
+                      title="View full image"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photoUrl}
+                        alt={`Quote request image ${idx + 1}`}
+                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/25 flex items-center justify-center">
+                        <div className="rounded-full bg-black/60 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                          <Maximize2 className="size-3.5" />
+                        </div>
+                      </div>
+                      <span className="absolute bottom-1 right-1 rounded bg-black/65 px-1 py-0.5 text-[9px] font-mono text-white">
+                        {idx + 1}/{allPhotos.length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           {/* SECTION 3: Provider Activity & Contact */}
@@ -1209,6 +1320,87 @@ export function CustomerQuoteRequestDetailView() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Fullscreen Photo Lightbox Modal */}
+    {previewPhotoIndex !== null && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-xs p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Image Preview"
+            onClick={() => setPreviewPhotoIndex(null)}
+          >
+            {/* Top bar */}
+            <div
+              className="absolute top-4 inset-x-4 flex items-center justify-between z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
+                {previewPhotoIndex + 1} of {allPhotos.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewPhotoIndex(null)}
+                className="rounded-full bg-black/60 p-2 text-white hover:bg-black/80 transition-colors"
+                aria-label="Close image preview"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            {/* Navigation buttons */}
+            {allPhotos.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreviewPhotoIndex((prev) =>
+                      prev !== null
+                        ? (prev - 1 + allPhotos.length) % allPhotos.length
+                        : 0,
+                    );
+                  }}
+                  className="absolute left-4 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 transition-colors"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="size-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreviewPhotoIndex((prev) =>
+                      prev !== null
+                        ? (prev + 1) % allPhotos.length
+                        : 0,
+                    );
+                  }}
+                  className="absolute right-4 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 transition-colors"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="size-6" />
+                </button>
+              </>
+            ) : null}
+
+            {/* Main Image */}
+            <div
+              className="relative max-h-[85vh] max-w-[90vw] overflow-hidden rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={allPhotos[previewPhotoIndex]}
+                alt={`Image preview ${previewPhotoIndex + 1}`}
+                className="max-h-[85vh] max-w-[90vw] object-contain"
+              />
+            </div>
+          </div>,
+          document.body,
+        )
+      : null}
     </>
   );
 }

@@ -443,6 +443,14 @@ function parseOrderListItem(raw: unknown): CustomerOrderListItem | null {
       typeof record.orderNumber === "string" ? record.orderNumber : "",
     status:
       (typeof record.status === "string" && record.status) || "BOOKING_REQUESTED",
+    orderType:
+      record.orderType === "pro_service" ? "pro_service" : "fixed_service",
+    jobStatus:
+      typeof record.jobStatus === "string" ? record.jobStatus : undefined,
+    estimateId:
+      typeof record.estimateId === "string" ? record.estimateId : null,
+    invoiceId:
+      typeof record.invoiceId === "string" ? record.invoiceId : null,
     serviceId,
     pricing: {
       totalAmount: toNumber(pricing.totalAmount, 0),
@@ -622,6 +630,23 @@ function parseOrderDetail(response: unknown): CustomerOrderDetail {
       .map(parseLifecycleEntry)
       .filter((item): item is LifecycleAuditEntry => Boolean(item)),
     completionDetails: parseCompletionDetails(data.completionDetails),
+    orderType:
+      data.orderType === "pro_service" ? "pro_service" : "fixed_service",
+    jobStatus:
+      typeof data.jobStatus === "string" ? data.jobStatus : undefined,
+    estimateId:
+      typeof data.estimateId === "string" ? data.estimateId : null,
+    invoiceId:
+      typeof data.invoiceId === "string" ? data.invoiceId : null,
+    items: Array.isArray(data.items)
+      ? (data.items as CustomerOrderDetail["items"])
+      : undefined,
+    assignedEmployees: Array.isArray(data.assignedEmployees)
+      ? (data.assignedEmployees as CustomerOrderDetail["assignedEmployees"])
+      : undefined,
+    assignedContractors: Array.isArray(data.assignedContractors)
+      ? (data.assignedContractors as CustomerOrderDetail["assignedContractors"])
+      : undefined,
     createdAt: typeof data.createdAt === "string" ? data.createdAt : undefined,
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : undefined,
   };
@@ -963,6 +988,10 @@ export function customerOrderDetailFromListItem(
     id: item.id,
     orderNumber: item.orderNumber,
     status: item.status,
+    orderType: item.orderType,
+    jobStatus: item.jobStatus,
+    estimateId: item.estimateId,
+    invoiceId: item.invoiceId,
     pricing: {
       basePrice: item.pricing.basePrice,
       subtotal: item.pricing.subtotal,

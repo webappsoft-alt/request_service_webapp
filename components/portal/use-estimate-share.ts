@@ -50,6 +50,7 @@ export type EstimateShareSnapshot = {
   tax: number;
   total: number;
   createdAt: string;
+  status?: string;
   companySignedBy?: string;
   companySignedAt?: string;
   companySignatureDataUrl?: string;

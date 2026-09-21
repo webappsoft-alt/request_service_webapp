@@ -1,18 +1,35 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { readPendingQuote } from "@/lib/booking/format-quote-answers";
-import { getIntakeEstimate, getIntakeSteps, type IntakeAnswers } from "@/lib/data/intake";
+import {
+  getIntakeEstimate,
+  getIntakeSteps,
+  type IntakeAnswers,
+} from "@/lib/data/intake";
 import { getJobRecord } from "@/lib/data/jobs";
 import { isValidZip } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+function hasUsableAddress(answers: IntakeAnswers) {
+  const lat = Number(answers.lat);
+  const lng = Number(answers.lng);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const zipOk = isValidZip(String(answers.zip || ""));
+  const streetOk = Boolean(String(answers.street || "").trim());
+  return (hasCoords && streetOk) || (zipOk && streetOk);
+}
 
 export function RequestIntake({
   onComplete,
@@ -21,7 +38,8 @@ export function RequestIntake({
 }) {
   const searchParams = useSearchParams();
   const startingService = searchParams.get("service") ?? "";
-  const startingZip = searchParams.get("zip") ?? "";
+  const startingZipRaw = searchParams.get("zip") ?? "";
+  const startingZip = isValidZip(startingZipRaw) ? startingZipRaw.trim() : "";
   const startingJobSlug = searchParams.get("job") ?? "";
   const startingJob =
     startingService && startingJobSlug
@@ -30,31 +48,49 @@ export function RequestIntake({
 
   const [answers, setAnswers] = useState<IntakeAnswers>(() => {
     const pending = readPendingQuote();
+    const pendingZip = String(pending?.zip || "").trim();
     return {
       ...pending,
       service: startingService || pending?.service || "",
-      zip: startingZip || pending?.zip || "",
+      zip: startingZip || (isValidZip(pendingZip) ? pendingZip : ""),
+      street: pending?.street || "",
+      city: pending?.city || "",
+      state: pending?.state || "",
+      lat: pending?.lat || "",
+      lng: pending?.lng || "",
+      addressLabel: pending?.addressLabel || "",
       job: startingJob || pending?.job || "",
     };
   });
+  const [addressInput, setAddressInput] = useState(
+    () => answers.addressLabel || answers.street || "",
+  );
   const [stepIndex, setStepIndex] = useState(() => {
-    const initial = getIntakeSteps(startingService, startingZip);
+    const initial = getIntakeSteps(startingService, startingZip || undefined);
     const index = initial.findIndex((item) => {
       if (item.id === "service") return !startingService;
       if (item.id === "job") return !startingJob;
-      if (item.id === "zip") return !isValidZip(startingZip);
+      if (item.id === "address") return !startingZip;
       return true;
     });
     return index < 0 ? 0 : index;
   });
+  const [submitting, setSubmitting] = useState(false);
 
   const steps = useMemo(
-    () => getIntakeSteps(answers.service, answers.zip),
-    [answers.service, answers.zip]
+    () => getIntakeSteps(answers.service, startingZip || undefined),
+    [answers.service, startingZip],
   );
-  const step = steps[Math.min(stepIndex, steps.length - 1)];
-  const progress = ((stepIndex + 1) / steps.length) * 100;
+
+  useEffect(() => {
+    setStepIndex((current) => Math.min(current, Math.max(0, steps.length - 1)));
+  }, [steps.length]);
+
+  const safeIndex = Math.min(stepIndex, Math.max(0, steps.length - 1));
+  const step = steps[safeIndex];
+  const progress = ((safeIndex + 1) / Math.max(1, steps.length)) * 100;
   const estimate = getIntakeEstimate(answers);
+  const isLastStep = safeIndex >= steps.length - 1;
 
   function setAnswer(id: string, value: string) {
     setAnswers((current) => {
@@ -64,24 +100,82 @@ export function RequestIntake({
     });
   }
 
+  function applyPlace(place: PlaceAddress) {
+    const label =
+      place.formattedAddress ||
+      [place.streetAddress, place.city, place.state, place.zipCode]
+        .filter(Boolean)
+        .join(", ");
+    setAddressInput(label);
+    setAnswers((current) => ({
+      ...current,
+      addressLabel: label,
+      street: place.streetAddress || place.formattedAddress || "",
+      city: place.city || "",
+      state: place.state || "",
+      zip: place.zipCode || current.zip || "",
+      lat: String(place.latitude ?? ""),
+      lng: String(place.longitude ?? ""),
+    }));
+  }
+
   function canContinue() {
     if (!step) return false;
-    if (step.id === "zip") return isValidZip(answers.zip ?? "");
-    if (step.type === "contact") return Boolean(answers.name?.trim() && answers.email?.trim());
+    if (step.id === "address") return hasUsableAddress(answers);
+    if (step.type === "contact") {
+      return Boolean(answers.name?.trim() && answers.email?.trim());
+    }
+    if (step.type === "text" && step.id === "details") return true;
     if (step.type === "text") return true;
     return Boolean(answers[step.id]);
   }
 
-  function goNext() {
-    if (step.id === "zip" && !isValidZip(answers.zip ?? "")) {
-      toast.error("Enter a valid 5-digit ZIP code.");
+  async function goNext() {
+    if (!step || submitting) return;
+
+    if (step.id === "address" && !hasUsableAddress(answers)) {
+      toast.error("Select a complete service address from the suggestions.");
       return;
     }
-    if (stepIndex >= steps.length - 1) {
-      onComplete(answers);
+
+    if (!isLastStep) {
+      setStepIndex((value) => Math.min(value + 1, steps.length - 1));
       return;
     }
-    setStepIndex((value) => value + 1);
+
+    if (!hasUsableAddress(answers) && !startingZip) {
+      toast.error("Select a service address before sending.");
+      const addressStep = steps.findIndex((item) => item.id === "address");
+      if (addressStep >= 0) setStepIndex(addressStep);
+      return;
+    }
+    if (!answers.service?.trim()) {
+      toast.error("Pick a service before sending.");
+      setStepIndex(0);
+      return;
+    }
+    if (!answers.name?.trim() || !answers.email?.trim()) {
+      toast.error("Name and email are required.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await onComplete({
+        ...answers,
+        zip: answers.zip || startingZip || "",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!step) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        Loading questions…
+      </p>
+    );
   }
 
   return (
@@ -89,7 +183,7 @@ export function RequestIntake({
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-3 text-sm">
           <span className="font-medium text-foreground">
-            Question {Math.min(stepIndex + 1, steps.length)} of {steps.length}
+            Question {safeIndex + 1} of {steps.length}
           </span>
           <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
             {estimate?.category.shortName ?? "Choose a service"}
@@ -104,8 +198,12 @@ export function RequestIntake({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-xl font-semibold tracking-tight md:text-2xl">{step.title}</h2>
-        {step.hint ? <p className="text-sm leading-6 text-muted-foreground">{step.hint}</p> : null}
+        <h2 className="text-xl font-semibold tracking-tight md:text-2xl">
+          {step.title}
+        </h2>
+        {step.hint ? (
+          <p className="text-sm leading-6 text-muted-foreground">{step.hint}</p>
+        ) : null}
       </div>
 
       {step.type === "choice" ? (
@@ -121,11 +219,16 @@ export function RequestIntake({
                   "flex items-center justify-between gap-3 rounded-xl border px-4 py-3.5 text-left text-sm font-medium transition-colors",
                   selected
                     ? "border-primary bg-secondary text-foreground shadow-sm"
-                    : "bg-background hover:border-foreground/20 hover:bg-muted/50"
+                    : "bg-background hover:border-foreground/20 hover:bg-muted/50",
                 )}
               >
                 <span>{option.label}</span>
-                {selected ? <Check className="size-4 shrink-0 text-primary" aria-hidden="true" /> : null}
+                {selected ? (
+                  <Check
+                    className="size-4 shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                ) : null}
               </button>
             );
           })}
@@ -141,17 +244,28 @@ export function RequestIntake({
         />
       ) : null}
 
-      {step.type === "text" && step.id === "zip" ? (
+      {step.type === "text" && step.id === "address" ? (
         <Field>
-          <FieldLabel htmlFor="intake-zip">ZIP code</FieldLabel>
-          <Input
-            id="intake-zip"
-            value={answers.zip ?? ""}
-            onChange={(event) => setAnswer("zip", event.target.value)}
-            inputMode="numeric"
-            autoComplete="postal-code"
-            placeholder="78701"
+          <FieldLabel htmlFor="intake-address">Service address</FieldLabel>
+          <AddressAutocomplete
+            id="intake-address"
+            value={addressInput}
+            onChange={setAddressInput}
+            onSelect={applyPlace}
+            placeholder="Start typing street address…"
           />
+          {answers.city || answers.zip ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {[answers.street, answers.city, answers.state, answers.zip]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Pick an address from the suggestions so we can match nearby licensed
+              professionals.
+            </p>
+          )}
         </Field>
       ) : null}
 
@@ -191,13 +305,26 @@ export function RequestIntake({
       ) : null}
 
       <div className="flex items-center justify-between gap-3">
-        <Button type="button" variant="ghost" onClick={() => setStepIndex((value) => Math.max(0, value - 1))} disabled={stepIndex === 0}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => setStepIndex((value) => Math.max(0, value - 1))}
+          disabled={safeIndex === 0 || submitting}
+        >
           <ArrowLeft data-icon="inline-start" />
           Back
         </Button>
-        <Button type="button" onClick={goNext} disabled={!canContinue()}>
-          {stepIndex >= steps.length - 1 ? "Send quote request" : "Continue"}
-          <ArrowRight data-icon="inline-end" />
+        <Button
+          type="button"
+          onClick={() => void goNext()}
+          disabled={!canContinue() || submitting}
+        >
+          {submitting
+            ? "Sending…"
+            : isLastStep
+              ? "Send quote request"
+              : "Continue"}
+          {!submitting ? <ArrowRight data-icon="inline-end" /> : null}
         </Button>
       </div>
     </div>

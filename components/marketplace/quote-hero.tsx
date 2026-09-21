@@ -115,18 +115,18 @@ export function QuoteHero({ categoryName }: { categoryName?: string }) {
 
 export function QuoteGuide() {
   return (
-    <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
+    <aside className="flex w-full min-w-0 flex-col gap-4 lg:sticky lg:top-24">
       <div className="rounded-xl border bg-card p-5 shadow-sm">
         <h2 className="text-sm font-semibold">What happens next</h2>
         <ol className="mt-4 flex flex-col gap-4">
           {nextSteps.map((step) => (
-            <li key={step.n} className="flex gap-3">
+            <li key={step.n} className="flex min-w-0 gap-3">
               <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
                 {step.n}
               </span>
-              <span>
+              <span className="min-w-0">
                 <span className="block text-sm font-medium">{step.title}</span>
-                <span className="mt-0.5 block text-sm leading-5 text-muted-foreground">
+                <span className="mt-0.5 block text-sm leading-5 break-words text-muted-foreground">
                   {step.body}
                 </span>
               </span>
@@ -139,12 +139,15 @@ export function QuoteGuide() {
         <h2 className="text-sm font-semibold">Before you request</h2>
         <ul className="mt-4 flex flex-col gap-3">
           {assurances.map((item) => (
-            <li key={item.label} className="flex items-start gap-2.5 text-sm">
+            <li
+              key={item.label}
+              className="flex min-w-0 items-start gap-2.5 text-sm break-words"
+            >
               <item.icon
                 className="mt-0.5 size-4 shrink-0 text-primary"
                 aria-hidden="true"
               />
-              {item.label}
+              <span className="min-w-0">{item.label}</span>
             </li>
           ))}
         </ul>

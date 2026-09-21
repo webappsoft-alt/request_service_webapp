@@ -30,7 +30,7 @@ import type {
 import type { PortalCalendarEvent, PortalRequest } from "@/lib/data/portal";
 import type { Estimate, Job } from "@/lib/types";
 
-export const REQUESTS_DEFAULT_LIMIT = 20;
+export const REQUESTS_DEFAULT_LIMIT = 10;
 
 export function requestsCacheKey(
   status = "",
@@ -146,10 +146,33 @@ export const fetchRequests = createAsyncThunk<
   const state = getState().requests ?? initialState;
   const hasParams = params !== undefined && params !== null;
   const targetPage = params?.page ?? state.page;
-  const targetLimit = params?.limit ?? state.limit;
-  const targetStatus = hasParams && "status" in params ? (params.status || "") : state.status;
-  const targetSearch = hasParams && "search" in params ? (params.search || "") : state.search;
-  const key = requestsCacheKey(targetStatus, targetSearch, targetPage, targetLimit);
+  const targetLimit = params?.limit ?? state.limit ?? REQUESTS_DEFAULT_LIMIT;
+  const targetStatus =
+    hasParams && "status" in params ? params.status || "" : state.status;
+  const targetSearch =
+    hasParams && "search" in params ? params.search || "" : state.search;
+  const force = Boolean(params?.force);
+  const key = requestsCacheKey(
+    targetStatus,
+    targetSearch,
+    targetPage,
+    targetLimit,
+  );
+
+  // Never trust an empty cached page — it goes stale when a new lead arrives
+  // while summary (always forced) already shows the badge count.
+  const cachedPage = state.pagesCache[key];
+  if (!force && Array.isArray(cachedPage) && cachedPage.length > 0) {
+    return {
+      items: cachedPage,
+      page: targetPage,
+      total: state.total,
+      totalPages: state.totalPages,
+      search: targetSearch,
+      status: targetStatus,
+      cacheKey: key,
+    };
+  }
 
   try {
     let resultItems: PortalRequest[] = [];
@@ -167,7 +190,7 @@ export const fetchRequests = createAsyncThunk<
       });
       resultItems = result.items;
       resultTotal = result.total;
-      resultTotalPages = result.totalPages;
+      resultTotalPages = Math.max(1, result.totalPages || 1);
     } catch {
       // Fallback to listRequests if queryRequests is unavailable
       resultItems = await listRequests({
@@ -400,6 +423,30 @@ const requestsSlice = createSlice({
   name: "requests",
   initialState,
   reducers: {
+    setRequestsPage(state, action: PayloadAction<number>) {
+      state.page = Math.max(1, action.payload);
+      const key = requestsCacheKey(
+        state.status,
+        state.search,
+        state.page,
+        state.limit,
+      );
+      if (key in state.pagesCache) {
+        state.items = state.pagesCache[key];
+      }
+    },
+    setRequestsSearch(state, action: PayloadAction<string>) {
+      state.search = action.payload;
+      state.page = 1;
+    },
+    setRequestsStatus(state, action: PayloadAction<string>) {
+      state.status = action.payload;
+      state.page = 1;
+      state.pagesCache = {};
+    },
+    invalidateRequestsCache(state) {
+      state.pagesCache = {};
+    },
     setRequestStatusLocal(
       state,
       action: PayloadAction<{ id: string; status: PortalRequest["status"] }>,
@@ -579,14 +626,26 @@ const requestsSlice = createSlice({
         state.error = null;
         const targetPage = action.meta.arg?.page ?? state.page;
         const targetLimit = action.meta.arg?.limit ?? state.limit;
-        const targetStatus = action.meta.arg && "status" in action.meta.arg ? (action.meta.arg.status || "") : state.status;
-        const targetSearch = action.meta.arg && "search" in action.meta.arg ? (action.meta.arg.search || "") : state.search;
-        const key = requestsCacheKey(targetStatus, targetSearch, targetPage, targetLimit);
+        const targetStatus =
+          action.meta.arg && "status" in action.meta.arg
+            ? action.meta.arg.status || ""
+            : state.status;
+        const targetSearch =
+          action.meta.arg && "search" in action.meta.arg
+            ? action.meta.arg.search || ""
+            : state.search;
+        const key = requestsCacheKey(
+          targetStatus,
+          targetSearch,
+          targetPage,
+          targetLimit,
+        );
 
-        if (state.pagesCache[key] && state.pagesCache[key].length >= 0) {
-          state.items = state.pagesCache[key];
+        const cached = state.pagesCache[key];
+        if (Array.isArray(cached) && cached.length > 0) {
+          state.items = cached;
           state.loading = false;
-        } else if (state.items.length === 0) {
+        } else {
           state.loading = true;
         }
       })
@@ -595,8 +654,9 @@ const requestsSlice = createSlice({
         state.items = action.payload.items;
         state.pagesCache[action.payload.cacheKey] = action.payload.items;
         state.page = action.payload.page;
+        state.limit = REQUESTS_DEFAULT_LIMIT;
         state.total = action.payload.total;
-        state.totalPages = action.payload.totalPages;
+        state.totalPages = Math.max(1, action.payload.totalPages);
         state.search = action.payload.search;
         state.status = action.payload.status;
         // Warm up details cache with retrieved items
@@ -797,6 +857,10 @@ const requestsSlice = createSlice({
 });
 
 export const {
+  setRequestsPage,
+  setRequestsSearch,
+  setRequestsStatus,
+  invalidateRequestsCache,
   setRequestStatusLocal,
   upsertRequestItem,
   upsertLeadTask,

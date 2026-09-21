@@ -1,6 +1,7 @@
 import { getJobStartingPrice, getCategoryStartingPrice } from "@/lib/data/provider-media";
 import { getQualifyQuestions } from "@/lib/data/service-directory";
 import { getServiceCategoryBySlug, serviceCategories } from "@/lib/data/services";
+import { isValidZip } from "@/lib/format";
 
 export type IntakeAnswers = Record<string, string>;
 
@@ -12,7 +13,12 @@ export type IntakeStep = {
   options?: { value: string; label: string }[];
 };
 
-export function getIntakeSteps(serviceSlug?: string, zip?: string): IntakeStep[] {
+/**
+ * Build intake steps.
+ * `prefilledZip` skips the ZIP question only when it is already a valid 5-digit ZIP
+ * (e.g. from `?zip=`). Do not pass the in-progress typed ZIP — that hid the field.
+ */
+export function getIntakeSteps(serviceSlug?: string, prefilledZip?: string): IntakeStep[] {
   const category = serviceSlug ? getServiceCategoryBySlug(serviceSlug) : undefined;
   const steps: IntakeStep[] = [
     {
@@ -119,11 +125,11 @@ export function getIntakeSteps(serviceSlug?: string, zip?: string): IntakeStep[]
     }
   );
 
-  if (!zip) {
+  if (!isValidZip(String(prefilledZip || ""))) {
     steps.push({
-      id: "zip",
-      title: "What is the job ZIP code?",
-      hint: "We match licensed companies that actually cover that area.",
+      id: "address",
+      title: "Where is the job located?",
+      hint: "Select a service address so we can match licensed companies that cover that area.",
       type: "text",
     });
   }

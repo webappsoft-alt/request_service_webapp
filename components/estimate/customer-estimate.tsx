@@ -182,6 +182,7 @@ function mapPublicEstimateToSnapshot(
     tax: numberValue(estimate.tax),
     total: numberValue(estimate.total),
     createdAt: toIso(estimate.createdAt) || new Date().toISOString(),
+    status: stringValue(estimate.status) || undefined,
     companySignedBy: companySignedBy || undefined,
     companySignedAt: companySignedAt || undefined,
     companySignatureDataUrl: companySignatureDataUrl || undefined,
@@ -216,6 +217,7 @@ export function CustomerEstimatePage({ token }: { token: string }) {
   const [approval, setApproval] = useState<EstimateApproval | undefined>(
     undefined,
   );
+  const [rejecting, setRejecting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -281,6 +283,7 @@ export function CustomerEstimatePage({ token }: { token: string }) {
       );
     } catch (err) {
       showApiErrorToast(err, "Unable to approve this estimate.");
+      return;
     }
 
     const nextApproval: EstimateApproval = {
@@ -292,9 +295,31 @@ export function CustomerEstimatePage({ token }: { token: string }) {
     share.approve(snapshot, signedBy, signatureImageBase64);
     setApproval(nextApproval);
     toast.success(
-      "Estimate signed and approved! The company has been notified.",
+      "Estimate signed and approved! Other estimates for this request were declined. The company has been notified.",
     );
     void load();
+  }
+
+  async function rejectEstimate() {
+    if (!snapshot || rejecting) return;
+    const confirmed = window.confirm(
+      "Decline this estimate? The professional will be notified.",
+    );
+    if (!confirmed) return;
+    setRejecting(true);
+    try {
+      await postData(
+        publicApi.estimateReject(token),
+        { reason: "Customer declined this estimate." },
+        { token: null, skipLogoutOn401: true },
+      );
+      toast.success("Estimate declined.");
+      void load();
+    } catch (err) {
+      showApiErrorToast(err, "Unable to decline this estimate.");
+    } finally {
+      setRejecting(false);
+    }
   }
 
   if (loading) {
@@ -338,6 +363,10 @@ export function CustomerEstimatePage({ token }: { token: string }) {
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
                 <CheckCircle2 className="size-3.5" /> Approved
               </span>
+            ) : snapshot.status === "rejected" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                Declined
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                 <ShieldCheck className="size-3.5" /> Ready for review
@@ -345,6 +374,19 @@ export function CustomerEstimatePage({ token }: { token: string }) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {!approval &&
+            snapshot.status !== "rejected" &&
+            snapshot.status !== "expired" &&
+            snapshot.status !== "converted_to_job" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={rejecting}
+                onClick={() => void rejectEstimate()}
+              >
+                {rejecting ? "Declining…" : "Decline estimate"}
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"
@@ -362,9 +404,13 @@ export function CustomerEstimatePage({ token }: { token: string }) {
           snapshot={snapshot}
           approval={approval}
           customerSlot={
-            approval ? undefined : (
-              <CustomerSignSlot snapshot={snapshot} onSign={approve} />
-            )
+            approval ||
+            snapshot.status === "rejected" ||
+            snapshot.status === "expired"
+              ? undefined
+              : (
+                  <CustomerSignSlot snapshot={snapshot} onSign={approve} />
+                )
           }
         />
 

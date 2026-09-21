@@ -13,7 +13,6 @@ import { PortalPage } from "@/components/portal/portal-page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listPublicChatThreads } from "@/lib/api/chat-client";
-import { loadRememberedCustomerEstimates } from "@/lib/api/customer-estimates";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatOrderMoney, orderServiceTitle } from "@/lib/orders/order-display";
 import { formatOrderStatus } from "@/lib/orders/order-status";
@@ -25,16 +24,11 @@ import {
   selectCustomerOrdersLoading,
   selectCustomerOrdersPagination,
 } from "@/store/ordersSlice";
-
-type EstimateRow = {
-  id: string;
-  number: string;
-  title: string;
-  status: string;
-  total: number;
-  shareToken: string;
-  provider?: { companyName?: string } | null;
-};
+import {
+  fetchCustomerEstimates,
+  selectCustomerApiEstimates,
+  selectCustomerApiEstimatesLoading,
+} from "@/store/customerQuotesSlice";
 
 function StatCard({
   label,
@@ -69,9 +63,9 @@ export function CustomerDashboardView() {
   const orders = useAppSelector(selectCustomerOrders);
   const ordersLoading = useAppSelector(selectCustomerOrdersLoading);
   const pagination = useAppSelector(selectCustomerOrdersPagination);
+  const estimates = useAppSelector(selectCustomerApiEstimates);
+  const estimatesLoading = useAppSelector(selectCustomerApiEstimatesLoading);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [estimates, setEstimates] = useState<EstimateRow[]>([]);
-  const [estimatesLoading, setEstimatesLoading] = useState(true);
 
   const firstName =
     String(user?.firstName || "").trim() ||
@@ -79,6 +73,7 @@ export function CustomerDashboardView() {
 
   useEffect(() => {
     void dispatch(fetchCustomerOrders({ page: 1, limit: 5 }));
+    void dispatch(fetchCustomerEstimates());
   }, [dispatch]);
 
   useEffect(() => {
@@ -105,38 +100,6 @@ export function CustomerDashboardView() {
     };
   }, [user?.email]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      setEstimatesLoading(true);
-      try {
-        const list = await loadRememberedCustomerEstimates();
-        if (!cancelled) {
-          setEstimates(
-            list.map((item) => ({
-              id: item.id,
-              number: item.number,
-              title: item.title,
-              status: item.status,
-              total: item.total,
-              shareToken: item.shareToken,
-              provider: item.provider
-                ? { companyName: item.provider.companyName }
-                : null,
-            })),
-          );
-        }
-      } catch {
-        if (!cancelled) setEstimates([]);
-      } finally {
-        if (!cancelled) setEstimatesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const openOrders = useMemo(
     () =>
       orders.filter(
@@ -162,12 +125,19 @@ export function CustomerDashboardView() {
       title={`Welcome back, ${firstName}`}
       description="Track orders, review estimates from professionals, and message providers — without leaving your account."
       actions={
-        <Button asChild variant="outline" size="sm">
-          <Link href={customerPaths.site}>
-            Browse services
-            <ArrowRight data-icon="inline-end" />
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm">
+            <Link href={customerPaths.estimateRequest}>
+              Request new estimate
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href={customerPaths.site}>
+              Browse services
+              <ArrowRight data-icon="inline-end" />
+            </Link>
+          </Button>
+        </div>
       }
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -296,8 +266,14 @@ export function CustomerDashboardView() {
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
-                When a professional sends you an estimate link, open it to
-                review and sign — it will show up here afterward.
+                No estimates yet.{" "}
+                <Link
+                  href={customerPaths.estimateRequest}
+                  className="font-medium text-[#003F7D] underline-offset-2 hover:underline"
+                >
+                  Request a new estimate
+                </Link>{" "}
+                to send your job details to matching professionals.
               </p>
             )}
           </CardContent>
@@ -305,6 +281,12 @@ export function CustomerDashboardView() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
+        <Button asChild size="sm">
+          <Link href={customerPaths.estimateRequest}>
+            <FileText data-icon="inline-start" />
+            Request new estimate
+          </Link>
+        </Button>
         <Button asChild variant="outline" size="sm">
           <Link href={customerPaths.messages}>
             <MessageCircle data-icon="inline-start" />

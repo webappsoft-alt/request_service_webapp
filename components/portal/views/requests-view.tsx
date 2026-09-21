@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -31,14 +31,21 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchRequests,
   fetchRequestsSummary,
+  invalidateRequestsCache,
   patchLeadStatus,
+  REQUESTS_DEFAULT_LIMIT,
   requestsCacheKey,
   setRequestStatusLocal,
+  setRequestsPage,
+  setRequestsSearch,
+  setRequestsStatus,
 } from "@/store/requestsSlice";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import type { RequestStatus } from "@/lib/types";
+
+const SEARCH_DEBOUNCE_MS = 400;
 
 function sourceLabel(source?: string) {
   if (source === "profile_view") return "Profile view";
@@ -99,21 +106,6 @@ const filters = [
   { value: "closed", label: "History" },
 ];
 
-function matchesFilter(request: PortalRequest, status: string) {
-  if (!status) return true;
-  if (status === "new") return request.status === "new" || request.status === "viewed";
-  if (status === "contacted") {
-    return (
-      request.status === "contacted" ||
-      request.status === "estimate_sent" ||
-      request.status === "accepted" ||
-      request.status === "converted_to_job"
-    );
-  }
-  if (status === "closed") return request.status === "declined" || request.status === "closed";
-  return request.status === (status as RequestStatus);
-}
-
 export function RequestsView() {
   const dispatch = useAppDispatch();
   const reduxRequests = useAppSelector((state) => state.requests);
@@ -124,12 +116,39 @@ export function RequestsView() {
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const [open, setOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState(reduxRequests.search || "");
+  const [actionLoading, setActionLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const archivedOnly = status === "archived";
 
-  const cacheKey = requestsCacheKey(status);
+  const page = reduxRequests.page || 1;
+  const limit = reduxRequests.limit || REQUESTS_DEFAULT_LIMIT;
+  const total = reduxRequests.total || 0;
+  const totalPages = Math.max(1, reduxRequests.totalPages || 1);
+  const search = reduxRequests.search || "";
+
+  // Map filter-tab values to API status when needed. "All" = no status filter.
+  const apiStatus = archivedOnly ? "" : status;
+
+  const cacheKey = requestsCacheKey(apiStatus, search, page, limit);
   const cachedItems = reduxRequests.pagesCache[cacheKey];
-  const items = cachedItems ?? (reduxRequests.items.length > 0 ? reduxRequests.items : []);
-  const hasCache = Boolean(cachedItems || reduxRequests.items.length > 0);
+  const items =
+    Array.isArray(cachedItems) && cachedItems.length > 0
+      ? cachedItems
+      : reduxRequests.items.length > 0
+        ? reduxRequests.items
+        : [];
+  const hasCache = Array.isArray(cachedItems) && cachedItems.length > 0;
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    if ((reduxRequests.status || "") !== apiStatus) {
+      dispatch(setRequestsStatus(apiStatus));
+    }
+  }, [apiStatus, dispatch, reduxRequests.status]);
 
   const updateLeadStatus = useCallback(
     async (id: string, newStatus: RequestStatus, message: string) => {
@@ -145,26 +164,43 @@ export function RequestsView() {
     [dispatch, records],
   );
 
-  const loadLeads = useCallback(async () => {
-    try {
-      await Promise.allSettled([
-        dispatch(fetchRequests({ status, silent: true })).unwrap(),
-        dispatch(fetchRequestsSummary({ silent: true })).unwrap(),
-      ]);
-    } catch (error) {
-      toast.error(
-        typeof error === "string"
-          ? error
-          : error instanceof Error
-            ? error.message
-            : "Could not load leads.",
-      );
-    }
-  }, [dispatch, status]);
+  const refreshLeads = useCallback(
+    async (force = true) => {
+      setActionLoading(true);
+      try {
+        if (force) dispatch(invalidateRequestsCache());
+        await Promise.allSettled([
+          dispatch(
+            fetchRequests({
+              page,
+              limit,
+              status: apiStatus,
+              search,
+              force: true,
+              silent: true,
+            }),
+          ).unwrap(),
+          dispatch(fetchRequestsSummary({ silent: true })).unwrap(),
+        ]);
+      } catch (error) {
+        toast.error(
+          typeof error === "string"
+            ? error
+            : error instanceof Error
+              ? error.message
+              : "Could not load leads.",
+        );
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [dispatch, page, limit, apiStatus, search],
+  );
 
+  // Always revalidate from the API so new quote leads appear immediately.
   useEffect(() => {
-    void loadLeads();
-  }, [loadLeads]);
+    void refreshLeads(true);
+  }, [refreshLeads]);
 
   useEffect(() => {
     const handleLeadStatus = (event: Event) => {
@@ -206,7 +242,7 @@ export function RequestsView() {
         type === "ORDER_UPDATED" ||
         type === "INBOX_SUMMARY_INVALIDATE"
       ) {
-        void loadLeads();
+        void refreshLeads(true);
       }
     };
 
@@ -216,7 +252,28 @@ export function RequestsView() {
       window.removeEventListener("rs-lead-status", handleLeadStatus);
       window.removeEventListener("rs-realtime", handleRealtime);
     };
-  }, [dispatch, loadLeads]);
+  }, [dispatch, refreshLeads]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function handleSearchChange(value: string) {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setActionLoading(true);
+      dispatch(setRequestsSearch(value.trim()));
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  function handlePageChange(nextPage: number) {
+    if (nextPage === page) return;
+    setActionLoading(true);
+    dispatch(setRequestsPage(nextPage));
+  }
 
   const source = items.length > 0 ? items : records.mergeRequests(requests);
 
@@ -236,9 +293,8 @@ export function RequestsView() {
     });
   }, [source, customers]);
 
-  const rows = records
-    .listed("request", enrichedSource, archivedOnly)
-    .filter((request) => archivedOnly || matchesFilter(request, status));
+  // Server already filters by status/search; only apply archive listing locally.
+  const rows = records.listed("request", enrichedSource, archivedOnly);
 
   const summary = reduxRequests.summary;
   const newLeadsCount =
@@ -264,10 +320,14 @@ export function RequestsView() {
     summary?.unreadChats ??
     source.reduce((acc, r) => acc + (r.unreadMessagesCount || 0), 0);
 
+  const tableLoading =
+    actionLoading ||
+    (reduxRequests.loading && !hasCache && rows.length === 0);
+
   return (
     <PortalPage
       eyebrow="Work / Leads"
-      title={`Leads (${rows.length})`}
+      title={`Leads (${total || rows.length})`}
       description="Website quote requests, chat, and phone leads land here. Open a lead to see their answers, discuss the work, then send an estimate."
       actions={
         <Button size="sm" onClick={() => setOpen(true)}>
@@ -353,7 +413,17 @@ export function RequestsView() {
         filename="requests"
         countLabel="Leads"
         searchPlaceholder="Search leads"
-        loading={reduxRequests.loading && !hasCache && rows.length === 0}
+        loading={tableLoading}
+        pageSize={limit}
+        serverPagination={{
+          page,
+          pageSize: limit,
+          total,
+          totalPages,
+          onPageChange: handlePageChange,
+          search: searchInput,
+          onSearchChange: handleSearchChange,
+        }}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/requests/${row.id}`}

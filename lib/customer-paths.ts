@@ -3,7 +3,11 @@ export const customerPaths = {
   orders: "/account/dashboard/orders",
   order: (id: string) => `/account/dashboard/orders/${id}`,
   estimates: "/account/dashboard/estimates",
+  estimateRequest: "/account/dashboard/estimates/request",
+  estimateRequests: "/account/dashboard/estimates?tab=requests",
   estimate: (token: string) => `/account/dashboard/estimates/${token}`,
+  quoteRequest: (batchId: string) =>
+    `/account/dashboard/estimates/requests/${batchId}`,
   messages: "/account/dashboard/messages",
   settings: "/account/dashboard/settings",
   site: "/",

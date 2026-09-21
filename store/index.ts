@@ -29,6 +29,7 @@ import ordersReducer from "./ordersSlice";
 import providerOrdersReducer from "./providerOrdersSlice";
 import customersReducer from "./customersSlice";
 import estimatesReducer from "./estimatesSlice";
+import customerQuotesReducer from "./customerQuotesSlice";
 import teamReducer from "./teamSlice";
 import contractorsReducer from "./contractorsSlice";
 import vendorsReducer from "./vendorsSlice";
@@ -73,6 +74,7 @@ const rootReducer = combineReducers({
   providerOrders: providerOrdersReducer,
   customers: customersReducer,
   estimates: estimatesReducer,
+  customerQuotes: customerQuotesReducer,
   team: teamReducer,
   contractors: contractorsReducer,
   vendors: vendorsReducer,

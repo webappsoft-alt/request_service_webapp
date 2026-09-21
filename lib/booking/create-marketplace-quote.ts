@@ -49,6 +49,12 @@ export async function createMarketplaceQuote(input: {
   email: string;
   phone?: string;
   zip: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  lat?: number;
+  lng?: number;
+  radius?: number;
   serviceSlug: string;
   serviceName?: string;
   details: string;
@@ -74,6 +80,14 @@ export async function createMarketplaceQuote(input: {
     email: input.email.trim(),
     phone: input.phone?.trim() || "",
     zip: input.zip.trim(),
+    street: input.street?.trim() || "",
+    city: input.city?.trim() || "",
+    state: input.state?.trim() || "",
+    lat:
+      input.lat != null && Number.isFinite(input.lat) ? input.lat : undefined,
+    lng:
+      input.lng != null && Number.isFinite(input.lng) ? input.lng : undefined,
+    radius: input.radius,
     serviceSlug: input.serviceSlug,
     serviceName: input.serviceName?.trim() || category?.name || "Service request",
     categoryId: resolvedCategoryId,
@@ -149,11 +163,26 @@ export async function createMarketplaceQuote(input: {
 export function createQuoteFromIntake(answers: IntakeAnswers) {
   writePendingQuote(answers);
   const formatted = formatIntakeQuote(answers);
+  const zip = String(formatted.zip || answers.zip || "").trim();
+  const lat = Number(answers.lat);
+  const lng = Number(answers.lng);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  if (!zip && !hasCoords) {
+    throw new Error("Select a service address from the suggestions before sending.");
+  }
+  if (zip && !/^\d{5}$/.test(zip) && !hasCoords) {
+    throw new Error("Select a complete service address that includes a ZIP code.");
+  }
   return createMarketplaceQuote({
     name: answers.name ?? "",
     email: answers.email ?? "",
     phone: answers.phone,
-    zip: formatted.zip,
+    zip: zip || "00000",
+    street: answers.street || formatted.street,
+    city: answers.city || formatted.city,
+    state: answers.state || formatted.state,
+    lat: hasCoords ? lat : undefined,
+    lng: hasCoords ? lng : undefined,
     serviceSlug: formatted.serviceSlug,
     serviceName: formatted.serviceName,
     details: formatted.details,

@@ -46,7 +46,7 @@ export function formatIntakeQuote(answers: IntakeAnswers) {
   const listed: QuoteAnswer[] = [];
 
   for (const step of steps) {
-    if (step.type === "contact" || step.id === "zip" || step.id === "details") continue;
+    if (step.type === "contact" || step.id === "zip" || step.id === "address" || step.id === "details") continue;
     const raw = answers[step.id]?.trim();
     if (!raw) continue;
     const value = step.options?.find((option) => option.value === raw)?.label ?? raw;
@@ -69,6 +69,11 @@ export function formatIntakeQuote(answers: IntakeAnswers) {
     serviceSlug: answers.service ?? "",
     serviceName: answers.job || getServiceCategoryBySlug(answers.service ?? "")?.name || "Service request",
     zip: answers.zip ?? "",
+    street: answers.street ?? "",
+    city: answers.city ?? "",
+    state: answers.state ?? "",
+    lat: answers.lat ?? "",
+    lng: answers.lng ?? "",
     preferredTime: preferredWindow(answers.urgency ?? answers.timeline),
   };
 }

@@ -19,6 +19,10 @@ export const userApi = {
   me: "user/me",
   profile: "user/profile",
   updatePassword: "user/update-password",
+  /** GET customer quote/lead batches with professional seen tracking */
+  quoteRequests: "user/quote-requests",
+  /** GET customer estimates across CRM providers */
+  estimates: "user/estimates",
 } as const;
 
 /** Customer bookings & orders (Bearer JWT, role: customer). */
@@ -185,6 +189,8 @@ export const publicApi = {
   estimate: (token: string) => `public/estimates/${token}`,
   /** POST customer digital approval */
   estimateApprove: (token: string) => `public/estimates/${token}/approve`,
+  /** POST customer decline */
+  estimateReject: (token: string) => `public/estimates/${token}/reject`,
   /** GET public blogs — query: page, limit, search, category */
   blogs: "public/blogs",
   /** GET one public blog by slug */

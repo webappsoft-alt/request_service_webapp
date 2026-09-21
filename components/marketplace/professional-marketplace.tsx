@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CategoryExplorer } from "@/components/marketplace/category-explorer";
 import { QuoteGuide, QuoteHero } from "@/components/marketplace/quote-hero";
 import { RequestIntake } from "@/components/marketplace/request-intake";
 import { createQuoteFromIntake } from "@/lib/booking/create-marketplace-quote";
+import { customerPaths } from "@/lib/customer-paths";
 import { getIntakeEstimate, type IntakeAnswers } from "@/lib/data/intake";
 import type { Provider, ServiceCategory } from "@/lib/types";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
 
 export function ProfessionalMarketplace({
   category,
@@ -31,6 +35,9 @@ export function ProfessionalMarketplace({
   /** Enable GET /api/public/professionals (Find a Professional). */
   liveProfessionals?: boolean;
 }) {
+  const router = useRouter();
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const authUser = useAppSelector(selectAuthUser);
   const [answers, setAnswers] = useState<IntakeAnswers | null>(null);
   const [asking, setAsking] = useState(ask);
   const [sent, setSent] = useState<{ number: string; count: number } | null>(null);
@@ -63,14 +70,14 @@ export function ProfessionalMarketplace({
           <div
             className={
               plain
-                ? "container-site grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-7"
+                ? "container-site grid items-start gap-6 lg:grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] xl:gap-8"
                 : "container-site flex min-h-[calc(100dvh-4.25rem)] items-center py-8"
             }
           >
             <div
               className={
                 plain
-                  ? "w-full rounded-xl border bg-card p-5 shadow-sm sm:p-7"
+                  ? "w-full min-w-0 rounded-xl border bg-card p-5 shadow-sm sm:p-7"
                   : "mx-auto w-full max-w-2xl rounded-2xl border bg-card p-5 shadow-sm sm:p-7"
               }
             >
@@ -80,28 +87,49 @@ export function ProfessionalMarketplace({
               <RequestIntake
                 onComplete={async (next) => {
                   setAnswers(next);
-                  setAsking(false);
                   try {
                     const result = await createQuoteFromIntake(next);
                     if (!result.requests.length) {
-                      toast.error("Add a ZIP we can match, then send the request again.");
-                      setAsking(true);
+                      toast.error(
+                        "No matching professionals found near that address. Try another location.",
+                      );
                       return;
                     }
-                    const requestNumber = result.requestNumber || result.requests[0]?.number || "";
+                    const requestNumber =
+                      result.requestNumber || result.requests[0]?.number || "";
                     const providerCount = result.count || result.requests.length;
                     setSent({ number: requestNumber, count: providerCount });
                     toast.success(
-                      `${requestNumber} is in ${providerCount} matching ${providerCount === 1 ? "inbox" : "inboxes"}. They can send a written estimate.`,
+                      `${requestNumber} sent to ${providerCount} matching ${providerCount === 1 ? "professional" : "professionals"}.`,
+                    );
+                    const estimatesHref = customerPaths.estimateRequests;
+                    const role = String(authUser?.role || "").toLowerCase();
+                    const isCustomer =
+                      role === "customer" ||
+                      role === "consumer" ||
+                      role === "user";
+                    if (isAuthenticated && isCustomer) {
+                      router.push(estimatesHref);
+                      return;
+                    }
+                    router.push(
+                      `/login?next=${encodeURIComponent(estimatesHref)}`,
                     );
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Unable to send the quote request.");
-                    setAsking(true);
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Unable to send the quote request.",
+                    );
                   }
                 }}
               />
             </div>
-            {plain ? <QuoteGuide /> : null}
+            {plain ? (
+              <div className="min-w-0 w-full xl:max-w-[22rem]">
+                <QuoteGuide />
+              </div>
+            ) : null}
           </div>
         </section>
       </>

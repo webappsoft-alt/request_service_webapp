@@ -67,34 +67,36 @@ function readNextFromLocation(): string | null {
   }
 }
 
-function isProAuthPath(pathname: string): boolean {
-  return (
-    pathname === "/pro/login" ||
-    pathname === "/pro/register" ||
-    pathname === "/pro/signup" ||
-    pathname === "/pro"
-  );
-}
-
 /**
  * Client-side RBAC after Redux Persist rehydrates.
  * - Customers must never see /pro/* (including pro login).
  * - After customer login, send them home unless ?next= or a pending order resume exists.
- * - Providers redirect away from login/auth and customer account pages to /pro/dashboard.
- * - Public pages (estimates, services, landing) remain accessible to both.
+ * - Providers only use /pro/dashboard/* — customer marketing, auth, and account bounce there.
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const auth = useAppSelector(selectAuth);
 
+  const role = auth.hydrated
+    ? normalizeRole(auth.role || auth.user?.role)
+    : null;
+  const loggedIn = Boolean(
+    auth.hydrated && auth.token && auth.isAuthenticated,
+  );
+  /** Hide customer chrome while bouncing a logged-in provider to the portal. */
+  const providerOffPortal =
+    loggedIn && role === "provider" && !isProDashboard(pathname);
+  /** Hide pro chrome while bouncing a logged-in customer off /pro. */
+  const customerOnPro = loggedIn && role === "customer" && isProArea(pathname);
+
   useEffect(() => {
     if (!auth.hydrated) return;
 
-    const role = normalizeRole(auth.role || auth.user?.role);
-    const loggedIn = Boolean(auth.token && auth.isAuthenticated);
+    const nextRole = normalizeRole(auth.role || auth.user?.role);
+    const nextLoggedIn = Boolean(auth.token && auth.isAuthenticated);
 
-    if (!loggedIn) {
+    if (!nextLoggedIn) {
       if (isCustomerProtected(pathname)) {
         const search =
           typeof window !== "undefined" ? window.location.search : "";
@@ -106,7 +108,7 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (role === "customer") {
+    if (nextRole === "customer") {
       if (isProArea(pathname)) {
         router.replace("/");
         return;
@@ -122,13 +124,9 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (role === "provider") {
-      // Logged-in providers only redirect away from auth and customer account areas.
-      if (
-        isProAuthPath(pathname) ||
-        isCustomerAuthPath(pathname) ||
-        isCustomerProtected(pathname)
-      ) {
+    if (nextRole === "provider") {
+      // Provider portal is /pro/dashboard/* only — not customer Home/Services/etc.
+      if (!isProDashboard(pathname)) {
         router.replace(proPaths.dashboard);
       }
     }
@@ -141,6 +139,10 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     pathname,
     router,
   ]);
+
+  if (providerOffPortal || customerOnPro) {
+    return null;
+  }
 
   return <>{children}</>;
 }

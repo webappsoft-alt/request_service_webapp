@@ -2,11 +2,21 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LogOut, Menu, PanelLeft, PanelLeftClose } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, LogOut, Menu, Search, X } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetClose,
@@ -15,7 +25,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   customerNavGroups,
   isCustomerOverviewPath,
@@ -25,6 +40,72 @@ import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser, type AuthUser } from "@/store/authSlice";
 import { listPublicChatThreads } from "@/lib/api/chat-client";
+
+function RecordTab({
+  href,
+  label,
+  active,
+  onClose,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  onClose?: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-[4px] border px-2.5 text-xs transition-colors",
+        active
+          ? "border-[#003F7D]/25 bg-[#e8eef5] font-semibold text-[#003F7D] shadow-[inset_0_-2px_0_#003F7D]"
+          : "border-black/10 bg-[#f7f8fa] text-muted-foreground hover:border-black/20 hover:bg-white hover:text-foreground",
+      )}
+    >
+      <span
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          active ? "bg-[#003F7D]" : "bg-black/25",
+        )}
+        aria-hidden
+      />
+      <Link href={href} className="min-w-0 truncate">
+        {label}
+      </Link>
+      {onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-[3px] p-0.5 hover:bg-black/10 hover:text-foreground"
+          aria-label={`Close ${label}`}
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function getCurrentCustomerSection(pathname: string) {
+  if (pathname.startsWith(customerPaths.orders)) {
+    return { href: customerPaths.orders, label: "Orders" };
+  }
+  if (pathname.startsWith(customerPaths.requests)) {
+    return { href: customerPaths.requests, label: "Requests" };
+  }
+  if (pathname.startsWith(customerPaths.estimates)) {
+    return { href: customerPaths.estimates, label: "Estimates" };
+  }
+  if (pathname.startsWith(customerPaths.invoices)) {
+    return { href: customerPaths.invoices, label: "Invoices" };
+  }
+  if (pathname.startsWith(customerPaths.messages)) {
+    return { href: customerPaths.messages, label: "Messages" };
+  }
+  if (pathname.startsWith(customerPaths.settings)) {
+    return { href: customerPaths.settings, label: "Settings" };
+  }
+  return null;
+}
 
 function NavLinks({
   collapsed = false,
@@ -131,13 +212,17 @@ function NavLinks({
 
 export function CustomerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const authUser = useAppSelector(selectAuthUser);
   const [collapsed, setCollapsed] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [headerSearch, setHeaderSearch] = useState("");
 
   const menuUser: AuthUser = authUser
     ? { ...authUser, role: authUser.role || "customer" }
     : { role: "customer" };
+
+  const currentSection = getCurrentCustomerSection(pathname);
 
   useEffect(() => {
     const email = String(authUser?.email || "").trim();
@@ -164,6 +249,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-svh bg-[#eef1f5]">
+      {/* Sidebar matching Provider Portal style */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] text-white transition-[width] duration-200 lg:flex",
@@ -193,15 +279,10 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         </div>
         <button
           type="button"
-          onClick={() => handleUserLogout()}
-          className={cn(
-            "flex items-center gap-2 border-t border-white/10 py-3 text-left text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white",
-            collapsed ? "justify-center px-2" : "px-3",
-          )}
-          aria-label="Log out"
+          onClick={() => setCollapsed((current) => !current)}
+          className="border-t border-white/10 px-3 py-3 text-left text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
         >
-          <LogOut className="size-3.5 shrink-0" />
-          {collapsed ? null : "Log out"}
+          {collapsed ? "Show" : "Hide labels"}
         </button>
       </aside>
 
@@ -211,8 +292,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
           collapsed ? "lg:pl-16" : "lg:pl-56",
         )}
       >
+        {/* Header matching Provider Portal style */}
         <header className="sticky top-0 z-20 border-b border-black/10 bg-card">
-          <div className="flex h-12 items-center gap-2 px-3 sm:gap-3 sm:px-4">
+          <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
             <Sheet>
               <SheetTrigger asChild>
                 <Button
@@ -250,31 +332,94 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               </SheetContent>
             </Sheet>
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="hidden lg:inline-flex"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              onClick={() => setCollapsed((current) => !current)}
-            >
-              {collapsed ? (
-                <PanelLeft className="size-4" />
-              ) : (
-                <PanelLeftClose className="size-4" />
-              )}
-            </Button>
+            {/* Provider-style Record Tabs */}
+            <div className="hidden min-w-0 flex-1 items-center gap-1.5 overflow-x-auto md:flex">
+              <RecordTab
+                href={customerPaths.dashboard}
+                label="Customer Dashboard"
+                active={isCustomerOverviewPath(pathname)}
+              />
+              {currentSection && currentSection.href !== customerPaths.dashboard ? (
+                <RecordTab
+                  href={currentSection.href}
+                  label={currentSection.label}
+                  active={true}
+                />
+              ) : null}
+            </div>
 
-            <div className="ml-auto flex items-center gap-2">
+            {/* Provider-style Header Search */}
+            <div className="relative ml-auto hidden w-56 lg:block">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search records…"
+                className="h-8 bg-[#f7f8fa] pl-8 text-sm"
+                aria-label="Search records"
+                value={headerSearch}
+                onChange={(event) => setHeaderSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  const q = headerSearch.trim();
+                  if (!q) return;
+                  router.push(`${customerPaths.estimates}?q=${encodeURIComponent(q)}`);
+                }}
+              />
+            </div>
+
+            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              {/* Notifications Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Notifications"
+                    className="relative size-8"
+                  >
+                    <Bell className="size-4" />
+                    {unreadMessages > 0 ? (
+                      <span className="absolute top-1 right-1 flex size-2 rounded-full bg-[#c2410c]" />
+                    ) : null}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel className="text-xs">Notifications</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {unreadMessages > 0 ? (
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href={customerPaths.messages}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span>Unread messages</span>
+                        <Badge className="bg-[#003F7D] text-white text-[10px]">
+                          {unreadMessages}
+                        </Badge>
+                      </Link>
+                    </DropdownMenuItem>
+                  ) : (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      No unread notifications.
+                    </p>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href={customerPaths.messages} className="text-xs">
+                      Open messages
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <Button
                 asChild
                 variant="outline"
                 size="sm"
-                className="hidden sm:inline-flex"
+                className="hidden sm:inline-flex h-8 text-xs"
               >
                 <Link href={customerPaths.site}>Back to site</Link>
               </Button>
-              <UserAccountMenu user={menuUser} />
+              <UserAccountMenu user={menuUser} className="size-8 border-black/10" />
             </div>
           </div>
         </header>

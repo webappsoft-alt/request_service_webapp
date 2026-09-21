@@ -117,11 +117,11 @@ export function BoardCard({
   empty?: string;
 }) {
   return (
-    <Card className="gap-0 border-border py-0">
-      <CardHeader className="border-b border-border bg-muted py-3">
-        <CardTitle>{title}</CardTitle>
+    <Card className="gap-0 border-border py-0 shadow-xs">
+      <CardHeader className="border-b border-border py-3.5">
+        <CardTitle className="text-sm font-semibold text-foreground">{title}</CardTitle>
         <CardAction>
-          <Link href={href} className="text-sm font-medium text-primary hover:text-primary/80">
+          <Link href={href} className="text-xs font-medium text-primary hover:text-primary/80">
             {hrefLabel}
           </Link>
         </CardAction>
@@ -191,21 +191,25 @@ export function DateStamp({ value }: { value?: string }) {
   const date = parseDateStamp(value);
   if (!date) return <DateStampFallback />;
 
+  let month = "";
+  let day = 0;
   try {
-    const month = date.toLocaleString("en-US", { month: "short" });
-    const day = date.getDate();
-    if (!month || Number.isNaN(day)) return <DateStampFallback />;
-    return (
-      <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-secondary text-primary">
-        <span className="text-[9px] font-medium tracking-[0.12em] uppercase">
-          {month}
-        </span>
-        <span className="text-sm leading-none font-semibold tabular-nums">{day}</span>
-      </span>
-    );
+    month = date.toLocaleString("en-US", { month: "short" });
+    day = date.getDate();
   } catch {
     return <DateStampFallback />;
   }
+
+  if (!month || Number.isNaN(day)) return <DateStampFallback />;
+
+  return (
+    <span className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-secondary text-primary">
+      <span className="text-[9px] font-medium tracking-[0.12em] uppercase">
+        {month}
+      </span>
+      <span className="text-sm leading-none font-semibold tabular-nums">{day}</span>
+    </span>
+  );
 }
 
 export function activityDot(title: string) {

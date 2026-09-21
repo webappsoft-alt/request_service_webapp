@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Eye } from "lucide-react";
+import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
-import { NoData } from "@/components/shared/no-data";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { StatusPill } from "@/components/portal/status-pill";
 import {
   Select,
   SelectContent,
@@ -26,7 +24,6 @@ import {
 } from "@/lib/orders/order-display";
 import {
   formatOrderStatus,
-  orderStatusBadgeVariant,
 } from "@/lib/orders/order-status";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
@@ -35,7 +32,6 @@ import {
   customerOrderDetailFromListItem,
   fetchCustomerOrders,
   selectCustomerOrders,
-  selectCustomerOrdersError,
   selectCustomerOrdersLoading,
   selectCustomerOrdersPagination,
   setCustomerOrderDetail,
@@ -53,6 +49,17 @@ const STATUS_FILTERS = [
   { value: "CANCELLED", label: "Cancelled" },
 ] as const;
 
+function orderTone(status: string) {
+  const up = String(status || "").toUpperCase();
+  if (up === "SETTLED" || up === "WORK_COMPLETED") return "success" as const;
+  if (up === "CANCELLED" || up === "DISPUTED") return "danger" as const;
+  if (up === "IN_PROGRESS" || up === "IN_TRANSIT" || up === "ARRIVED")
+    return "warning" as const;
+  if (up === "CONFIRMED" || up === "BOOKING_REQUESTED")
+    return "primary" as const;
+  return "neutral" as const;
+}
+
 export function CustomerOrdersDashboardView() {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -60,7 +67,6 @@ export function CustomerOrdersDashboardView() {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const orders = useAppSelector(selectCustomerOrders);
   const loading = useAppSelector(selectCustomerOrdersLoading);
-  const error = useAppSelector(selectCustomerOrdersError);
   const pagination = useAppSelector(selectCustomerOrdersPagination);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("all");
@@ -83,23 +89,6 @@ export function CustomerOrdersDashboardView() {
     );
   }, [auth.hydrated, dispatch, isAuthenticated, page, router, status]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((order) => {
-      const haystack = [
-        orderServiceTitle(order),
-        order.orderNumber,
-        order.id,
-        formatOrderStatus(order.status),
-        formatOrderAddressLine(order.address),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [orders, search]);
-
   if (!auth.hydrated || (!isAuthenticated && !loading)) {
     return <CenteredSpinner label="Checking your account…" />;
   }
@@ -110,166 +99,129 @@ export function CustomerOrdersDashboardView() {
       title="Orders"
       description="Booked fixed services and job requests. Open a row to view status, schedule, and actions."
     >
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search orders…"
-            className="h-9 bg-card pl-8"
-            aria-label="Search orders"
-          />
-        </div>
-        <Select
-          value={status}
-          onValueChange={(value) => {
-            setStatus(value);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="h-9 w-full bg-card sm:ml-auto sm:w-48">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent align="end">
-            {STATUS_FILTERS.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="overflow-hidden rounded-[4px] border border-black/10 bg-card">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-[#e8eef5] text-[11px] tracking-[0.12em] text-[#003F7D] uppercase">
-              <tr>
-                <th className="px-3 py-2.5 font-semibold">Service</th>
-                <th className="px-3 py-2.5 font-semibold">Schedule</th>
-                <th className="px-3 py-2.5 font-semibold">Location</th>
-                <th className="px-3 py-2.5 font-semibold">Status</th>
-                <th className="px-3 py-2.5 font-semibold">Total</th>
-                <th className="px-3 py-2.5 font-semibold"> </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && !filtered.length ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-3 py-10 text-center text-muted-foreground"
-                  >
-                    Loading orders…
-                  </td>
-                </tr>
-              ) : error && !filtered.length ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-3 py-10 text-center text-destructive"
-                  >
-                    {error}
-                  </td>
-                </tr>
-              ) : filtered.length ? (
-                filtered.map((order) => (
-                  <tr
-                    key={order.id}
-                    className="border-t border-black/10 hover:bg-[#f7f8fa]"
-                  >
-                    <td className="px-3 py-3">
-                      <p className="font-medium">{orderServiceTitle(order)}</p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {order.orderNumber || order.id}
-                      </p>
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground">
-                      {order.booking?.startTime
-                        ? formatOrderDateTime(order.booking.startTime)
-                        : "—"}
-                    </td>
-                    <td className="max-w-[14rem] px-3 py-3 text-muted-foreground">
-                      <span className="line-clamp-2">
-                        {formatOrderAddressLine(order.address) || "—"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant={orderStatusBadgeVariant(order.status)}>
-                        {formatOrderStatus(order.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3 font-semibold tabular-nums text-[#003F7D]">
-                      {formatOrderMoney(
-                        order.pricing.totalAmount,
-                        order.pricing.currency,
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          href={customerPaths.order(order.id)}
-                          onClick={() =>
-                            dispatch(
-                              setCustomerOrderDetail(
-                                customerOrderDetailFromListItem(order),
-                              ),
-                            )
-                          }
-                        >
-                          View
-                        </Link>
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8">
-                    <NoData
-                      title="No orders yet"
-                      description="When you book a fixed service, it will appear in this table."
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {pagination.totalPages > 1 ? (
-          <div className="flex items-center justify-between gap-3 border-t border-black/10 px-3 py-2.5">
-            <p className="text-sm text-muted-foreground">
-              Page {pagination.page} of {pagination.totalPages}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={page <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                aria-label="Previous page"
+      <PortalDataTable
+        filename="customer-orders"
+        countLabel="Orders"
+        searchPlaceholder="Search orders…"
+        loading={loading}
+        serverPagination={{
+          page: pagination.page || page,
+          pageSize: pagination.limit || CUSTOMER_ORDERS_PAGE_LIMIT,
+          total: pagination.total || orders.length,
+          totalPages: pagination.totalPages || 1,
+          onPageChange: (nextPage) => setPage(nextPage),
+          search,
+          onSearchChange: (val) => setSearch(val),
+        }}
+        toolbar={
+          <div className="h-8.5 w-40 sm:w-44">
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger
+                id="orders-status-filter"
+                aria-label="Filter by status"
+                className="h-full w-full text-xs"
               >
-                <ChevronLeft />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                disabled={page >= pagination.totalPages}
-                onClick={() =>
-                  setPage((current) =>
-                    Math.min(pagination.totalPages, current + 1),
-                  )
-                }
-                aria-label="Next page"
-              >
-                <ChevronRight />
-              </Button>
-            </div>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {STATUS_FILTERS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : null}
-      </div>
+        }
+        rows={orders}
+        rowKey={(row) => row.id}
+        rowHref={(row) => customerPaths.order(row.id)}
+        empty="No orders found."
+        columns={[
+          {
+            id: "service",
+            header: "Service",
+            sortValue: (row) => orderServiceTitle(row),
+            searchValue: (row) => `${orderServiceTitle(row)} ${row.orderNumber || ""}`,
+            exportValue: (row) => orderServiceTitle(row),
+            cell: (row) => (
+              <div>
+                <Link
+                  href={customerPaths.order(row.id)}
+                  onClick={() =>
+                    dispatch(
+                      setCustomerOrderDetail(customerOrderDetailFromListItem(row)),
+                    )
+                  }
+                  className="font-medium text-primary hover:underline"
+                >
+                  {orderServiceTitle(row)}
+                </Link>
+                <p className="font-mono text-xs text-muted-foreground">
+                  {row.orderNumber || row.id.slice(0, 8)}
+                </p>
+              </div>
+            ),
+          },
+          {
+            id: "schedule",
+            header: "Schedule",
+            sortValue: (row) => row.booking?.startTime ?? "",
+            cell: (row) => (
+              <span className="text-muted-foreground">
+                {row.booking?.startTime
+                  ? formatOrderDateTime(row.booking.startTime)
+                  : "—"}
+              </span>
+            ),
+          },
+          {
+            id: "location",
+            header: "Location",
+            sortValue: (row) => formatOrderAddressLine(row.address),
+            cell: (row) => (
+              <span className="line-clamp-2 max-w-[14rem] text-muted-foreground">
+                {formatOrderAddressLine(row.address) || "—"}
+              </span>
+            ),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            cell: (row) => (
+              <StatusPill
+                label={formatOrderStatus(row.status)}
+                tone={orderTone(row.status)}
+              />
+            ),
+          },
+          {
+            id: "total",
+            header: "Total",
+            sortValue: (row) => row.pricing.totalAmount ?? 0,
+            cell: (row) => (
+              <span className="font-bold tabular-nums text-[#003F7D]">
+                {formatOrderMoney(row.pricing.totalAmount, row.pricing.currency)}
+              </span>
+            ),
+          },
+        ]}
+        actions={(row) => [
+          {
+            label: "View details",
+            href: customerPaths.order(row.id),
+            icon: <Eye className="size-3.5" />,
+            quick: true,
+          },
+        ]}
+      />
     </PortalPage>
   );
 }

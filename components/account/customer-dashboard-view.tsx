@@ -2,20 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ArrowRight, Plus } from "lucide-react";
 import {
-  ArrowRight,
-  ClipboardList,
-  FileText,
-  MessageCircle,
-  Receipt,
-  Settings,
-} from "lucide-react";
+  BoardCard,
+  StatCell,
+  dashboardGreeting,
+} from "@/components/portal/dashboard-widgets";
 import { PortalPage } from "@/components/portal/portal-page";
+import { StatusPill, moneyTone } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listPublicChatThreads } from "@/lib/api/chat-client";
 import { customerPaths } from "@/lib/customer-paths";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatShortDate } from "@/lib/format";
 import { formatOrderMoney, orderServiceTitle } from "@/lib/orders/order-display";
 import { formatOrderStatus } from "@/lib/orders/order-status";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -28,8 +26,12 @@ import {
 } from "@/store/ordersSlice";
 import {
   fetchCustomerEstimates,
+  fetchCustomerQuoteRequests,
   selectCustomerApiEstimates,
   selectCustomerApiEstimatesLoading,
+  selectCustomerQuoteBatches,
+  selectCustomerQuoteBatchesLoading,
+  type CustomerQuoteBatch,
 } from "@/store/customerQuotesSlice";
 import {
   fetchCustomerInvoices,
@@ -37,31 +39,63 @@ import {
   selectCustomerInvoicesLoading,
 } from "@/store/customerInvoicesSlice";
 
-function StatCard({
-  label,
-  value,
-  hint,
-  href,
-}: {
-  label: string;
-  value: string | number;
-  hint: string;
-  href: string;
-}) {
+function batchKey(batch: CustomerQuoteBatch) {
   return (
-    <Link
-      href={href}
-      className="rounded-[4px] border border-black/10 bg-card p-4 transition-colors hover:border-black/25"
-    >
-      <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums text-[#003F7D]">
-        {value}
-      </p>
-      <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
-    </Link>
+    batch.quoteBatchId ||
+    batch.professionals[0]?.requestId ||
+    `${batch.serviceName}-${batch.createdAt}`
   );
+}
+
+function batchStatusLabel(batch: CustomerQuoteBatch) {
+  const statuses = batch.professionals.map((p) => p.status);
+  if (statuses.some((s) => s === "converted_to_job")) return "Job Created";
+  if (statuses.some((s) => s === "accepted")) return "Accepted";
+  if (batch.estimateCount > 0)
+    return `${batch.estimateCount} Estimate${batch.estimateCount === 1 ? "" : "s"}`;
+  if (batch.seenCount > 0) return "Viewed";
+  return "Dispatched";
+}
+
+function batchTone(batch: CustomerQuoteBatch) {
+  const statuses = batch.professionals.map((p) => p.status);
+  if (statuses.some((s) => s === "converted_to_job" || s === "accepted"))
+    return "success" as const;
+  if (batch.estimateCount > 0) return "primary" as const;
+  if (batch.seenCount > 0) return "warning" as const;
+  return "neutral" as const;
+}
+
+function estimateStatusLabel(status: string) {
+  const clean = String(status || "").toLowerCase();
+  if (clean === "converted_to_job") return "Job Created";
+  if (clean === "site_visit") return "Site Visit";
+  if (clean === "changes_requested") return "Changes Requested";
+  if (clean === "sent" || clean === "finalized") return "Ready to Review";
+  return clean
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function orderTone(status: string) {
+  const up = String(status || "").toUpperCase();
+  if (up === "SETTLED" || up === "WORK_COMPLETED") return "success" as const;
+  if (up === "CANCELLED" || up === "DISPUTED") return "danger" as const;
+  if (up === "IN_PROGRESS" || up === "IN_TRANSIT" || up === "ARRIVED")
+    return "warning" as const;
+  if (up === "CONFIRMED" || up === "BOOKING_REQUESTED")
+    return "primary" as const;
+  return "neutral" as const;
+}
+
+function invoiceStatusLabel(status: string) {
+  const clean = String(status || "").toLowerCase();
+  if (clean === "partially_paid") return "Partially Paid";
+  return clean
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export function CustomerDashboardView() {
@@ -70,6 +104,8 @@ export function CustomerDashboardView() {
   const orders = useAppSelector(selectCustomerOrders);
   const ordersLoading = useAppSelector(selectCustomerOrdersLoading);
   const pagination = useAppSelector(selectCustomerOrdersPagination);
+  const batches = useAppSelector(selectCustomerQuoteBatches);
+  const batchesLoading = useAppSelector(selectCustomerQuoteBatchesLoading);
   const estimates = useAppSelector(selectCustomerApiEstimates);
   const estimatesLoading = useAppSelector(selectCustomerApiEstimatesLoading);
   const invoices = useAppSelector(selectCustomerInvoices);
@@ -80,9 +116,22 @@ export function CustomerDashboardView() {
     String(user?.firstName || "").trim() ||
     String(user?.email || "there").split("@")[0];
 
+  const today = useMemo(() => new Date(), []);
+  const formattedToday = useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(today),
+    [today],
+  );
+
   useEffect(() => {
     void dispatch(fetchCustomerOrders({ page: 1, limit: 5 }));
     void dispatch(fetchCustomerEstimates());
+    void dispatch(fetchCustomerQuoteRequests());
     void dispatch(fetchCustomerInvoices());
   }, [dispatch]);
 
@@ -109,6 +158,17 @@ export function CustomerDashboardView() {
       cancelled = true;
     };
   }, [user?.email]);
+
+  const openRequests = useMemo(
+    () =>
+      batches.filter(
+        (b) =>
+          !b.professionals.some(
+            (p) => p.status === "converted_to_job" || p.status === "accepted",
+          ),
+      ).length,
+    [batches],
+  );
 
   const openOrders = useMemo(
     () =>
@@ -139,234 +199,263 @@ export function CustomerDashboardView() {
 
   return (
     <PortalPage
-      eyebrow="Home"
-      title={`Welcome back, ${firstName}`}
-      description="Track orders, review estimates and invoices from professionals, and message providers — without leaving your account."
+      eyebrow="Overview"
+      title={`${dashboardGreeting(today)}, ${firstName}`}
+      description={`${formattedToday} · Customer Dashboard`}
       actions={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button asChild size="sm">
             <Link href={customerPaths.estimateRequest}>
+              <Plus className="size-3.5" />
               Request new estimate
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.site}>
               Browse services
-              <ArrowRight data-icon="inline-end" />
+              <ArrowRight className="size-3.5" />
             </Link>
           </Button>
         </div>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Orders"
-          value={ordersLoading ? "…" : pagination.totalDocs || orders.length}
-          hint={
-            openOrders
-              ? `${openOrders} in progress`
-              : "Booked fixed services & jobs"
+      {/* Provider Portal StatCell Row */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <StatCell
+          label="Requests"
+          value={String(batchesLoading ? "…" : batches.length)}
+          note={
+            openRequests
+              ? `${openRequests} active requests`
+              : "Quote requests sent"
           }
-          href={customerPaths.orders}
+          href={customerPaths.requests}
         />
-        <StatCard
+        <StatCell
           label="Estimates"
-          value={estimatesLoading ? "…" : estimates.length}
-          hint={
+          value={String(estimatesLoading ? "…" : estimates.length)}
+          note={
             pendingEstimates
               ? `${pendingEstimates} awaiting your review`
               : "Proposals from professionals"
           }
           href={customerPaths.estimates}
         />
-        <StatCard
+        <StatCell
+          label="Orders"
+          value={String(ordersLoading ? "…" : pagination.totalDocs || orders.length)}
+          note={
+            openOrders
+              ? `${openOrders} in progress`
+              : "Booked fixed services & jobs"
+          }
+          href={customerPaths.orders}
+        />
+        <StatCell
           label="Invoices"
-          value={invoicesLoading ? "…" : invoices.length}
-          hint={
+          value={String(invoicesLoading ? "…" : invoices.length)}
+          note={
             openInvoices
               ? `${openInvoices} awaiting payment`
-              : "Bills from professionals"
+              : "Bills from completed services"
           }
           href={customerPaths.invoices}
         />
-        <StatCard
+        <StatCell
           label="Messages"
-          value={unreadMessages}
-          hint={unreadMessages ? "Unread conversations" : "Chat with pros"}
+          value={String(unreadMessages)}
+          note={
+            unreadMessages
+              ? `${unreadMessages} unread conversations`
+              : "Chat with professionals"
+          }
           href={customerPaths.messages}
         />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <Card className="border-black/10 shadow-none">
-          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-black/10 pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="size-4 text-[#003F7D]" aria-hidden />
-              Recent orders
-            </CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link href={customerPaths.orders}>View all</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="pt-3">
-            {ordersLoading && !orders.length ? (
-              <p className="text-sm text-muted-foreground">Loading orders…</p>
-            ) : orders.length ? (
-              <ul className="divide-y divide-black/10">
-                {orders.slice(0, 5).map((order) => (
-                  <li key={order.id}>
-                    <Link
-                      href={customerPaths.order(order.id)}
-                      className="flex items-center justify-between gap-3 py-2.5 text-sm transition-colors hover:bg-[#f7f8fa]"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">
-                          {orderServiceTitle(order)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatOrderStatus(order.status)}
-                        </span>
-                      </span>
-                      <span className="shrink-0 font-semibold tabular-nums text-[#003F7D]">
-                        {formatOrderMoney(
-                          order.pricing.totalAmount,
-                          order.pricing.currency,
-                        )}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No orders yet. Browse services on the main site to book a pro.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      {/* Provider Portal BoardCard Grid */}
+      <div className="grid gap-6 xl:grid-cols-2">
+        {/* Quote Requests */}
+        <BoardCard
+          title="Quote requests"
+          href={customerPaths.requests}
+          hrefLabel="View all"
+          empty={
+            batchesLoading && !batches.length
+              ? "Loading requests…"
+              : batches.length
+                ? undefined
+                : "No quote requests yet. Request an estimate for custom work."
+          }
+        >
+          {batches.slice(0, 5).map((batch) => (
+            <Link
+              key={batchKey(batch)}
+              href={customerPaths.quoteRequest(batchKey(batch))}
+              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">
+                  {batch.serviceName}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {batch.city ? `${batch.city}, ${batch.state}` : "Local request"}
+                  {batch.createdAt ? ` · ${formatShortDate(batch.createdAt)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <StatusPill
+                  label={batchStatusLabel(batch)}
+                  tone={batchTone(batch)}
+                />
+                <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                  {batch.estimateCount > 0
+                    ? `${batch.estimateCount} quote${batch.estimateCount === 1 ? "" : "s"}`
+                    : `${batch.sentToCount} sent`}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </BoardCard>
 
-        <Card className="border-black/10 shadow-none">
-          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-black/10 pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="size-4 text-[#003F7D]" aria-hidden />
-              Estimates to review
-            </CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link href={customerPaths.estimates}>View all</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="pt-3">
-            {estimatesLoading && !estimates.length ? (
-              <p className="text-sm text-muted-foreground">Loading estimates…</p>
-            ) : estimates.length ? (
-              <ul className="divide-y divide-black/10">
-                {estimates.slice(0, 5).map((item) => (
-                  <li key={item.id}>
-                    <Link
-                      href={
-                        item.shareToken
-                          ? customerPaths.estimate(item.shareToken)
-                          : customerPaths.estimates
-                      }
-                      className="flex items-center justify-between gap-3 py-2.5 text-sm transition-colors hover:bg-[#f7f8fa]"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">
-                          {item.title || item.number || "Estimate"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {item.provider?.companyName || "Professional"} ·{" "}
-                          {item.status}
-                        </span>
-                      </span>
-                      <span className="shrink-0 font-semibold tabular-nums text-[#003F7D]">
-                        {formatOrderMoney(item.total, "USD")}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No estimates yet.{" "}
-                <Link
-                  href={customerPaths.estimateRequest}
-                  className="font-medium text-[#003F7D] underline-offset-2 hover:underline"
-                >
-                  Request a new estimate
-                </Link>{" "}
-                to send your job details to matching professionals.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Estimates to Review */}
+        <BoardCard
+          title="Estimates to review"
+          href={customerPaths.estimates}
+          hrefLabel="View all"
+          empty={
+            estimatesLoading && !estimates.length
+              ? "Loading estimates…"
+              : estimates.length
+                ? undefined
+                : "No estimates yet. Request a quote to receive proposals."
+          }
+        >
+          {estimates.slice(0, 5).map((item) => (
+            <Link
+              key={item.id}
+              href={
+                item.shareToken
+                  ? customerPaths.estimate(item.shareToken)
+                  : customerPaths.estimates
+              }
+              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">
+                  {item.title || item.number || "Estimate"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {item.provider?.companyName || "Service Professional"}
+                  {item.createdAt ? ` · ${formatShortDate(item.createdAt)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <StatusPill
+                  label={estimateStatusLabel(item.status)}
+                  tone={moneyTone(item.status)}
+                />
+                <span className="font-semibold tabular-nums text-foreground">
+                  {item.total ? formatMoney(item.total) : "—"}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </BoardCard>
 
-        <Card className="border-black/10 shadow-none xl:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-black/10 pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Receipt className="size-4 text-[#003F7D]" aria-hidden />
-              Recent invoices
-            </CardTitle>
-            <Button asChild variant="ghost" size="sm">
-              <Link href={customerPaths.invoices}>View all</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="pt-3">
-            {invoicesLoading && !invoices.length ? (
-              <p className="text-sm text-muted-foreground">Loading invoices…</p>
-            ) : invoices.length ? (
-              <ul className="divide-y divide-black/10">
-                {invoices.slice(0, 5).map((item) => (
-                  <li key={item.id}>
-                    <Link
-                      href={customerPaths.invoice(item.id)}
-                      className="flex items-center justify-between gap-3 py-2.5 text-sm transition-colors hover:bg-[#f7f8fa]"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">
-                          {item.number}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {item.provider?.companyName || "Professional"} ·{" "}
-                          {item.status}
-                        </span>
-                      </span>
-                      <span className="shrink-0 font-semibold tabular-nums text-[#003F7D]">
-                        {formatMoney(item.balanceDue || item.total)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No invoices yet. When a professional sends one, it will appear
-                here.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+        {/* Recent Orders */}
+        <BoardCard
+          title="Recent orders"
+          href={customerPaths.orders}
+          hrefLabel="View all"
+          empty={
+            ordersLoading && !orders.length
+              ? "Loading orders…"
+              : orders.length
+                ? undefined
+                : "No orders yet. Browse services on the marketplace to book a pro."
+          }
+        >
+          {orders.slice(0, 5).map((order) => (
+            <Link
+              key={order.id}
+              href={customerPaths.order(order.id)}
+              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">
+                  {orderServiceTitle(order)}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {order.orderNumber || order.id.slice(0, 8)}
+                  {order.booking?.startTime
+                    ? ` · ${formatShortDate(order.booking.startTime)}`
+                    : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <StatusPill
+                  label={formatOrderStatus(order.status)}
+                  tone={orderTone(order.status)}
+                />
+                <span className="font-semibold tabular-nums text-foreground">
+                  {formatOrderMoney(
+                    order.pricing.totalAmount,
+                    order.pricing.currency,
+                  )}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </BoardCard>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button asChild size="sm">
-          <Link href={customerPaths.estimateRequest}>
-            <FileText data-icon="inline-start" />
-            Request new estimate
-          </Link>
-        </Button>
-        <Button asChild variant="outline" size="sm">
-          <Link href={customerPaths.messages}>
-            <MessageCircle data-icon="inline-start" />
-            Messages
-          </Link>
-        </Button>
-        <Button asChild variant="outline" size="sm">
-          <Link href={customerPaths.settings}>
-            <Settings data-icon="inline-start" />
-            Settings
-          </Link>
-        </Button>
+        {/* Recent Invoices */}
+        <BoardCard
+          title="Recent invoices"
+          href={customerPaths.invoices}
+          hrefLabel="View all"
+          empty={
+            invoicesLoading && !invoices.length
+              ? "Loading invoices…"
+              : invoices.length
+                ? undefined
+                : "No invoices yet. When a professional sends an invoice, it will appear here."
+          }
+        >
+          {invoices.slice(0, 5).map((item) => (
+            <Link
+              key={item.id}
+              href={customerPaths.invoice(item.id)}
+              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">
+                  {item.number}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {item.provider?.companyName || "Professional"}
+                  {item.dueAt ? ` · Due ${formatShortDate(item.dueAt)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <StatusPill
+                  label={invoiceStatusLabel(item.status)}
+                  tone={moneyTone(item.status)}
+                />
+                <div className="text-right">
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {formatMoney(item.balanceDue || item.total)}
+                  </span>
+                  {item.balanceDue && item.balanceDue < item.total ? (
+                    <p className="text-[10px] text-muted-foreground">
+                      of {formatMoney(item.total)}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </Link>
+          ))}
+        </BoardCard>
       </div>
     </PortalPage>
   );

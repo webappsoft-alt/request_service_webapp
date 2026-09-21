@@ -2352,9 +2352,7 @@ export function RequestDetailView({ id }: { id: string }) {
         open={estimateOpen}
         onOpenChange={setEstimateOpen}
         lead={lead}
-        onConverted={(estimateId) => {
-          setApiLead((prev) => (prev ? { ...prev, status: "estimate_sent" } : prev));
-          records.setStatus("request", lead.id, "estimate_sent");
+        onConverted={() => {
           refreshEstimates();
           if (typeof window !== "undefined") {
             window.dispatchEvent(
@@ -2363,6 +2361,9 @@ export function RequestDetailView({ id }: { id: string }) {
               }),
             );
           }
+          toast.success(
+            "Estimate created. Finalize and Share with customer so they can review and sign.",
+          );
         }}
       />
       <AssignEventDialog

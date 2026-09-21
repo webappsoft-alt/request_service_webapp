@@ -225,7 +225,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     ? crmCustomerName(customer)
     : estimate?.customerName?.trim() || "Customer";
 
-  const approval = share.approvalOf(id);
+  const localApproval = share.approvalOf(id);
   const apiReady =
     isProvider ||
     crm.enabled ||
@@ -281,9 +281,17 @@ export function EstimateDetailView({ id }: { id: string }) {
   const quote = estimate;
   const asJob = estimateAsJob(quote);
   const service = settings?.name || estimateDisplayName(estimate);
-  const signed = Boolean(
-    approval ||
+  const customerSignature =
     estimate.signature ||
+    (localApproval
+      ? {
+          signedBy: localApproval.signedBy,
+          signedAt: localApproval.signedAt,
+          imageBase64: localApproval.signatureDataUrl || undefined,
+        }
+      : undefined);
+  const signed = Boolean(
+    customerSignature ||
     estimate.status === "accepted" ||
     (estimate.status as string) === "approved" ||
     estimate.status === "converted_to_job",
@@ -862,6 +870,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                 status={estimate.status}
                 signed={signed}
                 hasJob={Boolean(job)}
+                signature={customerSignature}
               />
               {job ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -990,8 +999,28 @@ export function EstimateDetailView({ id }: { id: string }) {
         estimate={estimate}
         customer={customer}
         customerLabel={customerLabel}
-        onSent={({ viaApi }) => {
-          if (!viaApi) records.setStatus("estimate", estimate.id, "sent");
+        onSent={({ viaApi, status, token }) => {
+          const nextStatus = (status as Estimate["status"]) || "sent";
+          setStatusOverride(nextStatus);
+          if (token) {
+            crm.patchEstimate(estimate.id, {
+              status: nextStatus,
+              shareToken: token,
+            });
+            setFetched((prev) =>
+              prev
+                ? { ...prev, status: nextStatus, shareToken: token }
+                : prev,
+            );
+          }
+          if (!viaApi) records.setStatus("estimate", estimate.id, nextStatus);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("rs-realtime", {
+                detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+              }),
+            );
+          }
         }}
       />
       <CreateReminderDialog

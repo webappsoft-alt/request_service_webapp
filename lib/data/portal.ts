@@ -1216,6 +1216,7 @@ export function estimateStatusTone(status: EstimateStatus) {
 
 export function estimateCanShare(status: EstimateStatus) {
   switch (status) {
+    case "draft":
     case "finalized":
     case "sent":
     case "accepted":
@@ -1223,7 +1224,6 @@ export function estimateCanShare(status: EstimateStatus) {
       return true;
     case "site_visit":
     case "inspected":
-    case "draft":
     case "rejected":
     case "expired":
     case "converted_to_job":

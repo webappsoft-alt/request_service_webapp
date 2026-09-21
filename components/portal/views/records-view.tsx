@@ -515,27 +515,39 @@ export function EstimatesView() {
                   },
                 ]
               : []),
-            ...(isFinalized
+            ...(isFinalized || isDraftLike
               ? [
                   {
-                    label: "Mark sent",
+                    label: isFinalized ? "Send to customer" : "Share with customer",
                     onSelect: async () => {
                       try {
                         if (useApi) {
-                          await updateEstimateStatus(row.id, "sent");
+                          const res = await shareEstimate(row.id);
+                          const nextStatus =
+                            (res?.status as Estimate["status"]) || "sent";
+                          records.setStatus("estimate", row.id, nextStatus);
+                          dispatch(
+                            patchEstimateLocally({
+                              id: row.id,
+                              patch: {
+                                status: nextStatus,
+                                shareToken: res?.shareToken || row.shareToken,
+                              },
+                            }),
+                          );
+                          toast.success(
+                            res?.shareToken
+                              ? `${row.number} shared with the customer.`
+                              : "Estimate shared.",
+                          );
+                        } else {
+                          records.setStatus("estimate", row.id, "sent");
+                          toast.success("Estimate marked sent.");
                         }
-                        records.setStatus("estimate", row.id, "sent");
-                        dispatch(
-                          patchEstimateLocally({
-                            id: row.id,
-                            patch: { status: "sent" },
-                          }),
-                        );
-                        toast.success("Estimate marked sent.");
                       } catch (err) {
                         showApiErrorToast(
                           err,
-                          "Failed to mark estimate as sent.",
+                          "Failed to share estimate with the customer.",
                         );
                       }
                     },

@@ -191,6 +191,9 @@ export const publicApi = {
   estimateApprove: (token: string) => `public/estimates/${token}/approve`,
   /** POST customer decline */
   estimateReject: (token: string) => `public/estimates/${token}/reject`,
+  /** POST customer request changes (same estimate lifecycle) */
+  estimateRequestChanges: (token: string) =>
+    `public/estimates/${token}/request-changes`,
   /** GET public blogs — query: page, limit, search, category */
   blogs: "public/blogs",
   /** GET one public blog by slug */

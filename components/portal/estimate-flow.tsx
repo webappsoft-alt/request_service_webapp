@@ -47,7 +47,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { employeeName, type PortalEmployee } from "@/lib/data/portal";
-import type { Estimate, EstimateStatus, Job } from "@/lib/types";
+import { formatDate } from "@/lib/format";
+import type { Estimate, EstimateSignature, EstimateStatus, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -159,11 +160,17 @@ export function EstimateStageBanner({
   status,
   signed,
   hasJob,
+  signature,
 }: {
   status: EstimateStatus;
   signed: boolean;
   hasJob: boolean;
+  signature?: EstimateSignature | null;
 }) {
+  const showSignature =
+    Boolean(signature?.signedBy || signature?.signedAt || signature?.imageBase64) &&
+    (signed || status === "accepted" || status === "converted_to_job" || hasJob);
+
   const copy = (() => {
     if (hasJob)
       return {
@@ -173,7 +180,9 @@ export function EstimateStageBanner({
     if (signed || status === "accepted") {
       return {
         title: "Customer signed",
-        body: "The quote is approved. Convert it to a job to start the work.",
+        body: signature?.signedBy
+          ? `Signed by ${signature.signedBy}. Convert it to a job to start the work.`
+          : "The quote is approved. Convert it to a job to start the work.",
       };
     }
     switch (status) {
@@ -229,10 +238,63 @@ export function EstimateStageBanner({
     }
   })();
 
+  const signedAtLabel = signature?.signedAt
+    ? formatDate(signature.signedAt.slice(0, 10))
+    : null;
+  const signatureSrc = signature?.imageBase64?.trim() || "";
+
   return (
-    <div className="rounded-[4px] border border-black/10 bg-[#f8fafc] px-4 py-3">
-      <p className="text-sm font-semibold text-[#003F7D]">{copy.title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{copy.body}</p>
+    <div
+      className={
+        showSignature
+          ? "rounded-[4px] border border-emerald-200 bg-emerald-50 px-4 py-3"
+          : "rounded-[4px] border border-black/10 bg-[#f8fafc] px-4 py-3"
+      }
+    >
+      <p
+        className={
+          showSignature
+            ? "text-sm font-semibold text-emerald-900"
+            : "text-sm font-semibold text-[#003F7D]"
+        }
+      >
+        {copy.title}
+      </p>
+      <p
+        className={
+          showSignature
+            ? "mt-1 text-sm text-emerald-950"
+            : "mt-1 text-sm text-muted-foreground"
+        }
+      >
+        {copy.body}
+      </p>
+      {showSignature ? (
+        <div className="mt-3 flex flex-wrap items-end gap-4">
+          {signatureSrc ? (
+            <div className="rounded-[4px] border border-emerald-200 bg-white px-3 py-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={
+                  signature?.signedBy
+                    ? `Signature of ${signature.signedBy}`
+                    : "Customer signature"
+                }
+                src={signatureSrc}
+                className="h-16 w-48 object-contain"
+              />
+            </div>
+          ) : null}
+          <div className="min-w-0 text-sm text-emerald-950">
+            {signature?.signedBy ? (
+              <p className="font-medium">{signature.signedBy}</p>
+            ) : null}
+            {signedAtLabel ? (
+              <p className="text-emerald-900/80">Signed {signedAtLabel}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

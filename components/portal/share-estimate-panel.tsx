@@ -82,18 +82,54 @@ export function EstimateShareTab({
 
   async function publish() {
     if (!ready) {
-      toast.error("Finalize the estimate in the office before sending it to the customer.");
+      toast.error(
+        "This estimate cannot be shared yet. Finalize it in the office first, or wait until it is ready to send.",
+      );
       return "";
     }
-    let token = estimate.shareToken || snapshot?.token;
-    let href = token ? shareUrlFor(token) : "";
-    if (apiReady) {
+    if (!apiReady) {
+      toast.error("CRM is not connected. Sign in as a provider and try again.");
+      return "";
+    }
+    try {
       const shared = await shareEstimateApi(estimate.id);
-      token = shared.shareToken || token;
-      href = token ? shareUrlFor(token) : href;
+      const token = String(shared.shareToken || "").trim();
+      if (!token) {
+        toast.error("The CRM did not return a customer share link.");
+        return "";
+      }
+      const href = shareUrlFor(token);
+      const nextStatus = (shared.status as Estimate["status"]) || "sent";
       crm.patchEstimate(estimate.id, {
-        status: "sent",
-        shareToken: token || undefined,
+        status: nextStatus,
+        shareToken: token,
+      });
+      const next = buildEstimateSnapshot(estimate, {
+        token,
+        email: session?.email,
+        companyName: provider.companyName,
+        companyEmail: provider.email,
+        companyPhone: provider.phone,
+        companyStreet: provider.street,
+        companyCity: provider.city,
+        companyState: provider.state,
+        companyZip: provider.zip,
+        logoUrl: provider.logoUrl,
+        logoInitials: provider.logoInitials,
+        licensed: provider.licensed,
+        insured: provider.insured,
+        customerName: customer ? crmCustomerName(customer) : customerLabel,
+        customerEmail: customer?.email,
+        customerPhone: customer?.phone,
+      });
+      share.saveSnapshot(next);
+      setUrl(href);
+      onSent({
+        viaApi: true,
+        token,
+        url: href,
+        href,
+        status: nextStatus,
       });
       if (shared.emailSent) {
         toast.success(
@@ -108,35 +144,15 @@ export function EstimateShareTab({
           description: "Email could not be sent — check mail settings on the server.",
         });
       }
+      return href;
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not share this estimate with the customer.",
+      );
+      return "";
     }
-    const next = buildEstimateSnapshot(estimate, {
-      token,
-      email: session?.email,
-      companyName: provider.companyName,
-      companyEmail: provider.email,
-      companyPhone: provider.phone,
-      companyStreet: provider.street,
-      companyCity: provider.city,
-      companyState: provider.state,
-      companyZip: provider.zip,
-      logoUrl: provider.logoUrl,
-      logoInitials: provider.logoInitials,
-      licensed: provider.licensed,
-      insured: provider.insured,
-      customerName: customer ? crmCustomerName(customer) : customerLabel,
-      customerEmail: customer?.email,
-      customerPhone: customer?.phone,
-    });
-    share.saveSnapshot(next);
-    const nextHref = token ? shareUrlFor(token) : (href || shareUrlFor(next.token));
-    setUrl(nextHref);
-    onSent({
-      viaApi: apiReady,
-      token: next.token,
-      url: nextHref,
-      href: nextHref,
-    });
-    return nextHref;
   }
 
   async function copy() {
@@ -270,10 +286,16 @@ export function EstimateShareTab({
         estimate={estimate}
         customer={customer}
         customerLabel={customerLabel}
-        onSent={({ href, viaApi, token, url: sentUrl }) => {
+        onSent={({ href, viaApi, token, url: sentUrl, status }) => {
           const frontendUrl = token ? shareUrlFor(token) : (sentUrl || href);
           setUrl(frontendUrl);
-          onSent({ viaApi, token, url: frontendUrl, href: frontendUrl });
+          onSent({
+            viaApi,
+            token,
+            url: frontendUrl,
+            href: frontendUrl,
+            status,
+          });
         }}
       />
     </div>

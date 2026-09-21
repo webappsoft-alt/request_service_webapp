@@ -218,6 +218,9 @@ export function CustomerEstimatePage({ token }: { token: string }) {
     undefined,
   );
   const [rejecting, setRejecting] = useState(false);
+  const [requestingChanges, setRequestingChanges] = useState(false);
+  const [changeReason, setChangeReason] = useState("");
+  const [showChangeForm, setShowChangeForm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -322,6 +325,33 @@ export function CustomerEstimatePage({ token }: { token: string }) {
     }
   }
 
+  async function submitChangeRequest() {
+    if (!snapshot || requestingChanges) return;
+    const reason = changeReason.trim();
+    if (reason.length < 3) {
+      toast.error("Please describe what needs to be changed.");
+      return;
+    }
+    setRequestingChanges(true);
+    try {
+      await postData(
+        publicApi.estimateRequestChanges(token),
+        { reason },
+        { token: null, skipLogoutOn401: true },
+      );
+      toast.success(
+        "Change request sent. The professional will revise this estimate and send it again.",
+      );
+      setShowChangeForm(false);
+      setChangeReason("");
+      void load();
+    } catch (err) {
+      showApiErrorToast(err, "Unable to send the change request.");
+    } finally {
+      setRequestingChanges(false);
+    }
+  }
+
   if (loading) {
     return <EstimateDocumentSkeleton />;
   }
@@ -367,6 +397,10 @@ export function CustomerEstimatePage({ token }: { token: string }) {
               <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
                 Declined
               </span>
+            ) : snapshot.status === "changes_requested" ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                Changes requested
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                 <ShieldCheck className="size-3.5" /> Ready for review
@@ -377,15 +411,26 @@ export function CustomerEstimatePage({ token }: { token: string }) {
             {!approval &&
             snapshot.status !== "rejected" &&
             snapshot.status !== "expired" &&
-            snapshot.status !== "converted_to_job" ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={rejecting}
-                onClick={() => void rejectEstimate()}
-              >
-                {rejecting ? "Declining…" : "Decline estimate"}
-              </Button>
+            snapshot.status !== "converted_to_job" &&
+            snapshot.status !== "changes_requested" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={rejecting || requestingChanges}
+                  onClick={() => setShowChangeForm((open) => !open)}
+                >
+                  Request changes
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={rejecting || requestingChanges}
+                  onClick={() => void rejectEstimate()}
+                >
+                  {rejecting ? "Declining…" : "Decline estimate"}
+                </Button>
+              </>
             ) : null}
             <Button
               variant="outline"
@@ -399,6 +444,51 @@ export function CustomerEstimatePage({ token }: { token: string }) {
           </div>
         </div>
 
+        {showChangeForm &&
+        !approval &&
+        snapshot.status !== "changes_requested" ? (
+          <div className="rounded-md border border-black/10 bg-card p-4 print:hidden">
+            <p className="text-sm font-medium">What should be changed?</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The professional will update this same estimate and send it back
+              for your review.
+            </p>
+            <textarea
+              className="mt-3 w-full min-h-24 rounded-md border border-black/15 bg-background px-3 py-2 text-sm"
+              value={changeReason}
+              onChange={(event) => setChangeReason(event.target.value)}
+              placeholder="Example: Please reduce labor hours and add materials for the kitchen repair."
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                disabled={requestingChanges || changeReason.trim().length < 3}
+                onClick={() => void submitChangeRequest()}
+              >
+                {requestingChanges ? "Sending…" : "Send change request"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={requestingChanges}
+                onClick={() => {
+                  setShowChangeForm(false);
+                  setChangeReason("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {snapshot.status === "changes_requested" ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 print:hidden">
+            Your change request was sent. Waiting for the professional to revise
+            and re-share this estimate.
+          </div>
+        ) : null}
+
         {/* 2-page document preview with signature field on page 2 */}
         <EstimatePdfDocument
           snapshot={snapshot}
@@ -406,7 +496,8 @@ export function CustomerEstimatePage({ token }: { token: string }) {
           customerSlot={
             approval ||
             snapshot.status === "rejected" ||
-            snapshot.status === "expired"
+            snapshot.status === "expired" ||
+            snapshot.status === "changes_requested"
               ? undefined
               : (
                   <CustomerSignSlot snapshot={snapshot} onSign={approve} />

@@ -521,7 +521,6 @@ export function CreateEstimateDialog({
       const created = await createEstimateApi(estimateDraft);
       const saved = created ?? estimateDraft;
       if (!saved?.id) throw new Error("Could not create this estimate.");
-      if (requestId) records.setStatus("request", requestId, "estimate_sent");
       writeCostLines(
         session?.email,
         saved.id,

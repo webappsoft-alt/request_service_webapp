@@ -109,6 +109,26 @@ function buildTimeline(batch: CustomerQuoteBatch): TimelineItem[] {
     });
   }
 
+  const changesRequested = statuses.some((s) => s === "changes_requested");
+  if (changesRequested) {
+    items.push({
+      id: "changes",
+      label: "Changes requested",
+      done: true,
+    });
+  }
+
+  const sharedOrSent = statuses.some(
+    (s) =>
+      s === "sent" ||
+      s === "finalized" ||
+      s === "accepted" ||
+      s === "converted_to_job",
+  );
+  if (sharedOrSent && !changesRequested) {
+    // no-op marker — shared is already covered by "Estimate received" when token exists
+  }
+
   if (accepted) {
     items.push({
       id: "accepted",
@@ -180,13 +200,16 @@ function ProfessionalCard({
                     {["sent", "finalized", "changes_requested"].includes(
                       est.status,
                     )
-                      ? "Review & sign"
+                      ? est.status === "changes_requested"
+                        ? "View estimate"
+                        : "Review & sign"
                       : "View"}
                   </Link>
                 </Button>
               ) : (
                 <span className="text-xs text-muted-foreground">
-                  Waiting for share link
+                  Provider is preparing this estimate — open it here once they
+                  share the review link.
                 </span>
               )}
             </li>

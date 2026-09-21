@@ -26,9 +26,26 @@ function isProArea(pathname: string): boolean {
   return pathname === "/pro" || pathname.startsWith("/pro/");
 }
 
+function isProLanding(pathname: string): boolean {
+  return pathname === "/pro" || pathname === "/pro/";
+}
+
 function isProDashboard(pathname: string): boolean {
   return (
     pathname === "/pro/dashboard" || pathname.startsWith("/pro/dashboard/")
+  );
+}
+
+function isProAuthPath(pathname: string): boolean {
+  return (
+    pathname === "/pro/login" ||
+    pathname === "/pro/register" ||
+    pathname === "/pro/forgot-password" ||
+    pathname === "/pro/reset-password" ||
+    pathname === "/pro/verify-otp" ||
+    pathname === "/pro/verify-forgot-otp" ||
+    pathname.startsWith("/pro/login/") ||
+    pathname.startsWith("/pro/register/")
   );
 }
 
@@ -70,8 +87,9 @@ function readNextFromLocation(): string | null {
 /**
  * Client-side RBAC after Redux Persist rehydrates.
  * - Customers must never see /pro/* (including pro login).
- * - After customer login, send them home unless ?next= or a pending order resume exists.
- * - Providers only use /pro/dashboard/* — customer marketing, auth, and account bounce there.
+ * - After customer login, send them to the customer landing (/) unless ?next= or a pending order resume exists.
+ * - After provider login, send them to the pro landing (/pro). Dashboard is reached via the Dashboard button.
+ * - Providers may stay on /pro or /pro/dashboard/*; other customer marketing/account routes bounce to /pro.
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -84,9 +102,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const loggedIn = Boolean(
     auth.hydrated && auth.token && auth.isAuthenticated,
   );
-  /** Hide customer chrome while bouncing a logged-in provider to the portal. */
+  /** Hide chrome while bouncing a logged-in provider off customer marketing/auth. */
   const providerOffPortal =
-    loggedIn && role === "provider" && !isProDashboard(pathname);
+    loggedIn &&
+    role === "provider" &&
+    !isProDashboard(pathname) &&
+    !isProLanding(pathname);
   /** Hide pro chrome while bouncing a logged-in customer off /pro. */
   const customerOnPro = loggedIn && role === "customer" && isProArea(pathname);
 
@@ -110,11 +131,11 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
 
     if (nextRole === "customer") {
       if (isProArea(pathname)) {
-        router.replace("/");
+        router.replace(customerPaths.site);
         return;
       }
       if (isCustomerAuthPath(pathname)) {
-        // Prefer ?next=… (order resume), then pending order returnPath, else home.
+        // Prefer ?next=… (order resume), then pending order returnPath, else marketing home.
         const fromQuery = readNextFromLocation();
         const fromPending = safeInternalPath(
           readPendingFixedOrder()?.returnPath,
@@ -125,9 +146,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (nextRole === "provider") {
-      // Provider portal is /pro/dashboard/* only — not customer Home/Services/etc.
-      if (!isProDashboard(pathname)) {
-        router.replace(proPaths.dashboard);
+      // Stay on pro landing or dashboard; auth screens and customer site → landing.
+      if (isProDashboard(pathname) || isProLanding(pathname)) {
+        return;
+      }
+      if (isProAuthPath(pathname) || !isProArea(pathname)) {
+        router.replace(proPaths.home);
       }
     }
   }, [

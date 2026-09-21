@@ -153,7 +153,7 @@ export function OtpVerificationForm({
       ? nextPath
       : null;
   const successHref = isProvider
-    ? proPaths.dashboard
+    ? proPaths.home
     : safeNext || "/";
   const registerHrefWithNext = safeNext
     ? `${registerHref}?next=${encodeURIComponent(safeNext)}`

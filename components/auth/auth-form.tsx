@@ -163,7 +163,7 @@ function AuthFormInner({
               ? redirectNext
               : null;
           router.push(
-            safeRedirect || (isProvider ? proPaths.dashboard : "/"),
+            safeRedirect || (isProvider ? proPaths.home : "/"),
           );
         } catch (error) {
           showApiErrorToast(error, "Invalid email or password.");

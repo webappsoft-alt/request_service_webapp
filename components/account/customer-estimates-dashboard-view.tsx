@@ -34,12 +34,13 @@ import {
 } from "@/store/customerQuotesSlice";
 
 function statusLabel(status: string) {
-  const value = status.toLowerCase();
+  const value = String(status || "").toLowerCase();
   if (value === "site_visit") return "Site visit";
   if (value === "draft") return "Preparing";
   if (value === "inspected") return "Inspected";
   if (value === "finalized") return "Ready to send";
   if (value === "converted_to_job") return "Converted to Job";
+  if (value === "declined") return "Declined";
   return status
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -71,11 +72,27 @@ function batchReference(batch: CustomerQuoteBatch) {
 }
 
 function batchOverallStatus(batch: CustomerQuoteBatch) {
-  const statuses = batch.professionals.map((p) => p.status);
+  const pros = batch.professionals || [];
+  const statuses = pros.map((p) => String(p.status || "").toLowerCase());
+
   if (statuses.some((s) => s === "converted_to_job")) return "converted_to_job";
   if (statuses.some((s) => s === "accepted")) return "accepted";
-  if (statuses.some((s) => s === "estimate_sent")) return "estimate_sent";
-  if (batch.seenCount > 0) return "viewed";
+  if (batch.estimateCount > 0 || statuses.some((s) => s === "estimate_sent")) {
+    return "estimate_sent";
+  }
+  if (statuses.some((s) => s === "changes_requested")) return "changes_requested";
+  if (statuses.some((s) => s === "site_visit")) return "site_visit";
+
+  const isDeclined = (s: string) =>
+    ["declined", "rejected", "closed", "cancelled"].includes(s);
+
+  if (pros.length > 0 && statuses.every(isDeclined)) {
+    return "declined";
+  }
+
+  if (batch.seenCount > 0 || statuses.some((s) => s === "viewed" || s === "contacted")) {
+    return "viewed";
+  }
   return "new";
 }
 
@@ -385,7 +402,7 @@ export function CustomerEstimatesDashboardView({
               ? customerPaths.estimate(row.shareToken)
               : row.id
                 ? customerPaths.estimate(row.id)
-                : undefined
+                : ""
           }
           empty="No estimates received yet."
           columns={[

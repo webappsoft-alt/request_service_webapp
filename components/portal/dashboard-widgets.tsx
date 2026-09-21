@@ -50,7 +50,7 @@ export function StatCell({
       className="rounded-xl border border-border bg-card px-5 py-5 transition-colors hover:bg-muted/40"
     >
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{label}</p>
-      <p className="mt-3 text-[1.75rem] leading-none font-semibold tracking-tight tabular-nums">{value}</p>
+      <p className="mt-3 text-[1.75rem] leading-none font-semibold tracking-tight tabular-nums">{value || 0}</p>
       {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
     </Link>
   );

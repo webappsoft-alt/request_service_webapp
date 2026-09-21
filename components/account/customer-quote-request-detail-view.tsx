@@ -16,6 +16,7 @@ import {
   MessageSquare,
   ShieldCheck,
   Sparkles,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -54,12 +55,18 @@ import {
   type CustomerQuoteBatch,
 } from "@/store/customerQuotesSlice";
 
+function isDeclinedStatus(status: string) {
+  const clean = String(status || "").toLowerCase();
+  return ["declined", "rejected", "closed", "cancelled"].includes(clean);
+}
+
 function statusLabel(status: string) {
   const clean = String(status || "").toLowerCase();
   if (clean === "converted_to_job") return "Job Created";
   if (clean === "site_visit") return "Site Visit";
   if (clean === "changes_requested") return "Changes Requested";
   if (clean === "estimate_sent") return "Estimate Sent";
+  if (clean === "declined") return "Declined";
   if (clean === "rejected") return "Rejected";
   return status
     .split("_")
@@ -145,6 +152,40 @@ function buildTimelineSteps(batch: CustomerQuoteBatch): TimelineStep[] {
     .filter(Boolean)
     .sort()[0];
 
+  const pros = batch.professionals || [];
+  const proStatuses = pros.map((p) => String(p.status || "").toLowerCase());
+  const allProsDeclined =
+    pros.length > 0 && proStatuses.every(isDeclinedStatus) && !hasEstimate;
+
+  if (allProsDeclined) {
+    return [
+      {
+        id: "submitted",
+        label: "Request Submitted",
+        detail: batch.createdAt ? formatDate(batch.createdAt) : "Submitted online",
+        done: true,
+      },
+      {
+        id: "sent",
+        label: "Dispatched to Providers",
+        detail:
+          batch.sentToCount > 0
+            ? `Sent to ${batch.sentToCount} local professional${batch.sentToCount === 1 ? "" : "s"}`
+            : "Dispatched to local providers",
+        done: true,
+      },
+      {
+        id: "declined",
+        label: "Request Declined",
+        detail: firstViewed
+          ? `Provider reviewed and declined on ${formatDate(firstViewed)}`
+          : "Provider was unable to take on this request",
+        done: true,
+        current: true,
+      },
+    ];
+  }
+
   const steps: TimelineStep[] = [
     {
       id: "submitted",
@@ -225,6 +266,20 @@ function getOverallStatusBadge(batch: CustomerQuoteBatch) {
       </Badge>
     );
   }
+
+  const pros = batch.professionals || [];
+  const proStatuses = pros.map((p) => String(p.status || "").toLowerCase());
+  const allProsDeclined =
+    pros.length > 0 && proStatuses.every(isDeclinedStatus) && batch.estimateCount === 0;
+
+  if (allProsDeclined) {
+    return (
+      <Badge variant="destructive" className="bg-red-600 text-white hover:bg-red-700">
+        Declined
+      </Badge>
+    );
+  }
+
   if (batch.seenCount > 0) {
     return (
       <Badge variant="secondary" className="bg-amber-100 text-amber-900 border-amber-300">
@@ -444,6 +499,11 @@ export function CustomerQuoteRequestDetailView() {
     .filter(Boolean)
     .sort()[0];
 
+  const pros = batch.professionals || [];
+  const proStatuses = pros.map((p) => String(p.status || "").toLowerCase());
+  const allProsDeclined =
+    pros.length > 0 && proStatuses.every(isDeclinedStatus) && batch.estimateCount === 0;
+
   return (
     <>
     <PortalPage
@@ -477,18 +537,22 @@ export function CustomerQuoteRequestDetailView() {
         <StatCard
           label="Request status"
           value={
-            batch.estimateCount > 0
-              ? `${batch.estimateCount} ready`
-              : batch.seenCount > 0
-                ? "Under review"
-                : "Dispatched"
+            allProsDeclined
+              ? "Declined"
+              : batch.estimateCount > 0
+                ? `${batch.estimateCount} ready`
+                : batch.seenCount > 0
+                  ? "Under review"
+                  : "Dispatched"
           }
           hint={
-            batch.estimateCount > 0
-              ? "Estimates ready for signature"
-              : batch.seenCount > 0
-                ? "Pros reviewing requirements"
-                : "Sent to matching providers"
+            allProsDeclined
+              ? "Provider is unable to take this request"
+              : batch.estimateCount > 0
+                ? "Estimates ready for signature"
+                : batch.seenCount > 0
+                  ? "Pros reviewing requirements"
+                  : "Sent to matching providers"
           }
         />
         <StatCard
@@ -521,6 +585,28 @@ export function CustomerQuoteRequestDetailView() {
           }
         />
       </div>
+
+      {/* Decline notice banner if all pros declined */}
+      {allProsDeclined ? (
+        <div className="rounded-xl border border-red-200 bg-red-50/60 p-4 text-sm text-red-900 dark:border-red-950/40 dark:bg-red-950/20 dark:text-red-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-semibold text-red-900 dark:text-red-200">
+                This quote request was declined by the provider
+              </p>
+              <p className="text-xs text-red-700 dark:text-red-300">
+                The professional was unable to accept this request at this time. You can submit a new quote request to match with other available professionals.
+              </p>
+            </div>
+            <Button asChild size="sm" className="shrink-0 bg-red-600 hover:bg-red-700 text-white">
+              <Link href={customerPaths.estimateRequest}>
+                <Sparkles className="size-3.5 mr-1.5" />
+                Request New Quote
+              </Link>
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Main Grid: Content (Left) & Sidebar (Right) */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -844,27 +930,38 @@ export function CustomerQuoteRequestDetailView() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant={pro.seen ? "secondary" : "outline"}
-                        className={cn(
-                          pro.seen
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {pro.seen ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Eye className="size-3" />
-                            Viewed
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="size-3" />
-                            Not seen yet
-                          </span>
-                        )}
-                      </Badge>
-                      <Badge variant="outline">{statusLabel(pro.status)}</Badge>
+                      {isDeclinedStatus(pro.status) ? (
+                        <Badge
+                          variant="outline"
+                          className="bg-red-50 text-red-700 border-red-200 font-medium"
+                        >
+                          Declined
+                        </Badge>
+                      ) : (
+                        <>
+                          <Badge
+                            variant={pro.seen ? "secondary" : "outline"}
+                            className={cn(
+                              pro.seen
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "text-muted-foreground",
+                            )}
+                          >
+                            {pro.seen ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Eye className="size-3" />
+                                Viewed
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="size-3" />
+                                Not seen yet
+                              </span>
+                            )}
+                          </Badge>
+                          <Badge variant="outline">{statusLabel(pro.status)}</Badge>
+                        </>
+                      )}
 
                       <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
                         <Link href={customerPaths.messages}>
@@ -1005,14 +1102,18 @@ export function CustomerQuoteRequestDetailView() {
                   <span
                     className={cn(
                       "absolute -left-6 top-0 flex size-5 items-center justify-center rounded-full text-[10px] font-bold ring-4 ring-card",
-                      step.done
-                        ? "bg-emerald-600 text-white"
-                        : step.current
-                          ? "bg-primary text-primary-foreground ring-primary/20 animate-pulse"
-                          : "border border-border bg-muted text-muted-foreground",
+                      step.id === "declined"
+                        ? "bg-red-600 text-white"
+                        : step.done
+                          ? "bg-emerald-600 text-white"
+                          : step.current
+                            ? "bg-primary text-primary-foreground ring-primary/20 animate-pulse"
+                            : "border border-border bg-muted text-muted-foreground",
                     )}
                   >
-                    {step.done ? (
+                    {step.id === "declined" ? (
+                      <X className="size-3" />
+                    ) : step.done ? (
                       <Check className="size-3" />
                     ) : (
                       <span>{idx + 1}</span>
@@ -1022,11 +1123,13 @@ export function CustomerQuoteRequestDetailView() {
                     <p
                       className={cn(
                         "text-sm font-medium",
-                        step.done
-                          ? "text-foreground"
-                          : step.current
-                            ? "font-semibold text-primary"
-                            : "text-muted-foreground",
+                        step.id === "declined"
+                          ? "font-semibold text-red-600 dark:text-red-400"
+                          : step.done
+                            ? "text-foreground"
+                            : step.current
+                              ? "font-semibold text-primary"
+                              : "text-muted-foreground",
                       )}
                     >
                       {step.label}

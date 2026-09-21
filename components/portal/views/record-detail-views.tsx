@@ -245,7 +245,7 @@ export function EstimateDetailView({ id }: { id: string }) {
   }, [crm.enabled, crm.ready, crm.ensureLoaded]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || id === "new") return;
     let cancelled = false;
     setFetching(true);
     void getEstimate(id)

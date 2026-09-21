@@ -335,78 +335,7 @@ export function RequestsView() {
         </Button>
       }
     >
-      {/* Pipeline Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <Link
-          href="/pro/dashboard/requests?status=new"
-          className={`flex items-center justify-between p-3.5 rounded-lg border transition-all ${
-            status === "new"
-              ? "bg-[#003F7D]/5 border-[#003F7D] shadow-2xs"
-              : "bg-card border-black/10 hover:border-black/25"
-          }`}
-        >
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">New / Unseen</p>
-            <p className="text-xl font-bold text-foreground mt-0.5">{newLeadsCount}</p>
-          </div>
-          <span className="flex size-8 items-center justify-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold">
-            {newLeadsCount}
-          </span>
-        </Link>
-
-        <Link
-          href="/pro/dashboard/requests?status=contacted"
-          className={`flex items-center justify-between p-3.5 rounded-lg border transition-all ${
-            status === "contacted"
-              ? "bg-[#003F7D]/5 border-[#003F7D] shadow-2xs"
-              : "bg-card border-black/10 hover:border-black/25"
-          }`}
-        >
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">Active Pipeline</p>
-            <p className="text-xl font-bold text-foreground mt-0.5">{activeLeadsCount}</p>
-          </div>
-          <span className="flex size-8 items-center justify-center rounded-full bg-blue-50 text-[#003F7D] border border-blue-200 text-xs font-bold">
-            {activeLeadsCount}
-          </span>
-        </Link>
-
-        <Link
-          href="/pro/dashboard/requests?status=closed"
-          className={`flex items-center justify-between p-3.5 rounded-lg border transition-all ${
-            status === "closed"
-              ? "bg-[#003F7D]/5 border-[#003F7D] shadow-2xs"
-              : "bg-card border-black/10 hover:border-black/25"
-          }`}
-        >
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">Converted / Closed</p>
-            <p className="text-xl font-bold text-foreground mt-0.5">{convertedLeadsCount}</p>
-          </div>
-          <span className="flex size-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-            {convertedLeadsCount}
-          </span>
-        </Link>
-
-        <Link
-          href="/pro/dashboard/messages"
-          className="flex items-center justify-between p-3.5 rounded-lg border bg-card border-black/10 hover:border-black/25 transition-all"
-        >
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">Unread Chats</p>
-            <p className="text-xl font-bold text-foreground mt-0.5">{unreadChatsCount}</p>
-          </div>
-          <span
-            className={`flex size-8 items-center justify-center rounded-full text-xs font-bold ${
-              unreadChatsCount > 0
-                ? "bg-[#003F7D] text-white"
-                : "bg-slate-100 text-muted-foreground"
-            }`}
-          >
-            <MessageSquare className="size-3.5" />
-          </span>
-        </Link>
-      </div>
+      
 
       <FilterTabs baseHref="/pro/dashboard/requests" value={status} options={withArchiveFilter(filters)} />
       <PortalDataTable

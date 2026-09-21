@@ -47,22 +47,46 @@ function batchKey(batch: CustomerQuoteBatch) {
   );
 }
 
+function isDeclinedStatus(status: string) {
+  const clean = String(status || "").toLowerCase();
+  return ["declined", "rejected", "closed", "cancelled"].includes(clean);
+}
+
 function batchStatusLabel(batch: CustomerQuoteBatch) {
-  const statuses = batch.professionals.map((p) => p.status);
+  const pros = batch.professionals || [];
+  const statuses = pros.map((p) => String(p.status || "").toLowerCase());
   if (statuses.some((s) => s === "converted_to_job")) return "Job Created";
   if (statuses.some((s) => s === "accepted")) return "Accepted";
-  if (batch.estimateCount > 0)
+  if (batch.estimateCount > 0 || statuses.some((s) => s === "estimate_sent"))
     return `${batch.estimateCount} Estimate${batch.estimateCount === 1 ? "" : "s"}`;
-  if (batch.seenCount > 0) return "Viewed";
+  if (statuses.some((s) => s === "changes_requested")) return "Changes Requested";
+  if (statuses.some((s) => s === "site_visit")) return "Site Visit";
+
+  if (pros.length > 0 && statuses.every(isDeclinedStatus)) {
+    return "Declined";
+  }
+
+  if (batch.seenCount > 0 || statuses.some((s) => s === "viewed" || s === "contacted")) {
+    return "Viewed";
+  }
   return "Dispatched";
 }
 
 function batchTone(batch: CustomerQuoteBatch) {
-  const statuses = batch.professionals.map((p) => p.status);
+  const pros = batch.professionals || [];
+  const statuses = pros.map((p) => String(p.status || "").toLowerCase());
   if (statuses.some((s) => s === "converted_to_job" || s === "accepted"))
     return "success" as const;
-  if (batch.estimateCount > 0) return "primary" as const;
-  if (batch.seenCount > 0) return "warning" as const;
+  if (batch.estimateCount > 0 || statuses.some((s) => s === "estimate_sent"))
+    return "primary" as const;
+
+  if (pros.length > 0 && statuses.every(isDeclinedStatus)) {
+    return "danger" as const;
+  }
+
+  if (batch.seenCount > 0 || statuses.some((s) => s === "viewed" || s === "contacted")) {
+    return "warning" as const;
+  }
   return "neutral" as const;
 }
 
@@ -161,12 +185,17 @@ export function CustomerDashboardView() {
 
   const openRequests = useMemo(
     () =>
-      batches.filter(
-        (b) =>
-          !b.professionals.some(
-            (p) => p.status === "converted_to_job" || p.status === "accepted",
-          ),
-      ).length,
+      batches.filter((b) => {
+        const statuses = (b.professionals || []).map((p) =>
+          String(p.status || "").toLowerCase(),
+        );
+        const isClosed =
+          statuses.some((s) => s === "converted_to_job" || s === "accepted") ||
+          (b.professionals.length > 0 &&
+            statuses.every(isDeclinedStatus) &&
+            b.estimateCount === 0);
+        return !isClosed;
+      }).length,
     [batches],
   );
 

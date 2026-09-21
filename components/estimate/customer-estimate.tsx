@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowLeft,
   CheckCircle2,
-  Download,
+  Clock,
   FileQuestion,
   Printer,
+  RotateCcw,
   ShieldCheck,
 } from "lucide-react";
+import { customerPaths } from "@/lib/customer-paths";
 import { toast } from "sonner";
 import {
   EstimatePdfDocument,
@@ -229,10 +233,13 @@ function canCustomerSignStatus(status?: string) {
 export function CustomerEstimatePage({
   token,
   estimateId: estimateIdProp,
+  embedded = false,
 }: {
   token?: string;
   /** Authenticated CRM estimate id (preferred over public share token). */
   estimateId?: string;
+  /** When true, renders inside dashboard portal shell without page wrapper */
+  embedded?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const share = useEstimateShare();
@@ -252,7 +259,10 @@ export function CustomerEstimatePage({
   const [viaUserApi, setViaUserApi] = useState(() =>
     Boolean(estimateIdProp || isMongoObjectId(String(token || ""))),
   );
-  const [wantAccept, setWantAccept] = useState(false);
+  const [wantAccept] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("accept") === "1";
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -341,18 +351,17 @@ export function CustomerEstimatePage({
       setApproval(undefined);
       setLoading(false);
     }
-  }, [token, estimateIdProp, share.approvalOf]);
+  }, [token, estimateIdProp, share]);
 
   useEffect(() => {
-    void load();
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) void load();
+    });
+    return () => {
+      active = false;
+    };
   }, [load]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setWantAccept(
-      new URLSearchParams(window.location.search).get("accept") === "1",
-    );
-  }, [token, estimateIdProp]);
 
   const estimateId = snapshot?.estimateId || String(estimateIdProp || "").trim();
   const canSign = Boolean(
@@ -474,35 +483,94 @@ export function CustomerEstimatePage({
   }
 
   if (loading) {
-    return <EstimateDocumentSkeleton />;
+    return <EstimateDocumentSkeleton embedded={embedded} />;
   }
 
   if (!snapshot) {
-    return (
-      <main id="main-content" className="min-h-svh bg-[#eef1f5] px-4 py-16">
-        <div className="mx-auto max-w-lg rounded-md bg-card p-8 text-center">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-            <FileQuestion className="size-6" />
+    const isTimeout =
+      Boolean(error) &&
+      (error?.toLowerCase().includes("timeout") ||
+        error?.toLowerCase().includes("network") ||
+        error?.toLowerCase().includes("econnrefused") ||
+        error?.toLowerCase().includes("exceeded"));
+
+    const emptyCard = (
+      <div className="mx-auto max-w-lg rounded-xl border border-border bg-card p-8 sm:p-10 text-center shadow-xs">
+        <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-border bg-muted/60 text-muted-foreground shadow-2xs">
+          <FileQuestion className="size-7 text-primary/80" />
+        </div>
+        <h1 className="text-xl font-semibold text-foreground tracking-tight">
+          {isTimeout ? "Unable to load estimate" : "Estimate proposal not found"}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+          {isTimeout
+            ? "The request took longer than expected to respond. Please check your connection or try again."
+            : "The estimate proposal link may have expired, been updated, or is no longer accessible."}
+        </p>
+
+        {error ? (
+          <div className="mx-auto mt-3.5 inline-flex max-w-md items-center gap-2 rounded-lg border border-border bg-muted/40 px-3.5 py-1.5 text-xs text-muted-foreground">
+            <Clock className="size-3.5 shrink-0 text-amber-600" />
+            <span className="truncate font-mono">{error}</span>
           </div>
-          <h1 className="text-xl font-semibold">Estimate proposal not found</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {error ||
-              "Estimate proposal not found or link has expired. Please ask the service company to send a new link."}
+        ) : null}
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <Button
+            onClick={() => void load()}
+            size="sm"
+            className="gap-1.5 font-medium"
+          >
+            <RotateCcw className="size-3.5" />
+            Try again
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href={customerPaths.estimates}>
+              <ArrowLeft className="size-3.5" />
+              All estimates
+            </Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link href={customerPaths.requests}>
+              Quote requests
+            </Link>
+          </Button>
+        </div>
+
+        <div className="mt-8 border-t border-border/70 pt-5 text-xs text-muted-foreground">
+          <p>
+            Need help? Reach out to your provider via{" "}
+            <Link
+              href={customerPaths.messages}
+              className="font-medium text-primary hover:underline"
+            >
+              Messages
+            </Link>{" "}
+            or check your quote requests.
           </p>
         </div>
+      </div>
+    );
+
+    if (embedded) {
+      return <div className="w-full py-4 sm:py-8">{emptyCard}</div>;
+    }
+
+    return (
+      <main
+        id="main-content"
+        className="flex min-h-svh items-center justify-center bg-muted/20 px-4 py-16"
+      >
+        {emptyCard}
       </main>
     );
   }
 
-  return (
-    <main
-      id="main-content"
-      className="min-h-svh bg-[#eef1f5] px-4 py-6 sm:py-10 print:min-h-0 print:bg-white print:p-0 print:m-0"
-    >
-      <div className="mx-auto w-full max-w-[8.5in] space-y-4 print:max-w-none print:space-y-0 print:p-0 print:m-0">
-        {/* Top bar with quick actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-black/10 bg-card px-4 py-3 print:hidden">
-          <div className="flex items-center gap-2">
+  const documentContent = (
+    <div className="mx-auto w-full max-w-[8.5in] space-y-4 print:max-w-none print:space-y-0 print:p-0 print:m-0">
+      {/* Top bar with quick actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-xs print:hidden">
+        <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">
               {snapshot.companyName}
             </span>
@@ -666,6 +734,18 @@ export function CustomerEstimatePage({
           </div>
         ) : null}
       </div>
+  );
+
+  if (embedded) {
+    return <div className="w-full space-y-4 print:space-y-0">{documentContent}</div>;
+  }
+
+  return (
+    <main
+      id="main-content"
+      className="min-h-svh bg-muted/20 px-4 py-6 sm:py-10 print:min-h-0 print:bg-white print:p-0 print:m-0"
+    >
+      {documentContent}
     </main>
   );
 }
@@ -747,15 +827,15 @@ export function EstimateDocument({
   return <EstimatePdfDocument snapshot={snapshot} />;
 }
 
-export function EstimateDocumentSkeleton() {
-  return (
-    <main
-      id="main-content"
-      className="min-h-svh bg-[#eef1f5] px-4 py-6 sm:py-10"
-    >
-      <div className="mx-auto w-full max-w-[8.5in] space-y-4">
-        {/* Top bar skeleton */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-black/10 bg-card px-4 py-3">
+export function EstimateDocumentSkeleton({
+  embedded = false,
+}: {
+  embedded?: boolean;
+} = {}) {
+  const content = (
+    <div className="mx-auto w-full max-w-[8.5in] space-y-4">
+      {/* Top bar skeleton */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-xs">
           <div className="flex items-center gap-2">
             <Skeleton className="h-5 w-32" />
             <span className="text-muted-foreground">·</span>
@@ -906,12 +986,24 @@ export function EstimateDocumentSkeleton() {
               </div>
             </div>
           </div>
-          <footer className="flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2">
+          <footer className="flex items-center justify-between border-t border-border bg-muted/30 px-8 py-2">
             <Skeleton className="h-3 w-36" />
             <Skeleton className="h-3 w-16" />
           </footer>
         </article>
       </div>
+  );
+
+  if (embedded) {
+    return <div className="w-full space-y-4">{content}</div>;
+  }
+
+  return (
+    <main
+      id="main-content"
+      className="min-h-svh bg-muted/20 px-4 py-6 sm:py-10"
+    >
+      {content}
     </main>
   );
 }

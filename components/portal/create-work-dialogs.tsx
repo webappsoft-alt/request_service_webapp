@@ -89,9 +89,11 @@ export function CreateEstimateDialog({
   open,
   onOpenChange,
   customerId,
+  customerName,
   requestId,
   requestName,
   requestNotes,
+  requestAddress,
   estimate,
   onCreated,
   onUpdated,
@@ -99,9 +101,16 @@ export function CreateEstimateDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customerId?: string;
+  customerName?: string;
   requestId?: string;
   requestName?: string;
   requestNotes?: string;
+  requestAddress?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+  };
   /** When set, dialog edits this estimate (PUT) instead of creating. */
   estimate?: Estimate | null;
   onCreated?: (estimate: Estimate) => void;
@@ -219,7 +228,15 @@ export function CreateEstimateDialog({
     }
     // Edit mode hydrates in a separate effect — don't wipe the form.
     if (estimate?.id) return;
-    setName("");
+    if (requestName) {
+      setName(
+        requestName.endsWith("Proposal") || requestName.endsWith("Estimate")
+          ? requestName
+          : `${requestName} Proposal`,
+      );
+    } else {
+      setName("");
+    }
     setSaving(false);
     setLines([]);
     setPath("site_visit");
@@ -231,15 +248,26 @@ export function CreateEstimateDialog({
     setTerms("Valid for 30 days. Materials may change after site inspection.");
     if (requestNotes) setNotes(requestNotes);
     else setNotes("");
+    if (customerName) {
+      setCustomerLabel(customerName);
+    }
     if (boundCustomerId) {
       pickCustomer(boundCustomerId);
+    }
+    if (requestAddress) {
+      if (requestAddress.street) setStreet(requestAddress.street);
+      if (requestAddress.city) setCity(requestAddress.city);
+      if (requestAddress.state) setState(requestAddress.state);
+      if (requestAddress.zip) setZip(requestAddress.zip);
     }
     if (!useApi && employees.length === 0) {
       void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
     }
   }, [
     boundCustomerId,
+    customerName,
     open,
+    requestAddress,
     requestName,
     requestNotes,
     useApi,

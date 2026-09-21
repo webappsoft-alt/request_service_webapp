@@ -105,9 +105,12 @@ export function CustomerInvoicesDashboardView() {
             sortValue: (row) => row.provider?.companyName || "",
             searchValue: (row) => row.provider?.companyName || "",
             cell: (row) => (
-              <span className="font-medium text-foreground">
+              <Link
+                href={customerPaths.messages}
+                className="font-medium text-primary hover:underline"
+              >
                 {row.provider?.companyName || "Professional"}
-              </span>
+              </Link>
             ),
           },
           {
@@ -151,7 +154,7 @@ export function CustomerInvoicesDashboardView() {
               <span
                 className={cn(
                   "font-bold tabular-nums",
-                  row.balanceDue > 0 ? "text-[#003F7D]" : "text-muted-foreground",
+                  row.balanceDue > 0 ? "text-primary" : "text-muted-foreground",
                 )}
               >
                 {formatMoney(row.balanceDue)}

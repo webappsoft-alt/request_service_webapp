@@ -249,7 +249,7 @@ export function DashboardView() {
           href="/pro/dashboard/jobs?status=completed"
         />
         <StatCell
-          label="Jobs with no technician"
+          label="Jobs with no team member"
           value={String(unassigned.length)}
           note="Active jobs still unassigned"
           href="/pro/dashboard/jobs?status=unscheduled"

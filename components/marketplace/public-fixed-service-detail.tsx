@@ -22,6 +22,7 @@ import {
   type PublicFixedService,
 } from "@/store/publicFixedServicesSlice";
 import {
+  hydrateProviderCardCovers,
   normalizePublicProfessional,
   publicProfessionalToProvider,
 } from "@/store/publicProfessionalsSlice";
@@ -40,6 +41,7 @@ import {
   findOpenOrderForService,
   formatOrderStatus,
 } from "@/lib/orders/order-status";
+import { bannerUrlFromRecord } from "@/lib/data/provider-media";
 import { inferStateFromAddress } from "@/lib/format";
 import { locationDisplayLabel } from "@/store/locationSlice";
 import {
@@ -247,7 +249,7 @@ function providerFromRelatedProfessional(raw: unknown): Provider | null {
       (typeof record.avatar === "string" && record.avatar) ||
       (typeof record.avatarUrl === "string" && record.avatarUrl) ||
       undefined,
-    coverImage: undefined,
+    coverImage: bannerUrlFromRecord(record),
     startingPrice:
       typeof metrics.startingPrice === "number" ? metrics.startingPrice : undefined,
     tagline:
@@ -657,9 +659,14 @@ export function PublicFixedServiceDetail({
         }));
 
         if (!cancelled) {
-          setRelatedProviders(providers.slice(0, RELATED_LIMIT));
-          setRelatedListings(listings);
-          setRelatedLoading(false);
+          const withCovers = await hydrateProviderCardCovers(
+            providers.slice(0, RELATED_LIMIT),
+          );
+          if (!cancelled) {
+            setRelatedProviders(withCovers);
+            setRelatedListings(listings);
+            setRelatedLoading(false);
+          }
         }
       } catch {
         if (cancelled) return;

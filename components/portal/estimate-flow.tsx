@@ -179,7 +179,7 @@ export function EstimateStageBanner({
     switch (status) {
       case "site_visit":
         return {
-          title: "Technician on site",
+          title: "Team member on site",
           body: "Capture findings and photos on the Site visit tab and save the inspection. Once field notes are saved, you can price line items and finalize.",
         };
       case "inspected":
@@ -544,11 +544,11 @@ export function EstimateSiteVisitTab({
           )}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          What the technician saw on site. Photos and notes stay with this
+          What the team member saw on site. Photos and notes stay with this
           estimate until the office finalizes the quote.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Technician">
+          <Field label="Team member">
             <Select
               disabled={locked || loading}
               value={loading ? undefined : visit.employeeId || "__unassigned__"}
@@ -565,7 +565,7 @@ export function EstimateSiteVisitTab({
             >
               <SelectTrigger className="w-full" loading={loading}>
                 <SelectValue
-                  placeholder={loading ? "Loading technicians…" : "Unassigned"}
+                  placeholder={loading ? "Loading team members…" : "Unassigned"}
                 />
               </SelectTrigger>
               <SelectContent
@@ -576,7 +576,7 @@ export function EstimateSiteVisitTab({
                 {loading ? (
                   <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
                     <Loader2 className="size-3.5 animate-spin" />
-                    <span>Loading technicians…</span>
+                    <span>Loading team members…</span>
                   </div>
                 ) : (
                   <>

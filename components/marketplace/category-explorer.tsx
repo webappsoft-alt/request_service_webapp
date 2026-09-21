@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Spinner } from "@/components/ui/spinner";
-import { ProviderCardSkeletonGrid } from "@/components/shared/loading-skeletons";
+import {
+  MapPaneSkeleton,
+  ProviderCardSkeleton,
+} from "@/components/shared/loading-skeletons";
 import { ProviderCard } from "@/components/shared/provider-card";
 import {
   AddressAutocomplete,
@@ -65,8 +68,8 @@ const ProviderMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full items-center justify-center bg-muted text-sm text-muted-foreground">
-        Loading map…
+      <div className="relative h-full min-h-52 w-full">
+        <MapPaneSkeleton />
       </div>
     ),
   }
@@ -868,12 +871,13 @@ export function CategoryExplorer({
           </div>
 
           {showInitialSpinner ? (
-            <div className="p-3 sm:p-4">
-              <ProviderCardSkeletonGrid
-                count={6}
-                className="lg:min-h-0 xl:grid-cols-2"
-              />
-            </div>
+            <ul className="grid content-start grid-cols-1 gap-4 p-3 sm:p-4 xl:grid-cols-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              {Array.from({ length: 6 }, (_, i) => (
+                <li key={`provider-sk-${i}`} className="h-full">
+                  <ProviderCardSkeleton />
+                </li>
+              ))}
+            </ul>
           ) : results.length ? (
             <>
               <ul

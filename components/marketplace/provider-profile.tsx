@@ -153,22 +153,22 @@ export function ProviderProfile({
               </div>
             </div>
 
+            <FixedServiceCatalog
+              provider={provider}
+              services={live ? fixedServices : undefined}
+            />
+
             <section className="flex flex-col gap-4">
               <div>
                 <p className="eyebrow text-muted-foreground">Services</p>
                 <h2 className="mt-1 text-2xl font-semibold">What they provide</h2>
               </div>
-              <div className="grid max-w-sm grid-cols-1 gap-3 sm:max-w-[38rem] sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                 {categories.map((category) => (
                   <ServiceOfferCard key={category.id} category={category} />
                 ))}
               </div>
             </section>
-
-            <FixedServiceCatalog
-              provider={provider}
-              services={live ? fixedServices : undefined}
-            />
 
             <section className="flex flex-col gap-4">
               <div>

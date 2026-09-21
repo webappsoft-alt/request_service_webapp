@@ -1,12 +1,43 @@
+import { galleryBanner, normalizeBusinessGallery } from "@/lib/business-gallery";
 import { getAreaName } from "@/lib/data/service-areas";
 import { getServiceCategoryById } from "@/lib/data/services";
 import { HERO_HOME_IMAGE, HERO_PRO_IMAGE } from "@/lib/site";
 import type { Provider } from "@/lib/types";
 
-/** Profile/avatar photo for professional cards — never portfolio/project images. */
+/** Main business-gallery banner for professional cards. Logo stays on the small overlay. */
+export function getProviderCardCover(provider: Provider) {
+  const banner =
+    provider.coverImage?.trim() ||
+    provider.images?.find((src) => Boolean(src?.trim()))?.trim() ||
+    provider.gallery?.find((src) => Boolean(src?.trim()))?.trim();
+  return banner || HERO_PRO_IMAGE;
+}
+
 export function getProviderProfileImage(provider: Provider) {
-  const avatar = provider.logoUrl?.trim();
-  return avatar || HERO_PRO_IMAGE;
+  return getProviderCardCover(provider);
+}
+
+/** Resolve the public main-banner URL from a professional/related API record. */
+export function bannerUrlFromRecord(record: {
+  coverImage?: unknown;
+  bannerUrl?: unknown;
+  businessGallery?: unknown;
+  gallery?: unknown;
+  images?: unknown;
+} | null | undefined): string | undefined {
+  if (!record) return undefined;
+  if (typeof record.coverImage === "string" && record.coverImage.trim()) {
+    return record.coverImage.trim();
+  }
+  if (typeof record.bannerUrl === "string" && record.bannerUrl.trim()) {
+    return record.bannerUrl.trim();
+  }
+  const gallery = normalizeBusinessGallery(
+    record.businessGallery ?? record.gallery,
+  );
+  const banner = galleryBanner(gallery);
+  if (banner?.url) return banner.url;
+  return undefined;
 }
 
 const basePriceByCategory: Record<string, number> = {
@@ -31,8 +62,9 @@ export function getServiceImagePool(categoryId: string) {
   return [category?.image].filter((src): src is string => Boolean(src));
 }
 
-export function getJobImage(categoryId: string, _job: string, _index?: number) {
-  return getServiceImagePool(categoryId)[0] || HERO_HOME_IMAGE;
+export function getJobImage(categoryId: string, job: string, _index?: number) {
+  const uploaded = getServiceImagePool(categoryId)[0];
+  return uploaded || HERO_HOME_IMAGE;
 }
 
 export function getJobStartingPrice(categoryId: string, job: string) {

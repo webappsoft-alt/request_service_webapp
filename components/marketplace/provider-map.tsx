@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
 import { X } from "lucide-react";
+import { MapPaneSkeleton } from "@/components/shared/loading-skeletons";
 import { ProviderCard } from "@/components/shared/provider-card";
 import { getStartingPrice } from "@/lib/data/provider-media";
 import { formatStartingPrice } from "@/lib/format";
@@ -404,8 +405,8 @@ export function ProviderMap({
       <div ref={hostRef} className="h-full w-full" />
 
       {!mapReady ? (
-        <div className="pointer-events-none absolute inset-0 z-[400] flex items-center justify-center bg-muted text-sm text-muted-foreground">
-          Loading map…
+        <div className="pointer-events-none absolute inset-0 z-[400]">
+          <MapPaneSkeleton />
         </div>
       ) : null}
 

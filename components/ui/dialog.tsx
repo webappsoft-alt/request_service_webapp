@@ -63,11 +63,12 @@ function DialogContent({
     detail?: { originalEvent?: Event }
   }) {
     const original = event.detail?.originalEvent
+    const fallback = event as { composedPath?: () => EventTarget[] }
     const path =
-      original && "composedPath" in original && typeof original.composedPath === "function"
+      original && typeof original.composedPath === "function"
         ? original.composedPath()
-        : typeof (event as { composedPath?: () => EventTarget[] }).composedPath === "function"
-          ? (event as { composedPath: () => EventTarget[] }).composedPath()
+        : typeof fallback.composedPath === "function"
+          ? fallback.composedPath()
           : []
     const matchesPortaledUi = (node: EventTarget) =>
       node instanceof Element &&

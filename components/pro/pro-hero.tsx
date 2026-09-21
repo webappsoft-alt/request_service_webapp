@@ -44,7 +44,7 @@ export function ProHero() {
         aria-hidden="true"
       />
 
-      <Container className="relative grid items-center gap-12 py-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-14 lg:py-20 xl:py-24">
+      <Container className="relative grid items-center gap-12 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,38rem)] lg:gap-16 lg:py-20 xl:py-24">
         <div className="flex flex-col items-start gap-5">
           <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/85 ring-1 ring-white/20 backdrop-blur-sm">
             <ShieldCheck className="size-3.5" aria-hidden="true" />
@@ -112,48 +112,48 @@ export function ProHero() {
           </div>
         </div>
 
-        <div className="relative max-w-md lg:justify-self-end">
-          <p className="mb-3 text-[11px] font-medium tracking-[0.16em] text-white/55 uppercase">
+        <div className="relative w-full max-w-xl lg:justify-self-end">
+          <p className="mb-4 text-xs font-medium tracking-[0.16em] text-white/55 uppercase">
             How homeowners find you
           </p>
-          <div className="overflow-hidden rounded-2xl border border-white/20 bg-card text-card-foreground shadow-[0_36px_80px_rgba(2,16,36,0.45)]">
-            <div className="flex items-start gap-3 px-5 pt-5 pb-4">
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground">
+          <div className="overflow-hidden rounded-3xl border border-white/20 bg-card text-card-foreground shadow-[0_36px_80px_rgba(2,16,36,0.45)]">
+            <div className="flex items-start gap-4 px-6 pt-6 pb-5">
+              <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-base font-semibold text-primary-foreground">
                 SH
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold">Summit Home Systems</p>
-                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Star className="size-3 fill-primary text-primary" aria-hidden="true" />
+                <p className="text-lg font-semibold tracking-tight">Summit Home Systems</p>
+                <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Star className="size-3.5 fill-primary text-primary" aria-hidden="true" />
                   4.9 · 128 reviews · Licensed
                 </p>
               </div>
-              <span className="shrink-0 rounded-full bg-primary/8 px-2 py-1 text-[10px] font-medium text-primary">
+              <span className="shrink-0 rounded-full bg-primary/8 px-2.5 py-1 text-[11px] font-medium text-primary">
                 Live page
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 px-5">
+            <div className="flex flex-wrap gap-2 px-6">
               {trades.map((trade) => (
                 <span
                   key={trade}
-                  className="rounded-full bg-[#F3F7FB] px-2.5 py-1 text-[11px] font-medium text-primary"
+                  className="rounded-full bg-[#F3F7FB] px-3 py-1.5 text-xs font-medium text-primary"
                 >
                   {trade}
                 </span>
               ))}
             </div>
 
-            <p className="flex items-center gap-1.5 px-5 pt-3 text-xs text-muted-foreground">
-              <MapPin className="size-3.5" aria-hidden="true" />
+            <p className="flex items-center gap-1.5 px-6 pt-4 text-sm text-muted-foreground">
+              <MapPin className="size-4" aria-hidden="true" />
               Serves Aurora, Lakewood, and Denver
             </p>
 
-            <div className="grid grid-cols-2 gap-2 px-5 pt-4 pb-5">
-              <span className="rounded-lg bg-primary px-3 py-2.5 text-center text-[12px] font-medium text-primary-foreground">
+            <div className="grid grid-cols-2 gap-3 px-6 pt-5 pb-6">
+              <span className="rounded-xl bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground">
                 Get an estimate
               </span>
-              <span className="rounded-lg border border-black/12 px-3 py-2.5 text-center text-[12px] font-medium">
+              <span className="rounded-xl border border-black/12 px-4 py-3 text-center text-sm font-medium">
                 Book a time
               </span>
             </div>

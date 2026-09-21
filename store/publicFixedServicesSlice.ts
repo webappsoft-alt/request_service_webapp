@@ -7,6 +7,11 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { getData } from "@/components/api/sliceHttp";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { inferStateFromAddress } from "@/lib/format";
+import {
+  normalizeBusinessGallery,
+  type BusinessGalleryImage,
+} from "@/lib/business-gallery";
+import { bannerUrlFromRecord } from "@/lib/data/provider-media";
 
 export type PublicFixedServiceSortBy =
   | "recommended"
@@ -32,6 +37,8 @@ export type PublicFixedServiceProvider = {
   description?: string;
   /** Professional profile photo from API (`avatarUrl`). */
   avatarUrl?: string;
+  businessGallery?: BusinessGalleryImage[];
+  coverImage?: string;
   rating: {
     average: number;
     totalReviews: number;
@@ -202,6 +209,8 @@ function normalizeProvider(raw: unknown): PublicFixedServiceProvider | null {
       (typeof record.avatarUrl === "string" && record.avatarUrl.trim()) ||
       (typeof record.avatar === "string" && record.avatar.trim()) ||
       undefined,
+    businessGallery: normalizeBusinessGallery(record.businessGallery),
+    coverImage: bannerUrlFromRecord(record),
     rating: {
       average: toNumber(rating.average, 0),
       totalReviews: toNumber(rating.totalReviews, 0),

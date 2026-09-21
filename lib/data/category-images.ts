@@ -40,13 +40,24 @@ export type CategoryImageSource = {
   usedCounts?: Map<string, number>;
 };
 
-function firstApiImage(images?: string[]): string {
+export function firstApiImage(images?: string[]): string {
   return images?.find((src) => Boolean(String(src || "").trim()))?.trim() || "";
 }
 
-/** Prefer the API photo. Fall back to the homepage hero only when none exists. */
+function isHostedUpload(src: string) {
+  return /^https:\/\/storage\.googleapis\.com\//i.test(src);
+}
+
+/** Use the subcategory's own uploaded photo. Do not copy the parent photo onto every child. */
 export function resolveCategoryDisplayImage(source: CategoryImageSource): string {
-  return firstApiImage(source.images) || firstApiImage(source.parent?.images) || HERO_HOME_IMAGE;
+  const own = firstApiImage(source.images);
+  const parent = firstApiImage(source.parent?.images);
+  if (source.isSubcategory) {
+    if (own && own !== parent) return own;
+    if (own && isHostedUpload(own) && own !== parent) return own;
+    return "";
+  }
+  return own || parent || HERO_HOME_IMAGE;
 }
 
 export function assignCategoryDisplayImages(

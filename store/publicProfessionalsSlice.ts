@@ -603,6 +603,69 @@ function extractDetailEntity(response: unknown): PublicProfessional | null {
   return normalizePublicProfessional(response);
 }
 
+async function attachMissingGalleries(items: PublicProfessional[]) {
+  const missing = items.filter(
+    (item) => !galleryBanner(normalizeBusinessGallery(item.businessGallery)),
+  );
+  if (!missing.length) return items;
+
+  const results = await Promise.allSettled(
+    missing.map((item) =>
+      getData(publicApi.professional(item.slug || item.id), undefined, {
+        silent: true,
+      }),
+    ),
+  );
+
+  const extras = new Map<string, PublicProfessional>();
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    const professional = extractDetailEntity(result.value);
+    if (!professional) continue;
+    extras.set(professional.id, professional);
+    if (professional.slug) extras.set(professional.slug, professional);
+  }
+
+  return items.map((item) => {
+    const extra = extras.get(item.id) || extras.get(item.slug);
+    if (!extra?.businessGallery?.length) return item;
+    return { ...item, businessGallery: extra.businessGallery };
+  });
+}
+
+export async function hydrateProviderCardCovers(
+  providers: Provider[],
+): Promise<Provider[]> {
+  const missing = providers.filter((item) => !item.coverImage?.trim());
+  if (!missing.length) return providers;
+
+  const results = await Promise.allSettled(
+    missing.map((item) =>
+      getData(publicApi.professional(item.slug || item.id), undefined, {
+        silent: true,
+      }),
+    ),
+  );
+
+  const covers = new Map<string, string>();
+  missing.forEach((item, index) => {
+    const result = results[index];
+    if (!result || result.status !== "fulfilled") return;
+    const professional = extractDetailEntity(result.value);
+    const url = galleryBanner(
+      normalizeBusinessGallery(professional?.businessGallery),
+    )?.url;
+    if (!url) return;
+    covers.set(item.id, url);
+    if (item.slug) covers.set(item.slug, url);
+  });
+
+  return providers.map((item) => {
+    const cover = item.coverImage?.trim() || covers.get(item.id) || covers.get(item.slug);
+    return cover ? { ...item, coverImage: cover } : item;
+  });
+}
+
 export function selectPublicProfessionalBySlug(
   state: { publicProfessionals?: PublicProfessionalsState },
   slug: string,
@@ -977,8 +1040,9 @@ export const fetchPublicProfessionals = createAsyncThunk<
         { silent: true },
       );
       const parsed = parsePublicProfessionalsResponse(response);
+      const items = await attachMissingGalleries(parsed.items);
       return {
-        items: parsed.items,
+        items,
         page: parsed.page,
         limit: parsed.limit,
         total: parsed.total,

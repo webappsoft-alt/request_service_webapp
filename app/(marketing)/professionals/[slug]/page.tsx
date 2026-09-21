@@ -10,6 +10,8 @@ import { breadcrumbJsonLd, providerJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return [];
 }

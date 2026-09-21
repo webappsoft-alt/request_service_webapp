@@ -280,13 +280,23 @@ function useBookService() {
 export function BookServiceButton({
   serviceId,
   label = "Book service",
+  className,
+  size = "xl",
 }: {
   serviceId?: string;
   label?: string;
+  className?: string;
+  size?: "sm" | "xl";
 }) {
   const { openCalendar } = useBookService();
   return (
-    <Button variant="outline" size="xl" type="button" onClick={() => openCalendar(serviceId)}>
+    <Button
+      variant="outline"
+      size={size}
+      type="button"
+      className={className}
+      onClick={() => openCalendar(serviceId)}
+    >
       {label}
     </Button>
   );

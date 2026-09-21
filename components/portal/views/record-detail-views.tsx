@@ -586,7 +586,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                   variant="outline"
                   onClick={() => setAssignOpen(true)}
                 >
-                  Assign technician
+                  Assign team member
                 </Button>
               </>
             )}
@@ -601,7 +601,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                 {!signed && !job ? (
                   <>
                     <DropdownMenuItem onSelect={() => setAssignOpen(true)}>
-                      Assign technician
+                      Assign team member
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setTaskOpen(true)}>
                       Create task
@@ -1400,7 +1400,7 @@ export function JobDetailView({ id }: { id: string }) {
               variant="outline"
               onClick={() => setAssignOpen(true)}
             >
-              Assign technician
+              Assign team member
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

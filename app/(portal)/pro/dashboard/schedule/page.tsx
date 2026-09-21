@@ -4,7 +4,7 @@ import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
   "Schedule",
-  "Assign jobs, estimate visits, and requests to technicians on the company calendar.",
+  "Assign jobs, estimate visits, and requests to team members on the company calendar.",
   "/pro/dashboard/schedule",
 );
 

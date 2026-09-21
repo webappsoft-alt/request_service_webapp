@@ -311,7 +311,7 @@ function seedFile(
     logs.push({
       id: `log_${job.id}_assign`,
       at: job.updatedAt,
-      title: "Technician assigned",
+      title: "Team member assigned",
       detail: technician,
       actor: "System",
     });

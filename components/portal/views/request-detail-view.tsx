@@ -1754,7 +1754,7 @@ export function RequestDetailView({ id }: { id: string }) {
                                 </div>
                                 <div>
                                   <p className="text-muted-foreground font-medium">
-                                    Assigned staff / technician
+                                    Assigned staff / team member
                                   </p>
                                   <p className="mt-0.5 font-semibold text-foreground">
                                     {v.employeeId ? employeeLabel(v.employeeId) : "Unassigned"}

@@ -79,6 +79,7 @@ function isProAuthPath(pathname: string): boolean {
 /**
  * Client-side RBAC after Redux Persist rehydrates.
  * - Customers must never see /pro/* (including pro login).
+ * - After customer login, send them home unless ?next= or a pending order resume exists.
  * - Providers redirect away from login/auth and customer account pages to /pro/dashboard.
  * - Public pages (estimates, services, landing) remain accessible to both.
  */
@@ -111,12 +112,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
         return;
       }
       if (isCustomerAuthPath(pathname)) {
-        // Prefer ?next=… (order resume), then pending order returnPath, else dashboard.
+        // Prefer ?next=… (order resume), then pending order returnPath, else home.
         const fromQuery = readNextFromLocation();
         const fromPending = safeInternalPath(
           readPendingFixedOrder()?.returnPath,
         );
-        router.replace(fromQuery || fromPending || customerPaths.dashboard);
+        router.replace(fromQuery || fromPending || customerPaths.site);
       }
       return;
     }

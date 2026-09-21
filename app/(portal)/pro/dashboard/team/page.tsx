@@ -3,7 +3,7 @@ import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
   "Team",
-  "Add technicians and estimators, then assign them to jobs and estimate visits.",
+  "Add team members and estimators, then assign them to jobs and estimate visits.",
   "/pro/dashboard/team",
 );
 

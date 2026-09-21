@@ -66,60 +66,67 @@ export function FixedServiceCatalog({
         </p>
       </div>
       {services.length ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {services.map((service) => {
             const photo = service.images[0];
             const bullets = service.coverage;
             return (
               <article
                 key={service.id}
-                className="flex flex-col overflow-hidden rounded-xl border border-black/15 bg-card"
+                className="flex flex-col overflow-hidden rounded-xl border border-black/10 bg-card"
               >
-                <div className="relative aspect-[16/9] bg-[#003F7D]">
+                <div className="relative aspect-[2/1] bg-[#003F7D]">
                   {photo ? (
                     <Image
                       src={photo}
                       alt={service.name}
                       fill
-                      sizes="(min-width: 1024px) 22vw, 90vw"
+                      sizes="(min-width: 1024px) 18vw, 45vw"
                       className="object-cover"
                     />
                   ) : null}
                   {service.categoryName ? (
-                    <Badge className="absolute top-3 left-3 border-0 bg-white/95 text-[#003F7D]">
+                    <Badge className="absolute top-2 left-2 border-0 bg-white/95 text-[#003F7D]">
                       {service.categoryName}
                     </Badge>
                   ) : null}
                 </div>
-                <div className="flex flex-1 flex-col gap-3 p-4">
+                <div className="flex flex-1 flex-col gap-2 p-3">
                   <div>
-                    <h3 className="font-semibold tracking-tight">{service.name}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <h3 className="line-clamp-2 text-sm font-semibold tracking-tight">
+                      {service.name}
+                    </h3>
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
                       {service.description || `${provider.companyName} offers this as a priced public service.`}
                     </p>
                   </div>
-                  <p className="text-lg font-semibold text-[#003F7D]">
+                  <p className="text-sm font-semibold text-[#003F7D]">
                     {formatStartingPrice(service.price)}{" "}
-                    <span className="text-sm font-normal text-muted-foreground">
+                    <span className="text-xs font-normal text-muted-foreground">
                       {serviceUnitLabel(service.unit)}
                     </span>
                   </p>
                   {bullets.length ? (
-                    <ul className="flex flex-col gap-1.5">
-                      {bullets.slice(0, 3).map((item) => (
-                        <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
-                          <Check className="mt-0.5 size-3.5 shrink-0 text-[#003F7D]" aria-hidden="true" />
-                          <span>{item}</span>
+                    <ul className="flex flex-col gap-1">
+                      {bullets.slice(0, 2).map((item) => (
+                        <li key={item} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                          <Check className="mt-0.5 size-3 shrink-0 text-[#003F7D]" aria-hidden="true" />
+                          <span className="line-clamp-1">{item}</span>
                         </li>
                       ))}
                     </ul>
                   ) : null}
                   {isLive ? (
-                    <Button asChild variant="outline" size="xl">
+                    <Button asChild variant="outline" size="sm" className="mt-auto w-full">
                       <Link href={liveServicePath(provider, service)}>Book this service</Link>
                     </Button>
                   ) : (
-                    <BookServiceButton serviceId={service.id} label="Book this service" />
+                    <BookServiceButton
+                      serviceId={service.id}
+                      label="Book this service"
+                      size="sm"
+                      className="mt-auto w-full"
+                    />
                   )}
                 </div>
               </article>

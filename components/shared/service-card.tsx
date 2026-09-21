@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -61,42 +60,30 @@ export function ServiceOfferCard({ category }: { category: ServiceCategory }) {
   return (
     <Link
       href={`/services/${category.slug}`}
-      className="group flex h-full flex-col overflow-hidden rounded-xl border border-black/15 bg-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/25 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="group flex h-full flex-col gap-3 rounded-xl border border-black/10 bg-card p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/20 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
-      <div className="relative aspect-[2/1] overflow-hidden">
-        {category.image ? (
-          <Image
-            src={category.image}
-            alt={category.imageAlt ?? category.name}
-            fill
-            sizes="(min-width: 1024px) 22vw, (min-width: 640px) 40vw, 90vw"
-            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-          />
-        ) : (
-          <span className="absolute inset-0 bg-primary" aria-hidden="true" />
-        )}
+      <div className="flex items-start gap-3">
         <span
-          className="absolute inset-0 bg-linear-to-t from-black/25 to-transparent"
-          aria-hidden="true"
-        />
-        <span className="absolute bottom-3 left-3 flex size-10 items-center justify-center rounded-lg bg-card text-primary shadow-sm ring-1 ring-foreground/10">
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-lg transition-transform duration-300 ease-out group-hover:scale-105",
+            serviceAccents[category.slug],
+          )}
+        >
           <Icon className="size-5" aria-hidden="true" />
         </span>
-      </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <div>
+        <div className="min-w-0">
           <h3 className="font-semibold tracking-tight">{category.name}</h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">{category.tagline}</p>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">{category.tagline}</p>
         </div>
-        <ul className="flex flex-col gap-1.5">
-          {category.commonServices.slice(0, 3).map((service) => (
-            <li key={service} className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Check className="size-3.5 shrink-0 text-success" aria-hidden="true" />
-              <span className="truncate">{service}</span>
-            </li>
-          ))}
-        </ul>
       </div>
+      <ul className="flex flex-col gap-1.5">
+        {category.commonServices.slice(0, 3).map((service) => (
+          <li key={service} className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Check className="size-3.5 shrink-0 text-success" aria-hidden="true" />
+            <span className="truncate">{service}</span>
+          </li>
+        ))}
+      </ul>
     </Link>
   );
 }

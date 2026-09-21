@@ -458,7 +458,7 @@ function EmployeeFormDialog({
               <Input
                 id="emp-last"
                 value={lastName}
-                placeholder="Technician"
+                placeholder="Team member"
                 onChange={(change) => setLastName(change.target.value)}
               />
             </Field>

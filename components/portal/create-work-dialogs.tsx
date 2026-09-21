@@ -32,7 +32,10 @@ import {
   writeCostLines,
   type JobCostLine,
 } from "@/components/portal/use-job-costing";
-import { writeSiteVisit } from "@/components/portal/use-job-file";
+import {
+  siteVisitFromRecord,
+  writeSiteVisit,
+} from "@/components/portal/use-job-file";
 import {
   addressFrom,
   buildEstimate,
@@ -484,7 +487,8 @@ export function CreateEstimateDialog({
           })),
         );
         if (path === "site_visit" && siteVisitPayload) {
-          writeSiteVisit(session?.email, saved.id, siteVisitPayload);
+          const visit = siteVisitFromRecord(siteVisitPayload);
+          if (visit) writeSiteVisit(session?.email, saved.id, visit);
         }
         dispatch(invalidateEstimatesCache());
         void dispatch(fetchEstimates({ force: true }));
@@ -531,7 +535,8 @@ export function CreateEstimateDialog({
         })),
       );
       if (path === "site_visit" && siteVisitPayload) {
-        writeSiteVisit(session?.email, saved.id, siteVisitPayload);
+        const visit = siteVisitFromRecord(siteVisitPayload);
+        if (visit) writeSiteVisit(session?.email, saved.id, visit);
       }
       dispatch(invalidateEstimatesCache());
       void dispatch(fetchEstimates({ force: true }));
@@ -565,7 +570,7 @@ export function CreateEstimateDialog({
             <DialogDescription>
               {isEdit
                 ? "Update the estimate details. Changes are saved without leaving this customer."
-                : "Send a technician for a site visit, or write the quote in the office. The customer signs the finalized estimate before the job starts."}
+                : "Send a team member for a site visit, or write the quote in the office. The customer signs the finalized estimate before the job starts."}
             </DialogDescription>
           </DialogHeader>
           <WizardTabs
@@ -605,7 +610,7 @@ export function CreateEstimateDialog({
                 >
                   <p className="text-sm font-semibold">Site visit first</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Send a technician to inspect, take photos, then finalize in
+                    Send a team member to inspect, take photos, then finalize in
                     the office.
                   </p>
                 </button>
@@ -716,7 +721,7 @@ export function CreateEstimateDialog({
           ) : null}
           {tab === "visit" ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Technician">
+              <Field label="Team member">
                 <PaginatedEntitySelect
                   id="estimate-technician"
                   value={employeeId}
@@ -727,7 +732,7 @@ export function CreateEstimateDialog({
                       ? employeeName(technician)
                       : estimate?.siteVisit?.technician || undefined
                   }
-                  emptyLabel="No technicians found."
+                  emptyLabel="No team members found."
                   loading={useApi ? assigneePaging.loading : false}
                   loadingMore={useApi ? assigneePaging.loadingMore : false}
                   hasMore={useApi ? assigneePaging.hasMore : false}
@@ -753,7 +758,7 @@ export function CreateEstimateDialog({
               </Field>
               <p className="sm:col-span-2 text-sm text-muted-foreground">
                 Photos and findings are captured on the estimate after the
-                technician is on site.
+                team member is on site.
               </p>
             </div>
           ) : null}
@@ -1452,14 +1457,14 @@ export function CreateJobDialog({
                 onChange={(event) => setDue(event.target.value)}
               />
             </Field>
-            <Field label="Technician">
+            <Field label="Team member">
               <PaginatedEntitySelect
                 id="job-technician"
                 value={employeeId}
                 selectedLabel={employeeLabel}
                 options={technicianOptions}
                 placeholder="Unassigned"
-                emptyLabel="No technicians found."
+                emptyLabel="No team members found."
                 loading={useApi ? assigneePaging.loading : false}
                 loadingMore={useApi ? assigneePaging.loadingMore : false}
                 hasMore={useApi ? assigneePaging.hasMore : false}

@@ -439,7 +439,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                       <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
                         <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
                           <UserRound className="size-4 text-primary" aria-hidden="true" />
-                          <h3 className="text-sm font-semibold">Preferred technician</h3>
+                          <h3 className="text-sm font-semibold">Preferred team member</h3>
                         </header>
                         <div className="px-5 py-4">
                           <div className="flex items-center gap-3">

@@ -108,7 +108,7 @@ export function jobBoardColumns({
     },
     {
       id: "technician",
-      header: "Technician",
+      header: "Team member",
       sortValue: (row) => techOf(row),
       searchValue: (row) => techOf(row),
       exportValue: (row) => techOf(row),

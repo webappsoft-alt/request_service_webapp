@@ -35,7 +35,7 @@ import { ProviderCard } from "@/components/shared/provider-card";
 import { writePendingQuote } from "@/lib/booking/format-quote-answers";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
 import { getJobRecord, slugifyJob } from "@/lib/data/jobs";
-import { getStartingPrice } from "@/lib/data/provider-media";
+import { bannerUrlFromRecord, getStartingPrice } from "@/lib/data/provider-media";
 import { getAllProviders } from "@/lib/data/providers";
 import {
   findSubServiceValue,
@@ -279,8 +279,7 @@ function providerFromService(
     companyName: p.companyName,
     logoInitials: initials || "PR",
     logoUrl: avatarUrl || undefined,
-    // Profile card must not use fixed-service / portfolio images.
-    coverImage: undefined,
+    coverImage: p.coverImage?.trim() || bannerUrlFromRecord(p),
     images: undefined,
     startingPrice: service.price,
     tagline: p.tagline || "",

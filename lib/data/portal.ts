@@ -1315,7 +1315,7 @@ export function employeeRoleLabel(role: PortalEmployeeRole) {
     case "owner":
       return "Owner";
     case "technician":
-      return "Technician";
+      return "Team member";
     case "estimator":
       return "Estimator";
     case "dispatcher":

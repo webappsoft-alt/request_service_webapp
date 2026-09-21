@@ -51,6 +51,9 @@ function CategoryCard({
             sizes="(min-width: 1024px) 13vw, 40vw"
             className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
             unoptimized={image.startsWith("http")}
+            onError={(event) => {
+              event.currentTarget.style.visibility = "hidden";
+            }}
           />
         ) : (
           <Skeleton className="absolute inset-0 rounded-xl" />

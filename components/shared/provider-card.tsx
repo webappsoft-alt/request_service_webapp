@@ -11,7 +11,7 @@ import { ProviderLogo } from "@/components/shared/provider-logo";
 import { Rating } from "@/components/shared/rating";
 import { getProviderPresence } from "@/lib/data/service-directory";
 import {
-  getProviderProfileImage,
+  getProviderCardCover,
   getStartingPrice,
 } from "@/lib/data/provider-media";
 import { getServiceCategoryById } from "@/lib/data/services";
@@ -86,8 +86,8 @@ export function ProviderCard({
       ? provider.serviceLabels
       : categories.map((category) => category.name)
   ).slice(0, 4);
-  // Card photo = profile avatar only (never portfolio / project / service images).
-  const coverImage = getProviderProfileImage(provider);
+  // Card photo = main business gallery banner. Small logo overlay stays on ProviderLogo.
+  const coverImage = getProviderCardCover(provider);
   // Visual marketplace cards always keep the photo header layout (previous design).
   const showCover = visual;
   const showListPhoto = !visual;

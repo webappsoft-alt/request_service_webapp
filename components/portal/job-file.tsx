@@ -167,7 +167,7 @@ export function JobFileChrome({
               }
             />
           ) : null}
-          <Detail label="Technician" value={technician || "Unassigned"} />
+          <Detail label="Team member" value={technician || "Unassigned"} />
           <Detail
             label="Address"
             value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
@@ -635,7 +635,7 @@ export function JobSettingsTab({
       return;
     }
     if (!draft.employeeId) {
-      toast.error("Select a technician before saving.");
+      toast.error("Select a team member before saving.");
       return;
     }
     if (!draft.start) {
@@ -796,7 +796,7 @@ export function JobSettingsTab({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Assigned technician">
+          <Field label="Assigned team member">
             <Select
               value={assigneeValue}
               onValueChange={(value) =>
@@ -935,7 +935,7 @@ export function JobSettingsTab({
                 <UserRound className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
                   <dt className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                    Technician
+                    Team member
                   </dt>
                   <dd className="mt-0.5 font-medium">{assigneeLabel}</dd>
                 </div>

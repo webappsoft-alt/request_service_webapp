@@ -1312,7 +1312,7 @@ export function CancelOrderModal({
           </Label>
           <Textarea
             id="cancel-reason"
-            placeholder="e.g. Technician service van transmission breakdown en route to customer property"
+            placeholder="e.g. Team member service van transmission breakdown en route to customer property"
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}

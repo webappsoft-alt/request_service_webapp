@@ -18,6 +18,8 @@ import { buildMetadata } from "@/lib/seo";
 import { siteConfig, absoluteUrl } from "@/lib/site";
 import type { PageParams } from "@/lib/page-props";
 
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return [];
 }

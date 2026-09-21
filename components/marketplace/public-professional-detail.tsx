@@ -7,6 +7,7 @@ import { Container } from "@/components/layout/container";
 import { ProviderProfile } from "@/components/marketplace/provider-profile";
 import { ProfessionalDetailSkeleton } from "@/components/shared/loading-skeletons";
 import { galleryBanner, galleryRest, normalizeBusinessGallery } from "@/lib/business-gallery";
+import { bannerUrlFromRecord } from "@/lib/data/provider-media";
 import type { ExplorePlace } from "@/lib/data/profile-explore";
 import type { PortalFixedService } from "@/lib/data/portal";
 import { getServiceAreaNames } from "@/lib/data/service-areas";
@@ -27,6 +28,7 @@ import {
 import {
   fetchPublicProfessionalBySlug,
   hasProfessionalDetailFields,
+  hydrateProviderCardCovers,
   normalizePublicProfessional,
   publicProfessionalToProvider,
   selectPublicProfessionalBySlug,
@@ -216,7 +218,7 @@ function providerFromRelatedProfessional(raw: unknown): Provider | null {
       (typeof record.avatar === "string" && record.avatar) ||
       (typeof record.avatarUrl === "string" && record.avatarUrl) ||
       undefined,
-    coverImage: undefined,
+    coverImage: bannerUrlFromRecord(record),
     startingPrice:
       typeof metrics.startingPrice === "number" ? metrics.startingPrice : undefined,
     tagline:
@@ -316,6 +318,9 @@ function stashRelatedProfessional(related: Provider): PublicProfessional {
     slug: related.slug,
     tagline: related.tagline,
     avatarUrl: related.logoUrl || "",
+    businessGallery: related.coverImage
+      ? [{ url: related.coverImage, isBanner: true, sortOrder: 0 }]
+      : undefined,
     verificationBadge: {
       isVerified: false,
       status: "",
@@ -531,8 +536,13 @@ export function PublicProfessionalDetail({
         }
 
         if (!cancelled) {
-          setRelatedProviders(providers.slice(0, RELATED_LIMIT));
-          setRelatedLoading(false);
+          const withCovers = await hydrateProviderCardCovers(
+            providers.slice(0, RELATED_LIMIT),
+          );
+          if (!cancelled) {
+            setRelatedProviders(withCovers);
+            setRelatedLoading(false);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -662,11 +672,7 @@ export function PublicProfessionalDetail({
   }
 
   if (detailLoading || !detailError) {
-    return (
-      <Container className="py-16">
-        <ProfessionalDetailSkeleton />
-      </Container>
-    );
+    return <ProfessionalDetailSkeleton />;
   }
 
   return (

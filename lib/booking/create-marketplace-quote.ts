@@ -57,6 +57,8 @@ export async function createMarketplaceQuote(input: {
   radius?: number;
   serviceSlug: string;
   serviceName?: string;
+  /** Optional live category ObjectId from a provider service. */
+  categoryId?: string;
   details: string;
   answers?: QuoteAnswer[];
   preferredDate?: string;
@@ -68,7 +70,9 @@ export async function createMarketplaceQuote(input: {
   }
 
   const category = getServiceCategoryBySlug(input.serviceSlug);
-  const resolvedCategoryId = resolveCategoryId(input.serviceSlug);
+  const resolvedCategoryId = isObjectId(input.categoryId)
+    ? input.categoryId
+    : resolveCategoryId(input.serviceSlug);
   const providers = input.provider
     ? [input.provider]
     : category

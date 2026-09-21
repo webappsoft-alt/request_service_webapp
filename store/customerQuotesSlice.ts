@@ -16,9 +16,11 @@ export type CustomerQuoteProfessional = {
   estimates: Array<{
     id: string;
     number: string;
+    title?: string;
     status: string;
     shareToken: string;
     total: number;
+    createdAt?: string;
   }>;
 };
 
@@ -141,9 +143,11 @@ export const fetchCustomerQuoteRequests = createAsyncThunk(
                 return {
                   id: stringValue(e.id),
                   number: stringValue(e.number),
+                  title: stringValue(e.title),
                   status: stringValue(e.status),
                   shareToken: stringValue(e.shareToken),
                   total: numberValue(e.total),
+                  createdAt: stringValue(e.createdAt) || undefined,
                 };
               }),
             };

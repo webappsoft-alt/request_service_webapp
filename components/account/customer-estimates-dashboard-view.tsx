@@ -381,7 +381,11 @@ export function CustomerEstimatesDashboardView({
           rows={estimateItems}
           rowKey={(row) => row.shareToken || row.id || row.number}
           rowHref={(row) =>
-            row.shareToken ? customerPaths.estimate(row.shareToken) : undefined
+            row.shareToken
+              ? customerPaths.estimate(row.shareToken)
+              : row.id
+                ? customerPaths.estimate(row.id)
+                : undefined
           }
           empty="No estimates received yet."
           columns={[
@@ -390,10 +394,15 @@ export function CustomerEstimatesDashboardView({
               header: "Quote #",
               sortValue: (row) => row.number,
               searchValue: (row) => row.number,
-              cell: (row) => (
-                row.shareToken ? (
+              cell: (row) => {
+                const href = row.shareToken
+                  ? customerPaths.estimate(row.shareToken)
+                  : row.id
+                    ? customerPaths.estimate(row.id)
+                    : null;
+                return href ? (
                   <Link
-                    href={customerPaths.estimate(row.shareToken)}
+                    href={href}
                     className="font-mono text-xs font-medium text-primary hover:underline"
                   >
                     {row.number || "Estimate"}
@@ -402,18 +411,23 @@ export function CustomerEstimatesDashboardView({
                   <span className="font-mono text-xs font-medium text-foreground">
                     {row.number || "Estimate"}
                   </span>
-                )
-              ),
+                );
+              },
             },
             {
               id: "name",
               header: "Estimate name",
               sortValue: (row) => row.title || row.number || "Estimate",
               searchValue: (row) => `${row.title || ""} ${row.number || ""}`,
-              cell: (row) => (
-                row.shareToken ? (
+              cell: (row) => {
+                const href = row.shareToken
+                  ? customerPaths.estimate(row.shareToken)
+                  : row.id
+                    ? customerPaths.estimate(row.id)
+                    : null;
+                return href ? (
                   <Link
-                    href={customerPaths.estimate(row.shareToken)}
+                    href={href}
                     className="font-medium text-primary hover:underline"
                   >
                     {row.title || row.number || "Estimate"}
@@ -422,8 +436,8 @@ export function CustomerEstimatesDashboardView({
                   <span className="font-medium text-foreground">
                     {row.title || row.number || "Estimate"}
                   </span>
-                )
-              ),
+                );
+              },
             },
             {
               id: "provider",
@@ -471,18 +485,23 @@ export function CustomerEstimatesDashboardView({
               ),
             },
           ]}
-          actions={(row) =>
-            row.shareToken
-              ? [
-                  {
-                    label: "Open estimate",
-                    href: customerPaths.estimate(row.shareToken),
-                    icon: <ExternalLink className="size-3.5" />,
-                    quick: true,
-                  },
-                ]
-              : []
-          }
+          actions={(row) => {
+            const href = row.shareToken
+              ? customerPaths.estimate(row.shareToken)
+              : row.id
+                ? customerPaths.estimate(row.id)
+                : null;
+            if (!href) return [];
+            return [
+              {
+                label:
+                  row.status === "sent" ? "Review & accept" : "View estimate",
+                href,
+                icon: <ExternalLink className="size-3.5" />,
+                quick: true,
+              },
+            ];
+          }}
         />
       )}
     </PortalPage>

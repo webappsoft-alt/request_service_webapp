@@ -34,6 +34,11 @@ import {
   rememberCustomerEstimateToken,
 } from "@/lib/booking/customer-estimates-store";
 import { formatDate, formatMoney } from "@/lib/format";
+import { useAppDispatch } from "@/store/hooks";
+import {
+  fetchCustomerEstimates,
+  fetchCustomerQuoteRequests,
+} from "@/store/customerQuotesSlice";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -216,7 +221,9 @@ function isMongoObjectId(value: string) {
 
 function canCustomerSignStatus(status?: string) {
   const value = String(status || "").toLowerCase();
-  return value === "sent";
+  // Customer may accept once a proposal exists (draft/finalized/sent).
+  // Site-visit / inspected still wait for the pro to finalize & send.
+  return value === "sent" || value === "finalized" || value === "draft";
 }
 
 export function CustomerEstimatePage({
@@ -227,6 +234,7 @@ export function CustomerEstimatePage({
   /** Authenticated CRM estimate id (preferred over public share token). */
   estimateId?: string;
 }) {
+  const dispatch = useAppDispatch();
   const share = useEstimateShare();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -244,6 +252,7 @@ export function CustomerEstimatePage({
   const [viaUserApi, setViaUserApi] = useState(() =>
     Boolean(estimateIdProp || isMongoObjectId(String(token || ""))),
   );
+  const [wantAccept, setWantAccept] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -338,6 +347,13 @@ export function CustomerEstimatePage({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setWantAccept(
+      new URLSearchParams(window.location.search).get("accept") === "1",
+    );
+  }, [token, estimateIdProp]);
+
   const estimateId = snapshot?.estimateId || String(estimateIdProp || "").trim();
   const canSign = Boolean(
     snapshot && !approval && canCustomerSignStatus(snapshot.status),
@@ -353,6 +369,16 @@ export function CustomerEstimatePage({
     snapshot?.status !== "expired" &&
     snapshot?.status !== "accepted" &&
     snapshot?.status !== "converted_to_job";
+
+  useEffect(() => {
+    if (!wantAccept || !canSign || loading) return;
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById("customer-accept-sign")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [wantAccept, canSign, loading]);
 
   async function approve(signedBy: string, signatureImageBase64: string) {
     if (!snapshot) return;
@@ -385,6 +411,8 @@ export function CustomerEstimatePage({
     toast.success(
       "Estimate signed and approved! Other estimates for this request were declined. The company has been notified.",
     );
+    void dispatch(fetchCustomerQuoteRequests());
+    void dispatch(fetchCustomerEstimates());
     void load();
   }
 
@@ -488,7 +516,7 @@ export function CustomerEstimatePage({
               </span>
             ) : snapshot.status === "rejected" ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
-                Declined
+                Rejected
               </span>
             ) : snapshot.status === "changes_requested" ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
@@ -505,6 +533,19 @@ export function CustomerEstimatePage({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {canSign ? (
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => {
+                  document
+                    .getElementById("customer-accept-sign")
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              >
+                Accept
+              </Button>
+            ) : null}
             {canRequestChanges ? (
               <>
                 <Button
@@ -544,8 +585,16 @@ export function CustomerEstimatePage({
               ? " (site visit in progress)"
               : ""}
             . You can review the current draft here.{" "}
-            <strong>Review &amp; sign</strong>, request changes, and accept will
+            <strong>Review &amp; accept</strong>, request changes, and sign will
             unlock after they send it for your approval.
+          </div>
+        ) : null}
+
+        {snapshot.status === "rejected" ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-950 print:hidden">
+            This estimate was rejected because another proposal for the same
+            request was accepted. No further action is available on this
+            estimate.
           </div>
         ) : null}
 
@@ -633,7 +682,16 @@ function CustomerSignSlot({
   const pad = useSignPad();
 
   return (
-    <div>
+    <div id="customer-accept-sign" className="scroll-mt-24 space-y-3">
+      <div>
+        <p className="text-sm font-semibold text-[#003F7D]">
+          Accept this estimate
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Sign below to accept this proposal. Other estimates for the same
+          request will be rejected automatically.
+        </p>
+      </div>
       <SignaturePadField
         name={snapshot.customerName}
         pad={pad}
@@ -673,7 +731,7 @@ function CustomerSignSlot({
               ).finally(() => setBusy(false));
             }}
           >
-            {busy ? "Signing…" : `Sign and approve ${snapshot.number}`}
+            {busy ? "Accepting…" : `Accept ${snapshot.number}`}
           </Button>
         </div>
       </div>

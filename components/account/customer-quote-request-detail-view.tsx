@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -17,15 +17,34 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  postData,
+  showApiErrorToast,
+} from "@/components/api/apiFuntions";
+import { userApi } from "@/components/api/ApiRoutesFile";
+import { typedSignature } from "@/components/estimate/estimate-pdf";
 import { PortalPage } from "@/components/portal/portal-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
+import {
+  selectAuth,
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
 import {
   fetchCustomerEstimates,
   fetchCustomerQuoteRequests,
@@ -41,10 +60,34 @@ function statusLabel(status: string) {
   if (clean === "site_visit") return "Site Visit";
   if (clean === "changes_requested") return "Changes Requested";
   if (clean === "estimate_sent") return "Estimate Sent";
+  if (clean === "rejected") return "Rejected";
   return status
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function isAcceptedStatus(status: string) {
+  const clean = String(status || "").toLowerCase();
+  return clean === "accepted" || clean === "converted_to_job";
+}
+
+function isRejectedStatus(status: string) {
+  const clean = String(status || "").toLowerCase();
+  return clean === "rejected" || clean === "expired";
+}
+
+function isSignableStatus(status: string) {
+  const clean = String(status || "").toLowerCase();
+  return clean === "sent" || clean === "finalized" || clean === "draft";
+}
+
+function estimateHref(est: { id?: string; shareToken?: string }) {
+  const token = String(est.shareToken || "").trim();
+  const id = String(est.id || "").trim();
+  if (token) return customerPaths.estimate(token);
+  if (id) return customerPaths.estimate(id);
+  return null;
 }
 
 function formatAddress(batch: CustomerQuoteBatch) {
@@ -226,10 +269,15 @@ export function CustomerQuoteRequestDetailView() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
+  const authUser = useAppSelector(selectAuthUser);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const batches = useAppSelector(selectCustomerQuoteBatches);
   const loading = useAppSelector(selectCustomerQuoteBatchesLoading);
   const apiEstimates = useAppSelector(selectCustomerApiEstimates);
+  const [acceptTarget, setAcceptTarget] = useState<ConsolidatedEstimate | null>(
+    null,
+  );
+  const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -271,7 +319,9 @@ export function CustomerQuoteRequestDetailView() {
         map.set(key, {
           id: est.id,
           number: est.number || "Estimate",
-          title: `Proposal from ${pro.providerName}`,
+          title:
+            est.title ||
+            `Proposal from ${pro.providerName}`,
           status: est.status,
           total: est.total,
           shareToken: est.shareToken,
@@ -279,6 +329,7 @@ export function CustomerQuoteRequestDetailView() {
           providerSlug: pro.providerSlug,
           providerId: pro.providerId,
           requestId: pro.requestId,
+          createdAt: est.createdAt,
         });
       }
     }
@@ -310,6 +361,42 @@ export function CustomerQuoteRequestDetailView() {
 
     return Array.from(map.values());
   }, [batch, apiEstimates]);
+
+  const customerName = [
+    authUser?.firstName,
+    authUser?.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim() || authUser?.email || "Customer";
+
+  async function confirmAcceptEstimate() {
+    if (!acceptTarget?.id || accepting) return;
+    setAccepting(true);
+    try {
+      const signatureImageBase64 = typedSignature(customerName);
+      if (!signatureImageBase64) {
+        toast.error("Could not create acceptance signature. Please try again.");
+        return;
+      }
+      await postData(userApi.estimateApprove(acceptTarget.id), {
+        signedBy: customerName,
+        signatureImageBase64,
+      });
+      toast.success(
+        `${acceptTarget.number} accepted. Other estimates for this request were rejected.`,
+      );
+      setAcceptTarget(null);
+      await Promise.all([
+        dispatch(fetchCustomerQuoteRequests()),
+        dispatch(fetchCustomerEstimates()),
+      ]);
+    } catch (err) {
+      showApiErrorToast(err, "Unable to accept this estimate.");
+    } finally {
+      setAccepting(false);
+    }
+  }
 
   if (!auth.hydrated || (loading && !batch)) {
     return (
@@ -358,6 +445,7 @@ export function CustomerQuoteRequestDetailView() {
     .sort()[0];
 
   return (
+    <>
     <PortalPage
       eyebrow="Quote Request Details"
       title={batch.serviceName}
@@ -446,12 +534,27 @@ export function CustomerQuoteRequestDetailView() {
                     Estimates received ({consolidatedEstimates.length})
                   </h2>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Review proposals from providers and sign online to accept
+                    Review proposals from providers and select one to accept
                   </p>
                 </div>
-                <Badge variant="default" className="bg-primary text-primary-foreground">
-                  Action available
-                </Badge>
+                {consolidatedEstimates.some(
+                  (est) =>
+                    isSignableStatus(est.status) &&
+                    !consolidatedEstimates.some((other) =>
+                      isAcceptedStatus(other.status),
+                    ),
+                ) ? (
+                  <Badge
+                    variant="default"
+                    className="bg-primary text-primary-foreground"
+                  >
+                    Action available
+                  </Badge>
+                ) : consolidatedEstimates.some((est) =>
+                    isAcceptedStatus(est.status),
+                  ) ? (
+                  <Badge className="bg-emerald-600 text-white">Selected</Badge>
+                ) : null}
               </div>
 
               {/* Informative Guidance Notice */}
@@ -468,17 +571,31 @@ export function CustomerQuoteRequestDetailView() {
               {/* Estimates Cards List */}
               <div className="mt-4 space-y-3">
                 {consolidatedEstimates.map((est) => {
-                  const isAccepted =
-                    est.status === "accepted" ||
-                    est.status === "converted_to_job";
+                  const batchHasAccepted = consolidatedEstimates.some((item) =>
+                    isAcceptedStatus(item.status),
+                  );
+                  const isAccepted = isAcceptedStatus(est.status);
+                  const isRejected =
+                    isRejectedStatus(est.status) ||
+                    (batchHasAccepted && !isAccepted);
                   const isChanges = est.status === "changes_requested";
+                  const canSign =
+                    isSignableStatus(est.status) && !batchHasAccepted;
+                  const href = estimateHref(est);
+                  const displayStatus = isRejected && !isRejectedStatus(est.status)
+                    ? "rejected"
+                    : est.status;
 
                   return (
                     <div
                       key={est.id || est.shareToken || est.number}
                       className={cn(
-                        "group relative rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/50 sm:p-5",
+                        "group relative rounded-lg border border-border bg-card p-4 transition-all sm:p-5",
                         isAccepted && "border-emerald-500/40 bg-emerald-50/20",
+                        isRejected && "border-border bg-muted/30 opacity-80",
+                        !isAccepted &&
+                          !isRejected &&
+                          "hover:border-primary/50",
                       )}
                     >
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -494,16 +611,25 @@ export function CustomerQuoteRequestDetailView() {
                               variant={
                                 isAccepted
                                   ? "default"
-                                  : isChanges
+                                  : isRejected
                                     ? "secondary"
-                                    : "outline"
+                                    : isChanges
+                                      ? "secondary"
+                                      : "outline"
                               }
                               className={cn(
                                 isAccepted && "bg-emerald-600 text-white",
-                                isChanges && "bg-amber-100 text-amber-900 border-amber-300",
+                                isRejected &&
+                                  "bg-muted text-muted-foreground border-border",
+                                isChanges &&
+                                  "bg-amber-100 text-amber-900 border-amber-300",
                               )}
                             >
-                              {statusLabel(est.status)}
+                              {isAccepted
+                                ? statusLabel(est.status)
+                                : isRejected
+                                  ? "Rejected"
+                                  : statusLabel(displayStatus)}
                             </Badge>
                           </div>
 
@@ -524,9 +650,14 @@ export function CustomerQuoteRequestDetailView() {
                               </>
                             ) : null}
                           </div>
+                          {isRejected && !isAccepted ? (
+                            <p className="text-xs text-muted-foreground">
+                              Not selected — another estimate was accepted for
+                              this request.
+                            </p>
+                          ) : null}
                         </div>
 
-                        {/* Price & CTA Action */}
                         <div className="flex flex-wrap items-center gap-3 sm:text-right">
                           {est.total ? (
                             <div className="flex flex-col sm:items-end">
@@ -544,41 +675,53 @@ export function CustomerQuoteRequestDetailView() {
                           )}
 
                           <div className="flex items-center gap-2">
-                            {est.shareToken ? (
-                              <Button
-                                asChild
-                                size="sm"
-                                className={cn(
-                                  "gap-1.5 font-medium",
-                                  isAccepted && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                            {isRejected && !isAccepted ? null : (
+                              <>
+                                {href ? (
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 font-medium"
+                                  >
+                                    <Link href={href}>
+                                      {isAccepted
+                                        ? "View signed estimate"
+                                        : "View estimate"}
+                                      <ExternalLink className="size-3.5" />
+                                    </Link>
+                                  </Button>
+                                ) : (
+                                  <Button variant="outline" size="sm" disabled>
+                                    Preparing…
+                                  </Button>
                                 )}
-                              >
-                                <Link
-                                  href={customerPaths.estimate(est.shareToken)}
-                                >
-                                  {isAccepted
-                                    ? "View signed estimate"
-                                    : isChanges
-                                      ? "View estimate"
-                                      : "Review & sign"}
-                                  <ExternalLink className="size-3.5" />
-                                </Link>
-                              </Button>
-                            ) : (
-                              <Button variant="outline" size="sm" disabled>
-                                Preparing Link…
-                              </Button>
+                                {canSign && est.id ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="gap-1.5 font-medium"
+                                    disabled={accepting}
+                                    onClick={() => setAcceptTarget(est)}
+                                  >
+                                    Accept
+                                  </Button>
+                                ) : null}
+                                {isAccepted ? null : (
+                                  <Button asChild variant="outline" size="sm">
+                                    <Link
+                                      href={customerPaths.messages}
+                                      title={`Message ${est.providerName}`}
+                                    >
+                                      <MessageSquare className="size-3.5" />
+                                      <span className="sr-only">
+                                        Message provider
+                                      </span>
+                                    </Link>
+                                  </Button>
+                                )}
+                              </>
                             )}
-
-                            <Button asChild variant="outline" size="sm">
-                              <Link
-                                href={customerPaths.messages}
-                                title={`Message ${est.providerName}`}
-                              >
-                                <MessageSquare className="size-3.5" />
-                                <span className="sr-only">Message provider</span>
-                              </Link>
-                            </Button>
                           </div>
                         </div>
                       </div>
@@ -758,19 +901,72 @@ export function CustomerQuoteRequestDetailView() {
                               ) : null}
                             </div>
 
-                            {est.shareToken ? (
-                              <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-                                <Link
-                                  href={customerPaths.estimate(est.shareToken)}
-                                >
-                                  Review proposal
-                                </Link>
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                Provider preparing link
-                              </span>
-                            )}
+                            {(() => {
+                              const batchHasAccepted =
+                                consolidatedEstimates.some((item) =>
+                                  isAcceptedStatus(item.status),
+                                );
+                              const isAccepted = isAcceptedStatus(est.status);
+                              const isRejected =
+                                isRejectedStatus(est.status) ||
+                                (batchHasAccepted && !isAccepted);
+                              const canSign =
+                                isSignableStatus(est.status) &&
+                                !batchHasAccepted;
+                              const href = estimateHref(est);
+                              if (isRejected && !isAccepted) {
+                                return (
+                                  <span className="text-xs text-muted-foreground">
+                                    Rejected
+                                  </span>
+                                );
+                              }
+                              if (!href) {
+                                return (
+                                  <span className="text-xs text-muted-foreground">
+                                    Preparing…
+                                  </span>
+                                );
+                              }
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs"
+                                  >
+                                    <Link href={href}>
+                                      {isAccepted ? "View signed" : "View"}
+                                    </Link>
+                                  </Button>
+                                  {canSign && est.id ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      disabled={accepting}
+                                      onClick={() =>
+                                        setAcceptTarget({
+                                          id: est.id,
+                                          number: est.number || "Estimate",
+                                          title: "",
+                                          status: est.status,
+                                          total: est.total,
+                                          shareToken: est.shareToken || "",
+                                          providerName: pro.providerName,
+                                          providerSlug: pro.providerSlug,
+                                          providerId: pro.providerId,
+                                          requestId: pro.requestId,
+                                        })
+                                      }
+                                    >
+                                      Accept
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              );
+                            })()}
                           </li>
                         ))}
                       </ul>
@@ -870,5 +1066,46 @@ export function CustomerQuoteRequestDetailView() {
         </aside>
       </div>
     </PortalPage>
+
+    <Dialog
+      open={Boolean(acceptTarget)}
+      onOpenChange={(open) => {
+        if (!open && !accepting) setAcceptTarget(null);
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Accept this estimate?</DialogTitle>
+          <DialogDescription>
+            Accept{" "}
+            <strong>{acceptTarget?.number}</strong> from{" "}
+            <strong>{acceptTarget?.providerName}</strong>
+            {acceptTarget?.total
+              ? ` for ${formatMoney(acceptTarget.total)}`
+              : ""}
+            . Other estimates for this request will be rejected and their Accept
+            buttons will be removed.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={accepting}
+            onClick={() => setAcceptTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={accepting || !acceptTarget?.id}
+            onClick={() => void confirmAcceptEstimate()}
+          >
+            {accepting ? "Accepting…" : "Confirm accept"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

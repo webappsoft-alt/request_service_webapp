@@ -3,7 +3,20 @@
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  Check,
+  Clock,
+  ExternalLink,
+  Eye,
+  HelpCircle,
+  MapPin,
+  MessageSquare,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { PortalPage } from "@/components/portal/portal-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,10 +33,14 @@ import {
   selectCustomerQuoteBatches,
   selectCustomerQuoteBatchesLoading,
   type CustomerQuoteBatch,
-  type CustomerQuoteProfessional,
 } from "@/store/customerQuotesSlice";
 
 function statusLabel(status: string) {
+  const clean = String(status || "").toLowerCase();
+  if (clean === "converted_to_job") return "Job Created";
+  if (clean === "site_visit") return "Site Visit";
+  if (clean === "changes_requested") return "Changes Requested";
+  if (clean === "estimate_sent") return "Estimate Sent";
   return status
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -47,179 +64,158 @@ function batchKey(batch: CustomerQuoteBatch) {
   );
 }
 
-type TimelineItem = {
+type ConsolidatedEstimate = {
   id: string;
-  label: string;
-  done: boolean;
-  detail?: string;
+  number: string;
+  title: string;
+  status: string;
+  total: number;
+  shareToken: string;
+  providerName: string;
+  providerSlug?: string;
+  providerId?: string;
+  requestId?: string;
+  createdAt?: string;
 };
 
-function buildTimeline(batch: CustomerQuoteBatch): TimelineItem[] {
+type TimelineStep = {
+  id: string;
+  label: string;
+  detail?: string;
+  done: boolean;
+  current?: boolean;
+};
+
+function buildTimelineSteps(batch: CustomerQuoteBatch): TimelineStep[] {
   const hasSeen = batch.seenCount > 0;
   const hasEstimate = batch.estimateCount > 0;
-  const statuses = batch.professionals.flatMap((p) =>
-    p.estimates.map((e) => e.status),
-  );
-  const accepted = statuses.some(
+  const statuses = batch.professionals.flatMap((p) => [
+    p.status,
+    ...p.estimates.map((e) => e.status),
+  ]);
+  const isAccepted = statuses.some(
     (s) => s === "accepted" || s === "converted_to_job",
   );
-  const rejected = statuses.some((s) => s === "rejected");
-  const jobCreated = statuses.some((s) => s === "converted_to_job");
+  const isJobCreated = statuses.some((s) => s === "converted_to_job");
   const firstViewed = batch.professionals
     .map((p) => p.firstViewedAt)
     .filter(Boolean)
     .sort()[0];
 
-  // Only include events that already happened (no fake completed steps).
-  const items: TimelineItem[] = [
+  const steps: TimelineStep[] = [
     {
       id: "submitted",
-      label: "Request submitted",
+      label: "Request Submitted",
+      detail: batch.createdAt ? formatDate(batch.createdAt) : "Submitted online",
       done: true,
-      detail: batch.createdAt ? formatDate(batch.createdAt) : undefined,
+    },
+    {
+      id: "sent",
+      label: "Dispatched to Providers",
+      detail:
+        batch.sentToCount > 0
+          ? `Sent to ${batch.sentToCount} local professional${batch.sentToCount === 1 ? "" : "s"}`
+          : "Matching providers in your area",
+      done: batch.sentToCount > 0,
+      current: batch.sentToCount > 0 && !hasSeen,
+    },
+    {
+      id: "viewed",
+      label: "Provider Review",
+      detail: hasSeen
+        ? firstViewed
+          ? `Viewed by ${batch.seenCount} pro${batch.seenCount === 1 ? "" : "s"} · First on ${formatDate(firstViewed)}`
+          : `Viewed by ${batch.seenCount} pro${batch.seenCount === 1 ? "" : "s"}`
+        : "Awaiting provider review",
+      done: hasSeen,
+      current: hasSeen && !hasEstimate,
+    },
+    {
+      id: "estimate",
+      label: "Estimates Received",
+      detail: hasEstimate
+        ? `${batch.estimateCount} estimate${batch.estimateCount === 1 ? "" : "s"} submitted for review`
+        : "Providers are calculating estimates",
+      done: hasEstimate,
+      current: hasEstimate && !isAccepted,
+    },
+    {
+      id: "accepted",
+      label: isJobCreated ? "Job Confirmed" : "Estimate Accepted",
+      detail: isJobCreated
+        ? "Job created and scheduled with provider"
+        : isAccepted
+          ? "Approved & signed by customer"
+          : "Sign proposal to confirm booking",
+      done: isAccepted,
+      current: isAccepted,
     },
   ];
 
-  if (batch.sentToCount > 0) {
-    items.push({
-      id: "sent",
-      label: "Sent to providers",
-      done: true,
-      detail: `${batch.sentToCount} professional${batch.sentToCount === 1 ? "" : "s"}`,
-    });
-  }
-
-  if (hasSeen) {
-    items.push({
-      id: "viewed",
-      label: "Provider viewed",
-      done: true,
-      detail: firstViewed
-        ? `Seen by ${batch.seenCount} · ${formatDate(firstViewed)}`
-        : `Seen by ${batch.seenCount}`,
-    });
-  }
-
-  if (hasEstimate) {
-    items.push({
-      id: "response",
-      label: "Estimate received",
-      done: true,
-      detail: `${batch.estimateCount} estimate${batch.estimateCount === 1 ? "" : "s"}`,
-    });
-  }
-
-  const changesRequested = statuses.some((s) => s === "changes_requested");
-  if (changesRequested) {
-    items.push({
-      id: "changes",
-      label: "Changes requested",
-      done: true,
-    });
-  }
-
-  const sharedOrSent = statuses.some(
-    (s) =>
-      s === "sent" ||
-      s === "finalized" ||
-      s === "accepted" ||
-      s === "converted_to_job",
-  );
-  if (sharedOrSent && !changesRequested) {
-    // no-op marker — shared is already covered by "Estimate received" when token exists
-  }
-
-  if (accepted) {
-    items.push({
-      id: "accepted",
-      label: "Estimate accepted",
-      done: true,
-      detail: "Signed and approved",
-    });
-  }
-
-  if (accepted && rejected) {
-    items.push({
-      id: "rejected",
-      label: "Other estimates declined",
-      done: true,
-    });
-  }
-
-  if (jobCreated) {
-    items.push({
-      id: "job",
-      label: "Job created",
-      done: true,
-    });
-  }
-
-  return items;
+  return steps;
 }
 
-function ProfessionalCard({
-  pro,
+function getOverallStatusBadge(batch: CustomerQuoteBatch) {
+  const statuses = batch.professionals.flatMap((p) => [
+    p.status,
+    ...p.estimates.map((e) => e.status),
+  ]);
+
+  if (statuses.some((s) => s === "converted_to_job")) {
+    return (
+      <Badge className="bg-emerald-600 text-white hover:bg-emerald-700">
+        Job Created
+      </Badge>
+    );
+  }
+  if (statuses.some((s) => s === "accepted")) {
+    return (
+      <Badge className="bg-emerald-600 text-white hover:bg-emerald-700">
+        Estimate Accepted
+      </Badge>
+    );
+  }
+  if (batch.estimateCount > 0) {
+    return (
+      <Badge className="bg-primary text-primary-foreground">
+        {batch.estimateCount} Estimate{batch.estimateCount === 1 ? "" : "s"} Ready
+      </Badge>
+    );
+  }
+  if (batch.seenCount > 0) {
+    return (
+      <Badge variant="secondary" className="bg-amber-100 text-amber-900 border-amber-300">
+        Under Review
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="border-border text-muted-foreground">
+      Awaiting Providers
+    </Badge>
+  );
+}
+
+
+function StatCard({
+  label,
+  value,
+  hint,
 }: {
-  pro: CustomerQuoteProfessional;
+  label: string;
+  value: string | number;
+  hint: string;
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-[4px] border border-black/10 bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-medium">{pro.providerName}</p>
-          <p className="text-xs text-muted-foreground">{pro.number}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant={pro.seen ? "secondary" : "outline"}>
-            {pro.seen ? "Seen" : "Not seen"}
-          </Badge>
-          <Badge variant="outline">{statusLabel(pro.status)}</Badge>
-        </div>
-      </div>
-      {pro.estimates.length ? (
-        <ul className="mt-3 space-y-2 border-t border-black/10 pt-3">
-          {pro.estimates.map((est) => (
-            <li
-              key={est.id}
-              className="flex flex-wrap items-center justify-between gap-2 text-sm"
-            >
-              <span>
-                <span className="font-medium">{est.number || "Estimate"}</span>
-                <span className="ml-2 text-muted-foreground">
-                  {statusLabel(est.status)}
-                </span>
-                {est.total ? (
-                  <span className="ml-2 font-semibold tabular-nums text-[#003F7D]">
-                    {formatMoney(est.total)}
-                  </span>
-                ) : null}
-              </span>
-              {est.shareToken ? (
-                <Button asChild size="sm">
-                  <Link href={customerPaths.estimate(est.shareToken)}>
-                    {["sent", "finalized", "changes_requested"].includes(
-                      est.status,
-                    )
-                      ? est.status === "changes_requested"
-                        ? "View estimate"
-                        : "Review & sign"
-                      : "View"}
-                  </Link>
-                </Button>
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  Provider is preparing this estimate — open it here once they
-                  share the review link.
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-3 text-sm text-muted-foreground">
-          No estimate submitted yet.
-        </p>
-      )}
+    <div className="rounded-xl border border-border bg-card px-5 py-5 transition-colors hover:bg-muted/40">
+      <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p className="mt-3 text-[1.75rem] leading-none font-semibold tracking-tight tabular-nums text-foreground">
+        {value}
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
@@ -233,7 +229,7 @@ export function CustomerQuoteRequestDetailView() {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const batches = useAppSelector(selectCustomerQuoteBatches);
   const loading = useAppSelector(selectCustomerQuoteBatchesLoading);
-  const estimates = useAppSelector(selectCustomerApiEstimates);
+  const apiEstimates = useAppSelector(selectCustomerApiEstimates);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -248,25 +244,79 @@ export function CustomerQuoteRequestDetailView() {
   }, [auth.hydrated, isAuthenticated, router, dispatch, id]);
 
   const batch = useMemo(() => {
-    return batches.find((item) => batchKey(item) === id) || null;
+    return (
+      batches.find((item) => batchKey(item) === id) ||
+      batches.find((item) => item.quoteBatchId === id) ||
+      batches.find((item) =>
+        item.professionals.some((p) => p.requestId === id),
+      ) ||
+      null
+    );
   }, [batches, id]);
 
-  const timeline = batch ? buildTimeline(batch) : [];
+  const timelineSteps = useMemo(() => {
+    return batch ? buildTimelineSteps(batch) : [];
+  }, [batch]);
 
-  // Merge any API estimates that match request ids in this batch
-  const requestIds = new Set(
-    (batch?.professionals || []).map((p) => p.requestId),
-  );
-  const relatedEstimates = estimates.filter(
-    (est) => est.requestId && requestIds.has(est.requestId),
-  );
+  // Consolidate all estimates linked to this request / batch
+  const consolidatedEstimates = useMemo<ConsolidatedEstimate[]>(() => {
+    if (!batch) return [];
+    const map = new Map<string, ConsolidatedEstimate>();
 
-  if (!auth.hydrated || (!isAuthenticated && loading)) {
-    return <CenteredSpinner label="Loading request…" />;
-  }
+    // 1. Estimates directly under professionals
+    for (const pro of batch.professionals) {
+      for (const est of pro.estimates) {
+        const key = est.id || est.shareToken || est.number;
+        if (!key) continue;
+        map.set(key, {
+          id: est.id,
+          number: est.number || "Estimate",
+          title: `Proposal from ${pro.providerName}`,
+          status: est.status,
+          total: est.total,
+          shareToken: est.shareToken,
+          providerName: pro.providerName,
+          providerSlug: pro.providerSlug,
+          providerId: pro.providerId,
+          requestId: pro.requestId,
+        });
+      }
+    }
 
-  if (loading && !batch) {
-    return <CenteredSpinner label="Loading request…" />;
+    // 2. Estimates matching request IDs from API estimates list
+    const requestIds = new Set(batch.professionals.map((p) => p.requestId));
+    for (const est of apiEstimates) {
+      if (est.requestId && requestIds.has(est.requestId)) {
+        const key = est.id || est.shareToken || est.number;
+        const existing = map.get(key);
+        map.set(key, {
+          id: est.id,
+          number: est.number || existing?.number || "Estimate",
+          title: est.title || existing?.title || "Estimate",
+          status: est.status || existing?.status || "sent",
+          total: est.total || existing?.total || 0,
+          shareToken: est.shareToken || existing?.shareToken || "",
+          providerName:
+            est.provider?.companyName ||
+            existing?.providerName ||
+            "Service Professional",
+          providerSlug: est.provider?.slug || existing?.providerSlug,
+          providerId: est.provider?.id || existing?.providerId,
+          requestId: est.requestId,
+          createdAt: est.createdAt,
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [batch, apiEstimates]);
+
+  if (!auth.hydrated || (loading && !batch)) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center">
+        <CenteredSpinner label="Loading request details…" />
+      </div>
+    );
   }
 
   if (!batch) {
@@ -277,158 +327,546 @@ export function CustomerQuoteRequestDetailView() {
         description="This quote request may have been removed or the link is invalid."
         actions={
           <Button asChild variant="outline" size="sm">
-            <Link href={customerPaths.estimates}>Back to estimates</Link>
+            <Link href={customerPaths.estimateRequests}>
+              <ArrowLeft className="size-3.5" />
+              Back to requests
+            </Link>
           </Button>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          Return to your estimates list to open another request.
-        </p>
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <p className="text-base font-medium text-foreground">
+            Quote request could not be located
+          </p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            Return to your estimates dashboard to view all active requests and
+            proposals.
+          </p>
+          <Button asChild className="mt-4" size="sm">
+            <Link href={customerPaths.estimateRequests}>View all requests</Link>
+          </Button>
+        </div>
       </PortalPage>
     );
   }
 
+  const referenceId =
+    batch.quoteBatchId || batch.professionals[0]?.requestId || id;
+  const firstViewedAt = batch.professionals
+    .map((p) => p.firstViewedAt)
+    .filter(Boolean)
+    .sort()[0];
+
   return (
     <PortalPage
-      eyebrow="Quote request"
+      eyebrow="Quote Request Details"
       title={batch.serviceName}
-      description={formatAddress(batch)}
+      description={
+        referenceId
+          ? `${formatAddress(batch)} · Ref: ${referenceId.slice(0, 8)}`
+          : formatAddress(batch)
+      }
+      badge={getOverallStatusBadge(batch)}
       actions={
-        <Button asChild variant="outline" size="sm">
-          <Link href={customerPaths.estimateRequests}>
-            <ArrowLeft className="size-3.5" />
-            Back to requests
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={customerPaths.estimateRequests}>
+              <ArrowLeft className="size-3.5" />
+              Back to requests
+            </Link>
+          </Button>
+          <Button asChild size="sm">
+            <Link href={customerPaths.estimateRequest}>
+              <Sparkles className="size-3.5" />
+              New request
+            </Link>
+          </Button>
+        </div>
       }
     >
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+      {/* KPI Metric Cards */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Request status"
+          value={
+            batch.estimateCount > 0
+              ? `${batch.estimateCount} ready`
+              : batch.seenCount > 0
+                ? "Under review"
+                : "Dispatched"
+          }
+          hint={
+            batch.estimateCount > 0
+              ? "Estimates ready for signature"
+              : batch.seenCount > 0
+                ? "Pros reviewing requirements"
+                : "Sent to matching providers"
+          }
+        />
+        <StatCard
+          label="Providers notified"
+          value={batch.sentToCount}
+          hint={
+            batch.sentToCount === 1
+              ? "1 local provider notified"
+              : `${batch.sentToCount} local providers notified`
+          }
+        />
+        <StatCard
+          label="Provider views"
+          value={batch.seenCount}
+          hint={
+            firstViewedAt
+              ? `First seen ${formatDate(firstViewedAt)}`
+              : batch.seenCount > 0
+                ? "Seen by matching pros"
+                : "Awaiting initial view"
+          }
+        />
+        <StatCard
+          label="Estimates received"
+          value={batch.estimateCount}
+          hint={
+            batch.estimateCount > 0
+              ? "Proposals ready to compare"
+              : "Quotes in preparation"
+          }
+        />
+      </div>
+
+      {/* Main Grid: Content (Left) & Sidebar (Right) */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-6">
-          <section className="rounded-[4px] border border-black/10 bg-card p-4">
-            <h2 className="text-sm font-semibold tracking-wide text-[#003F7D] uppercase">
-              Request details
-            </h2>
-            <dl className="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
-              <div>
-                <dt className="text-muted-foreground">Service</dt>
-                <dd className="font-medium">{batch.serviceName}</dd>
+          {/* SECTION 1: Received Estimates Spotlight (If Any) */}
+          {consolidatedEstimates.length > 0 ? (
+            <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    Estimates received ({consolidatedEstimates.length})
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Review proposals from providers and sign online to accept
+                  </p>
+                </div>
+                <Badge variant="default" className="bg-primary text-primary-foreground">
+                  Action available
+                </Badge>
               </div>
-              <div>
-                <dt className="text-muted-foreground">Address</dt>
-                <dd className="font-medium">{formatAddress(batch)}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Sent to</dt>
-                <dd className="font-medium">{batch.sentToCount} professionals</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Seen by</dt>
-                <dd className="font-medium">{batch.seenCount}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Estimates</dt>
-                <dd className="font-medium">{batch.estimateCount}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Submitted</dt>
-                <dd className="font-medium">
-                  {batch.createdAt ? formatDate(batch.createdAt) : "—"}
-                </dd>
-              </div>
-            </dl>
-            {batch.details ? (
-              <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground">
-                {batch.details}
-              </p>
-            ) : null}
-          </section>
 
-          <section>
-            <h2 className="mb-3 text-sm font-semibold tracking-wide text-[#003F7D] uppercase">
-              Provider activity
-            </h2>
-            <div className="space-y-3">
-              {batch.professionals.map((pro) => (
-                <ProfessionalCard key={pro.requestId} pro={pro} />
-              ))}
-            </div>
-            {!batch.professionals.length ? (
-              <p className="text-sm text-muted-foreground">
-                No professionals linked to this request yet.
-              </p>
-            ) : null}
-          </section>
+              {/* Informative Guidance Notice */}
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3.5 text-xs text-foreground">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+                <p>
+                  <strong className="font-semibold">Single-Approval Guarantee:</strong>{" "}
+                  Once you review and accept an estimate with your digital
+                  signature, that provider is confirmed, and other competing
+                  proposals for this request are automatically declined.
+                </p>
+              </div>
 
-          {relatedEstimates.length ? (
-            <section>
-              <h2 className="mb-3 text-sm font-semibold tracking-wide text-[#003F7D] uppercase">
-                All estimates for this request
-              </h2>
-              <p className="mb-3 text-sm text-muted-foreground">
-                Approve one estimate with signature — other estimates from the same
-                quote batch are declined automatically.
-              </p>
-              <ul className="space-y-2">
-                {relatedEstimates.map((est) => (
-                  <li
-                    key={est.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-[4px] border border-black/10 bg-card px-3 py-2.5 text-sm"
-                  >
-                    <span>
-                      <span className="font-medium">
-                        {est.title || est.number}
-                      </span>
-                      <span className="ml-2 text-muted-foreground">
-                        {est.provider?.companyName || "Professional"}
-                      </span>
-                      <Badge className="ml-2" variant="outline">
-                        {statusLabel(est.status)}
-                      </Badge>
-                    </span>
-                    {est.shareToken ? (
-                      <Button asChild size="sm">
-                        <Link href={customerPaths.estimate(est.shareToken)}>
-                          Open
-                        </Link>
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              {/* Estimates Cards List */}
+              <div className="mt-4 space-y-3">
+                {consolidatedEstimates.map((est) => {
+                  const isAccepted =
+                    est.status === "accepted" ||
+                    est.status === "converted_to_job";
+                  const isChanges = est.status === "changes_requested";
+
+                  return (
+                    <div
+                      key={est.id || est.shareToken || est.number}
+                      className={cn(
+                        "group relative rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/50 sm:p-5",
+                        isAccepted && "border-emerald-500/40 bg-emerald-50/20",
+                      )}
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="flex size-7 items-center justify-center rounded-full bg-muted font-semibold text-xs text-foreground border border-border">
+                              {est.providerName.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="font-semibold text-foreground">
+                              {est.providerName}
+                            </span>
+                            <Badge
+                              variant={
+                                isAccepted
+                                  ? "default"
+                                  : isChanges
+                                    ? "secondary"
+                                    : "outline"
+                              }
+                              className={cn(
+                                isAccepted && "bg-emerald-600 text-white",
+                                isChanges && "bg-amber-100 text-amber-900 border-amber-300",
+                              )}
+                            >
+                              {statusLabel(est.status)}
+                            </Badge>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span className="font-mono font-medium text-foreground">
+                              {est.number}
+                            </span>
+                            {est.title && est.title !== est.number ? (
+                              <>
+                                <span>·</span>
+                                <span>{est.title}</span>
+                              </>
+                            ) : null}
+                            {est.createdAt ? (
+                              <>
+                                <span>·</span>
+                                <span>{formatDate(est.createdAt)}</span>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Price & CTA Action */}
+                        <div className="flex flex-wrap items-center gap-3 sm:text-right">
+                          {est.total ? (
+                            <div className="flex flex-col sm:items-end">
+                              <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+                                Quote total
+                              </span>
+                              <span className="text-xl font-bold tabular-nums text-foreground">
+                                {formatMoney(est.total)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Pricing pending
+                            </span>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            {est.shareToken ? (
+                              <Button
+                                asChild
+                                size="sm"
+                                className={cn(
+                                  "gap-1.5 font-medium",
+                                  isAccepted && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                                )}
+                              >
+                                <Link
+                                  href={customerPaths.estimate(est.shareToken)}
+                                >
+                                  {isAccepted
+                                    ? "View signed estimate"
+                                    : isChanges
+                                      ? "View estimate"
+                                      : "Review & sign"}
+                                  <ExternalLink className="size-3.5" />
+                                </Link>
+                              </Button>
+                            ) : (
+                              <Button variant="outline" size="sm" disabled>
+                                Preparing Link…
+                              </Button>
+                            )}
+
+                            <Button asChild variant="outline" size="sm">
+                              <Link
+                                href={customerPaths.messages}
+                                title={`Message ${est.providerName}`}
+                              >
+                                <MessageSquare className="size-3.5" />
+                                <span className="sr-only">Message provider</span>
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </section>
           ) : null}
+
+          {/* SECTION 2: Request & Service Specifications */}
+          <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
+            <div className="border-b border-border pb-4">
+              <h2 className="text-base font-semibold text-foreground">
+                Service & request details
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Job parameters and specifications sent to matching professionals
+              </p>
+            </div>
+
+            <dl className="mt-5 grid gap-4 sm:grid-cols-2 text-sm">
+              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+                <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+                <div>
+                  <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                    Requested service
+                  </dt>
+                  <dd className="mt-0.5 font-medium text-foreground">
+                    {batch.serviceName}
+                  </dd>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+                <MapPin className="mt-0.5 size-4 shrink-0 text-primary" />
+                <div>
+                  <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                    Service address
+                  </dt>
+                  <dd className="mt-0.5 font-medium text-foreground">
+                    {formatAddress(batch)}
+                  </dd>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+                <CalendarDays className="mt-0.5 size-4 shrink-0 text-primary" />
+                <div>
+                  <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                    Date submitted
+                  </dt>
+                  <dd className="mt-0.5 font-medium text-foreground">
+                    {batch.createdAt ? formatDate(batch.createdAt) : "—"}
+                  </dd>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+                <Building2 className="mt-0.5 size-4 shrink-0 text-primary" />
+                <div>
+                  <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                    Channel & distribution
+                  </dt>
+                  <dd className="mt-0.5 font-medium text-foreground capitalize">
+                    {batch.channel || "Marketplace Quote Request"}
+                  </dd>
+                </div>
+              </div>
+            </dl>
+
+            {/* Special Details / Customer Notes */}
+            <div className="mt-5">
+              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                Customer notes & specifications
+              </h3>
+              {batch.details ? (
+                <div className="mt-2 rounded-lg border border-border bg-muted/20 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                  {batch.details}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs italic text-muted-foreground">
+                  No additional notes or special requirements provided for this
+                  quote request.
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* SECTION 3: Provider Activity & Contact */}
+          <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
+            <div className="border-b border-border pb-4">
+              <h2 className="text-base font-semibold text-foreground">
+                Matched professionals ({batch.professionals.length})
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Providers notified of this request and their activity status
+              </p>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {batch.professionals.map((pro) => (
+                <div
+                  key={pro.requestId}
+                  className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/40"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-sm text-foreground border border-border">
+                        {pro.providerName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {pro.providerName}
+                        </p>
+                        <p className="font-mono text-xs text-muted-foreground">
+                          Ref: {pro.number || pro.requestId.slice(0, 8)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={pro.seen ? "secondary" : "outline"}
+                        className={cn(
+                          pro.seen
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {pro.seen ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Eye className="size-3" />
+                            Viewed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="size-3" />
+                            Not seen yet
+                          </span>
+                        )}
+                      </Badge>
+                      <Badge variant="outline">{statusLabel(pro.status)}</Badge>
+
+                      <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+                        <Link href={customerPaths.messages}>
+                          <MessageSquare className="size-3.5" />
+                          Message
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Estimates from this provider */}
+                  {pro.estimates.length > 0 ? (
+                    <div className="mt-3 border-t border-border pt-3">
+                      <p className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+                        Estimates submitted
+                      </p>
+                      <ul className="mt-2 space-y-2">
+                        {pro.estimates.map((est) => (
+                          <li
+                            key={est.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground">
+                                {est.number || "Estimate"}
+                              </span>
+                              <Badge variant="outline" className="text-xs">
+                                {statusLabel(est.status)}
+                              </Badge>
+                              {est.total ? (
+                                <span className="font-semibold tabular-nums text-foreground">
+                                  {formatMoney(est.total)}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {est.shareToken ? (
+                              <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                                <Link
+                                  href={customerPaths.estimate(est.shareToken)}
+                                >
+                                  Review proposal
+                                </Link>
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Provider preparing link
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      No estimate submitted yet by this professional.
+                    </p>
+                  )}
+                </div>
+              ))}
+
+              {!batch.professionals.length ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  No professionals linked to this request yet.
+                </p>
+              ) : null}
+            </div>
+          </section>
         </div>
 
-        <aside className="rounded-[4px] border border-black/10 bg-card p-4 h-fit xl:sticky xl:top-24">
-          <h2 className="text-sm font-semibold tracking-wide text-[#003F7D] uppercase">
-            Timeline
-          </h2>
-          <ol className="mt-4 space-y-3">
-            {timeline.map((item) => (
-              <li key={item.id} className="flex gap-2.5 text-sm">
-                {item.done ? (
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-                ) : (
-                  <span className="mt-0.5 size-4 shrink-0 rounded-full border border-muted-foreground/40" />
-                )}
-                <span>
+        {/* SIDEBAR: Lifecycle Timeline & Guidance */}
+        <aside className="space-y-6">
+          {/* Stepped Timeline */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs xl:sticky xl:top-20">
+            <h2 className="text-sm font-semibold text-foreground">
+              Request lifecycle
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Real-time progress of your quote request
+            </p>
+
+            <div className="relative mt-5 space-y-6 pl-6 before:absolute before:left-2.5 before:top-2.5 before:bottom-2.5 before:w-0.5 before:bg-border">
+              {timelineSteps.map((step, idx) => (
+                <div key={step.id} className="relative flex items-start gap-3">
                   <span
                     className={cn(
-                      "block font-medium",
-                      !item.done && "text-muted-foreground",
+                      "absolute -left-6 top-0 flex size-5 items-center justify-center rounded-full text-[10px] font-bold ring-4 ring-card",
+                      step.done
+                        ? "bg-emerald-600 text-white"
+                        : step.current
+                          ? "bg-primary text-primary-foreground ring-primary/20 animate-pulse"
+                          : "border border-border bg-muted text-muted-foreground",
                     )}
                   >
-                    {item.label}
+                    {step.done ? (
+                      <Check className="size-3" />
+                    ) : (
+                      <span>{idx + 1}</span>
+                    )}
                   </span>
-                  {item.detail ? (
-                    <span className="text-xs text-muted-foreground">
-                      {item.detail}
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ol>
+                  <div className="min-w-0">
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        step.done
+                          ? "text-foreground"
+                          : step.current
+                            ? "font-semibold text-primary"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {step.label}
+                    </p>
+                    {step.detail ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {step.detail}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Need Assistance Card */}
+            <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-xs text-foreground">
+              <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                <HelpCircle className="size-4 shrink-0 text-primary" />
+                <span>How quote requests work</span>
+              </div>
+              <ul className="mt-2.5 space-y-2 text-muted-foreground">
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary">•</span>
+                  <span>Providers typically review and respond within 24–48 hours.</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary">•</span>
+                  <span>Compare prices, terms, and reviews before signing.</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary">•</span>
+                  <span>Need changes? Message the provider directly anytime.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </aside>
       </div>
     </PortalPage>

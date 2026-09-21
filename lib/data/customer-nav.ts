@@ -1,8 +1,8 @@
-import type { LucideIcon } from "lucide-react";
 import {
   ClipboardList,
   FileText,
   Home,
+  Inbox,
   LayoutDashboard,
   MessageCircle,
   Receipt,
@@ -40,6 +40,7 @@ export const customerNavGroups: CustomerNavGroup[] = [
     label: "Activity",
     items: [
       { href: customerPaths.orders, label: "Orders", icon: ClipboardList },
+      { href: customerPaths.requests, label: "Requests", icon: Inbox },
       { href: customerPaths.estimates, label: "Estimates", icon: FileText },
       { href: customerPaths.invoices, label: "Invoices", icon: Receipt },
       { href: customerPaths.messages, label: "Messages", icon: MessageCircle },

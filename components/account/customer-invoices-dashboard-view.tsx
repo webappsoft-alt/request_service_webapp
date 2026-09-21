@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Search } from "lucide-react";
+import { Eye } from "lucide-react";
+import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
-import { NoData } from "@/components/shared/no-data";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { StatusPill, moneyTone } from "@/components/portal/status-pill";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate, formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
 import {
@@ -20,16 +19,10 @@ import {
   selectCustomerInvoicesLoading,
 } from "@/store/customerInvoicesSlice";
 
-function statusVariant(status: string) {
-  const value = status.toLowerCase();
-  if (value === "paid") return "default" as const;
-  if (value === "sent" || value === "partially_paid") return "secondary" as const;
-  if (value === "overdue") return "destructive" as const;
-  return "outline" as const;
-}
-
 function statusLabel(status: string) {
-  return status
+  const clean = String(status || "").toLowerCase();
+  if (clean === "partially_paid") return "Partially Paid";
+  return clean
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
@@ -42,7 +35,6 @@ export function CustomerInvoicesDashboardView() {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const invoices = useAppSelector(selectCustomerInvoices);
   const loading = useAppSelector(selectCustomerInvoicesLoading);
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -54,24 +46,6 @@ export function CustomerInvoicesDashboardView() {
     }
     void dispatch(fetchCustomerInvoices());
   }, [auth.hydrated, isAuthenticated, router, dispatch]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return invoices;
-    return invoices.filter((invoice) => {
-      const haystack = [
-        invoice.number,
-        invoice.status,
-        invoice.jobNumber,
-        invoice.provider?.companyName,
-        String(invoice.total),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [invoices, search]);
 
   if (!auth.hydrated || (loading && !invoices.length)) {
     return (
@@ -91,88 +65,109 @@ export function CustomerInvoicesDashboardView() {
       title="Invoices"
       description="Invoices sent by professionals after your job is underway. Open one to review totals and line items."
     >
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search invoices…"
-            className="pl-9"
-          />
-        </div>
-      </div>
-
-      {!filtered.length ? (
-        <NoData
-          title="No invoices yet"
-          description="When a professional sends an invoice for your job, it will show up here."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-[4px] border border-black/10">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-black/10 bg-[#f8fafc] text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-              <tr>
-                <th className="px-4 py-3">Invoice</th>
-                <th className="px-4 py-3">Professional</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Due</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                <th className="px-4 py-3 text-right">Balance</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((invoice) => (
-                <tr
-                  key={invoice.id}
-                  className="border-b border-black/5 last:border-0"
+      <PortalDataTable
+        filename="customer-invoices"
+        countLabel="Invoices"
+        searchPlaceholder="Search invoices…"
+        loading={loading}
+        rows={invoices}
+        rowKey={(row) => row.id}
+        rowHref={(row) => customerPaths.invoice(row.id)}
+        empty="No invoices yet."
+        columns={[
+          {
+            id: "number",
+            header: "Invoice #",
+            sortValue: (row) => row.number,
+            searchValue: (row) => `${row.number} ${row.jobNumber || ""}`,
+            exportValue: (row) => row.number,
+            cell: (row) => (
+              <div>
+                <Link
+                  href={customerPaths.invoice(row.id)}
+                  className="font-medium text-primary hover:underline"
                 >
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-[#003F7D]">
-                      {invoice.number}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {invoice.jobNumber
-                        ? `Job ${invoice.jobNumber}`
-                        : invoice.issuedAt
-                          ? `Issued ${formatDate(invoice.issuedAt.slice(0, 10))}`
-                          : "Invoice"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3">
-                    {invoice.provider?.companyName || "Professional"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusVariant(invoice.status)}>
-                      {statusLabel(invoice.status)}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {invoice.dueAt
-                      ? formatDate(invoice.dueAt.slice(0, 10))
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatMoney(invoice.total)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatMoney(invoice.balanceDue)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={customerPaths.invoice(invoice.id)}>
-                        <Eye className="size-3.5" />
-                        View
-                      </Link>
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  {row.number}
+                </Link>
+                <p className="text-xs text-muted-foreground">
+                  {row.jobNumber
+                    ? `Job ${row.jobNumber}`
+                    : row.issuedAt
+                      ? `Issued ${formatDate(row.issuedAt.slice(0, 10))}`
+                      : "Invoice"}
+                </p>
+              </div>
+            ),
+          },
+          {
+            id: "provider",
+            header: "Professional",
+            sortValue: (row) => row.provider?.companyName || "",
+            searchValue: (row) => row.provider?.companyName || "",
+            cell: (row) => (
+              <span className="font-medium text-foreground">
+                {row.provider?.companyName || "Professional"}
+              </span>
+            ),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            cell: (row) => (
+              <StatusPill
+                label={statusLabel(row.status)}
+                tone={moneyTone(row.status)}
+              />
+            ),
+          },
+          {
+            id: "due",
+            header: "Due",
+            sortValue: (row) => row.dueAt || "",
+            cell: (row) => (
+              <span className="text-muted-foreground">
+                {row.dueAt ? formatDate(row.dueAt.slice(0, 10)) : "—"}
+              </span>
+            ),
+          },
+          {
+            id: "total",
+            header: "Total",
+            className: "text-right",
+            sortValue: (row) => row.total ?? 0,
+            cell: (row) => (
+              <span className="font-semibold tabular-nums text-foreground">
+                {formatMoney(row.total)}
+              </span>
+            ),
+          },
+          {
+            id: "balance",
+            header: "Balance",
+            className: "text-right",
+            sortValue: (row) => row.balanceDue ?? 0,
+            cell: (row) => (
+              <span
+                className={cn(
+                  "font-bold tabular-nums",
+                  row.balanceDue > 0 ? "text-[#003F7D]" : "text-muted-foreground",
+                )}
+              >
+                {formatMoney(row.balanceDue)}
+              </span>
+            ),
+          },
+        ]}
+        actions={(row) => [
+          {
+            label: "View invoice",
+            href: customerPaths.invoice(row.id),
+            icon: <Eye className="size-3.5" />,
+            quick: true,
+          },
+        ]}
+      />
     </PortalPage>
   );
 }

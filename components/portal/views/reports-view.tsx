@@ -74,7 +74,7 @@ export function ReportsView() {
       ["Outstanding", formatMoney(outstanding)],
       ["Payments", String(paymentsCount)],
       ["Households", String(households)],
-      ["Quote requests", String(pipeline.find((item) => item.id === "requests")?.value ?? 0)],
+      ["Leads", String(pipeline.find((item) => item.id === "requests")?.value ?? 0)],
       ["Estimates sent", String(sent)],
       ["Estimates accepted", String(accepted)],
       ["Conversion", `${conversion}%`],
@@ -205,7 +205,7 @@ export function ReportsView() {
             {(pipeline.length > 0
               ? pipeline
               : [
-                  { id: "requests", label: "Quote requests", value: 0, href: "/pro/dashboard/requests" },
+                  { id: "requests", label: "Leads", value: 0, href: "/pro/dashboard/requests" },
                   { id: "estimates_sent", label: "Estimates sent", value: 0, href: "/pro/dashboard/estimates" },
                   { id: "accepted", label: "Accepted", value: 0, href: "/pro/dashboard/estimates?status=accepted" },
                   { id: "jobs", label: "Jobs", value: 0, href: "/pro/dashboard/jobs" },
@@ -236,7 +236,7 @@ export function ReportsView() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {requestMix.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No quote requests in this period yet.</p>
+              <p className="text-sm text-muted-foreground">No leads in this period yet.</p>
             ) : (
               requestMix.map((item) => (
                 <MixRow

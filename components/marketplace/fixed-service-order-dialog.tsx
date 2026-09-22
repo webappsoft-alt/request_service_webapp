@@ -63,6 +63,38 @@ function formatSlotLabel(iso: string) {
   }).format(date);
 }
 
+function formatSlotDisabledLabel(reason?: string | null) {
+  const code = String(reason || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+  if (code === "PAST_TIME" || code === "PAST") {
+    return {
+      /** Short label inside the compact slot card */
+      text: "Passed",
+      tone: "past" as const,
+    };
+  }
+  if (code === "BOOKED" || code === "UNAVAILABLE" || !code) {
+    return { text: "Booked", tone: "muted" as const };
+  }
+  const humanized = code
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+  return { text: humanized || "Unavailable", tone: "muted" as const };
+}
+
+function isPastSlotReason(reason?: string | null) {
+  const code = String(reason || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+  return code === "PAST_TIME" || code === "PAST";
+}
+
 function defaultTimezone() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
@@ -217,7 +249,6 @@ export function FixedServiceOrderDialog({
     if (
       !address.street.trim() ||
       !address.city.trim() ||
-      !address.zip.trim() ||
       address.lat == null ||
       address.lng == null ||
       !Number.isFinite(address.lat) ||
@@ -226,6 +257,8 @@ export function FixedServiceOrderDialog({
       toast.error("Please select a complete service address from the suggestions.");
       return;
     }
+    // Many places (esp. non-US) omit postal codes — coords + street/city are enough.
+    const zip = address.zip.trim() || "00000";
 
     // Auth gate happens at submit — preserve the full form first.
     if (!isAuthenticated) {
@@ -259,7 +292,7 @@ export function FixedServiceOrderDialog({
             unit: address.unit.trim() || undefined,
             city: address.city.trim(),
             state: address.state.trim() || undefined,
-            zip: address.zip.trim(),
+            zip,
             location: {
               type: "Point",
               coordinates: [address.lng, address.lat],
@@ -343,40 +376,58 @@ export function FixedServiceOrderDialog({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {slots.map((slot) => {
-                  const selected = selectedSlot?.startTime === slot.startTime;
-                  return (
-                    <button
-                      key={slot.startTime}
-                      type="button"
-                      disabled={!slot.isAvailable || checkoutLoading}
-                      onClick={() => setSelectedSlot(slot)}
-                      className={cn(
-                        "flex min-h-11 flex-col items-center justify-center rounded-lg border px-3 py-2.5 text-center text-sm transition-colors",
-                        slot.isAvailable
-                          ? selected
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-input bg-card hover:border-primary/40 hover:bg-muted/40"
-                          : "cursor-not-allowed border-muted bg-muted/50 text-muted-foreground",
-                      )}
-                      title={
-                        slot.isAvailable
-                          ? undefined
-                          : slot.disabledReason || "Booked"
-                      }
-                    >
-                      <span className="font-medium leading-none">
-                        {formatSlotLabel(slot.startTime)}
-                      </span>
-                      {!slot.isAvailable ? (
-                        <span className="mt-1 text-[11px] leading-none opacity-80">
-                          {slot.disabledReason || "Booked"}
+              <div className="flex flex-col gap-2">
+                {slots.some((slot) => !slot.isAvailable && isPastSlotReason(slot.disabledReason)) &&
+                !slots.some((slot) => slot.isAvailable) ? (
+                  <p className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] leading-snug text-red-700">
+                    These times have passed for today. Please book the next available date.
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {slots.map((slot) => {
+                    const selected = selectedSlot?.startTime === slot.startTime;
+                    const disabledLabel = !slot.isAvailable
+                      ? formatSlotDisabledLabel(slot.disabledReason)
+                      : null;
+                    return (
+                      <button
+                        key={slot.startTime}
+                        type="button"
+                        disabled={!slot.isAvailable || checkoutLoading}
+                        onClick={() => setSelectedSlot(slot)}
+                        className={cn(
+                          "flex min-h-11 flex-col items-center justify-center gap-1 rounded-lg border px-3 py-2 text-center text-sm transition-colors",
+                          slot.isAvailable
+                            ? selected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-input bg-card hover:border-primary/40 hover:bg-muted/40"
+                            : "cursor-not-allowed border-muted bg-muted/50 text-muted-foreground",
+                        )}
+                        title={
+                          disabledLabel?.tone === "past"
+                            ? "This slot has passed for today. Please book the next available date."
+                            : disabledLabel?.text
+                        }
+                      >
+                        <span className="font-medium leading-none">
+                          {formatSlotLabel(slot.startTime)}
                         </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
+                        {disabledLabel ? (
+                          <span
+                            className={cn(
+                              "text-[9px] font-normal leading-none",
+                              disabledLabel.tone === "past"
+                                ? "text-red-400"
+                                : "opacity-80",
+                            )}
+                          >
+                            {disabledLabel.text}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
             {!availabilityLoading &&

@@ -9,6 +9,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme="light"
       position="top-right"
       closeButton
+      visibleToasts={3}
       className="toaster group"
       icons={{
         success: (
@@ -37,7 +38,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "cn-toast !py-2.5 !px-3 !gap-2 text-sm",
+          title: "!text-sm !font-medium !leading-snug",
+          description: "!text-xs !leading-snug !opacity-90 line-clamp-2",
           closeButton: "cn-toast-close",
         },
       }}

@@ -1,8 +1,19 @@
 "use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
+import { subscribeRealtime } from "@/components/realtime/realtime-provider";
+import {
+  type AppNotification,
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  normalizeSocketNotification,
+  notificationHref,
+} from "@/lib/api/notifications-client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,44 +23,262 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
+function providerTitle(item: AppNotification) {
+  if (item.type === "NEW_LEAD") return "New lead";
+  if (item.type === "NEW_CHAT_MESSAGE") return "New message";
+  return item.title.replace(/^New quote request$/i, "New lead");
+}
+
+function leadFallbackNotification(payload: Record<string, unknown> | undefined): AppNotification | null {
+  if (!payload) return null;
+  const id = String(payload.id || payload.requestId || "").trim();
+  if (!id) return null;
+  const number = String(payload.number || "").trim();
+  const customerName = String(payload.customerName || "Customer").trim();
+  const serviceName = String(payload.serviceName || "a service").trim();
+  const href =
+    (typeof payload.href === "string" && payload.href) ||
+    `/pro/dashboard/requests/${id}`;
+  return {
+    id: `lead:${id}`,
+    type: "NEW_LEAD",
+    title: "New lead",
+    message: number
+      ? `${number} — ${customerName} requested ${serviceName}`
+      : `${customerName} requested ${serviceName}`,
+    data: { ...payload, href },
+    isRead: false,
+    createdAt: new Date().toISOString(),
+    href,
+  };
+}
 
 export function PortalNotifications() {
   const inbox = usePortalInbox();
+  const router = useRouter();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [open, setOpen] = useState(false);
+
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const result = await fetchNotifications({
+        page: 1,
+        limit: 30,
+        status: "all",
+        silent: true,
+        force: true,
+      });
+      setNotifications(result.items);
+      setUnreadNotifications(result.unreadCount);
+    } catch {
+      /* keep last known feed */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshNotifications();
+  }, [refreshNotifications]);
+
+  useEffect(() => {
+    return subscribeRealtime((detail) => {
+      const type = String(detail?.type || "");
+      if (type === "NEW_NOTIFICATION") {
+        const mapped = normalizeSocketNotification(detail.payload);
+        if (mapped) {
+          setNotifications((current) => {
+            if (current.some((row) => row.id === mapped.id)) return current;
+            return [mapped, ...current].slice(0, 30);
+          });
+          if (!mapped.isRead) {
+            setUnreadNotifications((count) => count + 1);
+          }
+          return;
+        }
+        void refreshNotifications();
+        return;
+      }
+
+      if (type === "LEAD_CREATED") {
+        const fallback = leadFallbackNotification(
+          detail.payload && typeof detail.payload === "object"
+            ? (detail.payload as Record<string, unknown>)
+            : undefined,
+        );
+        if (fallback) {
+          setNotifications((current) => {
+            if (
+              current.some(
+                (row) =>
+                  row.id === fallback.id ||
+                  String(row.data?.requestId || "") === String(fallback.data?.id || ""),
+              )
+            ) {
+              return current;
+            }
+            return [fallback, ...current].slice(0, 30);
+          });
+          setUnreadNotifications((count) => count + 1);
+        }
+        void refreshNotifications();
+        return;
+      }
+
+      if (type === "LEADS_TAB_OPENED") {
+        setNotifications((current) => {
+          const next = current.map((row) =>
+            row.type === "NEW_LEAD"
+              ? { ...row, isRead: true, readAt: new Date().toISOString() }
+              : row,
+          );
+          setUnreadNotifications(next.filter((row) => !row.isRead).length);
+          return next;
+        });
+        return;
+      }
+
+      if (
+        type === "INBOX_SUMMARY_INVALIDATE" ||
+        type === "CHAT_MESSAGE" ||
+        type === "CHAT_THREAD_UPDATED"
+      ) {
+        void refreshNotifications();
+      }
+    });
+  }, [refreshNotifications]);
+
+  useEffect(() => {
+    if (open) void refreshNotifications();
+  }, [open, refreshNotifications]);
+
+  const unreadFromList = useMemo(
+    () => notifications.filter((item) => !item.isRead).length,
+    [notifications],
+  );
+  const bellCount = Math.max(unreadFromList, unreadNotifications, inbox.total);
+
+  const historyItems =
+    notifications.length > 0
+      ? notifications
+      : inbox.items.map((item) => ({
+          id: item.id,
+          type: item.kind === "chat" ? "NEW_CHAT_MESSAGE" : "NEW_LEAD",
+          title: item.kind === "chat" ? "New message" : "New lead",
+          message: item.detail,
+          data: { href: item.href },
+          isRead: false,
+          href: item.href,
+        }));
+
+  async function onOpenNotification(item: AppNotification) {
+    const href = notificationHref(item, "provider");
+    if (!item.isRead && !item.id.startsWith("lead:")) {
+      try {
+        const result = await markNotificationRead(item.id);
+        setUnreadNotifications(result.unreadCount);
+        setNotifications((current) =>
+          current.map((row) =>
+            row.id === item.id
+              ? { ...row, isRead: true, readAt: new Date().toISOString() }
+              : row,
+          ),
+        );
+      } catch {
+        // still navigate
+      }
+    } else if (!item.isRead) {
+      setNotifications((current) =>
+        current.map((row) =>
+          row.id === item.id
+            ? { ...row, isRead: true, readAt: new Date().toISOString() }
+            : row,
+        ),
+      );
+      setUnreadNotifications((count) => Math.max(0, count - 1));
+    }
+    setOpen(false);
+    router.push(href);
+  }
+
+  async function onMarkAllRead() {
+    try {
+      await markAllNotificationsRead();
+      setUnreadNotifications(0);
+      setNotifications((current) =>
+        current.map((row) => ({
+          ...row,
+          isRead: true,
+          readAt: new Date().toISOString(),
+        })),
+      );
+    } catch {
+      // ignore
+    }
+  }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
           <Bell />
-          {inbox.total ? (
-            <span className="absolute top-1 right-1 min-w-4 rounded-full bg-[#c2410c] px-1 text-[10px] font-semibold text-white">
-              {inbox.total}
+          {bellCount > 0 ? (
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] font-semibold leading-none text-white">
+              {bellCount > 99 ? "99+" : bellCount}
             </span>
           ) : null}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel>Inbox</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {inbox.items.length ? (
-          inbox.items.slice(0, 8).map((item) => (
-            <DropdownMenuItem key={item.id} asChild>
-              <Link href={item.href} className="flex flex-col items-start gap-0.5">
-                <span className="text-sm font-medium">{item.title}</span>
-                <span className="line-clamp-2 text-xs text-muted-foreground">{item.detail}</span>
-              </Link>
-            </DropdownMenuItem>
-          ))
-        ) : (
-          <p className="px-2 py-3 text-sm text-muted-foreground">No new website requests or chats.</p>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/pro/dashboard/messages">Open messages</Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/pro/dashboard/requests?status=new">Open new leads</Link>
-        </DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-80 p-0">
+        <DropdownMenuLabel className="flex items-center justify-between gap-2 px-3 py-2">
+          <span>Inbox</span>
+          {bellCount > 0 ? (
+            <button
+              type="button"
+              className="text-[10px] font-medium text-primary hover:underline"
+              onClick={() => void onMarkAllRead()}
+            >
+              Mark all read
+            </button>
+          ) : null}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="m-0" />
+        <div className="max-h-56 overflow-y-auto overscroll-contain">
+          {historyItems.length ? (
+            historyItems.slice(0, 20).map((item) => (
+              <DropdownMenuItem
+                key={item.id}
+                className="flex cursor-pointer flex-col items-start gap-0.5 rounded-none px-3 py-2"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  void onOpenNotification(item);
+                }}
+              >
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    !item.isRead ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {providerTitle(item)}
+                </span>
+                <span className="line-clamp-1 text-xs text-muted-foreground">{item.message}</span>
+              </DropdownMenuItem>
+            ))
+          ) : (
+            <p className="px-3 py-4 text-sm text-muted-foreground">No new leads or chats.</p>
+          )}
+        </div>
+        <DropdownMenuSeparator className="m-0" />
+        <div className="flex flex-col py-1">
+          <DropdownMenuItem asChild className="rounded-none px-3 py-1.5 text-xs">
+            <Link href="/pro/dashboard/messages">Open messages</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="rounded-none px-3 py-1.5 text-xs">
+            <Link href="/pro/dashboard/requests?status=new">Open new leads</Link>
+          </DropdownMenuItem>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

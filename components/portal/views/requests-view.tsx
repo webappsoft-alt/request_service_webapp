@@ -27,6 +27,7 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { markUnreadLeadNotificationsRead } from "@/lib/api/notifications-client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchRequests,
@@ -51,7 +52,7 @@ function sourceLabel(source?: string) {
   if (source === "profile_view") return "Profile view";
   if (source === "fixed_service_view") return "Service view";
   if (source === "direct_message") return "Direct chat";
-  if (source === "quote_request") return "Quote request";
+  if (source === "quote_request") return "Lead";
   if (source === "phone") return "Phone";
   if (source === "walk_in") return "Walk-in";
   return source || "Direct";
@@ -119,6 +120,7 @@ export function RequestsView() {
   const [searchInput, setSearchInput] = useState(reduxRequests.search || "");
   const [actionLoading, setActionLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearedLeadBadgesRef = useRef(false);
   const archivedOnly = status === "archived";
 
   const page = reduxRequests.page || 1;
@@ -201,6 +203,16 @@ export function RequestsView() {
   useEffect(() => {
     void refreshLeads(true);
   }, [refreshLeads]);
+
+  // Opening Leads only clears the sidebar/bell lead badge — never changes lead status.
+  useEffect(() => {
+    if (clearedLeadBadgesRef.current) return;
+    clearedLeadBadgesRef.current = true;
+    window.dispatchEvent(
+      new CustomEvent("rs-realtime", { detail: { type: "LEADS_TAB_OPENED" } }),
+    );
+    void markUnreadLeadNotificationsRead().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const handleLeadStatus = (event: Event) => {

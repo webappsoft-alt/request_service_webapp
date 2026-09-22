@@ -1596,6 +1596,10 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     trimmed(record.providerPhone) ||
     trimmed(prov?.phone) ||
     undefined;
+  const providerSlug =
+    trimmed(record.providerSlug) ||
+    trimmed(prov?.slug) ||
+    undefined;
 
   return {
     id,
@@ -1603,6 +1607,7 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     providerName,
     providerAvatar,
     providerPhone,
+    providerSlug,
     customerId: crmIdOf(record.customerId) || undefined,
     customerName: trimmed(record.customerName) || trimmed(cust?.name) || "Customer",
     customerEmail: trimmed(record.customerEmail) || trimmed(cust?.email),

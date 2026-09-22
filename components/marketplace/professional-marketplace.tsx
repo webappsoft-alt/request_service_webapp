@@ -93,12 +93,13 @@ export function ProfessionalMarketplace({
                       toast.error(
                         "No matching professionals found near that address. Try another location.",
                       );
-                      return;
+                      throw new Error("No matching professionals found.");
                     }
                     const requestNumber =
                       result.requestNumber || result.requests[0]?.number || "";
                     const providerCount = result.count || result.requests.length;
                     setSent({ number: requestNumber, count: providerCount });
+                    setAnswers(null);
                     toast.success(
                       `${requestNumber} sent to ${providerCount} matching ${providerCount === 1 ? "professional" : "professionals"}.`,
                     );
@@ -121,6 +122,7 @@ export function ProfessionalMarketplace({
                         ? error.message
                         : "Unable to send the quote request.",
                     );
+                    throw error;
                   }
                 }}
               />

@@ -71,9 +71,23 @@ function showNotificationToast(title: string, message?: string) {
   for (const [k, at] of recentToastKeys) {
     if (now - at > TOAST_DEDUPE_MS * 4) recentToastKeys.delete(k);
   }
+  // Also collapse lead duplicates that share a request number in the body.
+  const reqMatch = String(message || "").match(/\b(REQ-\d+|RFQ-\d+)\b/i);
+  if (reqMatch) {
+    const leadKey = `lead:${reqMatch[1].toUpperCase()}`;
+    const leadLast = recentToastKeys.get(leadKey) || 0;
+    if (now - leadLast < TOAST_DEDUPE_MS) return;
+    recentToastKeys.set(leadKey, now);
+  }
   toast.message(title, {
     id: `notif:${key}`,
     description: message || undefined,
+    duration: 3500,
+    classNames: {
+      toast: "cn-toast !py-2 !gap-1.5",
+      title: "!text-sm !font-medium",
+      description: "!text-xs !opacity-90 line-clamp-2",
+    },
   });
 }
 
@@ -142,7 +156,10 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       broadcastRealtime({ type: "NEW_NOTIFICATION", payload });
       broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
       if (payload.title) {
-        showNotificationToast(payload.title, payload.message || undefined);
+        const type = String(payload.type || "");
+        // LEAD_CREATED already toasts once per request number — skip duplicate NEW_LEAD.
+        if (type === "NEW_LEAD") return;
+        showNotificationToast(String(payload.title), payload.message || undefined);
       }
     };
 
@@ -172,7 +189,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
           new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
         );
         showNotificationToast(
-          "New quote request",
+          "New lead",
           payload.number
             ? `${payload.number} just arrived in Leads.`
             : "A customer requested a quote.",

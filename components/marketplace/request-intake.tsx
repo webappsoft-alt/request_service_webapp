@@ -165,6 +165,24 @@ export function RequestIntake({
         ...answers,
         zip: answers.zip || startingZip || "",
       });
+      // Reset questionnaire so a fresh submit starts at question 1.
+      setAnswers({
+        service: "",
+        zip: "",
+        street: "",
+        city: "",
+        state: "",
+        lat: "",
+        lng: "",
+        addressLabel: "",
+        job: "",
+        name: "",
+        email: "",
+        phone: "",
+        details: "",
+      });
+      setAddressInput("");
+      setStepIndex(0);
     } finally {
       setSubmitting(false);
     }

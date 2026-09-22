@@ -131,9 +131,54 @@ export async function markAllNotificationsRead() {
   };
 }
 
-export function notificationHref(item: AppNotification): string {
-  if (item.href) return item.href;
+/** Mark unread NEW_LEAD notifications as read (e.g. when opening Leads tab). */
+export async function markUnreadLeadNotificationsRead() {
+  const unread = await fetchNotifications({
+    page: 1,
+    limit: 50,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  const leads = unread.items.filter((item) => item.type === "NEW_LEAD");
+  if (!leads.length) {
+    return { updatedCount: 0, unreadCount: unread.unreadCount };
+  }
+  await Promise.allSettled(leads.map((item) => markNotificationRead(item.id)));
+  const refreshed = await fetchNotifications({
+    page: 1,
+    limit: 1,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  return { updatedCount: leads.length, unreadCount: refreshed.unreadCount };
+}
+
+export function notificationHref(
+  item: AppNotification,
+  portal: "customer" | "provider" = "customer",
+): string {
+  if (item.href) {
+    if (portal === "provider" && item.href.startsWith("/account/")) {
+      // Fall through to provider defaults when a customer path leaked in.
+    } else {
+      return item.href;
+    }
+  }
   const type = item.type;
+  if (portal === "provider") {
+    if (type === "NEW_LEAD") return "/pro/dashboard/requests?status=new";
+    if (type === "NEW_CHAT_MESSAGE") return "/pro/dashboard/messages";
+    if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
+      return "/pro/dashboard/estimates";
+    }
+    if (type.includes("INVOICE")) return "/pro/dashboard/invoices";
+    if (type.includes("ORDER") || type.includes("BOOKING") || type.includes("WORK_")) {
+      return "/pro/dashboard/orders";
+    }
+    return "/pro/dashboard";
+  }
   if (type === "NEW_CHAT_MESSAGE") return "/account/dashboard/messages";
   if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
     return "/account/dashboard/estimates";

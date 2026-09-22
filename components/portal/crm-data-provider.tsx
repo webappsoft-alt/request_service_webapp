@@ -27,7 +27,13 @@ import type { ChatThread } from "@/lib/booking/chat-store";
 import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
-import { getAuthToken, getAuthUser } from "@/components/api/apiFuntions";
+import { getAuthToken, getAuthUser, invalidateGetCache } from "@/components/api/apiFuntions";
+
+function refreshInboxSummaryFromApi() {
+  invalidateGetCache("provider/requests/summary");
+  invalidateGetCache("provider/chats/inbox-summary");
+  return getInboxSummary({ silent: true, force: true });
+}
 
 const EVENT_NAME = "rs-crm-api";
 
@@ -357,7 +363,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     // Full snapshot is opt-in via ensureLoaded() / refresh() so Customers
     // (and similar list pages) are not flooded with unrelated APIs.
     let cancelled = false;
-    void getInboxSummary({ silent: true })
+    void refreshInboxSummaryFromApi()
       .then((inboxSummary) => {
         if (cancelled || !mountedRef.current) return;
         setState((current) => ({
@@ -380,16 +386,17 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!enabled) return;
     let debounceId = 0;
+    const applyInboxSummary = (inboxSummary: CrmInboxSummary) => {
+      if (!mountedRef.current) return;
+      setState((current) => ({ ...current, inboxSummary }));
+    };
     const onExternalRefresh = () => {
       // Keep badge counters fresh. Full snapshot is NEVER auto-fired from
       // background events — individual tabs manage only their own data.
       window.clearTimeout(debounceId);
       debounceId = window.setTimeout(() => {
-        void getInboxSummary({ silent: true })
-          .then((inboxSummary) => {
-            if (!mountedRef.current) return;
-            setState((current) => ({ ...current, inboxSummary }));
-          })
+        void refreshInboxSummaryFromApi()
+          .then(applyInboxSummary)
           .catch(() => undefined);
       }, 300);
     };
@@ -397,12 +404,25 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     const onRealtimeMessage = (event: Event) => {
       const custom = event as CustomEvent<{ type?: string; payload?: any }>;
       const detail = custom?.detail;
+
+      if (detail?.type === "LEAD_CREATED") {
+        setState((current) => ({
+          ...current,
+          inboxSummary: {
+            ...current.inboxSummary,
+            newLeads: (current.inboxSummary?.newLeads || 0) + 1,
+            total: (current.inboxSummary?.total || 0) + 1,
+          },
+        }));
+        void refreshInboxSummaryFromApi()
+          .then(applyInboxSummary)
+          .catch(() => undefined);
+        return;
+      }
+
       if (detail?.type === "INBOX_SUMMARY_INVALIDATE") {
-        void getInboxSummary({ silent: true })
-          .then((inboxSummary) => {
-            if (!mountedRef.current) return;
-            setState((current) => ({ ...current, inboxSummary }));
-          })
+        void refreshInboxSummaryFromApi()
+          .then(applyInboxSummary)
           .catch(() => undefined);
         return;
       }

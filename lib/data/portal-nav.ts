@@ -55,7 +55,7 @@ export const portalNavGroups: PortalNavGroup[] = [
     id: "work",
     label: "Work",
     items: [
-      { href: "/pro/dashboard/requests", label: "Quote requests", icon: Inbox },
+      { href: "/pro/dashboard/requests", label: "Leads", icon: Inbox },
       { href: "/pro/dashboard/messages", label: "Messages", icon: MessageCircle },
       { href: "/pro/dashboard/estimates", label: "Estimates", icon: FileText },
       { href: "/pro/dashboard/jobs", label: "Jobs", icon: Briefcase },
@@ -107,7 +107,7 @@ export const peopleSubnav: { href: string; label: string }[] = [
 ];
 
 export const workSubnav: { href: string; label: string }[] = [
-  { href: "/pro/dashboard/requests", label: "Quote requests" },
+  { href: "/pro/dashboard/requests", label: "Leads" },
   { href: "/pro/dashboard/messages", label: "Messages" },
   { href: "/pro/dashboard/estimates", label: "Estimates" },
   { href: "/pro/dashboard/jobs", label: "Jobs" },

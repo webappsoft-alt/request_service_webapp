@@ -1997,10 +1997,12 @@ export async function listChats(options?: CrmRequestOptions) {
 }
 
 export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmInboxSummary> {
+  const silent = options?.silent ?? true;
+  const force = options?.force ?? false;
   try {
     const response = await getData(providerCrmApi.requestsSummary, undefined, {
-      silent: options?.silent ?? true,
-      force: options?.force ?? false,
+      silent,
+      force,
     });
     const mapped = mapInboxSummary(response);
     if (mapped) return mapped;
@@ -2008,7 +2010,8 @@ export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmI
     /* fallback to chats inbox-summary */
   }
   const response = await getData(providerCrmApi.inboxSummary, undefined, {
-    silent: options?.silent ?? true,
+    silent,
+    force,
   });
   return mapInboxSummary(response);
 }

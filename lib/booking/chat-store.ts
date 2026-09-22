@@ -75,6 +75,11 @@ export function readChatGuest(): ChatGuest | null {
 
 export function writeChatGuest(guest: ChatGuest) {
   window.localStorage.setItem(GUEST_KEY, JSON.stringify(guest));
+  window.dispatchEvent(
+    new CustomEvent("rs-socket-auth", {
+      detail: { guestEmail: guest.email },
+    }),
+  );
 }
 
 function providerFor(email: string) {

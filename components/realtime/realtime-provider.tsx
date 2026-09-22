@@ -11,19 +11,16 @@ import {
   type PropsWithChildren,
 } from "react";
 import { toast } from "sonner";
+import { useSocket } from "@/components/socket/SocketProvider";
 import {
-  connectRealtime,
-  disconnectRealtime,
-  getRealtimeSocket,
   joinChatThread,
   leaveChatThread,
   emitChatTyping,
-  onRealtime,
+  emitChatMarkRead,
+  onSocketEvent,
+  queryPresence,
   type RealtimeEvents,
-} from "@/lib/realtime/socket";
-import { readChatGuest } from "@/lib/booking/chat-store";
-import { useAppSelector } from "@/store/hooks";
-import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
+} from "@/components/socket";
 
 export type UserPresence = {
   isOnline: boolean;
@@ -65,38 +62,22 @@ function broadcastRealtime(detail: Record<string, unknown>) {
 }
 
 export function RealtimeProvider({ children }: PropsWithChildren) {
-  const auth = useAppSelector(selectAuth);
-  const user = useAppSelector(selectAuthUser);
-  const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  const [connected, setConnected] = useState(false);
+  const { socket, isConnected } = useSocket();
   const [lastChatThreadId, setLastChatThreadId] = useState<string | null>(null);
   const [lastNotificationAt, setLastNotificationAt] = useState(0);
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
   const activeThreadIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!auth.hydrated) return;
-
-    const token = isAuthenticated ? auth.token : null;
-    const guestEmail =
-      !token && typeof window !== "undefined" ? readChatGuest()?.email || null : null;
-
-    const socket = connectRealtime({ token, guestEmail });
-    if (!socket) {
-      setConnected(false);
-      return;
-    }
+    if (!socket) return;
 
     const onConnect = () => {
-      setConnected(true);
       if (activeThreadIdRef.current) {
         joinChatThread(activeThreadIdRef.current);
       }
     };
-    const onDisconnect = () => setConnected(false);
 
     socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
     if (socket.connected) onConnect();
 
     const handlePresence = (payload: {
@@ -120,30 +101,30 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
     };
 
     const unsubscribers = [
-      onRealtime("CHAT_MESSAGE", (payload) => {
+      onSocketEvent("CHAT_MESSAGE", (payload) => {
         setLastChatThreadId(payload.threadId);
-        // Only broadcast to the window event bus \u2014 do NOT dispatch rs-crm-api here.
+        // Only broadcast to the window event bus — do NOT dispatch rs-crm-api here.
         // Dispatching rs-crm-api on every message would trigger a full fetchThreads()
         // API call in every subscriber (provider, customer) on each incoming message.
         // Each view handles CHAT_MESSAGE in-place via subscribeRealtime().
         broadcastRealtime({ type: "CHAT_MESSAGE", payload });
       }),
-      onRealtime("CHAT_THREAD_UPDATED", (payload) => {
+      onSocketEvent("CHAT_THREAD_UPDATED", (payload) => {
         const id = typeof payload.id === "string" ? payload.id : null;
         if (id) setLastChatThreadId(id);
         // Broadcast inline update; views update thread metadata without a fetch.
         broadcastRealtime({ type: "CHAT_THREAD_UPDATED", payload });
       }),
-      onRealtime("CHAT_TYPING", (payload) => {
+      onSocketEvent("CHAT_TYPING", (payload) => {
         broadcastRealtime({ type: "CHAT_TYPING", payload });
       }),
-      onRealtime("CHAT_READ_RECEIPT", (payload) => {
+      onSocketEvent("CHAT_READ_RECEIPT", (payload) => {
         broadcastRealtime({ type: "CHAT_READ_RECEIPT", payload });
         // NOTE: Never dispatch rs-crm-api here to prevent infinite ping-pong refetch loops!
       }),
-      onRealtime("USER_PRESENCE", handlePresence),
-      onRealtime("chat:presence", handlePresence),
-      onRealtime("LEAD_CREATED", (payload) => {
+      onSocketEvent("USER_PRESENCE", handlePresence),
+      onSocketEvent("chat:presence", handlePresence),
+      onSocketEvent("LEAD_CREATED", (payload) => {
         broadcastRealtime({ type: "LEAD_CREATED", payload });
         window.dispatchEvent(
           new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
@@ -154,30 +135,37 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
             : "A customer requested a quote.",
         });
       }),
-      onRealtime("ESTIMATE_ACCEPTED", (payload) => {
+      onSocketEvent("ESTIMATE_ACCEPTED", (payload) => {
         broadcastRealtime({ type: "ESTIMATE_ACCEPTED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));
       }),
-      onRealtime("INBOX_SUMMARY_INVALIDATE", (payload) => {
+      onSocketEvent("INBOX_SUMMARY_INVALIDATE", (payload) => {
         // Only broadcast to the window bus. Do NOT dispatch rs-crm-api here —
         // INBOX_SUMMARY_INVALIDATE fires after every chat message send, so
         // dispatching rs-crm-api would trigger a full fetchThreads() on every send.
         broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload });
       }),
-      onRealtime("NEW_NOTIFICATION", (payload: RealtimeEvents["NEW_NOTIFICATION"]) => {
+      onSocketEvent("NEW_NOTIFICATION", (payload: RealtimeEvents["NEW_NOTIFICATION"]) => {
         setLastNotificationAt(Date.now());
         broadcastRealtime({ type: "NEW_NOTIFICATION", payload });
         if (payload.title) {
+          const toastId = [
+            "NEW_NOTIFICATION",
+            payload.title,
+            payload.message || "",
+            payload.type || "",
+          ].join("|");
           toast.message(payload.title, {
+            id: toastId,
             description: payload.message || undefined,
           });
         }
       }),
-      onRealtime("ORDER_UPDATED", (payload) => {
+      onSocketEvent("ORDER_UPDATED", (payload) => {
         broadcastRealtime({ type: "ORDER_UPDATED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));
       }),
-      onRealtime("LEAD_STATUS_UPDATED", (payload) => {
+      onSocketEvent("LEAD_STATUS_UPDATED", (payload) => {
         const id = String(payload?.id || payload?.requestId || "").trim();
         const status = String(payload?.status || "").trim();
         if (!id || !status) return;
@@ -187,7 +175,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
           new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
         );
       }),
-      onRealtime("REQUEST_STATUS_UPDATED", (payload) => {
+      onSocketEvent("REQUEST_STATUS_UPDATED", (payload) => {
         const id = String(payload?.id || payload?.requestId || "").trim();
         const status = String(payload?.status || "").trim();
         if (!id || !status) return;
@@ -197,7 +185,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
           new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
         );
       }),
-      onRealtime("LEAD_UPDATED", (payload: any) => {
+      onSocketEvent("LEAD_UPDATED", (payload: any) => {
         const id = String(payload?.id || payload?._id || "").trim();
         const status = String(payload?.status || "").trim();
         if (id && status) {
@@ -210,7 +198,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
           broadcastRealtime({ type: "LEAD_UPDATED", payload });
         }
       }),
-      onRealtime("REQUEST_UPDATED", (payload: any) => {
+      onSocketEvent("REQUEST_UPDATED", (payload: any) => {
         const id = String(payload?.id || payload?._id || "").trim();
         const status = String(payload?.status || "").trim();
         if (id && status) {
@@ -223,7 +211,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
           broadcastRealtime({ type: "REQUEST_UPDATED", payload });
         }
       }),
-      onRealtime("lead:status", (payload: any) => {
+      onSocketEvent("lead:status", (payload: any) => {
         const id = String(payload?.id || payload?.requestId || "").trim();
         const status = String(payload?.status || "").trim();
         if (!id || !status) return;
@@ -233,7 +221,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
           new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
         );
       }),
-      onRealtime("request:status", (payload: any) => {
+      onSocketEvent("request:status", (payload: any) => {
         const id = String(payload?.id || payload?.requestId || "").trim();
         const status = String(payload?.status || "").trim();
         if (!id || !status) return;
@@ -248,16 +236,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
     return () => {
       unsubscribers.forEach((off) => off());
       socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-      // Keep connection across route changes; only disconnect on auth change/unmount of root.
     };
-  }, [auth.hydrated, auth.token, isAuthenticated, user?.id]);
-
-  useEffect(() => {
-    return () => {
-      disconnectRealtime();
-    };
-  }, []);
+  }, [socket]);
 
   const joinThread = useCallback((threadId: string) => {
     activeThreadIdRef.current = threadId;
@@ -276,28 +256,24 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   }, []);
 
   const markThreadRead = useCallback((threadId: string) => {
-    import("@/lib/realtime/socket").then((mod) => {
-      mod.emitChatMarkRead(threadId);
-    });
+    emitChatMarkRead(threadId);
   }, []);
 
   const queryUserPresence = useCallback((userIds: string | string[]) => {
-    import("@/lib/realtime/socket").then((mod) => {
-      mod.queryPresence(userIds, (results) => {
-        if (!results?.length) return;
-        setPresenceMap((prev) => {
-          const next = { ...prev };
-          for (const item of results) {
-            if (item.userId) {
-              next[item.userId] = {
-                isOnline: Boolean(item.isOnline),
-                lastSeen: item.lastSeen,
-                lastActiveAt: item.lastActiveAt,
-              };
-            }
+    queryPresence(userIds, (results) => {
+      if (!results?.length) return;
+      setPresenceMap((prev) => {
+        const next = { ...prev };
+        for (const item of results) {
+          if (item.userId) {
+            next[item.userId] = {
+              isOnline: Boolean(item.isOnline),
+              lastSeen: item.lastSeen,
+              lastActiveAt: item.lastActiveAt,
+            };
           }
-          return next;
-        });
+        }
+        return next;
       });
     });
   }, []);
@@ -312,7 +288,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
 
   const value = useMemo(
     () => ({
-      connected: connected || Boolean(getRealtimeSocket()?.connected),
+      connected: isConnected || Boolean(socket?.connected),
       joinThread,
       leaveThread,
       setTyping,
@@ -324,7 +300,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       lastNotificationAt,
     }),
     [
-      connected,
+      isConnected,
+      socket,
       joinThread,
       leaveThread,
       setTyping,

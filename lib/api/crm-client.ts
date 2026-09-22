@@ -39,7 +39,7 @@ import {
 } from "@/lib/api/crm-mappers";
 export type { CrmInboxSummary };
 import type { ChatThread } from "@/lib/booking/chat-store";
-import { emitLeadStatusChange } from "@/lib/realtime/socket";
+import { emitLeadStatusChange } from "@/components/socket";
 
 /**
  * Lazy axios helpers — avoids store → slice → crm-client → apiFuntions → store

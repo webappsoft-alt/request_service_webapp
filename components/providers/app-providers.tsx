@@ -7,6 +7,7 @@ import { AuthMeSync } from "@/components/auth/auth-me-sync";
 import { AuthRouteGuard } from "@/components/auth/auth-route-guard";
 import { RealtimeProvider } from "@/components/realtime/realtime-provider";
 import { PublicDataSync } from "@/components/realtime/public-data-sync";
+import { SocketProvider } from "@/components/socket";
 import { ReduxProvider } from "@/store/redux-provider";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
@@ -15,10 +16,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <TooltipProvider>
         <SmoothScroll />
         <AuthMeSync />
-        <RealtimeProvider>
-          <PublicDataSync />
-          <AuthRouteGuard>{children}</AuthRouteGuard>
-        </RealtimeProvider>
+        <SocketProvider>
+          <RealtimeProvider>
+            <PublicDataSync />
+            <AuthRouteGuard>{children}</AuthRouteGuard>
+          </RealtimeProvider>
+        </SocketProvider>
         <Toaster />
       </TooltipProvider>
     </ReduxProvider>

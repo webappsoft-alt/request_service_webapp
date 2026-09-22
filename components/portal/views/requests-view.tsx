@@ -391,7 +391,7 @@ export function RequestsView() {
                   ) : null}
                   {typeof row.viewCount === "number" && row.viewCount > 1 ? (
                     <span className="inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">
-                      {row.viewCount}x visits
+                      Viewed {row.viewCount} times
                     </span>
                   ) : null}
                 </div>

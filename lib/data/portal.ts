@@ -265,6 +265,7 @@ const REQUEST_STATUSES: RequestStatus[] = [
   "new",
   "viewed",
   "contacted",
+  "scheduled",
   "estimate_sent",
   "accepted",
   "declined",
@@ -276,6 +277,7 @@ export const ESTIMATE_STATUSES: EstimateStatus[] = [
   "site_visit",
   "inspected",
   "draft",
+  "scheduled",
   "finalized",
   "sent",
   "accepted",
@@ -1139,6 +1141,8 @@ export function requestStatusLabel(status: RequestStatus) {
       return "Viewed";
     case "contacted":
       return "Contacted";
+    case "scheduled":
+      return "Scheduled";
     case "estimate_sent":
       return "Estimate sent";
     case "accepted":
@@ -1164,6 +1168,8 @@ export function estimateStatusLabel(status: EstimateStatus) {
       return "Inspected";
     case "draft":
       return "Draft";
+    case "scheduled":
+      return "Scheduled";
     case "finalized":
       return "Finalized";
     case "sent":
@@ -1193,6 +1199,8 @@ export function estimateStatusTone(status: EstimateStatus) {
       return "bg-teal-50 text-teal-800";
     case "draft":
       return "bg-slate-100 text-slate-700";
+    case "scheduled":
+      return "bg-sky-50 text-sky-800";
     case "finalized":
       return "bg-[#e8eef5] text-[#003F7D]";
     case "sent":
@@ -1222,6 +1230,7 @@ export function estimateCanShare(status: EstimateStatus) {
       return true;
     case "draft":
     case "site_visit":
+    case "scheduled":
     case "inspected":
     case "accepted":
     case "rejected":
@@ -1240,6 +1249,7 @@ export function estimateCanFinalize(status: EstimateStatus) {
   switch (status) {
     case "draft":
     case "inspected":
+    case "scheduled":
     case "changes_requested":
       return true;
     case "site_visit":

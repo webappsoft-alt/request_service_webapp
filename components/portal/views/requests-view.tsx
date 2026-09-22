@@ -27,6 +27,8 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { markUnreadLeadNotificationsRead } from "@/lib/api/notifications-client";
+import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchRequests,
@@ -51,7 +53,7 @@ function sourceLabel(source?: string) {
   if (source === "profile_view") return "Profile view";
   if (source === "fixed_service_view") return "Service view";
   if (source === "direct_message") return "Direct chat";
-  if (source === "quote_request") return "Quote request";
+  if (source === "quote_request") return "Lead";
   if (source === "phone") return "Phone";
   if (source === "walk_in") return "Walk-in";
   return source || "Direct";
@@ -103,6 +105,7 @@ const filters = [
   { value: "", label: "All" },
   { value: "new", label: "New" },
   { value: "contacted", label: "Active" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "closed", label: "History" },
 ];
 
@@ -119,6 +122,7 @@ export function RequestsView() {
   const [searchInput, setSearchInput] = useState(reduxRequests.search || "");
   const [actionLoading, setActionLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearedLeadBadgesRef = useRef(false);
   const archivedOnly = status === "archived";
 
   const page = reduxRequests.page || 1;
@@ -202,6 +206,17 @@ export function RequestsView() {
     void refreshLeads(true);
   }, [refreshLeads]);
 
+  // Opening Leads only clears the sidebar/bell lead badge — never changes lead status.
+  useEffect(() => {
+    if (clearedLeadBadgesRef.current) return;
+    clearedLeadBadgesRef.current = true;
+    setPortalInboxCleared("leads", true);
+    window.dispatchEvent(
+      new CustomEvent("rs-realtime", { detail: { type: "LEADS_TAB_OPENED" } }),
+    );
+    void markUnreadLeadNotificationsRead().catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     const handleLeadStatus = (event: Event) => {
       const custom = event as CustomEvent<{ id?: string; status?: string }>;
@@ -224,23 +239,27 @@ export function RequestsView() {
       if (type === "LEAD_STATUS_UPDATED" || type === "REQUEST_STATUS_UPDATED") {
         const id = String(detail?.payload?.id || detail?.payload?.requestId || "").trim();
         const nextStatus = String(detail?.payload?.status || "").trim();
+        const scheduledDate = detail?.payload?.scheduledDate
+          ? String(detail.payload.scheduledDate)
+          : undefined;
         if (id && nextStatus) {
           dispatch(
             setRequestStatusLocal({
               id,
               status: nextStatus as PortalRequest["status"],
+              ...(scheduledDate ? { scheduledDate } : {}),
             }),
           );
         }
+        // Do not force a full list View refetch — local cache is the source of truth here.
         return;
       }
 
-      // Only refetch list on actual lead creation/mutation events, NOT on chat messages/typing/presence
+      // Only refetch list on actual lead creation/mutation events, NOT on chat/inbox badge noise
       if (
         type === "LEAD_CREATED" ||
         type === "ESTIMATE_ACCEPTED" ||
-        type === "ORDER_UPDATED" ||
-        type === "INBOX_SUMMARY_INVALIDATE"
+        type === "ORDER_UPDATED"
       ) {
         void refreshLeads(true);
       }
@@ -377,7 +396,7 @@ export function RequestsView() {
                   ) : null}
                   {typeof row.viewCount === "number" && row.viewCount > 1 ? (
                     <span className="inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">
-                      {row.viewCount}x visits
+                      Viewed {row.viewCount} times
                     </span>
                   ) : null}
                 </div>
@@ -585,6 +604,7 @@ export function RequestsView() {
               break;
 
             case "contacted":
+            case "scheduled":
               if (hasEstimate) {
                 statusActions.push(
                   {

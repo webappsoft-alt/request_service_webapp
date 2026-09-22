@@ -1,6 +1,6 @@
 import { postData } from "@/components/api/apiFuntions";
 import { publicQuoteApi } from "@/components/api/ApiRoutesFile";
-import { formatIntakeQuote, writePendingQuote } from "@/lib/booking/format-quote-answers";
+import { formatIntakeQuote, writePendingQuote, clearPendingQuote } from "@/lib/booking/format-quote-answers";
 import type { IntakeAnswers } from "@/lib/data/intake";
 import { getAreaName } from "@/lib/data/service-areas";
 import type { PortalRequest, QuoteAnswer } from "@/lib/data/portal";
@@ -164,7 +164,7 @@ export async function createMarketplaceQuote(input: {
   };
 }
 
-export function createQuoteFromIntake(answers: IntakeAnswers) {
+export async function createQuoteFromIntake(answers: IntakeAnswers) {
   writePendingQuote(answers);
   const formatted = formatIntakeQuote(answers);
   const zip = String(formatted.zip || answers.zip || "").trim();
@@ -177,20 +177,27 @@ export function createQuoteFromIntake(answers: IntakeAnswers) {
   if (zip && !/^\d{5}$/.test(zip) && !hasCoords) {
     throw new Error("Select a complete service address that includes a ZIP code.");
   }
-  return createMarketplaceQuote({
-    name: answers.name ?? "",
-    email: answers.email ?? "",
-    phone: answers.phone,
-    zip: zip || "00000",
-    street: answers.street || formatted.street,
-    city: answers.city || formatted.city,
-    state: answers.state || formatted.state,
-    lat: hasCoords ? lat : undefined,
-    lng: hasCoords ? lng : undefined,
-    serviceSlug: formatted.serviceSlug,
-    serviceName: formatted.serviceName,
-    details: formatted.details,
-    answers: formatted.answers,
-    preferredTime: formatted.preferredTime,
-  });
+  try {
+    const result = await createMarketplaceQuote({
+      name: answers.name ?? "",
+      email: answers.email ?? "",
+      phone: answers.phone,
+      zip: zip || "00000",
+      street: answers.street || formatted.street,
+      city: answers.city || formatted.city,
+      state: answers.state || formatted.state,
+      lat: hasCoords ? lat : undefined,
+      lng: hasCoords ? lng : undefined,
+      serviceSlug: formatted.serviceSlug,
+      serviceName: formatted.serviceName,
+      details: formatted.details,
+      answers: formatted.answers,
+      preferredTime: formatted.preferredTime,
+    });
+    clearPendingQuote();
+    return result;
+  } catch (error) {
+    // Keep pending answers so the customer can retry after fixing the issue.
+    throw error;
+  }
 }

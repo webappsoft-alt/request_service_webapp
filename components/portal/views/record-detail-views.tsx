@@ -983,6 +983,16 @@ export function EstimateDetailView({ id }: { id: string }) {
 
           writeSiteVisit(session?.email, estimate.id, updatedSiteVisit);
 
+          const scheduledPatch = {
+            status: "scheduled" as const,
+            scheduledDate: visitIso,
+          };
+          crm.patchEstimate(estimate.id, scheduledPatch);
+          setFetched((prev) =>
+            prev ? { ...prev, ...scheduledPatch } : prev,
+          );
+          setStatusOverride("scheduled");
+
           if (apiReady) {
             try {
               const siteVisitRecord = siteVisitToRecord(updatedSiteVisit);
@@ -991,19 +1001,23 @@ export function EstimateDetailView({ id }: { id: string }) {
                 siteVisitRecord ?? { photos: [] },
               );
               if (updated) {
-                crm.patchEstimate(estimate.id, updated);
-                setFetched(updated);
+                crm.patchEstimate(estimate.id, {
+                  ...updated,
+                  ...scheduledPatch,
+                });
+                setFetched({ ...updated, ...scheduledPatch });
               } else {
                 crm.patchEstimate(estimate.id, {
                   siteVisit: siteVisitRecord,
+                  ...scheduledPatch,
                 });
                 setFetched((prev) =>
-                  prev ? { ...prev, siteVisit: siteVisitRecord } : prev,
+                  prev
+                    ? { ...prev, siteVisit: siteVisitRecord, ...scheduledPatch }
+                    : prev,
                 );
               }
-              if (crm.ready) {
-                void crm.refresh({ silent: true });
-              }
+              // Local patch only — do not force a full CRM View reload after schedule.
             } catch {
               // local fallback already written
             }

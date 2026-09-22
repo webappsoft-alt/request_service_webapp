@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatWorkspaceSkeleton, MessageThreadSkeleton } from "@/components/shared/loading-skeletons";
 import { CenteredSpinner } from "@/components/ui/spinner";
+import { getData } from "@/components/api/apiFuntions";
+import { publicApi } from "@/components/api/ApiRoutesFile";
 import { customerPaths } from "@/lib/customer-paths";
 import { getAllProviders } from "@/lib/data/providers";
 import {
@@ -50,34 +52,111 @@ import { cn } from "@/lib/utils";
 
 type FilterTab = "all" | "unread";
 
-function resolveThreadProvider(thread: ChatThread) {
-  if (thread.providerName) {
+type ProviderLookup = {
+  name: string;
+  avatar?: string;
+  phone?: string;
+  slug?: string;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+async function fetchProviderLookup(providerId: string): Promise<ProviderLookup | null> {
+  const id = String(providerId || "").trim();
+  if (!id) return null;
+  try {
+    const response = await getData(publicApi.professional(id), undefined, {
+      silent: true,
+      force: true,
+      token: null,
+      skipLogoutOn401: true,
+    });
+    const root = asRecord(response) || {};
+    const data = asRecord(root.data) || root;
+    const name = String(
+      data.companyName || data.businessName || data.name || data.fullName || "",
+    ).trim();
+    if (!name) return null;
     return {
-      name: thread.providerName,
+      name,
+      avatar:
+        String(data.logo || data.avatarUrl || data.avatar || "").trim() || undefined,
+      phone: String(data.phone || "").trim() || undefined,
+      slug: String(data.slug || "").trim() || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function enrichThreadsWithProviderNames(threads: ChatThread[]): Promise<ChatThread[]> {
+  const missingIds = [
+    ...new Set(
+      threads
+        .filter((thread) => !String(thread.providerName || "").trim() && thread.providerId)
+        .map((thread) => thread.providerId),
+    ),
+  ];
+  if (!missingIds.length) return threads;
+
+  const entries = await Promise.all(
+    missingIds.map(async (id) => [id, await fetchProviderLookup(id)] as const),
+  );
+  const byId = Object.fromEntries(
+    entries.filter((entry): entry is [string, ProviderLookup] => Boolean(entry[1])),
+  );
+
+  return threads.map((thread) => {
+    const lookup = byId[thread.providerId];
+    if (!lookup) return thread;
+    return {
+      ...thread,
+      providerName: thread.providerName || lookup.name,
+      providerAvatar: thread.providerAvatar || lookup.avatar,
+      providerPhone: thread.providerPhone || lookup.phone,
+      providerSlug: thread.providerSlug || lookup.slug,
+    };
+  });
+}
+
+function resolveThreadProvider(thread: ChatThread) {
+  const apiName = String(thread.providerName || "").trim();
+  if (apiName && !/^provider$/i.test(apiName) && !/^service professional$/i.test(apiName)) {
+    return {
+      name: apiName,
       avatar: thread.providerAvatar,
       phone: thread.providerPhone,
-      slug: undefined,
+      slug: thread.providerSlug,
     };
   }
   const matched = getAllProviders().find(
     (p) =>
       p.id === thread.providerId ||
       p.email?.toLowerCase() === thread.providerId?.toLowerCase() ||
-      p.slug === thread.providerId,
+      p.slug === thread.providerId ||
+      p.slug === thread.providerSlug,
   );
   if (matched) {
     return {
       name: matched.companyName,
-      avatar: matched.images?.[0],
-      phone: matched.phone,
-      slug: matched.slug,
+      avatar: matched.images?.[0] || thread.providerAvatar,
+      phone: matched.phone || thread.providerPhone,
+      slug: matched.slug || thread.providerSlug,
     };
   }
+  const slugLabel = String(thread.providerSlug || "")
+    .trim()
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
   return {
-    name: "Service Professional",
-    avatar: undefined,
-    phone: undefined,
-    slug: undefined,
+    name: slugLabel || "Provider",
+    avatar: thread.providerAvatar,
+    phone: thread.providerPhone,
+    slug: thread.providerSlug,
   };
 }
 
@@ -95,6 +174,10 @@ function upsertThread(threads: ChatThread[], updated: ChatThread) {
   const merged: ChatThread = {
     ...existing,
     ...updated,
+    providerName: updated.providerName || existing.providerName,
+    providerAvatar: updated.providerAvatar || existing.providerAvatar,
+    providerPhone: updated.providerPhone || existing.providerPhone,
+    providerSlug: updated.providerSlug || existing.providerSlug,
     messages: [...existing.messages, ...newFromServer],
   };
   return [...threads.filter((item) => item.id !== updated.id), merged].sort(
@@ -172,7 +255,8 @@ export function CustomerMessagesView({
         const next = await listPublicChatThreads(listingEmail, {
           silent: options?.silent ?? true,
         });
-        setThreads(next);
+        const enriched = await enrichThreadsWithProviderNames(next);
+        setThreads(enriched);
         setError(null);
       } catch (err) {
         const message =
@@ -213,7 +297,10 @@ export function CustomerMessagesView({
         ) {
           return;
         }
-        setThreads((current) => upsertThread(current, updated));
+        void (async () => {
+          const [enriched] = await enrichThreadsWithProviderNames([updated]);
+          setThreads((current) => upsertThread(current, enriched || updated));
+        })();
         return;
       }
 
@@ -770,7 +857,11 @@ export function CustomerMessagesView({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                        <span>Professional service provider</span>
+                        {selected.requestId ? (
+                          <span>Quote request</span>
+                        ) : (
+                          <span>Messages</span>
+                        )}
                         {selectedProvider.phone ? (
                           <a
                             href={`tel:${selectedProvider.phone}`}

@@ -278,6 +278,16 @@ export function JobSummaryTab({
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      {isEstimate && estimate?.scheduledDate ? (
+        <div className="lg:col-span-3 rounded-lg border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm">
+          <p className="text-[10px] font-semibold tracking-[0.12em] text-sky-800 uppercase">
+            Scheduled date
+          </p>
+          <p className="mt-1 font-semibold text-sky-950">
+            {formatDate(estimate.scheduledDate)}
+          </p>
+        </div>
+      ) : null}
       <Panel title={noun === "estimate" ? "Quote mix" : "Cost mix"}>
         {noun === "estimate" ? (
           <EstimateCostChart labor={mix.labor} materials={mix.materials} />

@@ -84,6 +84,7 @@ export async function listPublicChatThreads(email: string, options?: { silent?: 
       silent: options?.silent ?? true,
       token: null,
       skipLogoutOn401: true,
+      force: true,
     },
   );
   return mapCrmList(response, mapChatThread).items;

@@ -1997,20 +1997,51 @@ export async function listChats(options?: CrmRequestOptions) {
 }
 
 export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmInboxSummary> {
-  try {
-    const response = await getData(providerCrmApi.requestsSummary, undefined, {
-      silent: options?.silent ?? true,
-      force: options?.force ?? false,
-    });
-    const mapped = mapInboxSummary(response);
-    if (mapped) return mapped;
-  } catch {
-    /* fallback to chats inbox-summary */
+  const silent = options?.silent ?? true;
+  const force = options?.force ?? false;
+
+  const [requestsResult, chatsResult] = await Promise.allSettled([
+    getData(providerCrmApi.requestsSummary, undefined, { silent, force }),
+    getData(providerCrmApi.inboxSummary, undefined, { silent, force }),
+  ]);
+
+  const fromRequests =
+    requestsResult.status === "fulfilled"
+      ? mapInboxSummary(requestsResult.value)
+      : null;
+  const fromChats =
+    chatsResult.status === "fulfilled"
+      ? mapInboxSummary(chatsResult.value)
+      : null;
+
+  if (!fromRequests && !fromChats) {
+    return {
+      newLeads: 0,
+      unreadChats: 0,
+      pendingOrders: 0,
+      total: 0,
+    };
   }
-  const response = await getData(providerCrmApi.inboxSummary, undefined, {
-    silent: options?.silent ?? true,
-  });
-  return mapInboxSummary(response);
+
+  const newLeads = Math.max(fromRequests?.newLeads || 0, fromChats?.newLeads || 0);
+  const unreadChats = Math.max(
+    fromRequests?.unreadChats || 0,
+    fromChats?.unreadChats || 0,
+  );
+  // pendingOrders lives on chats summary historically; requests summary now includes it too.
+  const pendingOrders = Math.max(
+    fromRequests?.pendingOrders || 0,
+    fromChats?.pendingOrders || 0,
+  );
+
+  return {
+    newLeads,
+    unreadChats,
+    pendingOrders,
+    activeLeads: fromRequests?.activeLeads ?? fromChats?.activeLeads,
+    convertedLeads: fromRequests?.convertedLeads ?? fromChats?.convertedLeads,
+    total: newLeads + unreadChats + pendingOrders,
+  };
 }
 
 export type ProviderReportsQuery = CrmRequestOptions & {

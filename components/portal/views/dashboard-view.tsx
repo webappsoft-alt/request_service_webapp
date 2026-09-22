@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
+import { DashboardActionAlerts } from "@/components/portal/dashboard-action-alerts";
 import {
   activityDot,
   AlertCell,
@@ -194,7 +195,7 @@ export function DashboardView() {
   const invoiceRows = countBy(allInvoices.map((item) => ({ label: agingLabel(item) }))).slice(0, 6);
 
   const alertItems = [
-    { label: "Leads", value: openLeads.filter((item) => item.status === "new").length, href: "/pro/dashboard/requests?status=new" },
+    { label: "Leads", value: Math.max(openLeads.filter((item) => item.status === "new").length, inbox.newLeads), href: "/pro/dashboard/requests?status=new" },
     { label: "Messages", value: inbox.unreadChats, href: "/pro/dashboard/messages" },
     { label: "Estimates", value: openEstimates.filter((item) => item.status === "sent").length, href: "/pro/dashboard/estimates?status=sent" },
     { label: "Jobs", value: unassigned.length + uninvoiced.length, href: "/pro/dashboard/jobs" },
@@ -209,6 +210,7 @@ export function DashboardView() {
       description={`${formatLongDate(today)} · ${provider.companyName} · ${provider.city}, ${provider.state}`}
       actions={<DashboardSwitcher />}
     >
+      <DashboardActionAlerts />
       {setup.percent < 100 ? (
         <Card className="border-primary/20 bg-primary/[0.03]">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -267,7 +269,7 @@ export function DashboardView() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <StatCell
           label="Open leads"
-          value={String(openLeads.length)}
+          value={String(Math.max(openLeads.length, inbox.newLeads))}
           note={`${inbox.newLeads} new from the website`}
           href="/pro/dashboard/requests?status=new"
         />
@@ -471,7 +473,7 @@ export function DashboardView() {
           title="Website inbox"
           href="/pro/dashboard/messages"
           hrefLabel="Open messages"
-          empty={inbox.items.length ? undefined : "No new website chats or quote requests."}
+          empty={inbox.items.length ? undefined : "No new website chats or leads."}
         >
           {inbox.items.slice(0, 5).map((item) => (
             <Link

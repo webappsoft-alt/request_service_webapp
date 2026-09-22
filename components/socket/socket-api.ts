@@ -95,6 +95,15 @@ export type RealtimeEvents = {
     href?: string;
     shareUrl?: string;
   };
+  SERVICE_SCHEDULED: {
+    kind?: string;
+    recordId?: string;
+    number?: string;
+    scheduledDate?: string;
+    href?: string;
+    title?: string;
+    message?: string;
+  };
   ESTIMATE_UPDATED: {
     estimateId?: string;
     number?: string;

@@ -111,6 +111,37 @@ function formatAddress(batch: CustomerQuoteBatch) {
   );
 }
 
+/** Split freeform quote `details` into note + answer rows for nicer display. */
+function parseQuoteDetails(details: string) {
+  const raw = String(details || "").trim();
+  if (!raw) return { note: "", answers: [] as { label: string; value: string }[] };
+
+  const answersStart = raw.search(/(?:^|\n)Answers\s*(?:\n|$)/i);
+  let note = raw;
+  let answersBlock = "";
+  if (answersStart >= 0) {
+    note = raw.slice(0, answersStart).trim();
+    answersBlock = raw.slice(answersStart).replace(/^Answers\s*/i, "").trim();
+  }
+
+  const answers: { label: string; value: string }[] = [];
+  for (const line of answersBlock.split(/\n+/)) {
+    const cleaned = line.replace(/^[•\-\*]\s*/, "").trim();
+    if (!cleaned) continue;
+    const sep = cleaned.indexOf(":");
+    if (sep > 0) {
+      answers.push({
+        label: cleaned.slice(0, sep).trim(),
+        value: cleaned.slice(sep + 1).trim(),
+      });
+    } else {
+      answers.push({ label: "Detail", value: cleaned });
+    }
+  }
+
+  return { note, answers };
+}
+
 function batchKey(batch: CustomerQuoteBatch) {
   return (
     batch.quoteBatchId ||
@@ -950,13 +981,53 @@ export function CustomerQuoteRequestDetailView() {
 
             {/* Special Details / Customer Notes */}
             <div className="mt-5">
-              <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              <h3 className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                 Customer notes & specifications
               </h3>
               {batch.details ? (
-                <div className="mt-2 rounded-lg border border-border bg-muted/20 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                  {batch.details}
-                </div>
+                (() => {
+                  const parsed = parseQuoteDetails(batch.details);
+                  return (
+                    <div className="mt-2.5 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
+                      {parsed.note ? (
+                        <div className="border-b border-border/80 bg-muted/25 px-4 py-3.5">
+                          <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                            Notes
+                          </p>
+                          <p className="mt-1.5 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                            {parsed.note}
+                          </p>
+                        </div>
+                      ) : null}
+                      {parsed.answers.length ? (
+                        <div className="px-4 py-3.5">
+                          <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                            Answers
+                          </p>
+                          <dl className="mt-2.5 grid gap-2 sm:grid-cols-2">
+                            {parsed.answers.map((item, index) => (
+                              <div
+                                key={`${item.label}-${index}`}
+                                className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5"
+                              >
+                                <dt className="text-[11px] font-medium text-muted-foreground">
+                                  {item.label}
+                                </dt>
+                                <dd className="mt-0.5 text-sm font-semibold text-foreground">
+                                  {item.value}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      ) : !parsed.note ? (
+                        <div className="px-4 py-3.5 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                          {batch.details}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()
               ) : (
                 <p className="mt-2 text-xs italic text-muted-foreground">
                   No additional notes or special requirements provided for this

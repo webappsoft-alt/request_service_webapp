@@ -587,11 +587,13 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     details: trimmed(record.details),
     preferredDate: toIsoString(record.preferredDate) || undefined,
     preferredTimeWindow: mapRequestTimeWindow(record.preferredTimeWindow) || undefined,
+    scheduledDate: toIsoString(record.scheduledDate) || undefined,
     photoUrls: photos,
     photos,
     status:
       trimmed(record.status) === "viewed" ||
       trimmed(record.status) === "contacted" ||
+      trimmed(record.status) === "scheduled" ||
       trimmed(record.status) === "estimate_sent" ||
       trimmed(record.status) === "accepted" ||
       trimmed(record.status) === "declined" ||
@@ -1084,6 +1086,7 @@ export function mapEstimate(raw: unknown): Estimate | null {
     status:
       trimmed(record.status) === "site_visit" ||
       trimmed(record.status) === "inspected" ||
+      trimmed(record.status) === "scheduled" ||
       trimmed(record.status) === "finalized" ||
       trimmed(record.status) === "sent" ||
       trimmed(record.status) === "accepted" ||
@@ -1104,6 +1107,7 @@ export function mapEstimate(raw: unknown): Estimate | null {
     items: mapEstimateItems(id, record.items),
     attachments: mapEstimateAttachments(record.attachments),
     siteVisit: mapEstimateSiteVisit(record.siteVisit),
+    scheduledDate: toIsoString(record.scheduledDate) || undefined,
     signature: mapApprovalSignature(record.approval ?? record.signature),
     shareToken: trimmed(record.shareToken || record.token || record.share_token) || undefined,
     shareUrl: trimmed(record.shareUrl || record.customerUrl || record.publicUrl) || undefined,
@@ -1596,6 +1600,10 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     trimmed(record.providerPhone) ||
     trimmed(prov?.phone) ||
     undefined;
+  const providerSlug =
+    trimmed(record.providerSlug) ||
+    trimmed(prov?.slug) ||
+    undefined;
 
   return {
     id,
@@ -1603,6 +1611,7 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     providerName,
     providerAvatar,
     providerPhone,
+    providerSlug,
     customerId: crmIdOf(record.customerId) || undefined,
     customerName: trimmed(record.customerName) || trimmed(cust?.name) || "Customer",
     customerEmail: trimmed(record.customerEmail) || trimmed(cust?.email),

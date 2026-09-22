@@ -85,6 +85,7 @@ export type RequestStatus =
   | "new"
   | "viewed"
   | "contacted"
+  | "scheduled"
   | "estimate_sent"
   | "accepted"
   | "declined"
@@ -105,6 +106,8 @@ export interface ServiceRequest {
   details: string;
   preferredDate?: string;
   preferredTimeWindow?: string;
+  /** Provider-assigned calendar date for this lead. */
+  scheduledDate?: string;
   photoUrls: string[];
   status: RequestStatus;
   createdAt: string;
@@ -115,6 +118,7 @@ export type EstimateStatus =
   | "site_visit"
   | "inspected"
   | "draft"
+  | "scheduled"
   | "finalized"
   | "sent"
   | "accepted"
@@ -184,6 +188,8 @@ export interface Estimate {
   items: EstimateItem[];
   attachments?: EstimateAttachmentItem[] | string[];
   siteVisit?: EstimateSiteVisitRecord;
+  /** Provider-assigned calendar date for this estimate. */
+  scheduledDate?: string;
   signature?: EstimateSignature;
   shareToken?: string;
   shareUrl?: string;

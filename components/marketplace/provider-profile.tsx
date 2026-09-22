@@ -12,7 +12,6 @@ import { ProfileExplore } from "@/components/marketplace/profile-explore";
 import { ProviderProjects } from "@/components/marketplace/provider-projects";
 import {
   BookServiceButton,
-  BookServiceCalendar,
   BookServiceProvider,
 } from "@/components/marketplace/book-service-panel";
 import { FixedServiceCatalog } from "@/components/marketplace/fixed-service-catalog";
@@ -114,7 +113,7 @@ export function ProviderProfile({
           <h2 className="mt-1 text-2xl font-semibold">Photos</h2>
         </div>
 
-        <BookServiceProvider slug={provider.slug} workingHours={provider.workingHours} services={fixedServices}>
+        <BookServiceProvider provider={provider} services={fixedServices}>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="flex flex-col gap-8">
             {live?.portfolioLoading && !photos.length ? (
@@ -304,8 +303,6 @@ export function ProviderProfile({
                 <BookServiceButton />
               </CardContent>
             </Card>
-
-            <BookServiceCalendar />
 
             <Card size="sm">
               <CardHeader>

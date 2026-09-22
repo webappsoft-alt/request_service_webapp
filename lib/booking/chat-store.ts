@@ -28,6 +28,7 @@ export type ChatThread = {
   providerName?: string;
   providerAvatar?: string;
   providerPhone?: string;
+  providerSlug?: string;
   customerId?: string;
   customerName: string;
   customerEmail: string;

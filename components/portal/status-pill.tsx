@@ -38,6 +38,8 @@ export function requestTone(status: string) {
     case "declined":
     case "closed":
       return "danger" as const;
+    case "scheduled":
+      return "primary" as const;
     case "estimate_sent":
     case "contacted":
       return "warning" as const;

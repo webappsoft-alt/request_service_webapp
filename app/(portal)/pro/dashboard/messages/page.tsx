@@ -4,7 +4,7 @@ import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
   "Messages",
-  "Discuss website chats and quote requests with customers.",
+  "Discuss website chats and leads with customers.",
   "/pro/dashboard/messages",
 );
 

@@ -1,270 +1,386 @@
 "use client";
 
-import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import Image from "next/image";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { FixedServiceOrderDialog } from "@/components/marketplace/fixed-service-order-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { serviceHours, type PortalFixedService } from "@/lib/data/portal";
-import { formatDate, formatHoursValue, formatTime } from "@/lib/format";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { serviceUnitLabel, type PortalFixedService } from "@/lib/data/portal";
+import { formatStartingPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { WorkingHours } from "@/lib/types";
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-const WEEKDAY_KEYS: WorkingHours["day"][] = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-];
+import type { Provider } from "@/lib/types";
+import {
+  type PublicFixedService,
+} from "@/store/publicFixedServicesSlice";
 
 type BookServiceContextValue = {
+  openBooking: (serviceId?: string) => void;
+  /** @deprecated Calendar flow removed — kept for API compatibility. */
   openCalendar: (serviceId?: string) => void;
   calendar: ReactNode;
 };
 
 const BookServiceContext = createContext<BookServiceContextValue | null>(null);
 
-function toIso(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+type LivePortalFixedService = PortalFixedService & {
+  liveCategorySlug?: string;
+  liveSlug?: string;
+};
 
-function parseIso(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
+export function toPublicFixedService(
+  provider: Provider,
+  service: LivePortalFixedService,
+): PublicFixedService {
+  const categorySlug = service.liveCategorySlug?.trim() || "";
+  const serviceSlug = service.liveSlug?.trim() || service.id;
 
-function monthLabel(year: number, month: number) {
-  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(
-    new Date(year, month, 1)
-  );
-}
-
-function hoursFor(date: Date, hours: WorkingHours[]) {
-  return hours.find((item) => item.day === WEEKDAY_KEYS[date.getDay()]);
-}
-
-function isOpenDay(date: Date, hours: WorkingHours[]) {
-  const entry = hoursFor(date, hours);
-  return Boolean(entry && !entry.closed && entry.open && entry.close);
-}
-
-function isPast(date: Date) {
-  const today = new Date();
-  return (
-    new Date(date.getFullYear(), date.getMonth(), date.getDate()) <
-    new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  );
-}
-
-function slotTimes(open: string, close: string) {
-  const [openHour, openMinute] = open.split(":").map(Number);
-  const [closeHour, closeMinute] = close.split(":").map(Number);
-  const start = openHour * 60 + openMinute;
-  const end = closeHour * 60 + closeMinute;
-  const slots: string[] = [];
-  for (let minutes = start; minutes + 60 <= end; minutes += 60) {
-    const hour = Math.floor(minutes / 60);
-    const minute = minutes % 60;
-    slots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
-  }
-  if (!slots.length && start < end) slots.push(open);
-  return slots;
+  return {
+    id: service.id,
+    servicesName: service.name,
+    slug: serviceSlug,
+    category: service.categoryId || service.categoryName
+      ? {
+          id: service.categoryId || service.categoryName,
+          name: service.categoryName || "Service",
+          slug: categorySlug,
+        }
+      : null,
+    subcategory: null,
+    price: service.price,
+    unit: service.unit,
+    images: service.images,
+    covered: service.coverage,
+    commonServices: service.coverage,
+    workingArea: service.areaZips,
+    availabilityType: service.availabilityMode || "office",
+    provider: {
+      id: provider.id,
+      companyName: provider.companyName,
+      slug: provider.slug,
+      tagline: provider.tagline,
+      avatarUrl: provider.logoUrl,
+      coverImage: provider.coverImage,
+      rating: {
+        average: provider.rating,
+        totalReviews: provider.reviewCount,
+      },
+      location: {
+        city: provider.city,
+        state: provider.state,
+        country: "",
+        zip: provider.zip,
+        address: provider.street,
+        coordinates: [provider.lng, provider.lat],
+      },
+      profile: {
+        yearsInBusiness: provider.yearsInBusiness,
+        licensed: provider.licensed,
+        insured: provider.insured,
+      },
+    },
+    distanceMiles: null,
+  };
 }
 
 export function BookServiceProvider({
+  provider,
   slug,
-  workingHours,
+  workingHours: _workingHours,
   services = [],
   children,
 }: {
-  slug: string;
-  workingHours: WorkingHours[];
+  provider: Provider;
+  /** @deprecated Prefer `provider.slug` — kept for call-site compatibility. */
+  slug?: string;
+  /** @deprecated Calendar hours no longer used for this button flow. */
+  workingHours?: Provider["workingHours"];
   services?: PortalFixedService[];
   children: ReactNode;
 }) {
-  const router = useRouter();
-  const calendarRef = useRef<HTMLDivElement>(null);
-  const today = new Date();
-  const [open, setOpen] = useState(false);
-  const [serviceId, setServiceId] = useState<string | null>(null);
-  const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const selectedService = services.find((item) => item.id === serviceId);
-  const hours = selectedService ? serviceHours(selectedService, workingHours) : workingHours;
+  void slug;
+  void _workingHours;
 
-  const cells = useMemo(() => {
-    const first = new Date(cursor.year, cursor.month, 1);
-    const start = new Date(first);
-    start.setDate(1 - first.getDay());
-    return Array.from({ length: 42 }, (_, index) => {
-      const date = new Date(start);
-      date.setDate(start.getDate() + index);
-      return {
-        iso: toIso(date),
-        day: date.getDate(),
-        inMonth: date.getMonth() === cursor.month,
-        available: date.getMonth() === cursor.month && !isPast(date) && isOpenDay(date, hours),
-      };
-    });
-  }, [cursor.month, cursor.year, hours]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [bookingService, setBookingService] = useState<PublicFixedService | null>(
+    null,
+  );
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
 
-  const selectedHours = selectedDate ? hoursFor(parseIso(selectedDate), hours) : undefined;
-  const slots =
-    selectedHours && !selectedHours.closed && selectedHours.open && selectedHours.close
-      ? slotTimes(selectedHours.open, selectedHours.close)
-      : [];
+  const activeServices = useMemo(
+    () => services.filter((item) => item.active !== false),
+    [services],
+  );
 
-  function openCalendar(nextServiceId?: string) {
-    setServiceId(nextServiceId ?? null);
-    setSelectedDate(null);
-    setSelectedTime(null);
-    setOpen(true);
-    requestAnimationFrame(() => {
-      calendarRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
+  const updateScrollState = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) {
+      setCanPrev(false);
+      setCanNext(false);
+      return;
+    }
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [pickerOpen, activeServices.length, updateScrollState]);
+
+  function scrollByCard(direction: -1 | 1) {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const card = el.querySelector<HTMLElement>("[data-service-card]");
+    const amount = card ? card.offsetWidth + 16 : el.clientWidth * 0.8;
+    el.scrollBy({ left: direction * amount, behavior: "smooth" });
   }
 
-  function chooseDate(iso: string) {
-    setSelectedDate(iso);
-    setSelectedTime(null);
-  }
+  const startOrder = useCallback(
+    (service: PortalFixedService) => {
+      const publicService = toPublicFixedService(
+        provider,
+        service as LivePortalFixedService,
+      );
+      setBookingService(publicService);
+      setPickerOpen(false);
+      setOrderOpen(true);
+    },
+    [provider],
+  );
 
-  function goNext() {
-    if (!selectedDate) return;
-    const params = new URLSearchParams({
-      provider: slug,
-      intent: "book",
-      date: selectedDate,
-    });
-    if (selectedTime) params.set("time", selectedTime);
-    if (serviceId) params.set("serviceId", serviceId);
-    router.push(`/request-service?${params.toString()}`);
-  }
+  const openBooking = useCallback(
+    (serviceId?: string) => {
+      if (serviceId) {
+        const match = activeServices.find((item) => item.id === serviceId);
+        if (match) {
+          startOrder(match);
+          return;
+        }
+      }
+      if (activeServices.length === 1) {
+        startOrder(activeServices[0]);
+        return;
+      }
+      setSelectedId(activeServices[0]?.id ?? null);
+      setPickerOpen(true);
+    },
+    [activeServices, startOrder],
+  );
 
-  const calendar = open ? (
-    <Card ref={calendarRef} className="scroll-mt-24">
-      <CardHeader className="border-b">
-        <CardTitle>{selectedService ? `Book ${selectedService.name}` : "Service available"}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4 pt-4">
-        <p className="text-sm text-muted-foreground">
-          {selectedService
-            ? "This priced service becomes a job as soon as you book. Pick a time they are available."
-            : "Dates follow this pro's working hours. Closed days cannot be booked."}
-        </p>
+  const selectedService = activeServices.find((item) => item.id === selectedId);
 
-        <div className="flex items-center justify-between gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            type="button"
-            aria-label="Previous month"
-            onClick={() =>
-              setCursor((current) =>
-                current.month === 0
-                  ? { year: current.year - 1, month: 11 }
-                  : { year: current.year, month: current.month - 1 }
-              )
-            }
-          >
-            <ChevronLeft />
-          </Button>
-          <p className="text-sm font-semibold">{monthLabel(cursor.year, cursor.month)}</p>
-          <Button
-            variant="outline"
-            size="icon"
-            type="button"
-            aria-label="Next month"
-            onClick={() =>
-              setCursor((current) =>
-                current.month === 11
-                  ? { year: current.year + 1, month: 0 }
-                  : { year: current.year, month: current.month + 1 }
-              )
-            }
-          >
-            <ChevronRight />
-          </Button>
-        </div>
-
-        <div>
-          <div className="grid grid-cols-7">
-            {WEEKDAYS.map((day) => (
-              <p
-                key={day}
-                className="py-1.5 text-center text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase"
-              >
-                {day}
-              </p>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {cells.map((cell) => (
-              <button
-                key={cell.iso}
-                type="button"
-                disabled={!cell.available}
-                onClick={() => chooseDate(cell.iso)}
-                className={cn(
-                  "flex aspect-square items-center justify-center rounded-lg text-sm font-medium transition-colors",
-                  !cell.inMonth && "text-transparent",
-                  cell.inMonth && !cell.available && "cursor-not-allowed text-muted-foreground/40",
-                  cell.available && "text-foreground hover:bg-muted",
-                  selectedDate === cell.iso && "bg-primary text-primary-foreground hover:bg-primary"
-                )}
-              >
-                {cell.inMonth ? cell.day : ""}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {selectedDate && selectedHours ? (
-          <div className="flex flex-col gap-3 border-t pt-4">
-            <div>
-              <p className="text-sm font-medium">{formatDate(selectedDate)}</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">{formatHoursValue(selectedHours)}</p>
-            </div>
-            {slots.length ? (
-              <div className="grid grid-cols-3 gap-2">
-                {slots.map((slot) => (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => setSelectedTime(slot)}
-                    className={cn(
-                      "rounded-lg border px-2 py-2 text-sm font-medium transition-colors",
-                      selectedTime === slot
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card hover:bg-muted"
-                    )}
-                  >
-                    {formatTime(slot)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <Button size="xl" type="button" disabled={!selectedDate} onClick={goNext}>
-          Next
-        </Button>
-      </CardContent>
-    </Card>
-  ) : null;
+  const value = useMemo<BookServiceContextValue>(
+    () => ({
+      openBooking,
+      openCalendar: openBooking,
+      calendar: null,
+    }),
+    [openBooking],
+  );
 
   return (
-    <BookServiceContext.Provider value={{ openCalendar, calendar }}>
+    <BookServiceContext.Provider value={value}>
       {children}
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="flex max-h-[min(90dvh,40rem)] w-[min(100%,42rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b border-black/10 px-5 py-4 text-left">
+            <DialogTitle>Book a service</DialogTitle>
+            <DialogDescription>
+              Choose a priced service from {provider.companyName}, then complete
+              booking on the next step.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 py-4">
+            {activeServices.length > 1 ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Swipe or use arrows to browse services
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Previous services"
+                    disabled={!canPrev}
+                    onClick={() => scrollByCard(-1)}
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Next services"
+                    disabled={!canNext}
+                    onClick={() => scrollByCard(1)}
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {activeServices.length ? (
+              <div
+                ref={scrollerRef}
+                className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-1"
+                role="list"
+                aria-label={`${provider.companyName} services`}
+              >
+                {activeServices.map((service) => {
+                  const selected = selectedId === service.id;
+                  const photo = service.images[0];
+                  return (
+                    <article
+                      key={service.id}
+                      data-service-card
+                      role="listitem"
+                      className={cn(
+                        "flex w-[min(15.5rem,72vw)] shrink-0 snap-start flex-col overflow-hidden rounded-xl border bg-card transition-all duration-200",
+                        selected
+                          ? "border-[#003F7D] ring-2 ring-[#003F7D]/20"
+                          : "border-black/10 hover:border-[#003F7D]/35",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="flex flex-1 flex-col text-left"
+                        onClick={() => setSelectedId(service.id)}
+                      >
+                        <div className="relative aspect-[2/1] bg-[#003F7D]/10">
+                          {photo ? (
+                            <Image
+                              src={photo}
+                              alt={service.name}
+                              fill
+                              sizes="250px"
+                              className="object-cover"
+                            />
+                          ) : null}
+                          {service.categoryName ? (
+                            <span className="absolute top-2 left-2 rounded-md bg-white/95 px-2 py-0.5 text-[10px] font-semibold text-[#003F7D]">
+                              {service.categoryName}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-1 flex-col gap-2 p-3.5">
+                          <div>
+                            <h4 className="line-clamp-2 text-sm font-semibold text-[#003F7D]">
+                              {service.name}
+                            </h4>
+                            {service.description ? (
+                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                {service.description}
+                              </p>
+                            ) : null}
+                          </div>
+                          <p className="text-sm font-semibold text-[#003F7D]">
+                            {formatStartingPrice(service.price)}{" "}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {serviceUnitLabel(service.unit)}
+                            </span>
+                          </p>
+                          {service.coverage?.length ? (
+                            <ul className="flex flex-col gap-1">
+                              {service.coverage.slice(0, 2).map((item) => (
+                                <li
+                                  key={item}
+                                  className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                                >
+                                  <Check
+                                    className="mt-0.5 size-3 shrink-0 text-[#003F7D]"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="line-clamp-1">{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                          <span
+                            className={cn(
+                              "mt-auto inline-flex h-8 items-center justify-center rounded-md border text-xs font-medium",
+                              selected
+                                ? "border-[#003F7D] bg-[#003F7D] text-white"
+                                : "border-input bg-background text-foreground",
+                            )}
+                          >
+                            {selected ? "Selected" : "Select"}
+                          </span>
+                        </div>
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-black/15 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+                This professional has not published bookable services yet.
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-black/10 px-5 py-3.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPickerOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!selectedService}
+              onClick={() => {
+                if (selectedService) startOrder(selectedService);
+              }}
+            >
+              Continue to booking
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {bookingService ? (
+        <FixedServiceOrderDialog
+          open={orderOpen}
+          onOpenChange={(next) => {
+            setOrderOpen(next);
+            if (!next) setBookingService(null);
+          }}
+          service={bookingService}
+        />
+      ) : null}
     </BookServiceContext.Provider>
   );
 }
@@ -288,20 +404,21 @@ export function BookServiceButton({
   className?: string;
   size?: "sm" | "xl";
 }) {
-  const { openCalendar } = useBookService();
+  const { openBooking } = useBookService();
   return (
     <Button
       variant="outline"
       size={size}
       type="button"
       className={className}
-      onClick={() => openCalendar(serviceId)}
+      onClick={() => openBooking(serviceId)}
     >
       {label}
     </Button>
   );
 }
 
+/** Calendar inline panel removed — booking uses the modal + order form flow. */
 export function BookServiceCalendar() {
-  return useBookService().calendar;
+  return null;
 }

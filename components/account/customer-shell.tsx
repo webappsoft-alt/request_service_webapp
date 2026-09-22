@@ -42,6 +42,7 @@ import {
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  normalizeSocketNotification,
   notificationHref,
   type AppNotification,
 } from "@/lib/api/notifications-client";
@@ -295,15 +296,88 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       ) {
         void refreshChatBadge();
       }
+      if (type === "NEW_NOTIFICATION") {
+        const mapped = normalizeSocketNotification(detail.payload);
+        if (mapped) {
+          setNotifications((current) => {
+            if (current.some((row) => row.id === mapped.id)) return current;
+            return [mapped, ...current].slice(0, 20);
+          });
+          if (!mapped.isRead) {
+            setUnreadNotifications((count) => count + 1);
+          }
+        }
+        void refreshNotifications();
+        void refreshChatBadge();
+        return;
+      }
+      if (type === "ORDER_UPDATED") {
+        const payload =
+          detail.payload && typeof detail.payload === "object"
+            ? (detail.payload as Record<string, unknown>)
+            : {};
+        const action = String(payload.action || "");
+        const number = String(payload.number || "").trim();
+        const orderId = String(payload.id || payload.orderId || "").trim();
+        let optimistic: AppNotification | null = null;
+        if (action === "accept" || action === "auto_confirm") {
+          optimistic = {
+            id: `booking-accept:${orderId || number || Date.now()}`,
+            type: "BOOKING_ACCEPTED",
+            title: "Booking accepted",
+            message: number
+              ? `${number} was accepted by the provider.`
+              : "Your booking was accepted.",
+            data: { ...payload, href: "/account/dashboard/orders" },
+            isRead: false,
+            createdAt: new Date().toISOString(),
+            href: "/account/dashboard/orders",
+          };
+        } else if (action === "reject") {
+          optimistic = {
+            id: `booking-reject:${orderId || number || Date.now()}`,
+            type: "BOOKING_REJECTED",
+            title: "Booking declined",
+            message: number
+              ? `${number} was declined by the provider.`
+              : "Your booking request was declined.",
+            data: { ...payload, href: "/account/dashboard/orders" },
+            isRead: false,
+            createdAt: new Date().toISOString(),
+            href: "/account/dashboard/orders",
+          };
+        } else if (action === "requested") {
+          optimistic = {
+            id: `booking-requested:${orderId || number || Date.now()}`,
+            type: "ORDER_STATUS_CHANGED",
+            title: "Booking request sent",
+            message: number
+              ? `${number} was sent. Waiting for the provider to accept.`
+              : "Your booking request was sent.",
+            data: { ...payload, href: "/account/dashboard/orders" },
+            isRead: false,
+            createdAt: new Date().toISOString(),
+            href: "/account/dashboard/orders",
+          };
+        }
+        if (optimistic) {
+          const row = optimistic;
+          setNotifications((current) => {
+            if (current.some((item) => item.id === row.id)) return current;
+            return [row, ...current].slice(0, 20);
+          });
+          setUnreadNotifications((count) => count + 1);
+        }
+        void refreshNotifications();
+        return;
+      }
       if (
-        type === "NEW_NOTIFICATION" ||
         type === "CUSTOMER_BADGE_INVALIDATE" ||
         type === "ESTIMATE_SENT" ||
-        type === "INVOICE_SENT" ||
-        type === "ORDER_UPDATED"
+        type === "INVOICE_SENT"
       ) {
         void refreshNotifications();
-        if (type === "NEW_NOTIFICATION" || type === "CUSTOMER_BADGE_INVALIDATE") {
+        if (type === "CUSTOMER_BADGE_INVALIDATE") {
           void refreshChatBadge();
         }
       }

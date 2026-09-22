@@ -22,6 +22,8 @@ import {
   type RealtimeEvents,
 } from "@/components/socket";
 import { normalizeSocketNotification } from "@/lib/api/notifications-client";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuthUser } from "@/store/authSlice";
 
 export type UserPresence = {
   isOnline: boolean;
@@ -71,8 +73,8 @@ function showNotificationToast(title: string, message?: string) {
   for (const [k, at] of recentToastKeys) {
     if (now - at > TOAST_DEDUPE_MS * 4) recentToastKeys.delete(k);
   }
-  // Also collapse lead duplicates that share a request number in the body.
-  const reqMatch = String(message || "").match(/\b(REQ-\d+|RFQ-\d+)\b/i);
+  // Also collapse lead/booking duplicates that share a request/order number in the body.
+  const reqMatch = String(message || "").match(/\b(REQ-\d+|RFQ-\d+|ORD-[\w-]+)\b/i);
   if (reqMatch) {
     const leadKey = `lead:${reqMatch[1].toUpperCase()}`;
     const leadLast = recentToastKeys.get(leadKey) || 0;
@@ -98,6 +100,8 @@ function broadcastRealtime(detail: Record<string, unknown>) {
 
 export function RealtimeProvider({ children }: PropsWithChildren) {
   const { socket, isConnected } = useSocket();
+  const authUser = useAppSelector(selectAuthUser);
+  const authRole = String(authUser?.role || "").toLowerCase();
   const [lastChatThreadId, setLastChatThreadId] = useState<string | null>(null);
   const [lastNotificationAt, setLastNotificationAt] = useState(0);
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
@@ -159,7 +163,17 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         const type = String(payload.type || "");
         // LEAD_CREATED already toasts once per request number — skip duplicate NEW_LEAD.
         if (type === "NEW_LEAD") return;
-        showNotificationToast(String(payload.title), payload.message || undefined);
+        // Provider-only booking request toast (customer gets "Booking request sent").
+        if (type === "NEW_BOOKING_REQUEST" && authRole === "customer") return;
+        const title =
+          type === "NEW_BOOKING_REQUEST"
+            ? "New booking request"
+            : type === "BOOKING_ACCEPTED"
+              ? "Booking accepted"
+              : type === "BOOKING_REJECTED"
+                ? "Booking declined"
+                : String(payload.title);
+        showNotificationToast(title, payload.message || undefined);
       }
     };
 
@@ -226,6 +240,52 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("ORDER_UPDATED", (payload) => {
         broadcastRealtime({ type: "ORDER_UPDATED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", {
+            detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+          }),
+        );
+        const status = String(payload?.status || "");
+        const action = String(payload?.action || "");
+        // Role-aware fallback toasts when NEW_NOTIFICATION is delayed/missed.
+        if (
+          (status === "BOOKING_REQUESTED" || action === "requested") &&
+          authRole === "provider"
+        ) {
+          showNotificationToast(
+            "New booking request",
+            payload?.number
+              ? `${payload.number} needs your review.`
+              : "A customer requested a booking.",
+          );
+        } else if (
+          (action === "accept" || action === "auto_confirm") &&
+          authRole === "customer"
+        ) {
+          showNotificationToast(
+            "Booking accepted",
+            payload?.number
+              ? `${payload.number} was accepted by the provider.`
+              : "Your booking was accepted.",
+          );
+        } else if (action === "reject" && authRole === "customer") {
+          showNotificationToast(
+            "Booking declined",
+            payload?.number
+              ? `${payload.number} was declined by the provider.`
+              : "Your booking request was declined.",
+          );
+        } else if (
+          action === "requested" &&
+          authRole === "customer"
+        ) {
+          showNotificationToast(
+            "Booking request sent",
+            payload?.number
+              ? `${payload.number} was sent. Waiting for the provider to accept.`
+              : "Your booking request was sent.",
+          );
+        }
       }),
       onSocketEvent("LEAD_STATUS_UPDATED", (payload) => {
         const id = String(payload?.id || payload?.requestId || "").trim();
@@ -301,7 +361,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       socket.off("NEW_NOTIFICATION", onNewNotification);
       socket.removeAllListeners("NEW_NOTIFICATION");
     };
-  }, [socket]);
+  }, [socket, authRole]);
 
   const joinThread = useCallback((threadId: string) => {
     activeThreadIdRef.current = threadId;

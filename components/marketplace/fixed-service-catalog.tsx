@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { BookServiceButton } from "@/components/marketplace/book-service-panel";
+import { BookServiceButton, toPublicFixedService } from "@/components/marketplace/book-service-panel";
 import { FixedServiceOrderDialog } from "@/components/marketplace/fixed-service-order-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,61 +24,6 @@ type LivePortalFixedService = PortalFixedService & {
   liveCategorySlug?: string;
   liveSlug?: string;
 };
-
-function toPublicFixedService(
-  provider: Provider,
-  service: LivePortalFixedService,
-): PublicFixedService {
-  const categorySlug = service.liveCategorySlug?.trim() || "";
-  const serviceSlug = service.liveSlug?.trim() || service.id;
-
-  return {
-    id: service.id,
-    servicesName: service.name,
-    slug: serviceSlug,
-    category: service.categoryId || service.categoryName
-      ? {
-          id: service.categoryId || service.categoryName,
-          name: service.categoryName || "Service",
-          slug: categorySlug,
-        }
-      : null,
-    subcategory: null,
-    price: service.price,
-    unit: service.unit,
-    images: service.images,
-    covered: service.coverage,
-    commonServices: service.coverage,
-    workingArea: service.areaZips,
-    availabilityType: service.availabilityMode || "office",
-    provider: {
-      id: provider.id,
-      companyName: provider.companyName,
-      slug: provider.slug,
-      tagline: provider.tagline,
-      avatarUrl: provider.logoUrl,
-      coverImage: provider.coverImage,
-      rating: {
-        average: provider.rating,
-        totalReviews: provider.reviewCount,
-      },
-      location: {
-        city: provider.city,
-        state: provider.state,
-        country: "",
-        zip: provider.zip,
-        address: provider.street,
-        coordinates: [provider.lng, provider.lat],
-      },
-      profile: {
-        yearsInBusiness: provider.yearsInBusiness,
-        licensed: provider.licensed,
-        insured: provider.insured,
-      },
-    },
-    distanceMiles: null,
-  };
-}
 
 function liveServiceDetailHref(
   provider: Provider,

@@ -28,6 +28,9 @@ import { cn } from "@/lib/utils";
 function providerTitle(item: AppNotification) {
   if (item.type === "NEW_LEAD") return "New lead";
   if (item.type === "NEW_CHAT_MESSAGE") return "New message";
+  if (item.type === "NEW_BOOKING_REQUEST") return "New booking request";
+  if (item.type === "BOOKING_ACCEPTED") return "Booking accepted";
+  if (item.type === "BOOKING_REJECTED") return "Booking declined";
   return item.title.replace(/^New quote request$/i, "New lead");
 }
 
@@ -48,6 +51,32 @@ function leadFallbackNotification(payload: Record<string, unknown> | undefined):
     message: number
       ? `${number} — ${customerName} requested ${serviceName}`
       : `${customerName} requested ${serviceName}`,
+    data: { ...payload, href },
+    isRead: false,
+    createdAt: new Date().toISOString(),
+    href,
+  };
+}
+
+function bookingFallbackNotification(
+  payload: Record<string, unknown> | undefined,
+): AppNotification | null {
+  if (!payload) return null;
+  const status = String(payload.status || "");
+  const action = String(payload.action || "");
+  if (status !== "BOOKING_REQUESTED" && action !== "requested") return null;
+  const id = String(payload.id || payload.orderId || "").trim();
+  const number = String(payload.number || "").trim();
+  if (!id && !number) return null;
+  const href =
+    (typeof payload.href === "string" && payload.href) || "/pro/dashboard/orders";
+  return {
+    id: `booking:${id || number}`,
+    type: "NEW_BOOKING_REQUEST",
+    title: "New booking request",
+    message: number
+      ? `${number} needs your review.`
+      : "A customer requested a booking.",
     data: { ...payload, href },
     isRead: false,
     createdAt: new Date().toISOString(),
@@ -126,6 +155,35 @@ export function PortalNotifications() {
         return;
       }
 
+      if (type === "ORDER_UPDATED") {
+        const fallback = bookingFallbackNotification(
+          detail.payload && typeof detail.payload === "object"
+            ? (detail.payload as Record<string, unknown>)
+            : undefined,
+        );
+        if (fallback) {
+          setNotifications((current) => {
+            if (
+              current.some(
+                (row) =>
+                  row.id === fallback.id ||
+                  (row.type === "NEW_BOOKING_REQUEST" &&
+                    String(fallback.data?.number || "") !== "" &&
+                    String(row.data?.number || row.message || "").includes(
+                      String(fallback.data?.number || ""),
+                    )),
+              )
+            ) {
+              return current;
+            }
+            return [fallback, ...current].slice(0, 30);
+          });
+          setUnreadNotifications((count) => count + 1);
+        }
+        void refreshNotifications();
+        return;
+      }
+
       if (type === "LEADS_TAB_OPENED") {
         setNotifications((current) => {
           const next = current.map((row) =>
@@ -141,6 +199,7 @@ export function PortalNotifications() {
 
       if (
         type === "INBOX_SUMMARY_INVALIDATE" ||
+        type === "ORDER_UPDATED" ||
         type === "CHAT_MESSAGE" ||
         type === "CHAT_THREAD_UPDATED"
       ) {

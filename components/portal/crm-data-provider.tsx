@@ -420,6 +420,60 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      if (detail?.type === "ORDER_UPDATED") {
+        const status = String(detail.payload?.status || "");
+        const action = String(detail.payload?.action || "");
+        if (status === "BOOKING_REQUESTED" || action === "requested") {
+          setState((current) => ({
+            ...current,
+            inboxSummary: {
+              ...current.inboxSummary,
+              pendingOrders: (current.inboxSummary?.pendingOrders || 0) + 1,
+              total: (current.inboxSummary?.total || 0) + 1,
+            },
+          }));
+        } else if (
+          status === "CONFIRMED" ||
+          status === "CANCELLED" ||
+          action === "accept" ||
+          action === "reject"
+        ) {
+          setState((current) => ({
+            ...current,
+            inboxSummary: {
+              ...current.inboxSummary,
+              pendingOrders: Math.max(
+                0,
+                (current.inboxSummary?.pendingOrders || 1) - 1,
+              ),
+              total: Math.max(0, (current.inboxSummary?.total || 1) - 1),
+            },
+          }));
+        }
+        void refreshInboxSummaryFromApi()
+          .then(applyInboxSummary)
+          .catch(() => undefined);
+        return;
+      }
+
+      if (detail?.type === "NEW_NOTIFICATION") {
+        const notifType = String(detail.payload?.type || "");
+        if (notifType === "NEW_BOOKING_REQUEST") {
+          setState((current) => ({
+            ...current,
+            inboxSummary: {
+              ...current.inboxSummary,
+              pendingOrders: (current.inboxSummary?.pendingOrders || 0) + 1,
+              total: (current.inboxSummary?.total || 0) + 1,
+            },
+          }));
+          void refreshInboxSummaryFromApi()
+            .then(applyInboxSummary)
+            .catch(() => undefined);
+        }
+        return;
+      }
+
       if (detail?.type === "INBOX_SUMMARY_INVALIDATE") {
         void refreshInboxSummaryFromApi()
           .then(applyInboxSummary)

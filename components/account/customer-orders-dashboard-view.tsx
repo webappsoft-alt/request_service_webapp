@@ -107,7 +107,7 @@ export function CustomerOrdersDashboardView() {
         serverPagination={{
           page: pagination.page || page,
           pageSize: pagination.limit || CUSTOMER_ORDERS_PAGE_LIMIT,
-          total: pagination.total || orders.length,
+          total: pagination.totalDocs || orders.length,
           totalPages: pagination.totalPages || 1,
           onPageChange: (nextPage) => setPage(nextPage),
           search,

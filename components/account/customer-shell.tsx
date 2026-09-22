@@ -339,7 +339,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
                 label="Customer Dashboard"
                 active={isCustomerOverviewPath(pathname)}
               />
-              {currentSection && currentSection.href !== customerPaths.dashboard ? (
+              {currentSection ? (
                 <RecordTab
                   href={currentSection.href}
                   label={currentSection.label}

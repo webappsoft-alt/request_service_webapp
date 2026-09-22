@@ -8,9 +8,13 @@ type AddressComponent = {
 };
 
 function googlePlacesKey(): string {
-  // Server-only. Do not read NEXT_PUBLIC_* here — Next inlines those at
-  // build time and Netlify redacts the value in uploaded functions.
-  return process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() || "";
+  // Prefer the server-only key. NEXT_PUBLIC_* is inlined at build time and
+  // Netlify redacts those values out of uploaded functions.
+  return (
+    process.env.GOOGLE_PLACES_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() ||
+    ""
+  );
 }
 
 function componentName(

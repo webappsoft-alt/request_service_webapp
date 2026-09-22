@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Receipt,
   Settings,
+  type LucideIcon,
 } from "lucide-react";
 import { customerPaths } from "@/lib/customer-paths";
 

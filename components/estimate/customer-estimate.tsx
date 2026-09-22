@@ -79,6 +79,53 @@ function numberValue(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function toSiteVisitPhoto(
+  entry: unknown,
+  idx: number,
+  idPrefix: string,
+): EstimateSiteVisitPhoto | null {
+  if (typeof entry === "string" && entry.trim()) {
+    return {
+      id: `${idPrefix}${idx + 1}`,
+      name: `Photo ${idx + 1}`,
+      url: entry.trim(),
+      type: "image/jpeg",
+    };
+  }
+  const record = asRecord(entry);
+  if (!record) return null;
+  const url = stringValue(record.url) || stringValue(record.dataUrl);
+  if (!url) return null;
+  return {
+    id: stringValue(record.id) || `${idPrefix}${idx + 1}`,
+    name: stringValue(record.name) || `Photo ${idx + 1}`,
+    url,
+    type: stringValue(record.type) || "image/jpeg",
+    size: numberValue(record.size),
+    addedAt: stringValue(record.addedAt),
+    actor: stringValue(record.actor),
+  };
+}
+
+function isImageAttachment(entry: unknown): boolean {
+  if (typeof entry === "string" && entry.trim()) {
+    const lower = entry.toLowerCase();
+    return (
+      Boolean(lower.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/)) ||
+      lower.startsWith("data:image/")
+    );
+  }
+  const record = asRecord(entry);
+  if (!record) return false;
+  const url = stringValue(record.url) || stringValue(record.dataUrl);
+  const type = stringValue(record.type);
+  return Boolean(
+    type.startsWith("image/") ||
+      url.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i) ||
+      url.startsWith("data:image/"),
+  );
+}
+
 function toIso(value: unknown): string {
   const raw = stringValue(value);
   if (!raw) return "";
@@ -161,31 +208,9 @@ function mapPublicEstimateToSnapshot(
     const rawPhotos = Array.isArray(siteVisitRaw.photos)
       ? siteVisitRaw.photos
       : [];
-    const photos: EstimateSiteVisitPhoto[] = rawPhotos
-      .map((entry, idx) => {
-        if (typeof entry === "string" && entry.trim()) {
-          return {
-            id: `photo_${idx + 1}`,
-            name: `Photo ${idx + 1}`,
-            url: entry.trim(),
-            type: "image/jpeg",
-          };
-        }
-        const p = asRecord(entry);
-        if (!p) return null;
-        const url = stringValue(p.url) || stringValue(p.dataUrl);
-        if (!url) return null;
-        return {
-          id: stringValue(p.id) || `photo_${idx + 1}`,
-          name: stringValue(p.name) || `Photo ${idx + 1}`,
-          url,
-          type: stringValue(p.type) || "image/jpeg",
-          size: numberValue(p.size),
-          addedAt: stringValue(p.addedAt),
-          actor: stringValue(p.actor),
-        };
-      })
-      .filter((item): item is EstimateSiteVisitPhoto => Boolean(item));
+    const photos = rawPhotos
+      .map((entry, idx) => toSiteVisitPhoto(entry, idx, "photo_"))
+      .filter((item): item is EstimateSiteVisitPhoto => item !== null);
 
     const technician = stringValue(siteVisitRaw.technician);
     const visitedAt = stringValue(siteVisitRaw.visitedAt);
@@ -222,45 +247,11 @@ function mapPublicEstimateToSnapshot(
     Array.isArray(estimate.attachments) &&
     (!siteVisit || siteVisit.photos.length === 0)
   ) {
-    const attachmentPhotos: EstimateSiteVisitPhoto[] = estimate.attachments
-      .map((entry, idx) => {
-        if (typeof entry === "string" && entry.trim()) {
-          const lower = entry.toLowerCase();
-          if (
-            lower.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/) ||
-            lower.startsWith("data:image/")
-          ) {
-            return {
-              id: `attach_${idx + 1}`,
-              name: `Photo ${idx + 1}`,
-              url: entry.trim(),
-              type: "image/jpeg",
-            };
-          }
-        }
-        const a = asRecord(entry);
-        if (!a) return null;
-        const url = stringValue(a.url) || stringValue(a.dataUrl);
-        if (!url) return null;
-        const type = stringValue(a.type);
-        if (
-          type.startsWith("image/") ||
-          url.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i) ||
-          url.startsWith("data:image/")
-        ) {
-          return {
-            id: stringValue(a.id) || `attach_${idx + 1}`,
-            name: stringValue(a.name) || `Photo ${idx + 1}`,
-            url,
-            type: type || "image/jpeg",
-            size: numberValue(a.size),
-            addedAt: stringValue(a.addedAt),
-            actor: stringValue(a.actor),
-          };
-        }
-        return null;
-      })
-      .filter((item): item is EstimateSiteVisitPhoto => Boolean(item));
+    const attachmentPhotos = estimate.attachments
+      .map((entry, idx) =>
+        isImageAttachment(entry) ? toSiteVisitPhoto(entry, idx, "attach_") : null,
+      )
+      .filter((item): item is EstimateSiteVisitPhoto => item !== null);
 
     if (attachmentPhotos.length > 0) {
       siteVisit = siteVisit

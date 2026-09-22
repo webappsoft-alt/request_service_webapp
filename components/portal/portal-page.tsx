@@ -10,7 +10,7 @@ export function PortalPage({
   badge,
 }: {
   eyebrow?: string;
-  title: string;
+  title: ReactNode;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;

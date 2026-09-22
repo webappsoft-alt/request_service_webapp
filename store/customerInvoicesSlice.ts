@@ -103,21 +103,20 @@ function mapInvoice(raw: unknown): CustomerInvoice | null {
     notes: stringValue(row.notes),
     jobId: stringValue(row.jobId) || null,
     jobNumber: stringValue(row.jobNumber) || null,
-    items: itemsRaw
-      .map((item) => {
-        const entry = asRecord(item);
-        if (!entry) return null;
-        return {
-          id: stringValue(entry.id) || undefined,
-          description: stringValue(entry.description) || "Line item",
-          kind: stringValue(entry.kind) || "labor",
-          quantity: numberValue(entry.quantity),
-          unitPrice: numberValue(entry.unitPrice),
-          taxRate: numberValue(entry.taxRate),
-          total: numberValue(entry.total),
-        };
-      })
-      .filter((item): item is CustomerInvoiceItem => Boolean(item)),
+    items: itemsRaw.flatMap((item) => {
+      const entry = asRecord(item);
+      if (!entry) return [];
+      const mapped: CustomerInvoiceItem = {
+        id: stringValue(entry.id) || undefined,
+        description: stringValue(entry.description) || "Line item",
+        kind: stringValue(entry.kind) || "labor",
+        quantity: numberValue(entry.quantity),
+        unitPrice: numberValue(entry.unitPrice),
+        taxRate: numberValue(entry.taxRate),
+        total: numberValue(entry.total),
+      };
+      return [mapped];
+    }),
     createdAt: stringValue(row.createdAt) || undefined,
     updatedAt: stringValue(row.updatedAt) || undefined,
     provider: provider

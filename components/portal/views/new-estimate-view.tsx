@@ -69,7 +69,14 @@ export function NewEstimateView() {
     return undefined;
   }, [request, customerObj]);
 
-  const address = request?.address;
+  const address = request
+    ? {
+        street: "",
+        city: request.city || "",
+        state: request.state || "",
+        zip: request.zip || "",
+      }
+    : undefined;
   const addressFormatted = useMemo(() => {
     if (!address) return null;
     const parts = [address.street, address.city, address.state, address.zip].filter(Boolean);
@@ -82,7 +89,7 @@ export function NewEstimateView() {
       title="Create New Estimate"
       description={
         request
-          ? `Drafting estimate proposal for ${request.serviceName || request.title || "request"} · ${request.number}`
+          ? `Drafting estimate proposal for ${request.serviceName || "request"} · ${request.number}`
           : "Draft an estimate proposal with itemized labor, materials, and terms."
       }
       actions={
@@ -124,7 +131,7 @@ export function NewEstimateView() {
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-4">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">
-                    {request.serviceName || request.title || "Service Request"}
+                    {request.serviceName || "Service Request"}
                   </h2>
                   <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                     Ref: {request.number || request.id}
@@ -215,8 +222,8 @@ export function NewEstimateView() {
         requestId={request?.id || requestId || undefined}
         customerId={effectiveCustomerId}
         customerName={effectiveCustomerName}
-        requestName={request?.serviceName || request?.title || undefined}
-        requestNotes={request?.details || request?.notes || undefined}
+        requestName={request?.serviceName || undefined}
+        requestNotes={request?.details || undefined}
         requestAddress={
           address
             ? {

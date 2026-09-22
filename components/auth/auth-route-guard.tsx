@@ -88,8 +88,8 @@ function readNextFromLocation(): string | null {
  * Client-side RBAC after Redux Persist rehydrates.
  * - Customers must never see /pro/* (including pro login).
  * - After customer login, send them to the customer landing (/) unless ?next= or a pending order resume exists.
- * - After provider login, send them to the pro landing (/pro). Dashboard is reached via the Dashboard button.
- * - Providers may stay on /pro or /pro/dashboard/*; other customer marketing/account routes bounce to /pro.
+ * - After provider login, send them to the provider dashboard (/pro/dashboard).
+ * - Providers may stay on /pro/dashboard/*; other customer marketing/account routes bounce to the dashboard.
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -106,8 +106,7 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const providerOffPortal =
     loggedIn &&
     role === "provider" &&
-    !isProDashboard(pathname) &&
-    !isProLanding(pathname);
+    !isProDashboard(pathname);
   /** Hide pro chrome while bouncing a logged-in customer off /pro. */
   const customerOnPro = loggedIn && role === "customer" && isProArea(pathname);
 
@@ -146,12 +145,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (nextRole === "provider") {
-      // Stay on pro landing or dashboard; auth screens and customer site → landing.
-      if (isProDashboard(pathname) || isProLanding(pathname)) {
+      // Stay on dashboard; auth screens, pro marketing landing, and customer site → dashboard.
+      if (isProDashboard(pathname)) {
         return;
       }
-      if (isProAuthPath(pathname) || !isProArea(pathname)) {
-        router.replace(proPaths.home);
+      if (isProAuthPath(pathname) || isProLanding(pathname) || !isProArea(pathname)) {
+        router.replace(proPaths.dashboard);
       }
     }
   }, [

@@ -32,6 +32,7 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
+import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -124,6 +125,16 @@ export function EstimatesView() {
   const [searchInput, setSearchInput] = useState("");
   // Debounce timer ref
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Opening Estimates clears the dashboard estimate-request alert.
+  useEffect(() => {
+    setPortalInboxCleared("estimates", true);
+    window.dispatchEvent(
+      new CustomEvent("rs-realtime", {
+        detail: { type: "ESTIMATES_TAB_OPENED" },
+      }),
+    );
+  }, []);
 
   const useApi =
     auth.hydrated &&

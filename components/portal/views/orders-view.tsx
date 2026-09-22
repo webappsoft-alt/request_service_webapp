@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { FilterTabs } from "@/components/portal/filter-tabs";
+import { markUnreadBookingNotificationsRead } from "@/lib/api/notifications-client";
+import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import {
   AcceptOrderModal,
   ArriveOrderModal,
@@ -141,6 +143,15 @@ export function OrdersView() {
   useEffect(() => {
     setSearchInput(search);
   }, [search]);
+
+  // Opening Fixed service orders clears sidebar badge + dashboard booking alert.
+  useEffect(() => {
+    setPortalInboxCleared("orders", true);
+    window.dispatchEvent(
+      new CustomEvent("rs-realtime", { detail: { type: "ORDERS_TAB_OPENED" } }),
+    );
+    void markUnreadBookingNotificationsRead().catch(() => undefined);
+  }, []);
 
   // Sync URL tab status with Redux statusFilter
   useEffect(() => {

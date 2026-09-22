@@ -155,6 +155,35 @@ export async function markUnreadLeadNotificationsRead() {
   return { updatedCount: leads.length, unreadCount: refreshed.unreadCount };
 }
 
+/** Mark unread booking-request notifications as read (opening Fixed service orders). */
+export async function markUnreadBookingNotificationsRead() {
+  const unread = await fetchNotifications({
+    page: 1,
+    limit: 50,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  const bookings = unread.items.filter(
+    (item) =>
+      item.type === "NEW_BOOKING_REQUEST" ||
+      (/BOOKING|ORDER/i.test(item.type) &&
+        /request|review|booked/i.test(`${item.title} ${item.message}`)),
+  );
+  if (!bookings.length) {
+    return { updatedCount: 0, unreadCount: unread.unreadCount };
+  }
+  await Promise.allSettled(bookings.map((item) => markNotificationRead(item.id)));
+  const refreshed = await fetchNotifications({
+    page: 1,
+    limit: 1,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  return { updatedCount: bookings.length, unreadCount: refreshed.unreadCount };
+}
+
 export function notificationHref(
   item: AppNotification,
   portal: "customer" | "provider" = "customer",

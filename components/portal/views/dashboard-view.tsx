@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
+import { DashboardActionAlerts } from "@/components/portal/dashboard-action-alerts";
 import {
   activityDot,
   AlertCell,
@@ -209,6 +210,7 @@ export function DashboardView() {
       description={`${formatLongDate(today)} · ${provider.companyName} · ${provider.city}, ${provider.state}`}
       actions={<DashboardSwitcher />}
     >
+      <DashboardActionAlerts />
       {setup.percent < 100 ? (
         <Card className="border-primary/20 bg-primary/[0.03]">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

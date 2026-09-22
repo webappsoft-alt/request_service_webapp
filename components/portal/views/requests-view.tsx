@@ -28,6 +28,7 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { markUnreadLeadNotificationsRead } from "@/lib/api/notifications-client";
+import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchRequests,
@@ -208,6 +209,7 @@ export function RequestsView() {
   useEffect(() => {
     if (clearedLeadBadgesRef.current) return;
     clearedLeadBadgesRef.current = true;
+    setPortalInboxCleared("leads", true);
     window.dispatchEvent(
       new CustomEvent("rs-realtime", { detail: { type: "LEADS_TAB_OPENED" } }),
     );

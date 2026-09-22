@@ -197,6 +197,21 @@ export function PortalNotifications() {
         return;
       }
 
+      if (type === "ORDERS_TAB_OPENED") {
+        setNotifications((current) => {
+          const next = current.map((row) =>
+            row.type === "NEW_BOOKING_REQUEST" ||
+            (/BOOKING|ORDER/i.test(row.type) &&
+              /request|review|booked/i.test(`${row.title} ${row.message}`))
+              ? { ...row, isRead: true, readAt: new Date().toISOString() }
+              : row,
+          );
+          setUnreadNotifications(next.filter((row) => !row.isRead).length);
+          return next;
+        });
+        return;
+      }
+
       if (
         type === "INBOX_SUMMARY_INVALIDATE" ||
         type === "ORDER_UPDATED" ||

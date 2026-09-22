@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { providerOrdersApi } from "@/components/api/ApiRoutesFile";
+import {
+  getPortalInboxClearState,
+  reopenPortalInboxBadge,
+  setPortalInboxCleared,
+  subscribePortalInboxClears,
+} from "@/components/portal/portal-inbox-clears";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -46,7 +52,7 @@ async function fetchPendingOrderCount(): Promise<number> {
 }
 
 export function usePortalInbox() {
-  const { requests } = usePortalWorkspace();
+  const { requests, estimates } = usePortalWorkspace();
   const records = usePortalRecords();
   const chat = useChatThreads();
   const crm = useCrmApiData();
@@ -54,16 +60,28 @@ export function usePortalInbox() {
   const [unreadLeadNotifs, setUnreadLeadNotifs] = useState(0);
   const [unreadChatNotifs, setUnreadChatNotifs] = useState(0);
   const [unreadBookingNotifs, setUnreadBookingNotifs] = useState(0);
+  const [unreadEstimateNotifs, setUnreadEstimateNotifs] = useState(0);
   const [liveLeadBump, setLiveLeadBump] = useState(0);
   const [liveOrderBump, setLiveOrderBump] = useState(0);
+  const [liveEstimateBump, setLiveEstimateBump] = useState(0);
   const [pendingFromApi, setPendingFromApi] = useState(0);
-  /** After visiting Leads, hide status-based count until a new lead arrives. */
-  const [leadsBadgeCleared, setLeadsBadgeCleared] = useState(false);
+  /** Shared across remounts — visiting a tab clears badge + dashboard alert. */
+  const [clears, setClears] = useState(getPortalInboxClearState);
 
   const leads = records.listed("request", records.mergeRequests(requests), false);
   const newLeads = useMemo(
     () => leads.filter((item) => item.status === "new"),
     [leads],
+  );
+
+  const listedEstimates = records.listed(
+    "estimate",
+    records.mergeEstimates(estimates),
+    false,
+  );
+  const estimateAttention = useMemo(
+    () => listedEstimates.filter((item) => item.status === "changes_requested"),
+    [listedEstimates],
   );
 
   const pendingFromStore = useMemo(() => {
@@ -80,7 +98,6 @@ export function usePortalInbox() {
         fromCache += 1;
       }
     }
-    // Prefer the dedicated Requested filter cache when present.
     const requestedKey = Object.keys(cache).find((key) =>
       key.startsWith("BOOKING_REQUESTED|"),
     );
@@ -123,6 +140,14 @@ export function usePortalInbox() {
               /request|review|booked/i.test(`${item.title} ${item.message}`)),
         ).length,
       );
+      setUnreadEstimateNotifs(
+        result.items.filter(
+          (item) =>
+            item.type === "ESTIMATE_CHANGES_REQUESTED" ||
+            (item.type.includes("ESTIMATE") &&
+              /change|request|revis/i.test(`${item.title} ${item.message}`)),
+        ).length,
+      );
     } catch {
       /* keep last */
     }
@@ -134,18 +159,49 @@ export function usePortalInbox() {
   }, []);
 
   useEffect(() => {
+    return subscribePortalInboxClears(() => {
+      setClears(getPortalInboxClearState());
+    });
+  }, []);
+
+  useEffect(() => {
     return subscribeRealtime((detail) => {
       const type = String(detail?.type || "");
       if (type === "LEAD_CREATED") {
-        setLeadsBadgeCleared(false);
+        reopenPortalInboxBadge("leads");
         setLiveLeadBump((count) => count + 1);
         void refreshNotifBadges();
         return;
       }
       if (type === "LEADS_TAB_OPENED") {
-        setLeadsBadgeCleared(true);
+        setPortalInboxCleared("leads", true);
         setUnreadLeadNotifs(0);
         setLiveLeadBump(0);
+        return;
+      }
+      if (type === "ORDERS_TAB_OPENED") {
+        setPortalInboxCleared("orders", true);
+        setUnreadBookingNotifs(0);
+        setLiveOrderBump(0);
+        return;
+      }
+      if (type === "ESTIMATES_TAB_OPENED") {
+        setPortalInboxCleared("estimates", true);
+        setUnreadEstimateNotifs(0);
+        setLiveEstimateBump(0);
+        return;
+      }
+      if (
+        type === "ESTIMATE_UPDATED" ||
+        type === "ESTIMATE_SENT" ||
+        type === "ESTIMATE_ACCEPTED"
+      ) {
+        const status = String(detail?.payload?.status || "").toLowerCase();
+        if (status === "changes_requested" || status === "draft") {
+          reopenPortalInboxBadge("estimates");
+          setLiveEstimateBump((count) => count + 1);
+        }
+        void refreshNotifBadges();
         return;
       }
       if (type === "ORDER_UPDATED") {
@@ -155,6 +211,7 @@ export function usePortalInbox() {
           (status === "BOOKING_REQUESTED" || action === "requested") &&
           action !== "auto_confirm"
         ) {
+          reopenPortalInboxBadge("orders");
           setLiveOrderBump((count) => count + 1);
         } else if (
           status === "CONFIRMED" ||
@@ -181,7 +238,12 @@ export function usePortalInbox() {
           notifAction !== "auto_confirm" &&
           notifStatus !== "CONFIRMED"
         ) {
+          reopenPortalInboxBadge("orders");
           setLiveOrderBump((count) => count + 1);
+        }
+        if (notifType === "ESTIMATE_CHANGES_REQUESTED") {
+          reopenPortalInboxBadge("estimates");
+          setLiveEstimateBump((count) => count + 1);
         }
         if (
           notifType === "BOOKING_ACCEPTED" ||
@@ -207,7 +269,6 @@ export function usePortalInbox() {
     });
   }, []);
 
-  // When CRM summary or list catches up, drop optimistic bumps.
   useEffect(() => {
     if ((crm.inboxSummary?.pendingOrders || 0) > 0 || pendingFromApi > 0 || pendingFromStore > 0) {
       setLiveOrderBump(0);
@@ -235,7 +296,7 @@ export function usePortalInbox() {
   }, [chat.threads, newLeads]);
 
   const summaryLeads = crm.enabled ? crm.inboxSummary.newLeads || 0 : 0;
-  const newLeadCount = leadsBadgeCleared
+  const newLeadCount = clears.leads
     ? Math.max(unreadLeadNotifs, liveLeadBump)
     : Math.max(summaryLeads, newLeads.length, unreadLeadNotifs, liveLeadBump);
 
@@ -248,20 +309,32 @@ export function usePortalInbox() {
     unreadChatNotifs,
   );
 
-  // Prefer live Requested order count (same as Leads counting "new"), then notifs/bumps.
-  const pendingOrders = Math.max(
+  const pendingOrdersRaw = Math.max(
     pendingFromApi,
     pendingFromStore,
     crm.enabled ? crm.inboxSummary.pendingOrders || 0 : 0,
     unreadBookingNotifs,
     liveOrderBump,
   );
+  const pendingOrders = clears.orders
+    ? Math.max(unreadBookingNotifs, liveOrderBump)
+    : pendingOrdersRaw;
+
+  const pendingEstimatesRaw = Math.max(
+    estimateAttention.length,
+    unreadEstimateNotifs,
+    liveEstimateBump,
+  );
+  const pendingEstimates = clears.estimates
+    ? Math.max(unreadEstimateNotifs, liveEstimateBump)
+    : pendingEstimatesRaw;
 
   return {
     newLeads: newLeadCount,
     unreadChats,
     pendingOrders,
-    total: newLeadCount + unreadChats + pendingOrders,
+    pendingEstimates,
+    total: newLeadCount + unreadChats + pendingOrders + pendingEstimates,
     items,
   };
 }

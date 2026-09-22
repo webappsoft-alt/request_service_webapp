@@ -28,7 +28,7 @@ import {
   openPublicChatThread,
   sendPublicChatMessage,
 } from "@/lib/api/chat-client";
-import { connectRealtime, onRealtime } from "@/lib/realtime/socket";
+import { connectSocket, onSocketEvent } from "@/components/socket";
 import type { Provider } from "@/lib/types";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -106,7 +106,7 @@ export function ProviderChat({ provider }: { provider: Provider }) {
         setThread(undefined);
         return;
       }
-      connectRealtime({ guestEmail: guest.email });
+      connectSocket({ guestEmail: guest.email });
       try {
         const next = await listPublicChatThreads(guest.email, { silent: true });
         if (cancelled) return;
@@ -126,7 +126,7 @@ export function ProviderChat({ provider }: { provider: Provider }) {
 
   useEffect(() => {
     if (!guest?.email) return;
-    return onRealtime("CHAT_THREAD_UPDATED", (payload) => {
+    return onSocketEvent("CHAT_THREAD_UPDATED", (payload) => {
       const updated = payload as ChatThread;
       if (!updated?.id) return;
       if (String(updated.providerId) !== String(activeProviderId || provider.id)) return;
@@ -161,7 +161,7 @@ export function ProviderChat({ provider }: { provider: Provider }) {
     const saved = { name: nextName.trim(), email: nextEmail.trim() };
     writeChatGuest(saved);
     setGuest(saved);
-    connectRealtime({ guestEmail: saved.email });
+    connectSocket({ guestEmail: saved.email });
     const existing = currentThread(threads, activeProviderId || provider.id, saved.email);
     if (existing) {
       setThread(existing);

@@ -40,8 +40,8 @@ export const customerNavGroups: CustomerNavGroup[] = [
     id: "activity",
     label: "Activity",
     items: [
+      { href: customerPaths.requests, label: "Quote Requests", icon: Inbox },
       { href: customerPaths.orders, label: "Orders", icon: ClipboardList },
-      { href: customerPaths.requests, label: "Requests", icon: Inbox },
       { href: customerPaths.estimates, label: "Estimates", icon: FileText },
       { href: customerPaths.invoices, label: "Invoices", icon: Receipt },
       { href: customerPaths.messages, label: "Messages", icon: MessageCircle },

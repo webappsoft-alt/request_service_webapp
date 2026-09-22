@@ -39,7 +39,7 @@ import {
 } from "@/lib/api/crm-mappers";
 export type { CrmInboxSummary };
 import type { ChatThread } from "@/lib/booking/chat-store";
-import { emitLeadStatusChange } from "@/lib/realtime/socket";
+import { emitLeadStatusChange } from "@/components/socket";
 
 /**
  * Lazy axios helpers — avoids store → slice → crm-client → apiFuntions → store
@@ -2011,6 +2011,146 @@ export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmI
     silent: options?.silent ?? true,
   });
   return mapInboxSummary(response);
+}
+
+export type ProviderReportsQuery = CrmRequestOptions & {
+  months?: number;
+};
+
+function asReportsRecord(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object") return {};
+  const root = raw as Record<string, unknown>;
+  const data = root.data;
+  if (data && typeof data === "object") return data as Record<string, unknown>;
+  return root;
+}
+
+function numberOr(value: unknown, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function stringOr(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : value == null ? fallback : String(value);
+}
+
+/** GET /api/provider/reports — aggregated KPIs, volume, pipeline, and ledger. */
+export async function getProviderReports(query: ProviderReportsQuery = {}) {
+  const months = Math.max(1, Math.min(24, Number(query.months) || 6));
+  const response = await getData(
+    providerCrmApi.reports,
+    { months },
+    {
+      silent: query.silent ?? true,
+      force: query.force ?? true,
+    },
+  );
+  const data = asReportsRecord(response);
+  const periodRaw =
+    data.period && typeof data.period === "object"
+      ? (data.period as Record<string, unknown>)
+      : {};
+  const kpisRaw =
+    data.kpis && typeof data.kpis === "object"
+      ? (data.kpis as Record<string, unknown>)
+      : {};
+  const moneyRaw =
+    data.moneyOnBooks && typeof data.moneyOnBooks === "object"
+      ? (data.moneyOnBooks as Record<string, unknown>)
+      : {};
+
+  const monthlyVolume = Array.isArray(data.monthlyVolume)
+    ? data.monthlyVolume.map((item) => {
+        const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+        return {
+          key: stringOr(row.key),
+          label: stringOr(row.label),
+          value: numberOr(row.value),
+          year: numberOr(row.year),
+        };
+      })
+    : [];
+
+  const pipeline = Array.isArray(data.pipeline)
+    ? data.pipeline.map((item) => {
+        const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+        return {
+          id: stringOr(row.id),
+          label: stringOr(row.label),
+          value: numberOr(row.value),
+          href: stringOr(row.href, "/pro/dashboard"),
+        };
+      })
+    : [];
+
+  const requestMix = Array.isArray(data.requestMix)
+    ? data.requestMix.map((item) => {
+        const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+        return {
+          status: stringOr(row.status),
+          label: stringOr(row.label, stringOr(row.status)),
+          value: numberOr(row.value),
+        };
+      })
+    : [];
+
+  const ledger = Array.isArray(data.ledger)
+    ? data.ledger.map((item) => {
+        const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+        return {
+          id: stringOr(row.id),
+          number: stringOr(row.number),
+          status: stringOr(row.status, "draft"),
+          issuedAt: stringOr(row.issuedAt),
+          dueAt: row.dueAt ? stringOr(row.dueAt) : null,
+          total: numberOr(row.total),
+          amountPaid: numberOr(row.amountPaid),
+          balanceDue: numberOr(row.balanceDue),
+          customerId: stringOr(row.customerId),
+          customerName: stringOr(row.customerName),
+          jobId: row.jobId ? stringOr(row.jobId) : null,
+          jobNumber: stringOr(row.jobNumber),
+          jobTitle: stringOr(row.jobTitle),
+          site: stringOr(row.site),
+          invoiceType: stringOr(row.invoiceType, "standard"),
+          updatedAt: row.updatedAt ? stringOr(row.updatedAt) : undefined,
+          createdAt: row.createdAt ? stringOr(row.createdAt) : undefined,
+        };
+      })
+    : [];
+
+  return {
+    companyName: stringOr(data.companyName),
+    period: {
+      start: stringOr(periodRaw.start),
+      end: stringOr(periodRaw.end),
+      label: stringOr(periodRaw.label),
+      months: numberOr(periodRaw.months, months),
+    },
+    kpis: {
+      collected: numberOr(kpisRaw.collected),
+      outstanding: numberOr(kpisRaw.outstanding),
+      paymentsCount: numberOr(kpisRaw.paymentsCount),
+      overdueInvoices: numberOr(kpisRaw.overdueInvoices),
+      estimateConversion: numberOr(kpisRaw.estimateConversion),
+      estimatesAccepted: numberOr(kpisRaw.estimatesAccepted),
+      estimatesSent: numberOr(kpisRaw.estimatesSent),
+      activeJobs: numberOr(kpisRaw.activeJobs),
+      completedJobs: numberOr(kpisRaw.completedJobs),
+      totalJobs: numberOr(kpisRaw.totalJobs),
+    },
+    monthlyVolume,
+    pipeline,
+    requestMix,
+    moneyOnBooks: {
+      collected: numberOr(moneyRaw.collected),
+      outstanding: numberOr(moneyRaw.outstanding),
+      overdue: numberOr(moneyRaw.overdue),
+      households: numberOr(moneyRaw.households),
+      invoicesOnFile: numberOr(moneyRaw.invoicesOnFile),
+    },
+    ledger,
+  };
 }
 
 export async function loadCrmSnapshot(): Promise<CrmSnapshot> {

@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { CategoryExplorer } from "@/components/marketplace/category-explorer";
 import { RelatedBrowse } from "@/components/marketplace/related-browse";
+import { ServicesDirectory } from "@/components/marketplace/services-directory";
+import { WhyHireSection } from "@/components/marketplace/why-hire-section";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getLocalKeywordPhrases, getLocalPageCopy, readPlaceFromSearch } from "@/lib/data/local-keywords";
 import { firstSearchValue } from "@/lib/data/markets";
-import { getProvidersByCategoryId } from "@/lib/data/providers";
+import { directoryHref } from "@/lib/data/related-categories";
 import { getServiceCategoryBySlug, serviceCategories } from "@/lib/data/services";
 import { breadcrumbJsonLd, serviceCategoryJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
@@ -56,9 +57,9 @@ export default async function ServiceCategoryPage({
   const category = getServiceCategoryBySlug(slug);
   if (!category) notFound();
 
-  const matchingProviders = getProvidersByCategoryId(category.id);
   const loc = firstSearchValue(query.loc);
   const zip = firstSearchValue(query.zip);
+  const job = firstSearchValue(query.job);
 
   return (
     <>
@@ -73,10 +74,20 @@ export default async function ServiceCategoryPage({
         ]}
       />
 
-      <CategoryExplorer
-        category={category}
-        providers={matchingProviders}
-        initialAddress={loc || zip}
+      <ServicesDirectory
+        initialCategory={category.slug}
+        initialJob={job}
+        initialZip={zip}
+        initialLocation={loc}
+      />
+      <WhyHireSection
+        ctaHref={directoryHref("/get-a-quote", {
+          service: category.slug,
+          job: job || undefined,
+          zip: zip || undefined,
+          loc: loc || undefined,
+        })}
+        ctaLabel="Get a written estimate"
       />
       <RelatedBrowse
         category={category}

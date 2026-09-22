@@ -194,7 +194,7 @@ export function ServiceJobCard({
               </span>
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground">
-              View profile
+              View details
               <ArrowRight
                 className="size-3.5 transition-transform duration-300 ease-out group-hover:translate-x-0.5"
                 aria-hidden="true"

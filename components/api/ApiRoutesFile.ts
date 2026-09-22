@@ -166,6 +166,8 @@ export const providerCrmApi = {
   notes: "provider/notes",
   /** GET/PUT/PATCH/DELETE one note by id */
   note: (id: string) => `provider/notes/${id}`,
+  /** GET aggregated business reports dashboard */
+  reports: "provider/reports",
 } as const;
 
 /** Public catalog endpoints (no provider auth required for reads). */
@@ -226,6 +228,13 @@ export const chatApi = {
   providerMessages: providerCrmApi.chatMessages,
   providerRead: providerCrmApi.chatRead,
   providerInboxSummary: providerCrmApi.inboxSummary,
+} as const;
+
+/** Authenticated in-app notifications (customer + provider). */
+export const notificationsApi = {
+  list: "notifications",
+  markRead: (id: string) => `notifications/${id}/read`,
+  markAllRead: "notifications/mark-all-read",
 } as const;
 
 export const uploadApi = {

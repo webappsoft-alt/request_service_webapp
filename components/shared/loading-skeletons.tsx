@@ -191,24 +191,81 @@ export function MessageThreadSkeleton({ className }: { className?: string }) {
 
 export function ServiceDetailSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("flex flex-col gap-8", className)} aria-hidden="true">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <Skeleton className="aspect-[16/10] w-full rounded-2xl" />
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-9 w-4/5" />
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-10 w-40 rounded-lg" />
-          <Skeleton className="h-10 w-full rounded-lg" />
+    <section
+      className={cn("pt-6 pb-10 md:pt-7 md:pb-12", className)}
+      aria-busy="true"
+      aria-label="Loading service details"
+    >
+      <Container className="flex flex-col gap-8">
+        <nav aria-hidden="true">
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="size-1 rounded-full" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="size-1 rounded-full" />
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="size-1 rounded-full" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+        </nav>
+
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,22rem)] lg:gap-12">
+          <div className="flex flex-col gap-6">
+            <div className="overflow-hidden rounded-2xl border border-black/10 bg-card">
+              <Skeleton className="aspect-[16/10] w-full rounded-none" />
+              <div className="flex gap-2 p-2">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <Skeleton
+                    key={`svc-thumb-${i}`}
+                    className="h-20 w-[calc((100%-1.5rem)/4)] shrink-0 rounded-lg sm:h-24"
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-full max-w-2xl" />
+              <Skeleton className="h-4 w-5/6 max-w-xl" />
+              <Skeleton className="h-4 w-2/3 max-w-lg" />
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-6 w-56" />
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={`svc-point-${i}`} className="flex items-start gap-2.5">
+                    <Skeleton className="mt-0.5 size-4 shrink-0 rounded-full" />
+                    <Skeleton className="h-4 flex-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <aside className="rounded-2xl border bg-card p-5 shadow-sm">
+            <Skeleton className="h-6 w-20 rounded-md" />
+            <Skeleton className="mt-3 h-8 w-4/5" />
+            <Skeleton className="mt-2 h-4 w-3/5" />
+            <div className="mt-5 space-y-1.5">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-9 w-24" />
+            </div>
+            <div className="mt-5 flex flex-col gap-2.5">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
+            <ul className="mt-5 flex flex-col gap-2 border-t pt-4">
+              {Array.from({ length: 4 }, (_, i) => (
+                <li key={`svc-benefit-${i}`} className="flex items-start gap-2">
+                  <Skeleton className="mt-0.5 size-4 shrink-0 rounded-full" />
+                  <Skeleton className="h-4 flex-1" />
+                </li>
+              ))}
+            </ul>
+          </aside>
         </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {Array.from({ length: 3 }, (_, i) => (
-          <Skeleton key={i} className="h-28 w-full rounded-xl" />
-        ))}
-      </div>
-    </div>
+      </Container>
+    </section>
   );
 }
 
@@ -631,6 +688,75 @@ export function ServiceJobCardSkeletonList({
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Full /services directory layout — hero, sidebar filters, and service cards. */
+export function ServicesDirectorySkeleton({
+  className,
+}: {
+  className?: string;
+}) {
+  return (
+    <div className={cn("bg-background", className)} aria-busy="true" aria-label="Loading services">
+      <div className="border-b bg-card">
+        <Container className="flex flex-col gap-4 py-8 md:py-10">
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-8 w-72 max-w-full" />
+          <div className="flex flex-col gap-3 rounded-xl border bg-background p-3 sm:flex-row sm:items-center">
+            <Skeleton className="h-11 flex-1 rounded-lg" />
+            <Skeleton className="h-11 flex-1 rounded-lg" />
+            <Skeleton className="h-11 w-full rounded-lg sm:w-28" />
+          </div>
+        </Container>
+      </div>
+
+      <section className="bg-[#f5f5f5] py-6 md:py-8">
+        <Container className="grid items-start gap-6 lg:grid-cols-[17.5rem_minmax(0,1fr)] lg:gap-7">
+          <aside className="max-lg:hidden sticky top-24 self-start rounded-xl border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b pb-3.5">
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-4 w-12" />
+            </div>
+            <div className="flex flex-col gap-3 pt-3.5">
+              <Skeleton className="h-4 w-16" />
+              {Array.from({ length: 8 }, (_, i) => (
+                <div key={`filter-sk-${i}`} className="flex items-center gap-2.5">
+                  <Skeleton className="size-4 rounded-sm" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          <div className="flex min-w-0 flex-col gap-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-7 w-48" />
+                <Skeleton className="h-4 w-40" />
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Skeleton className="h-9 w-28 rounded-md" />
+                <Skeleton className="size-9 rounded-md" />
+                <Skeleton className="size-9 rounded-md" />
+              </div>
+            </div>
+            <Skeleton className="h-4 w-32" />
+            <ServiceJobCardSkeletonList count={4} layout="list" />
+            <div className="flex flex-col gap-3 pt-2">
+              <Skeleton className="h-6 w-52" />
+              <ul className="flex flex-col gap-5" aria-hidden="true">
+                {Array.from({ length: 2 }, (_, i) => (
+                  <li key={`dir-pro-sk-${i}`}>
+                    <ProviderListCardSkeleton />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Container>
+      </section>
+    </div>
   );
 }
 

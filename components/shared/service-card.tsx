@@ -2,15 +2,24 @@ import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { serviceAccents, serviceButtonAccents, serviceIcons } from "@/lib/icons";
+import { servicesHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { ServiceCategory } from "@/lib/types";
+
+function categoryServicesHref(category: ServiceCategory) {
+  return servicesHref({
+    confidence: "exact-category",
+    query: "",
+    service: category.slug,
+  });
+}
 
 export function ServiceCard({ category }: { category: ServiceCategory }) {
   const Icon = serviceIcons[category.slug];
 
   return (
     <Link
-      href={`/services/${category.slug}`}
+      href={categoryServicesHref(category)}
       className="group flex h-full flex-col gap-5 rounded-xl border bg-card p-6 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-foreground/15 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <span
@@ -59,7 +68,7 @@ export function ServiceOfferCard({ category }: { category: ServiceCategory }) {
 
   return (
     <Link
-      href={`/services/${category.slug}`}
+      href={categoryServicesHref(category)}
       className="group flex h-full flex-col gap-3 rounded-xl border border-black/10 bg-card p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/20 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <div className="flex items-start gap-3">
@@ -93,7 +102,7 @@ export function ServiceCompactLink({ category }: { category: ServiceCategory }) 
 
   return (
     <Link
-      href={`/services/${category.slug}`}
+      href={categoryServicesHref(category)}
       className="flex items-center gap-3 rounded-lg border bg-card px-3.5 py-3 transition-colors hover:bg-muted/60"
     >
       <span

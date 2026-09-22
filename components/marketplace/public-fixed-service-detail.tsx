@@ -696,7 +696,9 @@ export function PublicFixedServiceDetail({
   }, [relatedLoading, relatedProviders, service]);
 
   if (service && record) {
-    const categoryPath = `/services/${service.category?.slug || categorySlug}`;
+    const compareProsHref = `/find-a-professional?service=${
+      service.category?.slug || categorySlug
+    }`;
     return (
       <>
         <JobDetail
@@ -734,7 +736,7 @@ export function PublicFixedServiceDetail({
                     setOrderOpen(true);
                   },
                 }),
-            compareHref: categoryPath,
+            compareHref: compareProsHref,
           }}
         />
         <RelatedBrowse
@@ -762,11 +764,7 @@ export function PublicFixedServiceDetail({
   }
 
   if (detailLoading || !detailError) {
-    return (
-      <Container className="py-16">
-        <ServiceDetailSkeleton />
-      </Container>
-    );
+    return <ServiceDetailSkeleton />;
   }
 
   return (

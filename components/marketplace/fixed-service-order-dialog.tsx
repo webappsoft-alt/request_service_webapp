@@ -417,7 +417,7 @@ export function FixedServiceOrderDialog({
                             className={cn(
                               "text-[9px] font-normal leading-none",
                               disabledLabel.tone === "past"
-                                ? "text-red-400"
+                                ? "text-black/40"
                                 : "opacity-80",
                             )}
                           >

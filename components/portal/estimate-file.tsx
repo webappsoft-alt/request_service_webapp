@@ -66,35 +66,69 @@ export function EstimateFileChrome({
           </>
         ) : null}
       </nav>
+
       <button
         type="button"
         aria-expanded={open}
-        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary"
+        className={cn(
+          "mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+          open
+            ? "border-primary/25 bg-primary/5 text-primary"
+            : "border-black/10 bg-card text-foreground hover:border-primary/30 hover:bg-muted/40",
+        )}
         onClick={() => setOpen((value) => !value)}
       >
-        {open ? "Hide estimate details" : "Show estimate details"}
-        <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+        <span>{open ? "Hide estimate details" : "Show estimate details"}</span>
+        <span
+          className={cn(
+            "inline-flex size-5 items-center justify-center rounded-full border border-current/15 bg-background/80",
+          )}
+        >
+          <ChevronDown
+            className={cn(
+              "size-3.5 transition-transform duration-200",
+              open && "rotate-180",
+            )}
+            aria-hidden="true"
+          />
+        </span>
       </button>
+
       {open ? (
-        <div className="mt-3 grid gap-3 border border-black/10 bg-[#f8fafc] p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-          <Detail
-            label="Customer"
-            value={
-              <Link href={`/pro/dashboard/customers/${estimate.customerId}`} className="font-semibold text-primary hover:underline">
-                {customerLabel}
-              </Link>
-            }
-          />
-          {customer && customer.entityKind === "company" && contact ? <Detail label="Contact" value={contact} /> : null}
-          <Detail label="Service" value={service} />
-          <Detail
-            label="Address"
-            value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
-          />
-          <Detail label="Issued" value={formatDate(estimate.issuedAt)} />
-          <Detail label="Expires" value={estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"} />
-          {customer?.phone ? <Detail label="Phone" value={customer.phone} /> : null}
-          {customer?.email ? <Detail label="Email" value={customer.email} /> : null}
+        <div className="mt-3 overflow-hidden rounded-lg border border-black/10 bg-card shadow-sm">
+          <div className="border-b border-black/5 bg-[#f8fafc] px-4 py-2.5">
+            <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+              Estimate overview
+            </p>
+          </div>
+          <div className="grid divide-y divide-black/5 sm:grid-cols-2 sm:divide-x xl:grid-cols-4">
+            <Detail
+              label="Customer"
+              value={
+                <Link
+                  href={`/pro/dashboard/customers/${estimate.customerId}`}
+                  className="font-semibold text-primary hover:underline"
+                >
+                  {customerLabel}
+                </Link>
+              }
+            />
+            {customer && customer.entityKind === "company" && contact ? (
+              <Detail label="Contact" value={contact} />
+            ) : null}
+            <Detail label="Service" value={service} />
+            <Detail
+              label="Address"
+              value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
+            />
+            <Detail label="Issued" value={formatDate(estimate.issuedAt)} />
+            <Detail
+              label="Expires"
+              value={estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"}
+            />
+            {customer?.phone ? <Detail label="Phone" value={customer.phone} /> : null}
+            {customer?.email ? <Detail label="Email" value={customer.email} /> : null}
+          </div>
         </div>
       ) : null}
     </div>
@@ -444,9 +478,13 @@ export function EstimateSettingsTab({
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div>
-      <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-      <div className="mt-1 font-medium text-foreground">{value}</div>
+    <div className="px-4 py-3.5">
+      <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+        {label}
+      </p>
+      <div className="mt-1.5 text-sm font-medium leading-snug text-foreground break-words">
+        {value}
+      </div>
     </div>
   );
 }

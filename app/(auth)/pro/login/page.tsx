@@ -2,8 +2,8 @@ import { AuthForm } from "@/components/auth/auth-form";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Provider Login",
-  description: "Sign in to the Request Service provider portal.",
+  title: "Pro Login",
+  description: "Sign in to the Request Service Pro portal.",
   path: "/pro/login",
   index: false,
   follow: false,

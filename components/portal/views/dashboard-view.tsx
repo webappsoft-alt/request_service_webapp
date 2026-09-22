@@ -313,7 +313,7 @@ export function DashboardView() {
       </div>
 
       <div className="grid gap-8 xl:grid-cols-[1.35fr_0.9fr] xl:items-start">
-        <Card className="border-border">
+        <Card className="border-black/30">
           <CardHeader className="gap-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Revenue</CardTitle>
             <p className="text-3xl font-semibold tracking-tight tabular-nums">{formatMoney(stats.revenue)}</p>
@@ -336,7 +336,7 @@ export function DashboardView() {
           </CardContent>
         </Card>
 
-        <Card className="border-border">
+        <Card className="border-black/30">
           <CardHeader className="gap-1">
             <CardTitle>Reminders</CardTitle>
             <p className="text-sm text-muted-foreground">Open reminders in the next 14 days and scheduled work this week.</p>
@@ -552,7 +552,7 @@ export function DashboardView() {
       </div>
 
       {alertItems.length ? (
-        <section className="rounded-xl border border-border bg-card px-5 py-5">
+        <section className="rounded-xl border border-black/30 bg-card px-5 py-5">
           <div className="mb-4">
             <h2 className="text-sm font-semibold">Needs attention</h2>
             <p className="text-sm text-muted-foreground">
@@ -567,7 +567,7 @@ export function DashboardView() {
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-border bg-card px-5 py-5">
+      <section className="rounded-xl border border-black/30 bg-card px-5 py-5">
         <h2 className="text-sm font-semibold">Quick actions</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => setLeadOpen(true)}>

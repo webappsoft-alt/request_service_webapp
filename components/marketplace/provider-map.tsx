@@ -6,8 +6,6 @@ import L from "leaflet";
 import { X } from "lucide-react";
 import { MapPaneSkeleton } from "@/components/shared/loading-skeletons";
 import { ProviderCard } from "@/components/shared/provider-card";
-import { getStartingPrice } from "@/lib/data/provider-media";
-import { formatStartingPrice } from "@/lib/format";
 import { getMapTileLayerProps } from "@/lib/maps";
 import type { Provider } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
@@ -41,15 +39,22 @@ function withSpreadCoords(providers: Provider[]): Provider[] {
   });
 }
 
+function markerInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase() || "PRO";
+}
+
 function markerIcon(provider: Provider, active: boolean) {
-  const label = formatStartingPrice(getStartingPrice(provider));
-  const width = Math.max(56, label.length * 8 + 20);
+  const label = markerInitials(provider.companyName);
 
   return L.divIcon({
     className: "rs-marker-wrap",
     html: `<div class="rs-pill${active ? " is-active" : ""}">${label}</div>`,
-    iconSize: [width, 28],
-    iconAnchor: [width / 2, 28],
+    iconSize: [40, 28],
+    iconAnchor: [20, 28],
   });
 }
 

@@ -29,7 +29,7 @@ export async function generateMetadata({ searchParams }: PageParams) {
       local?.description ??
       (category
         ? `Compare local ${category.name.toLowerCase()} companies on the map. Filter by ZIP, rating, and license, then request an itemized estimate.`
-        : "Search local service providers by category and ZIP code. View companies on the map, compare ratings and service areas, then request or book a professional."),
+        : "Search local Pros by category and ZIP code. View companies on the map, compare ratings and service areas, then request or book a professional."),
     path: category ? `/find-a-professional?service=${category.slug}` : "/find-a-professional",
     keywords: [
       ...getLocalKeywordPhrases({

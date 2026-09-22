@@ -1,7 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { formatDate } from "@/lib/format";
 import type { Provider, ProviderProject } from "@/lib/types";
 
 export function ProviderProjectCard({
@@ -13,39 +11,34 @@ export function ProviderProjectCard({
   project: ProviderProject;
   onBeforeNavigate?: () => void;
 }) {
+  const extraCount = Math.max(0, project.images.length - 1);
+
   return (
     <Link
       href={`/professionals/${provider.slug}/projects/${project.slug}`}
       onClick={() => onBeforeNavigate?.()}
-      className="group flex h-full flex-col overflow-hidden rounded-xl border border-black/15 bg-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/25 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="group flex flex-col overflow-hidden rounded-xl border border-black/15 bg-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-        <Image
-          src={project.cover}
-          alt={project.title}
-          fill
-          sizes="(min-width: 1024px) 18rem, (min-width: 640px) 45vw, 92vw"
-          className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-        />
-      </div>
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-          {project.categoryName}
-        </p>
-        <h3 className="text-lg font-semibold leading-snug">{project.title}</h3>
-        <p className="text-sm leading-6 text-muted-foreground">{project.summary}</p>
-        <p className="mt-auto pt-2 text-xs text-muted-foreground">
-          {project.location}
-          <span aria-hidden="true"> · </span>
-          {formatDate(project.completedOn)}
-        </p>
-        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-brand">
-          View project
-          <ArrowRight
-            className="size-3.5 transition-transform duration-300 ease-out group-hover:translate-x-0.5"
-            aria-hidden="true"
+      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+        {project.cover ? (
+          <Image
+            src={project.cover}
+            alt={project.title}
+            fill
+            sizes="(min-width: 1024px) 18rem, (min-width: 640px) 45vw, 92vw"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
           />
-        </span>
+        ) : null}
+        {extraCount > 0 ? (
+          <span className="absolute top-2 right-2 rounded-md bg-black/50 px-1.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+            +{extraCount}
+          </span>
+        ) : null}
+      </div>
+      <div className="px-3 py-2.5">
+        <h3 className="line-clamp-2 text-sm font-semibold leading-snug">
+          {project.title}
+        </h3>
       </div>
     </Link>
   );
@@ -66,17 +59,10 @@ export function ProviderProjects({
   if (!projects.length && !keepVisible) return null;
 
   return (
-    <section className="flex flex-col gap-4">
-      <div>
-        <p className="eyebrow text-muted-foreground">Portfolio</p>
-        <h2 className="mt-1 text-2xl font-semibold">About these projects</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Recent jobs {provider.companyName} completed in {provider.city}. Each one started from a
-          written scope.
-        </p>
-      </div>
+    <section className="flex flex-col gap-3">
+      <h2 className="text-2xl font-semibold">Portfolio</h2>
       {projects.length ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
             <ProviderProjectCard
               key={project.slug}
@@ -88,7 +74,7 @@ export function ProviderProjects({
         </div>
       ) : (
         <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-8 text-sm text-muted-foreground">
-          Portfolio projects will appear here when this company adds completed work.
+          Photos of completed work will appear here.
         </p>
       )}
     </section>

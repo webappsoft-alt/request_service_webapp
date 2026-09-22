@@ -196,7 +196,8 @@ export function usePortalInbox() {
         type === "ESTIMATE_SENT" ||
         type === "ESTIMATE_ACCEPTED"
       ) {
-        const status = String(detail?.payload?.status || "").toLowerCase();
+        const estimatePayload = asRecord(detail?.payload) ?? {};
+        const status = String(estimatePayload.status || "").toLowerCase();
         if (status === "changes_requested" || status === "draft") {
           reopenPortalInboxBadge("estimates");
           setLiveEstimateBump((count) => count + 1);
@@ -205,8 +206,9 @@ export function usePortalInbox() {
         return;
       }
       if (type === "ORDER_UPDATED") {
-        const status = String(detail?.payload?.status || "");
-        const action = String(detail?.payload?.action || "");
+        const orderPayload = asRecord(detail?.payload) ?? {};
+        const status = String(orderPayload.status || "");
+        const action = String(orderPayload.action || "");
         if (
           (status === "BOOKING_REQUESTED" || action === "requested") &&
           action !== "auto_confirm"

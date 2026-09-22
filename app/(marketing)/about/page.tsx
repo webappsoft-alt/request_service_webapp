@@ -61,7 +61,7 @@ export default function AboutPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Provider value</CardTitle>
+              <CardTitle>Pro value</CardTitle>
               <CardDescription>
                 A public profile that matches the operating account, plus tools for requests, customers, change orders, invoices, payments, and reports.
               </CardDescription>
@@ -79,7 +79,7 @@ export default function AboutPage() {
             <CardHeader>
               <CardTitle>Technology</CardTitle>
               <CardDescription>
-                A single design system for the marketing site, customer experience, and provider portal. Data models are already shaped for API connection.
+                A single design system for the marketing site, customer experience, and Pro portal. Data models are already shaped for API connection.
               </CardDescription>
             </CardHeader>
           </Card>

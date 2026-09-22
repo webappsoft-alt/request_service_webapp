@@ -120,7 +120,7 @@ export function SendApprovalDialog({
             onSend={async (signed) => {
               if (!apiReady) {
                 toast.error(
-                  "CRM is not connected. Sign in as a provider and try again.",
+                  "CRM is not connected. Sign in as a Pro and try again.",
                 );
                 return;
               }

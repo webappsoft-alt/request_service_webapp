@@ -348,7 +348,7 @@ export function useCrmDirectory() {
   const addReminder = useCallback(
     (reminder: PortalReminder) => {
       if (!crm.enabled) {
-        return Promise.reject(new Error("Sign in as a provider to manage reminders."));
+        return Promise.reject(new Error("Sign in as a Pro to manage reminders."));
       }
       return (async () => {
         const created = await createReminderApi(reminder);
@@ -433,7 +433,7 @@ export function useCrmDirectory() {
     (kind: "customer" | "contractor" | "vendor" | "reminder" | "task" | "note", id: string) => {
       if (kind === "reminder" || kind === "task") {
         if (!crm.enabled) {
-          return Promise.reject(new Error("Sign in as a provider to manage this record."));
+          return Promise.reject(new Error("Sign in as a Pro to manage this record."));
         }
         return (async () => {
           if (kind === "reminder") {
@@ -535,7 +535,7 @@ export function useCrmDirectory() {
   const setReminderStatus = useCallback(
     (id: string, status: PortalReminder["status"]) => {
       if (!crm.enabled) {
-        return Promise.reject(new Error("Sign in as a provider to manage reminders."));
+        return Promise.reject(new Error("Sign in as a Pro to manage reminders."));
       }
       return (async () => {
         crm.patchReminder(id, { status });

@@ -47,7 +47,7 @@ export function StatCell({
   return (
     <Link
       href={href}
-      className="rounded-xl border border-border bg-card px-5 py-5 transition-colors hover:bg-muted/40"
+      className="rounded-xl border border-black/30 bg-card px-5 py-5 transition-colors hover:bg-muted/40"
     >
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-3 text-[1.75rem] leading-none font-semibold tracking-tight tabular-nums">{value || 0}</p>
@@ -68,7 +68,7 @@ export function BreakdownCard({
   rows: { label: string; value: number }[];
 }) {
   return (
-    <Link href={href} className="rounded-xl border border-border bg-card px-5 py-5 transition-colors hover:bg-muted/40">
+    <Link href={href} className="rounded-xl border border-black/30 bg-card px-5 py-5 transition-colors hover:bg-muted/40">
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-3 text-[1.75rem] leading-none font-semibold tracking-tight tabular-nums">{value}</p>
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
@@ -95,7 +95,7 @@ export function AlertCell({
   return (
     <Link
       href={href}
-      className="rounded-xl border border-border bg-card px-4 py-4 transition-colors hover:bg-muted/40"
+      className="rounded-xl border border-black/30 bg-card px-4 py-4 transition-colors hover:bg-muted/40"
     >
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
@@ -117,8 +117,8 @@ export function BoardCard({
   empty?: string;
 }) {
   return (
-    <Card className="gap-0 border-border py-0 shadow-xs">
-      <CardHeader className="border-b border-border py-3.5">
+    <Card className="gap-0 border-black/30 py-0 shadow-xs">
+      <CardHeader className="border-b border-black/20 py-3.5">
         <CardTitle className="text-sm font-semibold text-foreground">{title}</CardTitle>
         <CardAction>
           <Link href={href} className="text-xs font-medium text-primary hover:text-primary/80">

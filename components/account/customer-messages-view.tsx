@@ -153,7 +153,7 @@ function resolveThreadProvider(thread: ChatThread) {
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
   return {
-    name: slugLabel || "Provider",
+    name: slugLabel || "Pro",
     avatar: thread.providerAvatar,
     phone: thread.providerPhone,
     slug: thread.providerSlug,

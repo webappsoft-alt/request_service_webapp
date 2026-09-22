@@ -75,7 +75,7 @@ export function PlatformSection() {
     <Section>
       <Container className="flex flex-col gap-16 lg:gap-24">
         <SectionHeader
-          eyebrow="The provider portal"
+          eyebrow="The Pro portal"
           title="Estimates, approvals, change orders, invoices, and payments"
           description="Every job keeps a financial audit trail. Extra materials are added as change orders instead of quietly rewriting the quote a customer already approved."
           action={

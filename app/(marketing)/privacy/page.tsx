@@ -5,7 +5,7 @@ import { siteConfig } from "@/lib/site";
 
 export const metadata = buildMetadata({
   title: "Privacy Policy",
-  description: `How ${siteConfig.name} intends to handle personal information as the marketplace and provider portal come online.`,
+  description: `How ${siteConfig.name} intends to handle personal information as the marketplace and Pro portal come online.`,
   path: "/privacy",
 });
 
@@ -24,13 +24,13 @@ export default function PrivacyPage() {
       <div className="section-space">
         <Container className="flex flex-col gap-5 text-sm leading-7 text-muted-foreground">
           <p>
-            {siteConfig.name} collects only the information you submit through public forms, such as name, email, ZIP code, and service details. Demo submissions on this Phase 1 site are not dispatched to providers.
+            {siteConfig.name} collects only the information you submit through public forms, such as name, email, ZIP code, and service details. Demo submissions on this Phase 1 site are not dispatched to Pros.
           </p>
           <p>
             We use that information to operate the marketplace, respond to inquiries, and — when accounts are connected — to match requests, estimates, jobs, and invoices.
           </p>
           <p>
-            We do not sell personal information. Service providers who receive a request will see the details needed to quote and perform the work.
+            We do not sell personal information. Pros who receive a request will see the details needed to quote and perform the work.
           </p>
           <p>
             Contact {siteConfig.email} for privacy questions.

@@ -448,7 +448,7 @@ export function CreateEstimateDialog({
       return;
     }
     if (!useApi) {
-      toast.error("Sign in as a provider to create estimates.");
+      toast.error("Sign in as a Pro to create estimates.");
       return;
     }
     setSaving(true);
@@ -1294,7 +1294,7 @@ export function CreateJobDialog({
             changeOrders: job.changeOrders,
             createdAt: job.createdAt,
           };
-          toast.error("Sign in as a provider to update jobs.");
+          toast.error("Sign in as a Pro to update jobs.");
           return;
         }
         writeCostLines(session?.email, saved.id, workLines);

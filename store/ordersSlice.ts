@@ -212,7 +212,7 @@ function parseProviderSummary(
   raw: unknown,
 ): CustomerOrderProviderSummary | null {
   if (typeof raw === "string" && raw.trim()) {
-    return { id: raw.trim(), companyName: "Provider" };
+    return { id: raw.trim(), companyName: "Pro" };
   }
   const record = asRecord(raw);
   if (!record) return null;
@@ -225,7 +225,7 @@ function parseProviderSummary(
   }
   return {
     id: pickId(record) || undefined,
-    companyName: companyName || "Service provider",
+    companyName: companyName || "Pro",
     phone: typeof record.phone === "string" ? record.phone : undefined,
     email: typeof record.email === "string" ? record.email : undefined,
     slug: typeof record.slug === "string" ? record.slug : undefined,

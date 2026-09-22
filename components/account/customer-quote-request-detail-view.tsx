@@ -203,19 +203,19 @@ function buildTimelineSteps(batch: CustomerQuoteBatch): TimelineStep[] {
       },
       {
         id: "sent",
-        label: "Dispatched to Providers",
+        label: "Dispatched to Pros",
         detail:
           batch.sentToCount > 0
             ? `Sent to ${batch.sentToCount} local professional${batch.sentToCount === 1 ? "" : "s"}`
-            : "Dispatched to local providers",
+            : "Dispatched to local Pros",
         done: true,
       },
       {
         id: "declined",
         label: "Request Declined",
         detail: firstViewed
-          ? `Provider reviewed and declined on ${formatDate(firstViewed)}`
-          : "Provider was unable to take on this request",
+          ? `Pro reviewed and declined on ${formatDate(firstViewed)}`
+          : "Pro was unable to take on this request",
         done: true,
         current: true,
       },
@@ -231,22 +231,22 @@ function buildTimelineSteps(batch: CustomerQuoteBatch): TimelineStep[] {
     },
     {
       id: "sent",
-      label: "Dispatched to Providers",
+      label: "Dispatched to Pros",
       detail:
         batch.sentToCount > 0
           ? `Sent to ${batch.sentToCount} local professional${batch.sentToCount === 1 ? "" : "s"}`
-          : "Matching providers in your area",
+          : "Matching Pros in your area",
       done: batch.sentToCount > 0,
       current: batch.sentToCount > 0 && !hasSeen,
     },
     {
       id: "viewed",
-      label: "Provider Review",
+      label: "Pro Review",
       detail: hasSeen
         ? firstViewed
           ? `Viewed by ${batch.seenCount} pro${batch.seenCount === 1 ? "" : "s"} · First on ${formatDate(firstViewed)}`
           : `Viewed by ${batch.seenCount} pro${batch.seenCount === 1 ? "" : "s"}`
-        : "Awaiting provider review",
+        : "Awaiting Pro review",
       done: hasSeen,
       current: hasSeen && !hasEstimate,
     },
@@ -255,7 +255,7 @@ function buildTimelineSteps(batch: CustomerQuoteBatch): TimelineStep[] {
       label: "Estimates Received",
       detail: hasEstimate
         ? `${batch.estimateCount} estimate${batch.estimateCount === 1 ? "" : "s"} submitted for review`
-        : "Providers are calculating estimates",
+        : "Pros are calculating estimates",
       done: hasEstimate,
       current: hasEstimate && !isAccepted,
     },
@@ -263,7 +263,7 @@ function buildTimelineSteps(batch: CustomerQuoteBatch): TimelineStep[] {
       id: "accepted",
       label: isJobCreated ? "Job Confirmed" : "Estimate Accepted",
       detail: isJobCreated
-        ? "Job created and scheduled with provider"
+        ? "Job created and scheduled with Pro"
         : isAccepted
           ? "Approved & signed by customer"
           : "Sign proposal to confirm booking",
@@ -325,7 +325,7 @@ function getOverallStatusBadge(batch: CustomerQuoteBatch) {
   }
   return (
     <Badge variant="outline" className="border-border text-muted-foreground">
-      Awaiting Providers
+      Awaiting Pros
     </Badge>
   );
 }
@@ -647,25 +647,25 @@ export function CustomerQuoteRequestDetailView() {
           }
           hint={
             allProsDeclined
-              ? "Provider is unable to take this request"
+              ? "Pro is unable to take this request"
               : batch.estimateCount > 0
                 ? "Estimates ready for signature"
                 : batch.seenCount > 0
                   ? "Pros reviewing requirements"
-                  : "Sent to matching providers"
+                  : "Sent to matching Pros"
           }
         />
         <StatCard
-          label="Providers notified"
+          label="Pros notified"
           value={batch.sentToCount}
           hint={
             batch.sentToCount === 1
-              ? "1 local provider notified"
-              : `${batch.sentToCount} local providers notified`
+              ? "1 local Pro notified"
+              : `${batch.sentToCount} local Pros notified`
           }
         />
         <StatCard
-          label="Provider views"
+          label="Pro views"
           value={batch.seenCount}
           hint={
             firstViewedAt
@@ -692,7 +692,7 @@ export function CustomerQuoteRequestDetailView() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="space-y-1">
               <p className="font-semibold text-red-900 dark:text-red-200">
-                This quote request was declined by the provider
+                This quote request was declined by the Pro
               </p>
               <p className="text-xs text-red-700 dark:text-red-300">
                 The professional was unable to accept this request at this time. You can submit a new quote request to match with other available professionals.
@@ -720,7 +720,7 @@ export function CustomerQuoteRequestDetailView() {
                     Estimates received ({consolidatedEstimates.length})
                   </h2>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Review proposals from providers and select one to accept
+                    Review proposals from Pros and select one to accept
                   </p>
                 </div>
                 {consolidatedEstimates.some(
@@ -749,7 +749,7 @@ export function CustomerQuoteRequestDetailView() {
                 <p>
                   <strong className="font-semibold">Single-Approval Guarantee:</strong>{" "}
                   Once you review and accept an estimate with your digital
-                  signature, that provider is confirmed, and other competing
+                  signature, that Pro is confirmed, and other competing
                   proposals for this request are automatically declined.
                 </p>
               </div>
@@ -901,7 +901,7 @@ export function CustomerQuoteRequestDetailView() {
                                     >
                                       <MessageSquare className="size-3.5" />
                                       <span className="sr-only">
-                                        Message provider
+                                        Message Pro
                                       </span>
                                     </Link>
                                   </Button>
@@ -1086,7 +1086,7 @@ export function CustomerQuoteRequestDetailView() {
                 Matched professionals ({batch.professionals.length})
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Providers notified of this request and their activity status
+                Pros notified of this request and their activity status
               </p>
             </div>
 
@@ -1335,7 +1335,7 @@ export function CustomerQuoteRequestDetailView() {
               <ul className="mt-2.5 space-y-2 text-muted-foreground">
                 <li className="flex items-start gap-1.5">
                   <span className="text-primary">•</span>
-                  <span>Providers typically review and respond within 24–48 hours.</span>
+                  <span>Pros typically review and respond within 24–48 hours.</span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-primary">•</span>
@@ -1343,7 +1343,7 @@ export function CustomerQuoteRequestDetailView() {
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="text-primary">•</span>
-                  <span>Need changes? Message the provider directly anytime.</span>
+                  <span>Need changes? Message the Pro directly anytime.</span>
                 </li>
               </ul>
             </div>

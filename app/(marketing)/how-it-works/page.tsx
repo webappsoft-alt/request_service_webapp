@@ -55,7 +55,7 @@ export default function HowItWorksPage() {
       <Section tone="muted">
         <Container className="flex flex-col gap-8">
           <SectionHeader
-            eyebrow="Providers"
+            eyebrow="Pros"
             title="From business profile to performance tracking"
           />
           <ol className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

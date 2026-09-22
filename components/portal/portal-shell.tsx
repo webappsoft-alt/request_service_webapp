@@ -140,7 +140,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
       };
 
   return (
-    <div className="min-h-svh bg-[#eef1f5]">
+    <div className="portal-app min-h-svh bg-[#eef1f5]">
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] text-white transition-[width] duration-200 lg:flex",
@@ -165,7 +165,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-16" : "lg:pl-56")}>
-        <header className="sticky top-0 z-20 border-b border-black/10 bg-card">
+        <header className="sticky top-0 z-20 border-b border-black/20 bg-card">
           <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
             <Sheet>
               <SheetTrigger asChild>

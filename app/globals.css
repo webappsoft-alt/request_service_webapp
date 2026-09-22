@@ -166,6 +166,12 @@
   --sidebar-ring: oklch(0.68 0.08 254);
 }
 
+/* Pro portal cards sit on a gray canvas — the default --border is too faint. */
+.portal-app {
+  --border: oklch(0.70 0.02 254);
+  --sidebar-border: oklch(0.70 0.02 254);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

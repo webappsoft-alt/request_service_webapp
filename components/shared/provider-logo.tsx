@@ -32,7 +32,8 @@ export function ProviderLogo({
           alt={`${provider.companyName} logo`}
           fill
           sizes="56px"
-          className="object-cover"
+          className="object-contain p-1"
+          style={{ objectFit: "contain" }}
         />
       ) : (
         <span className="flex size-full items-center justify-center bg-primary text-sm font-semibold text-primary-foreground">

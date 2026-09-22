@@ -5,7 +5,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Verify Email",
   description:
-    "Enter the 4-digit code sent to your email to finish creating your provider account.",
+    "Enter the 4-digit code sent to your email to finish creating your Pro account.",
   path: "/pro/verify-otp",
   index: false,
   follow: false,

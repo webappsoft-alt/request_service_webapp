@@ -6,7 +6,7 @@ export const primaryNav: NavItem[] = [
   {
     label: "Find a Professional",
     href: "/find-a-professional",
-    description: "Search local providers by service and ZIP code.",
+    description: "Search local Pros by service and ZIP code.",
   },
   {
     label: "Get a quote",
@@ -32,10 +32,10 @@ export const footerNav = {
     { label: "Customer Login", href: "/login" },
   ],
   providers: [
-    { label: "For Service Providers", href: "/pro" },
-    { label: "Provider Login", href: "/pro/login" },
-    { label: "Create a Provider Account", href: "/pro/register" },
-    { label: "Provider dashboard", href: "/pro/dashboard" },
+    { label: "For Pros", href: "/pro" },
+    { label: "Pro Login", href: "/pro/login" },
+    { label: "Create a Pro Account", href: "/pro/register" },
+    { label: "Pro dashboard", href: "/pro/dashboard" },
   ],
   company: [
     { label: "About", href: "/about" },
@@ -52,7 +52,7 @@ export const footerNav = {
 export const customerWorkflow = [
   { step: 1, title: "Choose a service", body: "Select the category that matches the work you need." },
   { step: 2, title: "Submit a request", body: "Add your ZIP code, details, timing, and photos if helpful." },
-  { step: 3, title: "Connect with professionals", body: "Matching local providers review the request." },
+  { step: 3, title: "Connect with professionals", body: "Matching local Pros review the request." },
   { step: 4, title: "Review the estimate", body: "Compare line items, materials, labor, and terms." },
   { step: 5, title: "Approve and sign", body: "Accept digitally. The original estimate is preserved." },
   { step: 6, title: "Get the work completed", body: "The approved estimate becomes a tracked job." },

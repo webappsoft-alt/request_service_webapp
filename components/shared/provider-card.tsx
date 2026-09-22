@@ -10,16 +10,28 @@ import { CredentialMark, credentialLabel } from "@/components/shared/credential-
 import { ProviderLogo } from "@/components/shared/provider-logo";
 import { Rating } from "@/components/shared/rating";
 import { getProviderPresence } from "@/lib/data/service-directory";
-import {
-  getProviderCardCover,
-  getStartingPrice,
-} from "@/lib/data/provider-media";
+import { getProviderCardCover } from "@/lib/data/provider-media";
 import { getServiceCategoryById } from "@/lib/data/services";
 import type { ExplorePlace } from "@/lib/data/profile-explore";
-import { formatProviderCardLocation, formatStartingPrice } from "@/lib/format";
+import { formatProviderCardLocation } from "@/lib/format";
 import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
+
+/** Unique labels already scoped to this pro — leftover is list.length − 2. */
+function cardServiceLabels(labels: string[]): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const raw of labels) {
+    const label = raw.trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(label);
+  }
+  return next;
+}
 
 function professionalHref(slug: string, place?: ExplorePlace) {
   const params = new URLSearchParams();
@@ -82,17 +94,18 @@ export function ProviderCard({
   const categories = provider.categoryIds
     .map((id) => getServiceCategoryById(id))
     .filter((category): category is NonNullable<typeof category> => Boolean(category));
-  const services = (
+  const allServices = cardServiceLabels(
     provider.serviceLabels?.length
       ? provider.serviceLabels
-      : categories.map((category) => category.name)
-  ).slice(0, 4);
+      : categories.map((category) => category.name),
+  );
+  const services = allServices.slice(0, 2);
+  const extraServiceCount = Math.max(0, allServices.length - services.length);
   // Card photo = main business gallery banner. Small logo overlay stays on ProviderLogo.
   const coverImage = getProviderCardCover(provider);
   // Visual marketplace cards always keep the photo header layout (previous design).
   const showCover = visual;
   const showListPhoto = !visual;
-  const startingPrice = getStartingPrice(provider);
   const hasCredentials = provider.licensed || provider.insured;
   const hasRating = provider.rating > 0;
   const presence = getProviderPresence(provider.id);
@@ -130,7 +143,8 @@ export function ProviderCard({
             alt={provider.companyName}
             fill
             sizes="(max-width: 640px) 90vw, 288px"
-            className="object-cover"
+            className="object-cover!"
+            style={{ objectFit: "cover" }}
             unoptimized={coverImage.startsWith("http")}
           />
           <span className="absolute top-3 left-3 rounded-md bg-card/95 px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm">
@@ -194,17 +208,14 @@ export function ProviderCard({
                     {service}
                   </Badge>
                 ))}
+                {extraServiceCount > 0 ? (
+                  <Badge variant="secondary">+{extraServiceCount} more</Badge>
+                ) : null}
               </div>
             ) : null}
           </div>
 
-          <div className="flex shrink-0 flex-row items-end justify-between gap-4 sm:w-44 sm:flex-col sm:items-end sm:justify-between">
-            <span className="flex flex-col gap-1 sm:items-end">
-              <span className="text-xs text-muted-foreground">Typical start</span>
-              <span className="text-2xl leading-none font-semibold tabular-nums">
-                {formatStartingPrice(startingPrice)}
-              </span>
-            </span>
+          <div className="flex shrink-0 flex-row items-end justify-end gap-4 sm:w-44 sm:flex-col sm:items-end sm:justify-end">
             <Button asChild size="sm">
               <Link href={profileHref} onClick={handleProfileClick}>
                 View profile
@@ -239,7 +250,8 @@ export function ProviderCard({
             alt={provider.companyName}
             fill
             sizes="(max-width: 768px) 82vw, 25vw"
-            className="object-cover"
+            className="object-cover!"
+            style={{ objectFit: "cover" }}
             unoptimized={coverImage.startsWith("http")}
           />
           <span
@@ -275,17 +287,12 @@ export function ProviderCard({
         <div className="flex shrink-0 items-start gap-3">
           {showCover ? null : <ProviderLogo provider={provider} size="xl" />}
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div className="flex items-start justify-between gap-2">
-              <h3
-                className="min-w-0 flex-1 capitalize text-sm leading-snug font-semibold sm:text-[0.95rem]"
-                title={provider.companyName}
-              >
-                <span className="line-clamp-2 break-words">{provider.companyName}</span>
-              </h3>
-              <span className="shrink-0 pt-0.5 text-sm leading-snug font-semibold tabular-nums text-brand sm:text-[0.95rem]">
-                {formatStartingPrice(startingPrice)}
-              </span>
-            </div>
+            <h3
+              className="min-w-0 capitalize text-sm leading-snug font-semibold sm:text-[0.95rem]"
+              title={provider.companyName}
+            >
+              <span className="line-clamp-2 break-words">{provider.companyName}</span>
+            </h3>
             <p className="line-clamp-1 text-sm leading-5 text-muted-foreground">
               {provider.tagline}
             </p>
@@ -315,14 +322,19 @@ export function ProviderCard({
         )}
 
         {services.length ? (
-          <div className="flex shrink-0 flex-wrap gap-1.5">
+          <div className="flex min-h-11 shrink-0 flex-wrap content-start gap-1.5">
             {services.map((service) => (
               <Badge key={service} variant="secondary">
                 {service}
               </Badge>
             ))}
+            {extraServiceCount > 0 ? (
+              <Badge variant="secondary">+{extraServiceCount} more</Badge>
+            ) : null}
           </div>
-        ) : null}
+        ) : (
+          <div className="min-h-11 shrink-0" aria-hidden="true" />
+        )}
 
         {visual ? null : (
           <p className="text-sm leading-5 text-muted-foreground">

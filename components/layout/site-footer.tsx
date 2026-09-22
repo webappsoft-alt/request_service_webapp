@@ -98,7 +98,7 @@ export function SiteFooter() {
         </div>
 
         <FooterColumn title="Customers" items={footerNav.customers} />
-        <FooterColumn title="Providers" items={footerNav.providers} />
+        <FooterColumn title="Pros" items={footerNav.providers} />
         <div className="flex flex-col gap-3">
           <p className="text-xs font-medium tracking-[0.14em] text-white uppercase">
             Services

@@ -536,7 +536,7 @@ export function EstimatesView() {
                     onSelect: async () => {
                       try {
                         if (!useApi) {
-                          toast.error("Sign in as a provider to share estimates.");
+                          toast.error("Sign in as a Pro to share estimates.");
                           return;
                         }
                         const res = await shareEstimate(row.id);

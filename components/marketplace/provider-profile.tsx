@@ -108,11 +108,6 @@ export function ProviderProfile({
           </ol>
         </nav>
 
-        <div className="mb-4">
-          <p className="eyebrow text-muted-foreground">Main business gallery</p>
-          <h2 className="mt-1 text-2xl font-semibold">Photos</h2>
-        </div>
-
         <BookServiceProvider provider={provider} services={fixedServices}>
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="flex flex-col gap-8">
@@ -145,30 +140,24 @@ export function ProviderProfile({
                   </div>
                 </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-semibold">About Service Pro</h2>
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-foreground">
+              {provider.description?.trim() ? (
+                <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
                   {provider.description}
                 </p>
-              </div>
+              ) : null}
             </div>
+
+            <ProviderProjects
+              provider={provider}
+              projects={projects}
+              keepVisible={isLive}
+              onBeforeNavigate={live?.onProjectBeforeNavigate}
+            />
 
             <FixedServiceCatalog
               provider={provider}
               services={live ? fixedServices : undefined}
             />
-
-            <section className="flex flex-col gap-4">
-              <div>
-                <p className="eyebrow text-muted-foreground">Services</p>
-                <h2 className="mt-1 text-2xl font-semibold">What they provide</h2>
-              </div>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                {categories.map((category) => (
-                  <ServiceOfferCard key={category.id} category={category} />
-                ))}
-              </div>
-            </section>
 
             <section className="flex flex-col gap-4">
               <div>
@@ -194,12 +183,17 @@ export function ProviderProfile({
               </div>
             </section>
 
-            <ProviderProjects
-              provider={provider}
-              projects={projects}
-              keepVisible={isLive}
-              onBeforeNavigate={live?.onProjectBeforeNavigate}
-            />
+            <section className="flex flex-col gap-4">
+              <div>
+                <p className="eyebrow text-muted-foreground">Services</p>
+                <h2 className="mt-1 text-2xl font-semibold">What they provide</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                {categories.map((category) => (
+                  <ServiceOfferCard key={category.id} category={category} />
+                ))}
+              </div>
+            </section>
 
             <section className="flex flex-col gap-4">
               <div>
@@ -372,7 +366,7 @@ export function ProviderProfile({
           <Container className="flex flex-col gap-4">
             <div>
               <p className="eyebrow text-muted-foreground">More professionals</p>
-              <h2 className="mt-1 text-2xl font-semibold">Relevant service providers</h2>
+              <h2 className="mt-1 text-2xl font-semibold">Relevant Pros</h2>
             </div>
             {live?.relatedLoading ? (
               <div

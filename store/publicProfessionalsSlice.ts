@@ -7,7 +7,10 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { getData } from "@/components/api/sliceHttp";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { inferStateFromAddress } from "@/lib/format";
-import { getServiceCategoryById } from "@/lib/data/services";
+import {
+  getServiceCategoryById,
+  serviceCategories,
+} from "@/lib/data/services";
 import {
   galleryBanner,
   galleryRest,
@@ -185,7 +188,7 @@ type PublicProfessionalsState = {
 export const PUBLIC_PROFESSIONALS_LIMIT = 10;
 
 const initialQuery: PublicProfessionalsQuery = {
-  sortBy: "recommended",
+  sortBy: "newest",
 };
 
 const initialState: PublicProfessionalsState = {
@@ -218,6 +221,41 @@ function toStringArray(value: unknown): string[] {
   return value.filter(
     (item): item is string => typeof item === "string" && Boolean(item.trim()),
   );
+}
+
+/** Unique job names this pro actually offers — not the full marketplace catalog dump. */
+function uniqueServiceLabels(labels: string[], categoryIds: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const raw of labels) {
+    const label = raw.trim();
+    if (label.length < 2 || label.length > 48) continue;
+    if (/^[a-f0-9]{24}$/i.test(label)) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(label);
+  }
+
+  const allowed = new Set<string>();
+  for (const id of categoryIds) {
+    for (const job of getServiceCategoryById(id)?.commonServices ?? []) {
+      allowed.add(job.toLowerCase());
+    }
+  }
+  const scoped = allowed.size
+    ? unique.filter((label) => allowed.has(label.toLowerCase()))
+    : [];
+  if (scoped.length) return scoped;
+
+  const matchedJobs = serviceCategories
+    .map((category) =>
+      category.commonServices.filter((job) => seen.has(job.toLowerCase())),
+    )
+    .filter((jobs) => jobs.length > 0);
+  if (matchedJobs.length === 1) return matchedJobs[0];
+  if (matchedJobs.length === 2) return [...new Set(matchedJobs.flat())];
+  return unique.length <= 12 ? unique : unique.slice(0, 2);
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -699,9 +737,10 @@ export function publicProfessionalToProvider(
   const resolvedCategoryNames = categoryIds
     .map((id) => getServiceCategoryById(id)?.name)
     .filter((name): name is string => Boolean(name));
-  const specialtyLabels = professional.tradeDetails.specialties
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const specialtyLabels = uniqueServiceLabels(
+    professional.tradeDetails.specialties,
+    categoryIds,
+  );
   const serviceLabels = (
     specialtyLabels.length
       ? specialtyLabels
@@ -713,9 +752,7 @@ export function publicProfessionalToProvider(
               professional.tagline?.trim() ||
               "",
           ]
-  )
-    .filter(Boolean)
-    .slice(0, 4);
+  ).filter(Boolean);
 
   const tradeLabel =
     professional.tradeDetails.tradeTitle?.trim() ||
@@ -736,7 +773,6 @@ export function publicProfessionalToProvider(
         specialtyPreview.length
           ? `Specialties include ${specialtyPreview.join(", ")}.`
           : "",
-        professional.activeOfferings.startingPriceDisplay?.trim() || "",
       ].filter(Boolean);
 
   let yearsInBusiness = toNumber(professional.profile?.yearsInBusiness, 0);
@@ -805,7 +841,6 @@ export function publicProfessionalToProvider(
     tagline:
       professional.tagline ||
       professional.tradeDetails.tradeTitle ||
-      professional.activeOfferings.startingPriceDisplay ||
       "",
     description: aboutParts.join(" "),
     rating: professional.performanceMetrics.rating.average,
@@ -887,7 +922,7 @@ export function resolvePublicProfessionalsQuery(
     Number.isFinite(location.longitude);
 
   const query: PublicProfessionalsQuery = {
-    sortBy: "recommended",
+    sortBy: "newest",
     ...incoming,
     // City/place picks include a center ZIP — don't AND it with radius or results empty.
     zipCode: hasZip && !hasCoords ? location.zip.trim() : undefined,
@@ -945,7 +980,7 @@ function toRequestParams(
     isIdentityVerified:
       query.isIdentityVerified === true ? true : undefined,
     availability: query.availability?.trim() || undefined,
-    sortBy: query.sortBy || "recommended",
+    sortBy: query.sortBy || "newest",
     sortOrder: query.sortOrder || "desc",
   };
 }

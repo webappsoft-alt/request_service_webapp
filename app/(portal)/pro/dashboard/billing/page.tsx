@@ -3,7 +3,7 @@ import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
   "Subscription",
-  "Current plan, upgrades, and billing period for the provider portal.",
+  "Current plan, upgrades, and billing period for the Pro portal.",
   "/pro/dashboard/billing",
 );
 

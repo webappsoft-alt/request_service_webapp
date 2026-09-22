@@ -39,7 +39,7 @@ function copyFor(role: DemoRole, mode: AuthMode) {
       return role === "provider"
         ? {
             eyebrow: "Service companies",
-            title: "Provider login",
+            title: "Pro login",
             description:
               "Sign in to manage your business profile, services, and incoming requests.",
           }
@@ -262,7 +262,7 @@ function AuthFormInner({
           <>
             Return to{" "}
             <Link href={loginHref} className={authLinkClass}>
-              {isProvider ? "provider login" : "customer login"}
+              {isProvider ? "Pro login" : "customer login"}
             </Link>
             .
           </>

@@ -20,17 +20,13 @@ export function ProviderCardSkeleton({ className }: { className?: string }) {
         <Skeleton className="absolute bottom-2.5 left-2.5 z-10 size-9 rounded-md" />
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pt-3 pb-3 sm:px-4">
-        <div className="flex items-start justify-between gap-2">
-          <Skeleton className="h-4 w-[55%]" />
-          <Skeleton className="h-4 w-12" />
-        </div>
+        <Skeleton className="h-4 w-[70%]" />
         <Skeleton className="h-3.5 w-4/5" />
         <Skeleton className="h-3.5 w-2/5" />
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex min-h-11 flex-wrap gap-1.5">
           <Skeleton className="h-5 w-[7.5rem] rounded-full" />
           <Skeleton className="h-5 w-24 rounded-full" />
-          <Skeleton className="h-5 w-[6.5rem] rounded-full" />
-          <Skeleton className="h-5 w-20 rounded-full" />
+          <Skeleton className="h-5 w-16 rounded-full" />
         </div>
         <div className="mt-auto flex w-full flex-col gap-2 sm:flex-row">
           <Skeleton className="h-8 w-full rounded-md sm:flex-1" />
@@ -288,11 +284,6 @@ export function ProfessionalDetailSkeleton({ className }: { className?: string }
             </div>
           </nav>
 
-          <div className="mb-4">
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="mt-2 h-7 w-24" />
-          </div>
-
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
             <div className="flex flex-col gap-8">
               <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
@@ -301,7 +292,7 @@ export function ProfessionalDetailSkeleton({ className }: { className?: string }
                   {Array.from({ length: 3 }, (_, i) => (
                     <Skeleton
                       key={`gallery-thumb-${i}`}
-                      className="h-24 w-[calc((100%-1rem)/3)] shrink-0 rounded-lg sm:h-28 sm:w-[calc((100%-1.5rem)/4)] lg:w-[calc((100%-2rem)/5)]"
+                      className="h-28 w-[calc((100%-1rem)/3)] shrink-0 rounded-lg sm:h-32 sm:w-[calc((100%-1.5rem)/4)] lg:w-[calc((100%-2rem)/5)]"
                     />
                   ))}
                 </div>
@@ -321,19 +312,25 @@ export function ProfessionalDetailSkeleton({ className }: { className?: string }
                   </div>
                 </div>
                 <div>
-                  <Skeleton className="h-7 w-48" />
-                  <Skeleton className="mt-3 h-4 w-full max-w-3xl" />
+                  <Skeleton className="h-4 w-full max-w-3xl" />
                   <Skeleton className="mt-2 h-4 w-full max-w-3xl" />
                   <Skeleton className="mt-2 h-4 w-2/3 max-w-2xl" />
                 </div>
               </div>
 
+              <section className="flex flex-col gap-3">
+                <Skeleton className="h-7 w-28" />
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array.from({ length: 3 }, (_, i) => (
+                    <ProjectCardSkeleton key={`project-sk-${i}`} />
+                  ))}
+                </div>
+              </section>
+
               <section className="flex flex-col gap-4">
                 <div>
                   <Skeleton className="h-3 w-24" />
                   <Skeleton className="mt-2 h-7 w-56" />
-                  <Skeleton className="mt-2 h-4 w-full max-w-2xl" />
-                  <Skeleton className="mt-1.5 h-4 w-4/5 max-w-xl" />
                 </div>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                   {Array.from({ length: 3 }, (_, i) => (
@@ -366,19 +363,6 @@ export function ProfessionalDetailSkeleton({ className }: { className?: string }
                 <div className="flex flex-wrap gap-2">
                   {Array.from({ length: 5 }, (_, i) => (
                     <Skeleton key={`area-sk-${i}`} className="h-6 w-24 rounded-full" />
-                  ))}
-                </div>
-              </section>
-
-              <section className="flex flex-col gap-4">
-                <div>
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="mt-2 h-7 w-56" />
-                  <Skeleton className="mt-2 h-4 w-full max-w-2xl" />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {Array.from({ length: 3 }, (_, i) => (
-                    <ProjectCardSkeleton key={`project-sk-${i}`} />
                   ))}
                 </div>
               </section>
@@ -553,15 +537,10 @@ function ServiceOfferCardSkeleton() {
 
 function ProjectCardSkeleton() {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-black/15 bg-card">
-      <Skeleton className="aspect-[16/10] w-full rounded-none" />
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="h-5 w-4/5" />
-        <Skeleton className="h-3.5 w-full" />
-        <Skeleton className="h-3.5 w-2/3" />
-        <Skeleton className="mt-auto h-3 w-32" />
-        <Skeleton className="h-4 w-24" />
+    <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
+      <Skeleton className="aspect-[4/3] w-full rounded-none" />
+      <div className="px-3 py-2.5">
+        <Skeleton className="h-4 w-4/5" />
       </div>
     </div>
   );

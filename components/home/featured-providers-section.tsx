@@ -46,7 +46,7 @@ export function FeaturedProvidersSection() {
     void dispatch(
       fetchPublicProfessionals({
         query: {
-          sortBy: "rating",
+          sortBy: "newest",
           sortOrder: "desc",
         },
       }),
@@ -80,7 +80,7 @@ export function FeaturedProvidersSection() {
       <Container className="flex flex-col gap-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col gap-2">
-            <p className="eyebrow text-muted-foreground">Featured providers</p>
+            <p className="eyebrow text-muted-foreground">Featured Pros</p>
             <h2 className="text-3xl font-semibold md:text-[2.5rem]">
               Pros you can compare on more than stars
             </h2>

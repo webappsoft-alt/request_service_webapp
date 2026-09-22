@@ -75,7 +75,7 @@ const ProviderMap = dynamic(
   }
 );
 
-type SortKey = "rating" | "reviews" | "years";
+type SortKey = "newest" | "rating" | "reviews" | "years";
 
 function majorityLocation(providers: Provider[]) {
   const counts = new Map<string, { label: string; count: number }>();
@@ -93,7 +93,8 @@ function majorityLocation(providers: Provider[]) {
 function sortByFromUi(sort: SortKey): PublicProfessionalSortBy {
   if (sort === "reviews") return "completed_jobs";
   if (sort === "years") return "experience";
-  return "rating";
+  if (sort === "rating") return "rating";
+  return "newest";
 }
 
 export function CategoryExplorer({
@@ -162,7 +163,7 @@ export function CategoryExplorer({
   const [subService, setSubService] = useState(initialJob);
   const [minRating, setMinRating] = useState(0);
   const [licensedOnly, setLicensedOnly] = useState(false);
-  const [sort, setSort] = useState<SortKey>("rating");
+  const [sort, setSort] = useState<SortKey>("newest");
   const [selectedId, setSelectedId] = useState<string | null>(
     providers[0]?.id ?? null,
   );
@@ -242,6 +243,7 @@ export function CategoryExplorer({
     next.sort((a, b) => {
       if (sort === "reviews") return b.reviewCount - a.reviewCount;
       if (sort === "years") return b.yearsInBusiness - a.yearsInBusiness;
+      if (sort === "newest") return 0;
       return b.rating - a.rating;
     });
     return next;
@@ -864,6 +866,7 @@ export function CategoryExplorer({
               className="w-full min-w-0 shrink-0 sm:w-auto [&>select]:w-full [&>select]:bg-card sm:[&>select]:w-auto"
               aria-label="Sort"
             >
+              <NativeSelectOption value="newest">Sort: Newest</NativeSelectOption>
               <NativeSelectOption value="rating">Sort: Highest rated</NativeSelectOption>
               <NativeSelectOption value="reviews">Sort: Most reviews</NativeSelectOption>
               <NativeSelectOption value="years">Sort: Most experienced</NativeSelectOption>

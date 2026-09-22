@@ -232,7 +232,7 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
             className={authLinkClass}
             onClick={() => clearPasswordResetSession()}
           >
-            {isProvider ? "provider login" : "customer login"}
+            {isProvider ? "Pro login" : "customer login"}
           </Link>
           .
         </>

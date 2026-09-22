@@ -6,14 +6,14 @@ export const faqs: FaqItem[] = [
     category: "customers",
     question: "How do I find a service professional?",
     answer:
-      "Choose a service category, enter your ZIP code, and submit a request — or browse the marketplace and open a specific provider profile. Both paths use the same professional request details.",
+      "Choose a service category, enter your ZIP code, and submit a request — or browse the marketplace and open a specific Pro profile. Both paths use the same professional request details.",
   },
   {
     id: "faq_c_2",
     category: "customers",
     question: "Is Request Service available nationwide?",
     answer:
-      "The public website is built for a USA-focused marketplace. Matching depends on providers who serve your ZIP code. Coverage expands as local businesses join the platform.",
+      "The public website is built for a USA-focused marketplace. Matching depends on Pros who serve your ZIP code. Coverage expands as local businesses join the platform.",
   },
   {
     id: "faq_c_3",
@@ -25,7 +25,7 @@ export const faqs: FaqItem[] = [
   {
     id: "faq_p_1",
     category: "providers",
-    question: "Who can join as a service provider?",
+    question: "Who can join as a Pro?",
     answer:
       "Local home-service businesses in supported categories can create a profile, subscribe, and receive opportunities that match their services and service area.",
   },
@@ -34,14 +34,14 @@ export const faqs: FaqItem[] = [
     category: "providers",
     question: "Do customers subscribe to Request Service?",
     answer:
-      "No. Only service providers subscribe to the business portal. Customers use the marketplace to find and request professionals.",
+      "No. Only Pros subscribe to the business portal. Customers use the marketplace to find and request professionals.",
   },
   {
     id: "faq_p_3",
     category: "providers",
-    question: "When do I get access to the provider portal?",
+    question: "When do I get access to the Pro portal?",
     answer:
-      "After registration and an active subscription, the provider dashboard, requests, estimates, jobs, invoices, and reports become available. Portal access is determined by subscription status.",
+      "After registration and an active subscription, the Pro dashboard, requests, estimates, jobs, invoices, and reports become available. Portal access is determined by subscription status.",
   },
   {
     id: "faq_p_4",
@@ -97,7 +97,7 @@ export const faqs: FaqItem[] = [
     category: "bookings",
     question: "What is the difference between a marketplace request and a direct booking?",
     answer:
-      "A marketplace request is matched to providers who offer that service in your area. A direct booking is sent to one company you selected from their public profile.",
+      "A marketplace request is matched to Pros who offer that service in your area. A direct booking is sent to one company you selected from their public profile.",
   },
   {
     id: "faq_b_2",
@@ -146,7 +146,7 @@ export const faqs: FaqItem[] = [
     category: "subscriptions",
     question: "Can I change plans later?",
     answer:
-      "Yes. The provider portal is designed to support upgrades, downgrades, cancellation, and billing history once subscriptions are connected.",
+      "Yes. The Pro portal is designed to support upgrades, downgrades, cancellation, and billing history once subscriptions are connected.",
   },
   {
     id: "faq_j_1",
@@ -160,13 +160,13 @@ export const faqs: FaqItem[] = [
     category: "jobs",
     question: "How do invoices relate to jobs?",
     answer:
-      "After work is completed, a provider can generate an invoice from the original estimate plus any approved additional charges. That invoice then tracks payments and remaining balance.",
+      "After work is completed, a Pro can generate an invoice from the original estimate plus any approved additional charges. That invoice then tracks payments and remaining balance.",
   },
 ];
 
 export const faqCategories = [
   { id: "customers", label: "Customers" },
-  { id: "providers", label: "Providers" },
+  { id: "providers", label: "Pros" },
   { id: "bookings", label: "Bookings" },
   { id: "estimates", label: "Estimates" },
   { id: "payments", label: "Payments" },

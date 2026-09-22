@@ -3,7 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
   title: "Provider Reset Password",
-  description: "Choose a new password for your Request Service provider account.",
+  description: "Choose a new password for your Request Service Pro account.",
   path: "/pro/reset-password",
   index: false,
   follow: false,

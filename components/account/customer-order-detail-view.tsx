@@ -563,7 +563,7 @@ export function CustomerOrderDetailView({
                 Provider
               </p>
               <p className="mt-2 truncate text-sm font-semibold text-foreground sm:text-base">
-                {provider?.companyName || "Service Provider"}
+                {provider?.companyName || "Pro"}
               </p>
               <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                 <ShieldCheck className="size-3.5 text-emerald-600 shrink-0" />

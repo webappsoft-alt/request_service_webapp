@@ -2,19 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Clock3,
-  MapPin,
-  Sparkles,
-  Wallet,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Container } from "@/components/layout/container";
 import { HomeMotion } from "@/components/home/home-motion";
+import { ProjectPortfolioGallery } from "@/components/marketplace/project-portfolio-gallery";
 import { ProviderProjectCard } from "@/components/marketplace/provider-projects";
 import { ProviderLogo } from "@/components/shared/provider-logo";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -57,7 +51,7 @@ export function ProjectDetail({
   portfolio?: PortfolioProject | null;
 }) {
   const media = portfolio?.media?.length
-    ? portfolio.media.filter((item) => item.url)
+    ? portfolio.media.filter((item) => item.url && item.type !== "video")
     : project.images.map((url, index) => ({
         url,
         type: "image" as const,
@@ -66,11 +60,32 @@ export function ProjectDetail({
         isAfter: false,
         isCover: index === 0,
       }));
+  const title = portfolio?.title || project.title;
   const cover =
     media.find((item) => item.isCover)?.url ||
     media[0]?.url ||
     project.cover;
-  const gallery = media.filter((item) => item.url !== cover);
+  const photos = [
+    ...media.filter((item) => item.url === cover),
+    ...media.filter((item) => item.url && item.url !== cover),
+  ].map((item, index) => ({
+    src: item.url,
+    alt:
+      item.caption ||
+      (item.isBefore
+        ? `${title} before`
+        : item.isAfter
+          ? `${title} after`
+          : title),
+    label:
+      index === 0 && portfolio?.isFeatured
+        ? "Featured"
+        : item.isBefore
+          ? "Before"
+          : item.isAfter
+            ? "After"
+            : undefined,
+  }));
   const tags = portfolio?.tags?.filter(Boolean) ?? [];
   const linkedServices = portfolio?.linkedServices ?? [];
   const duration = portfolio?.duration?.trim() || "";
@@ -81,20 +96,23 @@ export function ProjectDetail({
   const locationLabel =
     project.location ||
     [provider.city, provider.zip || provider.state].filter(Boolean).join(", ");
-  const title = portfolio?.title || project.title;
   const categoryName = portfolio?.categoryName || project.categoryName;
   const completedOn = portfolio?.projectDate || project.completedOn;
   const aboutText =
     portfolio?.description?.trim() ||
     project.details.join("\n\n") ||
     project.summary;
-  const coverCaption = media.find((item) => item.url === cover)?.caption;
   const hasFacts = cost != null || Boolean(duration) || Boolean(locationLabel);
+  const hasDetails =
+    Boolean(aboutText) ||
+    tags.length > 0 ||
+    linkedServices.length > 0 ||
+    hasFacts;
 
   return (
     <HomeMotion>
       <article className="pt-6 pb-10 md:pt-7 md:pb-14">
-        <Container className="flex flex-col gap-8">
+        <Container className="flex flex-col gap-5">
           <nav aria-label="Breadcrumb">
             <ol className="flex flex-wrap items-center gap-2 text-sm">
               <li>
@@ -125,92 +143,48 @@ export function ProjectDetail({
             </ol>
           </nav>
 
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-            <div className="flex flex-col gap-8">
-              {/* Hero media first — matches profile gallery-led layout */}
-              <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
-                <div className="relative aspect-[16/9] bg-muted">
-                  {cover ? (
-                    <Image
-                      src={cover}
-                      alt={coverCaption || title}
-                      fill
-                      priority
-                      sizes="(min-width: 1280px) 48rem, 92vw"
-                      className="object-cover"
-                      unoptimized={cover.startsWith("http")}
-                    />
-                  ) : null}
-                  {portfolio?.isFeatured ? (
-                    <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-md bg-card/95 px-2.5 py-1 text-xs font-semibold text-primary shadow-sm backdrop-blur-sm">
-                      <Sparkles className="size-3.5" aria-hidden />
-                      Featured
-                    </span>
-                  ) : null}
-                  {coverCaption ? (
-                    <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent px-4 py-3">
-                      <p className="text-sm font-medium text-white">{coverCaption}</p>
+          <ProjectPortfolioGallery photos={photos} title={title} />
+
+          <header className="flex flex-col gap-1.5">
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+              {title}
+            </h1>
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              {categoryName ? <span>{categoryName}</span> : null}
+              {categoryName && locationLabel ? (
+                <span className="text-muted-foreground/50">·</span>
+              ) : null}
+              {locationLabel ? (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                  {locationLabel}
+                </span>
+              ) : null}
+              {(categoryName || locationLabel) && completedOn ? (
+                <span className="text-muted-foreground/50">·</span>
+              ) : null}
+              {completedOn ? <span>{formatDate(completedOn)}</span> : null}
+            </p>
+          </header>
+
+          {hasDetails ? (
+            <div className="mt-3 grid gap-8 border-t border-black/10 pt-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+              <div className="flex flex-col gap-8">
+                {aboutText ? (
+                  <section className="flex flex-col gap-3">
+                    <h2 className="text-xl font-semibold">About this project</h2>
+                    <div className="flex flex-col gap-3">
+                      {aboutText.split(/\n+/).map((paragraph) => (
+                        <p
+                          key={paragraph}
+                          className="max-w-3xl text-sm leading-7 text-muted-foreground"
+                        >
+                          {paragraph}
+                        </p>
+                      ))}
                     </div>
-                  ) : null}
-                </div>
-
-                {gallery.length ? (
-                  <div className="grid grid-cols-3 gap-px border-t border-black/10 bg-black/10 sm:grid-cols-4">
-                    {gallery.map((item, index) => (
-                      <div
-                        key={`${item.url}-${index}`}
-                        className="relative aspect-[4/3] bg-muted"
-                      >
-                        <Image
-                          src={item.url}
-                          alt={item.caption || `${title} detail`}
-                          fill
-                          sizes="(min-width: 1024px) 10rem, 30vw"
-                          className="object-cover"
-                          unoptimized={item.url.startsWith("http")}
-                        />
-                        {(item.isBefore || item.isAfter) ? (
-                          <div className="absolute top-1.5 left-1.5">
-                            {item.isBefore ? (
-                              <span className="rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold text-white uppercase">
-                                Before
-                              </span>
-                            ) : null}
-                            {item.isAfter ? (
-                              <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground uppercase">
-                                After
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
+                  </section>
                 ) : null}
-              </div>
-
-              <header className="flex flex-col gap-4">
-                <div>
-                  <p className="eyebrow text-muted-foreground">Portfolio project</p>
-                  <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">
-                    {title}
-                  </h1>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
-                  {categoryName ? (
-                    <Badge variant="secondary">{categoryName}</Badge>
-                  ) : null}
-                  {locationLabel ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                      {locationLabel}
-                    </span>
-                  ) : null}
-                  {completedOn ? (
-                    <span>Completed {formatDate(completedOn)}</span>
-                  ) : null}
-                </div>
 
                 {tags.length ? (
                   <div className="flex flex-wrap gap-1.5">
@@ -222,186 +196,142 @@ export function ProjectDetail({
                   </div>
                 ) : null}
 
-                {(cost != null || duration) ? (
-                  <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-                    {cost != null ? (
-                      <div className="rounded-xl border border-black/10 bg-card px-4 py-3">
-                        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Wallet className="size-3.5" aria-hidden />
-                          Project cost
-                        </p>
-                        <p className="mt-1 text-xl font-semibold tabular-nums text-primary">
-                          {formatMoney(cost)}
-                        </p>
-                      </div>
-                    ) : null}
-                    {duration ? (
-                      <div className="rounded-xl border border-black/10 bg-card px-4 py-3">
-                        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Clock3 className="size-3.5" aria-hidden />
-                          Duration
-                        </p>
-                        <p className="mt-1 text-xl font-semibold tabular-nums">
-                          {duration}
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
+                {linkedServices.length ? (
+                  <section className="flex flex-col gap-3">
+                    <h2 className="text-xl font-semibold">Services on this job</h2>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {linkedServices.map((service) => {
+                        const href = `/request-service?provider=${provider.slug}&intent=book&serviceId=${service.id}`;
+                        return (
+                          <Link
+                            key={service.id}
+                            href={href}
+                            className="group overflow-hidden rounded-xl border border-black/10 bg-card transition-colors hover:border-black/25"
+                          >
+                            <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+                              {service.images?.[0] ? (
+                                <Image
+                                  src={service.images[0]}
+                                  alt={service.name}
+                                  fill
+                                  sizes="(min-width: 1024px) 16rem, 45vw"
+                                  className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                                  unoptimized={service.images[0].startsWith("http")}
+                                />
+                              ) : (
+                                <div className="flex size-full items-center justify-center text-xs text-muted-foreground">
+                                  No photo
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-1 p-3.5">
+                              <p className="font-semibold leading-snug">{service.name}</p>
+                              {service.price != null ? (
+                                <p className="text-sm text-primary">
+                                  {formatMoney(service.price)}
+                                  {service.unit ? (
+                                    <span className="text-muted-foreground">
+                                      {" "}
+                                      · {service.unit}
+                                    </span>
+                                  ) : null}
+                                </p>
+                              ) : null}
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </section>
                 ) : null}
-              </header>
 
-              {aboutText ? (
-                <section className="flex flex-col gap-3 border-t border-black/10 pt-8">
-                  <h2 className="text-2xl font-semibold">About this project</h2>
-                  <div className="flex flex-col gap-3">
-                    {aboutText.split(/\n+/).map((paragraph) => (
-                      <p
-                        key={paragraph}
-                        className="max-w-3xl text-sm leading-7 text-foreground"
-                      >
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {linkedServices.length ? (
-                <section className="flex flex-col gap-4 border-t border-black/10 pt-8">
-                  <div>
-                    <p className="eyebrow text-muted-foreground">Linked services</p>
-                    <h2 className="mt-1 text-2xl font-semibold">
-                      Fixed services on this job
-                    </h2>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {linkedServices.map((service) => {
-                      const href = `/request-service?provider=${provider.slug}&intent=book&serviceId=${service.id}`;
-                      return (
-                        <Link
-                          key={service.id}
-                          href={href}
-                          className="group overflow-hidden rounded-xl border border-black/10 bg-card transition-colors hover:border-black/25"
-                        >
-                          <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-                            {service.images?.[0] ? (
-                              <Image
-                                src={service.images[0]}
-                                alt={service.name}
-                                fill
-                                sizes="(min-width: 1024px) 16rem, 45vw"
-                                className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                                unoptimized={service.images[0].startsWith("http")}
-                              />
-                            ) : (
-                              <div className="flex size-full items-center justify-center text-xs text-muted-foreground">
-                                No photo
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-1 p-3.5">
-                            <p className="font-semibold leading-snug">{service.name}</p>
-                            {service.price != null ? (
-                              <p className="text-sm text-primary">
-                                {formatMoney(service.price)}
-                                {service.unit ? (
-                                  <span className="text-muted-foreground">
-                                    {" "}
-                                    · {service.unit}
-                                  </span>
-                                ) : null}
-                              </p>
-                            ) : null}
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-
-              <Button variant="outline" asChild className="w-fit">
-                <Link href={`/professionals/${provider.slug}`}>
-                  <ArrowLeft data-icon="inline-start" />
-                  Back to {provider.companyName}
-                </Link>
-              </Button>
-            </div>
-
-            <aside className="flex flex-col gap-3 lg:sticky lg:top-24 lg:self-start">
-              <Card className="border-black/15 shadow-none">
-                <CardHeader className="border-b border-black/10 pb-4">
-                  <CardTitle className="text-base">Completed by</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4 pt-4">
-                  <Link
-                    href={`/professionals/${provider.slug}`}
-                    className="flex items-center gap-3 rounded-lg transition-colors hover:bg-muted/60"
-                  >
-                    <ProviderLogo provider={provider} size="md" />
-                    <span className="min-w-0">
-                      <span className="block font-semibold leading-snug">
-                        {provider.companyName}
-                      </span>
-                      {provider.tagline ? (
-                        <span className="mt-0.5 block line-clamp-2 text-sm text-muted-foreground">
-                          {provider.tagline}
-                        </span>
-                      ) : null}
-                    </span>
+                <Button variant="outline" asChild className="w-fit">
+                  <Link href={`/professionals/${provider.slug}`}>
+                    <ArrowLeft data-icon="inline-start" />
+                    Back to {provider.companyName}
                   </Link>
+                </Button>
+              </div>
 
-                  {hasFacts ? (
-                    <dl className="divide-y divide-black/10 rounded-xl border border-black/10 text-sm">
-                      {cost != null ? (
-                        <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                          <dt className="text-muted-foreground">Cost</dt>
-                          <dd className="font-medium tabular-nums">
-                            {formatMoney(cost)}
-                          </dd>
-                        </div>
-                      ) : null}
-                      {duration ? (
-                        <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                          <dt className="text-muted-foreground">Duration</dt>
-                          <dd className="text-right font-medium">{duration}</dd>
-                        </div>
-                      ) : null}
-                      {locationLabel ? (
-                        <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                          <dt className="text-muted-foreground">Location</dt>
-                          <dd className="max-w-[60%] text-right font-medium">
-                            {locationLabel}
-                          </dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                  ) : null}
+              <aside className="flex flex-col gap-3 lg:sticky lg:top-24 lg:self-start">
+                <Card className="border-black/15 shadow-none">
+                  <CardHeader className="border-b border-black/10 pb-4">
+                    <CardTitle className="text-base">Completed by</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4 pt-4">
+                    <Link
+                      href={`/professionals/${provider.slug}`}
+                      className="flex items-center gap-3 rounded-lg transition-colors hover:bg-muted/60"
+                    >
+                      <ProviderLogo provider={provider} size="md" />
+                      <span className="min-w-0">
+                        <span className="block font-semibold leading-snug">
+                          {provider.companyName}
+                        </span>
+                        {provider.tagline ? (
+                          <span className="mt-0.5 block line-clamp-2 text-sm text-muted-foreground">
+                            {provider.tagline}
+                          </span>
+                        ) : null}
+                      </span>
+                    </Link>
 
-                  <div className="flex flex-col gap-2">
-                    <Button size="xl" asChild className="w-full">
-                      <Link href={`/request-service?provider=${provider.slug}`}>
-                        Request this pro
-                        <ArrowRight data-icon="inline-end" />
-                      </Link>
-                    </Button>
-                    <Button variant="outline" size="xl" asChild className="w-full">
-                      <Link href={`/professionals/${provider.slug}`}>
-                        View full profile
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </aside>
-          </div>
+                    {hasFacts ? (
+                      <dl className="divide-y divide-black/10 rounded-xl border border-black/10 text-sm">
+                        {cost != null ? (
+                          <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                            <dt className="text-muted-foreground">Cost</dt>
+                            <dd className="font-medium tabular-nums">
+                              {formatMoney(cost)}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {duration ? (
+                          <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                            <dt className="text-muted-foreground">Duration</dt>
+                            <dd className="text-right font-medium">{duration}</dd>
+                          </div>
+                        ) : null}
+                        {locationLabel ? (
+                          <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                            <dt className="text-muted-foreground">Location</dt>
+                            <dd className="max-w-[60%] text-right font-medium">
+                              {locationLabel}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    ) : null}
+
+                    <div className="flex flex-col gap-2">
+                      <Button size="xl" asChild className="w-full">
+                        <Link href={`/request-service?provider=${provider.slug}`}>
+                          Request this pro
+                          <ArrowRight data-icon="inline-end" />
+                        </Link>
+                      </Button>
+                      <Button variant="outline" size="xl" asChild className="w-full">
+                        <Link href={`/professionals/${provider.slug}`}>
+                          View full profile
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </aside>
+            </div>
+          ) : (
+            <Button variant="outline" asChild className="w-fit">
+              <Link href={`/professionals/${provider.slug}`}>
+                <ArrowLeft data-icon="inline-start" />
+                Back to {provider.companyName}
+              </Link>
+            </Button>
+          )}
 
           {related.length ? (
             <section className="flex flex-col gap-4 border-t border-black/10 pt-8">
-              <div>
-                <p className="eyebrow text-muted-foreground">More from this pro</p>
-                <h2 className="mt-1 text-2xl font-semibold">Other projects</h2>
-              </div>
+              <h2 className="text-xl font-semibold">Other projects</h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {related.map((item) => (
                   <ProviderProjectCard

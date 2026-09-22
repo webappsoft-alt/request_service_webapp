@@ -64,7 +64,7 @@ export function preserveScheduledLeadState(
       scheduledDate: localItem.scheduledDate || apiItem.scheduledDate,
     };
   }
-  if (localScheduled && apiEarly && apiStatus !== "scheduled") {
+  if (localScheduled && apiEarly) {
     return {
       ...apiItem,
       status: "scheduled",

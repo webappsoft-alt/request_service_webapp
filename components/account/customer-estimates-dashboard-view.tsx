@@ -322,7 +322,7 @@ export function CustomerEstimatesDashboardView({
             },
             {
               id: "providers",
-              header: "Providers",
+              header: "Pros",
               sortValue: (row) => row.sentToCount,
               cell: (row) => (
                 <span className="text-xs text-muted-foreground">
@@ -466,7 +466,7 @@ export function CustomerEstimatesDashboardView({
                   href={customerPaths.messages}
                   className="font-medium text-primary hover:underline"
                 >
-                  {row.provider?.companyName || "Service Provider"}
+                  {row.provider?.companyName || "Pro"}
                 </Link>
               ),
             },

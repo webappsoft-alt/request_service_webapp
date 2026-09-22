@@ -209,6 +209,11 @@ export function notificationHref(
     return "/pro/dashboard";
   }
   if (type === "NEW_CHAT_MESSAGE") return "/account/dashboard/messages";
+  if (type === "SERVICE_SCHEDULED") {
+    const kind = String(item.data?.kind || "");
+    if (kind === "estimate") return "/account/dashboard/estimates";
+    return "/account/dashboard/requests";
+  }
   if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
     return "/account/dashboard/estimates";
   }

@@ -172,7 +172,9 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
               ? "Booking accepted"
               : type === "BOOKING_REJECTED"
                 ? "Booking declined"
-                : String(payload.title);
+                : type === "SERVICE_SCHEDULED"
+                  ? "Service scheduled"
+                  : String(payload.title);
         showNotificationToast(title, payload.message || undefined);
       }
     };
@@ -226,6 +228,23 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("ESTIMATE_SENT", (payload) => {
         broadcastRealtime({ type: "ESTIMATE_SENT", payload });
         broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+      }),
+      onSocketEvent("SERVICE_SCHEDULED", (payload) => {
+        broadcastRealtime({ type: "SERVICE_SCHEDULED", payload });
+        broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+        // Domain event always reaches guest + user rooms; toast here so customers
+        // still see it when NEW_NOTIFICATION is delayed or only guest-bound.
+        if (authRole === "customer") {
+          const title =
+            (typeof payload?.title === "string" && payload.title.trim()) ||
+            "Service scheduled";
+          const message =
+            (typeof payload?.message === "string" && payload.message.trim()) ||
+            (payload?.number
+              ? `${payload.number} was scheduled by your provider.`
+              : "Your service has been scheduled.");
+          showNotificationToast(title, message);
+        }
       }),
       onSocketEvent("INVOICE_SENT", (payload) => {
         broadcastRealtime({ type: "INVOICE_SENT", payload });

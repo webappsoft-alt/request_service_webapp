@@ -196,6 +196,10 @@ export function AssignEventDialog({
     event ??
     events.find((item) => `${item.kind}:${item.recordId}` === recordKey);
 
+  /** Leads & estimates use a single scheduled date (no start/end span). */
+  const useSingleScheduledDate =
+    selected?.kind === "request" || selected?.kind === "estimate";
+
   async function handleSave() {
     if (!selected || !date || !employeeId) return;
     setSaving(true);
@@ -212,7 +216,11 @@ export function AssignEventDialog({
         title: selected.title,
         status: selected.status,
         date,
-        endDate: endDate && endDate > date ? endDate : undefined,
+        endDate: useSingleScheduledDate
+          ? undefined
+          : endDate && endDate > date
+            ? endDate
+            : undefined,
         timeWindow,
         startMinutes: slot.startMinutes,
         endMinutes: slot.endMinutes,
@@ -273,26 +281,38 @@ export function AssignEventDialog({
               </span>
             </p>
           )}
-          <div className="grid gap-4 sm:grid-cols-2">
+          {useSingleScheduledDate ? (
             <Field>
-              <FieldLabel htmlFor="crew-date">Start</FieldLabel>
+              <FieldLabel htmlFor="crew-scheduled-date">Scheduled date</FieldLabel>
               <Input
-                id="crew-date"
+                id="crew-scheduled-date"
                 type="date"
                 value={date}
                 onChange={(change) => setDate(change.target.value)}
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="crew-end">End</FieldLabel>
-              <Input
-                id="crew-end"
-                type="date"
-                value={endDate}
-                onChange={(change) => setEndDate(change.target.value)}
-              />
-            </Field>
-          </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="crew-date">Start</FieldLabel>
+                <Input
+                  id="crew-date"
+                  type="date"
+                  value={date}
+                  onChange={(change) => setDate(change.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="crew-end">End</FieldLabel>
+                <Input
+                  id="crew-end"
+                  type="date"
+                  value={endDate}
+                  onChange={(change) => setEndDate(change.target.value)}
+                />
+              </Field>
+            </div>
+          )}
           <Field>
             <FieldLabel htmlFor="crew-window">Time interval</FieldLabel>
             <Select value={timeSlot} onValueChange={setTimeSlot}>

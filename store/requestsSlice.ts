@@ -45,6 +45,38 @@ export function leadTabCacheKey(requestId?: string, customerId?: string) {
   return `${requestId || "none"}_${customerId || "none"}`;
 }
 
+/** Keep a locally scheduled lead from being downgraded by a stale View/list payload. */
+export function preserveScheduledLeadState(
+  apiItem: PortalRequest,
+  localItem?: PortalRequest | null,
+): PortalRequest {
+  if (!localItem) return apiItem;
+  const apiStatus = apiItem.status;
+  const localStatus = localItem.status;
+  const localScheduled = Boolean(localItem.scheduledDate);
+  const apiEarly =
+    apiStatus === "new" || apiStatus === "viewed" || apiStatus === "contacted";
+
+  if (localStatus === "scheduled" && apiEarly) {
+    return {
+      ...apiItem,
+      status: "scheduled",
+      scheduledDate: localItem.scheduledDate || apiItem.scheduledDate,
+    };
+  }
+  if (localScheduled && apiEarly && apiStatus !== "scheduled") {
+    return {
+      ...apiItem,
+      status: "scheduled",
+      scheduledDate: localItem.scheduledDate || apiItem.scheduledDate,
+    };
+  }
+  if (localScheduled && !apiItem.scheduledDate) {
+    return { ...apiItem, scheduledDate: localItem.scheduledDate };
+  }
+  return apiItem;
+}
+
 export type RequestsState = {
   items: PortalRequest[];
   pagesCache: Record<string, PortalRequest[]>;
@@ -341,9 +373,13 @@ export const fetchLeadSchedule = createAsyncThunk<
   { key: string; events: PortalCalendarEvent[] },
   { requestId: string; customerId?: string },
   { state: { requests: RequestsState }; rejectValue: string }
->("requests/fetchSchedule", async ({ requestId, customerId }, { rejectWithValue }) => {
+>("requests/fetchSchedule", async ({ requestId, customerId }, { getState, rejectWithValue }) => {
   const key = leadTabCacheKey(requestId, customerId);
   try {
+    const existing = getState().requests.scheduleCache[key];
+    if (existing !== undefined) {
+      return { key, events: existing };
+    }
     const list = await querySchedule({
       kind: "request",
       customerId: customerId || undefined,
@@ -363,14 +399,27 @@ export const fetchLeadSchedule = createAsyncThunk<
 });
 
 export const bookLeadSchedule = createAsyncThunk<
-  { key: string; event: PortalCalendarEvent },
+  {
+    key: string;
+    event: PortalCalendarEvent;
+    requestId?: string;
+    scheduledDate?: string;
+  },
   { key: string; assignment: CrmScheduleAssignment },
   { state: { requests: RequestsState }; rejectValue: string }
 >("requests/bookSchedule", async ({ key, assignment }, { rejectWithValue }) => {
   try {
     const saved = await assignSchedule(assignment);
     if (!saved) return rejectWithValue("Failed to book schedule.");
-    return { key, event: saved };
+    const scheduledDate = assignment.date
+      ? `${assignment.date}T00:00:00.000Z`
+      : undefined;
+    return {
+      key,
+      event: saved,
+      requestId: assignment.recordId || undefined,
+      scheduledDate,
+    };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }
@@ -449,21 +498,30 @@ const requestsSlice = createSlice({
     },
     setRequestStatusLocal(
       state,
-      action: PayloadAction<{ id: string; status: PortalRequest["status"] }>,
+      action: PayloadAction<{
+        id: string;
+        status: PortalRequest["status"];
+        scheduledDate?: string;
+      }>,
     ) {
-      const { id, status } = action.payload;
+      const { id, status, scheduledDate } = action.payload;
+      const patch = (item: PortalRequest): PortalRequest => ({
+        ...item,
+        status,
+        ...(scheduledDate !== undefined ? { scheduledDate } : {}),
+      });
       // Update details cache
       if (state.detailsCache[id]) {
-        state.detailsCache[id] = { ...state.detailsCache[id], status };
+        state.detailsCache[id] = patch(state.detailsCache[id]);
       }
       // Update items list
       state.items = state.items.map((item) =>
-        item.id === id ? { ...item, status } : item,
+        item.id === id ? patch(item) : item,
       );
       // Update pagesCache
       for (const k of Object.keys(state.pagesCache)) {
         state.pagesCache[k] = state.pagesCache[k].map((item) =>
-          item.id === id ? { ...item, status } : item,
+          item.id === id ? patch(item) : item,
         );
       }
     },
@@ -651,19 +709,25 @@ const requestsSlice = createSlice({
       })
       .addCase(fetchRequests.fulfilled, (state, action) => {
         state.loading = false;
-        state.items = action.payload.items;
-        state.pagesCache[action.payload.cacheKey] = action.payload.items;
+        // Merge API rows with local cache so a successful schedule is not
+        // overwritten by a stale "viewed" list response.
+        const merged = action.payload.items.map((apiItem) => {
+          const local =
+            state.detailsCache[apiItem.id] ||
+            state.items.find((row) => row.id === apiItem.id);
+          return preserveScheduledLeadState(apiItem, local);
+        });
+        state.items = merged;
+        state.pagesCache[action.payload.cacheKey] = merged;
         state.page = action.payload.page;
         state.limit = REQUESTS_DEFAULT_LIMIT;
         state.total = action.payload.total;
         state.totalPages = Math.max(1, action.payload.totalPages);
         state.search = action.payload.search;
         state.status = action.payload.status;
-        // Warm up details cache with retrieved items
-        for (const item of action.payload.items) {
-          if (!state.detailsCache[item.id]) {
-            state.detailsCache[item.id] = item;
-          }
+        for (const item of merged) {
+          const prev = state.detailsCache[item.id];
+          state.detailsCache[item.id] = preserveScheduledLeadState(item, prev);
         }
       })
       .addCase(fetchRequests.rejected, (state, action) => {
@@ -681,12 +745,17 @@ const requestsSlice = createSlice({
       })
       .addCase(fetchRequestDetail.fulfilled, (state, action) => {
         state.detailLoading = false;
-        const item = action.payload;
+        const prev = state.detailsCache[action.payload.id];
+        const item = preserveScheduledLeadState(action.payload, prev);
         state.detailsCache[item.id] = item;
-        // Update in items list if present
         const idx = state.items.findIndex((x) => x.id === item.id);
         if (idx >= 0) {
-          state.items[idx] = item;
+          state.items[idx] = preserveScheduledLeadState(item, state.items[idx]);
+        }
+        for (const k of Object.keys(state.pagesCache)) {
+          state.pagesCache[k] = state.pagesCache[k].map((row) =>
+            row.id === item.id ? preserveScheduledLeadState(item, row) : row,
+          );
         }
       })
       .addCase(fetchRequestDetail.rejected, (state, action) => {
@@ -817,6 +886,28 @@ const requestsSlice = createSlice({
         }
         state.scheduleCache[action.payload.key] = [...list];
         state.tabsLoaded.schedule[action.payload.key] = true;
+
+        // Patch lead detail/list from schedule response — no View/Details reload.
+        const requestId = action.payload.requestId;
+        const scheduledDate = action.payload.scheduledDate;
+        if (requestId) {
+          const patch = (item: PortalRequest): PortalRequest => ({
+            ...item,
+            status: "scheduled",
+            ...(scheduledDate ? { scheduledDate } : {}),
+          });
+          if (state.detailsCache[requestId]) {
+            state.detailsCache[requestId] = patch(state.detailsCache[requestId]);
+          }
+          state.items = state.items.map((item) =>
+            item.id === requestId ? patch(item) : item,
+          );
+          for (const k of Object.keys(state.pagesCache)) {
+            state.pagesCache[k] = state.pagesCache[k].map((item) =>
+              item.id === requestId ? patch(item) : item,
+            );
+          }
+        }
       })
 
       // updateLeadSchedule
@@ -829,6 +920,26 @@ const requestsSlice = createSlice({
           list.push(action.payload.event);
         }
         state.scheduleCache[action.payload.key] = [...list];
+
+        const event = action.payload.event;
+        if (event?.kind === "request" && event.recordId && event.date) {
+          const scheduledDate = event.date.includes("T")
+            ? event.date
+            : `${event.date}T00:00:00.000Z`;
+          const patch = (item: PortalRequest): PortalRequest => ({
+            ...item,
+            status: "scheduled",
+            scheduledDate,
+          });
+          if (state.detailsCache[event.recordId]) {
+            state.detailsCache[event.recordId] = patch(
+              state.detailsCache[event.recordId],
+            );
+          }
+          state.items = state.items.map((item) =>
+            item.id === event.recordId ? patch(item) : item,
+          );
+        }
       })
 
       // deleteLeadSchedule

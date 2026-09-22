@@ -374,10 +374,11 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       if (
         type === "CUSTOMER_BADGE_INVALIDATE" ||
         type === "ESTIMATE_SENT" ||
-        type === "INVOICE_SENT"
+        type === "INVOICE_SENT" ||
+        type === "SERVICE_SCHEDULED"
       ) {
         void refreshNotifications();
-        if (type === "CUSTOMER_BADGE_INVALIDATE") {
+        if (type === "CUSTOMER_BADGE_INVALIDATE" || type === "SERVICE_SCHEDULED") {
           void refreshChatBadge();
         }
       }

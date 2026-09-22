@@ -201,6 +201,11 @@ export function EstimateStageBanner({
           title: "Office draft",
           body: "Write the quote here. Finalize when pricing is ready, then send it to the customer.",
         };
+      case "scheduled":
+        return {
+          title: "Visit scheduled",
+          body: "This estimate is on the calendar. Complete the site visit notes, then finalize and send.",
+        };
       case "finalized":
         return {
           title: "Ready to send",

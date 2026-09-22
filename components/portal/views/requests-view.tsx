@@ -105,6 +105,7 @@ const filters = [
   { value: "", label: "All" },
   { value: "new", label: "New" },
   { value: "contacted", label: "Active" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "closed", label: "History" },
 ];
 
@@ -238,23 +239,27 @@ export function RequestsView() {
       if (type === "LEAD_STATUS_UPDATED" || type === "REQUEST_STATUS_UPDATED") {
         const id = String(detail?.payload?.id || detail?.payload?.requestId || "").trim();
         const nextStatus = String(detail?.payload?.status || "").trim();
+        const scheduledDate = detail?.payload?.scheduledDate
+          ? String(detail.payload.scheduledDate)
+          : undefined;
         if (id && nextStatus) {
           dispatch(
             setRequestStatusLocal({
               id,
               status: nextStatus as PortalRequest["status"],
+              ...(scheduledDate ? { scheduledDate } : {}),
             }),
           );
         }
+        // Do not force a full list View refetch — local cache is the source of truth here.
         return;
       }
 
-      // Only refetch list on actual lead creation/mutation events, NOT on chat messages/typing/presence
+      // Only refetch list on actual lead creation/mutation events, NOT on chat/inbox badge noise
       if (
         type === "LEAD_CREATED" ||
         type === "ESTIMATE_ACCEPTED" ||
-        type === "ORDER_UPDATED" ||
-        type === "INBOX_SUMMARY_INVALIDATE"
+        type === "ORDER_UPDATED"
       ) {
         void refreshLeads(true);
       }
@@ -599,6 +604,7 @@ export function RequestsView() {
               break;
 
             case "contacted":
+            case "scheduled":
               if (hasEstimate) {
                 statusActions.push(
                   {

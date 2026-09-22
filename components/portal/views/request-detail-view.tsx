@@ -88,6 +88,7 @@ import {
   removeLeadReminder,
   setRequestStatusLocal,
   patchLeadStatus,
+  preserveScheduledLeadState,
 } from "@/store/requestsSlice";
 import { getCustomer, getRequest, queryEstimates, queryJobs, queryTasks, queryReminders } from "@/lib/api/crm-client";
 import { ensureProviderChatThread } from "@/lib/api/chat-client";
@@ -194,6 +195,7 @@ const LEAD_STATUSES: RequestStatus[] = [
   "new",
   "viewed",
   "contacted",
+  "scheduled",
   "estimate_sent",
   "accepted",
   "declined",
@@ -221,7 +223,7 @@ function leadFlowIndex(status: RequestStatus, hasEstimate: boolean, hasJob: bool
   if (hasJob || status === "converted_to_job") return 4;
   if (status === "accepted") return 3;
   if (status === "estimate_sent" || hasEstimate) return 2;
-  if (status === "contacted" || status === "viewed") return 1;
+  if (status === "contacted" || status === "viewed" || status === "scheduled") return 1;
   if (status === "declined" || status === "closed") return 0;
   return 0;
 }
@@ -238,21 +240,24 @@ function getAvailableLeadStatuses(
     return ["accepted", "converted_to_job", "declined", "closed"];
   }
   if (hasEstimate || status === "estimate_sent") {
-    return ["estimate_sent", "accepted", "converted_to_job", "declined"];
+    return ["estimate_sent", "scheduled", "accepted", "converted_to_job", "declined"];
+  }
+  if (status === "scheduled") {
+    return ["scheduled", "contacted", "estimate_sent", "declined", "closed"];
   }
   if (status === "contacted") {
-    return ["contacted", "estimate_sent", "declined"];
+    return ["contacted", "scheduled", "estimate_sent", "declined"];
   }
   if (status === "viewed") {
-    return ["viewed", "contacted", "estimate_sent", "declined"];
+    return ["viewed", "contacted", "scheduled", "estimate_sent", "declined"];
   }
   if (status === "declined") {
-    return ["declined", "contacted"];
+    return ["declined", "contacted", "scheduled"];
   }
   if (status === "closed") {
-    return ["closed", "contacted"];
+    return ["closed", "contacted", "scheduled"];
   }
-  return ["new", "viewed", "contacted", "estimate_sent", "declined"];
+  return ["new", "viewed", "contacted", "scheduled", "estimate_sent", "declined"];
 }
 
 function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: boolean) {
@@ -261,6 +266,7 @@ function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: bool
   if (status === "closed") return "Closed without a job.";
   if (status === "accepted") return "They accepted. Start the job from the signed estimate.";
   if (status === "estimate_sent" || hasEstimate) return "A quote is on this lead. Follow up if they have not signed.";
+  if (status === "scheduled") return "Visit is on the calendar. Confirm details, then write or send the estimate.";
   if (status === "contacted") return "You spoke with them. Qualify the work, then write the estimate.";
   if (status === "viewed") return "Seen in the inbox. Call or text so this does not go cold.";
   return "New inbound request. Review their answers, then send a written estimate if you can take it.";
@@ -361,18 +367,48 @@ export function RequestDetailView({ id }: { id: string }) {
   const hasRemindersCached = Boolean(cachedReminders);
   const hasScheduleCached = cachedSchedules !== undefined;
 
+  const detailFetchedForIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    if (!cachedLead) {
+
+    const cached = reduxRequests.detailsCache[id];
+    // Trust cache only for progressed statuses. For new/viewed/contacted always
+    // hit View once so the server can heal "has calendar visit → Scheduled" into MongoDB.
+    const trustCache =
+      cached &&
+      cached.status !== "new" &&
+      cached.status !== "viewed" &&
+      cached.status !== "contacted";
+
+    if (trustCache) {
+      setApiLead(cached);
+      setApiLoading(false);
+      detailFetchedForIdRef.current = id;
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (detailFetchedForIdRef.current === id && trustCache) {
+      setApiLead(cached);
+      setApiLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!cached) {
       setApiLoading(true);
     }
+    detailFetchedForIdRef.current = id;
+    const wasNew = !cached || cached.status === "new";
     void dispatch(fetchRequestDetail(id))
       .unwrap()
       .then((item) => {
         if (!cancelled && item) {
-          setApiLead(item);
-          // Backend GET auto-transitions status to "viewed", refresh badge counters
-          if (typeof window !== "undefined") {
+          setApiLead(preserveScheduledLeadState(item, cached || null));
+          if (wasNew && item.status !== "scheduled" && typeof window !== "undefined") {
             window.dispatchEvent(
               new CustomEvent("rs-realtime", {
                 detail: { type: "INBOX_SUMMARY_INVALIDATE" },
@@ -388,7 +424,8 @@ export function RequestDetailView({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [id, dispatch, Boolean(cachedLead)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cache-first detail load by id
+  }, [id, dispatch]);
 
   useEffect(() => {
     const handleLeadStatus = (event: Event) => {
@@ -657,27 +694,32 @@ export function RequestDetailView({ id }: { id: string }) {
         });
     }
 
-    // 6. Schedule: fetch on lead load or when tab is active
+    // 6. Schedule tab: cache-first like Customer — fetch only when Schedule is open and uncached.
     const scheduleFetchKey = `${id}_${request?.customerId || "none"}`;
-    if (id && loadedTabsRef.current.schedule !== scheduleFetchKey) {
-      loadedTabsRef.current.schedule = scheduleFetchKey;
-      if (!hasScheduleCached) setScheduleLoading(true);
-      void dispatch(
-        fetchLeadSchedule({
-          requestId: id,
-          customerId: request?.customerId || undefined,
-        }),
-      )
-        .unwrap()
-        .then((result) => {
-          if (!cancelled && result?.events) {
-            setApiSchedules(result.events);
-          }
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          if (!cancelled) setScheduleLoading(false);
-        });
+    if (tab === "schedule" && id) {
+      if (hasScheduleCached) {
+        loadedTabsRef.current.schedule = scheduleFetchKey;
+        if (cachedSchedules) setApiSchedules(cachedSchedules);
+      } else if (loadedTabsRef.current.schedule !== scheduleFetchKey) {
+        loadedTabsRef.current.schedule = scheduleFetchKey;
+        setScheduleLoading(true);
+        void dispatch(
+          fetchLeadSchedule({
+            requestId: id,
+            customerId: request?.customerId || undefined,
+          }),
+        )
+          .unwrap()
+          .then((result) => {
+            if (!cancelled && result?.events) {
+              setApiSchedules(result.events);
+            }
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            if (!cancelled) setScheduleLoading(false);
+          });
+      }
     }
 
     return () => {
@@ -830,6 +872,43 @@ export function RequestDetailView({ id }: { id: string }) {
       (item) => item.kind === "request" && (item.recordId === id || item.id === `cal_${id}`),
     );
   }, [cachedSchedules, apiSchedules, events, id]);
+
+  // Local-only heal: if a visit is on the calendar but badge still says Viewed, promote in Redux.
+  // Do NOT PATCH /status here — that re-fetches inbox noise and fails when API rejects "scheduled".
+  useEffect(() => {
+    if (!request?.id) return;
+    const stuck =
+      request.status === "new" ||
+      request.status === "viewed" ||
+      request.status === "contacted";
+    const visit = scheduledVisits.find((v) => Boolean(v.date));
+    if (!stuck || !visit?.date) return;
+    const scheduledIso = visit.date.includes("T")
+      ? visit.date
+      : `${visit.date}T00:00:00.000Z`;
+    dispatch(
+      setRequestStatusLocal({
+        id: request.id,
+        status: "scheduled",
+        scheduledDate: request.scheduledDate || scheduledIso,
+      }),
+    );
+    setApiLead((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: "scheduled",
+            scheduledDate: prev.scheduledDate || scheduledIso,
+          }
+        : prev,
+    );
+  }, [
+    dispatch,
+    request?.id,
+    request?.status,
+    request?.scheduledDate,
+    scheduledVisits,
+  ]);
 
   const handleDeleteSchedule = async (targetVisit: PortalCalendarEvent) => {
     if (!targetVisit?.id) return;
@@ -1388,6 +1467,13 @@ export function RequestDetailView({ id }: { id: string }) {
                           label="Window"
                           value={request.preferredTimeWindow ?? "Any time"}
                         />
+                        {request.scheduledDate ? (
+                          <InfoRow
+                            icon={CalendarDays}
+                            label="Scheduled date"
+                            value={formatDate(request.scheduledDate)}
+                          />
+                        ) : null}
                         <InfoRow
                           icon={CalendarDays}
                           label="Date created"
@@ -2444,9 +2530,26 @@ export function RequestDetailView({ id }: { id: string }) {
               else list.push(savedEvent);
               return list;
             });
-            assign(assignment);
-            if (request.status === "new" || request.status === "viewed") {
-              void records.setStatus("request", request.id, "contacted");
+            // Do not call assign() again — bookLeadSchedule/updateLeadSchedule
+            // already persisted the calendar row (avoids collision + status races).
+            const scheduledIso = assignment.date
+              ? `${assignment.date}T00:00:00.000Z`
+              : undefined;
+            if (scheduledIso) {
+              // Update Redux/detail from schedule response only — no View/Details reload,
+              // no status PATCH (assignSchedule already sets scheduled on the server).
+              dispatch(
+                setRequestStatusLocal({
+                  id: request.id,
+                  status: "scheduled",
+                  scheduledDate: scheduledIso,
+                }),
+              );
+              setApiLead((prev) =>
+                prev
+                  ? { ...prev, status: "scheduled", scheduledDate: scheduledIso }
+                  : prev,
+              );
             }
             toast.success(isEditing ? "Visit rescheduled." : "Visit scheduled on the calendar.");
             setSelectedScheduleForEdit(null);

@@ -38,6 +38,7 @@ import { getPortalServices, type PortalFixedService } from "@/lib/data/portal";
 import { getRelatedProviders } from "@/lib/data/providers";
 import { getServiceAreaNames } from "@/lib/data/service-areas";
 import { formatHoursValue, formatLocation, formatWorkingDay, getTodayWeekday } from "@/lib/format";
+import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider, ProviderProject, ServiceCategory } from "@/lib/types";
 
@@ -297,7 +298,7 @@ export function ProviderProfile({
                   above book as a job immediately.
                 </p>
                 <Button size="xl" asChild>
-                  <Link href={`/request-service?provider=${provider.slug}`}>Request a quote</Link>
+                  <Link href={servicesForProviderHref(provider)}>Request a quote</Link>
                 </Button>
                 <ProviderChat provider={provider} />
                 <BookServiceButton />

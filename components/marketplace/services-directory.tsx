@@ -30,7 +30,11 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
-import { ServiceJobCardSkeletonList } from "@/components/shared/loading-skeletons";
+import {
+  ProviderCardSkeleton,
+  ProviderListCardSkeleton,
+  ServiceJobCardSkeletonList,
+} from "@/components/shared/loading-skeletons";
 import { ProviderCard } from "@/components/shared/provider-card";
 import { writePendingQuote } from "@/lib/booking/format-quote-answers";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
@@ -78,13 +82,89 @@ import {
   type PublicFixedServiceSortBy,
   type PublicFixedServicesQuery,
 } from "@/store/publicFixedServicesSlice";
-import { fetchPublicProfessionals, publicProfessionalToProvider } from "@/store/publicProfessionalsSlice";
+import {
+  fetchPublicProfessionals,
+  fetchPublicProfessionalBySlug,
+  publicProfessionalToProvider,
+  type PublicProfessional,
+  type PublicProfessionalActiveService,
+} from "@/store/publicProfessionalsSlice";
 import type { ServiceJobListing } from "@/components/marketplace/service-job-card";
 
 type SortKey = "price-asc" | "price-desc" | "rating";
 type ViewKey = "grid" | "list";
 
 const PAGE_SIZE = 10;
+
+function fixedServiceFromActive(
+  service: PublicProfessionalActiveService,
+  professional: PublicProfessional,
+): PublicFixedService {
+  return {
+    id: service.id,
+    servicesName: service.servicesName,
+    slug: service.slug || service.id,
+    category: service.category
+      ? {
+          id: service.category.id,
+          name: service.category.name,
+          slug: service.category.slug,
+        }
+      : null,
+    subcategory: null,
+    price: service.price,
+    unit: service.unit,
+    images: service.images,
+    covered: service.commonServices,
+    commonServices: service.commonServices,
+    workingArea: service.workingArea,
+    availabilityType: "office",
+    provider: {
+      id: professional.id,
+      companyName: professional.companyName,
+      slug: professional.slug,
+      tagline: professional.tagline,
+      avatarUrl: professional.avatarUrl,
+      rating: {
+        average: professional.performanceMetrics.rating.average,
+        totalReviews: professional.performanceMetrics.rating.totalReviews,
+      },
+      location: {
+        city: professional.location.city,
+        state: professional.location.state,
+        country: professional.location.country,
+        zip: professional.location.zip,
+        address: professional.location.address,
+        coordinates: professional.location.coordinates,
+      },
+      profile: {
+        yearsInBusiness: professional.profile?.yearsInBusiness ?? 0,
+        licensed:
+          professional.profile?.licensed ??
+          professional.verificationBadge.licensed,
+        insured:
+          professional.profile?.insured ??
+          professional.verificationBadge.insured,
+      },
+    },
+    distanceMiles: professional.location.distanceMiles,
+  };
+}
+
+function serviceMatchesProvider(
+  service: PublicFixedService,
+  providerKey: string,
+  providerLabel = "",
+) {
+  const key = providerKey.trim().toLowerCase();
+  const label = providerLabel.trim().toLowerCase();
+  const provider = service.provider;
+  if (!provider) return false;
+  if (provider.id === providerKey.trim()) return true;
+  if (provider.slug?.toLowerCase() === key) return true;
+  if (label && provider.companyName?.toLowerCase() === label) return true;
+  return false;
+}
 
 function DirectoryPagination({
   page,
@@ -385,12 +465,16 @@ export function ServicesDirectory({
   initialJob = "",
   initialZip = "",
   initialLocation = "",
+  initialProviderId = "",
+  initialProviderName = "",
 }: {
   initialQuery?: string;
   initialCategory?: string;
   initialJob?: string;
   initialZip?: string;
   initialLocation?: string;
+  initialProviderId?: string;
+  initialProviderName?: string;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -420,9 +504,13 @@ export function ServicesDirectory({
     job: initialJob,
     zip: initialZip,
     location: initialLocation || initialZip,
+    providerId: initialProviderId,
+    providerName: initialProviderName,
   });
   const [query, setQuery] = useState(seed.query);
   const [categories, setCategories] = useState<string[]>(seed.service ? [seed.service] : []);
+  const [providerId, setProviderId] = useState(seed.providerId || "");
+  const [providerName, setProviderName] = useState(seed.providerName || "");
   const [minPrice, setMinPrice] = useState(priceBounds.min);
   const [maxPrice, setMaxPrice] = useState(priceBounds.max);
   const [minRating, setMinRating] = useState(0);
@@ -520,6 +608,69 @@ export function ServicesDirectory({
   const professionalsForAvatars = useAppSelector(
     (state) => state.publicProfessionals.items,
   );
+  const scopedProfessional = useAppSelector(
+    (state) => state.publicProfessionals.detail,
+  );
+  const scopedProfessionalLoading = useAppSelector(
+    (state) => state.publicProfessionals.detailLoading,
+  );
+
+  // When Request service deep-links with ?provider=, load that pro's catalog
+  // (works even if the remote fixed-services list API ignores providerId).
+  useEffect(() => {
+    const key = providerId.trim();
+    if (!key) return;
+    void dispatch(fetchPublicProfessionalBySlug(key));
+  }, [dispatch, providerId]);
+
+  const providerScopedServices = useMemo(() => {
+    const key = providerId.trim();
+    if (!key) return null;
+
+    const fromDetail =
+      scopedProfessional &&
+      (scopedProfessional.id === key ||
+        scopedProfessional.slug?.toLowerCase() === key.toLowerCase())
+        ? (scopedProfessional.activeServices ?? []).map((service) =>
+            fixedServiceFromActive(service, scopedProfessional),
+          )
+        : null;
+
+    if (fromDetail && fromDetail.length) return fromDetail;
+
+    const fromList = fixedServices.filter((service) =>
+      serviceMatchesProvider(service, key, providerName),
+    );
+    if (fromList.length) return fromList;
+
+    // Detail loaded with an empty catalog — show empty, not the unscoped list.
+    if (
+      scopedProfessional &&
+      (scopedProfessional.id === key ||
+        scopedProfessional.slug?.toLowerCase() === key.toLowerCase()) &&
+      !scopedProfessionalLoading
+    ) {
+      return [];
+    }
+
+    return null;
+  }, [
+    fixedServices,
+    providerId,
+    providerName,
+    scopedProfessional,
+    scopedProfessionalLoading,
+  ]);
+
+  const displayServices = providerId.trim()
+    ? providerScopedServices ?? []
+    : fixedServices;
+  const displayServicesTotal = providerId.trim()
+    ? displayServices.length
+    : fixedServicesTotal;
+  const displayServicesHasNextPage = providerId.trim()
+    ? false
+    : fixedServicesHasNextPage;
 
   const filterLabel = (filterId: string, value: string) => {
     const filter = dynamicServiceFilters.find((item) => item.id === filterId);
@@ -580,6 +731,7 @@ export function ServicesDirectory({
     if (minPrice > priceBounds.min) next.minPrice = minPrice;
     if (maxPrice < priceBounds.max) next.maxPrice = maxPrice;
     if (minRating) next.rating = minRating;
+    if (providerId.trim()) next.providerId = providerId.trim();
     next.radius = 50;
     return next;
   }, [
@@ -596,6 +748,7 @@ export function ServicesDirectory({
     minPrice,
     minRating,
     parentCategories,
+    providerId,
     query,
     selectedApiSub?.id,
     sort,
@@ -611,24 +764,41 @@ export function ServicesDirectory({
 
   const locationUsable = hasServiceGeoLocation(customerLocation);
   const awaitingGeo = customerLocation.detecting;
+  const awaitingProviderScope =
+    Boolean(providerId.trim()) &&
+    providerScopedServices === null &&
+    (scopedProfessionalLoading || !scopedProfessional);
   const showInitialServicesSpinner =
-    !fixedServices.length &&
-    (awaitingGeo ||
-      fixedServicesLoading ||
-      pendingRefresh ||
-      (!fixedServicesLoaded && !fixedServicesError));
+    awaitingProviderScope ||
+    (!displayServices.length &&
+      (awaitingGeo ||
+        fixedServicesLoading ||
+        pendingRefresh ||
+        (!fixedServicesLoaded && !fixedServicesError && !providerId.trim())));
   const showRefreshOverlay =
-    fixedServices.length > 0 &&
-    (fixedServicesLoading || pendingRefresh);
+    displayServices.length > 0 &&
+    (fixedServicesLoading || pendingRefresh) &&
+    !providerId.trim();
 
   const matchingProfessionals = useMemo(() => {
+    if (providerId.trim() && scopedProfessional) {
+      const key = providerId.trim();
+      if (
+        scopedProfessional.id === key ||
+        scopedProfessional.slug?.toLowerCase() === key.toLowerCase()
+      ) {
+        return [publicProfessionalToProvider(scopedProfessional)];
+      }
+    }
+
+    const source = displayServices;
     const ids = new Set(
-      fixedServices
+      source
         .map((service) => service.provider?.id)
         .filter((id): id is string => Boolean(id)),
     );
     const slugs = new Set(
-      fixedServices
+      source
         .map((service) => service.provider?.slug)
         .filter((slug): slug is string => Boolean(slug)),
     );
@@ -651,11 +821,16 @@ export function ServicesDirectory({
       if (pro.slug) avatarByKey.set(pro.slug, url);
     }
     return uniqueProviders(
-      fixedServices
+      source
         .map((service) => providerFromService(service, avatarByKey))
         .filter((item): item is Provider => Boolean(item)),
     );
-  }, [fixedServices, professionalsForAvatars]);
+  }, [
+    displayServices,
+    professionalsForAvatars,
+    providerId,
+    scopedProfessional,
+  ]);
 
   const pageCount = Math.max(1, Math.ceil(matchingProfessionals.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -666,6 +841,17 @@ export function ServicesDirectory({
   const selectedCategory =
     selectedParent ||
     serviceCategories.find((item) => item.slug === activeCategory);
+
+  // Fill chip label from loaded services when URL only had provider id.
+  useEffect(() => {
+    if (!providerId.trim() || providerName.trim()) return;
+    const name = fixedServices.find(
+      (service) =>
+        service.provider?.id === providerId ||
+        service.provider?.slug === providerId,
+    )?.provider?.companyName;
+    if (name?.trim()) setProviderName(name.trim());
+  }, [fixedServices, providerId, providerName]);
 
   // Auto-detect once on first visit when empty. Clearing location sets detectAttempted
   // so we do not re-detect — that path loads the full paginated catalog instead.
@@ -780,6 +966,8 @@ export function ServicesDirectory({
       job: initialJob,
       zip: initialZip,
       location: initialLocation || initialZip,
+      providerId: initialProviderId,
+      providerName: initialProviderName,
     });
     skipUrlRef.current = true;
     setQuery(next.query);
@@ -791,6 +979,8 @@ export function ServicesDirectory({
           ? [initialCategory.trim()]
           : [],
     );
+    setProviderId(next.providerId || initialProviderId.trim() || "");
+    setProviderName(next.providerName || initialProviderName.trim() || "");
     if (next.location || next.zip) {
       dispatch(
         hydrateLocationIfEmpty({
@@ -801,7 +991,16 @@ export function ServicesDirectory({
       );
     }
     setAnswers(answersFromIntent(next));
-  }, [dispatch, initialCategory, initialJob, initialLocation, initialQuery, initialZip]);
+  }, [
+    dispatch,
+    initialCategory,
+    initialJob,
+    initialLocation,
+    initialProviderId,
+    initialProviderName,
+    initialQuery,
+    initialZip,
+  ]);
 
   // Once API parents load, normalize the selected key to the checkbox slug/id.
   useEffect(() => {
@@ -836,7 +1035,7 @@ export function ServicesDirectory({
 
   useEffect(() => {
     setPage(1);
-  }, [answers, categories, location, minPrice, maxPrice, minRating, query, sort, zip]);
+  }, [answers, categories, location, minPrice, maxPrice, minRating, providerId, query, sort, zip]);
 
   useEffect(() => {
     if (skipUrlRef.current) {
@@ -851,11 +1050,23 @@ export function ServicesDirectory({
       job: subOption?.job ?? subOption?.value,
       zip: zip || extractZip(location),
       location,
+      providerId: providerId || undefined,
+      providerName: providerName || undefined,
     });
     if (`${window.location.pathname}${window.location.search}` !== href) {
       router.replace(href, { scroll: false });
     }
-  }, [activeCategory, featuredJob, location, query, router, subOption, zip]);
+  }, [
+    activeCategory,
+    featuredJob,
+    location,
+    providerId,
+    providerName,
+    query,
+    router,
+    subOption,
+    zip,
+  ]);
 
   function applyIntent(intent: SearchIntent) {
     setQuery(intent.query);
@@ -907,6 +1118,8 @@ export function ServicesDirectory({
   function resetFilters() {
     setQuery("");
     setCategories([]);
+    setProviderId("");
+    setProviderName("");
     setMinPrice(priceBounds.min);
     setMaxPrice(priceBounds.max);
     setMinRating(0);
@@ -914,7 +1127,41 @@ export function ServicesDirectory({
     setAnswers({});
   }
 
+  const selectedProviderLabel =
+    providerName.trim() ||
+    (scopedProfessional &&
+    (scopedProfessional.id === providerId.trim() ||
+      scopedProfessional.slug?.toLowerCase() === providerId.trim().toLowerCase())
+      ? scopedProfessional.companyName
+      : "") ||
+    displayServices.find((service) => service.provider?.id === providerId)
+      ?.provider?.companyName ||
+    "";
+
   const activeChips = [
+    ...(providerId.trim() && selectedProviderLabel
+      ? [
+          {
+            key: "provider",
+            label: selectedProviderLabel,
+            clear: () => {
+              setProviderId("");
+              setProviderName("");
+            },
+          },
+        ]
+      : providerId.trim()
+        ? [
+            {
+              key: "provider",
+              label: "Selected professional",
+              clear: () => {
+                setProviderId("");
+                setProviderName("");
+              },
+            },
+          ]
+        : []),
     ...categories.map((slug) => ({
       key: `cat-${slug}`,
       label:
@@ -1146,7 +1393,7 @@ export function ServicesDirectory({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {showInitialServicesSpinner
                     ? "\u00a0"
-                    : `${fixedServicesTotal} ${fixedServicesTotal === 1 ? "service" : "services"} · ${matchingProfessionals.length} ${matchingProfessionals.length === 1 ? "professional" : "professionals"}`}
+                    : `${displayServicesTotal} ${displayServicesTotal === 1 ? "service" : "services"} · ${matchingProfessionals.length} ${matchingProfessionals.length === 1 ? "professional" : "professionals"}`}
                 </p>
               </div>
 
@@ -1263,8 +1510,41 @@ export function ServicesDirectory({
             ) : null}
 
             {showInitialServicesSpinner ? (
-              <ServiceJobCardSkeletonList count={6} layout={view} />
-            ) : fixedServices.length || pageItems.length ? (
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {selectedCategory
+                      ? `${selectedCategory.name} services`
+                      : "Browse services"}
+                  </p>
+                  <ServiceJobCardSkeletonList count={4} layout={view} />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                    Matching professionals
+                  </h2>
+                  <ul
+                    className={cn(
+                      view === "grid"
+                        ? "grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+                        : "flex flex-col gap-5",
+                    )}
+                    aria-busy="true"
+                    aria-label="Loading professionals"
+                  >
+                    {Array.from({ length: 2 }, (_, i) => (
+                      <li key={`pro-sk-${i}`}>
+                        {view === "grid" ? (
+                          <ProviderCardSkeleton />
+                        ) : (
+                          <ProviderListCardSkeleton />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : displayServices.length || pageItems.length ? (
               <div className="relative">
                 {showRefreshOverlay ? (
                   <div
@@ -1281,12 +1561,14 @@ export function ServicesDirectory({
                     showRefreshOverlay && "pointer-events-none opacity-55",
                   )}
                 >
-                  {fixedServices.length ? (
+                  {displayServices.length ? (
                     <div className="flex flex-col gap-3">
                       <p className="text-sm font-medium text-muted-foreground">
                         {selectedCategory
                           ? `${selectedCategory.name} services`
-                          : "Browse services"}
+                          : providerId.trim() && selectedProviderLabel
+                            ? `${selectedProviderLabel} services`
+                            : "Browse services"}
                       </p>
                       <ul
                         className={cn(
@@ -1296,7 +1578,7 @@ export function ServicesDirectory({
                           !showRefreshOverlay && "reveal-list",
                         )}
                       >
-                        {fixedServices.map((service, index) => (
+                        {displayServices.map((service, index) => (
                           <li key={service.id}>
                             <ServiceJobCard
                               category={categoryStubFromService(service)}
@@ -1310,7 +1592,7 @@ export function ServicesDirectory({
                           </li>
                         ))}
                       </ul>
-                      {fixedServicesHasNextPage ? (
+                      {displayServicesHasNextPage ? (
                         <div className="flex justify-center pt-1">
                           <Button
                             type="button"
@@ -1333,9 +1615,9 @@ export function ServicesDirectory({
 
                   {pageItems.length ? (
                     <div className="flex flex-col gap-3" ref={professionalsRef}>
-                      <p className="text-sm font-medium text-muted-foreground">
+                      <h2 className="text-lg font-semibold tracking-tight text-foreground">
                         Matching professionals
-                      </p>
+                      </h2>
                       <ul
                         className={cn(
                           view === "grid"

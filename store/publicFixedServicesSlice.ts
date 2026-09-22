@@ -91,6 +91,8 @@ export type PublicFixedServicesQuery = {
   maxPrice?: number;
   rating?: number;
   availability?: string;
+  /** Professional ObjectId or slug — scopes results to that provider. */
+  providerId?: string;
   sortBy?: PublicFixedServiceSortBy;
   /**
    * Client-only token so location select/clear refetches even when zip is empty.
@@ -414,6 +416,9 @@ function toRequestParams(
     maxPrice: query.maxPrice,
     rating: query.rating,
     availability: query.availability?.trim() || undefined,
+    providerId: query.providerId?.trim() || undefined,
+    // Alias — some deployments accept `provider` for the same filter.
+    provider: query.providerId?.trim() || undefined,
     sortBy: query.sortBy || "recommended",
   };
 }

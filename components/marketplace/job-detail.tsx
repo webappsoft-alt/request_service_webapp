@@ -6,7 +6,7 @@ import {
   ServiceJobCard,
   type ServiceJobListing,
 } from "@/components/marketplace/service-job-card";
-import { ImageGallerySlider } from "@/components/shared/image-gallery-slider";
+import { PortfolioGallery } from "@/components/marketplace/portfolio-lightbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderCard } from "@/components/shared/provider-card";
@@ -68,6 +68,13 @@ export function JobDetail({
       : fallbackImage
         ? [fallbackImage]
         : [];
+  const galleryPhotos = galleryImages.map((src, index) => ({
+    src,
+    alt:
+      index === 0
+        ? `${job} gallery`
+        : `${job} photo ${index + 1}`,
+  }));
   const staticRelated =
     relatedListings || relatedLoading || content?.hideRelated
       ? []
@@ -78,7 +85,9 @@ export function JobDetail({
   const onRequestJob = content?.onRequestJob;
   const requestLabel = content?.requestLabel?.trim() || "Request this job";
   const requestHint = content?.requestHint?.trim() || "";
-  const compareHref = content?.compareHref ?? `/services/${category.slug}`;
+  const compareHref =
+    content?.compareHref ??
+    `/find-a-professional?service=${category.slug}`;
   const description =
     content?.description ??
     `${detail.description} This is typical ${category.name.toLowerCase()} work, not a company listing. The written estimate comes after a visit.`;
@@ -137,11 +146,9 @@ export function JobDetail({
 
           <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,22rem)] lg:gap-12">
             <div className="flex flex-col gap-6">
-              <ImageGallerySlider
-                images={galleryImages}
-                alt={job}
-                priority
-              />
+              {galleryPhotos.length ? (
+                <PortfolioGallery photos={galleryPhotos} companyName={job} />
+              ) : null}
 
               <div className="flex flex-col gap-3">
                 <p className="max-w-2xl text-base leading-7 text-muted-foreground">

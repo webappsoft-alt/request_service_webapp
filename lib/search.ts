@@ -143,6 +143,10 @@ export type SearchIntent = {
   job?: string;
   zip?: string;
   location?: string;
+  /** Professional ObjectId (preferred) or slug for scoped services directory. */
+  providerId?: string;
+  /** Display name for the selected-professional chip. */
+  providerName?: string;
 };
 
 export function resolveSearchIntent(input: {
@@ -152,10 +156,14 @@ export function resolveSearchIntent(input: {
   job?: string;
   zip?: string;
   location?: string;
+  providerId?: string;
+  providerName?: string;
 }): SearchIntent {
   const query = input.query?.trim() ?? input.picked?.label ?? "";
   const zip = input.zip || extractZip(input.location ?? "") || undefined;
   const location = input.location?.trim() || undefined;
+  const providerId = input.providerId?.trim() || undefined;
+  const providerName = input.providerName?.trim() || undefined;
 
   if (input.picked) {
     return {
@@ -165,6 +173,8 @@ export function resolveSearchIntent(input: {
       job: input.picked.job,
       zip,
       location,
+      providerId,
+      providerName,
     };
   }
 
@@ -172,7 +182,16 @@ export function resolveSearchIntent(input: {
     ? getServiceCategoryBySlug(input.service)?.slug ?? input.service.trim()
     : undefined;
   if (service && input.job) {
-    return { confidence: "exact-job", query, service, job: input.job, zip, location };
+    return {
+      confidence: "exact-job",
+      query,
+      service,
+      job: input.job,
+      zip,
+      location,
+      providerId,
+      providerName,
+    };
   }
 
   if (service) {
@@ -187,32 +206,86 @@ export function resolveSearchIntent(input: {
         job: option?.job ?? option?.value ?? input.job,
         zip,
         location,
+        providerId,
+        providerName,
       };
     }
-    return { confidence: "exact-category", query, service, zip, location };
+    return {
+      confidence: "exact-category",
+      query,
+      service,
+      zip,
+      location,
+      providerId,
+      providerName,
+    };
   }
 
   const match = query ? matchServiceQuery(query) : undefined;
-  if (!match) return { confidence: "related", query, zip, location };
+  if (!match) {
+    return { confidence: "related", query, zip, location, providerId, providerName };
+  }
 
   const exactLabel = serviceSuggestions.some((item) => normalize(item.label) === normalize(query));
   if (exactLabel && match.job) {
-    return { confidence: "exact-job", query: match.label, service: match.service, job: match.job, zip, location };
+    return {
+      confidence: "exact-job",
+      query: match.label,
+      service: match.service,
+      job: match.job,
+      zip,
+      location,
+      providerId,
+      providerName,
+    };
   }
   if (exactLabel && match.service) {
-    return { confidence: "exact-category", query: match.label, service: match.service, zip, location };
+    return {
+      confidence: "exact-category",
+      query: match.label,
+      service: match.service,
+      zip,
+      location,
+      providerId,
+      providerName,
+    };
   }
 
   const hits = suggestServices(query, 8);
   const sameService = hits.length > 0 && hits.every((hit) => hit.service === hits[0]?.service);
   if (sameService && match.job) {
-    return { confidence: "exact-job", query, service: match.service, job: match.job, zip, location };
+    return {
+      confidence: "exact-job",
+      query,
+      service: match.service,
+      job: match.job,
+      zip,
+      location,
+      providerId,
+      providerName,
+    };
   }
   if (sameService && match.service) {
-    return { confidence: "exact-category", query, service: match.service, zip, location };
+    return {
+      confidence: "exact-category",
+      query,
+      service: match.service,
+      zip,
+      location,
+      providerId,
+      providerName,
+    };
   }
 
-  return { confidence: "related", query, service: match.service, zip, location };
+  return {
+    confidence: "related",
+    query,
+    service: match.service,
+    zip,
+    location,
+    providerId,
+    providerName,
+  };
 }
 
 export function servicesHref(intent: SearchIntent) {
@@ -222,8 +295,30 @@ export function servicesHref(intent: SearchIntent) {
   if (intent.job) params.set("job", intent.job);
   if (intent.zip) params.set("zip", intent.zip);
   if (intent.location && intent.location !== intent.zip) params.set("loc", intent.location);
+  if (intent.providerId) params.set("provider", intent.providerId);
+  if (intent.providerName) params.set("providerName", intent.providerName);
   const query = params.toString();
   return query ? `/services?${query}` : "/services";
+}
+
+/** Services directory scoped to one professional (Request service from a provider card). */
+export function servicesForProviderHref(provider: {
+  id: string;
+  companyName: string;
+  slug?: string;
+}) {
+  const objectId = /^[0-9a-fA-F]{24}$/;
+  const id = provider.id?.trim() || "";
+  const slug = provider.slug?.trim() || "";
+  // Prefer Mongo ObjectId for the API; fall back to slug for demo/seeded records.
+  const providerKey = objectId.test(id) ? id : slug || id;
+  if (!providerKey) return "/services";
+  return servicesHref({
+    confidence: "related",
+    query: "",
+    providerId: providerKey,
+    providerName: provider.companyName?.trim() || undefined,
+  });
 }
 
 export function extractZip(value: string) {

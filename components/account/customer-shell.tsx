@@ -86,11 +86,11 @@ function RecordTab({
 }
 
 function getCurrentCustomerSection(pathname: string) {
+  if (pathname.startsWith(customerPaths.requests)) {
+    return { href: customerPaths.requests, label: "Quote Requests" };
+  }
   if (pathname.startsWith(customerPaths.orders)) {
     return { href: customerPaths.orders, label: "Orders" };
-  }
-  if (pathname.startsWith(customerPaths.requests)) {
-    return { href: customerPaths.requests, label: "Requests" };
   }
   if (pathname.startsWith(customerPaths.estimates)) {
     return { href: customerPaths.estimates, label: "Estimates" };

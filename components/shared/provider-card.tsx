@@ -17,6 +17,7 @@ import {
 import { getServiceCategoryById } from "@/lib/data/services";
 import type { ExplorePlace } from "@/lib/data/profile-explore";
 import { formatProviderCardLocation, formatStartingPrice } from "@/lib/format";
+import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
 
@@ -337,7 +338,7 @@ export function ProviderCard({
             className="h-8 w-full sm:min-w-0 sm:flex-1"
           >
             <Link
-              href={`/request-service?provider=${provider.slug}`}
+              href={servicesForProviderHref(provider)}
               onClick={(event) => event.stopPropagation()}
               className="justify-center whitespace-nowrap"
             >

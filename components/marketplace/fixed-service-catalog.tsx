@@ -1,33 +1,97 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Check } from "lucide-react";
 import { BookServiceButton } from "@/components/marketplace/book-service-panel";
+import { FixedServiceOrderDialog } from "@/components/marketplace/fixed-service-order-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { readPublicFixedServices } from "@/lib/booking/public-services";
 import { serviceUnitLabel, type PortalFixedService } from "@/lib/data/portal";
 import { formatStartingPrice } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
+import { useAppDispatch } from "@/store/hooks";
+import {
+  publicFixedServicePath,
+  setPublicFixedServiceDetail,
+  type PublicFixedService,
+} from "@/store/publicFixedServicesSlice";
 
-const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
+type LivePortalFixedService = PortalFixedService & {
+  liveCategorySlug?: string;
+  liveSlug?: string;
+};
 
-function liveServicePath(
+function toPublicFixedService(
   provider: Provider,
-  service: PortalFixedService,
-) {
-  const liveService = service as PortalFixedService & {
-    liveCategorySlug?: string;
-    liveSlug?: string;
+  service: LivePortalFixedService,
+): PublicFixedService {
+  const categorySlug = service.liveCategorySlug?.trim() || "";
+  const serviceSlug = service.liveSlug?.trim() || service.id;
+
+  return {
+    id: service.id,
+    servicesName: service.name,
+    slug: serviceSlug,
+    category: service.categoryId || service.categoryName
+      ? {
+          id: service.categoryId || service.categoryName,
+          name: service.categoryName || "Service",
+          slug: categorySlug,
+        }
+      : null,
+    subcategory: null,
+    price: service.price,
+    unit: service.unit,
+    images: service.images,
+    covered: service.coverage,
+    commonServices: service.coverage,
+    workingArea: service.areaZips,
+    availabilityType: service.availabilityMode || "office",
+    provider: {
+      id: provider.id,
+      companyName: provider.companyName,
+      slug: provider.slug,
+      tagline: provider.tagline,
+      avatarUrl: provider.logoUrl,
+      coverImage: provider.coverImage,
+      rating: {
+        average: provider.rating,
+        totalReviews: provider.reviewCount,
+      },
+      location: {
+        city: provider.city,
+        state: provider.state,
+        country: "",
+        zip: provider.zip,
+        address: provider.street,
+        coordinates: [provider.lng, provider.lat],
+      },
+      profile: {
+        yearsInBusiness: provider.yearsInBusiness,
+        licensed: provider.licensed,
+        insured: provider.insured,
+      },
+    },
+    distanceMiles: null,
   };
-  const categorySlug = liveService.liveCategorySlug?.trim();
-  const serviceSlug = liveService.liveSlug?.trim();
-  if (categorySlug && serviceSlug && OBJECT_ID_REGEX.test(service.id)) {
-    return `/services/${categorySlug}/${serviceSlug}?book=1`;
+}
+
+function liveServiceDetailHref(
+  provider: Provider,
+  service: LivePortalFixedService,
+) {
+  const categorySlug = service.liveCategorySlug?.trim();
+  const serviceSlug = service.liveSlug?.trim();
+  if (categorySlug && serviceSlug) {
+    return publicFixedServicePath(
+      toPublicFixedService(provider, service),
+    );
   }
-  return `/request-service?provider=${provider.slug}&intent=book&serviceId=${service.id}`;
+  return null;
 }
 
 export function FixedServiceCatalog({
@@ -38,8 +102,12 @@ export function FixedServiceCatalog({
   /** When provided (including `[]`), use live API data instead of portal/localStorage. */
   services?: PortalFixedService[];
 }) {
+  const dispatch = useAppDispatch();
   const [services, setServices] = useState<PortalFixedService[]>(() =>
     servicesProp ?? readPublicFixedServices(provider),
+  );
+  const [bookingService, setBookingService] = useState<PublicFixedService | null>(
+    null,
   );
 
   useEffect(() => {
@@ -68,13 +136,37 @@ export function FixedServiceCatalog({
       {services.length ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {services.map((service) => {
+            const liveService = service as LivePortalFixedService;
             const photo = service.images[0];
             const bullets = service.coverage;
+            const detailHref = isLive
+              ? liveServiceDetailHref(provider, liveService)
+              : null;
+            const publicService = isLive
+              ? toPublicFixedService(provider, liveService)
+              : null;
+
             return (
               <article
                 key={service.id}
-                className="flex flex-col overflow-hidden rounded-xl border border-black/10 bg-card"
+                className={cn(
+                  "relative flex flex-col overflow-hidden rounded-xl border border-black/10 bg-card",
+                  detailHref &&
+                    "transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/20 hover:elevate",
+                )}
               >
+                {detailHref ? (
+                  <Link
+                    href={detailHref}
+                    aria-label={`View ${service.name} details`}
+                    className="absolute inset-0 z-0"
+                    onClick={() => {
+                      if (publicService) {
+                        dispatch(setPublicFixedServiceDetail(publicService));
+                      }
+                    }}
+                  />
+                ) : null}
                 <div className="relative aspect-[2/1] bg-[#003F7D]">
                   {photo ? (
                     <Image
@@ -91,7 +183,7 @@ export function FixedServiceCatalog({
                     </Badge>
                   ) : null}
                 </div>
-                <div className="flex flex-1 flex-col gap-2 p-3">
+                <div className="relative z-10 flex flex-1 flex-col gap-2 p-3 pointer-events-none">
                   <div>
                     <h3 className="line-clamp-2 text-sm font-semibold tracking-tight">
                       {service.name}
@@ -117,16 +209,28 @@ export function FixedServiceCatalog({
                     </ul>
                   ) : null}
                   {isLive ? (
-                    <Button asChild variant="outline" size="sm" className="mt-auto w-full">
-                      <Link href={liveServicePath(provider, service)}>Book this service</Link>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="pointer-events-auto mt-auto w-full"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (publicService) setBookingService(publicService);
+                      }}
+                    >
+                      Book this service
                     </Button>
                   ) : (
-                    <BookServiceButton
-                      serviceId={service.id}
-                      label="Book this service"
-                      size="sm"
-                      className="mt-auto w-full"
-                    />
+                    <div className="pointer-events-auto mt-auto">
+                      <BookServiceButton
+                        serviceId={service.id}
+                        label="Book this service"
+                        size="sm"
+                        className="w-full"
+                      />
+                    </div>
                   )}
                 </div>
               </article>
@@ -138,6 +242,16 @@ export function FixedServiceCatalog({
           Fixed services will appear here when this company publishes priced jobs.
         </p>
       )}
+
+      {bookingService ? (
+        <FixedServiceOrderDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setBookingService(null);
+          }}
+          service={bookingService}
+        />
+      ) : null}
     </section>
   );
 }

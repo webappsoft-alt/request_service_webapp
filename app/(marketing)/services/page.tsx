@@ -77,6 +77,8 @@ export default async function ServicesPage({ searchParams }: PageParams) {
         initialJob={job}
         initialZip={zip}
         initialLocation={loc}
+        initialProviderId={firstSearchValue(params.provider)}
+        initialProviderName={firstSearchValue(params.providerName)}
       />
       <WhyHireSection
         ctaHref={directoryHref("/get-a-quote", {

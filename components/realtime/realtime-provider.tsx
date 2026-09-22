@@ -21,6 +21,7 @@ import {
   queryPresence,
   type RealtimeEvents,
 } from "@/components/socket";
+import { normalizeSocketNotification } from "@/lib/api/notifications-client";
 
 export type UserPresence = {
   isOnline: boolean;
@@ -56,6 +57,26 @@ const RealtimeContext = createContext<RealtimeContextValue>({
 
 const REALTIME_EVENT = "rs-realtime";
 
+/** Prevent stacked identical toasts (dual listeners / HMR orphans). */
+const recentToastKeys = new Map<string, number>();
+const TOAST_DEDUPE_MS = 4000;
+
+function showNotificationToast(title: string, message?: string) {
+  // Dedupe on content only — ignore notification id (two DB rows must not double-toast).
+  const key = `${title.trim()}::${String(message || "").trim()}`.toLowerCase();
+  const now = Date.now();
+  const last = recentToastKeys.get(key) || 0;
+  if (now - last < TOAST_DEDUPE_MS) return;
+  recentToastKeys.set(key, now);
+  for (const [k, at] of recentToastKeys) {
+    if (now - at > TOAST_DEDUPE_MS * 4) recentToastKeys.delete(k);
+  }
+  toast.message(title, {
+    id: `notif:${key}`,
+    description: message || undefined,
+  });
+}
+
 function broadcastRealtime(detail: Record<string, unknown>) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(REALTIME_EVENT, { detail }));
@@ -70,6 +91,9 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!socket) return;
+
+    // Clear orphaned NEW_NOTIFICATION handlers (HMR / failed prior cleanups).
+    socket.removeAllListeners("NEW_NOTIFICATION");
 
     const onConnect = () => {
       if (activeThreadIdRef.current) {
@@ -100,19 +124,38 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       broadcastRealtime({ type: "USER_PRESENCE", payload });
     };
 
+    const onNewNotification = (raw: unknown) => {
+      const normalized = normalizeSocketNotification(raw);
+      const payload = {
+        ...(typeof raw === "object" && raw ? (raw as Record<string, unknown>) : {}),
+        ...(normalized
+          ? {
+              id: normalized.id,
+              title: normalized.title,
+              message: normalized.message,
+              type: normalized.type,
+              data: normalized.data,
+            }
+          : {}),
+      } as RealtimeEvents["NEW_NOTIFICATION"];
+      setLastNotificationAt(Date.now());
+      broadcastRealtime({ type: "NEW_NOTIFICATION", payload });
+      broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+      if (payload.title) {
+        showNotificationToast(payload.title, payload.message || undefined);
+      }
+    };
+
+    socket.on("NEW_NOTIFICATION", onNewNotification);
+
     const unsubscribers = [
       onSocketEvent("CHAT_MESSAGE", (payload) => {
         setLastChatThreadId(payload.threadId);
-        // Only broadcast to the window event bus — do NOT dispatch rs-crm-api here.
-        // Dispatching rs-crm-api on every message would trigger a full fetchThreads()
-        // API call in every subscriber (provider, customer) on each incoming message.
-        // Each view handles CHAT_MESSAGE in-place via subscribeRealtime().
         broadcastRealtime({ type: "CHAT_MESSAGE", payload });
       }),
       onSocketEvent("CHAT_THREAD_UPDATED", (payload) => {
         const id = typeof payload.id === "string" ? payload.id : null;
         if (id) setLastChatThreadId(id);
-        // Broadcast inline update; views update thread metadata without a fetch.
         broadcastRealtime({ type: "CHAT_THREAD_UPDATED", payload });
       }),
       onSocketEvent("CHAT_TYPING", (payload) => {
@@ -120,7 +163,6 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       }),
       onSocketEvent("CHAT_READ_RECEIPT", (payload) => {
         broadcastRealtime({ type: "CHAT_READ_RECEIPT", payload });
-        // NOTE: Never dispatch rs-crm-api here to prevent infinite ping-pong refetch loops!
       }),
       onSocketEvent("USER_PRESENCE", handlePresence),
       onSocketEvent("chat:presence", handlePresence),
@@ -129,37 +171,40 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         window.dispatchEvent(
           new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
         );
-        toast.message("New quote request", {
-          description: payload.number
+        showNotificationToast(
+          "New quote request",
+          payload.number
             ? `${payload.number} just arrived in Leads.`
             : "A customer requested a quote.",
-        });
+        );
       }),
       onSocketEvent("ESTIMATE_ACCEPTED", (payload) => {
         broadcastRealtime({ type: "ESTIMATE_ACCEPTED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
+      }),
+      onSocketEvent("ESTIMATE_UPDATED", (payload) => {
+        broadcastRealtime({ type: "ESTIMATE_UPDATED", payload });
+        window.dispatchEvent(new Event("rs-crm-api"));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
+      }),
+      onSocketEvent("ESTIMATE_SENT", (payload) => {
+        broadcastRealtime({ type: "ESTIMATE_SENT", payload });
+        broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+      }),
+      onSocketEvent("INVOICE_SENT", (payload) => {
+        broadcastRealtime({ type: "INVOICE_SENT", payload });
+        broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+      }),
+      onSocketEvent("CUSTOMER_BADGE_INVALIDATE", (payload) => {
+        broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
       }),
       onSocketEvent("INBOX_SUMMARY_INVALIDATE", (payload) => {
-        // Only broadcast to the window bus. Do NOT dispatch rs-crm-api here —
-        // INBOX_SUMMARY_INVALIDATE fires after every chat message send, so
-        // dispatching rs-crm-api would trigger a full fetchThreads() on every send.
         broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload });
-      }),
-      onSocketEvent("NEW_NOTIFICATION", (payload: RealtimeEvents["NEW_NOTIFICATION"]) => {
-        setLastNotificationAt(Date.now());
-        broadcastRealtime({ type: "NEW_NOTIFICATION", payload });
-        if (payload.title) {
-          const toastId = [
-            "NEW_NOTIFICATION",
-            payload.title,
-            payload.message || "",
-            payload.type || "",
-          ].join("|");
-          toast.message(payload.title, {
-            id: toastId,
-            description: payload.message || undefined,
-          });
-        }
       }),
       onSocketEvent("ORDER_UPDATED", (payload) => {
         broadcastRealtime({ type: "ORDER_UPDATED", payload });
@@ -236,6 +281,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
     return () => {
       unsubscribers.forEach((off) => off());
       socket.off("connect", onConnect);
+      socket.off("NEW_NOTIFICATION", onNewNotification);
+      socket.removeAllListeners("NEW_NOTIFICATION");
     };
   }, [socket]);
 

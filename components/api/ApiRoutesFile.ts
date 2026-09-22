@@ -230,6 +230,13 @@ export const chatApi = {
   providerInboxSummary: providerCrmApi.inboxSummary,
 } as const;
 
+/** Authenticated in-app notifications (customer + provider). */
+export const notificationsApi = {
+  list: "notifications",
+  markRead: (id: string) => `notifications/${id}/read`,
+  markAllRead: "notifications/mark-all-read",
+} as const;
+
 export const uploadApi = {
   /** POST multipart field `image` → `{ image: url }` */
   image: "upload-image",

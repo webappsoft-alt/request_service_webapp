@@ -60,10 +60,19 @@ export type RealtimeEvents = {
     lastActiveAt?: string;
   };
   NEW_NOTIFICATION: {
+    id?: string;
     title?: string;
     message?: string;
     type?: string;
     data?: Record<string, unknown>;
+    notification?: Record<string, unknown>;
+  };
+  CUSTOMER_BADGE_INVALIDATE: {
+    reason?: string;
+    threadId?: string;
+    orderId?: string;
+    estimateId?: string;
+    invoiceId?: string;
   };
   LEAD_CREATED: {
     id: string;
@@ -79,6 +88,24 @@ export type RealtimeEvents = {
     number?: string;
     href?: string;
     customerName?: string;
+  };
+  ESTIMATE_SENT: {
+    estimateId?: string;
+    number?: string;
+    href?: string;
+    shareUrl?: string;
+  };
+  ESTIMATE_UPDATED: {
+    estimateId?: string;
+    number?: string;
+    status?: string;
+    href?: string;
+    providerId?: string;
+  };
+  INVOICE_SENT: {
+    invoiceId?: string;
+    number?: string;
+    href?: string;
   };
   ORDER_UPDATED: Record<string, unknown>;
   LEAD_STATUS_UPDATED: {
@@ -272,9 +299,13 @@ export function onSocketEvent<E extends keyof RealtimeEvents>(
     listenerRegistry.set(eventName, handlers);
   }
   handlers.add(listener);
-  if (sharedSocket) {
-    sharedSocket.off(eventName, listener);
-    sharedSocket.on(eventName, listener);
+
+  // Capture the socket we attach to — cleanup must off THIS instance even if
+  // bindSharedSocket(null) already ran (otherwise orphaned handlers stack toasts).
+  const attachedTo = sharedSocket;
+  if (attachedTo) {
+    attachedTo.off(eventName, listener);
+    attachedTo.on(eventName, listener);
   }
 
   return () => {
@@ -282,7 +313,10 @@ export function onSocketEvent<E extends keyof RealtimeEvents>(
     if (handlers && handlers.size === 0) {
       listenerRegistry.delete(eventName);
     }
-    sharedSocket?.off(eventName, listener);
+    attachedTo?.off(eventName, listener);
+    if (sharedSocket && sharedSocket !== attachedTo) {
+      sharedSocket.off(eventName, listener);
+    }
   };
 }
 

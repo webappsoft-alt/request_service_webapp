@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search, X } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
+import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,10 +37,17 @@ import {
   isCustomerOverviewPath,
 } from "@/lib/data/customer-nav";
 import { customerPaths } from "@/lib/customer-paths";
+import { listPublicChatThreads } from "@/lib/api/chat-client";
+import {
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  notificationHref,
+  type AppNotification,
+} from "@/lib/api/notifications-client";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser, type AuthUser } from "@/store/authSlice";
-import { listPublicChatThreads } from "@/lib/api/chat-client";
 
 function RecordTab({
   href,
@@ -111,15 +119,24 @@ function NavLinks({
   collapsed = false,
   closeOnNavigate = false,
   unreadMessages = 0,
+  unreadEstimates = 0,
+  unreadInvoices = 0,
+  unreadOrders = 0,
 }: {
   collapsed?: boolean;
   closeOnNavigate?: boolean;
   unreadMessages?: number;
+  unreadEstimates?: number;
+  unreadInvoices?: number;
+  unreadOrders?: number;
 }) {
   const pathname = usePathname();
 
   function badgeFor(href: string) {
     if (href === customerPaths.messages) return unreadMessages;
+    if (href === customerPaths.estimates) return unreadEstimates;
+    if (href === customerPaths.invoices) return unreadInvoices;
+    if (href === customerPaths.orders) return unreadOrders;
     return 0;
   }
 
@@ -216,6 +233,8 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const authUser = useAppSelector(selectAuthUser);
   const [collapsed, setCollapsed] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [headerSearch, setHeaderSearch] = useState("");
 
   const menuUser: AuthUser = authUser
@@ -224,28 +243,115 @@ export function CustomerShell({ children }: { children: ReactNode }) {
 
   const currentSection = getCurrentCustomerSection(pathname);
 
-  useEffect(() => {
+  const refreshChatBadge = useCallback(async () => {
     const email = String(authUser?.email || "").trim();
-    if (!email) return;
-    let cancelled = false;
-    void (async () => {
+    if (!email) {
+      setUnreadMessages(0);
+      return;
+    }
+    try {
+      const threads = await listPublicChatThreads(email, { silent: true });
+      setUnreadMessages(
+        threads.reduce((sum, thread) => sum + (thread.unreadForCustomer || 0), 0),
+      );
+    } catch {
+      setUnreadMessages(0);
+    }
+  }, [authUser?.email]);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!authUser?.id && !authUser?.email) {
+      setNotifications([]);
+      setUnreadNotifications(0);
+      return;
+    }
+    try {
+      const result = await fetchNotifications({
+        page: 1,
+        limit: 12,
+        status: "all",
+        silent: true,
+        force: true,
+      });
+      setNotifications(result.items);
+      setUnreadNotifications(result.unreadCount);
+    } catch {
+      // Keep last known counts if the feed fails.
+    }
+  }, [authUser?.email, authUser?.id]);
+
+  useEffect(() => {
+    void refreshChatBadge();
+    void refreshNotifications();
+  }, [pathname, refreshChatBadge, refreshNotifications]);
+
+  useEffect(() => {
+    return subscribeRealtime((detail) => {
+      const type = String(detail?.type || "");
+      if (
+        type === "CHAT_MESSAGE" ||
+        type === "CHAT_THREAD_UPDATED" ||
+        type === "CHAT_READ_RECEIPT"
+      ) {
+        void refreshChatBadge();
+      }
+      if (
+        type === "NEW_NOTIFICATION" ||
+        type === "CUSTOMER_BADGE_INVALIDATE" ||
+        type === "ESTIMATE_SENT" ||
+        type === "INVOICE_SENT" ||
+        type === "ORDER_UPDATED"
+      ) {
+        void refreshNotifications();
+        if (type === "NEW_NOTIFICATION" || type === "CUSTOMER_BADGE_INVALIDATE") {
+          void refreshChatBadge();
+        }
+      }
+    });
+  }, [refreshChatBadge, refreshNotifications]);
+
+  const unreadEstimates = notifications.filter(
+    (item) => !item.isRead && /ESTIMATE/i.test(item.type),
+  ).length;
+  const unreadInvoices = notifications.filter(
+    (item) => !item.isRead && /INVOICE/i.test(item.type),
+  ).length;
+  const unreadOrders = notifications.filter(
+    (item) =>
+      !item.isRead &&
+      (/ORDER/i.test(item.type) || /BOOKING/i.test(item.type) || /WORK_/i.test(item.type)),
+  ).length;
+  const bellCount = unreadNotifications + unreadMessages;
+
+  async function onOpenNotification(item: AppNotification) {
+    const href = notificationHref(item);
+    if (!item.isRead) {
       try {
-        const threads = await listPublicChatThreads(email, { silent: true });
-        if (cancelled) return;
-        setUnreadMessages(
-          threads.reduce(
-            (sum, thread) => sum + (thread.unreadForCustomer || 0),
-            0,
+        const result = await markNotificationRead(item.id);
+        setUnreadNotifications(result.unreadCount);
+        setNotifications((current) =>
+          current.map((row) =>
+            row.id === item.id ? { ...row, isRead: true, readAt: new Date().toISOString() } : row,
           ),
         );
       } catch {
-        if (!cancelled) setUnreadMessages(0);
+        // still navigate
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser?.email, pathname]);
+    }
+    router.push(href);
+  }
+
+  async function onMarkAllRead() {
+    try {
+      await markAllNotificationsRead();
+      setUnreadNotifications(0);
+      setNotifications((current) =>
+        current.map((row) => ({ ...row, isRead: true, readAt: new Date().toISOString() })),
+      );
+    } catch {
+      // ignore
+    }
+  }
 
   return (
     <div className="min-h-svh bg-[#eef1f5]">
@@ -275,7 +381,13 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             collapsed ? "px-2" : "px-2",
           )}
         >
-          <NavLinks collapsed={collapsed} unreadMessages={unreadMessages} />
+          <NavLinks
+            collapsed={collapsed}
+            unreadMessages={unreadMessages}
+            unreadEstimates={unreadEstimates}
+            unreadInvoices={unreadInvoices}
+            unreadOrders={unreadOrders}
+          />
         </div>
         <button
           type="button"
@@ -319,6 +431,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
                   <NavLinks
                     closeOnNavigate
                     unreadMessages={unreadMessages}
+                    unreadEstimates={unreadEstimates}
+                    unreadInvoices={unreadInvoices}
+                    unreadOrders={unreadOrders}
                   />
                 </div>
                 <button
@@ -377,15 +492,42 @@ export function CustomerShell({ children }: { children: ReactNode }) {
                     className="relative size-8"
                   >
                     <Bell className="size-4" />
-                    {unreadMessages > 0 ? (
+                    {bellCount > 0 ? (
                       <span className="absolute top-1 right-1 flex size-2 rounded-full bg-[#c2410c]" />
                     ) : null}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel className="text-xs">Notifications</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-80">
+                  <DropdownMenuLabel className="flex items-center justify-between text-xs">
+                    <span>Notifications</span>
+                    {unreadNotifications > 0 ? (
+                      <button
+                        type="button"
+                        className="text-[10px] font-medium text-primary hover:underline"
+                        onClick={() => void onMarkAllRead()}
+                      >
+                        Mark all read
+                      </button>
+                    ) : null}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {unreadMessages > 0 ? (
+                  {notifications.length > 0 ? (
+                    notifications.slice(0, 8).map((item) => (
+                      <DropdownMenuItem
+                        key={item.id}
+                        className="flex cursor-pointer flex-col items-start gap-0.5 py-2 text-xs"
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          void onOpenNotification(item);
+                        }}
+                      >
+                        <span className={cn("font-medium", !item.isRead && "text-foreground")}>
+                          {item.title}
+                        </span>
+                        <span className="line-clamp-2 text-muted-foreground">{item.message}</span>
+                      </DropdownMenuItem>
+                    ))
+                  ) : unreadMessages > 0 ? (
                     <DropdownMenuItem asChild>
                       <Link
                         href={customerPaths.messages}

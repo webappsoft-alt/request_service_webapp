@@ -159,6 +159,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       nextSocket.off("connect", onConnect);
       nextSocket.off("disconnect", onDisconnect);
       nextSocket.off("connect_error", onConnectError);
+      nextSocket.removeAllListeners("NEW_NOTIFICATION");
       nextSocket.disconnect();
       bindSharedSocket(null);
       setSocket(null);

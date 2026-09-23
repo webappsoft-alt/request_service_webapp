@@ -560,6 +560,15 @@ export function normalizePublicProfessional(
             : "",
       licensed: Boolean(profileRecord?.licensed),
       insured: Boolean(profileRecord?.insured),
+      language:
+        typeof profileRecord?.language === "string"
+          ? profileRecord.language.trim()
+          : "",
+      paymentMethods: Array.isArray(profileRecord?.paymentMethods)
+        ? profileRecord.paymentMethods
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [],
     };
   }
   if ("coverage" in record) {

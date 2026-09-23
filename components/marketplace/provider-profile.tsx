@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CalendarDays, CreditCard, Globe, Languages, Mail, MapPin, UserRound, Users, type LucideIcon } from "lucide-react";
+import { CalendarDays, CreditCard, Globe, Languages, Mail, MapPin, Phone, UserRound, Users, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,7 @@ import { getPortalServices, type PortalFixedService } from "@/lib/data/portal";
 import { getRelatedProviders } from "@/lib/data/providers";
 import { getServiceAreaNames } from "@/lib/data/service-areas";
 import { formatHoursValue, formatLocation, formatWorkingDay, getTodayWeekday } from "@/lib/format";
+import { formatPaymentMethodsLabel } from "@/lib/provider-preferences";
 import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider, ProviderProject, ServiceCategory } from "@/lib/types";
@@ -91,6 +92,10 @@ export function ProviderProfile({
       : provider.foundedYear > 0
         ? Math.max(0, new Date().getFullYear() - provider.foundedYear)
         : 0;
+  const paymentMethodsLabel = formatPaymentMethodsLabel(
+    provider.paymentMethods,
+  );
+  const languageLabel = provider.language?.trim() || "";
 
   return (
     <HomeMotion>
@@ -225,6 +230,16 @@ export function ProviderProfile({
                   <p>{contact.name}</p>
                   <p className="mt-0.5 font-normal text-muted-foreground">{contact.role}</p>
                 </BusinessInfoItem>
+                {provider.phone?.trim() ? (
+                  <BusinessInfoItem icon={Phone} label="Phone">
+                    <a
+                      href={`tel:${provider.phone.replace(/\s+/g, "")}`}
+                      className="block break-words hover:text-primary"
+                    >
+                      {provider.phone}
+                    </a>
+                  </BusinessInfoItem>
+                ) : null}
                 {provider.email?.trim() ? (
                   <BusinessInfoItem icon={Mail} label="Email">
                     <a
@@ -285,14 +300,14 @@ export function ProviderProfile({
                     </p>
                   </BusinessInfoItem>
                 ) : null}
-                {provider.paymentMethods && provider.paymentMethods.length > 0 ? (
+                {paymentMethodsLabel ? (
                   <BusinessInfoItem icon={CreditCard} label="Payment methods">
-                    <p>{provider.paymentMethods.join(" • ")}</p>
+                    <p>{paymentMethodsLabel}</p>
                   </BusinessInfoItem>
                 ) : null}
-                {provider.language?.trim() ? (
+                {languageLabel ? (
                   <BusinessInfoItem icon={Languages} label="Languages">
-                    <p>{provider.language.trim()}</p>
+                    <p>{languageLabel}</p>
                   </BusinessInfoItem>
                 ) : null}
               </CardContent>

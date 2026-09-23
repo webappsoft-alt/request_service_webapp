@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Image from "next/image";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Expand } from "lucide-react";
 import { PhotoLightbox } from "@/components/marketplace/portfolio-lightbox";
 import { cn } from "@/lib/utils";
@@ -29,16 +30,50 @@ function tileClass(count: number, index: number) {
     : "min-h-[11rem] sm:min-h-[13rem]";
 }
 
-export function ProjectPortfolioGallery({
+function parsePhotoIndex(raw: string | null, count: number) {
+  if (raw == null || !count) return null;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.min(parsed, count - 1);
+}
+
+function ProjectPortfolioGalleryInner({
   photos,
   title,
 }: {
   photos: ProjectGalleryPhoto[];
   title: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [index, setIndex] = useState(0);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const count = photos.length;
+  const queryPhoto = parsePhotoIndex(searchParams.get("photo"), count);
+
+  const [open, setOpen] = useState(queryPhoto != null);
+  const [index, setIndex] = useState(queryPhoto ?? 0);
+
+  useEffect(() => {
+    if (queryPhoto == null) return;
+    setIndex(queryPhoto);
+    setOpen(true);
+  }, [queryPhoto]);
+
+  const clearPhotoQuery = useCallback(() => {
+    if (!searchParams.has("photo")) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("photo");
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen);
+      if (!nextOpen) clearPhotoQuery();
+    },
+    [clearPhotoQuery],
+  );
 
   if (!count) return null;
 
@@ -80,6 +115,7 @@ export function ProjectPortfolioGallery({
               className="object-cover! transition-transform duration-500 ease-out group-hover:scale-[1.03]"
               style={{ objectFit: "cover" }}
               priority={photoIndex === 0}
+              unoptimized={photo.src.startsWith("http")}
             />
             {photo.label ? (
               <span className="absolute top-3 left-3 rounded-md bg-black/55 px-2 py-1 text-[11px] font-semibold tracking-wide text-white uppercase backdrop-blur-sm">
@@ -88,9 +124,6 @@ export function ProjectPortfolioGallery({
             ) : null}
             <span className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               <Expand className="size-3.5" />
-              <span className="text-[11px] font-medium tabular-nums">
-                {photoIndex + 1}/{count}
-              </span>
             </span>
           </button>
         ))}
@@ -100,10 +133,24 @@ export function ProjectPortfolioGallery({
         photos={photos}
         title={title}
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
         index={index}
         onIndexChange={setIndex}
       />
     </>
+  );
+}
+
+export function ProjectPortfolioGallery({
+  photos,
+  title,
+}: {
+  photos: ProjectGalleryPhoto[];
+  title: string;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <ProjectPortfolioGalleryInner photos={photos} title={title} />
+    </Suspense>
   );
 }

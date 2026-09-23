@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CalendarDays, Globe, Mail, MapPin, Phone, UserRound, Users, type LucideIcon } from "lucide-react";
+import { CalendarDays, Globe, Mail, MapPin, UserRound, Users, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,7 +141,7 @@ export function ProviderProfile({
                 </div>
               </div>
               {provider.description?.trim() ? (
-                <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
+                <p className="w-full text-sm leading-7 text-muted-foreground">
                   {provider.description}
                 </p>
               ) : null}
@@ -218,17 +218,6 @@ export function ProviderProfile({
                   <p>{contact.name}</p>
                   <p className="mt-0.5 font-normal text-muted-foreground">{contact.role}</p>
                 </BusinessInfoItem>
-                {provider.phone?.trim() ? (
-                  <BusinessInfoItem icon={Phone} label="Phone">
-                    <a href={`tel:${provider.phone}`} className="hover:text-primary">
-                      {provider.phone}
-                    </a>
-                  </BusinessInfoItem>
-                ) : isLive ? (
-                  <BusinessInfoItem icon={Phone} label="Phone">
-                    <p className="text-muted-foreground">Not listed</p>
-                  </BusinessInfoItem>
-                ) : null}
                 {provider.email?.trim() ? (
                   <BusinessInfoItem icon={Mail} label="Email">
                     <a

@@ -30,11 +30,14 @@ export interface GeoLocationPoint {
 }
 
 export interface OrderAddress {
+  address?: string;
   street: string;
   unit?: string;
   city: string;
   state: string;
   zip: string;
+  lat?: number | null;
+  lng?: number | null;
   location: GeoLocationPoint;
   notes?: string;
 }
@@ -77,12 +80,15 @@ export interface OrderCheckoutRequest {
   startTime: string;
   duration?: number;
   address: {
-    street: string;
+    address: string;
+    street?: string;
     unit?: string;
     city: string;
     state: string;
     zip: string;
-    location: {
+    lat: number;
+    lng: number;
+    location?: {
       type?: "Point";
       coordinates: [number, number];
     };

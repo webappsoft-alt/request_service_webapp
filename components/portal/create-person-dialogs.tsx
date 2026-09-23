@@ -113,6 +113,8 @@ export function CreateCustomerDialog({
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
   const [customerType, setCustomerType] = useState<CrmCustomerType>("residential");
   const [source, setSource] = useState<CrmPersonSource>("external");
   const [ein, setEin] = useState("");
@@ -130,6 +132,8 @@ export function CreateCustomerDialog({
     setCity("");
     setState("");
     setZip("");
+    setLat(null);
+    setLng(null);
     setCustomerType("residential");
     setSource("external");
     setEin("");
@@ -151,10 +155,12 @@ export function CreateCustomerDialog({
     setCompanyName(customer.companyName ?? "");
     setEmail(customer.email);
     setPhone(customer.phone ?? "");
-    setStreet(address?.street ?? "");
+    setStreet(address?.street ?? address?.address ?? "");
     setCity(address?.city ?? provider.city);
     setState(address?.state ?? provider.state);
     setZip(address?.zip ?? provider.serviceArea[0] ?? "");
+    setLat(address?.lat ?? address?.latitude ?? null);
+    setLng(address?.lng ?? address?.longitude ?? null);
     setCustomerType(customer.customerType);
     setSource(customer.source);
     setEin(customer.ein ?? "");
@@ -169,6 +175,16 @@ export function CreateCustomerDialog({
     setCity(address.city || "");
     setState(address.state || "");
     setZip(address.zipCode || "");
+    setLat(
+      typeof address.latitude === "number" && Number.isFinite(address.latitude)
+        ? address.latitude
+        : null,
+    );
+    setLng(
+      typeof address.longitude === "number" && Number.isFinite(address.longitude)
+        ? address.longitude
+        : null,
+    );
   }
 
   async function save() {
@@ -194,13 +210,18 @@ export function CreateCustomerDialog({
             addresses: [
               {
                 id: existingAddress?.id ?? `addr_${customer.id}`,
-                street: street.trim() || existingAddress?.street || "Address pending",
+                address: street.trim() || existingAddress?.address || existingAddress?.street || "Address pending",
+                street: street.trim() || existingAddress?.street || existingAddress?.address || "Address pending",
                 city: city.trim() || provider.city,
                 state: state.trim() || provider.state,
                 zip: zip.trim() || provider.serviceArea[0] || "00000",
                 country: existingAddress?.country ?? "US",
                 label: existingAddress?.label,
                 unit: existingAddress?.unit,
+                latitude: lat,
+                longitude: lng,
+                lat,
+                lng,
               },
             ],
           }),
@@ -233,11 +254,16 @@ export function CreateCustomerDialog({
           ? [
               {
                 id: `addr_${id}`,
+                address: street.trim(),
                 street: street.trim(),
                 city: city.trim(),
                 state: state.trim(),
                 zip: zip.trim(),
                 country: "US",
+                latitude: lat,
+                longitude: lng,
+                lat,
+                lng,
               },
             ]
           : [],
@@ -428,13 +454,13 @@ export function CreateCustomerDialog({
             </div>
           ) : null}
           <Field>
-            <FieldLabel htmlFor="cust-street">Street address</FieldLabel>
+            <FieldLabel htmlFor="cust-street">Address</FieldLabel>
             <AddressAutocomplete
               id="cust-street"
               value={street}
               onChange={setStreet}
               onSelect={applyAddress}
-              placeholder="Start typing a street address…"
+              placeholder="Start typing your address…"
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-3">

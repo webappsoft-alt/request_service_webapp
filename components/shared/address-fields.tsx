@@ -1,0 +1,137 @@
+"use client";
+
+import {
+  AddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/address-autocomplete";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+
+export type AddressFieldsValue = {
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  lat: number | null;
+  lng: number | null;
+  /** Optional display label for the autocomplete input (defaults to address). */
+  label?: string;
+};
+
+type AddressFieldsProps = {
+  idPrefix: string;
+  value: AddressFieldsValue;
+  onChange: (next: AddressFieldsValue) => void;
+  disabled?: boolean;
+  required?: boolean;
+  addressLabel?: string;
+  addressPlaceholder?: string;
+};
+
+/**
+ * Standard address block used across signup, booking, estimates, etc.
+ * Order: Address → City → State → ZIP. Lat/lng filled from Places selection.
+ */
+export function AddressFields({
+  idPrefix,
+  value,
+  onChange,
+  disabled = false,
+  required = false,
+  addressLabel = "Address",
+  addressPlaceholder = "Start typing your address",
+}: AddressFieldsProps) {
+  const autocompleteValue = value.label ?? value.address;
+
+  function applyPlace(place: PlaceAddress) {
+    onChange({
+      ...value,
+      label:
+        place.formattedAddress || place.streetAddress || value.label || "",
+      address: place.streetAddress || place.formattedAddress || "",
+      city: place.city || "",
+      state: place.state || "",
+      zip: place.zipCode || "",
+      lat:
+        typeof place.latitude === "number" && Number.isFinite(place.latitude)
+          ? place.latitude
+          : null,
+      lng:
+        typeof place.longitude === "number" && Number.isFinite(place.longitude)
+          ? place.longitude
+          : null,
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-address`}>{addressLabel}</FieldLabel>
+        <AddressAutocomplete
+          id={`${idPrefix}-address`}
+          value={autocompleteValue}
+          onChange={(next) =>
+            onChange({
+              ...value,
+              label: next,
+              address: "",
+              city: "",
+              state: "",
+              zip: "",
+              lat: null,
+              lng: null,
+            })
+          }
+          onSelect={applyPlace}
+          placeholder={addressPlaceholder}
+          required={required}
+          disabled={disabled}
+        />
+      </Field>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-city`}>City</FieldLabel>
+          <Input
+            id={`${idPrefix}-city`}
+            value={value.city}
+            onChange={(event) =>
+              onChange({ ...value, city: event.target.value })
+            }
+            placeholder="City"
+            required={required}
+            disabled={disabled}
+            autoComplete="address-level2"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-state`}>State</FieldLabel>
+          <Input
+            id={`${idPrefix}-state`}
+            value={value.state}
+            onChange={(event) =>
+              onChange({ ...value, state: event.target.value })
+            }
+            placeholder="State"
+            required={required}
+            disabled={disabled}
+            autoComplete="address-level1"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-zip`}>ZIP</FieldLabel>
+          <Input
+            id={`${idPrefix}-zip`}
+            value={value.zip}
+            onChange={(event) =>
+              onChange({ ...value, zip: event.target.value })
+            }
+            placeholder="ZIP"
+            disabled={disabled}
+            autoComplete="postal-code"
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}

@@ -185,16 +185,23 @@ function normalizeStatus<T extends string>(
 }
 
 function mapAddressForApi(address?: ServiceAddress | null) {
-  return address
-    ? {
-        label: address.label || "Primary",
-        street: address.street,
-        unit: address.unit || "",
-        city: address.city,
-        state: address.state,
-        zip: address.zip,
-      }
-    : undefined;
+  if (!address) return undefined;
+  const line = String(address.address || address.street || "").trim();
+  const lat = Number(address.lat ?? address.latitude);
+  const lng = Number(address.lng ?? address.longitude);
+  return {
+    label: address.label || "Primary",
+    address: line,
+    street: line,
+    unit: address.unit || "",
+    city: address.city,
+    state: address.state,
+    zip: address.zip,
+    lat: Number.isFinite(lat) ? lat : 0,
+    lng: Number.isFinite(lng) ? lng : 0,
+    latitude: Number.isFinite(lat) ? lat : 0,
+    longitude: Number.isFinite(lng) ? lng : 0,
+  };
 }
 
 /** Job API location object — GET/POST/PUT use this shape. */
@@ -222,7 +229,7 @@ function mapJobLocationForApi(address?: ServiceAddress | null) {
     state: address.state || "",
     country: address.country || "US",
     zip: address.zip || "",
-    address: address.street || "",
+    address: address.address || address.street || "",
   };
 }
 
@@ -1390,11 +1397,16 @@ export type EstimateSettingsPayload = {
   issuedAt?: string;
   expiresAt?: string | null;
   propertyAddress?: {
+    address?: string;
     street?: string;
     city?: string;
     state?: string;
     zip?: string;
     unit?: string;
+    lat?: number | null;
+    lng?: number | null;
+    latitude?: number | null;
+    longitude?: number | null;
   };
   notes?: string;
   terms?: string;
@@ -1408,12 +1420,28 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
   if (settings.issuedAt !== undefined) payload.issuedAt = settings.issuedAt;
   if (settings.expiresAt !== undefined) payload.expiresAt = settings.expiresAt || null;
   if (settings.propertyAddress !== undefined) {
+    const line = String(
+      settings.propertyAddress.address ||
+        settings.propertyAddress.street ||
+        "",
+    ).trim();
+    const lat = Number(
+      settings.propertyAddress.lat ?? settings.propertyAddress.latitude,
+    );
+    const lng = Number(
+      settings.propertyAddress.lng ?? settings.propertyAddress.longitude,
+    );
     payload.propertyAddress = {
-      street: settings.propertyAddress.street || "",
+      address: line,
+      street: line,
       city: settings.propertyAddress.city || "",
       state: settings.propertyAddress.state || "",
       zip: settings.propertyAddress.zip || "",
       unit: settings.propertyAddress.unit || "",
+      lat: Number.isFinite(lat) ? lat : 0,
+      lng: Number.isFinite(lng) ? lng : 0,
+      latitude: Number.isFinite(lat) ? lat : 0,
+      longitude: Number.isFinite(lng) ? lng : 0,
     };
   }
   if (settings.notes !== undefined) payload.notes = settings.notes;

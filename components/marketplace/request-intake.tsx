@@ -5,9 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { toast } from "sonner";
 import {
-  AddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+  AddressFields,
+  type AddressFieldsValue,
+} from "@/components/shared/address-fields";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { postData } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
@@ -31,8 +31,10 @@ function hasUsableAddress(answers: IntakeAnswers) {
   const lng = Number(answers.lng);
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
   const zipOk = isValidZip(String(answers.zip || ""));
-  const streetOk = Boolean(String(answers.street || "").trim());
-  return (hasCoords && streetOk) || (zipOk && streetOk);
+  const lineOk = Boolean(
+    String(answers.address || answers.street || "").trim(),
+  );
+  return (hasCoords && lineOk) || (zipOk && lineOk);
 }
 
 function composedName(answers: IntakeAnswers) {
@@ -70,7 +72,8 @@ export function RequestIntake({
       ...pending,
       service: startingService || pending?.service || "",
       zip: startingZip || (isValidZip(pendingZip) ? pendingZip : ""),
-      street: pending?.street || "",
+      address: pending?.address || pending?.street || "",
+      street: pending?.street || pending?.address || "",
       city: pending?.city || "",
       state: pending?.state || "",
       lat: pending?.lat || "",
@@ -83,9 +86,6 @@ export function RequestIntake({
       phone: pending?.phone || "",
     };
   });
-  const [addressInput, setAddressInput] = useState(
-    () => answers.addressLabel || answers.street || "",
-  );
   const [stepIndex, setStepIndex] = useState(() => {
     const initial = getIntakeSteps(startingService, startingZip || undefined);
     const index = initial.findIndex((item) => {
@@ -129,22 +129,20 @@ export function RequestIntake({
     });
   }
 
-  function applyPlace(place: PlaceAddress) {
+  function applyAddressFields(next: AddressFieldsValue) {
     const label =
-      place.formattedAddress ||
-      [place.streetAddress, place.city, place.state, place.zipCode]
-        .filter(Boolean)
-        .join(", ");
-    setAddressInput(label);
+      next.label ||
+      [next.address, next.city, next.state, next.zip].filter(Boolean).join(", ");
     setAnswers((current) => ({
       ...current,
       addressLabel: label,
-      street: place.streetAddress || place.formattedAddress || "",
-      city: place.city || "",
-      state: place.state || "",
-      zip: place.zipCode || current.zip || "",
-      lat: String(place.latitude ?? ""),
-      lng: String(place.longitude ?? ""),
+      address: next.address,
+      street: next.address,
+      city: next.city,
+      state: next.state,
+      zip: next.zip || current.zip || "",
+      lat: next.lat != null ? String(next.lat) : "",
+      lng: next.lng != null ? String(next.lng) : "",
     }));
   }
 
@@ -168,6 +166,7 @@ export function RequestIntake({
     setAnswers({
       service: "",
       zip: "",
+      address: "",
       street: "",
       city: "",
       state: "",
@@ -182,7 +181,6 @@ export function RequestIntake({
       phone: "",
       details: "",
     });
-    setAddressInput("");
     setStepIndex(0);
     setShowPhoneVerify(false);
   }
@@ -365,28 +363,21 @@ export function RequestIntake({
       ) : null}
 
       {step.type === "text" && step.id === "address" ? (
-        <Field>
-          <FieldLabel htmlFor="intake-address">Service address</FieldLabel>
-          <AddressAutocomplete
-            id="intake-address"
-            value={addressInput}
-            onChange={setAddressInput}
-            onSelect={applyPlace}
-            placeholder="Start typing street address…"
-          />
-          {answers.city || answers.zip ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {[answers.street, answers.city, answers.state, answers.zip]
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Pick an address from the suggestions so we can match nearby licensed
-              professionals.
-            </p>
-          )}
-        </Field>
+        <AddressFields
+          idPrefix="intake"
+          value={{
+            address: answers.address || answers.street || "",
+            city: answers.city || "",
+            state: answers.state || "",
+            zip: answers.zip || "",
+            lat: Number.isFinite(Number(answers.lat)) ? Number(answers.lat) : null,
+            lng: Number.isFinite(Number(answers.lng)) ? Number(answers.lng) : null,
+            label: answers.addressLabel || answers.address || answers.street || "",
+          }}
+          onChange={applyAddressFields}
+          required
+          addressPlaceholder="Start typing your address…"
+        />
       ) : null}
 
       {step.type === "contact" ? (

@@ -19,7 +19,11 @@ type PublicThreadInput = {
   zip?: string;
   city?: string;
   state?: string;
+  address?: string;
+  /** @deprecated Prefer `address`. */
   street?: string;
+  lat?: number;
+  lng?: number;
   requestId?: string | null;
   text?: string;
   attachments?: ChatAttachment[];
@@ -102,7 +106,10 @@ export async function openPublicChatThread(input: PublicThreadInput) {
       zip: input.zip || "",
       city: input.city || "",
       state: input.state || "",
-      street: input.street || "",
+      address: input.address || input.street || "",
+      street: input.address || input.street || "",
+      lat: input.lat,
+      lng: input.lng,
       requestId: input.requestId || null,
       text: input.text || "",
       attachments: input.attachments ?? [],

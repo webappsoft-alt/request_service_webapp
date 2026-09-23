@@ -14,10 +14,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  AddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+import { AddressFields } from "@/components/shared/address-fields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectIsAuthenticated } from "@/store/authSlice";
 import { invalidatePublicCatalog } from "@/components/realtime/public-data-sync";
@@ -105,6 +102,7 @@ function defaultTimezone() {
 
 const emptyAddress: PendingFixedOrderAddress = {
   label: "",
+  address: "",
   street: "",
   city: "",
   state: "",
@@ -211,19 +209,6 @@ export function FixedServiceOrderDialog({
     }
   }, [dispatch, open]);
 
-  function onSelectPlace(place: PlaceAddress) {
-    setAddress((current) => ({
-      ...current,
-      label: place.formattedAddress || place.streetAddress || current.label,
-      street: place.streetAddress || place.formattedAddress || "",
-      city: place.city || "",
-      state: place.state || "",
-      zip: place.zipCode || "",
-      lat: place.latitude,
-      lng: place.longitude,
-    }));
-  }
-
   function buildPendingDraft(): PendingFixedOrder {
     const returnPath = `${publicFixedServicePath(service)}?book=1`;
     return {
@@ -247,7 +232,7 @@ export function FixedServiceOrderDialog({
       return;
     }
     if (
-      !address.street.trim() ||
+      !String(address.address || address.street || "").trim() ||
       !address.city.trim() ||
       !address.state.trim() ||
       address.lat == null ||
@@ -258,8 +243,9 @@ export function FixedServiceOrderDialog({
       toast.error("Please select a complete service address from the suggestions.");
       return;
     }
-    // Many places (esp. non-US) omit postal codes — coords + street/city/state are enough.
+    // Many places (esp. non-US) omit postal codes — coords + address/city/state are enough.
     const zip = address.zip.trim() || "00000";
+    const addressLine = String(address.address || address.street || "").trim();
 
     // Auth gate happens at submit — preserve the full form first.
     if (!isAuthenticated) {
@@ -289,15 +275,14 @@ export function FixedServiceOrderDialog({
           startTime: selectedSlot.startTime,
           duration,
           address: {
-            street: address.street.trim(),
+            address: addressLine,
+            street: addressLine,
             unit: address.unit.trim() || undefined,
             city: address.city.trim(),
             state: address.state.trim(),
             zip,
-            location: {
-              type: "Point",
-              coordinates: [address.lng, address.lat],
-            },
+            lat: address.lat,
+            lng: address.lng,
             notes: address.notes.trim() || undefined,
           },
           customerNotes: customerNotes.trim() || undefined,
@@ -441,82 +426,35 @@ export function FixedServiceOrderDialog({
             ) : null}
           </div>
 
-          <Field>
-            <FieldLabel htmlFor="order-address">Service address</FieldLabel>
-            <AddressAutocomplete
-              id="order-address"
-              value={address.label}
-              onChange={(value) =>
-                setAddress((current) => ({
-                  ...current,
-                  label: value,
-                  street: "",
-                  city: "",
-                  state: "",
-                  zip: "",
-                  lat: null,
-                  lng: null,
-                }))
-              }
-              onSelect={onSelectPlace}
-              placeholder="Start typing your address"
-              required
-              disabled={checkoutLoading}
-            />
-          </Field>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field>
-              <FieldLabel htmlFor="order-city">City</FieldLabel>
-              <Input
-                id="order-city"
-                value={address.city}
-                onChange={(event) =>
-                  setAddress((current) => ({
-                    ...current,
-                    city: event.target.value,
-                  }))
-                }
-                placeholder="City"
-                required
-                disabled={checkoutLoading}
-                autoComplete="address-level2"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="order-zip">ZIP</FieldLabel>
-              <Input
-                id="order-zip"
-                value={address.zip}
-                onChange={(event) =>
-                  setAddress((current) => ({
-                    ...current,
-                    zip: event.target.value,
-                  }))
-                }
-                placeholder="ZIP"
-                disabled={checkoutLoading}
-                autoComplete="postal-code"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="order-state">State</FieldLabel>
-              <Input
-                id="order-state"
-                value={address.state}
-                onChange={(event) =>
-                  setAddress((current) => ({
-                    ...current,
-                    state: event.target.value,
-                  }))
-                }
-                placeholder="State"
-                required
-                disabled={checkoutLoading}
-                autoComplete="address-level1"
-              />
-            </Field>
-          </div>
+          <AddressFields
+            idPrefix="order"
+            value={{
+              label: address.label,
+              address: address.address || address.street || "",
+              city: address.city,
+              state: address.state,
+              zip: address.zip,
+              lat: address.lat,
+              lng: address.lng,
+            }}
+            onChange={(next) =>
+              setAddress((current) => ({
+                ...current,
+                label: next.label || next.address,
+                address: next.address,
+                street: next.address,
+                city: next.city,
+                state: next.state,
+                zip: next.zip,
+                lat: next.lat,
+                lng: next.lng,
+              }))
+            }
+            required
+            disabled={checkoutLoading}
+            addressLabel="Address"
+            addressPlaceholder="Start typing your address"
+          />
 
           <Field>
             <FieldLabel htmlFor="order-unit">Unit / apt (optional)</FieldLabel>

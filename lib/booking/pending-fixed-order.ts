@@ -3,8 +3,12 @@ import type { BookingSlot } from "@/lib/types/order-booking";
 const PENDING_FIXED_ORDER_KEY = "rs-pending-fixed-order";
 
 export type PendingFixedOrderAddress = {
+  /** Autocomplete display value */
   label: string;
-  street: string;
+  /** Street / line-1 (API key: address) */
+  address: string;
+  /** @deprecated Prefer `address` */
+  street?: string;
   city: string;
   state: string;
   zip: string;
@@ -34,6 +38,30 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
+function normalizeAddress(
+  raw: Partial<PendingFixedOrderAddress> | null | undefined,
+): PendingFixedOrderAddress {
+  const line = String(raw?.address || raw?.street || "").trim();
+  return {
+    label: String(raw?.label || line || ""),
+    address: line,
+    street: line,
+    city: String(raw?.city || ""),
+    state: String(raw?.state || ""),
+    zip: String(raw?.zip || ""),
+    unit: String(raw?.unit || ""),
+    notes: String(raw?.notes || ""),
+    lat:
+      raw?.lat != null && Number.isFinite(Number(raw.lat))
+        ? Number(raw.lat)
+        : null,
+    lng:
+      raw?.lng != null && Number.isFinite(Number(raw.lng))
+        ? Number(raw.lng)
+        : null,
+  };
+}
+
 export function readPendingFixedOrder(): PendingFixedOrder | null {
   if (!isBrowser()) return null;
   try {
@@ -43,7 +71,10 @@ export function readPendingFixedOrder(): PendingFixedOrder | null {
     if (!parsed?.serviceId || !parsed?.serviceSlug || !parsed?.returnPath) {
       return null;
     }
-    return parsed;
+    return {
+      ...parsed,
+      address: normalizeAddress(parsed.address),
+    };
   } catch {
     return null;
   }
@@ -53,7 +84,11 @@ export function writePendingFixedOrder(draft: PendingFixedOrder) {
   if (!isBrowser()) return;
   window.sessionStorage.setItem(
     PENDING_FIXED_ORDER_KEY,
-    JSON.stringify({ ...draft, savedAt: Date.now() }),
+    JSON.stringify({
+      ...draft,
+      address: normalizeAddress(draft.address),
+      savedAt: Date.now(),
+    }),
   );
 }
 

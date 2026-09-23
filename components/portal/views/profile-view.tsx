@@ -15,10 +15,7 @@ import {
   extractUploadedUrl,
   uploadFile,
 } from "@/components/api/uploadFile";
-import {
-  AddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+import { AddressFields } from "@/components/shared/address-fields";
 import { BusinessGalleryEditor } from "@/components/portal/business-gallery-editor";
 import { HoursEditor } from "@/components/portal/hours-editor";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -210,7 +207,6 @@ export function ProfileView() {
   const user = useAppSelector(selectAuthUser);
   const authProvider = useAppSelector(selectAuthProvider);
   const { officeHours, saveOfficeHours } = usePortalSettings();
-  const zipRef = useRef<HTMLInputElement>(null);
   const formReadyRef = useRef(false);
   const hoursSynced = useRef(false);
   const portfolioSubmitRef = useRef<(() => Promise<boolean>) | null>(null);
@@ -382,19 +378,6 @@ export function ProfileView() {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
-
-  function applyAddress(address: PlaceAddress) {
-    setStreetAddress(address.formattedAddress || address.streetAddress);
-    setCity(address.city);
-    setState(address.state);
-    setZip(address.zipCode);
-    setCountry(address.country || "");
-    setLatitude(address.latitude != null ? String(address.latitude) : "");
-    setLongitude(address.longitude != null ? String(address.longitude) : "");
-    if (!address.zipCode) {
-      window.setTimeout(() => zipRef.current?.focus(), 0);
-    }
-  }
 
   function buildLocation() {
     const lat = Number(latitude);
@@ -891,35 +874,32 @@ export function ProfileView() {
                     onChange={(event) => setTagline(event.target.value)}
                   />
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="street">Street address</FieldLabel>
-                  <AddressAutocomplete
-                    id="street"
-                    value={streetAddress}
-                    onChange={setStreetAddress}
-                    onSelect={applyAddress}
-                    placeholder="Start typing a street address…"
-                  />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="city">City</FieldLabel>
-                    <Input
-                      id="city"
-                      value={city}
-                      onChange={(event) => setCity(event.target.value)}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="zip">ZIP</FieldLabel>
-                    <Input
-                      ref={zipRef}
-                      id="zip"
-                      value={zip}
-                      onChange={(event) => setZip(event.target.value)}
-                    />
-                  </Field>
-                </div>
+                <AddressFields
+                  idPrefix="profile-business"
+                  value={{
+                    address: streetAddress,
+                    city,
+                    state,
+                    zip,
+                    lat: Number.isFinite(Number(latitude))
+                      ? Number(latitude)
+                      : null,
+                    lng: Number.isFinite(Number(longitude))
+                      ? Number(longitude)
+                      : null,
+                    label: streetAddress,
+                  }}
+                  onChange={(next) => {
+                    setStreetAddress(next.address);
+                    setCity(next.city);
+                    setState(next.state);
+                    setZip(next.zip);
+                    setLatitude(next.lat != null ? String(next.lat) : "");
+                    setLongitude(next.lng != null ? String(next.lng) : "");
+                    if (next.state && !country) setCountry("US");
+                  }}
+                  addressPlaceholder="Start typing your address…"
+                />
               </FieldGroup>
             </section>
 

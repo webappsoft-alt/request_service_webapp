@@ -159,7 +159,7 @@ export function EstimateSettingsTab({
   const fallback = useMemo<EstimateSettingsDraft>(() => ({
     name: service,
     customerId: estimate.customerId,
-    street: estimate.propertyAddress.street,
+    street: estimate.propertyAddress.address || estimate.propertyAddress.street,
     city: estimate.propertyAddress.city,
     state: estimate.propertyAddress.state,
     zip: estimate.propertyAddress.zip,
@@ -291,6 +291,7 @@ export function EstimateSettingsTab({
       customerName,
       propertyAddress: {
         ...estimate.propertyAddress,
+        address: settingsDraft.street,
         street: settingsDraft.street,
         city: settingsDraft.city,
         state: settingsDraft.state,
@@ -311,6 +312,7 @@ export function EstimateSettingsTab({
         title: settingsDraft.name.trim() || estimate.title,
         customerId: settingsDraft.customerId,
         propertyAddress: {
+          address: settingsDraft.street,
           street: settingsDraft.street,
           city: settingsDraft.city,
           state: settingsDraft.state,
@@ -431,7 +433,7 @@ export function EstimateSettingsTab({
             <Input disabled className="bg-muted/50 cursor-not-allowed" value={customerEmail} />
           </Field>
         ) : null}
-        <Field label="Job address">
+        <Field label="Address">
           <Input disabled={isLocked || saving} value={draft.street} onChange={(event) => patch({ street: event.target.value })} />
         </Field>
         <Field label="City">

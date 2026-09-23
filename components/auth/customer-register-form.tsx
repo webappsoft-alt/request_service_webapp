@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -11,15 +11,25 @@ import { PasswordInput } from "@/components/auth/password-input";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { Input } from "@/components/ui/input";
 import {
-  AddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+  AddressFields,
+  type AddressFieldsValue,
+} from "@/components/shared/address-fields";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import {
   savePendingRegistration,
   type PendingCustomerRegistration,
 } from "@/lib/auth/pending-registration";
+
+const emptyAddress: AddressFieldsValue = {
+  address: "",
+  city: "",
+  state: "",
+  zip: "",
+  lat: null,
+  lng: null,
+  label: "",
+};
 
 export function CustomerRegisterForm() {
   const router = useRouter();
@@ -30,20 +40,14 @@ export function CustomerRegisterForm() {
   const loginHref = safeNext
     ? `/login?next=${encodeURIComponent(safeNext)}`
     : "/login";
-  const zipRef = useRef<HTMLInputElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [streetAddress, setStreetAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zipCode, setZipCode] = useState("");
-  const [country, setCountry] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const [addressFields, setAddressFields] =
+    useState<AddressFieldsValue>(emptyAddress);
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit =
@@ -53,31 +57,26 @@ export function CustomerRegisterForm() {
     password.length > 0 &&
     confirmPassword.length > 0;
 
-  function applyAddress(address: PlaceAddress) {
-    setStreetAddress(address.formattedAddress || address.streetAddress);
-    setCity(address.city);
-    setState(address.state);
-    setZipCode(address.zipCode);
-    setCountry(address.country || "");
-    setLatitude(address.latitude != null ? String(address.latitude) : "");
-    setLongitude(address.longitude != null ? String(address.longitude) : "");
-    if (!address.zipCode) {
-      window.setTimeout(() => zipRef.current?.focus(), 0);
-    }
-  }
-
   function buildLocation() {
-    const lat = Number(latitude);
-    const lng = Number(longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+    const lat = addressFields.lat;
+    const lng = addressFields.lng;
+    const hasCoords =
+      lat != null &&
+      lng != null &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng);
+    const hasText =
+      addressFields.address.trim() ||
+      addressFields.city.trim() ||
+      addressFields.zip.trim();
+    if (!hasCoords && !hasText) return undefined;
     return {
       type: "Point" as const,
-      coordinates: [lng, lat] as [number, number],
-      city: city || undefined,
-      country: country || undefined,
-      address: streetAddress || undefined,
-      zip: zipCode || undefined,
-      state: state || undefined,
+      coordinates: (hasCoords ? [lng!, lat!] : [0, 0]) as [number, number],
+      city: addressFields.city || undefined,
+      address: addressFields.address || undefined,
+      zip: addressFields.zip || undefined,
+      state: addressFields.state || undefined,
     };
   }
 
@@ -100,7 +99,7 @@ export function CustomerRegisterForm() {
       lastName: lastName.trim(),
       password,
       phone: phone.trim() || undefined,
-      zip: zipCode.trim() || undefined,
+      zip: addressFields.zip.trim() || undefined,
       location: buildLocation(),
     };
 
@@ -177,7 +176,7 @@ export function CustomerRegisterForm() {
               name="email"
               type="email"
               autoComplete="email"
-              placeholder="you@email.com"
+              placeholder="you@example.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
@@ -189,38 +188,15 @@ export function CustomerRegisterForm() {
               id="phone"
               value={phone}
               onChange={setPhone}
-              placeholder="Optional phone number"
+              placeholder="Optional"
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="street-address">Home address</FieldLabel>
-            <AddressAutocomplete
-              id="street-address"
-              name="streetAddress"
-              value={streetAddress}
-              onChange={setStreetAddress}
-              onSelect={applyAddress}
-              placeholder="Start typing a street address (number + street)…"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="zip">ZIP</FieldLabel>
-            <Input
-              ref={zipRef}
-              id="zip"
-              name="zipCode"
-              autoComplete="postal-code"
-              inputMode="numeric"
-              placeholder="78701"
-              value={zipCode}
-              onChange={(event) => setZipCode(event.target.value)}
-            />
-          </Field>
-          <input type="hidden" name="city" value={city} />
-          <input type="hidden" name="state" value={state} />
-          <input type="hidden" name="country" value={country} />
-          <input type="hidden" name="latitude" value={latitude} />
-          <input type="hidden" name="longitude" value={longitude} />
+          <AddressFields
+            idPrefix="customer-register"
+            value={addressFields}
+            onChange={setAddressFields}
+            addressPlaceholder="Start typing your address…"
+          />
           <div className="grid gap-5 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="password">Password</FieldLabel>

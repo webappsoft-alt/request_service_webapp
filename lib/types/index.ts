@@ -32,6 +32,9 @@ export interface Customer {
 export interface ServiceAddress {
   id: string;
   label?: string;
+  /** Preferred street / line-1 key (API: `address`). */
+  address?: string;
+  /** @deprecated Prefer `address`. Kept for older UI/API shapes. */
   street: string;
   unit?: string;
   city: string;
@@ -41,6 +44,8 @@ export interface ServiceAddress {
   /** Optional geo from Places / job.location.coordinates [lng, lat]. */
   latitude?: number | null;
   longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export type ServiceCategorySlug =

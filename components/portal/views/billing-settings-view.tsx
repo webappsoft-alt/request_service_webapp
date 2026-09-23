@@ -506,13 +506,13 @@ export function SettingsView() {
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="settings-location">Location</FieldLabel>
+            <FieldLabel htmlFor="settings-location">Address</FieldLabel>
             <AddressAutocomplete
               id="settings-location"
               value={streetAddress}
               onChange={setStreetAddress}
               onSelect={applyAddress}
-              placeholder="Start typing a street address…"
+              placeholder="Start typing your address…"
             />
           </Field>
 

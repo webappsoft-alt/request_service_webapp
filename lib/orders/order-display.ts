@@ -68,6 +68,7 @@ export function formatOrderMoney(
 export function formatOrderAddressLine(
   address:
     | {
+        address?: string;
         street?: string;
         unit?: string;
         city?: string;
@@ -78,7 +79,7 @@ export function formatOrderAddressLine(
     | undefined,
 ): string {
   if (!address) return "";
-  const street = address.street?.trim() || "";
+  const street = (address.address || address.street)?.trim() || "";
   const unit = address.unit?.trim() || "";
   const city = address.city?.trim() || "";
   const state = address.state?.trim() || "";

@@ -7,9 +7,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import {
-  AddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+  AddressFields,
+  type AddressFieldsValue,
+} from "@/components/shared/address-fields";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { PhoneOtpVerificationPanel } from "@/components/marketplace/phone-otp-verification-panel";
 import { Button } from "@/components/ui/button";
@@ -542,28 +542,14 @@ export function RequestServiceForm({
     return "Submit a marketplace request";
   }, [fixedService, intent, isProviderBooking, jobRecord, provider]);
 
-  function applyPlace(address: PlaceAddress) {
-    setStreet(address.streetAddress || address.formattedAddress || "");
-    setCity(address.city || "");
-    setState(address.state || "");
-    setZip(address.zipCode || zip);
-    setLat(
-      typeof address.latitude === "number" && Number.isFinite(address.latitude)
-        ? address.latitude
-        : null,
-    );
-    setLng(
-      typeof address.longitude === "number" &&
-        Number.isFinite(address.longitude)
-        ? address.longitude
-        : null,
-    );
-    setAddressInput(
-      address.formattedAddress ||
-        [address.streetAddress, address.city, address.state, address.zipCode]
-          .filter(Boolean)
-          .join(", "),
-    );
+  function applyAddressFields(next: AddressFieldsValue) {
+    setStreet(next.address);
+    setCity(next.city);
+    setState(next.state);
+    setZip(next.zip || zip);
+    setLat(next.lat);
+    setLng(next.lng);
+    setAddressInput(next.label || next.address || "");
   }
 
   async function startPhoneVerification(
@@ -679,6 +665,7 @@ export function RequestServiceForm({
         email,
         phone,
         zip: zip.trim() || provider.zip || "",
+        address: street,
         street,
         city: city || provider.city,
         state: state || provider.state,
@@ -733,7 +720,10 @@ export function RequestServiceForm({
           zip: zip.trim(),
           city: city || provider.city,
           state: state || provider.state,
+          address: street.trim(),
           street: street.trim(),
+          lat: lat ?? undefined,
+          lng: lng ?? undefined,
           requestId: request.id,
           text: detailsText,
         });
@@ -798,6 +788,12 @@ export function RequestServiceForm({
         email,
         phone,
         zip,
+        address: street,
+        street,
+        city,
+        state,
+        lat: lat ?? undefined,
+        lng: lng ?? undefined,
         serviceSlug: service,
         serviceName,
         details: requestDetails,
@@ -1008,9 +1004,12 @@ export function RequestServiceForm({
         customerEmail: email.trim(),
         phone: phone.trim(),
         zip: zip.trim(),
-        city: provider.city,
-        state: provider.state,
+        city: city || provider.city,
+        state: state || provider.state,
+        address: street.trim(),
         street: street.trim(),
+        lat: lat ?? undefined,
+        lng: lng ?? undefined,
         requestId: request.id,
         text: details.trim() || `Requested ${request.serviceName}.`,
       });
@@ -1266,29 +1265,21 @@ export function RequestServiceForm({
                 </Field>
               </div>
 
-              <Field>
-                <FieldLabel htmlFor="booking-address">
-                  Location / address
-                </FieldLabel>
-                <AddressAutocomplete
-                  id="booking-address"
-                  value={addressInput}
-                  onChange={setAddressInput}
-                  onSelect={applyPlace}
-                  placeholder="Start typing street address…"
-                  required
-                />
-                {street || city || zip ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {[street, city, state, zip].filter(Boolean).join(", ")}
-                  </p>
-                ) : (
-                  <FieldDescription>
-                    Pick an address from the suggestions so location matching
-                    stays accurate.
-                  </FieldDescription>
-                )}
-              </Field>
+              <AddressFields
+                idPrefix="booking"
+                value={{
+                  address: street,
+                  city,
+                  state,
+                  zip,
+                  lat,
+                  lng,
+                  label: addressInput || street,
+                }}
+                onChange={applyAddressFields}
+                required
+                addressPlaceholder="Start typing your address…"
+              />
 
               <Field>
                 <FieldLabel htmlFor="booking-details">Details</FieldLabel>
@@ -1410,30 +1401,35 @@ export function RequestServiceForm({
           </Field>
         )}
         {isFixedBooking ? (
+          <AddressFields
+            idPrefix="request-fixed"
+            value={{
+              address: street,
+              city,
+              state,
+              zip,
+              lat,
+              lng,
+              label: addressInput || street,
+            }}
+            onChange={applyAddressFields}
+            required
+            addressPlaceholder="Start typing your address…"
+          />
+        ) : (
           <Field>
-            <FieldLabel htmlFor="request-street">Job address</FieldLabel>
+            <FieldLabel htmlFor="request-zip">ZIP</FieldLabel>
             <Input
-              id="request-street"
-              value={street}
-              onChange={(event) => setStreet(event.target.value)}
-              autoComplete="street-address"
-              placeholder="312 Congress Avenue"
+              id="request-zip"
+              value={zip}
+              onChange={(event) => setZip(event.target.value)}
+              inputMode="numeric"
+              autoComplete="postal-code"
+              placeholder="78701"
               required
             />
           </Field>
-        ) : null}
-        <Field>
-          <FieldLabel htmlFor="request-zip">ZIP code</FieldLabel>
-          <Input
-            id="request-zip"
-            value={zip}
-            onChange={(event) => setZip(event.target.value)}
-            inputMode="numeric"
-            autoComplete="postal-code"
-            placeholder="78701"
-            required
-          />
-        </Field>
+        )}
         <div className="grid gap-5 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="request-date">Preferred date</FieldLabel>

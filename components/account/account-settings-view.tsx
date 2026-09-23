@@ -17,10 +17,7 @@ import {
   extractUploadedUrl,
   uploadFile,
 } from "@/components/api/uploadFile";
-import {
-  AddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+import { AddressFields } from "@/components/shared/address-fields";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -112,7 +109,6 @@ export function AccountSettingsView({
   const dispatch = useAppDispatch();
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const zipRef = useRef<HTMLInputElement>(null);
 
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
@@ -189,19 +185,6 @@ export function AccountSettingsView({
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
-
-  function applyAddress(address: PlaceAddress) {
-    setStreetAddress(address.formattedAddress || address.streetAddress);
-    setCity(address.city);
-    setState(address.state);
-    setZip(address.zipCode);
-    setCountry(address.country || "");
-    setLatitude(address.latitude != null ? String(address.latitude) : "");
-    setLongitude(address.longitude != null ? String(address.longitude) : "");
-    if (!address.zipCode) {
-      window.setTimeout(() => zipRef.current?.focus(), 0);
-    }
-  }
 
   function buildLocation() {
     const lat = Number(latitude);
@@ -596,43 +579,32 @@ export function AccountSettingsView({
                       />
                     </Field>
 
-                    <Field>
-                      <FieldLabel htmlFor="settings-location">
-                        Location
-                      </FieldLabel>
-                      <AddressAutocomplete
-                        id="settings-location"
-                        name="streetAddress"
-                        value={streetAddress}
-                        onChange={setStreetAddress}
-                        onSelect={applyAddress}
-                        placeholder="Start typing a street address (number + street)…"
-                      />
-                    </Field>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor="settings-zip">ZIP code</FieldLabel>
-                        <Input
-                          ref={zipRef}
-                          id="settings-zip"
-                          autoComplete="postal-code"
-                          value={zip}
-                          onChange={(event) => setZip(event.target.value)}
-                          placeholder="78701"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="settings-city">City</FieldLabel>
-                        <Input
-                          id="settings-city"
-                          autoComplete="address-level2"
-                          value={city}
-                          onChange={(event) => setCity(event.target.value)}
-                          placeholder="Austin"
-                        />
-                      </Field>
-                    </div>
+                    <AddressFields
+                      idPrefix="settings"
+                      value={{
+                        address: streetAddress,
+                        city,
+                        state,
+                        zip,
+                        lat: Number.isFinite(Number(latitude))
+                          ? Number(latitude)
+                          : null,
+                        lng: Number.isFinite(Number(longitude))
+                          ? Number(longitude)
+                          : null,
+                        label: streetAddress,
+                      }}
+                      onChange={(next) => {
+                        setStreetAddress(next.address);
+                        setCity(next.city);
+                        setState(next.state);
+                        setZip(next.zip);
+                        setLatitude(next.lat != null ? String(next.lat) : "");
+                        setLongitude(next.lng != null ? String(next.lng) : "");
+                        if (next.state && !country) setCountry("US");
+                      }}
+                      addressPlaceholder="Start typing your address…"
+                    />
                   </FieldGroup>
 
                   <div className="flex flex-wrap items-center gap-3 border-t border-border/70 pt-5">

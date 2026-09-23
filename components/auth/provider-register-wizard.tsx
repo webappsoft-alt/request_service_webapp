@@ -26,9 +26,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  AddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+  AddressFields,
+  type AddressFieldsValue,
+} from "@/components/shared/address-fields";
 import {
   extractErrorMessage,
   postData,
@@ -72,7 +72,7 @@ type Draft = {
   confirmPassword: string;
   companyName: string;
   tagline: string;
-  street: string;
+  address: string;
   city: string;
   state: string;
   zip: string;
@@ -101,7 +101,7 @@ const emptyDraft: Draft = {
   confirmPassword: "",
   companyName: "",
   tagline: "",
-  street: "",
+  address: "",
   city: "",
   state: "TX",
   zip: "",
@@ -161,7 +161,6 @@ function toggleValue(list: string[], value: string) {
 
 export function ProviderRegisterWizard() {
   const router = useRouter();
-  const zipRef = useRef<HTMLInputElement>(null);
   const emailCheckRequestId = useRef(0);
   const [step, setStep] = useState<Step>("account");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -218,19 +217,16 @@ export function ProviderRegisterWizard() {
     }
   }
 
-  function applyAddress(address: PlaceAddress) {
+  function applyAddressFields(next: AddressFieldsValue) {
     patch({
-      street: address.formattedAddress || address.streetAddress,
-      city: address.city,
-      state: address.state,
-      zip: address.zipCode,
-      country: address.country || "",
-      latitude: address.latitude != null ? String(address.latitude) : "",
-      longitude: address.longitude != null ? String(address.longitude) : "",
+      address: next.address,
+      city: next.city,
+      state: next.state,
+      zip: next.zip,
+      latitude: next.lat != null ? String(next.lat) : "",
+      longitude: next.lng != null ? String(next.lng) : "",
+      country: draft.country || (next.state ? "US" : ""),
     });
-    if (!address.zipCode) {
-      window.setTimeout(() => zipRef.current?.focus(), 0);
-    }
   }
 
   function goTo(next: Step) {
@@ -248,7 +244,7 @@ export function ProviderRegisterWizard() {
       country:
         draft.country ||
         (draft.state ? "US" : undefined),
-      address: draft.street || undefined,
+      address: draft.address || undefined,
       zip: draft.zip || undefined,
       state: draft.state || undefined,
     };
@@ -289,10 +285,17 @@ export function ProviderRegisterWizard() {
       password: draft.password,
       companyName: draft.companyName.trim(),
       tagline: draft.tagline.trim() || undefined,
-      street: draft.street.trim() || undefined,
+      address: draft.address.trim() || undefined,
+      street: draft.address.trim() || undefined,
       city: draft.city.trim() || undefined,
       state: draft.state.trim() || undefined,
       zip: draft.zip.trim() || undefined,
+      lat: Number.isFinite(Number(draft.latitude))
+        ? Number(draft.latitude)
+        : undefined,
+      lng: Number.isFinite(Number(draft.longitude))
+        ? Number(draft.longitude)
+        : undefined,
       location: buildLocation(),
       categoryIds: draft.categoryIds.length ? draft.categoryIds : undefined,
       offeredJobs: draft.jobs.length ? draft.jobs : undefined,
@@ -575,33 +578,25 @@ export function ProviderRegisterWizard() {
                 placeholder="Optional — Plumbing and HVAC for Austin homes."
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="street">Street address</FieldLabel>
-              <AddressAutocomplete
-                id="street"
-                value={draft.street}
-                onChange={(street) => patch({ street })}
-                onSelect={applyAddress}
-                placeholder="Start typing a street address (number + street)…"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="zip">ZIP</FieldLabel>
-              <Input
-                ref={zipRef}
-                id="zip"
-                value={draft.zip}
-                onChange={(event) => patch({ zip: event.target.value })}
-                autoComplete="postal-code"
-                placeholder="Optional — 78701"
-              />
-            </Field>
-            {/* Kept in draft/payload only — auto-filled from Mapbox, not shown in UI */}
-            <input type="hidden" name="city" value={draft.city} readOnly />
-            <input type="hidden" name="state" value={draft.state} readOnly />
+            <AddressFields
+              idPrefix="provider-register"
+              value={{
+                address: draft.address,
+                city: draft.city,
+                state: draft.state,
+                zip: draft.zip,
+                lat: Number.isFinite(Number(draft.latitude))
+                  ? Number(draft.latitude)
+                  : null,
+                lng: Number.isFinite(Number(draft.longitude))
+                  ? Number(draft.longitude)
+                  : null,
+                label: draft.address,
+              }}
+              onChange={applyAddressFields}
+              addressPlaceholder="Start typing your address…"
+            />
             <input type="hidden" name="country" value={draft.country} readOnly />
-            <input type="hidden" name="latitude" value={draft.latitude} readOnly />
-            <input type="hidden" name="longitude" value={draft.longitude} readOnly />
           </FieldGroup>
         ) : null}
 

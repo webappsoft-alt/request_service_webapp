@@ -16,17 +16,28 @@ export function addressFrom(
   state: string,
   zip: string,
   id = `addr_${Date.now().toString(36)}`,
-  coords?: { latitude?: number | null; longitude?: number | null },
+  coords?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    lat?: number | null;
+    lng?: number | null;
+  },
 ): ServiceAddress {
+  const lat = coords?.lat ?? coords?.latitude ?? null;
+  const lng = coords?.lng ?? coords?.longitude ?? null;
+  const line = String(street || "").trim();
   return {
     id,
-    street,
+    address: line,
+    street: line,
     city,
     state,
     zip,
     country: "US",
-    latitude: coords?.latitude ?? null,
-    longitude: coords?.longitude ?? null,
+    latitude: lat,
+    longitude: lng,
+    lat,
+    lng,
   };
 }
 

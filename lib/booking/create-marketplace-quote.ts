@@ -49,6 +49,9 @@ export async function createMarketplaceQuote(input: {
   email: string;
   phone?: string;
   zip: string;
+  /** Preferred street line key */
+  address?: string;
+  /** @deprecated Prefer `address` */
   street?: string;
   city?: string;
   state?: string;
@@ -79,12 +82,14 @@ export async function createMarketplaceQuote(input: {
       ? matchQuoteProviders(category.id, input.zip)
       : [];
 
+  const addressLine = String(input.address || input.street || "").trim();
   const payload = {
     name: input.name.trim(),
     email: input.email.trim(),
     phone: input.phone?.trim() || "",
     zip: input.zip.trim(),
-    street: input.street?.trim() || "",
+    address: addressLine,
+    street: addressLine,
     city: input.city?.trim() || "",
     state: input.state?.trim() || "",
     lat:
@@ -189,7 +194,8 @@ export async function createQuoteFromIntake(answers: IntakeAnswers) {
       email: answers.email ?? "",
       phone: answers.phone,
       zip: zip || "00000",
-      street: answers.street || formatted.street,
+      address: answers.address || answers.street || formatted.street,
+      street: answers.street || answers.address || formatted.street,
       city: answers.city || formatted.city,
       state: answers.state || formatted.state,
       lat: hasCoords ? lat : undefined,

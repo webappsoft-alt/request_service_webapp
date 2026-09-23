@@ -189,10 +189,12 @@ function mapServiceAddress(value: unknown, fallbackId = ""): ServiceAddress {
   const coords = Array.isArray(record.coordinates) ? record.coordinates : null;
   const lng = numberValue(record.longitude ?? record.lng ?? coords?.[0], Number.NaN);
   const lat = numberValue(record.latitude ?? record.lat ?? coords?.[1], Number.NaN);
+  const line = trimmed(record.address) || trimmed(record.street);
   return {
     id: crmIdOf(record) || fallbackId || `addr_${Math.random().toString(36).slice(2, 10)}`,
     label: trimmed(record.label) || undefined,
-    street: trimmed(record.street) || trimmed(record.address),
+    address: line,
+    street: line,
     unit: trimmed(record.unit) || undefined,
     city: trimmed(record.city),
     state: trimmed(record.state),
@@ -200,6 +202,8 @@ function mapServiceAddress(value: unknown, fallbackId = ""): ServiceAddress {
     country: "US",
     latitude: Number.isFinite(lat) ? lat : null,
     longitude: Number.isFinite(lng) ? lng : null,
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
   };
 }
 

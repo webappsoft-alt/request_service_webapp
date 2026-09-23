@@ -152,6 +152,12 @@ export function CreateEstimateDialog({
     address?.state || customerLocation.state || "CO",
   );
   const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
+  const [latitude, setLatitude] = useState<number | null>(
+    address?.latitude ?? address?.lat ?? customerLocation.latitude ?? null,
+  );
+  const [longitude, setLongitude] = useState<number | null>(
+    address?.longitude ?? address?.lng ?? customerLocation.longitude ?? null,
+  );
   const [issuedAt, setIssuedAt] = useState(todayISO());
   const [expiresAt, setExpiresAt] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -414,26 +420,41 @@ export function CreateEstimateDialog({
     const nextAddress = next?.addresses[0];
     if (
       nextAddress &&
-      (nextAddress.street || nextAddress.city || nextAddress.zip)
+      (nextAddress.street || nextAddress.address || nextAddress.city || nextAddress.zip)
     ) {
-      setStreet(nextAddress.street || "");
+      setStreet(nextAddress.address || nextAddress.street || "");
       setCity(nextAddress.city || "");
       setState(nextAddress.state || "CO");
       setZip(nextAddress.zip || "");
+      setLatitude(nextAddress.latitude ?? nextAddress.lat ?? null);
+      setLongitude(nextAddress.longitude ?? nextAddress.lng ?? null);
     } else if (hasLocation(customerLocation)) {
       setStreet(customerLocation.address || "");
       setCity(customerLocation.city || "");
       setState(customerLocation.state || "CO");
       setZip(customerLocation.zip || "");
+      setLatitude(customerLocation.latitude ?? null);
+      setLongitude(customerLocation.longitude ?? null);
     }
   }
 
   function applyJobAddress(address: PlaceAddress) {
-    setStreet(address.formattedAddress || address.streetAddress);
+    setStreet(address.streetAddress || address.formattedAddress || "");
     setCity(address.city || "");
     setState(address.state || "");
     // Keep ZIP manually editable when Places has no postal code.
     if (address.zipCode) setZip(address.zipCode);
+    setLatitude(
+      typeof address.latitude === "number" && Number.isFinite(address.latitude)
+        ? address.latitude
+        : null,
+    );
+    setLongitude(
+      typeof address.longitude === "number" &&
+        Number.isFinite(address.longitude)
+        ? address.longitude
+        : null,
+    );
     dispatch(setLocationFromPlace(address));
   }
 
@@ -484,6 +505,7 @@ export function CreateEstimateDialog({
             state,
             zip,
             estimate.propertyAddress?.id,
+            { latitude, longitude, lat: latitude, lng: longitude },
           ),
           // Status has dedicated endpoints — keep existing on update.
           status: estimate.status,
@@ -542,7 +564,12 @@ export function CreateEstimateDialog({
         customerName:
           customerLabel || (customer ? crmCustomerName(customer) : undefined),
         requestId,
-        address: addressFrom(street, city, state, zip),
+        address: addressFrom(street, city, state, zip, undefined, {
+          latitude,
+          longitude,
+          lat: latitude,
+          lng: longitude,
+        }),
         status: path === "site_visit" ? "site_visit" : "draft",
         issuedAt,
         expiresAt: expiresAt || undefined,
@@ -721,13 +748,13 @@ export function CreateEstimateDialog({
                   onChange={(event) => setExpiresAt(event.target.value)}
                 />
               </Field>
-              <Field label="Job address" className="sm:col-span-2">
+              <Field label="Address" className="sm:col-span-2">
                 <AddressAutocomplete
                   id="estimate-job-address"
                   value={street}
                   onChange={setStreet}
                   onSelect={applyJobAddress}
-                  placeholder="Start typing a street address…"
+                  placeholder="Start typing your address…"
                 />
               </Field>
               <Field label="City">
@@ -1448,13 +1475,13 @@ export function CreateJobDialog({
                 onChange={(event) => setName(event.target.value)}
               />
             </Field>
-            <Field label="Job address" className="sm:col-span-2">
+            <Field label="Address" className="sm:col-span-2">
               <AddressAutocomplete
                 id="job-address-autocomplete"
                 value={street}
                 onChange={setStreet}
                 onSelect={applyJobAddress}
-                placeholder="Start typing a street address…"
+                placeholder="Start typing your address…"
               />
             </Field>
             <Field label="City">

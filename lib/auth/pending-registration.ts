@@ -32,11 +32,16 @@ export type PendingProviderRegistration = {
   phone?: string;
   companyName: string;
   tagline?: string;
+  /** Preferred street line (API key: address). */
+  address?: string;
+  /** @deprecated Prefer `address`. */
   street?: string;
   city?: string;
   state?: string;
   zip?: string;
   country?: string;
+  lat?: number;
+  lng?: number;
   location?: PendingCustomerRegistration["location"];
   categoryIds?: string[];
   offeredJobs?: string[];

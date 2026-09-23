@@ -514,10 +514,12 @@ export function JobSettingsTab({
     return {
       name: job.title || service || "",
       customerId: job.customerId || "",
-      street: job.address?.street || "",
+      street: job.address?.address || job.address?.street || "",
       city: job.address?.city || "",
       state: job.address?.state || "",
       zip: job.address?.zip || "",
+      latitude: job.address?.latitude ?? job.address?.lat ?? null,
+      longitude: job.address?.longitude ?? job.address?.lng ?? null,
       start: (start || job.scheduledAt || "").slice(0, 10),
       due: (due || job.dueAt || "").slice(0, 10),
       employeeId: resolvedId,
@@ -678,10 +680,27 @@ export function JobSettingsTab({
             assignedEmployeeId: next.employeeId || undefined,
             address: {
               ...job.address,
+              address: next.street || job.address.address || job.address.street,
               street: next.street || job.address.street,
               city: next.city || job.address.city,
               state: next.state || job.address.state,
               zip: next.zip || job.address.zip,
+              latitude:
+                next.latitude !== undefined
+                  ? next.latitude
+                  : job.address.latitude,
+              longitude:
+                next.longitude !== undefined
+                  ? next.longitude
+                  : job.address.longitude,
+              lat:
+                next.latitude !== undefined
+                  ? next.latitude
+                  : job.address.lat,
+              lng:
+                next.longitude !== undefined
+                  ? next.longitude
+                  : job.address.lng,
             },
           },
         }),
@@ -853,20 +872,22 @@ export function JobSettingsTab({
             </Field>
           ) : null}
           <div className="sm:col-span-2">
-            <Field label="Job address">
+            <Field label="Address">
               <AddressAutocomplete
                 id="job-settings-address"
                 value={draft.street}
                 onChange={(value) => patch({ street: value })}
                 onSelect={(address: PlaceAddress) =>
                   patch({
-                    street: address.formattedAddress || address.streetAddress,
+                    street: address.streetAddress || address.formattedAddress,
                     city: address.city || "",
                     state: address.state || "",
                     zip: address.zipCode || "",
+                    latitude: address.latitude ?? null,
+                    longitude: address.longitude ?? null,
                   })
                 }
-                placeholder="Start typing a street address…"
+                placeholder="Start typing your address…"
               />
             </Field>
           </div>

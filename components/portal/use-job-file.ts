@@ -40,6 +40,8 @@ export type JobSettingsDraft = {
   city: string;
   state: string;
   zip: string;
+  latitude?: number | null;
+  longitude?: number | null;
   start: string;
   due: string;
   employeeId: string;
@@ -190,10 +192,29 @@ export function applyJobSettings(job: Job, settings?: JobSettingsDraft): Job {
       : (job.notes ?? settings.notes),
     address: {
       ...job.address,
+      address: settings.street?.trim()
+        ? settings.street
+        : job.address.address || job.address.street,
       street: settings.street?.trim() ? settings.street : job.address.street,
       city: settings.city?.trim() ? settings.city : job.address.city,
       state: settings.state?.trim() ? settings.state : job.address.state,
       zip: settings.zip?.trim() ? settings.zip : job.address.zip,
+      latitude:
+        settings.latitude !== undefined
+          ? settings.latitude
+          : job.address.latitude,
+      longitude:
+        settings.longitude !== undefined
+          ? settings.longitude
+          : job.address.longitude,
+      lat:
+        settings.latitude !== undefined
+          ? settings.latitude
+          : job.address.lat,
+      lng:
+        settings.longitude !== undefined
+          ? settings.longitude
+          : job.address.lng,
     },
   };
 }

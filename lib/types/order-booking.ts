@@ -80,7 +80,7 @@ export interface OrderCheckoutRequest {
     street: string;
     unit?: string;
     city: string;
-    state?: string;
+    state: string;
     zip: string;
     location: {
       type?: "Point";

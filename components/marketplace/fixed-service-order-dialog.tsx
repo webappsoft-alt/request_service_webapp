@@ -249,6 +249,7 @@ export function FixedServiceOrderDialog({
     if (
       !address.street.trim() ||
       !address.city.trim() ||
+      !address.state.trim() ||
       address.lat == null ||
       address.lng == null ||
       !Number.isFinite(address.lat) ||
@@ -257,7 +258,7 @@ export function FixedServiceOrderDialog({
       toast.error("Please select a complete service address from the suggestions.");
       return;
     }
-    // Many places (esp. non-US) omit postal codes — coords + street/city are enough.
+    // Many places (esp. non-US) omit postal codes — coords + street/city/state are enough.
     const zip = address.zip.trim() || "00000";
 
     // Auth gate happens at submit — preserve the full form first.
@@ -291,7 +292,7 @@ export function FixedServiceOrderDialog({
             street: address.street.trim(),
             unit: address.unit.trim() || undefined,
             city: address.city.trim(),
-            state: address.state.trim() || undefined,
+            state: address.state.trim(),
             zip,
             location: {
               type: "Point",
@@ -464,20 +465,22 @@ export function FixedServiceOrderDialog({
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Field>
-              <FieldLabel htmlFor="order-unit">Unit / apt (optional)</FieldLabel>
+              <FieldLabel htmlFor="order-city">City</FieldLabel>
               <Input
-                id="order-unit"
-                value={address.unit}
+                id="order-city"
+                value={address.city}
                 onChange={(event) =>
                   setAddress((current) => ({
                     ...current,
-                    unit: event.target.value,
+                    city: event.target.value,
                   }))
                 }
-                placeholder="Apt, suite…"
+                placeholder="City"
+                required
                 disabled={checkoutLoading}
+                autoComplete="address-level2"
               />
             </Field>
             <Field>
@@ -493,9 +496,44 @@ export function FixedServiceOrderDialog({
                 }
                 placeholder="ZIP"
                 disabled={checkoutLoading}
+                autoComplete="postal-code"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="order-state">State</FieldLabel>
+              <Input
+                id="order-state"
+                value={address.state}
+                onChange={(event) =>
+                  setAddress((current) => ({
+                    ...current,
+                    state: event.target.value,
+                  }))
+                }
+                placeholder="State"
+                required
+                disabled={checkoutLoading}
+                autoComplete="address-level1"
               />
             </Field>
           </div>
+
+          <Field>
+            <FieldLabel htmlFor="order-unit">Unit / apt (optional)</FieldLabel>
+            <Input
+              id="order-unit"
+              value={address.unit}
+              onChange={(event) =>
+                setAddress((current) => ({
+                  ...current,
+                  unit: event.target.value,
+                }))
+              }
+              placeholder="Apt, suite…"
+              disabled={checkoutLoading}
+              autoComplete="address-line2"
+            />
+          </Field>
 
           <Field>
             <FieldLabel htmlFor="order-access-notes">

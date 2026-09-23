@@ -7,7 +7,7 @@ import { organizationJsonLd, websiteJsonLd } from "@/lib/json-ld";
 import { defaultKeywords } from "@/lib/seo";
 import { siteConfig } from "@/lib/site";
 import "./globals.css";
-
+// 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

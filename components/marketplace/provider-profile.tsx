@@ -285,12 +285,16 @@ export function ProviderProfile({
                     </p>
                   </BusinessInfoItem>
                 ) : null}
-                <BusinessInfoItem icon={CreditCard} label="Payment methods">
-                  <p>Check • Cash • PayPal • Square • Venmo • Zelle</p>
-                </BusinessInfoItem>
-                <BusinessInfoItem icon={Languages} label="Languages">
-                  <p>English • Spanish</p>
-                </BusinessInfoItem>
+                {provider.paymentMethods && provider.paymentMethods.length > 0 ? (
+                  <BusinessInfoItem icon={CreditCard} label="Payment methods">
+                    <p>{provider.paymentMethods.join(" • ")}</p>
+                  </BusinessInfoItem>
+                ) : null}
+                {provider.language?.trim() ? (
+                  <BusinessInfoItem icon={Languages} label="Languages">
+                    <p>{provider.language.trim()}</p>
+                  </BusinessInfoItem>
+                ) : null}
               </CardContent>
             </Card>
 

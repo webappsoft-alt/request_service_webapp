@@ -109,6 +109,8 @@ export type PublicProfessional = {
     employeeCount: string;
     licensed: boolean;
     insured: boolean;
+    language?: string;
+    paymentMethods?: string[];
   };
   coverage?: {
     neighborhoods: PublicProfessionalCoverageNeighborhood[];
@@ -877,6 +879,13 @@ export function publicProfessionalToProvider(
     gallery: galleryFromServices,
     foundedYear,
     employeeCount: professional.profile?.employeeCount?.trim() || "",
+    language: professional.profile?.language?.trim() || "",
+    paymentMethods: Array.isArray(professional.profile?.paymentMethods)
+      ? professional.profile.paymentMethods.filter(
+          (item): item is string =>
+            typeof item === "string" && Boolean(item.trim()),
+        )
+      : [],
     reviews: professional.reviews ?? [],
     contact: professional.fullName.trim()
       ? {

@@ -36,6 +36,13 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  PROVIDER_LANGUAGES,
+  PROVIDER_PAYMENT_METHODS,
+  normalizePaymentMethods,
+  type ProviderLanguage,
+  type ProviderPaymentMethod,
+} from "@/lib/provider-preferences";
+import {
   getServiceCategoryById,
   serviceCategories,
 } from "@/lib/data/services";
@@ -181,6 +188,12 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
         ? String(provider.profile.yearsInBusiness)
         : "",
     employeeCount: API_TO_EMPLOYEE[employeeRaw] || employeeRaw,
+    language: (PROVIDER_LANGUAGES as readonly string[]).includes(
+      String(provider?.profile?.language || "").trim(),
+    )
+      ? (String(provider?.profile?.language).trim() as ProviderLanguage)
+      : ("" as const),
+    paymentMethods: normalizePaymentMethods(provider?.profile?.paymentMethods),
     startingPrice:
       typeof provider?.services?.startingPrice === "number"
         ? String(provider.services.startingPrice)
@@ -235,6 +248,10 @@ export function ProfileView() {
   const [insured, setInsured] = useState(false);
   const [yearsInBusiness, setYearsInBusiness] = useState("");
   const [employeeCount, setEmployeeCount] = useState("");
+  const [language, setLanguage] = useState<ProviderLanguage | "">("");
+  const [paymentMethods, setPaymentMethods] = useState<ProviderPaymentMethod[]>(
+    [],
+  );
   const [startingPrice, setStartingPrice] = useState("");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [jobs, setJobs] = useState<string[]>([]);
@@ -346,6 +363,8 @@ export function ProfileView() {
       setInsured(next.insured);
       setYearsInBusiness(next.yearsInBusiness);
       setEmployeeCount(next.employeeCount);
+      setLanguage(next.language);
+      setPaymentMethods(next.paymentMethods);
       setStartingPrice(next.startingPrice);
       setCategoryIds(next.categoryIds);
       setJobs(next.jobs);
@@ -470,6 +489,8 @@ export function ProfileView() {
       yearsInBusiness: Number.isFinite(years) ? years : undefined,
       employeeCount:
         EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
+      language: language || "",
+      paymentMethods,
       licensed,
       insured,
       businessGallery: gallery,
@@ -479,6 +500,8 @@ export function ProfileView() {
           EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
         licensed,
         insured,
+        language: language || "",
+        paymentMethods,
       },
     };
 
@@ -553,6 +576,8 @@ export function ProfileView() {
             undefined,
           licensed,
           insured,
+          language: language || "",
+          paymentMethods,
         },
         coverage: fromApi?.coverage || {
           neighborhoods: areaIds,
@@ -1041,6 +1066,68 @@ export function ProfileView() {
                   Insured
                 </label>
               </div>
+              <Field>
+                <FieldLabel htmlFor="profile-language">Language</FieldLabel>
+                <Select
+                  value={language || undefined}
+                  onValueChange={(value) =>
+                    setLanguage(value as ProviderLanguage)
+                  }
+                >
+                  <SelectTrigger id="profile-language" className="w-full">
+                    <SelectValue placeholder="Select a language" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    align="start"
+                    className="z-[100] w-[var(--radix-select-trigger-width)]"
+                  >
+                    {PROVIDER_LANGUAGES.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  Shown on your public business information card.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel>Payment methods</FieldLabel>
+                <FieldDescription>
+                  Select every payment method you accept.
+                </FieldDescription>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {PROVIDER_PAYMENT_METHODS.map((method) => {
+                    const checked = paymentMethods.includes(method);
+                    return (
+                      <label
+                        key={method}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm transition-colors",
+                          checked
+                            ? "border-primary bg-primary/5"
+                            : "border-foreground/20 hover:border-foreground/35",
+                        )}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) => {
+                            const on = value === true;
+                            setPaymentMethods((current) =>
+                              on
+                                ? normalizePaymentMethods([...current, method])
+                                : current.filter((item) => item !== method),
+                            );
+                          }}
+                        />
+                        {method}
+                      </label>
+                    );
+                  })}
+                </div>
+              </Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="website">Website</FieldLabel>

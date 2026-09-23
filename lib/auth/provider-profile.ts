@@ -34,6 +34,8 @@ export type AuthProviderRecord = {
     employeeCount?: string;
     licensed?: boolean;
     insured?: boolean;
+    language?: string;
+    paymentMethods?: string[];
     [key: string]: unknown;
   };
   coverage?: {

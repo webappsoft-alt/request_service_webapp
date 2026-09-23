@@ -491,6 +491,8 @@ export interface Provider {
   gallery: string[];
   foundedYear: number;
   employeeCount: string;
+  language?: string;
+  paymentMethods?: string[];
   reviews: Review[];
   featured?: boolean;
 }

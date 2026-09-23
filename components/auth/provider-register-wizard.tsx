@@ -41,12 +41,25 @@ import {
   savePendingRegistration,
   type PendingProviderRegistration,
 } from "@/lib/auth/pending-registration";
+import {
+  PROVIDER_LANGUAGES,
+  PROVIDER_PAYMENT_METHODS,
+  type ProviderLanguage,
+  type ProviderPaymentMethod,
+} from "@/lib/provider-preferences";
 import { cn } from "@/lib/utils";
 
-const STEPS = ["account", "business", "services", "profile", "coverage"] as const;
+const STEPS = [
+  "account",
+  "business",
+  "services",
+  "profile",
+  "preferences",
+  "coverage",
+] as const;
 type Step = (typeof STEPS)[number];
 
-const OPTIONAL_STEPS: Step[] = ["services", "profile", "coverage"];
+const OPTIONAL_STEPS: Step[] = ["services", "profile", "preferences", "coverage"];
 
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
 
@@ -89,6 +102,8 @@ type Draft = {
   employeeCount: string;
   website: string;
   contactRole: string;
+  language: ProviderLanguage | "";
+  paymentMethods: ProviderPaymentMethod[];
   areaNames: string[];
 };
 
@@ -118,6 +133,8 @@ const emptyDraft: Draft = {
   employeeCount: "",
   website: "",
   contactRole: "",
+  language: "",
+  paymentMethods: [],
   areaNames: [],
 };
 
@@ -142,6 +159,12 @@ function stepCopy(step: Step) {
       return {
         title: "Profile details",
         description: "A short intro and credentials help homeowners trust the listing.",
+      };
+    case "preferences":
+      return {
+        title: "Language & payments",
+        description:
+          "Tell customers which language you speak and how they can pay you.",
       };
     case "coverage":
       return {
@@ -305,6 +328,10 @@ export function ProviderRegisterWizard() {
         ? yearsInBusiness
         : undefined,
       employeeCount: mapEmployeeCount(draft.employeeCount),
+      language: draft.language || undefined,
+      paymentMethods: draft.paymentMethods.length
+        ? draft.paymentMethods
+        : undefined,
       licensed: draft.licensed,
       insured: draft.insured,
       website: draft.website.trim() || undefined,
@@ -374,6 +401,10 @@ export function ProviderRegisterWizard() {
       return;
     }
     if (step === "profile") {
+      goTo("preferences");
+      return;
+    }
+    if (step === "preferences") {
       goTo("coverage");
       return;
     }
@@ -397,6 +428,7 @@ export function ProviderRegisterWizard() {
       break;
     case "services":
     case "profile":
+    case "preferences":
     case "coverage":
       canContinue = true;
       break;
@@ -427,7 +459,7 @@ export function ProviderRegisterWizard() {
         </>
       }
     >
-      <ol className="mb-6 grid grid-cols-5 gap-2">
+      <ol className="mb-6 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {STEPS.map((item, index) => {
           const current = item === step;
           const done = index < stepIndex;
@@ -761,6 +793,73 @@ export function ProviderRegisterWizard() {
                 />
               </Field>
             </div>
+          </FieldGroup>
+        ) : null}
+
+        {step === "preferences" ? (
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="language">Language</FieldLabel>
+              <Select
+                value={draft.language || undefined}
+                onValueChange={(value) =>
+                  patch({ language: value as ProviderLanguage })
+                }
+              >
+                <SelectTrigger id="language" className="w-full">
+                  <SelectValue placeholder="Select a language" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-[100] w-[var(--radix-select-trigger-width)]"
+                >
+                  {PROVIDER_LANGUAGES.map((language) => (
+                    <SelectItem key={language} value={language}>
+                      {language}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                Customers see this on your public profile.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel>Payment methods</FieldLabel>
+              <FieldDescription>
+                Select every payment method you accept. You can change this later.
+              </FieldDescription>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {PROVIDER_PAYMENT_METHODS.map((method) => {
+                  const checked = draft.paymentMethods.includes(method);
+                  return (
+                    <label
+                      key={method}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm transition-colors",
+                        checked
+                          ? "border-primary bg-primary/5"
+                          : "border-foreground/20 hover:border-foreground/35",
+                      )}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() =>
+                          patch({
+                            paymentMethods: toggleValue(
+                              draft.paymentMethods,
+                              method,
+                            ) as ProviderPaymentMethod[],
+                          })
+                        }
+                      />
+                      {method}
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
           </FieldGroup>
         ) : null}
 

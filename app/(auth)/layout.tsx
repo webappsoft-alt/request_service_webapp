@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <SiteHeader />
-      {/* min-h-0 lets AuthShell lock to the viewport; form column owns scrolling. */}
+      {/* min-h-0 lets AuthShell lock to the viewport; form column owns scrolling.ewew */}
       <main id="main-content" className="flex min-h-0 flex-1 flex-col">
         <PageEnter className="page-enter flex min-h-0 flex-1 flex-col">
           {children}

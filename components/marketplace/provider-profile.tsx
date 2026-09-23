@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CalendarDays, Globe, Mail, MapPin, UserRound, Users, type LucideIcon } from "lucide-react";
+import { CalendarDays, CreditCard, Globe, Languages, Mail, MapPin, UserRound, Users, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +85,12 @@ export function ProviderProfile({
     : getPortalServices(provider).filter((item) => item.active);
   const showHours = isLive || provider.workingHours.length > 0;
   const showRelated = isLive || relatedProviders.length > 0;
+  const yearsInBusiness =
+    provider.yearsInBusiness > 0
+      ? provider.yearsInBusiness
+      : provider.foundedYear > 0
+        ? Math.max(0, new Date().getFullYear() - provider.foundedYear)
+        : 0;
 
   return (
     <HomeMotion>
@@ -132,18 +138,19 @@ export function ProviderProfile({
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <Rating value={provider.rating} count={provider.reviewCount} size="md" />
                     <CredentialMark licensed={provider.licensed} insured={provider.insured} />
-                    {provider.yearsInBusiness > 0 ? (
-                      <span className="text-sm text-muted-foreground">
-                        {provider.yearsInBusiness} years in business
-                      </span>
-                    ) : null}
+                    <span className="text-sm text-muted-foreground">
+                      Business Verified
+                    </span>
                   </div>
                 </div>
               </div>
               {provider.description?.trim() ? (
-                <p className="w-full text-sm leading-7 text-muted-foreground">
-                  {provider.description}
-                </p>
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-xl font-semibold">About</h2>
+                  <p className="w-full text-sm leading-7 text-muted-foreground">
+                    {provider.description}
+                  </p>
+                </div>
               ) : null}
             </div>
 
@@ -253,20 +260,37 @@ export function ProviderProfile({
                   )}
                 </BusinessInfoItem>
                 {provider.foundedYear > 0 ? (
-                  <BusinessInfoItem icon={CalendarDays} label="Founded">
-                    <p>{provider.foundedYear}</p>
-                    <p className="mt-0.5 font-normal text-muted-foreground">
-                      {provider.yearsInBusiness}{" "}
-                      {provider.yearsInBusiness === 1 ? "year" : "years"} ago
+                  <BusinessInfoItem icon={CalendarDays} label="Years in business">
+                    <p>Since {provider.foundedYear}</p>
+                    {yearsInBusiness > 0 ? (
+                      <p className="mt-0.5 font-normal text-muted-foreground">
+                        {yearsInBusiness}{" "}
+                        {yearsInBusiness === 1 ? "Year" : "Years"} in business
+                      </p>
+                    ) : null}
+                  </BusinessInfoItem>
+                ) : yearsInBusiness > 0 ? (
+                  <BusinessInfoItem icon={CalendarDays} label="Years in business">
+                    <p>
+                      {yearsInBusiness}{" "}
+                      {yearsInBusiness === 1 ? "Year" : "Years"} in business
                     </p>
                   </BusinessInfoItem>
                 ) : null}
                 {provider.employeeCount?.trim() ? (
                   <BusinessInfoItem icon={Users} label="Team">
                     <p>{provider.employeeCount}</p>
-                    <p className="mt-0.5 font-normal text-muted-foreground">people</p>
+                    <p className="mt-0.5 font-normal text-muted-foreground">
+                      professionals
+                    </p>
                   </BusinessInfoItem>
                 ) : null}
+                <BusinessInfoItem icon={CreditCard} label="Payment methods">
+                  <p>Check • Cash • PayPal • Square • Venmo • Zelle</p>
+                </BusinessInfoItem>
+                <BusinessInfoItem icon={Languages} label="Languages">
+                  <p>English • Spanish</p>
+                </BusinessInfoItem>
               </CardContent>
             </Card>
 

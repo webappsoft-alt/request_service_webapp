@@ -10,6 +10,8 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { PhoneOtpVerificationPanel } from "@/components/marketplace/phone-otp-verification-panel";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -26,8 +28,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { writeChatGuest } from "@/lib/booking/chat-store";
 import { openPublicChatThread } from "@/lib/api/chat-client";
-import { getData } from "@/components/api/apiFuntions";
-import { publicApi } from "@/components/api/ApiRoutesFile";
+import { getData, postData } from "@/components/api/apiFuntions";
+import { authApi, publicApi } from "@/components/api/ApiRoutesFile";
 import { createFixedServiceBooking } from "@/lib/booking/create-fixed-booking";
 import { createMarketplaceQuote } from "@/lib/booking/create-marketplace-quote";
 import { createWebsiteLead } from "@/lib/booking/create-website-lead";
@@ -54,6 +56,17 @@ import {
 import type { Provider, ServiceCategorySlug } from "@/lib/types";
 
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
+
+function phoneDigits(value: string) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function composedFullName(firstName: string, lastName: string) {
+  return [firstName, lastName]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -448,9 +461,15 @@ export function RequestServiceForm({
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [addressInput, setAddressInput] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
+  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  const [pendingAfterVerify, setPendingAfterVerify] = useState<
+    "booking" | "marketplace" | null
+  >(null);
   const [details, setDetails] = useState(
     fixedService
       ? `${fixedService.name}. ${fixedService.description}`
@@ -501,14 +520,13 @@ export function RequestServiceForm({
 
   useEffect(() => {
     if (!authUser) return;
-    const fullName = [authUser.firstName, authUser.lastName]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    setName((current) => current || fullName);
+    setFirstName((current) => current || String(authUser.firstName || ""));
+    setLastName((current) => current || String(authUser.lastName || ""));
     setEmail((current) => current || String(authUser.email || ""));
     setPhone((current) => current || String(authUser.phone || ""));
   }, [authUser]);
+
+  const fullName = composedFullName(firstName, lastName);
 
   const selectedBookingService = serviceOptions.find(
     (item) => item.id === selectedServiceId,
@@ -548,6 +566,45 @@ export function RequestServiceForm({
     );
   }
 
+  async function startPhoneVerification(
+    next: "booking" | "marketplace",
+  ): Promise<boolean> {
+    const trimmedPhone = phone.trim();
+    const trimmedEmail = email.trim();
+    if (phoneDigits(trimmedPhone).length < 8) {
+      toast.error("Enter a valid phone number.");
+      return false;
+    }
+    if (!trimmedEmail) {
+      toast.error("Enter your email so we can send the verification code.");
+      return false;
+    }
+    setOtpSending(true);
+    try {
+      const response = await postData<{ message?: string }>(
+        authApi.sendPhoneOtp,
+        { phone: trimmedPhone, email: trimmedEmail },
+        { token: null, skipLogoutOn401: true, silent: true },
+      );
+      toast.success(
+        response?.message ||
+          "Verification code sent. Check your email.",
+      );
+      setPendingAfterVerify(next);
+      setShowPhoneVerify(true);
+      return true;
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not send verification code.",
+      );
+      return false;
+    } finally {
+      setOtpSending(false);
+    }
+  }
+
   async function submitProviderBooking() {
     if (!provider || !defaultProvider) {
       toast.error("This professional could not be loaded. Open their profile and try again.");
@@ -578,8 +635,8 @@ export function RequestServiceForm({
       );
       return;
     }
-    if (!name.trim() || !email.trim()) {
-      toast.error("Add your name and email.");
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+      toast.error("Add your first name, last name, and email.");
       return;
     }
     if (!phone.trim()) {
@@ -618,7 +675,7 @@ export function RequestServiceForm({
         .join(" ");
 
       const result = await createMarketplaceQuote({
-        name,
+        name: fullName,
         email,
         phone,
         zip: zip.trim() || provider.zip || "",
@@ -660,7 +717,7 @@ export function RequestServiceForm({
       }
 
       const request = result.requests[0];
-      writeChatGuest({ name: name.trim(), email: email.trim() });
+      writeChatGuest({ name: fullName.trim(), email: email.trim() });
       try {
         const liveProviderId = OBJECT_ID_REGEX.test(request.providerId ?? "")
           ? request.providerId
@@ -670,7 +727,7 @@ export function RequestServiceForm({
         await openPublicChatThread({
           providerId: liveProviderId,
           providerSlug: provider.slug,
-          customerName: name.trim(),
+          customerName: fullName.trim(),
           customerEmail: email.trim(),
           phone: phone.trim(),
           zip: zip.trim(),
@@ -692,6 +749,8 @@ export function RequestServiceForm({
       toast.success(
         `${result.requestNumber || request.number} was sent to ${provider.companyName}.`,
       );
+      setShowPhoneVerify(false);
+      setPendingAfterVerify(null);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -703,11 +762,125 @@ export function RequestServiceForm({
     }
   }
 
+  async function submitMarketplaceQuote() {
+    if (!service) {
+      toast.error("Choose a service category.");
+      return;
+    }
+    if (!isValidZip(zip)) {
+      toast.error("Enter a valid 5-digit ZIP code.");
+      return;
+    }
+    const category = serviceCategories.find((item) => item.slug === service);
+    const pending = readPendingQuote();
+    const formatted = pending
+      ? formatIntakeQuote({
+          ...pending,
+          zip,
+          name: fullName,
+          email,
+          phone,
+          details,
+        })
+      : undefined;
+    const serviceName =
+      jobRecord?.job ||
+      formatted?.serviceName ||
+      category?.name ||
+      "Service request";
+    const requestDetails = formatted?.details || details;
+    const answers = formatted?.answers;
+
+    setSubmitting(true);
+    try {
+      const result = await createMarketplaceQuote({
+        name: fullName,
+        email,
+        phone,
+        zip,
+        serviceSlug: service,
+        serviceName,
+        details: requestDetails,
+        answers,
+        preferredDate,
+        preferredTime: preferredTime || formatted?.preferredTime,
+      });
+      if (!result.requests.length) {
+        toast.error(
+          "No matching companies for that ZIP yet. Try another area or pick a professional.",
+        );
+        return;
+      }
+      const requestNumber =
+        result.requestNumber || result.requests[0]?.number || "";
+      const providerCount = result.count || result.requests.length;
+      clearPendingQuote();
+      setShowPhoneVerify(false);
+      setPendingAfterVerify(null);
+      setConfirmation({
+        kind: "marketplace",
+        requestNumber,
+        serviceName,
+        count: providerCount,
+      });
+      toast.success(
+        `${requestNumber} was sent to ${providerCount} matching ${providerCount === 1 ? "company" : "companies"}.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the quote request.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (isProviderBooking) {
-      await submitProviderBooking();
+      if (!provider || !defaultProvider) {
+        toast.error(
+          "This professional could not be loaded. Open their profile and try again.",
+        );
+        return;
+      }
+      if (!selectedBookingService) {
+        toast.error("Select a service for booking.");
+        return;
+      }
+      if (!preferredDate || !preferredTime) {
+        toast.error("Choose a preferred date and time.");
+        return;
+      }
+      if (
+        !hasUsableBookingAddress({
+          street,
+          zip,
+          lat,
+          lng,
+        })
+      ) {
+        toast.error(
+          "Pick a service address from the suggestions so we can match your location.",
+        );
+        return;
+      }
+      if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+        toast.error("Add your first name, last name, and email.");
+        return;
+      }
+      if (phoneDigits(phone).length < 8) {
+        toast.error("Add your phone number.");
+        return;
+      }
+      if (!details.trim()) {
+        toast.error("Add a few details about the work.");
+        return;
+      }
+      await startPhoneVerification("booking");
       return;
     }
 
@@ -735,8 +908,8 @@ export function RequestServiceForm({
         );
         return;
       }
-      if (!name.trim() || !email.trim()) {
-        toast.error("Add your name and email.");
+      if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+        toast.error("Add your first name, last name, and email.");
         return;
       }
       if (!isValidZip(zip)) {
@@ -750,7 +923,7 @@ export function RequestServiceForm({
       const { job } = createFixedServiceBooking({
         provider,
         service: fixedService,
-        name,
+        name: fullName,
         email,
         phone,
         street,
@@ -777,14 +950,18 @@ export function RequestServiceForm({
       toast.error("Enter a valid 5-digit ZIP code.");
       return;
     }
-    if (!name.trim() || !email.trim()) {
-      toast.error("Add your name and email.");
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+      toast.error("Add your first name, last name, and email.");
+      return;
+    }
+    if (phoneDigits(phone).length < 8) {
+      toast.error("Add your phone number.");
       return;
     }
     const category = serviceCategories.find((item) => item.slug === service);
     const pending = readPendingQuote();
     const formatted = pending
-      ? formatIntakeQuote({ ...pending, zip, name, email, phone, details })
+      ? formatIntakeQuote({ ...pending, zip, name: fullName, email, phone, details })
       : undefined;
     const serviceName =
       jobRecord?.job ||
@@ -794,53 +971,14 @@ export function RequestServiceForm({
     const requestDetails = formatted?.details || details;
     const answers = formatted?.answers;
     if (!provider) {
-      try {
-        const result = await createMarketplaceQuote({
-          name,
-          email,
-          phone,
-          zip,
-          serviceSlug: service,
-          serviceName,
-          details: requestDetails,
-          answers,
-          preferredDate,
-          preferredTime: preferredTime || formatted?.preferredTime,
-        });
-        if (!result.requests.length) {
-          toast.error(
-            "No matching companies for that ZIP yet. Try another area or pick a professional.",
-          );
-          return;
-        }
-        const requestNumber =
-          result.requestNumber || result.requests[0]?.number || "";
-        const providerCount = result.count || result.requests.length;
-        clearPendingQuote();
-        setConfirmation({
-          kind: "marketplace",
-          requestNumber,
-          serviceName,
-          count: providerCount,
-        });
-        toast.success(
-          `${requestNumber} was sent to ${providerCount} matching ${providerCount === 1 ? "company" : "companies"}.`,
-        );
-        return;
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Unable to send the quote request.",
-        );
-        return;
-      }
+      await startPhoneVerification("marketplace");
+      return;
     }
     let request;
     try {
       const result = await createWebsiteLead({
         provider,
-        name,
+        name: fullName,
         email,
         phone,
         zip,
@@ -858,7 +996,7 @@ export function RequestServiceForm({
       );
       return;
     }
-    writeChatGuest({ name: name.trim(), email: email.trim() });
+    writeChatGuest({ name: fullName.trim(), email: email.trim() });
     try {
       const liveProviderId = OBJECT_ID_REGEX.test(request.providerId ?? "")
         ? request.providerId
@@ -866,7 +1004,7 @@ export function RequestServiceForm({
       await openPublicChatThread({
         providerId: liveProviderId,
         providerSlug: provider.slug,
-        customerName: name.trim(),
+        customerName: fullName.trim(),
         customerEmail: email.trim(),
         phone: phone.trim(),
         zip: zip.trim(),
@@ -891,6 +1029,28 @@ export function RequestServiceForm({
     });
     toast.success(
       `${request.number} is in the ${provider.companyName} inbox. They can send a written estimate.`,
+    );
+  }
+
+  if (showPhoneVerify) {
+    return (
+      <PhoneOtpVerificationPanel
+        phone={phone.trim()}
+        email={email.trim()}
+        onBack={() => {
+          setShowPhoneVerify(false);
+          setPendingAfterVerify(null);
+        }}
+        onVerified={async () => {
+          if (pendingAfterVerify === "booking") {
+            await submitProviderBooking();
+            return;
+          }
+          if (pendingAfterVerify === "marketplace") {
+            await submitMarketplaceQuote();
+          }
+        }}
+      />
     );
   }
 
@@ -1144,24 +1304,24 @@ export function RequestServiceForm({
 
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor="booking-name">Your name</FieldLabel>
+                  <FieldLabel htmlFor="booking-first-name">First name</FieldLabel>
                   <Input
-                    id="booking-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    autoComplete="name"
+                    id="booking-first-name"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    autoComplete="given-name"
+                    placeholder="Jordan"
                     required
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="booking-phone">Phone</FieldLabel>
+                  <FieldLabel htmlFor="booking-last-name">Last name</FieldLabel>
                   <Input
-                    id="booking-phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    autoComplete="tel"
-                    placeholder="(512) 555-0182"
+                    id="booking-last-name"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    autoComplete="family-name"
+                    placeholder="Lee"
                     required
                   />
                 </Field>
@@ -1173,14 +1333,33 @@ export function RequestServiceForm({
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     autoComplete="email"
+                    placeholder="you@email.com"
+                    required
+                  />
+                </Field>
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="booking-phone">Phone</FieldLabel>
+                  <AuthPhoneInput
+                    id="booking-phone"
+                    value={phone}
+                    onChange={setPhone}
+                    placeholder="(512) 555-0182"
                     required
                   />
                 </Field>
               </div>
             </FieldGroup>
 
-            <Button type="submit" size="xl" disabled={submitting}>
-              {submitting ? "Sending…" : "Send Booking"}
+            <Button
+              type="submit"
+              size="xl"
+              disabled={submitting || otpSending}
+            >
+              {otpSending
+                ? "Sending code…"
+                : submitting
+                  ? "Sending…"
+                  : "Send Booking"}
             </Button>
           </form>
         ) : null}
@@ -1305,16 +1484,28 @@ export function RequestServiceForm({
         </Field>
         <div className="grid gap-5 sm:grid-cols-2">
           <Field>
-            <FieldLabel htmlFor="request-name">Your name</FieldLabel>
+            <FieldLabel htmlFor="request-first-name">First name</FieldLabel>
             <Input
-              id="request-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoComplete="name"
+              id="request-first-name"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              autoComplete="given-name"
+              placeholder="Jordan"
               required
             />
           </Field>
           <Field>
+            <FieldLabel htmlFor="request-last-name">Last name</FieldLabel>
+            <Input
+              id="request-last-name"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              autoComplete="family-name"
+              placeholder="Lee"
+              required
+            />
+          </Field>
+          <Field className="sm:col-span-2">
             <FieldLabel htmlFor="request-email">Email</FieldLabel>
             <Input
               id="request-email"
@@ -1322,28 +1513,34 @@ export function RequestServiceForm({
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
+              placeholder="you@email.com"
+              required
+            />
+          </Field>
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="request-phone">Phone</FieldLabel>
+            <AuthPhoneInput
+              id="request-phone"
+              value={phone}
+              onChange={setPhone}
+              placeholder="(512) 555-0182"
               required
             />
           </Field>
         </div>
-        <Field>
-          <FieldLabel htmlFor="request-phone">Phone</FieldLabel>
-          <Input
-            id="request-phone"
-            type="tel"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            autoComplete="tel"
-            placeholder="(512) 555-0182"
-          />
-        </Field>
       </FieldGroup>
-      <Button type="submit" size="xl">
-        {isFixedBooking
-          ? "Book this job"
-          : provider
-            ? "Send request to this provider"
-            : "Send quote request"}
+      <Button
+        type="submit"
+        size="xl"
+        disabled={submitting || otpSending}
+      >
+        {otpSending
+          ? "Sending code…"
+          : isFixedBooking
+            ? "Book this job"
+            : provider
+              ? "Send request to this provider"
+              : "Send quote request"}
       </Button>
     </form>
   );

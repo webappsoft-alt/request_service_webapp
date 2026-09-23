@@ -8,6 +8,10 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { postData } from "@/components/api/apiFuntions";
+import { authApi } from "@/components/api/ApiRoutesFile";
+import { PhoneOtpVerificationPanel } from "@/components/marketplace/phone-otp-verification-panel";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -31,6 +35,17 @@ function hasUsableAddress(answers: IntakeAnswers) {
   return (hasCoords && streetOk) || (zipOk && streetOk);
 }
 
+function composedName(answers: IntakeAnswers) {
+  return [answers.firstName, answers.lastName]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function phoneDigits(value: string) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 export function RequestIntake({
   onComplete,
 }: {
@@ -49,6 +64,8 @@ export function RequestIntake({
   const [answers, setAnswers] = useState<IntakeAnswers>(() => {
     const pending = readPendingQuote();
     const pendingZip = String(pending?.zip || "").trim();
+    const pendingName = String(pending?.name || "").trim();
+    const nameParts = pendingName ? pendingName.split(/\s+/) : [];
     return {
       ...pending,
       service: startingService || pending?.service || "",
@@ -60,6 +77,10 @@ export function RequestIntake({
       lng: pending?.lng || "",
       addressLabel: pending?.addressLabel || "",
       job: startingJob || pending?.job || "",
+      firstName: pending?.firstName || nameParts[0] || "",
+      lastName: pending?.lastName || nameParts.slice(1).join(" ") || "",
+      email: pending?.email || "",
+      phone: pending?.phone || "",
     };
   });
   const [addressInput, setAddressInput] = useState(
@@ -76,6 +97,8 @@ export function RequestIntake({
     return index < 0 ? 0 : index;
   });
   const [submitting, setSubmitting] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [showPhoneVerify, setShowPhoneVerify] = useState(false);
 
   const steps = useMemo(
     () => getIntakeSteps(answers.service, startingZip || undefined),
@@ -96,6 +119,12 @@ export function RequestIntake({
     setAnswers((current) => {
       const next = { ...current, [id]: value };
       if (id === "service" && value !== current.service) next.job = "";
+      if (id === "firstName" || id === "lastName") {
+        next.name = [next.firstName, next.lastName]
+          .map((part) => String(part || "").trim())
+          .filter(Boolean)
+          .join(" ");
+      }
       return next;
     });
   }
@@ -123,15 +152,93 @@ export function RequestIntake({
     if (!step) return false;
     if (step.id === "address") return hasUsableAddress(answers);
     if (step.type === "contact") {
-      return Boolean(answers.name?.trim() && answers.email?.trim());
+      return Boolean(
+        answers.firstName?.trim() &&
+          answers.lastName?.trim() &&
+          answers.email?.trim() &&
+          phoneDigits(answers.phone || "").length >= 8,
+      );
     }
     if (step.type === "text" && step.id === "details") return true;
     if (step.type === "text") return true;
     return Boolean(answers[step.id]);
   }
 
+  function resetAnswers() {
+    setAnswers({
+      service: "",
+      zip: "",
+      street: "",
+      city: "",
+      state: "",
+      lat: "",
+      lng: "",
+      addressLabel: "",
+      job: "",
+      firstName: "",
+      lastName: "",
+      name: "",
+      email: "",
+      phone: "",
+      details: "",
+    });
+    setAddressInput("");
+    setStepIndex(0);
+    setShowPhoneVerify(false);
+  }
+
+  async function submitQuoteRequest() {
+    const fullName = composedName(answers);
+    setSubmitting(true);
+    try {
+      await onComplete({
+        ...answers,
+        name: fullName,
+        zip: answers.zip || startingZip || "",
+      });
+      resetAnswers();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function sendOtpAndShowVerify() {
+    const phone = String(answers.phone || "").trim();
+    const email = String(answers.email || "").trim();
+    if (phoneDigits(phone).length < 8) {
+      toast.error("Enter a valid phone number.");
+      return;
+    }
+    if (!email) {
+      toast.error("Enter your email so we can send the verification code.");
+      return;
+    }
+
+    setOtpSending(true);
+    try {
+      const response = await postData<{ message?: string }>(
+        authApi.sendPhoneOtp,
+        { phone, email },
+        { token: null, skipLogoutOn401: true, silent: true },
+      );
+      toast.success(
+        response?.message ||
+          "Verification code sent. Check your email.",
+      );
+      setShowPhoneVerify(true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not send verification code.",
+      );
+    } finally {
+      setOtpSending(false);
+    }
+  }
+
   async function goNext() {
-    if (!step || submitting) return;
+    if (!step || submitting || otpSending) return;
 
     if (step.id === "address" && !hasUsableAddress(answers)) {
       toast.error("Select a complete service address from the suggestions.");
@@ -154,38 +261,20 @@ export function RequestIntake({
       setStepIndex(0);
       return;
     }
-    if (!answers.name?.trim() || !answers.email?.trim()) {
-      toast.error("Name and email are required.");
+    if (
+      !answers.firstName?.trim() ||
+      !answers.lastName?.trim() ||
+      !answers.email?.trim()
+    ) {
+      toast.error("First name, last name, and email are required.");
+      return;
+    }
+    if (phoneDigits(answers.phone || "").length < 8) {
+      toast.error("Enter a valid phone number.");
       return;
     }
 
-    setSubmitting(true);
-    try {
-      await onComplete({
-        ...answers,
-        zip: answers.zip || startingZip || "",
-      });
-      // Reset questionnaire so a fresh submit starts at question 1.
-      setAnswers({
-        service: "",
-        zip: "",
-        street: "",
-        city: "",
-        state: "",
-        lat: "",
-        lng: "",
-        addressLabel: "",
-        job: "",
-        name: "",
-        email: "",
-        phone: "",
-        details: "",
-      });
-      setAddressInput("");
-      setStepIndex(0);
-    } finally {
-      setSubmitting(false);
-    }
+    await sendOtpAndShowVerify();
   }
 
   if (!step) {
@@ -193,6 +282,19 @@ export function RequestIntake({
       <p className="py-8 text-center text-sm text-muted-foreground">
         Loading questions…
       </p>
+    );
+  }
+
+  if (showPhoneVerify) {
+    return (
+      <PhoneOtpVerificationPanel
+        phone={String(answers.phone || "").trim()}
+        email={String(answers.email || "").trim()}
+        onBack={() => setShowPhoneVerify(false)}
+        onVerified={async () => {
+          await submitQuoteRequest();
+        }}
+      />
     );
   }
 
@@ -290,15 +392,26 @@ export function RequestIntake({
       {step.type === "contact" ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
-            <FieldLabel htmlFor="intake-name">Your name</FieldLabel>
+            <FieldLabel htmlFor="intake-first-name">First name</FieldLabel>
             <Input
-              id="intake-name"
-              value={answers.name ?? ""}
-              onChange={(event) => setAnswer("name", event.target.value)}
-              autoComplete="name"
+              id="intake-first-name"
+              value={answers.firstName ?? ""}
+              onChange={(event) => setAnswer("firstName", event.target.value)}
+              autoComplete="given-name"
+              placeholder="Jordan"
             />
           </Field>
           <Field>
+            <FieldLabel htmlFor="intake-last-name">Last name</FieldLabel>
+            <Input
+              id="intake-last-name"
+              value={answers.lastName ?? ""}
+              onChange={(event) => setAnswer("lastName", event.target.value)}
+              autoComplete="family-name"
+              placeholder="Lee"
+            />
+          </Field>
+          <Field className="sm:col-span-2">
             <FieldLabel htmlFor="intake-email">Email</FieldLabel>
             <Input
               id="intake-email"
@@ -306,16 +419,15 @@ export function RequestIntake({
               value={answers.email ?? ""}
               onChange={(event) => setAnswer("email", event.target.value)}
               autoComplete="email"
+              placeholder="you@email.com"
             />
           </Field>
           <Field className="sm:col-span-2">
             <FieldLabel htmlFor="intake-phone">Phone</FieldLabel>
-            <Input
+            <AuthPhoneInput
               id="intake-phone"
-              type="tel"
               value={answers.phone ?? ""}
-              onChange={(event) => setAnswer("phone", event.target.value)}
-              autoComplete="tel"
+              onChange={(value) => setAnswer("phone", value)}
               placeholder="(512) 555-0182"
             />
           </Field>
@@ -327,7 +439,7 @@ export function RequestIntake({
           type="button"
           variant="ghost"
           onClick={() => setStepIndex((value) => Math.max(0, value - 1))}
-          disabled={safeIndex === 0 || submitting}
+          disabled={safeIndex === 0 || submitting || otpSending}
         >
           <ArrowLeft data-icon="inline-start" />
           Back
@@ -335,14 +447,18 @@ export function RequestIntake({
         <Button
           type="button"
           onClick={() => void goNext()}
-          disabled={!canContinue() || submitting}
+          disabled={!canContinue() || submitting || otpSending}
         >
-          {submitting
-            ? "Sending…"
-            : isLastStep
-              ? "Send quote request"
-              : "Continue"}
-          {!submitting ? <ArrowRight data-icon="inline-end" /> : null}
+          {otpSending
+            ? "Sending code…"
+            : submitting
+              ? "Sending…"
+              : isLastStep
+                ? "Send quote request"
+                : "Continue"}
+          {!otpSending && !submitting ? (
+            <ArrowRight data-icon="inline-end" />
+          ) : null}
         </Button>
       </div>
     </div>

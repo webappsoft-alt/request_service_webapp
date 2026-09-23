@@ -179,7 +179,13 @@ export async function createQuoteFromIntake(answers: IntakeAnswers) {
   }
   try {
     const result = await createMarketplaceQuote({
-      name: answers.name ?? "",
+      name:
+        [answers.firstName, answers.lastName]
+          .map((part) => String(part || "").trim())
+          .filter(Boolean)
+          .join(" ") ||
+        answers.name ||
+        "",
       email: answers.email ?? "",
       phone: answers.phone,
       zip: zip || "00000",

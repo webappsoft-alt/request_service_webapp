@@ -6,6 +6,10 @@ export const authApi = {
   providerRegister: "auth/provider/register",
   sendOtp: "auth/send-otp",
   verifyOtp: "auth/verify-otp",
+  /** Marketplace quote phone verification step 1 */
+  sendPhoneOtp: "auth/send-phone-otp",
+  /** Marketplace quote phone verification step 2 */
+  verifyPhoneOtp: "auth/verify-phone-otp",
   /** Password recovery step 1 */
   forgotPassword: "auth/forgot-password-otp",
   /** Password recovery step 2 — body: `{ code }` */

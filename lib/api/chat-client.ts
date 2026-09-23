@@ -1,4 +1,4 @@
-import { getData, patchData, postData } from "@/components/api/apiFuntions";
+import { getData, postData, putData } from "@/components/api/apiFuntions";
 import { chatApi } from "@/components/api/ApiRoutesFile";
 import { mapChatThread, mapCrmEntity, mapCrmList, mapInboxSummary } from "@/lib/api/crm-mappers";
 import type { ChatAttachment } from "@/lib/booking/chat-store";
@@ -63,7 +63,7 @@ export async function sendProviderChatMessage(
 }
 
 export async function markProviderChatRead(threadId: string) {
-  const response = await patchData(chatApi.providerRead(threadId), {});
+  const response = await putData(chatApi.providerRead(threadId), {});
   return mapCrmEntity(response, mapChatThread);
 }
 
@@ -137,7 +137,7 @@ export async function sendPublicChatMessage(
 }
 
 export async function markPublicChatRead(threadId: string, customerEmail: string) {
-  const response = await patchData(
+  const response = await putData(
     chatApi.publicRead(threadId),
     { customerEmail },
     {

@@ -1269,7 +1269,7 @@ export function CreateJobDialog({
           assignedTo: techId || undefined,
           scheduledAt: start,
           dueAt: due || undefined,
-          // Status has a separate PATCH /jobs/:id/status endpoint — do not change it here.
+          // Status has a separate PUT /jobs/:id/status endpoint — do not change it here.
           status: job.status,
           notes,
           lines: workLines,

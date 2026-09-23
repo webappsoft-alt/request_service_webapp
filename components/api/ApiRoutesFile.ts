@@ -71,7 +71,7 @@ export const providerApi = {
   portfolio: "provider/portfolio",
   /** GET/PUT/DELETE one portfolio project by id */
   portfolioItem: (id: string) => `provider/portfolio/${id}`,
-  /** PATCH toggle featured flag (no body) */
+  /** PUT toggle featured flag (no body) */
   portfolioFeature: (id: string) => `provider/portfolio/${id}/feature`,
 } as const;
 
@@ -164,7 +164,7 @@ export const providerCrmApi = {
   inboxSummary: "provider/chats/inbox-summary",
   /** GET list / POST create universal CRM notes */
   notes: "provider/notes",
-  /** GET/PUT/PATCH/DELETE one note by id */
+  /** GET/PUT/DELETE one note by id */
   note: (id: string) => `provider/notes/${id}`,
   /** GET aggregated business reports dashboard */
   reports: "provider/reports",

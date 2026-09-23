@@ -4,7 +4,7 @@ import {
   type PayloadAction,
 } from "@reduxjs/toolkit";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
-import { deleteData, getData, patchData, postData, putData } from "@/components/api/sliceHttp";
+import { deleteData, getData, postData, putData } from "@/components/api/sliceHttp";
 import { providerApi } from "@/components/api/ApiRoutesFile";
 
 export type PortfolioMediaType = "image" | "video";
@@ -492,7 +492,7 @@ export const togglePortfolioFeature = createAsyncThunk<
   { rejectValue: string }
 >("portfolio/toggleFeature", async (id, { rejectWithValue }) => {
   try {
-    const response = await patchData(
+    const response = await putData(
       providerApi.portfolioFeature(id),
       undefined,
       { silent: true },

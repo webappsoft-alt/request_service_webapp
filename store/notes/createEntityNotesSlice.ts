@@ -4,7 +4,7 @@ import {
   type PayloadAction,
 } from "@reduxjs/toolkit";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
-import { deleteData, getData, patchData, postData, putData } from "@/components/api/sliceHttp";
+import { deleteData, getData, postData, putData } from "@/components/api/sliceHttp";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 import {
   extractNoteEntity,
@@ -157,10 +157,7 @@ export function createEntityNotesSlice(options: {
         body.attachments = payload.attachments;
       }
 
-      const response =
-        payload.isPinned !== undefined && Object.keys(body).length === 1
-          ? await patchData(providerCrmApi.note(id), body, { silent: true })
-          : await putData(providerCrmApi.note(id), body, { silent: true });
+      const response = await putData(providerCrmApi.note(id), body, { silent: true });
 
       const entity = extractNoteEntity(response, entityType);
       if (!entity) {

@@ -105,7 +105,7 @@ export async function fetchNotifications(query: {
 }
 
 export async function markNotificationRead(id: string) {
-  const response = await http().patchData(
+  const response = await http().putData(
     notificationsApi.markRead(id),
     undefined,
     { silent: true },
@@ -119,7 +119,7 @@ export async function markNotificationRead(id: string) {
 }
 
 export async function markAllNotificationsRead() {
-  const response = await http().patchData(
+  const response = await http().putData(
     notificationsApi.markAllRead,
     undefined,
     { silent: true },

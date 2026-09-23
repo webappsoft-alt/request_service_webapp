@@ -124,7 +124,7 @@ function endpointRoot(endpoint: string): string {
     .replace(/\/[a-zA-Z0-9_-]{20,}(\/.*)?$/i, "");
 }
 
-/** Drop cached GETs for this resource after POST/PUT/PATCH/DELETE. */
+/** Drop cached GETs for this resource after POST/PUT/DELETE. */
 function invalidateCachedGets(endpoint: string): void {
   const root = endpointRoot(endpoint);
   if (!root) return;

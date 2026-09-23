@@ -62,10 +62,6 @@ function putData(...args: Parameters<typeof import("@/components/api/apiFuntions
   return http().putData(...args);
 }
 
-function patchData(...args: Parameters<typeof import("@/components/api/apiFuntions").patchData>) {
-  return http().patchData(...args);
-}
-
 function deleteData<T = unknown>(
   endpoint: string,
   options?: Parameters<typeof import("@/components/api/apiFuntions").deleteData>[1],
@@ -1253,7 +1249,7 @@ export async function createRequest(request: Partial<PortalRequest>) {
 }
 
 export async function updateRequestStatus(id: string, status: PortalRequest["status"]) {
-  const response = await patchData(providerCrmApi.requestStatus(id), { status });
+  const response = await putData(providerCrmApi.requestStatus(id), { status });
   const mapped = mapCrmEntity(response, mapPortalRequest);
   try {
     emitLeadStatusChange(id, status);
@@ -1621,7 +1617,7 @@ export async function updateEstimateActivity(
     title: payload.title.trim(),
     description: payload.description,
   };
-  const response = await patchData(
+  const response = await putData(
     providerCrmApi.estimateActivity(estimateId, activityId),
     body,
     { silent: false },
@@ -1748,7 +1744,7 @@ export async function updateTask(id: string, task: PortalTask) {
 }
 
 export async function updateTaskStatus(id: string, status: PortalTask["status"]) {
-  const response = await patchData(providerCrmApi.taskStatus(id), { status });
+  const response = await putData(providerCrmApi.taskStatus(id), { status });
   invalidateGetCache(providerCrmApi.tasks);
   return mapCrmEntity(response, mapPortalTask);
 }
@@ -1781,24 +1777,19 @@ export async function createReminder(reminder: PortalReminder) {
 
 export async function updateReminder(id: string, reminder: PortalReminder | Partial<PortalReminder>) {
   const payload = reminderPayload(reminder);
-  let response;
-  try {
-    response = await putData(providerCrmApi.reminder(id), payload);
-  } catch {
-    response = await patchData(providerCrmApi.reminder(id), payload);
-  }
+  const response = await putData(providerCrmApi.reminder(id), payload);
   invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }
 
 export async function updateReminderArchive(id: string, isArchived: boolean) {
-  const response = await patchData(providerCrmApi.reminder(id), { isArchived });
+  const response = await putData(providerCrmApi.reminder(id), { isArchived });
   invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }
 
 export async function updateReminderStatus(id: string, status: PortalReminder["status"]) {
-  const response = await patchData(providerCrmApi.reminderStatus(id), { status });
+  const response = await putData(providerCrmApi.reminderStatus(id), { status });
   invalidateGetCache(providerCrmApi.reminders);
   return mapCrmEntity(response, mapPortalReminder);
 }

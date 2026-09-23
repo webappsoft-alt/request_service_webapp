@@ -874,7 +874,7 @@ export function RequestDetailView({ id }: { id: string }) {
   }, [cachedSchedules, apiSchedules, events, id]);
 
   // Local-only heal: if a visit is on the calendar but badge still says Viewed, promote in Redux.
-  // Do NOT PATCH /status here — that re-fetches inbox noise and fails when API rejects "scheduled".
+  // Do NOT PUT /status here — that re-fetches inbox noise and fails when API rejects "scheduled".
   useEffect(() => {
     if (!request?.id) return;
     const stuck =
@@ -2537,7 +2537,7 @@ export function RequestDetailView({ id }: { id: string }) {
               : undefined;
             if (scheduledIso) {
               // Update Redux/detail from schedule response only — no View/Details reload,
-              // no status PATCH (assignSchedule already sets scheduled on the server).
+              // no status PUT (assignSchedule already sets scheduled on the server).
               dispatch(
                 setRequestStatusLocal({
                   id: request.id,

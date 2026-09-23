@@ -7,6 +7,7 @@ import {
   type ServiceJobListing,
 } from "@/components/marketplace/service-job-card";
 import { PortfolioGallery } from "@/components/marketplace/portfolio-lightbox";
+import { JobDetailFaqSection } from "@/components/marketplace/job-detail-faq-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderCard } from "@/components/shared/provider-card";
@@ -183,6 +184,8 @@ export function JobDetail({
                   ))}
                 </ul>
               </div>
+
+              <JobDetailFaqSection />
             </div>
 
             <aside className="rounded-2xl border bg-card p-5 shadow-sm lg:sticky lg:top-24">

@@ -25,6 +25,8 @@ import locationReducer from "./locationSlice";
 import publicFixedServicesReducer from "./publicFixedServicesSlice";
 import publicProfessionalsReducer from "./publicProfessionalsSlice";
 import contactUsReducer from "./contactUsSlice";
+import customerFaqsReducer from "./customerFaqsSlice";
+import providerFaqsReducer from "./providerFaqsSlice";
 import ordersReducer from "./ordersSlice";
 import providerOrdersReducer from "./providerOrdersSlice";
 import customersReducer from "./customersSlice";
@@ -72,6 +74,8 @@ const rootReducer = combineReducers({
   publicFixedServices: publicFixedServicesReducer,
   publicProfessionals: publicProfessionalsReducer,
   contactUs: contactUsReducer,
+  customerFaqs: customerFaqsReducer,
+  providerFaqs: providerFaqsReducer,
   orders: ordersReducer,
   providerOrders: providerOrdersReducer,
   customers: customersReducer,
@@ -142,6 +146,8 @@ function needsReducerHotReplace(state: RootState) {
     state.publicFixedServices === undefined ||
     state.publicProfessionals === undefined ||
     state.contactUs === undefined ||
+    state.customerFaqs === undefined ||
+    state.providerFaqs === undefined ||
     state.orders === undefined ||
     state.providerOrders === undefined ||
     state.customers === undefined ||

@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { Container, Section } from "@/components/layout/container";
 import { FaqList } from "@/components/shared/faq-list";
 import { FaqCardsSkeleton } from "@/components/shared/loading-skeletons";
@@ -10,45 +8,36 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { faqJsonLd } from "@/lib/json-ld";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  fetchCustomerFaqs,
-  selectCustomerFaqs,
-  selectCustomerFaqsLoading,
-} from "@/store/customerFaqsSlice";
+  fetchProviderFaqs,
+  selectProviderFaqs,
+  selectProviderFaqsLoading,
+} from "@/store/providerFaqsSlice";
 
-export function HomeFaqSection() {
+export function ProFaqSection() {
   const dispatch = useAppDispatch();
-  const items = useAppSelector(selectCustomerFaqs);
-  const loading = useAppSelector(selectCustomerFaqsLoading);
+  const items = useAppSelector(selectProviderFaqs);
+  const loading = useAppSelector(selectProviderFaqsLoading);
 
   useEffect(() => {
-    void dispatch(fetchCustomerFaqs());
+    void dispatch(fetchProviderFaqs());
   }, [dispatch]);
 
-  // Cached data: skip loading UI. Empty after load: hide section.
   if (!loading && items.length === 0) return null;
 
   return (
-    <Section>
+    <Section id="faq" density="tight">
       {items.length > 0 ? <JsonLd data={faqJsonLd(items)} /> : null}
       <Container className="grid items-start gap-12 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] lg:gap-20">
         <div className="flex flex-col gap-5 lg:sticky lg:top-28">
           <p className="eyebrow text-primary">FAQ</p>
           <h2 className="text-3xl font-semibold tracking-tight md:text-[2.5rem]">
-            Questions before you request
+            Questions from the office
           </h2>
           <p className="max-w-sm text-sm leading-7 text-muted-foreground">
-            How matching works, what a written estimate includes, and how you pay
-            once the job is done.
+            Short answers on accounts, subscriptions, and how work reaches your
+            portal.
           </p>
-          <Link
-            href="/faq"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors hover:text-foreground"
-          >
-            See all questions
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
         </div>
-
         {loading && items.length === 0 ? (
           <FaqCardsSkeleton count={6} />
         ) : (

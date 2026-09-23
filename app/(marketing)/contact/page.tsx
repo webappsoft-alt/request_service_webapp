@@ -3,9 +3,8 @@ import { ArrowRight, AtSign, Clock, Mail, MapPin, Phone } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { Button } from "@/components/ui/button";
 import { ContactForm } from "@/components/contact/contact-form";
-import { FaqList } from "@/components/shared/faq-list";
+import { ContactFaqList } from "@/components/contact/contact-faq-list";
 import { JsonLd } from "@/components/seo/json-ld";
-import { faqs } from "@/lib/data/content";
 import { breadcrumbJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import { siteConfig } from "@/lib/site";
@@ -17,10 +16,6 @@ export const metadata = buildMetadata({
   description: `Have a question or need support? Contact ${siteConfig.name} by form, email, or phone.`,
   path: "/contact",
 });
-
-const contactFaqs = faqs.filter((item) =>
-  ["customers", "bookings", "estimates"].includes(item.category)
-);
 
 export default function ContactPage() {
   return (
@@ -212,7 +207,7 @@ export default function ContactPage() {
               can help you succeed.
             </p>
           </div>
-          <FaqList items={contactFaqs} variant="cards" />
+          <ContactFaqList />
         </Container>
       </section>
     </>

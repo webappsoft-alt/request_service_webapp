@@ -858,3 +858,68 @@ export function ChatPanelSkeleton({ className }: { className?: string }) {
   );
 }
 
+/** Matches FaqList variant="cards" accordion rows. */
+export function FaqCardsSkeleton({
+  count = 6,
+  className,
+}: {
+  count?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn("flex flex-col gap-2", className)}
+      aria-hidden="true"
+      aria-busy="true"
+    >
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-3 rounded-xl border border-black/15 bg-card px-3.5 py-3.5 shadow-[0_1px_2px_rgb(0_63_125/6%),0_6px_14px_-6px_rgb(0_63_125/12%)]"
+        >
+          <Skeleton className="size-7 shrink-0 rounded-full" />
+          <Skeleton
+            className={cn(
+              "h-4 flex-1 rounded",
+              index % 3 === 0 ? "max-w-[88%]" : index % 3 === 1 ? "max-w-[72%]" : "max-w-[80%]",
+            )}
+          />
+          <Skeleton className="size-4 shrink-0 rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Matches FaqList variant="list" accordion rows. */
+export function FaqListSkeleton({
+  count = 4,
+  className,
+}: {
+  count?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn("flex flex-col border-t", className)}
+      aria-hidden="true"
+      aria-busy="true"
+    >
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={index}
+          className="flex items-center justify-between gap-4 border-b py-4"
+        >
+          <Skeleton
+            className={cn(
+              "h-5 rounded",
+              index % 2 === 0 ? "w-3/4" : "w-2/3",
+            )}
+          />
+          <Skeleton className="size-4 shrink-0 rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+

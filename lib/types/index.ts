@@ -589,7 +589,7 @@ export interface FaqItem {
   id: string;
   question: string;
   answer: string;
-  category:
+  category?:
     | "customers"
     | "providers"
     | "bookings"

@@ -216,6 +216,8 @@ export const publicApi = {
   blog: (slug: string) => `public/blogs/${slug}`,
   /** POST comment to a public blog by slug */
   blogComments: (slug: string) => `public/blogs/${slug}/comments`,
+  /** GET active FAQs — query: audience (`customer` | `provider`), optional domain */
+  faqs: "public/faqs",
 } as const;
 
 export const publicQuoteApi = {

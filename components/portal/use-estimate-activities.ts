@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/apiFuntions";
 import {
@@ -10,16 +10,35 @@ import {
 } from "@/lib/api/crm-client";
 import type { EstimateActivity } from "@/lib/types";
 
+function activitiesFingerprint(list?: EstimateActivity[]) {
+  if (!list) return "";
+  return list
+    .map((item) => `${item.id}:${item.updatedAt || item.createdAt}:${item.title}`)
+    .join("|");
+}
+
 export function useEstimateActivities(
   estimateId?: string,
   enabled = true,
   initialActivities?: EstimateActivity[],
   onMutate?: (next: EstimateActivity[]) => void,
 ) {
-  const [activities, setActivities] = useState<EstimateActivity[]>(() => initialActivities ?? []);
+  const [activities, setActivities] = useState<EstimateActivity[]>(
+    () => initialActivities ?? [],
+  );
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const estimateIdRef = useRef(estimateId);
+  const activitiesRef = useRef(activities);
+  const onMutateRef = useRef(onMutate);
+  const fingerprint = useMemo(
+    () => activitiesFingerprint(initialActivities),
+    [initialActivities],
+  );
+
+  activitiesRef.current = activities;
+  onMutateRef.current = onMutate;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -28,16 +47,39 @@ export function useEstimateActivities(
     };
   }, []);
 
-  // Synchronize when estimate.activities from getEstimate API changes
+  // Reset when navigating to a different estimate
   useEffect(() => {
-    if (initialActivities) {
-      setActivities(initialActivities);
+    if (estimateId !== estimateIdRef.current) {
+      estimateIdRef.current = estimateId;
+      setActivities(initialActivities ?? []);
     }
-  }, [initialActivities]);
+  }, [estimateId, initialActivities]);
+
+  // Sync from getEstimate / parent when the server payload identity changes.
+  // Fingerprint avoids wiping local state on unrelated parent re-renders that
+  // pass a new [] reference with the same contents.
+  useEffect(() => {
+    if (!enabled) return;
+    if (initialActivities === undefined) return;
+    setActivities(initialActivities);
+    // Only re-sync when the activity payload identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint gates sync
+  }, [enabled, fingerprint]);
+
+  const publish = useCallback((next: EstimateActivity[]) => {
+    activitiesRef.current = next;
+    setActivities(next);
+    // Defer parent/CRM updates so we never setState another component
+    // during this component's state updater / render path.
+    queueMicrotask(() => {
+      if (!mountedRef.current) return;
+      onMutateRef.current?.(next);
+    });
+  }, []);
 
   const addActivity = useCallback(
     async (title: string, description: string) => {
-      if (!estimateId) return null;
+      if (!estimateId || !enabled) return null;
       setSaving(true);
       try {
         const created = await createEstimateActivity(estimateId, {
@@ -45,11 +87,10 @@ export function useEstimateActivities(
           description: description.trim(),
         });
         if (created && mountedRef.current) {
-          setActivities((prev) => {
-            const next = [created, ...prev.filter((item) => item.id !== created.id)];
-            onMutate?.(next);
-            return next;
-          });
+          publish([
+            created,
+            ...activitiesRef.current.filter((item) => item.id !== created.id),
+          ]);
         }
         toast.success("Activity posted.");
         return created;
@@ -62,12 +103,12 @@ export function useEstimateActivities(
         }
       }
     },
-    [estimateId, onMutate],
+    [estimateId, enabled, publish],
   );
 
   const updateActivity = useCallback(
     async (activityId: string, title: string, description: string) => {
-      if (!estimateId || !activityId) return null;
+      if (!estimateId || !activityId || !enabled) return null;
       setSaving(true);
       try {
         const updated = await updateEstimateActivity(estimateId, activityId, {
@@ -75,11 +116,11 @@ export function useEstimateActivities(
           description: description.trim(),
         });
         if (updated && mountedRef.current) {
-          setActivities((prev) => {
-            const next = prev.map((item) => (item.id === activityId ? updated : item));
-            onMutate?.(next);
-            return next;
-          });
+          publish(
+            activitiesRef.current.map((item) =>
+              item.id === activityId ? updated : item,
+            ),
+          );
         }
         toast.success("Activity updated.");
         return updated;
@@ -92,21 +133,17 @@ export function useEstimateActivities(
         }
       }
     },
-    [estimateId, onMutate],
+    [estimateId, enabled, publish],
   );
 
   const deleteActivity = useCallback(
     async (activityId: string) => {
-      if (!estimateId || !activityId) return false;
+      if (!estimateId || !activityId || !enabled) return false;
       setDeletingId(activityId);
       try {
         await deleteEstimateActivity(estimateId, activityId);
         if (mountedRef.current) {
-          setActivities((prev) => {
-            const next = prev.filter((item) => item.id !== activityId);
-            onMutate?.(next);
-            return next;
-          });
+          publish(activitiesRef.current.filter((item) => item.id !== activityId));
         }
         toast.success("Activity deleted.");
         return true;
@@ -119,7 +156,7 @@ export function useEstimateActivities(
         }
       }
     },
-    [estimateId, onMutate],
+    [estimateId, enabled, publish],
   );
 
   return {

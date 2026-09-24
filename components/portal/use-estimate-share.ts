@@ -97,13 +97,44 @@ export function shareTokenFor(estimateId: string) {
   return `s_${estimateId}`;
 }
 
+/** Public customer estimate path: /e/{shareToken} */
 export function sharePath(token: string) {
-  return `/${token}`;
+  const cleaned = String(token || "")
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/^e\//i, "");
+  return `/e/${cleaned}`;
 }
 
-export function shareUrlFor(token: string) {
-  if (typeof window === "undefined") return sharePath(token);
-  return `${window.location.origin}${sharePath(token)}`;
+/**
+ * Live customer-facing site origin from `live_domain_url` /
+ * `NEXT_PUBLIC_LIVE_DOMAIN_URL`. Prefer the configured live domain over the
+ * current tab origin so Open customer view matches email links.
+ */
+export function customerSiteOrigin(): string {
+  const fromEnv = String(
+    process.env.NEXT_PUBLIC_LIVE_DOMAIN_URL ||
+      process.env.NEXT_PUBLIC_live_domain_url ||
+      "",
+  )
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\/+$/, "");
+  if (fromEnv) return fromEnv;
+  if (typeof window !== "undefined") {
+    return window.location.origin.replace(/\/+$/, "");
+  }
+  return "";
+}
+
+/** Same public estimate URL used by email "Review & sign" and Open customer view. */
+export function shareUrlFor(token: string, options?: { accept?: boolean }) {
+  const path = sharePath(token);
+  const origin = customerSiteOrigin();
+  const accept = options?.accept !== false;
+  const qs = accept ? "?accept=1" : "";
+  if (!origin) return `${path}${qs}`;
+  return `${origin}${path}${qs}`;
 }
 
 export function buildEstimateSnapshot(

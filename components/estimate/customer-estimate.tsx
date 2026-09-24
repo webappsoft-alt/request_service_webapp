@@ -162,7 +162,10 @@ function mapPublicEstimateToSnapshot(
       : null) ??
     {};
 
-  const companySignature = asRecord(estimate.signature);
+  const companySignature =
+    asRecord(estimate.companySignature) ??
+    asRecord(estimate.providerSignature) ??
+    asRecord(estimate.companyApproval);
   const approvalRaw = asRecord(estimate.approval);
   const estimateId =
     stringValue(estimate.id) ||
@@ -198,6 +201,7 @@ function mapPublicEstimateToSnapshot(
   const companySignedAt =
     toIso(companySignature?.signedAt) || toIso(estimate.companySignedAt);
   const companySignatureDataUrl =
+    stringValue(companySignature?.signatureImageBase64) ||
     stringValue(companySignature?.imageBase64) ||
     stringValue(companySignature?.signature) ||
     stringValue(estimate.companySignatureDataUrl);

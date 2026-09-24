@@ -71,26 +71,41 @@ export function EstimatePdfDocument({
         </div>
         <div className="mt-6">
           <p className="text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Work details</p>
-          <table className="mt-2 w-full border-collapse text-[12px]">
+          <table className="mt-2 w-full table-fixed border-collapse text-[12px]">
+            <colgroup>
+              <col className="w-[52%]" />
+              <col className="w-[12%]" />
+              <col className="w-[10%]" />
+              <col className="w-[13%]" />
+              <col className="w-[13%]" />
+            </colgroup>
             <thead>
               <tr className="border-y border-black/10 bg-[#e8eef5] text-[10px] tracking-[0.12em] text-[#003F7D] uppercase print:bg-transparent">
                 <th className="px-2 py-2 text-left font-semibold">Description</th>
-                <th className="px-2 py-2 text-left font-semibold">Type</th>
-                <th className="px-2 py-2 text-right font-semibold">Qty</th>
-                <th className="px-2 py-2 text-right font-semibold">Price</th>
+                <th className="px-1.5 py-2 text-left font-semibold">Type</th>
+                <th className="px-1.5 py-2 text-right font-semibold">Qty</th>
+                <th className="px-1.5 py-2 text-right font-semibold">Price</th>
                 <th className="px-2 py-2 text-right font-semibold">Amount</th>
               </tr>
             </thead>
             <tbody>
               {snapshot.items.map((row, index) => (
                 <tr key={`${row.description}-${index}`} className="border-b border-black/8">
-                  <td className="px-2 py-2 font-medium">{row.description || (row.kind === "labor" ? "Labor" : "Material")}</td>
-                  <td className="px-2 py-2 capitalize text-muted-foreground">{row.kind}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                  <td className="px-2 py-2 break-words font-medium">
+                    {row.description || (row.kind === "labor" ? "Labor" : "Material")}
+                  </td>
+                  <td className="px-1.5 py-2 capitalize whitespace-nowrap text-muted-foreground">
+                    {row.kind}
+                  </td>
+                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap text-muted-foreground">
                     {row.quantity} {row.unit}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums">{formatMoney(row.unitPrice)}</td>
-                  <td className="px-2 py-2 text-right font-medium tabular-nums">{formatMoney(row.total)}</td>
+                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap">
+                    {formatMoney(row.unitPrice)}
+                  </td>
+                  <td className="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap">
+                    {formatMoney(row.total)}
+                  </td>
                 </tr>
               ))}
             </tbody>

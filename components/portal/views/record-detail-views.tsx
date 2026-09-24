@@ -50,6 +50,7 @@ import {
 } from "@/components/portal/invoice-file";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import { patchEstimateLocally } from "@/store/estimatesSlice";
 import {
   fetchInvoiceDetail,
   patchInvoiceArchive,
@@ -167,6 +168,7 @@ import {
 
 export function EstimateDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const isProvider =
@@ -702,6 +704,17 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    onActivitiesChange={(next) => {
+                      setFetched((prev) =>
+                        prev ? { ...prev, activities: next } : prev,
+                      );
+                      dispatch(
+                        patchEstimateLocally({
+                          id: estimate.id,
+                          patch: { activities: next },
+                        }),
+                      );
+                    }}
                   />
                 );
               case "visit":
@@ -875,6 +888,17 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    onActivitiesChange={(next) => {
+                      setFetched((prev) =>
+                        prev ? { ...prev, activities: next } : prev,
+                      );
+                      dispatch(
+                        patchEstimateLocally({
+                          id: estimate.id,
+                          patch: { activities: next },
+                        }),
+                      );
+                    }}
                   />
                 );
             }

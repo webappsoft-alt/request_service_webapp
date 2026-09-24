@@ -180,9 +180,19 @@ export function EstimateShareTab({
   }
 
   async function openCustomerView() {
-    const targetUrl = displayUrl || (await publish());
-    if (!targetUrl) return;
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
+    const existingToken = String(
+      estimate.shareToken || snapshot?.token || "",
+    ).trim();
+    let token = existingToken;
+    if (!token) {
+      const publishedUrl = await publish();
+      if (!publishedUrl) return;
+      token =
+        publishedUrl.match(/\/e\/([^/?#]+)/)?.[1] ||
+        String(estimate.shareToken || "").trim();
+    }
+    if (!token) return;
+    window.open(shareUrlFor(token), "_blank", "noopener,noreferrer");
   }
 
   return (

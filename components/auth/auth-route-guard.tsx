@@ -53,6 +53,15 @@ function isCustomerProtected(pathname: string): boolean {
   return pathname === "/account" || pathname.startsWith("/account/");
 }
 
+/** Public customer estimate review/sign links (must work even when a Pro is logged in). */
+function isPublicEstimateSharePath(pathname: string): boolean {
+  if (pathname === "/e" || pathname.startsWith("/e/")) return true;
+  // Legacy share route: /{uuid}
+  return /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(
+    pathname,
+  );
+}
+
 function normalizeRole(
   role: string | null | undefined,
 ): "customer" | "provider" | null {
@@ -89,7 +98,8 @@ function readNextFromLocation(): string | null {
  * - Customers must never see /pro/* (including pro login).
  * - After customer login, send them to the customer landing (/) unless ?next= or a pending order resume exists.
  * - After provider login, send them to the provider dashboard (/pro/dashboard).
- * - Providers may stay on /pro/dashboard/*; other customer marketing/account routes bounce to the dashboard.
+ * - Providers may stay on /pro/dashboard/* and on public estimate share links (/e/*, legacy UUID).
+ * - Other customer marketing/account routes bounce providers to the dashboard.
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -106,7 +116,8 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const providerOffPortal =
     loggedIn &&
     role === "provider" &&
-    !isProDashboard(pathname);
+    !isProDashboard(pathname) &&
+    !isPublicEstimateSharePath(pathname);
   /** Hide pro chrome while bouncing a logged-in customer off /pro. */
   const customerOnPro = loggedIn && role === "customer" && isProArea(pathname);
 
@@ -145,8 +156,8 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (nextRole === "provider") {
-      // Stay on dashboard; auth screens, pro marketing landing, and customer site → dashboard.
-      if (isProDashboard(pathname)) {
+      // Stay on dashboard and public estimate customer-view links.
+      if (isProDashboard(pathname) || isPublicEstimateSharePath(pathname)) {
         return;
       }
       if (isProAuthPath(pathname) || isProLanding(pathname) || !isProArea(pathname)) {

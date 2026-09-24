@@ -225,6 +225,7 @@ export function JobSummaryTab({
   technician,
   noun = "job",
   locked = false,
+  onActivitiesChange,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -232,8 +233,13 @@ export function JobSummaryTab({
   technician: string;
   noun?: CostingNoun;
   locked?: boolean;
+  onActivitiesChange?: (next: Estimate["activities"]) => void;
 }) {
-  const { lines, mix } = useJobCosting(job, { preferApi: noun === "job" });
+  const { lines, mix } = useJobCosting(job, {
+    // Estimates: prefer line items from the estimate record so Labor/Materials
+    // kinds stay aligned with API (and labour spelling repairs), not stale localStorage.
+    preferApi: noun === "job" || Boolean(estimate),
+  });
   const sheet = jobMoneySheet(mix);
   const file = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();
@@ -245,6 +251,7 @@ export function JobSummaryTab({
     (next) => {
       if (estimate?.id) {
         crm.patchEstimate(estimate.id, { activities: next });
+        onActivitiesChange?.(next);
       }
     },
   );
@@ -256,13 +263,16 @@ export function JobSummaryTab({
   const materialLines = lines.filter((line) => line.kind === "materials");
 
   const activities: Array<{ id: string; title: string; html: string; actor: string; at: string }> = isEstimate
-    ? estimateActivities.activities.map((item) => ({
-        id: item.id,
-        title: item.title,
-        html: item.description,
-        actor: item.actor || "Desk",
-        at: item.createdAt,
-      }))
+    ? estimateActivities.activities
+        .slice()
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        .map((item) => ({
+          id: item.id,
+          title: item.title,
+          html: item.description,
+          actor: item.actor || "Desk",
+          at: item.createdAt,
+        }))
     : file.activities;
 
   const hasInvoice =
@@ -276,8 +286,123 @@ export function JobSummaryTab({
       ? `/pro/dashboard/invoices/${job.invoiceId}`
       : null;
 
+  const estimateAddress = estimate?.propertyAddress;
+  const estimateAddressLine = estimateAddress
+    ? [
+        estimateAddress.address || estimateAddress.street,
+        formatLocation(
+          estimateAddress.city,
+          estimateAddress.state,
+          estimateAddress.zip,
+        ),
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "";
+
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      {isEstimate && estimate ? (
+        <div className="lg:col-span-3">
+          <Panel title="Estimate details">
+          <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                Customer
+              </p>
+              <p className="mt-1 font-medium">
+                {estimate.customerId ? (
+                  <Link
+                    href={`/pro/dashboard/customers/${estimate.customerId}`}
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    {estimate.customerName?.trim() || "Customer"}
+                  </Link>
+                ) : (
+                  estimate.customerName?.trim() || "—"
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                Status
+              </p>
+              <p className="mt-1 font-medium capitalize">
+                {String(estimate.status || "").replace(/_/g, " ") || "—"}
+              </p>
+            </div>
+            {estimate.title?.trim() ? (
+              <div>
+                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  Title
+                </p>
+                <p className="mt-1 font-medium">{estimate.title}</p>
+              </div>
+            ) : null}
+            {estimateAddressLine ? (
+              <div className="sm:col-span-2">
+                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  Address
+                </p>
+                <p className="mt-1 font-medium">{estimateAddressLine}</p>
+              </div>
+            ) : null}
+            <div>
+              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                Issued
+              </p>
+              <p className="mt-1 font-medium">
+                {estimate.issuedAt ? formatDate(estimate.issuedAt) : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                Expires
+              </p>
+              <p className="mt-1 font-medium">
+                {estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"}
+              </p>
+            </div>
+            {estimate.customerPhone?.trim() ? (
+              <div>
+                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  Phone
+                </p>
+                <p className="mt-1 font-medium">{estimate.customerPhone}</p>
+              </div>
+            ) : null}
+            {estimate.customerEmail?.trim() ? (
+              <div>
+                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  Email
+                </p>
+                <p className="mt-1 font-medium break-all">{estimate.customerEmail}</p>
+              </div>
+            ) : null}
+            {estimate.notes?.trim() ? (
+              <div className="sm:col-span-2 xl:col-span-4">
+                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  Notes
+                </p>
+                <p className="mt-1 whitespace-pre-wrap font-medium text-muted-foreground">
+                  {estimate.notes}
+                </p>
+              </div>
+            ) : null}
+            {estimate.terms?.trim() ? (
+              <div className="sm:col-span-2 xl:col-span-4">
+                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                  Terms
+                </p>
+                <p className="mt-1 whitespace-pre-wrap font-medium text-muted-foreground">
+                  {estimate.terms}
+                </p>
+              </div>
+            ) : null}
+          </div>
+          </Panel>
+        </div>
+      ) : null}
       {isEstimate && estimate?.scheduledDate ? (
         <div className="lg:col-span-3 rounded-lg border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm">
           <p className="text-[10px] font-semibold tracking-[0.12em] text-sky-800 uppercase">

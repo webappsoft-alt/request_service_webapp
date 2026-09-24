@@ -475,7 +475,12 @@ export function EstimatesView() {
                         if (!linkUrl && useApi) {
                           try {
                             const res = await shareEstimate(row.id);
-                            if (res?.shareToken) {
+                            if (
+                              res?.absoluteShareUrl &&
+                              !/localhost|127\.0\.0\.1/i.test(res.absoluteShareUrl)
+                            ) {
+                              linkUrl = res.absoluteShareUrl;
+                            } else if (res?.shareToken) {
                               linkUrl = shareUrlFor(res.shareToken);
                             } else if (res?.shareUrl) {
                               linkUrl = res.shareUrl.startsWith("http")

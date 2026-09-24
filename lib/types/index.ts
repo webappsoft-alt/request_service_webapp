@@ -195,7 +195,10 @@ export interface Estimate {
   siteVisit?: EstimateSiteVisitRecord;
   /** Provider-assigned calendar date for this estimate. */
   scheduledDate?: string;
+  /** Customer digital acceptance (when signed). */
   signature?: EstimateSignature;
+  /** Provider / company authorization signature from Send for approval. */
+  companySignature?: EstimateSignature;
   shareToken?: string;
   shareUrl?: string;
   isArchived?: boolean;
@@ -261,6 +264,8 @@ export interface JobItem {
   unit: string;
   unitPrice: number;
   total: number;
+  /** When known (e.g. from EstimateItem.type). Prefer over description heuristics. */
+  kind?: "labor" | "materials";
 }
 
 export interface ChangeOrder {

@@ -4,6 +4,10 @@ import type { ReactElement } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
+import {
+  formatPendingBadgeCount,
+  useCustomerPendingBadge,
+} from "@/components/account/use-customer-pending-badge";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -38,6 +42,18 @@ export function SiteHeader() {
   }
 
   return <CustomerSiteHeader pathname={pathname} />;
+}
+
+function PendingCountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-card"
+      aria-label={`${count} pending notifications`}
+    >
+      {formatPendingBadgeCount(count)}
+    </span>
+  );
 }
 
 function CustomerSiteHeader({ pathname }: { pathname: string }) {
@@ -86,10 +102,11 @@ function CustomerSiteHeader({ pathname }: { pathname: string }) {
             <Button
               variant="outline"
               size="icon"
-              className="lg:hidden"
+              className="relative lg:hidden"
               aria-label="Open menu"
             >
               <Menu />
+              <MobileMenuPendingDot />
             </Button>
           </SheetTrigger>
           <SheetContent side="right" className="w-80">
@@ -134,6 +151,18 @@ function CustomerSiteHeader({ pathname }: { pathname: string }) {
   );
 }
 
+function MobileMenuPendingDot() {
+  const auth = useAppSelector(selectAuth);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const user = useAppSelector(selectAuthUser);
+  const showAccount = Boolean(user && (isAuthenticated || auth.token));
+  const isProvider = Boolean(user && user.role === "provider");
+  const { pendingCount } = useCustomerPendingBadge(
+    Boolean(auth.hydrated && showAccount && !isProvider),
+  );
+  return <PendingCountBadge count={pendingCount} />;
+}
+
 function HeaderActions({
   showAccount,
   user,
@@ -145,11 +174,15 @@ function HeaderActions({
   stacked?: boolean;
   closeOnNavigate?: boolean;
 }) {
+  const isProvider = Boolean(user && user.role === "provider");
+  const { pendingCount } = useCustomerPendingBadge(
+    Boolean(showAccount && user && !isProvider),
+  );
+
   const wrap = (node: ReactElement) =>
     closeOnNavigate ? <SheetClose asChild>{node}</SheetClose> : node;
 
   if (showAccount && user) {
-    const isProvider = user.role === "provider";
     const settingsHref = isProvider
       ? "/pro/dashboard/settings"
       : customerPaths.settings;
@@ -178,8 +211,15 @@ function HeaderActions({
             : (
                 <>
                   {wrap(
-                    <Button asChild>
-                      <Link href={customerPaths.dashboard}>Dashboard</Link>
+                    <Button asChild className="relative justify-between">
+                      <Link href={customerPaths.dashboard}>
+                        <span>Dashboard</span>
+                        {pendingCount > 0 ? (
+                          <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white">
+                            {formatPendingBadgeCount(pendingCount)}
+                          </span>
+                        ) : null}
+                      </Link>
                     </Button>,
                   )}
                   {wrap(
@@ -212,8 +252,11 @@ function HeaderActions({
     return (
       <div className="flex items-center gap-2">
         {!isProvider ? (
-          <Button asChild variant="outline" size="sm">
-            <Link href={customerPaths.dashboard}>Dashboard</Link>
+          <Button asChild variant="outline" size="sm" className="relative">
+            <Link href={customerPaths.dashboard} className="relative pr-1">
+              Dashboard
+              <PendingCountBadge count={pendingCount} />
+            </Link>
           </Button>
         ) : null}
         <UserAccountMenu user={user} />

@@ -254,15 +254,29 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
 }
 
 function jobItemsToApi(items: Job["items"]) {
-  return items.map((item) => ({
-    id: item.id,
-    description: item.description,
-    kind: item.source === "change_order" ? "material" : /labor/i.test(item.description) ? "labor" : "material",
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    taxRate: 0,
-    total: item.total,
-  }));
+  return items.map((item) => {
+    const text = String(item.description || "").toLowerCase();
+    const isLabor =
+      item.kind === "labor" ||
+      (item.kind !== "materials" &&
+        (text.includes("labor") ||
+          text.includes("labour") ||
+          String(item.unit || "").toLowerCase() === "hr"));
+    return {
+      id: item.id,
+      description: item.description,
+      kind:
+        item.source === "change_order"
+          ? "material"
+          : isLabor
+            ? "labor"
+            : "material",
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      taxRate: 0,
+      total: item.total,
+    };
+  });
 }
 
 function invoiceItemsToApi(items: Invoice["items"]) {
@@ -1516,8 +1530,31 @@ export async function finalizeEstimate(id: string, estimate?: Estimate) {
   }
 }
 
-export async function shareEstimate(id: string) {
-  const response = await postData(providerCrmApi.estimateShare(id), undefined, { silent: false });
+export type ShareEstimateInput = {
+  companySignedBy?: string;
+  companySignedAt?: string;
+  companySignatureDataUrl?: string;
+};
+
+export async function shareEstimate(id: string, input?: ShareEstimateInput) {
+  const body =
+    input?.companySignatureDataUrl || input?.companySignedBy
+      ? {
+          companySignature: {
+            signedBy: input.companySignedBy || "",
+            signatureImageBase64: input.companySignatureDataUrl || "",
+            signedAt: input.companySignedAt || new Date().toISOString(),
+          },
+          companySignedBy: input.companySignedBy,
+          companySignatureDataUrl: input.companySignatureDataUrl,
+          companySignedAt: input.companySignedAt,
+        }
+      : undefined;
+  const response = await postData(
+    providerCrmApi.estimateShare(id),
+    body,
+    { silent: false },
+  );
   const raw = ((response as { data?: unknown })?.data ?? response) as Record<string, unknown> | null;
   const payload = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const nestedEst = (payload.estimate && typeof payload.estimate === "object" ? payload.estimate : {}) as Record<string, unknown>;
@@ -1544,7 +1581,7 @@ export async function shareEstimate(id: string) {
   return {
     estimateId: String(payload.estimateId ?? payload.id ?? payload._id ?? nestedEst.id ?? nestedEst._id ?? id),
     shareToken,
-    shareUrl: shareUrl || (shareToken ? `/${shareToken}` : ""),
+    shareUrl: shareUrl || (shareToken ? `/e/${shareToken}` : ""),
     absoluteShareUrl: payload.absoluteShareUrl
       ? String(payload.absoluteShareUrl)
       : undefined,
@@ -1627,12 +1664,17 @@ export async function createEstimateActivity(
   if (mapped) return mapped;
   const raw = (response as { data?: unknown })?.data ?? response;
   const id = crmIdOf(raw);
+  const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
     id: id || `act_${Date.now()}`,
     estimateId,
     title: payload.title.trim(),
     description: payload.description,
-    createdAt: new Date().toISOString(),
+    actor: typeof record.actor === "string" ? record.actor : "Desk",
+    createdAt:
+      (typeof record.timestamp === "string" && record.timestamp) ||
+      (typeof record.createdAt === "string" && record.createdAt) ||
+      new Date().toISOString(),
   };
 }
 

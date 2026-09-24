@@ -1113,6 +1113,9 @@ export function mapEstimate(raw: unknown): Estimate | null {
     siteVisit: mapEstimateSiteVisit(record.siteVisit),
     scheduledDate: toIsoString(record.scheduledDate) || undefined,
     signature: mapApprovalSignature(record.approval ?? record.signature),
+    companySignature: mapApprovalSignature(
+      record.companySignature ?? record.providerSignature ?? record.companyApproval,
+    ),
     shareToken: trimmed(record.shareToken || record.token || record.share_token) || undefined,
     shareUrl: trimmed(record.shareUrl || record.customerUrl || record.publicUrl) || undefined,
     isArchived: record.isArchived !== undefined || record.isArchieved !== undefined

@@ -60,10 +60,26 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function classifyJobLine(item: JobItem): JobCostKind {
-  const text = item.description.toLowerCase();
+  if (item.kind === "labor" || item.kind === "materials") return item.kind;
   if (item.source === "change_order") return "materials";
-  if (text.includes("labor")) return "labor";
+  const text = item.description.toLowerCase();
+  // Match US "labor" and UK "labour" (e.g. "LABOUR WORK").
+  if (text.includes("labor") || text.includes("labour")) return "labor";
+  if (String(item.unit || "").trim().toLowerCase() === "hr") return "labor";
   return "materials";
+}
+
+/** Repair misclassified lines (e.g. localStorage seeded before labour spelling was handled). */
+export function repairCostLineKind(line: JobCostLine): JobCostLine {
+  const text = line.description.toLowerCase();
+  const looksLikeLabor =
+    text.includes("labor") ||
+    text.includes("labour") ||
+    String(line.unit || "").trim().toLowerCase() === "hr";
+  if (looksLikeLabor && line.kind !== "labor") {
+    return { ...line, kind: "labor" };
+  }
+  return line;
 }
 
 export function seedJobLines(job: Job): JobCostLine[] {
@@ -146,8 +162,9 @@ export function useJobCosting(job: Job, options?: { preferApi?: boolean }) {
     () => readStore(key),
     () => EMPTY,
   );
-  const seeded = seedJobLines(job);
-  const lines = options?.preferApi ? seeded : (store[job.id] ?? seeded);
+  const seeded = seedJobLines(job).map(repairCostLineKind);
+  const stored = store[job.id]?.map(repairCostLineKind);
+  const lines = options?.preferApi ? seeded : (stored ?? seeded);
   const mix = jobCostMix(lines);
 
   const commit = useCallback(

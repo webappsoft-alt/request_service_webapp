@@ -125,7 +125,11 @@ export function SendApprovalDialog({
                 return;
               }
               try {
-                const shared = await shareEstimate(estimate.id);
+                const shared = await shareEstimate(estimate.id, {
+                  companySignedBy: signed.companySignedBy,
+                  companySignedAt: signed.companySignedAt,
+                  companySignatureDataUrl: signed.companySignatureDataUrl,
+                });
                 const token = String(shared.shareToken || "").trim();
                 if (!token) {
                   throw new Error(
@@ -137,6 +141,11 @@ export function SendApprovalDialog({
                 crm.patchEstimate(estimate.id, {
                   status: nextStatus,
                   shareToken: token,
+                  companySignature: {
+                    signedBy: signed.companySignedBy || "",
+                    signedAt: signed.companySignedAt || new Date().toISOString(),
+                    imageBase64: signed.companySignatureDataUrl,
+                  },
                 });
                 const next = { ...signed, token };
                 share.saveSnapshot(next);

@@ -66,6 +66,7 @@ export function linesToJobItems(jobId: string, lines: JobCostLine[]): JobItem[] 
     unit: line.unit,
     unitPrice: line.unitPrice,
     total: lineTotal(line),
+    kind: line.kind,
   }));
 }
 
@@ -123,12 +124,13 @@ export function estimateAsJob(estimate: Estimate): Job {
     items: estimate.items.map((item) => ({
       id: item.id,
       jobId: estimate.id,
-      source: "estimate",
+      source: "estimate" as const,
       description: item.description,
       quantity: item.quantity,
       unit: item.unit,
       unitPrice: item.unitPrice,
       total: item.total,
+      kind: item.type === "labor" ? ("labor" as const) : ("materials" as const),
     })),
     changeOrders: [],
     createdAt: estimate.createdAt,

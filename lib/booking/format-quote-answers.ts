@@ -47,7 +47,8 @@ export function formatIntakeQuote(answers: IntakeAnswers) {
 
   for (const step of steps) {
     if (step.type === "contact" || step.id === "zip" || step.id === "address" || step.id === "details") continue;
-    const raw = answers[step.id]?.trim();
+    const rawValue = answers[step.id];
+    const raw = typeof rawValue === "string" ? rawValue.trim() : "";
     if (!raw) continue;
     const value = step.options?.find((option) => option.value === raw)?.label ?? raw;
     listed.push({

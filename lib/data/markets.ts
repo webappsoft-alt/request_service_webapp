@@ -145,7 +145,7 @@ export function parsePlaceInput(value?: string): ExplorePlace {
     };
   }
 
-  if (lastAsState && (last.length === 2 || Boolean(STATE_BY_NAME[last.toLowerCase()]))) {
+  if (lastAsState) {
     return { state: lastAsState, location: trimmed };
   }
 

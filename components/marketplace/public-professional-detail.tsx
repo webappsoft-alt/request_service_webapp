@@ -20,7 +20,6 @@ import type {
 } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { trackLeadInteraction } from "@/lib/api/crm-client";
-import { readChatGuest } from "@/lib/booking/chat-store";
 import {
   normalizePortfolioProject,
   type PortfolioProject,
@@ -407,17 +406,20 @@ export function PublicProfessionalDetail({
     const targetSlug = professionalSlug || professional?.slug || fallbackProvider?.slug;
     const targetId = professional?.id || fallbackProvider?.id;
     if (!targetSlug && !targetId) return;
-    const trackKey = `${targetId || targetSlug}`;
+
+    // Only logged-in registered customers create profile-view leads (once per provider).
+    const customerEmail = String(authUser?.email || "").trim();
+    if (!customerEmail) return;
+    if (authUser?.role && authUser.role !== "customer") return;
+
+    const trackKey = `${targetId || targetSlug}|${customerEmail.toLowerCase()}`;
     if (trackedRef.current === trackKey) return;
     trackedRef.current = trackKey;
 
-    const guest = readChatGuest();
     const customerName =
       [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
       authUser?.name ||
-      guest?.name ||
       "";
-    const customerEmail = authUser?.email || guest?.email || "";
     const phone = authUser?.phone || "";
 
     void trackLeadInteraction({

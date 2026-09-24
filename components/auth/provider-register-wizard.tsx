@@ -36,6 +36,10 @@ import {
 } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  PROVIDER_CONTACT_ROLES,
+  normalizeProviderContactRole,
+} from "@/lib/data/portal";
 import { serviceCategories } from "@/lib/data/services";
 import {
   savePendingRegistration,
@@ -94,7 +98,6 @@ type Draft = {
   longitude: string;
   categoryIds: string[];
   jobs: string[];
-  startingPrice: string;
   description: string;
   yearsInBusiness: string;
   licensed: boolean;
@@ -125,7 +128,6 @@ const emptyDraft: Draft = {
   longitude: "",
   categoryIds: [],
   jobs: [],
-  startingPrice: "",
   description: "",
   yearsInBusiness: "",
   licensed: false,
@@ -296,7 +298,6 @@ export function ProviderRegisterWizard() {
       return;
     }
 
-    const startingPrice = Number(draft.startingPrice);
     const yearsInBusiness = Number(draft.yearsInBusiness);
 
     const pending: PendingProviderRegistration = {
@@ -322,7 +323,6 @@ export function ProviderRegisterWizard() {
       location: buildLocation(),
       categoryIds: draft.categoryIds.length ? draft.categoryIds : undefined,
       offeredJobs: draft.jobs.length ? draft.jobs : undefined,
-      startingPrice: Number.isFinite(startingPrice) ? startingPrice : undefined,
       description: draft.description.trim() || undefined,
       yearsInBusiness: Number.isFinite(yearsInBusiness)
         ? yearsInBusiness
@@ -335,7 +335,7 @@ export function ProviderRegisterWizard() {
       licensed: draft.licensed,
       insured: draft.insured,
       website: draft.website.trim() || undefined,
-      contactRole: draft.contactRole.trim() || undefined,
+      contactRole: normalizeProviderContactRole(draft.contactRole) || undefined,
       serviceArea: draft.areaNames.length ? draft.areaNames : undefined,
       country:
         draft.country.trim() ||
@@ -695,18 +695,6 @@ export function ProviderRegisterWizard() {
                 Choose at least one category, or skip and add services later.
               </p>
             )}
-
-            <Field>
-              <FieldLabel htmlFor="starting-price">Starting price</FieldLabel>
-              <Input
-                id="starting-price"
-                inputMode="numeric"
-                value={draft.startingPrice}
-                onChange={(event) => patch({ startingPrice: event.target.value })}
-                placeholder="Optional — e.g. 129"
-              />
-              <FieldDescription>Shown as “Starting from” on your public profile.</FieldDescription>
-            </Field>
           </FieldGroup>
         ) : null}
 
@@ -785,12 +773,25 @@ export function ProviderRegisterWizard() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="role">Your role</FieldLabel>
-                <Input
-                  id="role"
-                  value={draft.contactRole}
-                  onChange={(event) => patch({ contactRole: event.target.value })}
-                  placeholder="Optional — Owner, dispatcher…"
-                />
+                <Select
+                  value={normalizeProviderContactRole(draft.contactRole) || undefined}
+                  onValueChange={(value) => patch({ contactRole: value })}
+                >
+                  <SelectTrigger id="role" className="w-full">
+                    <SelectValue placeholder="Optional — select a role" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    align="start"
+                    className="z-[100] w-[var(--radix-select-trigger-width)]"
+                  >
+                    {PROVIDER_CONTACT_ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {role}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
           </FieldGroup>

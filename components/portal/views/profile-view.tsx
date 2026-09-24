@@ -46,7 +46,7 @@ import {
   getServiceCategoryById,
   serviceCategories,
 } from "@/lib/data/services";
-import { cloneWorkingHours } from "@/lib/data/portal";
+import { cloneWorkingHours, PROVIDER_CONTACT_ROLES, normalizeProviderContactRole } from "@/lib/data/portal";
 import {
   asAuthProvider,
   type AuthProviderRecord,
@@ -173,7 +173,7 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
     phone: String(provider?.phone || ""),
     email: String(provider?.email || ""),
     website: String(provider?.website || ""),
-    contactRole: String(provider?.contactRole || ""),
+    contactRole: normalizeProviderContactRole(provider?.contactRole),
     streetAddress: String(loc?.address || ""),
     city: String(loc?.city || ""),
     state: String(typeof loc?.state === "string" ? loc.state : ""),
@@ -194,10 +194,6 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
       ? (String(provider?.profile?.language).trim() as ProviderLanguage)
       : ("" as const),
     paymentMethods: normalizePaymentMethods(provider?.profile?.paymentMethods),
-    startingPrice:
-      typeof provider?.services?.startingPrice === "number"
-        ? String(provider.services.startingPrice)
-        : "",
     categoryIds: Array.isArray(provider?.services?.categoryIds)
       ? [...provider.services.categoryIds]
       : [],
@@ -252,7 +248,6 @@ export function ProfileView() {
   const [paymentMethods, setPaymentMethods] = useState<ProviderPaymentMethod[]>(
     [],
   );
-  const [startingPrice, setStartingPrice] = useState("");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [jobs, setJobs] = useState<string[]>([]);
   const [areaIds, setAreaIds] = useState<string[]>([]);
@@ -365,7 +360,6 @@ export function ProfileView() {
       setEmployeeCount(next.employeeCount);
       setLanguage(next.language);
       setPaymentMethods(next.paymentMethods);
-      setStartingPrice(next.startingPrice);
       setCategoryIds(next.categoryIds);
       setJobs(next.jobs);
       setAreaIds(next.areaIds);
@@ -467,7 +461,6 @@ export function ProfileView() {
     }
 
     const years = Number(yearsInBusiness);
-    const price = Number(startingPrice);
     const location = buildLocation();
     const nextPhone = phone.trim();
 
@@ -479,11 +472,10 @@ export function ProfileView() {
       phone: nextPhone || undefined,
       email: email.trim() || undefined,
       website: website.trim() || undefined,
-      contactRole: contactRole.trim() || undefined,
+      contactRole: normalizeProviderContactRole(contactRole) || undefined,
       ...(location ? { location } : {}),
       categoryIds,
       offeredJobs: jobs,
-      ...(Number.isFinite(price) ? { startingPrice: price } : {}),
       neighborhoods: areaIds,
       serviceArea: areaIds,
       yearsInBusiness: Number.isFinite(years) ? years : undefined,
@@ -561,12 +553,11 @@ export function ProfileView() {
         phone: nextPhone,
         email: email.trim(),
         website: website.trim(),
-        contactRole: contactRole.trim(),
+        contactRole: normalizeProviderContactRole(contactRole),
         location: location || fromApi?.location || authProvider?.location,
         services: fromApi?.services || {
           categoryIds,
           offeredJobs: jobs,
-          ...(Number.isFinite(price) ? { startingPrice: price } : {}),
         },
         profile: fromApi?.profile || {
           ...(Number.isFinite(years) ? { yearsInBusiness: years } : {}),
@@ -603,9 +594,6 @@ export function ProfileView() {
               )
             : jobs,
         );
-        if (typeof savedServices.startingPrice === "number") {
-          setStartingPrice(String(savedServices.startingPrice));
-        }
       }
       if (savedCoverage && Array.isArray(savedCoverage.neighborhoods)) {
         setAreaIds(coverageNeighborhoodIds(savedCoverage.neighborhoods));
@@ -1140,12 +1128,25 @@ export function ProfileView() {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="contact-role">Your role</FieldLabel>
-                  <Input
-                    id="contact-role"
-                    value={contactRole}
-                    onChange={(event) => setContactRole(event.target.value)}
-                    placeholder="Owner, Manager…"
-                  />
+                  <Select
+                    value={normalizeProviderContactRole(contactRole) || undefined}
+                    onValueChange={setContactRole}
+                  >
+                    <SelectTrigger id="contact-role" className="w-full">
+                      <SelectValue placeholder="Optional — select a role" />
+                    </SelectTrigger>
+                    <SelectContent
+                      position="popper"
+                      align="start"
+                      className="z-[100] w-[var(--radix-select-trigger-width)]"
+                    >
+                      {PROVIDER_CONTACT_ROLES.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
               </div>
             </FieldGroup>
@@ -1220,20 +1221,6 @@ export function ProfileView() {
               Pick the catalog jobs customers should see under each service.
             </p>
             <FieldGroup className="mt-4">
-              <Field className="max-w-xs">
-                <FieldLabel htmlFor="starting-price">Starting price</FieldLabel>
-                <Input
-                  id="starting-price"
-                  inputMode="numeric"
-                  value={startingPrice}
-                  onChange={(event) => setStartingPrice(event.target.value)}
-                  placeholder="Optional — e.g. 129"
-                />
-                <FieldDescription>
-                  Shown as “Starting from” on your public profile.
-                </FieldDescription>
-              </Field>
-
               {selectedCategories.length ? (
                 <div className="flex flex-col gap-5">
                   {selectedCategories.map((category) => {

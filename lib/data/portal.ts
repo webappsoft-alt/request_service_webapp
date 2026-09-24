@@ -147,6 +147,32 @@ export type PortalRevenuePoint = {
 
 export type PortalEmployeeRole = "owner" | "technician" | "estimator" | "dispatcher";
 
+/** Provider signup / profile “Your role” options (aligned with team roles). */
+export const PROVIDER_CONTACT_ROLES = [
+  "Owner",
+  "Team member",
+  "Estimator",
+  "Dispatcher",
+] as const;
+export type ProviderContactRole = (typeof PROVIDER_CONTACT_ROLES)[number];
+
+export function normalizeProviderContactRole(value: string | undefined | null): string {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  const byLabel = PROVIDER_CONTACT_ROLES.find(
+    (role) => role.toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (byLabel) return byLabel;
+  const slugMap: Record<string, ProviderContactRole> = {
+    owner: "Owner",
+    technician: "Team member",
+    "team member": "Team member",
+    estimator: "Estimator",
+    dispatcher: "Dispatcher",
+  };
+  return slugMap[trimmed.toLowerCase()] || "";
+}
+
 /** MD Workforce `workingHours` matrix — minutes from midnight. */
 export type PortalEmployeeWorkingHours = {
   day:

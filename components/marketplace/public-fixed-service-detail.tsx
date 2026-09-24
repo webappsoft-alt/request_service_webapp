@@ -33,7 +33,6 @@ import {
 } from "@/store/ordersSlice";
 import { selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
 import { trackLeadInteraction } from "@/lib/api/crm-client";
-import { readChatGuest } from "@/lib/booking/chat-store";
 import type { JobRecord } from "@/lib/data/jobs";
 import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
@@ -425,17 +424,20 @@ export function PublicFixedServiceDetail({
 
   useEffect(() => {
     if (!service) return;
-    const trackKey = `${service.id || serviceSlug}`;
+
+    // Only logged-in registered customers create browsing leads (once per provider).
+    const customerEmail = String(authUser?.email || "").trim();
+    if (!customerEmail) return;
+    if (authUser?.role && authUser.role !== "customer") return;
+
+    const trackKey = `${service.id || serviceSlug}|${customerEmail.toLowerCase()}`;
     if (trackedRef.current === trackKey) return;
     trackedRef.current = trackKey;
 
-    const guest = readChatGuest();
     const customerName =
       [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
       authUser?.name ||
-      guest?.name ||
       "";
-    const customerEmail = authUser?.email || guest?.email || "";
     const phone = authUser?.phone || "";
 
     void trackLeadInteraction({

@@ -26,7 +26,6 @@ export type AuthProviderRecord = {
   services?: {
     categoryIds?: string[];
     offeredJobs?: string[];
-    startingPrice?: number;
     [key: string]: unknown;
   };
   profile?: {

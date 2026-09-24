@@ -106,10 +106,6 @@ export function BusinessProfileDetailView() {
     authProvider?.coverage?.neighborhoods,
     areasById,
   );
-  const startingPrice =
-    typeof authProvider?.services?.startingPrice === "number"
-      ? authProvider.services.startingPrice
-      : null;
   const years =
     typeof authProvider?.profile?.yearsInBusiness === "number"
       ? authProvider.profile.yearsInBusiness
@@ -319,12 +315,6 @@ export function BusinessProfileDetailView() {
                   No service categories selected yet.
                 </p>
               )}
-              {startingPrice != null ? (
-                <p className="text-sm">
-                  Starting from{" "}
-                  <span className="font-semibold tabular-nums">${startingPrice}</span>
-                </p>
-              ) : null}
             </CardContent>
           </Card>
 

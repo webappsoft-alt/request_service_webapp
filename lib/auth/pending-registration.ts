@@ -45,7 +45,6 @@ export type PendingProviderRegistration = {
   location?: PendingCustomerRegistration["location"];
   categoryIds?: string[];
   offeredJobs?: string[];
-  startingPrice?: number;
   description?: string;
   yearsInBusiness?: number;
   employeeCount?: string;

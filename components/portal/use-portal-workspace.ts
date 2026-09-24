@@ -296,10 +296,6 @@ export function usePortalWorkspace() {
         images: Array.isArray(authProvider?.images)
           ? authProvider.images.filter((item): item is string => typeof item === "string")
           : [],
-        startingPrice:
-          typeof authProvider?.services?.startingPrice === "number"
-            ? authProvider.services.startingPrice
-            : undefined,
         tagline: String(authProvider?.tagline || ""),
         description: String(authProvider?.description || ""),
         rating: 0,
@@ -389,10 +385,6 @@ export function usePortalWorkspace() {
       employeeCount: String(
         authProvider?.profile?.employeeCount || seed.employeeCount || "",
       ),
-      startingPrice:
-        typeof authProvider?.services?.startingPrice === "number"
-          ? authProvider.services.startingPrice
-          : seed.startingPrice,
       workingHours: (() => {
         const fromAuth = workingHoursFromProvider(authProvider);
         return fromAuth.length ? fromAuth : seed.workingHours;

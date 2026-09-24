@@ -73,6 +73,8 @@ import {
 import {
   deleteEstimate,
   queryEstimates,
+  queryInvoices,
+  resolveCrmObjectId,
   shareEstimate,
   updateEstimateStatus,
 } from "@/lib/api/crm-client";
@@ -805,8 +807,35 @@ export function JobsView() {
     if (convertingId) return;
     const existingInvoiceId = row.invoiceId?.trim();
     if (existingInvoiceId) {
-      router.push(`/pro/dashboard/invoices/${existingInvoiceId}`);
-      return;
+      const mongo = resolveCrmObjectId(existingInvoiceId);
+      if (mongo) {
+        router.push(`/pro/dashboard/invoices/${mongo}`);
+        return;
+      }
+      // Stale offline inv_* key — prefer the live CRM invoice for this job.
+      const linked = records
+        .mergeInvoices(invoices)
+        .find((item) => item.jobId === row.id);
+      if (linked?.id) {
+        router.push(`/pro/dashboard/invoices/${linked.id}`);
+        return;
+      }
+      try {
+        const list = await queryInvoices({ jobId: row.id, limit: 5, silent: true });
+        if (list.items[0]?.id) {
+          router.push(`/pro/dashboard/invoices/${list.items[0].id}`);
+          return;
+        }
+      } catch {
+        // Fall through.
+      }
+      if (row.status === "invoiced" || row.status === "paid") {
+        toast.error(
+          "This job is invoiced but the invoice link is outdated. Open the job to refresh.",
+        );
+        router.push(`/pro/dashboard/jobs/${row.id}`);
+        return;
+      }
     }
     if (row.status === "invoiced" || row.status === "paid") {
       toast.error("This job is marked invoiced but has no invoice link yet.");
@@ -957,7 +986,7 @@ export function JobsView() {
               ? {
                   label: row.invoiceId ? "Open invoice" : "Invoiced",
                   href: row.invoiceId
-                    ? `/pro/dashboard/invoices/${row.invoiceId}`
+                    ? `/pro/dashboard/invoices/${resolveCrmObjectId(row.invoiceId) || row.invoiceId}`
                     : `/pro/dashboard/jobs/${row.id}`,
                 }
               : {

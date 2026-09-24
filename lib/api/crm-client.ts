@@ -1863,13 +1863,13 @@ export async function convertJobToInvoice(
   id: string,
   options?: { clientId?: string },
 ) {
-  const body =
-    options?.clientId && String(options.clientId).trim()
-      ? { clientId: String(options.clientId).trim() }
-      : undefined;
+  // Always send a portal clientId so GET /invoices/inv_xxx resolves after convert.
+  const clientId =
+    (options?.clientId && String(options.clientId).trim()) ||
+    `inv_${Date.now().toString(36)}`;
   const response = await postData(
     providerCrmApi.jobConvertToInvoice(id),
-    body,
+    { clientId },
     { silent: false },
   );
   return mapCrmEntity(response, mapInvoice);

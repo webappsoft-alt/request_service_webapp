@@ -68,7 +68,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateEstimate as updateEstimateApi, updateEstimateAttachments, updateInvoiceAttachments, updateJobAttachments, assignSchedule, updateSchedule } from "@/lib/api/crm-client";
+import {
+  updateEstimate as updateEstimateApi,
+  updateEstimateAttachments,
+  updateInvoiceAttachments,
+  updateJobAttachments,
+  assignSchedule,
+  updateSchedule,
+  resolveCrmObjectId,
+} from "@/lib/api/crm-client";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { useAppDispatch } from "@/store/hooks";
 import {
@@ -306,7 +314,7 @@ export function JobSummaryTab({
   const invoiceHref = invoice?.id
     ? `/pro/dashboard/invoices/${invoice.id}`
     : job.invoiceId
-      ? `/pro/dashboard/invoices/${job.invoiceId}`
+      ? `/pro/dashboard/invoices/${resolveCrmObjectId(job.invoiceId) || job.invoiceId}`
       : null;
 
   const estimateAddress = estimate?.propertyAddress;
@@ -815,7 +823,7 @@ export function JobSettingsTab({
   const invoiceHref = invoice?.id
     ? `/pro/dashboard/invoices/${invoice.id}`
     : job.invoiceId
-      ? `/pro/dashboard/invoices/${job.invoiceId}`
+      ? `/pro/dashboard/invoices/${resolveCrmObjectId(job.invoiceId) || job.invoiceId}`
       : null;
   const hasInvoice = Boolean(invoiceHref) || job.status === "invoiced" || job.status === "paid";
   const assigneeLabel = (() => {

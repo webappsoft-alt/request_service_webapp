@@ -1387,7 +1387,10 @@ export function mapInvoice(raw: unknown): Invoice | null {
   const record = asRecord(raw);
   if (!record) return null;
 
-  const id = crmIdOf(record);
+  const mongoId = crmIdOf(record);
+  // Prefer portal clientId (inv_xxx) so list/detail URLs match GET /invoices/:clientId.
+  const clientId = trimmed(record.clientId);
+  const id = clientId || mongoId;
   if (!id) return null;
 
   return {

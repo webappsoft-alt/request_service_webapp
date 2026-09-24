@@ -195,13 +195,12 @@ export function PaginatedEntitySelect({
   }, [open]);
 
   useEffect(() => {
-    if (!showSearch) return;
+    if (!open || !searchable) return;
     const frame = window.requestAnimationFrame(() => {
       searchRef.current?.focus();
-      searchRef.current?.select();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [showSearch]);
+  }, [open, searchable]);
 
   useEffect(() => {
     if (!open) return;

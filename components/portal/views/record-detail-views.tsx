@@ -121,6 +121,7 @@ import {
   getEstimate,
   getJob,
   getInvoiceWithPayments,
+  queryInvoices,
   resolveCrmObjectId,
   sendInvoice as sendInvoiceApi,
   updateEstimate as updateEstimateApi,
@@ -1319,8 +1320,30 @@ export function JobDetailView({ id }: { id: string }) {
     ) {
       // Prefer live CRM invoice linked on the job over stale local inv_* ids.
       if (crm.enabled && currentJob.invoiceId) {
-        router.push(`/pro/dashboard/invoices/${currentJob.invoiceId}`);
-        return;
+        const liveId =
+          resolveCrmObjectId(currentJob.invoiceId) || currentJob.invoiceId;
+        if (resolveCrmObjectId(currentJob.invoiceId)) {
+          router.push(`/pro/dashboard/invoices/${liveId}`);
+          return;
+        }
+        const linked = allInvoices.find((item) => item.jobId === currentJob.id);
+        if (linked?.id) {
+          router.push(`/pro/dashboard/invoices/${linked.id}`);
+          return;
+        }
+        try {
+          const list = await queryInvoices({
+            jobId: currentJob.id,
+            limit: 5,
+            silent: true,
+          });
+          if (list.items[0]?.id) {
+            router.push(`/pro/dashboard/invoices/${list.items[0].id}`);
+            return;
+          }
+        } catch {
+          // Fall through to error toast.
+        }
       }
       toast.error("This job is already invoiced but the invoice could not be loaded.");
       return;
@@ -1739,6 +1762,7 @@ export function JobDetailView({ id }: { id: string }) {
 
 export function InvoiceDetailView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const useApi =
@@ -1809,16 +1833,57 @@ export function InvoiceDetailView({ id }: { id: string }) {
       : "Customer";
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [resolvingStale, setResolvingStale] = useState(false);
 
   useEffect(() => {
     if (!useApi || !invoiceRef) return;
-    void dispatch(fetchInvoiceDetail(invoiceRef));
-  }, [dispatch, useApi, invoiceRef]);
+    let cancelled = false;
+
+    void (async () => {
+      const result = await dispatch(fetchInvoiceDetail(invoiceRef));
+      if (cancelled) return;
+      if (fetchInvoiceDetail.fulfilled.match(result)) return;
+
+      // Stale offline key (inv_muf…) — recover via the linked job’s live invoice.
+      const isLocalPortalKey =
+        /^inv_/i.test(invoiceRef) && !resolveCrmObjectId(invoiceRef);
+      if (!isLocalPortalKey) return;
+
+      setResolvingStale(true);
+      const linkedJob =
+        allJobs.find(
+          (item) =>
+            item.invoiceId === invoiceRef ||
+            records.linkedId("job", item.id) === invoiceRef,
+        ) ?? null;
+      const jobId = linkedJob?.id;
+      if (!jobId) {
+        if (!cancelled) setResolvingStale(false);
+        return;
+      }
+      try {
+        const list = await queryInvoices({ jobId, limit: 5, silent: true });
+        const liveId = list.items[0]?.id;
+        if (!cancelled && liveId && liveId !== invoiceRef) {
+          router.replace(`/pro/dashboard/invoices/${liveId}`);
+        }
+      } catch {
+        // Keep the not-found state.
+      } finally {
+        if (!cancelled) setResolvingStale(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // allJobs/records intentionally omitted — recover once per invoiceRef
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, useApi, invoiceRef, router]);
 
   if (!invoice) {
-    // Wait only while this detail request is in flight — never spin forever
-    // on local/demo ids or CRM bootstrap.
-    if (useApi && detailLoading && !detailError) {
+    // Wait while loading or recovering a stale local inv_* link.
+    if (useApi && (detailLoading || resolvingStale)) {
       return (
         <div className="flex min-h-[50vh] items-center justify-center py-12">
           <Loader2 className="size-8 animate-spin text-primary" />

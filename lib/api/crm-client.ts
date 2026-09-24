@@ -631,6 +631,10 @@ function invoicePayload(invoice: Invoice | Partial<Invoice>) {
   if (invoice.attachments !== undefined) {
     payload.attachments = estimateAttachmentsToApi(invoice.attachments as unknown[]);
   }
+  // Preserve portal keys like inv_xxx so GET /invoices/inv_xxx resolves.
+  if (typeof invoice.id === "string" && /^inv_/i.test(invoice.id.trim())) {
+    payload.clientId = invoice.id.trim();
+  }
   payload.notes = "";
   payload.terms = "";
   return payload;
@@ -1855,8 +1859,19 @@ export async function updateJobArchive(id: string, isArchived: boolean) {
   return mapCrmEntity(response, mapJob);
 }
 
-export async function convertJobToInvoice(id: string) {
-  const response = await postData(providerCrmApi.jobConvertToInvoice(id), undefined, { silent: false });
+export async function convertJobToInvoice(
+  id: string,
+  options?: { clientId?: string },
+) {
+  const body =
+    options?.clientId && String(options.clientId).trim()
+      ? { clientId: String(options.clientId).trim() }
+      : undefined;
+  const response = await postData(
+    providerCrmApi.jobConvertToInvoice(id),
+    body,
+    { silent: false },
+  );
   return mapCrmEntity(response, mapInvoice);
 }
 
@@ -1971,31 +1986,32 @@ export async function createInvoice(invoice: Invoice) {
   return mapCrmEntity(response, mapInvoice);
 }
 
-function requireInvoiceObjectId(id: string) {
-  const resolved = resolveCrmObjectId(id);
-  if (!resolved) {
-    throw new Error("Invoice id must be a valid CRM ObjectId.");
+function requireInvoiceId(id: string) {
+  const raw = String(id || "").trim();
+  if (!raw) {
+    throw new Error("Invoice id is required.");
   }
-  return resolved;
+  // Prefer Mongo ObjectId when present; otherwise pass portal clientId through.
+  return resolveCrmObjectId(raw) || raw;
 }
 
 export async function updateInvoice(id: string, invoice: Invoice | Partial<Invoice>) {
-  const mongoId = requireInvoiceObjectId(id);
-  const response = await putData(providerCrmApi.invoice(mongoId), invoicePayload(invoice));
+  const invoiceRef = requireInvoiceId(id);
+  const response = await putData(providerCrmApi.invoice(invoiceRef), invoicePayload(invoice));
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(mongoId));
+  invalidateGetCache(providerCrmApi.invoice(invoiceRef));
   return mapCrmEntity(response, mapInvoice);
 }
 
 export async function updateInvoiceArchive(id: string, isArchived: boolean) {
-  const mongoId = requireInvoiceObjectId(id);
+  const invoiceRef = requireInvoiceId(id);
   const response = await putData(
-    providerCrmApi.invoice(mongoId),
+    providerCrmApi.invoice(invoiceRef),
     { isArchived },
     { silent: false },
   );
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(mongoId));
+  invalidateGetCache(providerCrmApi.invoice(invoiceRef));
   return mapCrmEntity(response, mapInvoice);
 }
 
@@ -2003,22 +2019,22 @@ export async function updateInvoiceAttachments(
   id: string,
   attachments: Array<{ name: string; attachment: string }>,
 ) {
-  const mongoId = requireInvoiceObjectId(id);
+  const invoiceRef = requireInvoiceId(id);
   const response = await putData(
-    providerCrmApi.invoice(mongoId),
+    providerCrmApi.invoice(invoiceRef),
     { attachments },
     { silent: false },
   );
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(mongoId));
+  invalidateGetCache(providerCrmApi.invoice(invoiceRef));
   return mapCrmEntity(response, mapInvoice);
 }
 
 export async function sendInvoice(id: string) {
-  const mongoId = requireInvoiceObjectId(id);
-  const response = await postData(providerCrmApi.invoiceSend(mongoId), undefined, { silent: false });
+  const invoiceRef = requireInvoiceId(id);
+  const response = await postData(providerCrmApi.invoiceSend(invoiceRef), undefined, { silent: false });
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(mongoId));
+  invalidateGetCache(providerCrmApi.invoice(invoiceRef));
   const data =
     response && typeof response === "object" && "data" in response
       ? (response as { data?: { invoice?: unknown } }).data
@@ -2026,13 +2042,13 @@ export async function sendInvoice(id: string) {
   if (data?.invoice) {
     return mapInvoice(data.invoice);
   }
-  const detail = await getInvoiceWithPayments(mongoId);
+  const detail = await getInvoiceWithPayments(invoiceRef);
   return detail.invoice;
 }
 
 export async function getInvoiceWithPayments(id: string) {
-  const mongoId = requireInvoiceObjectId(id);
-  const response = await getData(providerCrmApi.invoice(mongoId), undefined, {
+  const invoiceRef = requireInvoiceId(id);
+  const response = await getData(providerCrmApi.invoice(invoiceRef), undefined, {
     silent: true,
     force: true,
   });
@@ -2040,8 +2056,8 @@ export async function getInvoiceWithPayments(id: string) {
 }
 
 export async function recordInvoicePayment(invoiceId: string, payment: Payment) {
-  const mongoId = requireInvoiceObjectId(invoiceId);
-  const response = await postData(providerCrmApi.invoicePayments(mongoId), {
+  const invoiceRef = requireInvoiceId(invoiceId);
+  const response = await postData(providerCrmApi.invoicePayments(invoiceRef), {
     amount: payment.amount,
     method: payment.method,
     scheduleId: payment.scheduleId || null,
@@ -2049,7 +2065,7 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
     transactionReference: "",
   });
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(mongoId));
+  invalidateGetCache(providerCrmApi.invoice(invoiceRef));
   const data =
     response && typeof response === "object" && "data" in response
       ? ((response as { data?: unknown }).data as Record<string, unknown> | undefined)
@@ -2063,10 +2079,10 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
 }
 
 export async function deleteInvoice(id: string) {
-  const mongoId = requireInvoiceObjectId(id);
-  const result = await deleteData(providerCrmApi.invoice(mongoId), { silent: false });
+  const invoiceRef = requireInvoiceId(id);
+  const result = await deleteData(providerCrmApi.invoice(invoiceRef), { silent: false });
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(mongoId));
+  invalidateGetCache(providerCrmApi.invoice(invoiceRef));
   return result;
 }
 

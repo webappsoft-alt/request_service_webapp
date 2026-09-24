@@ -636,17 +636,21 @@ export function usePortalRecords() {
 
   const addInvoice = useCallback(
     (invoice: Invoice) => {
-      if (apiReady) {
+      // Use live CRM whenever the provider session is enabled (don't wait for snapshot).
+      if (crm.enabled) {
         return (async () => {
           const created = await createInvoiceApi(invoice);
-          await crm.refresh();
+          if (crm.ready) {
+            await crm.refresh({ silent: true });
+          }
           return created;
         })();
       }
       const current = readStore(key);
       writeStore(key, { ...current, invoices: [...current.invoices, invoice] });
+      return invoice;
     },
-    [apiReady, crm, key],
+    [crm, key],
   );
 
   const patchInvoice = useCallback(

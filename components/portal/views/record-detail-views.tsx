@@ -1313,24 +1313,20 @@ export function JobDetailView({ id }: { id: string }) {
       router.push(`/pro/dashboard/invoices/${mongoExisting}`);
       return;
     }
-    // Offline / demo only — never send local `inv_*` ids to the CRM API.
-    if (!crm.enabled) {
-      const localId = invoice?.id || currentJob.invoiceId;
-      if (localId) {
-        router.push(`/pro/dashboard/invoices/${localId}`);
-        return;
-      }
-    }
     if (
       currentJob.status === "invoiced" ||
       currentJob.status === "paid"
     ) {
+      // Prefer live CRM invoice linked on the job over stale local inv_* ids.
+      if (crm.enabled && currentJob.invoiceId) {
+        router.push(`/pro/dashboard/invoices/${currentJob.invoiceId}`);
+        return;
+      }
       toast.error("This job is already invoiced but the invoice could not be loaded.");
       return;
     }
     setConverting(true);
     try {
-      // Use live CRM whenever the provider session is enabled (don't wait for full snapshot).
       if (crm.enabled) {
         const { invoice: created } = await dispatch(
           convertJobToInvoiceRecord(currentJob.id),
@@ -1342,7 +1338,7 @@ export function JobDetailView({ id }: { id: string }) {
         return;
       }
       const lines = readCostLines(session?.email, currentJob);
-      const created = buildInvoice({
+      const draft = buildInvoice({
         number: nextRecordNumber(
           "INV",
           allInvoices.map((item) => item.number),
@@ -1361,7 +1357,8 @@ export function JobDetailView({ id }: { id: string }) {
               unitPrice: item.unitPrice,
             })),
       });
-      records.addInvoice(created);
+      const saved = await Promise.resolve(records.addInvoice(draft));
+      const created = saved ?? draft;
       records.linkRecords("job", currentJob.id, created.id);
       records.setStatus("job", currentJob.id, "invoiced");
       toast.success(`${created.number} drafted from ${currentJob.number}.`);
@@ -1748,30 +1745,38 @@ export function InvoiceDetailView({ id }: { id: string }) {
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
-  const mongoId = resolveCrmObjectId(id);
-  const detailKey = mongoId ?? id;
+  const invoiceRef = String(id || "").trim();
+  const mongoId = resolveCrmObjectId(invoiceRef);
+  const detailKey = mongoId ?? invoiceRef;
 
   const detailInvoice = useAppSelector(
     (state) =>
       state.invoices?.detailsCache?.[detailKey] ??
+      state.invoices?.detailsCache?.[invoiceRef] ??
       state.invoices?.detailsCache?.[id],
   );
   const detailPayments = useAppSelector(
     (state) =>
       state.invoices?.detailPayments?.[detailKey] ??
+      state.invoices?.detailPayments?.[invoiceRef] ??
       state.invoices?.detailPayments?.[id] ??
       [],
   );
   const detailLoading = useAppSelector((state) =>
     Boolean(state.invoices?.detailLoading),
   );
+  const detailError = useAppSelector(
+    (state) => state.invoices?.detailError ?? null,
+  );
 
   const { invoices, jobs, estimates, requests, payments, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
-  const settings = useInvoiceSettings(id);
-  const seeded = records.mergeInvoices(invoices).find((item) => item.id === id);
+  const settings = useInvoiceSettings(invoiceRef);
+  const seeded = records
+    .mergeInvoices(invoices)
+    .find((item) => item.id === invoiceRef || item.id === id);
   const workspaceInvoice = seeded
     ? {
         ...applyInvoiceSettings(seeded, settings),
@@ -1790,31 +1795,37 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const relatedPayments = useApi
     ? detailPayments.length
       ? detailPayments
-      : records.mergePayments(payments).filter((item) => item.invoiceId === id)
-    : records.mergePayments(payments).filter((item) => item.invoiceId === id);
+      : records.mergePayments(payments).filter(
+          (item) => item.invoiceId === invoiceRef || item.invoiceId === invoice?.id,
+        )
+    : records.mergePayments(payments).filter(
+        (item) => item.invoiceId === invoiceRef || item.invoiceId === id,
+      );
   const customer = customers.find((item) => item.id === invoice?.customerId);
   const customerLabel = customer
     ? crmCustomerName(customer)
     : invoice
       ? getPortalCustomerName(provider, invoice.customerId)
       : "Customer";
-  const pending = useCrmRecordPending();
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
-    if (!useApi || !mongoId) return;
-    void dispatch(fetchInvoiceDetail(mongoId));
-  }, [dispatch, useApi, mongoId]);
+    if (!useApi || !invoiceRef) return;
+    void dispatch(fetchInvoiceDetail(invoiceRef));
+  }, [dispatch, useApi, invoiceRef]);
 
   if (!invoice) {
-    return pending || (useApi && detailLoading) ? (
-      <div className="flex min-h-[50vh] items-center justify-center py-12">
-        <Loader2 className="size-8 animate-spin text-primary" />
-      </div>
-    ) : (
-      <Missing title="Invoice not found" href="/pro/dashboard/invoices" />
-    );
+    // Wait only while this detail request is in flight — never spin forever
+    // on local/demo ids or CRM bootstrap.
+    if (useApi && detailLoading && !detailError) {
+      return (
+        <div className="flex min-h-[50vh] items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+    return <Missing title="Invoice not found" href="/pro/dashboard/invoices" />;
   }
 
   const asJob = invoiceAsJob(invoice, job);

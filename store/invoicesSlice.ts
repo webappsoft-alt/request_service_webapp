@@ -432,6 +432,12 @@ const invoicesSlice = createSlice({
         const { invoice, payments } = action.payload;
         applyInvoiceToState(state, invoice);
         state.detailPayments[invoice.id] = payments;
+        // Alias cache when opened via portal clientId (inv_xxx).
+        const requested = action.meta.arg;
+        if (requested && requested !== invoice.id) {
+          state.detailsCache[requested] = invoice;
+          state.detailPayments[requested] = payments;
+        }
       })
       .addCase(fetchInvoiceDetail.rejected, (state, action) => {
         state.detailLoading = false;

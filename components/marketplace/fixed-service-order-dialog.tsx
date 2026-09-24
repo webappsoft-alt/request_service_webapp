@@ -320,7 +320,7 @@ export function FixedServiceOrderDialog({
       <DialogContent className="flex max-h-[90vh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
         <div className="shrink-0 border-b px-5 py-4 pr-12 sm:px-6">
           <DialogTitle className="text-lg font-semibold tracking-tight">
-            Request this job
+            Book this service
           </DialogTitle>
           <DialogDescription className="mt-1 text-sm leading-5 text-muted-foreground">
             {service.servicesName} · {formatStartingPrice(price)}

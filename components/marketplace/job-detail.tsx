@@ -33,7 +33,7 @@ export type JobDetailContent = {
   /** Hide static “related jobs” when showing a live Fixed Service. */
   hideRelated?: boolean;
   requestHref?: string;
-  /** When set, Request this job runs this handler instead of navigating. */
+  /** When set, Book this service runs this handler instead of navigating. */
   onRequestJob?: () => void;
   /** Override primary CTA label (e.g. "View order" when already booked). */
   requestLabel?: string;
@@ -84,7 +84,7 @@ export function JobDetail({
     content?.requestHref ??
     `/get-a-quote?service=${category.slug}&job=${record.slug}`;
   const onRequestJob = content?.onRequestJob;
-  const requestLabel = content?.requestLabel?.trim() || "Request this job";
+  const requestLabel = content?.requestLabel?.trim() || "Book this service";
   const requestHint = content?.requestHint?.trim() || "";
   const compareHref =
     content?.compareHref ??

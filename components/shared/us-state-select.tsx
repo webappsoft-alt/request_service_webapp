@@ -20,7 +20,9 @@ type UsStateSelectProps = {
 };
 
 /**
- * Searchable U.S. state dropdown. Displays and stores 2-letter codes (CA, TX, …).
+ * Searchable U.S. state dropdown.
+ * List shows full names; the closed field shows only the 2-letter code (CA, TX, …).
+ * Value stored is always the 2-letter code.
  */
 export function UsStateSelect({
   id,
@@ -92,7 +94,7 @@ export function UsStateSelect({
           !code && "text-muted-foreground",
         )}
       >
-        <span className="line-clamp-1 flex-1 font-medium tracking-wide">
+        <span className="line-clamp-1 flex-1 tracking-wide">
           {code || placeholder}
         </span>
         <ChevronDownIcon
@@ -160,9 +162,9 @@ export function UsStateSelect({
                     setQuery("");
                   }}
                 >
-                  <span className="font-medium tracking-wide">{state.code}</span>
-                  <span className="truncate text-muted-foreground">
-                    {state.name}
+                  <span className="min-w-0 flex-1 truncate">{state.name}</span>
+                  <span className="shrink-0 text-xs tracking-wide text-muted-foreground">
+                    {state.code}
                   </span>
                 </button>
               );

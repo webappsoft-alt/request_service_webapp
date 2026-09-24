@@ -227,14 +227,21 @@ export const patchJobArchive = createAsyncThunk<
 });
 
 export const convertJobToInvoiceRecord = createAsyncThunk<
-  { invoice: Invoice; jobId: string },
+  { invoice: Invoice; jobId: string; job?: Job | null },
   string,
   { rejectValue: string }
 >("jobs/convertToInvoice", async (id, { rejectWithValue }) => {
   try {
     const invoice = await convertJobToInvoice(id);
     if (!invoice) return rejectWithValue("Failed to convert job to invoice.");
-    return { invoice, jobId: id };
+    // Refresh job so Activity tab includes "Converted to invoice".
+    let job: Job | null = null;
+    try {
+      job = await getJob(id);
+    } catch {
+      job = null;
+    }
+    return { invoice, jobId: id, job };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }
@@ -475,18 +482,38 @@ const jobsSlice = createSlice({
 
       .addCase(convertJobToInvoiceRecord.fulfilled, (state, action) => {
         state.pagesCache = {};
-        const { invoice, jobId } = action.payload;
+        const { invoice, jobId, job } = action.payload;
+        if (job) {
+          applyJobToState(state, job);
+          return;
+        }
         const existing = state.detailsCache[jobId];
+        const now = new Date().toISOString();
+        const convertActivity = {
+          id: `act_convert_${invoice.id}`,
+          title: "Converted to invoice",
+          description: `Converted to invoice ${invoice.number || invoice.id}.`,
+          createdAt: now,
+          actor: "System",
+        };
         if (existing) {
           applyJobToState(state, {
             ...existing,
             status: "invoiced",
             invoiceId: invoice.id,
+            activities: [...(existing.activities ?? []), convertActivity],
+            updatedAt: now,
           });
         } else {
           state.items = state.items.map((item) =>
             item.id === jobId
-              ? { ...item, status: "invoiced", invoiceId: invoice.id }
+              ? {
+                  ...item,
+                  status: "invoiced" as const,
+                  invoiceId: invoice.id,
+                  activities: [...(item.activities ?? []), convertActivity],
+                  updatedAt: now,
+                }
               : item,
           );
         }

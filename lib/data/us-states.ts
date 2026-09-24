@@ -1,6 +1,6 @@
 /**
  * Full U.S. states + DC for address forms.
- * Dropdowns display the 2-letter code (e.g. CA, TX, FL).
+ * Dropdown lists show full names; the selected value is the 2-letter code (CA, TX, FL).
  */
 
 export type UsState = {

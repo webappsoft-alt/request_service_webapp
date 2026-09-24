@@ -116,6 +116,7 @@ function fixedServiceFromActive(
     unit: service.unit,
     images: service.images,
     covered: service.commonServices,
+    faqs: [],
     commonServices: service.commonServices,
     workingArea: service.workingArea,
     availabilityType: "office",

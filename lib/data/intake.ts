@@ -3,9 +3,29 @@ import { getQualifyQuestions } from "@/lib/data/service-directory";
 import { getServiceCategoryBySlug, serviceCategories } from "@/lib/data/services";
 import { isValidZip } from "@/lib/format";
 
-export type IntakeAnswers = Record<string, string> & {
+export type IntakeAnswers = {
+  service?: string;
+  job?: string;
+  zip?: string;
+  address?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  lat?: string;
+  lng?: string;
+  addressLabel?: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  details?: string;
+  urgency?: string;
+  size?: string;
+  timeline?: string;
   /** Optional job photos uploaded on the details step (URL strings). */
   photoUrls?: string[];
+  [key: string]: string | string[] | undefined;
 };
 
 export type IntakeStep = {
@@ -148,7 +168,7 @@ export function getIntakeSteps(serviceSlug?: string, prefilledZip?: string): Int
 }
 
 export function getIntakeEstimate(answers: IntakeAnswers) {
-  const category = getServiceCategoryBySlug(answers.service);
+  const category = getServiceCategoryBySlug(answers.service ?? "");
   if (!category) return undefined;
 
   let price = answers.job

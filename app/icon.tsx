@@ -16,6 +16,7 @@ export default function Icon() {
           alignItems: "center",
           justifyContent: "center",
           fontSize: 220,
+          // fontSize:10
           fontWeight: 700,
         }}
       >

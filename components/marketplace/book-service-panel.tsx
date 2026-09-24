@@ -66,6 +66,7 @@ export function toPublicFixedService(
     unit: service.unit,
     images: service.images,
     covered: service.coverage,
+    faqs: [],
     commonServices: service.coverage,
     workingArea: service.areaZips,
     availabilityType: service.availabilityMode || "office",

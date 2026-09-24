@@ -722,6 +722,7 @@ export function PublicFixedServiceDetail({
               "",
             benefits: defaultBenefits(service),
             hideRelated: true,
+            faqs: service.faqs ?? [],
             ...(openOrder
               ? {
                   requestLabel: "View order",

@@ -112,34 +112,15 @@ export type ExplorePlace = {
   location?: string;
 };
 
-const STATE_NAMES: Record<string, string> = {
-  AZ: "Arizona",
-  CA: "California",
-  CO: "Colorado",
-  FL: "Florida",
-  GA: "Georgia",
-  IL: "Illinois",
-  MA: "Massachusetts",
-  MN: "Minnesota",
-  NY: "New York",
-  TX: "Texas",
-  WA: "Washington",
-};
-
-const STATE_BY_NAME = Object.fromEntries(
-  Object.entries(STATE_NAMES).map(([code, name]) => [name.toLowerCase(), code]),
-);
+import { normalizeUsStateCode, usStateName } from "@/lib/data/us-states";
 
 export function stateCode(value?: string) {
-  const trimmed = value?.trim();
-  if (!trimmed) return "";
-  if (trimmed.length === 2) return trimmed.toUpperCase();
-  return STATE_BY_NAME[trimmed.toLowerCase()] ?? "";
+  return normalizeUsStateCode(value);
 }
 
 export function stateLabel(value?: string) {
   const code = stateCode(value);
-  return (code && STATE_NAMES[code]) || value?.trim() || "";
+  return (code && usStateName(code)) || value?.trim() || "";
 }
 
 export function parsePlaceInput(value?: string): ExplorePlace {

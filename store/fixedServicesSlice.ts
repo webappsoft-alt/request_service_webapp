@@ -9,6 +9,11 @@ import { providerApi } from "@/components/api/ApiRoutesFile";
 
 export type FixedServiceUnit = "job" | "hour" | "visit";
 
+export type FixedServiceFaq = {
+  question: string;
+  answer: string;
+};
+
 export type FixedService = {
   id: string;
   servicesName: string;
@@ -22,6 +27,7 @@ export type FixedService = {
   customerSee: boolean;
   images: string[];
   covered: string[];
+  faqs: FixedServiceFaq[];
   description: string;
   commonServices: string[];
   workingArea: string[];
@@ -42,6 +48,7 @@ export type FixedServiceInput = {
   customerSee: boolean;
   images: string[];
   covered: string[];
+  faqs: FixedServiceFaq[];
   commonServices: string[];
   workingArea: string[];
   serviceAreas: string[];
@@ -211,6 +218,20 @@ export function normalizeFixedService(raw: unknown): FixedService | null {
     customerSee: Boolean(record.customerSee ?? record.isPublic ?? true),
     images: toStringArray(record.images),
     covered: toStringArray(record.covered),
+    faqs: Array.isArray(record.faqs)
+      ? record.faqs
+          .map((item) => {
+            const row = asRecord(item);
+            if (!row) return null;
+            const question =
+              typeof row.question === "string" ? row.question.trim() : "";
+            const answer =
+              typeof row.answer === "string" ? row.answer.trim() : "";
+            if (!question || !answer) return null;
+            return { question, answer };
+          })
+          .filter((item): item is FixedServiceFaq => Boolean(item))
+      : [],
     description:
       typeof record.description === "string"
         ? record.description
@@ -228,7 +249,8 @@ export function normalizeFixedService(raw: unknown): FixedService | null {
           .filter((title): title is string => Boolean(title))
       : [],
     availabilityType:
-      String(record.availabilityType || "") === "custom"
+      String(record.availabilityType || "") === "custom" ||
+      String(record.availabilityType || "") === "custom_hours"
         ? "custom"
         : "company_office_hours",
     customHours: record.customHours ?? record.workingHours,
@@ -387,13 +409,15 @@ export const updateFixedService = createAsyncThunk<
         customerSee: payload.customerSee,
         images: payload.images,
         covered: payload.covered,
+        faqs: payload.faqs || [],
         description: payload.description || "",
         commonServices: payload.commonServices,
         workingArea: payload.workingArea,
         serviceAreaIds: payload.serviceAreas,
         serviceAreaNames: [],
         availabilityType:
-          payload.availabilityType === "custom"
+          payload.availabilityType === "custom" ||
+          payload.availabilityType === "custom_hours"
             ? "custom"
             : "company_office_hours",
       };

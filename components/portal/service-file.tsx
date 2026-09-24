@@ -92,6 +92,7 @@ type DraftState = {
   active: boolean;
   images: string[];
   coverage: string[];
+  faqs: { question: string; answer: string }[];
   commonServices: string[];
   workingArea: string[];
   serviceAreaIds: string[];
@@ -112,6 +113,7 @@ function emptyDraft(officeHours: WorkingHours[]): DraftState {
     active: true,
     images: [],
     coverage: [""],
+    faqs: [{ question: "", answer: "" }],
     commonServices: [],
     workingArea: [],
     serviceAreaIds: [],
@@ -270,6 +272,23 @@ function ServicePreview({
             <p className="mt-2 text-sm text-muted-foreground">Add the work this price covers.</p>
           )}
         </div>
+        {(service.faqs ?? []).filter(
+          (item) => item.question.trim() && item.answer.trim(),
+        ).length ? (
+          <div>
+            <p className="text-sm font-semibold">FAQ</p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {(service.faqs ?? [])
+                .filter((item) => item.question.trim() && item.answer.trim())
+                .map((item) => (
+                  <li key={item.question} className="text-sm">
+                    <p className="font-medium text-foreground">{item.question}</p>
+                    <p className="mt-0.5 text-muted-foreground">{item.answer}</p>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ) : null}
         <div>
           <p className="flex items-center gap-1.5 text-sm font-semibold">
             <MapPin className="size-3.5" aria-hidden="true" />
@@ -540,6 +559,12 @@ export function ServiceFormView({ id }: { id?: string }) {
           active: detail.isPublic,
           images: detail.images,
           coverage: detail.covered.length ? detail.covered : [""],
+          faqs: detail.faqs?.length
+            ? detail.faqs.map((item) => ({
+                question: item.question,
+                answer: item.answer,
+              }))
+            : [{ question: "", answer: "" }],
           commonServices: detail.commonServices,
           workingArea: detail.workingArea,
           serviceAreaIds: detail.serviceAreaIds,
@@ -599,6 +624,7 @@ export function ServiceFormView({ id }: { id?: string }) {
     active: draft.active,
     images: draft.images,
     coverage: draft.coverage,
+    faqs: draft.faqs,
     areaZips: [],
     availabilityMode: draft.availabilityMode,
     customHours: draft.customHours,
@@ -679,12 +705,18 @@ export function ServiceFormView({ id }: { id?: string }) {
       customerSee: draft.active,
       images: draft.images,
       covered: draft.coverage.map((item) => item.trim()).filter(Boolean),
+      faqs: (Array.isArray(draft.faqs) ? draft.faqs : [])
+        .map((item) => ({
+          question: String(item?.question || "").trim(),
+          answer: String(item?.answer || "").trim(),
+        }))
+        .filter((item) => item.question && item.answer),
       commonServices: draft.commonServices,
       workingArea: draft.workingArea,
       serviceAreas: draft.serviceAreaIds,
       availabilityType:
         draft.availabilityMode === "custom"
-          ? "custom"
+          ? "custom_hours"
           : "company_office_hours",
       description: draft.description.trim() || undefined,
     };
@@ -1160,6 +1192,102 @@ export function ServiceFormView({ id }: { id?: string }) {
               <Plus className="size-4" />
               Add coverage
             </Button>
+          </section>
+
+          <section className="rounded-xl border border-input bg-card p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">FAQ</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Optional. Add questions customers often ask about this service.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    faqs: [
+                      ...(current.faqs || []),
+                      { question: "", answer: "" },
+                    ],
+                  }))
+                }
+              >
+                <Plus className="size-4" />
+                Add FAQ
+              </Button>
+            </div>
+            <ul className="mt-3 flex flex-col gap-3">
+              {(draft.faqs?.length
+                ? draft.faqs
+                : [{ question: "", answer: "" }]
+              ).map((item, index) => (
+                <li
+                  key={index}
+                  className="flex flex-col gap-2 rounded-lg border border-input p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Question {index + 1}
+                    </p>
+                    {(draft.faqs?.length || 0) > 1 ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label="Remove FAQ"
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            faqs: current.faqs.filter(
+                              (_, faqIndex) => faqIndex !== index,
+                            ),
+                          }))
+                        }
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+                  <Input
+                    value={item.question}
+                    placeholder="e.g. How long does this job take?"
+                    onChange={(event) =>
+                      setDraft((current) => {
+                        const faqs = current.faqs?.length
+                          ? [...current.faqs]
+                          : [{ question: "", answer: "" }];
+                        faqs[index] = {
+                          ...faqs[index],
+                          question: event.target.value,
+                        };
+                        return { ...current, faqs };
+                      })
+                    }
+                  />
+                  <Textarea
+                    value={item.answer}
+                    placeholder="Short answer for customers"
+                    rows={3}
+                    onChange={(event) =>
+                      setDraft((current) => {
+                        const faqs = current.faqs?.length
+                          ? [...current.faqs]
+                          : [{ question: "", answer: "" }];
+                        faqs[index] = {
+                          ...faqs[index],
+                          answer: event.target.value,
+                        };
+                        return { ...current, faqs };
+                      })
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
           </section>
 
           <section className="rounded-xl border border-input bg-card p-5">

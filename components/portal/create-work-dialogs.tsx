@@ -8,6 +8,7 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { UsStateSelect } from "@/components/shared/us-state-select";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
@@ -27,6 +28,7 @@ import {
   updateEstimate as updateEstimateApi,
   createRequest,
 } from "@/lib/api/crm-client";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import {
   seedJobLines,
   writeCostLines,
@@ -149,7 +151,7 @@ export function CreateEstimateDialog({
     address?.city || customerLocation.city || "",
   );
   const [state, setState] = useState(
-    address?.state || customerLocation.state || "CO",
+    normalizeUsStateCode(address?.state || customerLocation.state) || "CO",
   );
   const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
   const [latitude, setLatitude] = useState<number | null>(
@@ -441,7 +443,7 @@ export function CreateEstimateDialog({
   function applyJobAddress(address: PlaceAddress) {
     setStreet(address.streetAddress || address.formattedAddress || "");
     setCity(address.city || "");
-    setState(address.state || "");
+    setState(normalizeUsStateCode(address.state) || address.state || "");
     // Keep ZIP manually editable when Places has no postal code.
     if (address.zipCode) setZip(address.zipCode);
     setLatitude(
@@ -757,6 +759,7 @@ export function CreateEstimateDialog({
                   placeholder="Start typing your address…"
                 />
               </Field>
+              <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(6.5rem,0.7fr)_minmax(5rem,0.55fr)]">
               <Field label="City">
                 <Input
                   value={city}
@@ -765,19 +768,21 @@ export function CreateEstimateDialog({
                 />
               </Field>
               <Field label="State">
-                <Input
-                  value={state}
+                <UsStateSelect
+                  value={normalizeUsStateCode(state)}
+                  onChange={setState}
                   placeholder="State"
-                  onChange={(event) => setState(event.target.value)}
                 />
               </Field>
               <Field label="ZIP">
                 <Input
                   value={zip}
-                  placeholder="ZIP / postal code"
+                  placeholder="ZIP"
                   onChange={(event) => setZip(event.target.value)}
+                  inputMode="numeric"
                 />
               </Field>
+              </div>
             </div>
           ) : null}
           {tab === "visit" ? (
@@ -954,7 +959,7 @@ export function CreateJobDialog({
     address?.city || customerLocation.city || "",
   );
   const [state, setState] = useState(
-    address?.state || customerLocation.state || "CO",
+    normalizeUsStateCode(address?.state || customerLocation.state) || "CO",
   );
   const [zip, setZip] = useState(address?.zip || customerLocation.zip || "");
   const [latitude, setLatitude] = useState<number | null>(
@@ -1249,7 +1254,7 @@ export function CreateJobDialog({
   function applyJobAddress(address: PlaceAddress) {
     setStreet(address.formattedAddress || address.streetAddress);
     setCity(address.city || "");
-    setState(address.state || "");
+    setState(normalizeUsStateCode(address.state) || address.state || "");
     // Keep ZIP editable — only fill when Places returns one.
     if (address.zipCode) setZip(address.zipCode);
     setLatitude(address.latitude);
@@ -1484,6 +1489,7 @@ export function CreateJobDialog({
                 placeholder="Start typing your address…"
               />
             </Field>
+            <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(6.5rem,0.7fr)_minmax(5rem,0.55fr)]">
             <Field label="City">
               <Input
                 value={city}
@@ -1491,13 +1497,22 @@ export function CreateJobDialog({
                 onChange={(event) => setCity(event.target.value)}
               />
             </Field>
+            <Field label="State">
+              <UsStateSelect
+                value={normalizeUsStateCode(state)}
+                onChange={setState}
+                placeholder="State"
+              />
+            </Field>
             <Field label="ZIP">
               <Input
                 value={zip}
-                placeholder="ZIP / postal code"
+                placeholder="ZIP"
                 onChange={(event) => setZip(event.target.value)}
+                inputMode="numeric"
               />
             </Field>
+            </div>
           </div>
         ) : null}
         {tab === "schedule" ? (

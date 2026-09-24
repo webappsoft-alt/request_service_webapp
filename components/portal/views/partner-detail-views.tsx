@@ -37,6 +37,8 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { UsStateSelect } from "@/components/shared/us-state-select";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { CreateNoteDialogForSubject, NotesPanel } from "@/components/portal/notes-panel";
 import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
@@ -385,7 +387,7 @@ function VendorSettingsTab({
       ...current,
       street: address.formattedAddress || address.streetAddress || "",
       city: address.city || "",
-      state: address.state || "",
+      state: normalizeUsStateCode(address.state) || address.state || "",
       zip: address.zipCode || current.zip || "",
       latitude: address.latitude,
       longitude: address.longitude,
@@ -508,6 +510,7 @@ function VendorSettingsTab({
             placeholder="Start typing a street address…"
           />
         </Field>
+        <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(6.5rem,0.7fr)_minmax(5rem,0.55fr)]">
         <Field label="City">
           <Input
             value={draft.city}
@@ -516,19 +519,21 @@ function VendorSettingsTab({
           />
         </Field>
         <Field label="State">
-          <Input
-            value={draft.state}
+          <UsStateSelect
+            value={normalizeUsStateCode(draft.state)}
+            onChange={(code) => setDraft({ ...draft, state: code })}
             placeholder="State"
-            onChange={(event) => setDraft({ ...draft, state: event.target.value })}
           />
         </Field>
-        <Field label="ZIP" className="sm:col-span-2">
+        <Field label="ZIP">
           <Input
             value={draft.zip || ""}
-            placeholder="ZIP / postal code"
+            placeholder="ZIP"
             onChange={(event) => setDraft({ ...draft, zip: event.target.value })}
+            inputMode="numeric"
           />
         </Field>
+        </div>
       </div>
     </div>
   );

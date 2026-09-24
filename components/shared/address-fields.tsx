@@ -4,8 +4,9 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { CityStateZipFields } from "@/components/shared/city-state-zip-fields";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 
 export type AddressFieldsValue = {
   address: string;
@@ -30,7 +31,7 @@ type AddressFieldsProps = {
 
 /**
  * Standard address block used across signup, booking, estimates, etc.
- * Order: Address → City → State → ZIP. Lat/lng filled from Places selection.
+ * Order: Address → City (wide) → State (US codes) → ZIP (narrow).
  */
 export function AddressFields({
   idPrefix,
@@ -50,7 +51,7 @@ export function AddressFields({
         place.formattedAddress || place.streetAddress || value.label || "",
       address: place.streetAddress || place.formattedAddress || "",
       city: place.city || "",
-      state: place.state || "",
+      state: normalizeUsStateCode(place.state) || place.state || "",
       zip: place.zipCode || "",
       lat:
         typeof place.latitude === "number" && Number.isFinite(place.latitude)
@@ -89,49 +90,17 @@ export function AddressFields({
         />
       </Field>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field>
-          <FieldLabel htmlFor={`${idPrefix}-city`}>City</FieldLabel>
-          <Input
-            id={`${idPrefix}-city`}
-            value={value.city}
-            onChange={(event) =>
-              onChange({ ...value, city: event.target.value })
-            }
-            placeholder="City"
-            required={required}
-            disabled={disabled}
-            autoComplete="address-level2"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`${idPrefix}-state`}>State</FieldLabel>
-          <Input
-            id={`${idPrefix}-state`}
-            value={value.state}
-            onChange={(event) =>
-              onChange({ ...value, state: event.target.value })
-            }
-            placeholder="State"
-            required={required}
-            disabled={disabled}
-            autoComplete="address-level1"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`${idPrefix}-zip`}>ZIP</FieldLabel>
-          <Input
-            id={`${idPrefix}-zip`}
-            value={value.zip}
-            onChange={(event) =>
-              onChange({ ...value, zip: event.target.value })
-            }
-            placeholder="ZIP"
-            disabled={disabled}
-            autoComplete="postal-code"
-          />
-        </Field>
-      </div>
+      <CityStateZipFields
+        idPrefix={idPrefix}
+        value={{
+          city: value.city,
+          state: value.state,
+          zip: value.zip,
+        }}
+        onChange={(next) => onChange({ ...value, ...next })}
+        disabled={disabled}
+        required={required}
+      />
     </div>
   );
 }

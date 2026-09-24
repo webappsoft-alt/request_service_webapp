@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { CityStateZipFields } from "@/components/shared/city-state-zip-fields";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import {
   AddressAutocomplete,
   type PlaceAddress,
@@ -173,7 +175,7 @@ export function CreateCustomerDialog({
   function applyAddress(address: PlaceAddress) {
     setStreet(address.streetAddress || address.formattedAddress);
     setCity(address.city || "");
-    setState(address.state || "");
+    setState(normalizeUsStateCode(address.state) || address.state || "");
     setZip(address.zipCode || "");
     setLat(
       typeof address.latitude === "number" && Number.isFinite(address.latitude)
@@ -463,35 +465,15 @@ export function CreateCustomerDialog({
               placeholder="Start typing your address…"
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field>
-              <FieldLabel htmlFor="cust-city">City</FieldLabel>
-              <Input
-                id="cust-city"
-                value={city}
-                onChange={(change) => setCity(change.target.value)}
-                placeholder="Austin"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-state">State</FieldLabel>
-              <Input
-                id="cust-state"
-                value={state}
-                onChange={(change) => setState(change.target.value)}
-                placeholder="TX"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="cust-zip">ZIP</FieldLabel>
-              <Input
-                id="cust-zip"
-                value={zip}
-                onChange={(change) => setZip(change.target.value)}
-                placeholder="78701"
-              />
-            </Field>
-          </div>
+          <CityStateZipFields
+            idPrefix="cust"
+            value={{ city, state, zip }}
+            onChange={(next) => {
+              setCity(next.city);
+              setState(next.state);
+              setZip(next.zip);
+            }}
+          />
           <p className="text-xs text-muted-foreground">City, state, and ZIP fill in when you pick an address.</p>
           <Field>
             <FieldLabel htmlFor="cust-notes">Notes</FieldLabel>
@@ -767,7 +749,7 @@ export function CreateVendorDialog({
   function applyVendorAddress(address: PlaceAddress) {
     setStreet(address.formattedAddress || address.streetAddress || "");
     setCity(address.city || "");
-    setState(address.state || "");
+    setState(normalizeUsStateCode(address.state) || address.state || "");
     if (address.zipCode) setZip(address.zipCode);
     setLatitude(address.latitude);
     setLongitude(address.longitude);
@@ -884,35 +866,15 @@ export function CreateVendorDialog({
               placeholder="Start typing a street address…"
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field>
-              <FieldLabel htmlFor="ven-city">City</FieldLabel>
-              <Input
-                id="ven-city"
-                value={city}
-                onChange={(change) => setCity(change.target.value)}
-                placeholder="Austin"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="ven-state">State</FieldLabel>
-              <Input
-                id="ven-state"
-                value={state}
-                onChange={(change) => setState(change.target.value)}
-                placeholder="TX"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="ven-zip">ZIP</FieldLabel>
-              <Input
-                id="ven-zip"
-                value={zip}
-                onChange={(change) => setZip(change.target.value)}
-                placeholder="78701"
-              />
-            </Field>
-          </div>
+          <CityStateZipFields
+            idPrefix="ven"
+            value={{ city, state, zip }}
+            onChange={(next) => {
+              setCity(next.city);
+              setState(next.state);
+              setZip(next.zip);
+            }}
+          />
           <p className="text-xs text-muted-foreground">
             City, state, and ZIP fill in when you pick an address.
           </p>

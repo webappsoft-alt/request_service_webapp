@@ -8,6 +8,7 @@ import {
 } from "@/components/marketplace/service-job-card";
 import { PortfolioGallery } from "@/components/marketplace/portfolio-lightbox";
 import { JobDetailFaqSection } from "@/components/marketplace/job-detail-faq-section";
+import { FaqList } from "@/components/shared/faq-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProviderCard } from "@/components/shared/provider-card";
@@ -18,7 +19,7 @@ import {
 import { getJobImage, getJobStartingPrice } from "@/lib/data/provider-media";
 import { getRelatedJobs, type JobRecord } from "@/lib/data/jobs";
 import { formatStartingPrice } from "@/lib/format";
-import type { Provider } from "@/lib/types";
+import type { FaqItem, Provider } from "@/lib/types";
 
 /** Optional live Fixed Service overrides — same layout, API-backed values. */
 export type JobDetailContent = {
@@ -40,6 +41,8 @@ export type JobDetailContent = {
   /** Short note under the CTA (e.g. already-booked status). */
   requestHint?: string;
   compareHref?: string;
+  /** Optional Pro-authored FAQs for this fixed service. */
+  faqs?: Array<{ question: string; answer: string }>;
 };
 
 export function JobDetail({
@@ -102,6 +105,13 @@ export function JobDetail({
   const showRelatedSection =
     relatedLoading || showRelatedListings || showStaticRelated;
   const showProvidersSection = providersLoading || providers.length > 0;
+  const serviceFaqs: FaqItem[] = (content?.faqs || [])
+    .filter((item) => item.question.trim() && item.answer.trim())
+    .map((item, index) => ({
+      id: `service-faq-${index}`,
+      question: item.question.trim(),
+      answer: item.answer.trim(),
+    }));
 
   return (
     <HomeMotion>
@@ -185,7 +195,19 @@ export function JobDetail({
                 </ul>
               </div>
 
-              <JobDetailFaqSection />
+              {serviceFaqs.length ? (
+                <div className="flex flex-col gap-4 border-t pt-8">
+                  <div className="flex flex-col gap-1.5">
+                    <p className="eyebrow text-primary">FAQ</p>
+                    <h2 className="text-xl font-semibold">
+                      Questions about this service
+                    </h2>
+                  </div>
+                  <FaqList items={serviceFaqs} variant="cards" />
+                </div>
+              ) : content?.faqs === undefined ? (
+                <JobDetailFaqSection />
+              ) : null}
             </div>
 
             <aside className="rounded-2xl border bg-card p-5 shadow-sm lg:sticky lg:top-24">

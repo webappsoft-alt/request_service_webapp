@@ -80,6 +80,7 @@ export type PortalFixedService = {
   active: boolean;
   images: string[];
   coverage: string[];
+  faqs?: { question: string; answer: string }[];
   areaZips: string[];
   availabilityMode: ServiceAvailabilityMode;
   customHours: WorkingHours[];

@@ -18,6 +18,7 @@ import {
   AddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/address-autocomplete";
+import { CityStateZipFields } from "@/components/shared/city-state-zip-fields";
 import { HoursEditor } from "@/components/portal/hours-editor";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
@@ -29,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cloneWorkingHours } from "@/lib/data/portal";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { getActivePlans, formatPlanPrice } from "@/lib/data/plans";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -224,7 +226,7 @@ export function SettingsView() {
   function applyAddress(address: PlaceAddress) {
     setStreetAddress(address.formattedAddress || address.streetAddress);
     setCity(address.city);
-    setState(address.state);
+    setState(normalizeUsStateCode(address.state) || address.state || "");
     setZip(address.zipCode);
     setCountry(address.country || "");
     setLatitude(address.latitude != null ? String(address.latitude) : "");
@@ -516,33 +518,16 @@ export function SettingsView() {
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field>
-              <FieldLabel htmlFor="settings-city">City</FieldLabel>
-              <Input
-                id="settings-city"
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="settings-state">State</FieldLabel>
-              <Input
-                id="settings-state"
-                value={state}
-                onChange={(event) => setState(event.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="settings-zip">ZIP</FieldLabel>
-              <Input
-                ref={zipRef}
-                id="settings-zip"
-                value={zip}
-                onChange={(event) => setZip(event.target.value)}
-              />
-            </Field>
-          </div>
+          <CityStateZipFields
+            idPrefix="settings"
+            value={{ city, state, zip }}
+            onChange={(next) => {
+              setCity(next.city);
+              setState(next.state);
+              setZip(next.zip);
+            }}
+            zipRef={zipRef}
+          />
 
           <div className="flex flex-wrap gap-3 pt-1">
             <Button type="submit" disabled={savingAccount || uploadingImage}>

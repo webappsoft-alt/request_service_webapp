@@ -68,6 +68,7 @@ export type PublicFixedService = {
   unit: string;
   images: string[];
   covered: string[];
+  faqs: { question: string; answer: string }[];
   commonServices: string[];
   workingArea: string[];
   availabilityType: string;
@@ -260,6 +261,26 @@ export function normalizePublicFixedService(
     unit: typeof record.unit === "string" ? record.unit : "",
     images: toStringArray(record.images),
     covered: toStringArray(record.covered),
+    faqs: Array.isArray(record.faqs)
+      ? record.faqs
+          .map((item) => {
+            const row =
+              item && typeof item === "object"
+                ? (item as Record<string, unknown>)
+                : null;
+            if (!row) return null;
+            const question =
+              typeof row.question === "string" ? row.question.trim() : "";
+            const answer =
+              typeof row.answer === "string" ? row.answer.trim() : "";
+            if (!question || !answer) return null;
+            return { question, answer };
+          })
+          .filter(
+            (item): item is { question: string; answer: string } =>
+              Boolean(item),
+          )
+      : [],
     commonServices: toStringArray(record.commonServices),
     workingArea: toStringArray(record.workingArea),
     availabilityType:

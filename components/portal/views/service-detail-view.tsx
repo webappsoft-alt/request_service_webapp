@@ -71,6 +71,7 @@ export function ServiceDetailView({ id }: { id: string }) {
       active: detail.isPublic,
       images: detail.images,
       coverage: detail.covered,
+      faqs: detail.faqs ?? [],
       areaZips: [],
       availabilityMode:
         detail.availabilityType === "custom" ? "custom" : "office",
@@ -306,6 +307,32 @@ export function ServiceDetailView({ id }: { id: string }) {
             ) : (
               <p className="mt-2 text-sm text-muted-foreground">
                 No coverage lines yet.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-black/10 bg-card p-5">
+            <p className="text-sm font-semibold">FAQ</p>
+            {(service.faqs ?? []).filter(
+              (item) => item.question.trim() && item.answer.trim(),
+            ).length ? (
+              <ul className="mt-3 flex flex-col gap-3">
+                {(service.faqs ?? [])
+                  .filter((item) => item.question.trim() && item.answer.trim())
+                  .map((item, index) => (
+                    <li key={`${item.question}-${index}`} className="text-sm">
+                      <p className="font-medium text-foreground">
+                        {item.question}
+                      </p>
+                      <p className="mt-1 leading-6 text-muted-foreground">
+                        {item.answer}
+                      </p>
+                    </li>
+                  ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                No FAQs added yet. Edit this service to add optional questions.
               </p>
             )}
           </section>

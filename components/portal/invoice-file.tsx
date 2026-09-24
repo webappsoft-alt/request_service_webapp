@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { StatusDot, moneyTone } from "@/components/portal/status-pill";
+import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { useJobFile, type InvoiceSettingsDraft } from "@/components/portal/use-job-file";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { invoiceAsJob, todayISO } from "@/components/portal/work-builders";
@@ -474,16 +477,34 @@ export function InvoiceSummaryTab({
 
 export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: Job }) {
   const { customers } = useCrmDirectory();
+  const crm = useCrmApiData();
+  const useApi = crm.enabled;
+  const customerPaging = usePaginatedCrmOptions(useApi ? "customer" : null, useApi);
   const records = usePortalRecords();
   const asJob = invoiceAsJob(invoice, job);
   const file = useJobFile(asJob, undefined, invoice, "");
-  const selected = customers.find((item) => item.id === invoice.customerId);
   const [draft, setDraft] = useState<InvoiceSettingsDraft>(() => ({
     customerId: invoice.customerId,
     issuedAt: invoice.issuedAt.slice(0, 10),
     dueAt: invoice.dueAt?.slice(0, 10) ?? "",
     status: invoice.status,
   }));
+
+  const customerSelectOptions = useMemo(
+    () =>
+      useApi
+        ? customerPaging.options
+        : customers.map((item) => ({
+            id: item.id,
+            label: crmCustomerName(item),
+          })),
+    [useApi, customerPaging.options, customers],
+  );
+
+  const selected = customers.find((item) => item.id === draft.customerId);
+  const customerDisplayName =
+    (selected ? crmCustomerName(selected) : "") ||
+    (draft.customerId ? `Customer ${draft.customerId.slice(-6)}` : "");
 
   function patch(next: Partial<InvoiceSettingsDraft>) {
     setDraft((current) => ({ ...current, ...next }));
@@ -527,25 +548,23 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
           </Select>
         </Field>
         <Field label="Customer">
-          <Select
+          <PaginatedEntitySelect
+            id="invoice-settings-customer"
             value={draft.customerId}
-            onValueChange={(value) => patch({ customerId: value })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select customer" />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
-            >
-              {customers.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {crmCustomerName(item)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={customerSelectOptions}
+            selectedLabel={customerDisplayName || undefined}
+            placeholder="Select customer"
+            emptyLabel="No customers found."
+            loading={useApi ? customerPaging.loading : false}
+            loadingMore={useApi ? customerPaging.loadingMore : false}
+            hasMore={useApi ? customerPaging.hasMore : false}
+            onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+            searchable={useApi}
+            searchValue={useApi ? customerPaging.search : ""}
+            onSearchChange={useApi ? customerPaging.setSearch : undefined}
+            searchPlaceholder="Search customers…"
+            onChange={(id) => patch({ customerId: id })}
+          />
         </Field>
         <Field label="Issued">
           <Input type="date" value={draft.issuedAt} onChange={(event) => patch({ issuedAt: event.target.value })} />

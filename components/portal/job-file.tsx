@@ -34,7 +34,9 @@ import {
 import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type CostingNoun } from "@/components/portal/job-costing";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
+import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { useEstimateActivities } from "@/components/portal/use-estimate-activities";
 import { useJobActivities } from "@/components/portal/use-job-activities";
 import { patchJobLocally } from "@/store/jobsSlice";
@@ -642,6 +644,15 @@ export function JobSettingsTab({
   const dispatch = useAppDispatch();
   const { customers, contractors } = useCrmDirectory();
   const crm = useCrmApiData();
+  const useApi = crm.enabled;
+  const technicianFilter = useMemo(() => ({ role: "technician" }), []);
+  const customerPaging = usePaginatedCrmOptions(useApi ? "customer" : null, useApi);
+  const assigneePaging = usePaginatedCrmOptions(
+    useApi ? "assignee" : null,
+    useApi,
+    undefined,
+    technicianFilter,
+  );
   const { employees, events } = usePortalCrew();
   const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
 
@@ -769,20 +780,34 @@ export function JobSettingsTab({
     return base;
   }, [contractors, draft.employeeId, technicianOptions]);
 
-  const assigneeIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const item of technicianOptions) ids.add(item.id);
-    for (const item of contractorOptions) ids.add(item.id);
-    return ids;
-  }, [technicianOptions, contractorOptions]);
+  const customerSelectOptions = useMemo(
+    () =>
+      useApi
+        ? customerPaging.options
+        : customers.map((item) => ({
+            id: item.id,
+            label: crmCustomerName(item),
+          })),
+    [useApi, customerPaging.options, customers],
+  );
+
+  const assigneeSelectOptions = useMemo(() => {
+    const rows = useApi
+      ? assigneePaging.options
+      : [
+          ...technicianOptions.map((item) => ({
+            id: item.id,
+            label: `${employeeName(item)}${item.trade ? ` · ${item.trade}` : ""}`,
+          })),
+          ...contractorOptions.map((item) => ({
+            id: item.id,
+            label: `${item.companyName} · Contractor`,
+          })),
+        ];
+    return [{ id: "", label: "Unassigned" }, ...rows];
+  }, [useApi, assigneePaging.options, technicianOptions, contractorOptions]);
 
   const statusValue = JOB_STATUSES.includes(draft.status) ? draft.status : JOB_STATUSES[0];
-  const customerInList = customers.some((item) => item.id === draft.customerId);
-  const customerValue = draft.customerId
-    ? draft.customerId
-    : "__none__";
-  const assigneeValue =
-    draft.employeeId && assigneeIds.has(draft.employeeId) ? draft.employeeId : "__unassigned__";
 
   const addressLine = [draft.street, formatLocation(draft.city, draft.state, draft.zip)]
     .filter(Boolean)
@@ -794,6 +819,10 @@ export function JobSettingsTab({
       : null;
   const hasInvoice = Boolean(invoiceHref) || job.status === "invoiced" || job.status === "paid";
   const assigneeLabel = (() => {
+    const fromOptions = assigneeSelectOptions.find(
+      (item) => item.id && item.id === draft.employeeId,
+    );
+    if (fromOptions) return fromOptions.label;
     const tech = technicianOptions.find((item) => item.id === draft.employeeId);
     if (tech) return employeeName(tech);
     const contractor = contractorOptions.find((item) => item.id === draft.employeeId);
@@ -967,61 +996,51 @@ export function JobSettingsTab({
             </Select>
           </Field>
           <Field label="Customer">
-            <Select
-              value={customerValue}
-              onValueChange={(value) =>
-                patch({ customerId: value === "__none__" ? "" : value })
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select customer" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                align="start"
-                className="z-[100] w-[var(--radix-select-trigger-width)]"
-              >
-                <SelectItem value="__none__">Select customer</SelectItem>
-                {draft.customerId && !customerInList ? (
-                  <SelectItem value={draft.customerId}>{customerDisplayName}</SelectItem>
-                ) : null}
-                {customers.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {crmCustomerName(item)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PaginatedEntitySelect
+              id="job-settings-customer"
+              value={draft.customerId}
+              options={customerSelectOptions}
+              selectedLabel={customerDisplayName || undefined}
+              placeholder="Select customer"
+              emptyLabel="No customers found."
+              loading={useApi ? customerPaging.loading : false}
+              loadingMore={useApi ? customerPaging.loadingMore : false}
+              hasMore={useApi ? customerPaging.hasMore : false}
+              onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+              searchable={useApi}
+              searchValue={useApi ? customerPaging.search : ""}
+              onSearchChange={useApi ? customerPaging.setSearch : undefined}
+              searchPlaceholder="Search customers…"
+              onChange={(id) => patch({ customerId: id })}
+            />
           </Field>
           <Field label="Assigned team member">
-            <Select
-              value={assigneeValue}
-              onValueChange={(value) =>
-                patch({ employeeId: value === "__unassigned__" ? "" : value })
+            <PaginatedEntitySelect
+              id="job-settings-assignee"
+              value={draft.employeeId}
+              options={assigneeSelectOptions}
+              selectedLabel={
+                draft.employeeId && assigneeLabel !== "Unassigned"
+                  ? assigneeLabel
+                  : draft.assignedTo || undefined
               }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Unassigned" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                align="start"
-                className="z-[100] w-[var(--radix-select-trigger-width)]"
-              >
-                <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                {technicianOptions.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {employeeName(item)}
-                    {item.trade ? ` · ${item.trade}` : ""}
-                  </SelectItem>
-                ))}
-                {contractorOptions.map((item) => (
-                  <SelectItem key={`contractor-${item.id}`} value={item.id}>
-                    {item.companyName} · Contractor
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Unassigned"
+              emptyLabel="No team members found."
+              loading={useApi ? assigneePaging.loading : false}
+              loadingMore={useApi ? assigneePaging.loadingMore : false}
+              hasMore={useApi ? assigneePaging.hasMore : false}
+              onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+              searchable={useApi}
+              searchValue={useApi ? assigneePaging.search : ""}
+              onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+              searchPlaceholder="Search team members…"
+              onChange={(id, option) =>
+                patch({
+                  employeeId: id,
+                  assignedTo: id && option?.label ? option.label : "",
+                })
+              }
+            />
           </Field>
           <Field label="Start date">
             <Input type="date" value={draft.start} onChange={(event) => patch({ start: event.target.value })} />

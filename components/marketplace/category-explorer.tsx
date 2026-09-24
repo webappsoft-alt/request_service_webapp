@@ -21,6 +21,7 @@ import {
   PaginatedCategorySelect,
   type CategoryOption,
 } from "@/components/portal/paginated-category-select";
+import { usePaginatedCategoryOptions } from "@/components/portal/use-paginated-category-options";
 import { findMarketCity, stateLabel } from "@/lib/data/markets";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
 import { extractZip } from "@/lib/search";
@@ -175,20 +176,36 @@ export function CategoryExplorer({
 
   const useLive = Boolean(marketplace && liveProfessionals);
 
+  const filterParentPaging = usePaginatedCategoryOptions("parents", useLive);
+  const filterSubPaging = usePaginatedCategoryOptions(
+    categoryId ? "subs" : null,
+    useLive && Boolean(categoryId),
+    categoryId || undefined,
+  );
+
   const activeCategory =
     serviceSlug === "all"
       ? undefined
       : serviceCategories.find((item) => item.slug === serviceSlug);
-  const selectedParent = useMemo(
-    () =>
-      parentCategories.find(
-        (item) => item.id === categoryId || item.slug === serviceSlug,
-      ),
-    [categoryId, parentCategories, serviceSlug],
-  );
-  const apiSubcategories = selectedParent
-    ? (subcategoriesByParent[selectedParent.id] ?? [])
-    : [];
+  const selectedParent = useMemo(() => {
+    const fromFilter = filterParentPaging.categories.find(
+      (item) => item.id === categoryId || item.slug === serviceSlug,
+    );
+    if (fromFilter) return fromFilter;
+    return parentCategories.find(
+      (item) => item.id === categoryId || item.slug === serviceSlug,
+    );
+  }, [
+    categoryId,
+    filterParentPaging.categories,
+    parentCategories,
+    serviceSlug,
+  ]);
+  const apiSubcategories = useLive
+    ? filterSubPaging.categories
+    : selectedParent
+      ? (subcategoriesByParent[selectedParent.id] ?? [])
+      : [];
   const subServices = !useLive && activeCategory
     ? getSubServices(activeCategory.slug)
     : undefined;
@@ -565,7 +582,9 @@ export function CategoryExplorer({
       syncMarketplaceUrl("all");
       return;
     }
-    const parent = parentCategories.find((item) => item.id === id);
+    const parent =
+      filterParentPaging.categories.find((item) => item.id === id) ||
+      parentCategories.find((item) => item.id === id);
     setCategoryId(id);
     setServiceSlug(parent?.slug || id);
     setSubService("");
@@ -613,10 +632,13 @@ export function CategoryExplorer({
         : `Professionals in ${cityLabel}`;
 
   const mapCountTotal = useLive ? liveTotal : scopedProviders.length;
-  const parentOptions: CategoryOption[] = parentCategories.map((item) => ({
-    id: item.id,
-    name: item.name,
-  }));
+  const parentOptions: CategoryOption[] = useLive
+    ? filterParentPaging.options
+    : parentCategories.map((item) => ({
+        id: item.id,
+        name: item.name,
+      }));
+  const liveSubOptions: CategoryOption[] = filterSubPaging.options;
 
   return (
     <div className="container-site flex flex-col bg-background lg:h-[calc(100dvh-4.25rem)]">
@@ -680,13 +702,18 @@ export function CategoryExplorer({
                 value={categoryId}
                 options={parentOptions}
                 placeholder="All services"
-                loading={loadingParents && !parentOptions.length}
-                loadingMore={loadingMoreParents}
-                hasMore={parentsHasMore}
+                loading={
+                  filterParentPaging.loading && !parentOptions.length
+                }
+                loadingMore={filterParentPaging.loadingMore}
+                hasMore={filterParentPaging.hasMore}
+                searchable
+                searchValue={filterParentPaging.search}
+                onSearchChange={filterParentPaging.setSearch}
+                searchPlaceholder="Search services…"
                 onChange={onLiveCategoryChange}
                 onLoadMore={() => {
-                  if (!parentsHasMore || loadingMoreParents) return;
-                  void dispatch(fetchParentCategories({ append: true }));
+                  filterParentPaging.loadMore();
                 }}
                 className="w-full min-w-0 sm:w-fit sm:min-w-36 [&_button]:border-primary [&_button]:bg-card [&_button]:text-primary"
               />
@@ -725,22 +752,25 @@ export function CategoryExplorer({
             ) : null}
 
             {useLive && selectedParent ? (
-              <NativeSelect
-                value={selectedLiveSub?.id || subService}
-                onChange={(event) => onSubServiceChange(event.target.value)}
-                disabled={loadingSubcategories && !apiSubcategories.length}
-                className="w-full min-w-0 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:bg-card sm:[&>select]:min-w-44 sm:[&>select]:max-w-64"
-                aria-label="Sub-service"
-              >
-                <NativeSelectOption value="">
-                  All {selectedParent.name} jobs
-                </NativeSelectOption>
-                {apiSubcategories.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {item.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <PaginatedCategorySelect
+                value={selectedLiveSub?.id || ""}
+                options={liveSubOptions}
+                placeholder={`All ${selectedParent.name} jobs`}
+                loading={
+                  filterSubPaging.loading && !liveSubOptions.length
+                }
+                loadingMore={filterSubPaging.loadingMore}
+                hasMore={filterSubPaging.hasMore}
+                searchable
+                searchValue={filterSubPaging.search}
+                onSearchChange={filterSubPaging.setSearch}
+                searchPlaceholder="Search jobs…"
+                onChange={(id) => onSubServiceChange(id)}
+                onLoadMore={() => {
+                  filterSubPaging.loadMore();
+                }}
+                className="w-full min-w-0 sm:w-fit sm:min-w-44 sm:max-w-64 [&_button]:bg-card"
+              />
             ) : null}
 
             <NativeSelect

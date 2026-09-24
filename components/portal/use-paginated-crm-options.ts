@@ -16,6 +16,7 @@ import { employeeName } from "@/lib/data/portal";
 import type { PaginatedEntityOption } from "@/components/portal/paginated-entity-select";
 
 export const CRM_DROPDOWN_PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export type PaginatedCrmKind = ReminderSubjectKind | "assignee";
 
@@ -28,6 +29,8 @@ type PageResult = {
 export type PaginatedCrmFilters = {
   customerId?: string;
   role?: string;
+  /** Server-side search (debounced by the hook when using setSearch). */
+  search?: string;
 };
 
 async function fetchKindPage(
@@ -37,9 +40,16 @@ async function fetchKindPage(
   filters: PaginatedCrmFilters = {},
 ): Promise<PageResult> {
   const customerId = filters.customerId?.trim() || undefined;
+  const search = filters.search?.trim() || undefined;
   switch (kind) {
     case "customer": {
-      const result = await queryCustomers({ page, limit, force: true, silent: true });
+      const result = await queryCustomers({
+        page,
+        limit,
+        search,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -55,6 +65,7 @@ async function fetchKindPage(
         page,
         limit,
         role: filters.role?.trim() || undefined,
+        search,
         force: true,
         silent: true,
       });
@@ -68,7 +79,13 @@ async function fetchKindPage(
       };
     }
     case "contractor": {
-      const result = await queryContractors({ page, limit, force: true, silent: true });
+      const result = await queryContractors({
+        page,
+        limit,
+        search,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -79,7 +96,13 @@ async function fetchKindPage(
       };
     }
     case "vendor": {
-      const result = await queryVendors({ page, limit, force: true, silent: true });
+      const result = await queryVendors({
+        page,
+        limit,
+        search,
+        force: true,
+        silent: true,
+      });
       return {
         items: result.items.map((item) => ({
           id: item.id,
@@ -94,6 +117,7 @@ async function fetchKindPage(
         page,
         limit,
         customerId,
+        search,
         force: true,
         silent: true,
       });
@@ -111,6 +135,7 @@ async function fetchKindPage(
         page,
         limit,
         customerId,
+        search,
         force: true,
         silent: true,
       });
@@ -128,6 +153,7 @@ async function fetchKindPage(
         page,
         limit,
         customerId,
+        search,
         force: true,
         silent: true,
       });
@@ -145,6 +171,7 @@ async function fetchKindPage(
         page,
         limit,
         customerId,
+        search,
         force: true,
         silent: true,
       });
@@ -167,6 +194,7 @@ async function fetchKindPage(
 /**
  * Infinite-scroll options for CRM entity dropdowns (page/limit from MD).
  * Appends pages; skips duplicate in-flight page requests.
+ * Exposes debounced `search` / `setSearch` for dropdown search fields.
  */
 export function usePaginatedCrmOptions(
   kind: PaginatedCrmKind | null,
@@ -179,6 +207,8 @@ export function usePaginatedCrmOptions(
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const inFlightPageRef = useRef<number | null>(null);
   const optionsRef = useRef<PaginatedEntityOption[]>([]);
   const kindRef = useRef(kind);
@@ -186,7 +216,20 @@ export function usePaginatedCrmOptions(
   kindRef.current = kind;
   filtersRef.current = filters;
   optionsRef.current = options;
-  const filterKey = `${filters.customerId?.trim() || ""}|${filters.role?.trim() || ""}`;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setSearchInput("");
+    setDebouncedSearch("");
+  }, [kind, enabled]);
+
+  const filterKey = `${filters.customerId?.trim() || ""}|${filters.role?.trim() || ""}|${debouncedSearch}`;
 
   const loadPage = useCallback(
     async (pageNum: number, append: boolean) => {
@@ -199,12 +242,10 @@ export function usePaginatedCrmOptions(
       else setLoading(true);
 
       try {
-        const result = await fetchKindPage(
-          activeKind,
-          pageNum,
-          pageSize,
-          filtersRef.current,
-        );
+        const result = await fetchKindPage(activeKind, pageNum, pageSize, {
+          ...filtersRef.current,
+          search: debouncedSearch || filtersRef.current.search,
+        });
         if (kindRef.current !== activeKind) return;
 
         if (!append) {
@@ -234,7 +275,7 @@ export function usePaginatedCrmOptions(
         setLoadingMore(false);
       }
     },
-    [enabled, pageSize],
+    [enabled, pageSize, debouncedSearch],
   );
 
   useEffect(() => {
@@ -260,5 +301,7 @@ export function usePaginatedCrmOptions(
     loadingMore,
     hasMore,
     loadMore,
+    search: searchInput,
+    setSearch: setSearchInput,
   };
 }

@@ -34,6 +34,11 @@ type PaginatedEntitySelectProps = {
   onLoadMore: () => void;
   className?: string;
   emptyLabel?: string;
+  /** Show a search field when the menu is open (API-backed lists). */
+  searchable?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
 };
 
 function isNearBottom(el: HTMLElement, threshold = 72) {
@@ -47,10 +52,20 @@ function isInsideMenu(node: EventTarget | null) {
   );
 }
 
+const triggerClassName = cn(
+  "flex h-10 w-full min-w-0 items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none",
+  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+  "disabled:cursor-not-allowed disabled:opacity-50",
+);
+
 /**
  * Single-select with infinite scroll.
  * Menu is portaled to body (avoids dialog overflow clip) and marked so Dialog
  * does not treat clicks as "outside".
+ *
+ * Search uses a combobox pattern: the search input replaces the trigger while
+ * open so it stays inside Dialog focus scope (portaled inputs cannot receive
+ * keystrokes when a modal Dialog traps focus).
  */
 export function PaginatedEntitySelect({
   id,
@@ -66,10 +81,15 @@ export function PaginatedEntitySelect({
   onLoadMore,
   className,
   emptyLabel = "No options found.",
+  searchable = false,
+  searchValue = "",
+  onSearchChange,
+  searchPlaceholder = "Search…",
 }: PaginatedEntitySelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const onChangeRef = useRef(onChange);
   const onLoadMoreRef = useRef(onLoadMore);
   const loadingMoreRef = useRef(Boolean(loadingMore));
@@ -94,22 +114,27 @@ export function PaginatedEntitySelect({
     : value && selectedLabel
       ? selectedLabel
       : placeholder;
+  const showSearch = Boolean(open && searchable);
 
   function tryLoadMore() {
     if (!hasMoreRef.current || loadingMoreRef.current) return;
     onLoadMoreRef.current();
   }
 
+  function closeMenu() {
+    setOpen(false);
+  }
+
   function selectOption(option: PaginatedEntityOption) {
     onChangeRef.current(option.id, option);
-    setOpen(false);
+    closeMenu();
   }
 
   function updateMenuPosition() {
     const trigger = rootRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const maxH = 192;
+    const maxH = 240;
     const gap = 4;
     const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
     const spaceAbove = rect.top - gap - 8;
@@ -135,7 +160,7 @@ export function PaginatedEntitySelect({
   useLayoutEffect(() => {
     if (!open) return;
     updateMenuPosition();
-  }, [open, options.length]);
+  }, [open, options.length, searchable]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,17 +173,17 @@ export function PaginatedEntitySelect({
       window.removeEventListener("resize", onReposition);
       document.removeEventListener("scroll", onReposition, true);
     };
-  }, [open]);
+  }, [open, searchable]);
 
   useEffect(() => {
     if (!open) return;
     function onDocPointer(event: MouseEvent) {
       if (isInsideMenu(event.target)) return;
       if (rootRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
+      closeMenu();
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") closeMenu();
     }
     // Bubble phase so option handlers run first.
     document.addEventListener("mousedown", onDocPointer);
@@ -168,6 +193,15 @@ export function PaginatedEntitySelect({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const frame = window.requestAnimationFrame(() => {
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showSearch]);
 
   useEffect(() => {
     if (!open) return;
@@ -213,108 +247,144 @@ export function PaginatedEntitySelect({
       id={listId}
       role="listbox"
       aria-labelledby={id}
-      ref={listRef}
       style={menuStyle}
       data-paginated-entity-menu=""
       data-lenis-prevent=""
-      className="overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
+      className="flex flex-col overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
       onWheel={(event) => {
         event.stopPropagation();
       }}
     >
-      {loading && options.length === 0 ? (
-        <div className="flex min-h-48 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
-          <Spinner size="sm" label="Loading" />
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        </div>
-      ) : null}
-
-      {!loading && !loadingMore && options.length === 0 ? (
-        <div className="flex min-h-48 flex-col items-center justify-center gap-1 px-4 py-6 text-center">
-          <p className="text-sm font-medium text-foreground">No results</p>
-          <p className="max-w-[14rem] text-xs text-muted-foreground">
-            {emptyLabel}
-          </p>
-        </div>
-      ) : null}
-
-      {options.map((option) => {
-        const active = option.id === value;
-        return (
-          <div
-            key={option.id || "__empty__"}
-            role="option"
-            tabIndex={-1}
-            data-paginated-option=""
-            aria-selected={active}
-            className={cn(
-              "flex w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-muted/60",
-              active && "bg-muted font-medium",
-            )}
-            onMouseDown={(event) => {
-              // mousedown (not click): Dialog may swallow click on portaled nodes.
-              event.preventDefault();
-              event.stopPropagation();
-              selectOption(option);
-            }}
-          >
-            {option.label}
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      >
+        {loading && options.length === 0 ? (
+          <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+            <Spinner size="sm" label="Loading" />
+            <p className="text-xs text-muted-foreground">Loading…</p>
           </div>
-        );
-      })}
+        ) : null}
 
-      {loadingMore ? (
-        <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
-          <SelectLoadingDots />
-          <span>Loading more…</span>
-        </div>
-      ) : null}
+        {!loading && !loadingMore && options.length === 0 ? (
+          <div className="flex min-h-40 flex-col items-center justify-center gap-1 px-4 py-6 text-center">
+            <p className="text-sm font-medium text-foreground">No results</p>
+            <p className="max-w-[14rem] text-xs text-muted-foreground">
+              {emptyLabel}
+            </p>
+          </div>
+        ) : null}
 
-      {!loadingMore && hasMore ? (
-        <div aria-hidden className="h-1 w-full" data-paginated-sentinel="" />
-      ) : null}
+        {options.map((option) => {
+          const active = option.id === value;
+          return (
+            <div
+              key={option.id || "__empty__"}
+              role="option"
+              tabIndex={-1}
+              data-paginated-option=""
+              aria-selected={active}
+              className={cn(
+                "flex w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-muted/60",
+                active && "bg-muted font-medium",
+              )}
+              onMouseDown={(event) => {
+                // mousedown (not click): Dialog may swallow click on portaled nodes.
+                event.preventDefault();
+                event.stopPropagation();
+                selectOption(option);
+              }}
+            >
+              {option.label}
+            </div>
+          );
+        })}
+
+        {loadingMore ? (
+          <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+            <SelectLoadingDots />
+            <span>Loading more…</span>
+          </div>
+        ) : null}
+
+        {!loadingMore && hasMore ? (
+          <div aria-hidden className="h-1 w-full" data-paginated-sentinel="" />
+        ) : null}
+      </div>
     </div>
   ) : null;
 
   return (
     <div ref={rootRef} className={cn("relative w-full", className)}>
-      <button
-        id={id}
-        type="button"
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listId}
-        aria-busy={busy || undefined}
-        data-loading={busy ? "" : undefined}
-        onClick={() => {
-          if (disabled) return;
-          setOpen((current) => !current);
-        }}
-        className={cn(
-          "flex h-10 w-full min-w-0 items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-left text-sm transition-colors outline-none select-none",
-          "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-          !selected && !selectedLabel && "text-muted-foreground",
-        )}
-      >
-        <span className="line-clamp-1 min-w-0 flex-1">{label}</span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          {busy ? (
-            <>
-              <SelectLoadingDots />
-              <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
-            </>
-          ) : null}
-          <ChevronDownIcon
+      {showSearch ? (
+        <div className="relative w-full">
+          <input
+            ref={searchRef}
+            id={id}
+            type="search"
+            value={searchValue}
+            disabled={disabled}
+            placeholder={searchPlaceholder}
+            autoComplete="off"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-busy={busy || undefined}
             className={cn(
-              "size-4 shrink-0 text-muted-foreground transition-transform",
-              open && "rotate-180",
+              triggerClassName,
+              "pr-9 select-text",
             )}
+            onChange={(event) => onSearchChange?.(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                closeMenu();
+              }
+            }}
+          />
+          <ChevronDownIcon
+            className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 rotate-180 text-muted-foreground"
             aria-hidden
           />
-        </span>
-      </button>
+        </div>
+      ) : (
+        <button
+          id={id}
+          type="button"
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-busy={busy || undefined}
+          data-loading={busy ? "" : undefined}
+          onClick={() => {
+            if (disabled) return;
+            setOpen((current) => !current);
+          }}
+          className={cn(
+            triggerClassName,
+            !selected && !selectedLabel && "text-muted-foreground",
+          )}
+        >
+          <span className="line-clamp-1 min-w-0 flex-1">{label}</span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            {busy ? (
+              <>
+                <SelectLoadingDots />
+                <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
+              </>
+            ) : null}
+            <ChevronDownIcon
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </span>
+        </button>
+      )}
 
       {mounted && menu ? createPortal(menu, document.body) : null}
     </div>

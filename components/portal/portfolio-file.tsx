@@ -17,6 +17,7 @@ import {
   uploadFile,
 } from "@/components/api/uploadFile";
 import { PaginatedCategorySelect } from "@/components/portal/paginated-category-select";
+import { usePaginatedCategoryOptions } from "@/components/portal/use-paginated-category-options";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
@@ -29,11 +30,7 @@ import { toTitleCase } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { selectAuthProvider } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  fetchParentCategories,
-  fetchSubcategories,
-  type PublicCategory,
-} from "@/store/categoriesSlice";
+import { type PublicCategory } from "@/store/categoriesSlice";
 import {
   clearPortfolioDetail,
   createPortfolio,
@@ -131,7 +128,6 @@ export function PortfolioFormView({
   const dispatch = useAppDispatch();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const lastSubFetchRef = useRef("");
 
   const authProvider = useAppSelector(selectAuthProvider);
   const detail = useAppSelector((state) => state.portfolio?.detail ?? null);
@@ -140,36 +136,6 @@ export function PortfolioFormView({
   );
   const mutating = useAppSelector(
     (state) => state.portfolio?.mutating ?? false,
-  );
-
-  const parents = useAppSelector((state) => state.categories?.parents ?? []);
-  const parentsHasMore = useAppSelector(
-    (state) => state.categories?.parentsHasMore ?? false,
-  );
-  const parentsPage = useAppSelector(
-    (state) => state.categories?.parentsPage ?? 0,
-  );
-  const parentsTotalPages = useAppSelector(
-    (state) => state.categories?.parentsTotalPages ?? 1,
-  );
-  const loadingParents = useAppSelector(
-    (state) => state.categories?.loadingParents ?? false,
-  );
-  const loadingMoreParents = useAppSelector(
-    (state) => state.categories?.loadingMoreParents ?? false,
-  );
-
-  const subcategoriesByParent = useAppSelector(
-    (state) => state.categories?.subcategoriesByParent ?? {},
-  );
-  const subMetaByParent = useAppSelector(
-    (state) => state.categories?.subMetaByParent ?? {},
-  );
-  const loadingSubcategories = useAppSelector(
-    (state) => state.categories?.loadingSubcategories ?? false,
-  );
-  const loadingMoreSubcategories = useAppSelector(
-    (state) => state.categories?.loadingMoreSubcategories ?? false,
   );
 
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
@@ -186,13 +152,28 @@ export function PortfolioFormView({
       : [];
   }, [allowedCategoryIds, authProvider?.services?.categoryIds]);
 
-  const categoryHasMore =
-    Boolean(parentsHasMore) || parentsPage < parentsTotalPages;
+  const noSignupCategories = !signupCategoryIds.length;
+
+  const parentPaging = usePaginatedCategoryOptions(
+    "parents",
+    !noSignupCategories,
+  );
+  const subPaging = usePaginatedCategoryOptions(
+    draft.categoryId ? "subs" : null,
+    Boolean(draft.categoryId),
+    draft.categoryId || undefined,
+  );
+
+  const loadingParents = parentPaging.loading;
+  const loadingMoreParents = parentPaging.loadingMore;
+  const loadingSubcategories = subPaging.loading;
+  const loadingMoreSubcategories = subPaging.loadingMore;
+  const subcategoryHasMore = subPaging.hasMore;
 
   const categoryOptions = useMemo(() => {
     if (!signupCategoryIds.length) return [];
 
-    const matched = parents.filter((parent) =>
+    const matched = parentPaging.categories.filter((parent) =>
       signupCategoryIds.some((signupId) =>
         parentMatchesSignupId(parent, signupId),
       ),
@@ -211,25 +192,16 @@ export function PortfolioFormView({
     }
     return list;
   }, [
-    parents,
+    parentPaging.categories,
     signupCategoryIds,
     draft.categoryId,
     draft.categoryName,
   ]);
 
-  const subcategories = draft.categoryId
-    ? (subcategoriesByParent[draft.categoryId] ?? [])
-    : [];
-
-  const subcategoryHasMore = Boolean(
-    draft.categoryId &&
-      (subMetaByParent[draft.categoryId]?.hasMore ||
-        (subMetaByParent[draft.categoryId]?.page ?? 0) <
-          (subMetaByParent[draft.categoryId]?.totalPages ?? 1)),
-  );
+  const categoryHasMore = parentPaging.hasMore;
 
   const subcategoryOptions = useMemo(() => {
-    const list = subcategories.map((item) => ({
+    const list = subPaging.options.map((item) => ({
       id: item.id,
       name: item.name,
     }));
@@ -243,15 +215,7 @@ export function PortfolioFormView({
       });
     }
     return list;
-  }, [
-    subcategories,
-    draft.subcategoryId,
-    draft.subcategoryName,
-  ]);
-
-  useEffect(() => {
-    void dispatch(fetchParentCategories());
-  }, [dispatch]);
+  }, [subPaging.options, draft.subcategoryId, draft.subcategoryName]);
 
   // Keep loading parents until all signup categories are matched (or exhausted).
   useEffect(() => {
@@ -259,22 +223,24 @@ export function PortfolioFormView({
       return;
     }
     if (!categoryHasMore) return;
+    if (parentPaging.search.trim()) return;
 
-    const matchedCount = parents.filter((parent) =>
+    const matchedCount = parentPaging.categories.filter((parent) =>
       signupCategoryIds.some((signupId) =>
         parentMatchesSignupId(parent, signupId),
       ),
     ).length;
     if (matchedCount >= signupCategoryIds.length) return;
 
-    void dispatch(fetchParentCategories({ append: true }));
+    parentPaging.loadMore();
   }, [
     signupCategoryIds,
-    parents,
+    parentPaging.categories,
+    parentPaging.search,
     categoryHasMore,
     loadingParents,
     loadingMoreParents,
-    dispatch,
+    parentPaging.loadMore,
   ]);
 
   useEffect(() => {
@@ -308,31 +274,7 @@ export function PortfolioFormView({
             : "ACTIVE",
     });
     setHydrated(true);
-
-    if (detail.categoryId) {
-      lastSubFetchRef.current = detail.categoryId;
-      void dispatch(fetchSubcategories({ parentId: detail.categoryId }));
-    }
-  }, [detail, hydrated, id, dispatch]);
-
-  useEffect(() => {
-    if (!draft.categoryId) return;
-    if (lastSubFetchRef.current === draft.categoryId) return;
-    if (
-      subcategoriesByParent[draft.categoryId] &&
-      subMetaByParent[draft.categoryId]
-    ) {
-      lastSubFetchRef.current = draft.categoryId;
-      return;
-    }
-    lastSubFetchRef.current = draft.categoryId;
-    void dispatch(fetchSubcategories({ parentId: draft.categoryId }));
-  }, [
-    dispatch,
-    draft.categoryId,
-    subcategoriesByParent,
-    subMetaByParent,
-  ]);
+  }, [detail, hydrated, id]);
 
   const title = id
     ? toTitleCase(draft.title || detail?.title || "Portfolio project")
@@ -513,8 +455,6 @@ export function PortfolioFormView({
     }
   }
 
-  const noSignupCategories = !signupCategoryIds.length;
-
   const formFields = (
     <FieldGroup>
       <Field>
@@ -552,8 +492,11 @@ export function PortfolioFormView({
                 ? "No categories selected"
                 : "Select category"
             }
+            searchable={!noSignupCategories}
+            searchValue={parentPaging.search}
+            onSearchChange={parentPaging.setSearch}
+            searchPlaceholder="Search categories…"
             onChange={(nextId, category) => {
-              lastSubFetchRef.current = "";
               setDraft((current) => ({
                 ...current,
                 categoryId: nextId,
@@ -564,7 +507,7 @@ export function PortfolioFormView({
             }}
             onLoadMore={() => {
               if (noSignupCategories) return;
-              void dispatch(fetchParentCategories({ append: true }));
+              parentPaging.loadMore();
             }}
           />
           {noSignupCategories ? (
@@ -594,6 +537,10 @@ export function PortfolioFormView({
                   ? "Loading subcategories…"
                   : "Select subcategory"
             }
+            searchable={Boolean(draft.categoryId)}
+            searchValue={subPaging.search}
+            onSearchChange={subPaging.setSearch}
+            searchPlaceholder="Search subcategories…"
             onChange={(nextId, sub) => {
               setDraft((current) => ({
                 ...current,
@@ -602,13 +549,7 @@ export function PortfolioFormView({
               }));
             }}
             onLoadMore={() => {
-              if (!draft.categoryId) return;
-              void dispatch(
-                fetchSubcategories({
-                  parentId: draft.categoryId,
-                  append: true,
-                }),
-              );
+              subPaging.loadMore();
             }}
           />
         </Field>

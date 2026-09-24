@@ -31,19 +31,14 @@ import {
   type EstimateSiteVisit,
   type JobAttachment,
 } from "@/components/portal/use-job-file";
+import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchTeam } from "@/store/teamSlice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { employeeName, type PortalEmployee } from "@/lib/data/portal";
@@ -321,10 +316,19 @@ export function EstimateSiteVisitTab({
   const { employees: crewEmployees, loading: crewLoading } = usePortalCrew();
   const { contractors } = useCrmDirectory();
   const crm = useCrmApiData();
+  const useApi = crm.enabled;
+  const technicianFilter = useMemo(() => ({ role: "technician" }), []);
+  const assigneePaging = usePaginatedCrmOptions(
+    useApi ? "assignee" : null,
+    useApi,
+    undefined,
+    technicianFilter,
+  );
 
   useEffect(() => {
+    if (useApi) return;
     void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
-  }, [dispatch]);
+  }, [dispatch, useApi]);
 
   const technicians = useMemo(() => {
     const contractorIds = new Set([
@@ -361,7 +365,19 @@ export function EstimateSiteVisitTab({
     return result;
   }, [crewEmployees, reduxEmployees, crm.employees, crm.contractors, contractors]);
 
-  const loading = (crewLoading || teamLoading) && technicians.length === 0;
+  const technicianSelectOptions = useMemo(() => {
+    const rows = useApi
+      ? assigneePaging.options
+      : technicians.map((item) => ({
+          id: item.id,
+          label: `${employeeName(item)}${item.trade ? ` · ${item.trade}` : ""}`,
+        }));
+    return [{ id: "", label: "Unassigned" }, ...rows];
+  }, [useApi, assigneePaging.options, technicians]);
+
+  const loading =
+    (useApi ? assigneePaging.loading : crewLoading || teamLoading) &&
+    technicianSelectOptions.length <= 1;
   const { siteVisit, saveSiteVisit, actor } = useJobFile(
     asJob,
     estimate,
@@ -616,48 +632,34 @@ export function EstimateSiteVisitTab({
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="Team member">
-            <Select
+            <PaginatedEntitySelect
+              id="estimate-site-technician"
+              value={visit.employeeId}
+              options={technicianSelectOptions}
+              selectedLabel={visit.technician || undefined}
+              placeholder={loading ? "Loading team members…" : "Unassigned"}
+              emptyLabel="No team members found."
               disabled={locked || loading}
-              value={loading ? undefined : visit.employeeId || "__unassigned__"}
-              onValueChange={(value) => {
-                const resolvedId = value === "__unassigned__" ? "" : value;
-                const employee = technicians.find(
-                  (item) => item.id === resolvedId,
-                );
+              loading={loading}
+              loadingMore={useApi ? assigneePaging.loadingMore : false}
+              hasMore={useApi ? assigneePaging.hasMore : false}
+              onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+              searchable={useApi}
+              searchValue={useApi ? assigneePaging.search : ""}
+              onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+              searchPlaceholder="Search team members…"
+              onChange={(id, option) => {
+                const employee = technicians.find((item) => item.id === id);
                 patch({
-                  employeeId: resolvedId,
-                  technician: employee ? employeeName(employee) : "",
+                  employeeId: id,
+                  technician: employee
+                    ? employeeName(employee)
+                    : id && option?.label
+                      ? option.label.split(" · ")[0]
+                      : "",
                 });
               }}
-            >
-              <SelectTrigger className="w-full" loading={loading}>
-                <SelectValue
-                  placeholder={loading ? "Loading team members…" : "Unassigned"}
-                />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                align="start"
-                className="z-[100] w-[var(--radix-select-trigger-width)]"
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    <span>Loading team members…</span>
-                  </div>
-                ) : (
-                  <>
-                    <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                    {technicians.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {employeeName(item)}
-                        {item.trade ? ` · ${item.trade}` : ""}
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
+            />
           </Field>
           <Field label="Visit date">
             <Input

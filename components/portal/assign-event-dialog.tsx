@@ -356,6 +356,10 @@ export function AssignEventDialog({
               loadingMore={useApi ? assigneePaging.loadingMore : false}
               hasMore={useApi ? assigneePaging.hasMore : false}
               onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+              searchable={useApi}
+              searchValue={useApi ? assigneePaging.search : ""}
+              onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+              searchPlaceholder="Search people…"
               onChange={(id, option) => {
                 setEmployeeId(id);
                 setEmployeeLabel(option?.label && id ? option.label : "");

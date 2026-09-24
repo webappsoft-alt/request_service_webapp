@@ -1157,6 +1157,10 @@ export function CreateReminderDialog({
                 }
                 emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
                 disabled={(useApi ? recordPaging.loading : lookupsLoading) && !selectedId}
+                searchable={useApi}
+                searchValue={useApi ? recordPaging.search : ""}
+                onSearchChange={useApi ? recordPaging.setSearch : undefined}
+                searchPlaceholder={`Search ${reminderSubjectKindLabel(kind).toLowerCase()}s…`}
               />
             </Field>
           </div>
@@ -1203,6 +1207,10 @@ export function CreateReminderDialog({
                 }
                 emptyLabel="No employees found"
                 disabled={(useApi ? assigneePaging.loading : lookupsLoading) && !assignedEmployeeId}
+                searchable={useApi}
+                searchValue={useApi ? assigneePaging.search : ""}
+                onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+                searchPlaceholder="Search assignees…"
               />
             </Field>
             <Field>
@@ -1550,6 +1558,10 @@ export function CreateTaskDialog({
                 }
                 emptyLabel={`No ${reminderSubjectKindLabel(kind).toLowerCase()}s found`}
                 disabled={(useApi ? recordPaging.loading : lookupsLoading) && !selectedId}
+                searchable={useApi}
+                searchValue={useApi ? recordPaging.search : ""}
+                onSearchChange={useApi ? recordPaging.setSearch : undefined}
+                searchPlaceholder={`Search ${reminderSubjectKindLabel(kind).toLowerCase()}s…`}
               />
             </Field>
           </div>
@@ -1596,6 +1608,10 @@ export function CreateTaskDialog({
                 }
                 emptyLabel="No employees found"
                 disabled={(useApi ? assigneePaging.loading : lookupsLoading) && !assignedEmployeeId}
+                searchable={useApi}
+                searchValue={useApi ? assigneePaging.search : ""}
+                onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+                searchPlaceholder="Search assignees…"
               />
             </Field>
             <Field>

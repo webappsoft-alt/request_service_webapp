@@ -12,6 +12,7 @@ import {
 } from "@/components/api/uploadFile";
 import { HoursEditor, ServiceHoursSummary } from "@/components/portal/hours-editor";
 import { PaginatedCategorySelect } from "@/components/portal/paginated-category-select";
+import { usePaginatedCategoryOptions } from "@/components/portal/use-paginated-category-options";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { usePortalSettings } from "@/components/portal/use-portal-settings";
@@ -47,10 +48,6 @@ import {
 import type { WorkingHours } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  fetchParentCategories,
-  fetchSubcategories,
-} from "@/store/categoriesSlice";
 import {
   clearFixedServiceDetail,
   createFixedService,
@@ -386,35 +383,6 @@ export function ServiceFormView({ id }: { id?: string }) {
   const { officeHours } = usePortalSettings();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const parents = useAppSelector((state) => state.categories?.parents ?? []);
-  const loadingParents = useAppSelector(
-    (state) => state.categories?.loadingParents ?? false,
-  );
-  const loadingMoreParents = useAppSelector(
-    (state) => state.categories?.loadingMoreParents ?? false,
-  );
-  const parentsHasMore = useAppSelector(
-    (state) => state.categories?.parentsHasMore ?? false,
-  );
-  const parentsPage = useAppSelector(
-    (state) => state.categories?.parentsPage ?? 0,
-  );
-  const parentsTotalPages = useAppSelector(
-    (state) => state.categories?.parentsTotalPages ?? 1,
-  );
-  const loadingSubcategories = useAppSelector(
-    (state) => state.categories?.loadingSubcategories ?? false,
-  );
-  const loadingMoreSubcategories = useAppSelector(
-    (state) => state.categories?.loadingMoreSubcategories ?? false,
-  );
-  const subcategoriesByParent = useAppSelector(
-    (state) => state.categories?.subcategoriesByParent ?? {},
-  );
-  const subMetaByParent = useAppSelector(
-    (state) => state.categories?.subMetaByParent ?? {},
-  );
-
   const detail = useAppSelector((state) => state.fixedServices?.detail ?? null);
   const detailLoading = useAppSelector(
     (state) => state.fixedServices?.detailLoading ?? false,
@@ -437,7 +405,6 @@ export function ServiceFormView({ id }: { id?: string }) {
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft(officeHours));
   const [uploading, setUploading] = useState(false);
   const [hydrated, setHydrated] = useState(!id);
-  const lastSubFetchRef = useRef<string>("");
 
   const selectedCategoryId =
     draft.categoryId || (detail && detail.id === id ? detail.categoryId : "") || "";
@@ -446,54 +413,46 @@ export function ServiceFormView({ id }: { id?: string }) {
     (detail && detail.id === id ? detail.subcategoryId : "") ||
     "";
 
-  const subcategories = selectedCategoryId
-    ? subcategoriesByParent[selectedCategoryId] ?? []
-    : [];
-  const categoryHasMore =
-    Boolean(parentsHasMore) || parentsPage < parentsTotalPages;
-  const subcategoryHasMore = Boolean(
-    selectedCategoryId &&
-      (subMetaByParent[selectedCategoryId]?.hasMore ||
-        (subMetaByParent[selectedCategoryId]?.page ?? 0) <
-          (subMetaByParent[selectedCategoryId]?.totalPages ?? 1)),
+  const parentPaging = usePaginatedCategoryOptions("parents", true);
+  const subPaging = usePaginatedCategoryOptions(
+    selectedCategoryId ? "subs" : null,
+    Boolean(selectedCategoryId),
+    selectedCategoryId || undefined,
   );
 
+  const loadingParents = parentPaging.loading;
+  const loadingMoreParents = parentPaging.loadingMore;
+  const categoryHasMore = parentPaging.hasMore;
+  const loadingSubcategories = subPaging.loading;
+  const loadingMoreSubcategories = subPaging.loadingMore;
+  const subcategoryHasMore = subPaging.hasMore;
+
   const categoryOptions = useMemo(() => {
-    const list = [...parents];
+    const list = [...parentPaging.options];
     const ensure = (cid: string, cname: string) => {
       if (!cid) return;
       if (list.some((item) => item.id === cid)) return;
-      list.unshift({
-        id: cid,
-        name: cname || "Selected category",
-        slug: "",
-        parentCategory: null,
-        commonServices: [],
-        workingArea: [],
-        images: [],
-      });
+      list.unshift({ id: cid, name: cname || "Selected category" });
     };
     ensure(draft.categoryId, draft.categoryName);
     if (detail && detail.id === id) {
       ensure(detail.categoryId, detail.categoryName);
     }
     return list;
-  }, [parents, draft.categoryId, draft.categoryName, detail, id]);
+  }, [
+    parentPaging.options,
+    draft.categoryId,
+    draft.categoryName,
+    detail,
+    id,
+  ]);
 
   const subcategoryOptions = useMemo(() => {
-    const list = [...subcategories];
+    const list = [...subPaging.options];
     const ensure = (sid: string, sname: string) => {
       if (!sid) return;
       if (list.some((item) => item.id === sid)) return;
-      list.unshift({
-        id: sid,
-        name: sname || "Selected sub-category",
-        slug: "",
-        parentCategory: selectedCategoryId || null,
-        commonServices: [],
-        workingArea: [],
-        images: [],
-      });
+      list.unshift({ id: sid, name: sname || "Selected sub-category" });
     };
     ensure(draft.subcategoryId, draft.subcategoryName);
     if (detail && detail.id === id) {
@@ -501,24 +460,24 @@ export function ServiceFormView({ id }: { id?: string }) {
     }
     return list;
   }, [
-    subcategories,
+    subPaging.options,
     draft.subcategoryId,
     draft.subcategoryName,
-    selectedCategoryId,
     detail,
     id,
   ]);
 
   const selectedCategory = useMemo(
-    () => categoryOptions.find((item) => item.id === selectedCategoryId),
-    [categoryOptions, selectedCategoryId],
+    () =>
+      parentPaging.categories.find((item) => item.id === selectedCategoryId) ??
+      null,
+    [parentPaging.categories, selectedCategoryId],
   );
 
   const whatNeedsWorkOptions = selectedCategory?.commonServices ?? [];
   const whereIsWorkOptions = selectedCategory?.workingArea ?? [];
 
   useEffect(() => {
-    void dispatch(fetchParentCategories());
     void dispatch(fetchServiceAreasPicker());
   }, [dispatch]);
 
@@ -590,27 +549,7 @@ export function ServiceFormView({ id }: { id?: string }) {
     });
 
     if (!hydrated) setHydrated(true);
-
-    const parentId = detail.categoryId;
-    if (parentId && lastSubFetchRef.current !== parentId) {
-      lastSubFetchRef.current = parentId;
-      void dispatch(fetchSubcategories({ parentId }));
-    }
-  }, [detail, dispatch, hydrated, id, officeHours]);
-
-  useEffect(() => {
-    if (!selectedCategoryId) return;
-    if (lastSubFetchRef.current === selectedCategoryId) return;
-    if (
-      subcategoriesByParent[selectedCategoryId] &&
-      subMetaByParent[selectedCategoryId]
-    ) {
-      lastSubFetchRef.current = selectedCategoryId;
-      return;
-    }
-    lastSubFetchRef.current = selectedCategoryId;
-    void dispatch(fetchSubcategories({ parentId: selectedCategoryId }));
-  }, [dispatch, selectedCategoryId, subcategoriesByParent, subMetaByParent]);
+  }, [detail, hydrated, id, officeHours]);
 
   const previewPrice = priceNumber(draft.price);
   const previewService: PortalFixedService = {
@@ -833,8 +772,11 @@ export function ServiceFormView({ id }: { id?: string }) {
                     loadingMore={loadingMoreParents}
                     hasMore={categoryHasMore}
                     placeholder="Select category"
+                    searchable
+                    searchValue={parentPaging.search}
+                    onSearchChange={parentPaging.setSearch}
+                    searchPlaceholder="Search categories…"
                     onChange={(nextId, category) => {
-                      lastSubFetchRef.current = "";
                       setDraft((current) => ({
                         ...current,
                         categoryId: nextId,
@@ -846,7 +788,7 @@ export function ServiceFormView({ id }: { id?: string }) {
                       }));
                     }}
                     onLoadMore={() => {
-                      void dispatch(fetchParentCategories({ append: true }));
+                      parentPaging.loadMore();
                     }}
                   />
                 </Field>
@@ -871,6 +813,10 @@ export function ServiceFormView({ id }: { id?: string }) {
                           ? "Loading sub-categories…"
                           : "Select sub-category"
                     }
+                    searchable={Boolean(selectedCategoryId)}
+                    searchValue={subPaging.search}
+                    onSearchChange={subPaging.setSearch}
+                    searchPlaceholder="Search sub-categories…"
                     onChange={(nextId, sub) => {
                       setDraft((current) => ({
                         ...current,
@@ -879,13 +825,7 @@ export function ServiceFormView({ id }: { id?: string }) {
                       }));
                     }}
                     onLoadMore={() => {
-                      if (!selectedCategoryId) return;
-                      void dispatch(
-                        fetchSubcategories({
-                          parentId: selectedCategoryId,
-                          append: true,
-                        }),
-                      );
+                      subPaging.loadMore();
                     }}
                   />
                 </Field>

@@ -23,6 +23,11 @@ type PaginatedCategorySelectProps = {
   onChange: (id: string, option?: CategoryOption) => void;
   onLoadMore: () => void;
   className?: string;
+  /** Show a search field at the top of the menu (API-backed lists). */
+  searchable?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
 };
 
 function isNearBottom(el: HTMLElement, threshold = 72) {
@@ -33,6 +38,7 @@ function isNearBottom(el: HTMLElement, threshold = 72) {
  * Category / sub-category dropdown with infinite scroll.
  * Calls onLoadMore when the user reaches the bottom; keeps calling while
  * still at the bottom after each page until hasMore is false.
+ * Optional search field sends the query to the parent (API search).
  */
 export function PaginatedCategorySelect({
   id,
@@ -46,10 +52,15 @@ export function PaginatedCategorySelect({
   onChange,
   onLoadMore,
   className,
+  searchable = false,
+  searchValue = "",
+  onSearchChange,
+  searchPlaceholder = "Search…",
 }: PaginatedCategorySelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const onLoadMoreRef = useRef(onLoadMore);
   const loadingMoreRef = useRef(Boolean(loadingMore));
   const hasMoreRef = useRef(Boolean(hasMore));
@@ -88,6 +99,14 @@ export function PaginatedCategorySelect({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !searchable) return;
+    const frame = window.requestAnimationFrame(() => {
+      searchRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, searchable]);
 
   // Native scroll listener (more reliable than React onScroll for nested buttons).
   useEffect(() => {
@@ -170,59 +189,88 @@ export function PaginatedCategorySelect({
           id={listId}
           role="listbox"
           aria-labelledby={id}
-          ref={listRef}
-          className="absolute z-[1300] mt-1 max-h-60 w-full overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
+          className="absolute z-[1300] mt-1 flex max-h-60 w-full flex-col overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
         >
-          <button
-            type="button"
-            role="option"
-            aria-selected={!value}
-            className={cn(
-              "flex w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/60",
-              !value && "bg-muted/40",
-            )}
-            onClick={() => {
-              onChange("");
-              setOpen(false);
-            }}
-          >
-            {placeholder}
-          </button>
-
-          {options.map((option) => {
-            const active = option.id === value;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                role="option"
-                data-paginated-option=""
-                aria-selected={active}
-                className={cn(
-                  "flex w-full px-3 py-2 text-left text-sm hover:bg-muted/60",
-                  active && "bg-muted font-medium",
-                )}
-                onClick={() => {
-                  onChange(option.id, option);
-                  setOpen(false);
+          {searchable ? (
+            <div
+              className="shrink-0 border-b border-input p-2"
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <input
+                ref={searchRef}
+                type="search"
+                value={searchValue}
+                onChange={(event) => onSearchChange?.(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                autoComplete="off"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.stopPropagation();
+                    setOpen(false);
+                  }
                 }}
-              >
-                {toTitleCase(option.name)}
-              </button>
-            );
-          })}
-
-          {loadingMore ? (
-            <div className="flex items-center justify-center py-2">
-              <Spinner size="sm" label="Loading more" />
+              />
             </div>
           ) : null}
 
-          {!loading && !options.length ? (
-            <div className="px-3 py-3 text-sm text-muted-foreground">
-              No options found.
-            </div>
-          ) : null}
+          <div
+            ref={listRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          >
+            <button
+              type="button"
+              role="option"
+              aria-selected={!value}
+              className={cn(
+                "flex w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/60",
+                !value && "bg-muted/40",
+              )}
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+            >
+              {placeholder}
+            </button>
+
+            {options.map((option) => {
+              const active = option.id === value;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="option"
+                  data-paginated-option=""
+                  aria-selected={active}
+                  className={cn(
+                    "flex w-full px-3 py-2 text-left text-sm hover:bg-muted/60",
+                    active && "bg-muted font-medium",
+                  )}
+                  onClick={() => {
+                    onChange(option.id, option);
+                    setOpen(false);
+                  }}
+                >
+                  {toTitleCase(option.name)}
+                </button>
+              );
+            })}
+
+            {loadingMore ? (
+              <div className="flex items-center justify-center py-2">
+                <Spinner size="sm" label="Loading more" />
+              </div>
+            ) : null}
+
+            {!loading && !options.length ? (
+              <div className="px-3 py-3 text-sm text-muted-foreground">
+                No options found.
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

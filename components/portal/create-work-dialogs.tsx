@@ -722,6 +722,10 @@ export function CreateEstimateDialog({
                     loadingMore={useApi ? customerPaging.loadingMore : false}
                     hasMore={useApi ? customerPaging.hasMore : false}
                     onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+                    searchable={useApi}
+                    searchValue={useApi ? customerPaging.search : ""}
+                    onSearchChange={useApi ? customerPaging.setSearch : undefined}
+                    searchPlaceholder="Search customers…"
                     onChange={(id, option) => pickCustomer(id, option)}
                   />
                 </Field>
@@ -803,6 +807,10 @@ export function CreateEstimateDialog({
                   loadingMore={useApi ? assigneePaging.loadingMore : false}
                   hasMore={useApi ? assigneePaging.hasMore : false}
                   onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+                  searchable={useApi}
+                  searchValue={useApi ? assigneePaging.search : ""}
+                  onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+                  searchPlaceholder="Search team members…"
                   onChange={(id) => setEmployeeId(id)}
                 />
               </Field>
@@ -1449,6 +1457,10 @@ export function CreateJobDialog({
                   loadingMore={useApi ? estimatePaging.loadingMore : false}
                   hasMore={useApi ? estimatePaging.hasMore : false}
                   onLoadMore={useApi ? estimatePaging.loadMore : () => {}}
+                  searchable={useApi}
+                  searchValue={useApi ? estimatePaging.search : ""}
+                  onSearchChange={useApi ? estimatePaging.setSearch : undefined}
+                  searchPlaceholder="Search estimates…"
                   onChange={(id) => void pickSource(id)}
                 />
               </Field>
@@ -1466,6 +1478,10 @@ export function CreateJobDialog({
                   loadingMore={useApi ? customerPaging.loadingMore : false}
                   hasMore={useApi ? customerPaging.hasMore : false}
                   onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+                  searchable={useApi}
+                  searchValue={useApi ? customerPaging.search : ""}
+                  onSearchChange={useApi ? customerPaging.setSearch : undefined}
+                  searchPlaceholder="Search customers…"
                   onChange={(id, option) => {
                     setSelectedCustomer(id);
                     if (option?.label) setCustomerLabel(option.label);
@@ -1545,6 +1561,10 @@ export function CreateJobDialog({
                 loadingMore={useApi ? assigneePaging.loadingMore : false}
                 hasMore={useApi ? assigneePaging.hasMore : false}
                 onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
+                searchable={useApi}
+                searchValue={useApi ? assigneePaging.search : ""}
+                onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+                searchPlaceholder="Search team members…"
                 onChange={(id, option) => {
                   setEmployeeId(id);
                   setEmployeeLabel(option?.label && id ? option.label : "");
@@ -1900,6 +1920,10 @@ export function CreateLeadDialog({
               loadingMore={useApi ? customerPaging.loadingMore : false}
               hasMore={useApi ? customerPaging.hasMore : false}
               onLoadMore={useApi ? customerPaging.loadMore : () => {}}
+              searchable={useApi}
+              searchValue={useApi ? customerPaging.search : ""}
+              onSearchChange={useApi ? customerPaging.setSearch : undefined}
+              searchPlaceholder="Search customers…"
               onChange={(id, option) => {
                 setCustomerId(id);
                 if (option?.label) setCustomerLabel(option.label);

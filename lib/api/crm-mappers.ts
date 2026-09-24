@@ -149,6 +149,12 @@ export function resolveCrmObjectId(id: string | null | undefined): string | null
   return null;
 }
 
+/** True for offline `inv_${Date.now().toString(36)}` keys that are not Mongo-backed. */
+export function isLocalInvoicePortalKey(id: string | null | undefined): boolean {
+  const raw = String(id ?? "").trim();
+  return /^inv_/i.test(raw) && !resolveCrmObjectId(raw);
+}
+
 function personDisplayName(value: unknown): string {
   return displayNameFromRecord(value);
 }
@@ -1387,10 +1393,9 @@ export function mapInvoice(raw: unknown): Invoice | null {
   const record = asRecord(raw);
   if (!record) return null;
 
-  const mongoId = crmIdOf(record);
-  // Prefer portal clientId (inv_xxx) so list/detail URLs match GET /invoices/:clientId.
-  const clientId = trimmed(record.clientId);
-  const id = clientId || mongoId;
+  // Always use Mongo ObjectId for portal routes — local `inv_${Date.now()}` keys
+  // are not reliable for GET /invoices/:id (clientId may be missing or stale).
+  const id = crmIdOf(record);
   if (!id) return null;
 
   return {

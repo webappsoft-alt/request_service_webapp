@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { isLocalInvoicePortalKey } from "@/lib/api/crm-mappers";
 
 export type OpenRecord = {
   href: string;
@@ -15,6 +16,20 @@ const EMPTY: OpenRecord[] = [];
 let cachedRaw = "";
 let cached: OpenRecord[] = EMPTY;
 
+function isStaleInvoiceHref(href: string) {
+  const match = href.match(/\/pro\/dashboard\/invoices\/([^/?#]+)/i);
+  if (!match?.[1]) return false;
+  try {
+    return isLocalInvoicePortalKey(decodeURIComponent(match[1]));
+  } catch {
+    return isLocalInvoicePortalKey(match[1]);
+  }
+}
+
+function pruneStale(records: OpenRecord[]) {
+  return records.filter((item) => !isStaleInvoiceHref(item.href));
+}
+
 function read(): OpenRecord[] {
   if (typeof window === "undefined") return EMPTY;
   try {
@@ -26,7 +41,15 @@ function read(): OpenRecord[] {
       return cached;
     }
     const parsed = JSON.parse(raw) as OpenRecord[];
-    cached = Array.isArray(parsed) ? parsed : EMPTY;
+    const list = Array.isArray(parsed) ? parsed : EMPTY;
+    const pruned = pruneStale(list);
+    if (pruned.length !== list.length) {
+      cached = pruned;
+      cachedRaw = JSON.stringify(pruned);
+      window.sessionStorage.setItem(KEY, cachedRaw);
+      return cached;
+    }
+    cached = list;
     return cached;
   } catch {
     return EMPTY;
@@ -34,8 +57,9 @@ function read(): OpenRecord[] {
 }
 
 function write(next: OpenRecord[]) {
-  cached = next;
-  cachedRaw = JSON.stringify(next);
+  const pruned = pruneStale(next);
+  cached = pruned;
+  cachedRaw = JSON.stringify(pruned);
   window.sessionStorage.setItem(KEY, cachedRaw);
   window.dispatchEvent(new Event(EVENT));
 }
@@ -49,6 +73,7 @@ export function useOpenRecords() {
   const records = useSyncExternalStore(subscribe, read, () => EMPTY);
 
   const openRecord = useCallback((record: OpenRecord) => {
+    if (isStaleInvoiceHref(record.href)) return;
     const current = read();
     if (current.some((item) => item.href === record.href)) return;
     write([...current, record].slice(-8));

@@ -123,6 +123,7 @@ import {
   getInvoiceWithPayments,
   queryInvoices,
   resolveCrmObjectId,
+  isLocalInvoicePortalKey,
   sendInvoice as sendInvoiceApi,
   updateEstimate as updateEstimateApi,
   updateEstimateArchive as updateEstimateArchiveApi,
@@ -1350,14 +1351,22 @@ export function JobDetailView({ id }: { id: string }) {
     }
     setConverting(true);
     try {
-      if (crm.enabled) {
+      // Prefer API whenever this job is a live CRM record (ObjectId) or CRM is on.
+      const jobIsLive = Boolean(resolveCrmObjectId(currentJob.id));
+      if (crm.enabled || jobIsLive) {
         const { invoice: created } = await dispatch(
           convertJobToInvoiceRecord(currentJob.id),
         ).unwrap();
+        const dest = resolveCrmObjectId(created.id) || created.id;
         toast.success(
           `${created.number || "Invoice"} drafted from ${currentJob.number}.`,
         );
-        router.push(`/pro/dashboard/invoices/${created.id}`);
+        if (!resolveCrmObjectId(dest)) {
+          toast.error("Invoice created — open it from the Invoices list.");
+          router.push("/pro/dashboard/invoices");
+          return;
+        }
+        router.push(`/pro/dashboard/invoices/${dest}`);
         return;
       }
       const lines = readCostLines(session?.email, currentJob);
@@ -1385,7 +1394,8 @@ export function JobDetailView({ id }: { id: string }) {
       records.linkRecords("job", currentJob.id, created.id);
       records.setStatus("job", currentJob.id, "invoiced");
       toast.success(`${created.number} drafted from ${currentJob.number}.`);
-      router.push(`/pro/dashboard/invoices/${created.id}`);
+      const dest = resolveCrmObjectId(created.id) || created.id;
+      router.push(`/pro/dashboard/invoices/${dest}`);
     } catch (error) {
       toast.error(
         typeof error === "string"
@@ -1840,35 +1850,63 @@ export function InvoiceDetailView({ id }: { id: string }) {
     let cancelled = false;
 
     void (async () => {
-      const result = await dispatch(fetchInvoiceDetail(invoiceRef));
-      if (cancelled) return;
-      if (fetchInvoiceDetail.fulfilled.match(result)) return;
+      const isLocalPortalKey = isLocalInvoicePortalKey(invoiceRef);
 
-      // Stale offline key (inv_muf…) — recover via the linked job’s live invoice.
-      const isLocalPortalKey =
-        /^inv_/i.test(invoiceRef) && !resolveCrmObjectId(invoiceRef);
-      if (!isLocalPortalKey) return;
-
-      setResolvingStale(true);
-      const linkedJob =
-        allJobs.find(
-          (item) =>
-            item.invoiceId === invoiceRef ||
-            records.linkedId("job", item.id) === invoiceRef,
-        ) ?? null;
-      const jobId = linkedJob?.id;
-      if (!jobId) {
-        if (!cancelled) setResolvingStale(false);
+      // Do not call GET /invoices/inv_muf… — those offline keys 404 by design.
+      if (!isLocalPortalKey) {
+        const result = await dispatch(fetchInvoiceDetail(invoiceRef));
+        if (cancelled) return;
+        if (fetchInvoiceDetail.fulfilled.match(result)) return;
+        // Real Mongo id missing — show not-found (no stale-key recovery).
         return;
       }
+
+      setResolvingStale(true);
       try {
-        const list = await queryInvoices({ jobId, limit: 5, silent: true });
-        const liveId = list.items[0]?.id;
+        const linkedJob =
+          allJobs.find(
+            (item) =>
+              item.invoiceId === invoiceRef ||
+              records.linkedId("job", item.id) === invoiceRef,
+          ) ?? null;
+
+        let liveId: string | null = null;
+        const jobId = linkedJob?.id;
+        if (jobId) {
+          const list = await queryInvoices({ jobId, limit: 5, silent: true });
+          liveId = list.items[0]?.id ?? null;
+        }
+
+        if (!liveId && linkedJob?.invoiceId) {
+          liveId = resolveCrmObjectId(linkedJob.invoiceId);
+        }
+
+        if (!liveId) {
+          const recent = await queryInvoices({ limit: 20, silent: true });
+          const mongoLinked = linkedJob
+            ? recent.items.find((item) => item.jobId === linkedJob.id)
+            : null;
+          liveId = mongoLinked?.id ?? null;
+        }
+
         if (!cancelled && liveId && liveId !== invoiceRef) {
           router.replace(`/pro/dashboard/invoices/${liveId}`);
+          return;
+        }
+
+        if (!cancelled) {
+          toast.error(
+            "That invoice link is outdated. Open the invoice from your Invoices list.",
+          );
+          router.replace("/pro/dashboard/invoices");
         }
       } catch {
-        // Keep the not-found state.
+        if (!cancelled) {
+          toast.error(
+            "That invoice link is outdated. Open the invoice from your Invoices list.",
+          );
+          router.replace("/pro/dashboard/invoices");
+        }
       } finally {
         if (!cancelled) setResolvingStale(false);
       }

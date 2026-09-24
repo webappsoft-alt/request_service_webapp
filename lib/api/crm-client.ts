@@ -37,6 +37,7 @@ import {
   mapPortalVendorPurchaseOrder,
   mapScheduleEvent,
   type CrmInboxSummary,
+  isLocalInvoicePortalKey,
 } from "@/lib/api/crm-mappers";
 export type { CrmInboxSummary };
 import type { ChatThread } from "@/lib/booking/chat-store";
@@ -1863,13 +1864,15 @@ export async function convertJobToInvoice(
   id: string,
   options?: { clientId?: string },
 ) {
-  // Always send a portal clientId so GET /invoices/inv_xxx resolves after convert.
-  const clientId =
-    (options?.clientId && String(options.clientId).trim()) ||
-    `inv_${Date.now().toString(36)}`;
+  // Do not invent random inv_* keys for URLs — portal routes use the Mongo id
+  // returned on the invoice. Optional clientId is only for explicit callers.
+  const body =
+    options?.clientId && String(options.clientId).trim()
+      ? { clientId: String(options.clientId).trim().slice(0, 80) }
+      : undefined;
   const response = await postData(
     providerCrmApi.jobConvertToInvoice(id),
-    { clientId },
+    body,
     { silent: false },
   );
   return mapCrmEntity(response, mapInvoice);
@@ -2423,4 +2426,4 @@ export function extractId(value: unknown) {
   return crmIdOf(value);
 }
 
-export { resolveCrmObjectId };
+export { resolveCrmObjectId, isLocalInvoicePortalKey };

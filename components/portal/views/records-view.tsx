@@ -848,7 +848,13 @@ export function JobsView() {
         convertJobToInvoiceRecord(row.id),
       ).unwrap();
       toast.success(`${invoice.number || "Invoice"} drafted from ${row.number}.`);
-      router.push(`/pro/dashboard/invoices/${invoice.id}`);
+      const dest = resolveCrmObjectId(invoice.id) || invoice.id;
+      if (!resolveCrmObjectId(dest)) {
+        toast.error("Invoice created — open it from the Invoices list.");
+        router.push("/pro/dashboard/invoices");
+        return;
+      }
+      router.push(`/pro/dashboard/invoices/${dest}`);
     } catch (err) {
       toast.error(
         typeof err === "string"

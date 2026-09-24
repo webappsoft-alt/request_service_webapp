@@ -1087,7 +1087,13 @@ function CustomerJobsPanel({
         void dispatch(fetchCustomerJobs({ customerId, force: true }));
         void dispatch(fetchCustomerInvoices({ customerId, force: true }));
         void dispatch(fetchCustomerTimeline({ customerId, force: true }));
-        router.push(`/pro/dashboard/invoices/${created.id}`);
+        const dest = resolveCrmObjectId(created.id) || created.id;
+        if (!resolveCrmObjectId(dest)) {
+          toast.error("Invoice created — open it from the Invoices list.");
+          router.push("/pro/dashboard/invoices");
+          return;
+        }
+        router.push(`/pro/dashboard/invoices/${dest}`);
         return;
       }
       const lines = readCostLines(session?.email, job);

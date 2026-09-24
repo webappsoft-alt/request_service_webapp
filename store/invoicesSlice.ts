@@ -8,6 +8,7 @@ import {
   createInvoice,
   deleteInvoice,
   getInvoiceWithPayments,
+  isLocalInvoicePortalKey,
   queryInvoices,
   recordInvoicePayment,
   sendInvoice,
@@ -166,6 +167,10 @@ export const fetchInvoiceDetail = createAsyncThunk<
   { state: { invoices: InvoicesState }; rejectValue: string }
 >("invoices/fetchDetail", async (id, { rejectWithValue }) => {
   try {
+    // Offline-only keys never exist on the API — skip the doomed GET.
+    if (isLocalInvoicePortalKey(id)) {
+      return rejectWithValue("Invoice not found.");
+    }
     const result = await getInvoiceWithPayments(id);
     if (!result.invoice) return rejectWithValue("Invoice not found.");
     return { invoice: result.invoice, payments: result.payments };

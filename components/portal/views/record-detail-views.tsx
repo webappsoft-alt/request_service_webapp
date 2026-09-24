@@ -121,6 +121,7 @@ import {
   getEstimate,
   getJob,
   getInvoiceWithPayments,
+  resolveCrmObjectId,
   sendInvoice as sendInvoiceApi,
   updateEstimate as updateEstimateApi,
   updateEstimateArchive as updateEstimateArchiveApi,
@@ -1186,10 +1187,14 @@ export function JobDetailView({ id }: { id: string }) {
         )
     : undefined;
   const estimate = allEstimates.find((item) => item.id === job?.estimateId);
+  const linkedInvoiceId = records.linkedId("job", id);
+  // Prefer live CRM ObjectIds over any stale local `inv_*` link from offline mode.
   const workspaceInvoice =
-    allInvoices.find((item) => item.id === records.linkedId("job", id)) ??
     allInvoices.find((item) => item.id === job?.invoiceId) ??
-    allInvoices.find((item) => item.jobId === id);
+    allInvoices.find((item) => item.jobId === id) ??
+    (linkedInvoiceId
+      ? allInvoices.find((item) => item.id === linkedInvoiceId)
+      : undefined);
   const invoice = workspaceInvoice ?? resolvedInvoice ?? undefined;
   const event = events.find(
     (item) => item.kind === "job" && item.recordId === id,
@@ -1225,7 +1230,7 @@ export function JobDetailView({ id }: { id: string }) {
 
   // Resolve invoice by id when job is invoiced but invoice isn't in workspace list.
   useEffect(() => {
-    const invoiceId = job?.invoiceId;
+    const invoiceId = resolveCrmObjectId(job?.invoiceId);
     if (!invoiceId || workspaceInvoice) {
       setResolvedInvoice(null);
       return;
@@ -1301,10 +1306,20 @@ export function JobDetailView({ id }: { id: string }) {
 
   async function convertToInvoice() {
     if (converting) return;
-    const invoiceId = invoice?.id || currentJob.invoiceId;
-    if (invoiceId) {
-      router.push(`/pro/dashboard/invoices/${invoiceId}`);
+    const mongoExisting =
+      resolveCrmObjectId(currentJob.invoiceId) ||
+      resolveCrmObjectId(invoice?.id);
+    if (mongoExisting) {
+      router.push(`/pro/dashboard/invoices/${mongoExisting}`);
       return;
+    }
+    // Offline / demo only — never send local `inv_*` ids to the CRM API.
+    if (!crm.enabled) {
+      const localId = invoice?.id || currentJob.invoiceId;
+      if (localId) {
+        router.push(`/pro/dashboard/invoices/${localId}`);
+        return;
+      }
     }
     if (
       currentJob.status === "invoiced" ||
@@ -1315,7 +1330,8 @@ export function JobDetailView({ id }: { id: string }) {
     }
     setConverting(true);
     try {
-      if (apiReady) {
+      // Use live CRM whenever the provider session is enabled (don't wait for full snapshot).
+      if (crm.enabled) {
         const { invoice: created } = await dispatch(
           convertJobToInvoiceRecord(currentJob.id),
         ).unwrap();
@@ -1732,10 +1748,19 @@ export function InvoiceDetailView({ id }: { id: string }) {
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
+  const mongoId = resolveCrmObjectId(id);
+  const detailKey = mongoId ?? id;
 
-  const detailInvoice = useAppSelector((state) => state.invoices?.detailsCache?.[id]);
+  const detailInvoice = useAppSelector(
+    (state) =>
+      state.invoices?.detailsCache?.[detailKey] ??
+      state.invoices?.detailsCache?.[id],
+  );
   const detailPayments = useAppSelector(
-    (state) => state.invoices?.detailPayments?.[id] ?? [],
+    (state) =>
+      state.invoices?.detailPayments?.[detailKey] ??
+      state.invoices?.detailPayments?.[id] ??
+      [],
   );
   const detailLoading = useAppSelector((state) =>
     Boolean(state.invoices?.detailLoading),
@@ -1778,9 +1803,9 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
-    if (!useApi || !id) return;
-    void dispatch(fetchInvoiceDetail(id));
-  }, [dispatch, useApi, id]);
+    if (!useApi || !mongoId) return;
+    void dispatch(fetchInvoiceDetail(mongoId));
+  }, [dispatch, useApi, mongoId]);
 
   if (!invoice) {
     return pending || (useApi && detailLoading) ? (

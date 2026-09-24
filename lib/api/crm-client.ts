@@ -25,6 +25,7 @@ import {
   mapInvoiceWithPayments,
   mapJob,
   mapPayment,
+  resolveCrmObjectId,
   mapPortalContractor,
   mapPortalCustomerCrm,
   mapPortalEmployee,
@@ -1970,21 +1971,31 @@ export async function createInvoice(invoice: Invoice) {
   return mapCrmEntity(response, mapInvoice);
 }
 
+function requireInvoiceObjectId(id: string) {
+  const resolved = resolveCrmObjectId(id);
+  if (!resolved) {
+    throw new Error("Invoice id must be a valid CRM ObjectId.");
+  }
+  return resolved;
+}
+
 export async function updateInvoice(id: string, invoice: Invoice | Partial<Invoice>) {
-  const response = await putData(providerCrmApi.invoice(id), invoicePayload(invoice));
+  const mongoId = requireInvoiceObjectId(id);
+  const response = await putData(providerCrmApi.invoice(mongoId), invoicePayload(invoice));
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(id));
+  invalidateGetCache(providerCrmApi.invoice(mongoId));
   return mapCrmEntity(response, mapInvoice);
 }
 
 export async function updateInvoiceArchive(id: string, isArchived: boolean) {
+  const mongoId = requireInvoiceObjectId(id);
   const response = await putData(
-    providerCrmApi.invoice(id),
+    providerCrmApi.invoice(mongoId),
     { isArchived },
     { silent: false },
   );
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(id));
+  invalidateGetCache(providerCrmApi.invoice(mongoId));
   return mapCrmEntity(response, mapInvoice);
 }
 
@@ -1992,20 +2003,22 @@ export async function updateInvoiceAttachments(
   id: string,
   attachments: Array<{ name: string; attachment: string }>,
 ) {
+  const mongoId = requireInvoiceObjectId(id);
   const response = await putData(
-    providerCrmApi.invoice(id),
+    providerCrmApi.invoice(mongoId),
     { attachments },
     { silent: false },
   );
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(id));
+  invalidateGetCache(providerCrmApi.invoice(mongoId));
   return mapCrmEntity(response, mapInvoice);
 }
 
 export async function sendInvoice(id: string) {
-  const response = await postData(providerCrmApi.invoiceSend(id), undefined, { silent: false });
+  const mongoId = requireInvoiceObjectId(id);
+  const response = await postData(providerCrmApi.invoiceSend(mongoId), undefined, { silent: false });
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(id));
+  invalidateGetCache(providerCrmApi.invoice(mongoId));
   const data =
     response && typeof response === "object" && "data" in response
       ? (response as { data?: { invoice?: unknown } }).data
@@ -2013,12 +2026,13 @@ export async function sendInvoice(id: string) {
   if (data?.invoice) {
     return mapInvoice(data.invoice);
   }
-  const detail = await getInvoiceWithPayments(id);
+  const detail = await getInvoiceWithPayments(mongoId);
   return detail.invoice;
 }
 
 export async function getInvoiceWithPayments(id: string) {
-  const response = await getData(providerCrmApi.invoice(id), undefined, {
+  const mongoId = requireInvoiceObjectId(id);
+  const response = await getData(providerCrmApi.invoice(mongoId), undefined, {
     silent: true,
     force: true,
   });
@@ -2026,7 +2040,8 @@ export async function getInvoiceWithPayments(id: string) {
 }
 
 export async function recordInvoicePayment(invoiceId: string, payment: Payment) {
-  const response = await postData(providerCrmApi.invoicePayments(invoiceId), {
+  const mongoId = requireInvoiceObjectId(invoiceId);
+  const response = await postData(providerCrmApi.invoicePayments(mongoId), {
     amount: payment.amount,
     method: payment.method,
     scheduleId: payment.scheduleId || null,
@@ -2034,7 +2049,7 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
     transactionReference: "",
   });
   invalidateGetCache(providerCrmApi.invoices);
-  invalidateGetCache(providerCrmApi.invoice(invoiceId));
+  invalidateGetCache(providerCrmApi.invoice(mongoId));
   const data =
     response && typeof response === "object" && "data" in response
       ? ((response as { data?: unknown }).data as Record<string, unknown> | undefined)
@@ -2048,8 +2063,10 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
 }
 
 export async function deleteInvoice(id: string) {
-  const result = await deleteData(providerCrmApi.invoice(id), { silent: false });
+  const mongoId = requireInvoiceObjectId(id);
+  const result = await deleteData(providerCrmApi.invoice(mongoId), { silent: false });
   invalidateGetCache(providerCrmApi.invoices);
+  invalidateGetCache(providerCrmApi.invoice(mongoId));
   return result;
 }
 
@@ -2389,3 +2406,5 @@ type CustomerLike = {
 export function extractId(value: unknown) {
   return crmIdOf(value);
 }
+
+export { resolveCrmObjectId };

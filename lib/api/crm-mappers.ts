@@ -123,6 +123,32 @@ export function crmIdOf(value: unknown): string {
   return "";
 }
 
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+/** Timeline / portal event prefixes that sometimes leak into route params. */
+const CRM_ID_PREFIX_RE =
+  /^(?:inv|invoice|job|est|estimate|pmt|payment|cust|customer|sch|note|task|rem|req|lead)_/i;
+
+/** True when `id` is a strict 24-char Mongo ObjectId string. */
+export function isCrmObjectId(id: string | null | undefined): boolean {
+  return OBJECT_ID_RE.test(String(id ?? "").trim());
+}
+
+/**
+ * Normalize a CRM resource id for API calls.
+ * Accepts bare ObjectIds and prefixed forms like `inv_<ObjectId>`.
+ * Returns null for local/demo ids (e.g. `inv_mufk1sba` from buildInvoice).
+ */
+export function resolveCrmObjectId(id: string | null | undefined): string | null {
+  const raw = String(id ?? "").trim();
+  if (!raw) return null;
+  if (OBJECT_ID_RE.test(raw)) return raw;
+  if (CRM_ID_PREFIX_RE.test(raw)) {
+    const stripped = raw.replace(CRM_ID_PREFIX_RE, "");
+    if (OBJECT_ID_RE.test(stripped)) return stripped;
+  }
+  return null;
+}
+
 function personDisplayName(value: unknown): string {
   return displayNameFromRecord(value);
 }

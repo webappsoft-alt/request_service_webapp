@@ -803,8 +803,9 @@ export function JobsView() {
 
   async function handleConvert(row: Job) {
     if (convertingId) return;
-    if (row.invoiceId) {
-      router.push(`/pro/dashboard/invoices/${row.invoiceId}`);
+    const existingInvoiceId = row.invoiceId?.trim();
+    if (existingInvoiceId) {
+      router.push(`/pro/dashboard/invoices/${existingInvoiceId}`);
       return;
     }
     if (row.status === "invoiced" || row.status === "paid") {

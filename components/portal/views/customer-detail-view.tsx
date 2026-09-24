@@ -58,6 +58,7 @@ import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { buildInvoice, nextRecordNumber, todayISO } from "@/components/portal/work-builders";
 import { convertJobToInvoice as convertJobToInvoiceApi, updateEstimateArchive, updateInvoiceArchive, updateJobArchive } from "@/lib/api/crm-client";
+import { resolveCrmObjectId } from "@/lib/api/crm-mappers";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
@@ -1058,12 +1059,24 @@ function CustomerJobsPanel({
 
   async function convertToInvoice(job: Job) {
     if (convertingId) return;
-    const existing =
-      relatedInvoices.find((item) => item.jobId === job.id) ||
-      allInvoices.find((item) => item.jobId === job.id);
-    if (existing) {
-      router.push(`/pro/dashboard/invoices/${existing.id}`);
+    const mongoExisting =
+      resolveCrmObjectId(job.invoiceId) ||
+      resolveCrmObjectId(
+        relatedInvoices.find((item) => item.jobId === job.id)?.id ||
+          allInvoices.find((item) => item.jobId === job.id)?.id,
+      );
+    if (mongoExisting) {
+      router.push(`/pro/dashboard/invoices/${mongoExisting}`);
       return;
+    }
+    if (!crm.enabled) {
+      const existing =
+        relatedInvoices.find((item) => item.jobId === job.id) ||
+        allInvoices.find((item) => item.jobId === job.id);
+      if (existing) {
+        router.push(`/pro/dashboard/invoices/${existing.id}`);
+        return;
+      }
     }
     setConvertingId(job.id);
     try {

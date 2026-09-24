@@ -36,6 +36,8 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useEstimateActivities } from "@/components/portal/use-estimate-activities";
+import { useJobActivities } from "@/components/portal/use-job-activities";
+import { patchJobLocally } from "@/store/jobsSlice";
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
 import {
   useJobFile,
@@ -235,6 +237,7 @@ export function JobSummaryTab({
   locked?: boolean;
   onActivitiesChange?: (next: Estimate["activities"]) => void;
 }) {
+  const dispatch = useAppDispatch();
   const { lines, mix } = useJobCosting(job, {
     // Estimates: prefer line items from the estimate record so Labor/Materials
     // kinds stay aligned with API (and labour spelling repairs), not stale localStorage.
@@ -244,6 +247,7 @@ export function JobSummaryTab({
   const file = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();
   const isEstimate = noun === "estimate" && Boolean(estimate?.id);
+  const isJobRecord = noun === "job" && Boolean(job?.id);
   const estimateActivities = useEstimateActivities(
     estimate?.id,
     isEstimate,
@@ -255,6 +259,16 @@ export function JobSummaryTab({
       }
     },
   );
+  const jobActivities = useJobActivities(
+    job?.id,
+    isJobRecord,
+    job?.activities,
+    (next) => {
+      if (job?.id) {
+        dispatch(patchJobLocally({ id: job.id, patch: { activities: next } }));
+      }
+    },
+  );
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<{ id: string; title: string; html: string } | null>(null);
@@ -262,18 +276,25 @@ export function JobSummaryTab({
   const laborLines = lines.filter((line) => line.kind === "labor");
   const materialLines = lines.filter((line) => line.kind === "materials");
 
-  const activities: Array<{ id: string; title: string; html: string; actor: string; at: string }> = isEstimate
-    ? estimateActivities.activities
-        .slice()
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-        .map((item) => ({
-          id: item.id,
-          title: item.title,
-          html: item.description,
-          actor: item.actor || "Desk",
-          at: item.createdAt,
-        }))
-    : file.activities;
+  const apiActivities = isEstimate
+    ? estimateActivities
+    : isJobRecord
+      ? jobActivities
+      : null;
+
+  const activities: Array<{ id: string; title: string; html: string; actor: string; at: string }> =
+    apiActivities
+      ? apiActivities.activities
+          .slice()
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+          .map((item) => ({
+            id: item.id,
+            title: item.title,
+            html: item.description,
+            actor: item.actor || "Desk",
+            at: item.createdAt,
+          }))
+      : file.activities;
 
   const hasInvoice =
     Boolean(invoice) ||
@@ -483,7 +504,10 @@ export function JobSummaryTab({
                 key={item.id}
                 item={item}
                 locked={locked}
-                deleting={estimateActivities.deletingId === item.id}
+                deleting={
+                  (isEstimate && estimateActivities.deletingId === item.id) ||
+                  (isJobRecord && jobActivities.deletingId === item.id)
+                }
                 onEdit={() => {
                   setEditing({ id: item.id, title: item.title, html: item.html });
                   setOpen(true);
@@ -491,6 +515,8 @@ export function JobSummaryTab({
                 onDelete={async () => {
                   if (isEstimate) {
                     await estimateActivities.deleteActivity(item.id);
+                  } else if (isJobRecord) {
+                    await jobActivities.deleteActivity(item.id);
                   } else {
                     file.removeActivity(item.id);
                     toast.success("Activity deleted.");
@@ -506,7 +532,11 @@ export function JobSummaryTab({
       <ActivityDialog
         open={open}
         activity={editing}
-        saving={saving || (isEstimate && estimateActivities.saving)}
+        saving={
+          saving ||
+          (isEstimate && estimateActivities.saving) ||
+          (isJobRecord && jobActivities.saving)
+        }
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) setEditing(null);
@@ -519,6 +549,19 @@ export function JobSummaryTab({
                 await estimateActivities.updateActivity(editing.id, title, html);
               } else {
                 await estimateActivities.addActivity(title, html);
+              }
+              setOpen(false);
+              setEditing(null);
+            } finally {
+              setSaving(false);
+            }
+          } else if (isJobRecord) {
+            setSaving(true);
+            try {
+              if (editing) {
+                await jobActivities.updateActivity(editing.id, title, html);
+              } else {
+                await jobActivities.addActivity(title, html);
               }
               setOpen(false);
               setEditing(null);

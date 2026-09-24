@@ -1326,6 +1326,13 @@ export function mapJob(raw: unknown): Job | null {
       record.isArchived !== undefined
         ? Boolean(record.isArchived)
         : undefined,
+    activities: asArray(record.activities)
+      .map((entry) => {
+        const mapped = mapEstimateActivity(entry);
+        if (!mapped) return null;
+        return { ...mapped, jobId: id };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
   };

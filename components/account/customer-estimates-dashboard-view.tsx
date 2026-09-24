@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ExternalLink, Eye, Plus } from "lucide-react";
+import { ExternalLink, Eye, MessageSquare, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, moneyTone, requestTone } from "@/components/portal/status-pill";
@@ -14,6 +15,7 @@ import {
   loadRememberedCustomerEstimates,
   type CustomerEstimateListItem,
 } from "@/lib/api/customer-estimates";
+import { openPublicChatThread } from "@/lib/api/chat-client";
 import {
   extractEstimateTokenFromInput,
   rememberCustomerEstimateToken,
@@ -33,13 +35,17 @@ import {
   type CustomerQuoteBatch,
 } from "@/store/customerQuotesSlice";
 
-function statusLabel(status: string) {
+function statusLabel(status: string, jobNumber?: string | null) {
   const value = String(status || "").toLowerCase();
   if (value === "site_visit") return "Site visit";
   if (value === "draft") return "Preparing";
   if (value === "inspected") return "Inspected";
   if (value === "finalized") return "Ready to send";
-  if (value === "converted_to_job") return "Converted to Job";
+  if (value === "converted_to_job") {
+    return jobNumber
+      ? `Converted to Job · ${jobNumber}`
+      : "Converted to Job";
+  }
   if (value === "declined") return "Declined";
   return status
     .split("_")
@@ -170,11 +176,57 @@ export function CustomerEstimatesDashboardView({
         total: item.total,
         shareToken: item.shareToken,
         issuedAt: item.updatedAt || item.createdAt || null,
+        jobId: item.jobId,
+        jobNumber: item.jobNumber,
         provider: item.provider,
       });
     }
     return [...byToken.values()];
   }, [apiEstimates, remembered]);
+
+  const [chatBusyId, setChatBusyId] = useState<string | null>(null);
+
+  async function openChatWithProvider(row: CustomerEstimateListItem) {
+    const providerId = row.provider?.id?.trim() || "";
+    const providerSlug = row.provider?.slug?.trim() || "";
+    if (!providerId && !providerSlug) {
+      toast.error("This estimate has no professional linked for chat yet.");
+      return;
+    }
+    const email = String(auth.user?.email || "").trim();
+    if (!email) {
+      toast.error("Sign in with an email to message this professional.");
+      return;
+    }
+    const busyKey = row.id || row.shareToken || providerId || providerSlug;
+    setChatBusyId(busyKey);
+    try {
+      const thread = await openPublicChatThread({
+        providerId: providerId || undefined,
+        providerSlug: providerSlug || undefined,
+        customerName:
+          [auth.user?.firstName, auth.user?.lastName].filter(Boolean).join(" ") ||
+          email,
+        customerEmail: email,
+        text: row.number
+          ? `Hi — I'm following up on estimate ${row.number}.`
+          : "",
+      });
+      const threadId = String(thread?.id || "").trim();
+      if (!threadId) {
+        throw new Error("Chat thread was not created.");
+      }
+      router.push(`${customerPaths.messages}?thread=${encodeURIComponent(threadId)}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not open chat with this professional.",
+      );
+    } finally {
+      setChatBusyId(null);
+    }
+  }
 
   function setTab(next: TabId) {
     if (next === "requests") {
@@ -476,10 +528,37 @@ export function CustomerEstimatesDashboardView({
               sortValue: (row) => row.status,
               cell: (row) => (
                 <StatusPill
-                  label={statusLabel(row.status)}
+                  label={statusLabel(row.status, row.jobNumber)}
                   tone={moneyTone(row.status)}
                 />
               ),
+            },
+            {
+              id: "chat",
+              header: "Chat",
+              cell: (row) => {
+                const canChat = Boolean(
+                  row.provider?.id || row.provider?.slug,
+                );
+                const busyKey = row.id || row.shareToken || "";
+                return (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!canChat || chatBusyId === busyKey}
+                    className="gap-1.5"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void openChatWithProvider(row);
+                    }}
+                  >
+                    <MessageSquare className="size-3.5" />
+                    {chatBusyId === busyKey ? "Opening…" : "Message"}
+                  </Button>
+                );
+              },
             },
             {
               id: "total",

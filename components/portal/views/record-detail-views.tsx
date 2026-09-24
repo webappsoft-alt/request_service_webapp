@@ -560,7 +560,11 @@ export function EstimateDetailView({ id }: { id: string }) {
             />
             {job || estimate.status === "converted_to_job" ? (
               <StatusPill
-                label="Converted to job"
+                label={
+                  job?.number
+                    ? `Converted to job · ${job.number}`
+                    : "Converted to job"
+                }
                 className="bg-emerald-50 text-emerald-800"
               />
             ) : null}
@@ -920,7 +924,7 @@ export function EstimateDetailView({ id }: { id: string }) {
               {job ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
                   <p className="text-sm font-semibold text-emerald-900">
-                    Converted to job
+                    Converted to job {job.number}
                   </p>
                   <p className="mt-1 text-sm text-emerald-950">
                     This estimate is locked to{" "}
@@ -1645,10 +1649,10 @@ export function JobDetailView({ id }: { id: string }) {
               {estimate ? (
                 <div className="rounded-[4px] border border-[#003F7D]/15 bg-[#f4f7fb] px-4 py-3">
                   <p className="text-sm font-semibold text-[#003F7D]">
-                    Converted from estimate
+                    Estimate converted to {job.number}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    This job was created from{" "}
+                    This job ({job.number}) was created from estimate{" "}
                     <Link
                       href={`/pro/dashboard/estimates/${estimate.id}`}
                       className="font-semibold text-primary underline"
@@ -1662,10 +1666,10 @@ export function JobDetailView({ id }: { id: string }) {
               ) : job.estimateId ? (
                 <div className="rounded-[4px] border border-[#003F7D]/15 bg-[#f4f7fb] px-4 py-3">
                   <p className="text-sm font-semibold text-[#003F7D]">
-                    Converted from estimate
+                    Estimate converted to {job.number}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    This job keeps a reference to its source estimate.
+                    Job {job.number} keeps a reference to its source estimate.
                   </p>
                 </div>
               ) : null}

@@ -14,7 +14,13 @@ export type CustomerEstimateListItem = {
   total: number;
   shareToken: string;
   issuedAt?: string | null;
-  provider?: { companyName?: string; slug?: string } | null;
+  jobId?: string | null;
+  jobNumber?: string | null;
+  provider?: {
+    id?: string;
+    companyName?: string;
+    slug?: string;
+  } | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {

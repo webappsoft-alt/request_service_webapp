@@ -220,12 +220,15 @@ export interface EstimateLog {
 export interface EstimateActivity {
   id: string;
   estimateId?: string;
+  jobId?: string;
   title: string;
   description: string;
   actor?: string;
   createdAt: string;
   updatedAt?: string;
 }
+
+export type JobActivity = EstimateActivity;
 
 export interface EstimateAttachmentItem {
   name: string;
@@ -302,6 +305,8 @@ export interface Job {
   invoiceId?: string;
   /** Soft-archive — independent of lifecycle status. */
   isArchived?: boolean;
+  /** User-facing workflow activities (separate from jobLogs). */
+  activities?: JobActivity[];
   createdAt: string;
   updatedAt: string;
 }

@@ -1715,6 +1715,87 @@ export async function deleteEstimateActivity(
   return true;
 }
 
+type JobActivityPayload = {
+  title: string;
+  description: string;
+};
+
+export async function listJobActivities(
+  jobId: string,
+): Promise<EstimateActivity[]> {
+  const response = await getData(
+    providerCrmApi.jobActivities(jobId),
+    undefined,
+    { silent: true, force: true },
+  );
+  return mapCrmList(response, mapEstimateActivity).items;
+}
+
+export async function createJobActivity(
+  jobId: string,
+  payload: JobActivityPayload,
+): Promise<EstimateActivity | null> {
+  const response = await postData(
+    providerCrmApi.jobActivities(jobId),
+    {
+      title: payload.title.trim(),
+      description: payload.description,
+    },
+    { silent: false },
+  );
+  const mapped = mapCrmEntity(response, mapEstimateActivity);
+  if (mapped) return { ...mapped, jobId };
+  const raw = (response as { data?: unknown })?.data ?? response;
+  const id = crmIdOf(raw);
+  const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    id: id || `act_${Date.now()}`,
+    jobId,
+    title: payload.title.trim(),
+    description: payload.description,
+    actor: typeof record.actor === "string" ? record.actor : "Desk",
+    createdAt:
+      (typeof record.timestamp === "string" && record.timestamp) ||
+      (typeof record.createdAt === "string" && record.createdAt) ||
+      new Date().toISOString(),
+  };
+}
+
+export async function updateJobActivity(
+  jobId: string,
+  activityId: string,
+  payload: JobActivityPayload,
+): Promise<EstimateActivity | null> {
+  const response = await putData(
+    providerCrmApi.jobActivity(jobId, activityId),
+    {
+      title: payload.title.trim(),
+      description: payload.description,
+    },
+    { silent: false },
+  );
+  const mapped = mapCrmEntity(response, mapEstimateActivity);
+  if (mapped) return { ...mapped, jobId };
+  return {
+    id: activityId,
+    jobId,
+    title: payload.title.trim(),
+    description: payload.description,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function deleteJobActivity(
+  jobId: string,
+  activityId: string,
+): Promise<boolean> {
+  await deleteData(providerCrmApi.jobActivity(jobId, activityId), {
+    silent: false,
+  });
+  return true;
+}
+
 export async function getJob(id: string) {
   const response = await getData(providerCrmApi.job(id), undefined, { silent: true, force: true });
   return mapCrmEntity(response, mapJob);

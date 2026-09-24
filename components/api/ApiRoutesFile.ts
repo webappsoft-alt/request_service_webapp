@@ -146,6 +146,9 @@ export const providerCrmApi = {
   job: (id: string) => `provider/jobs/${id}`,
   jobStatus: (id: string) => `provider/jobs/${id}/status`,
   jobConvertToInvoice: (id: string) => `provider/jobs/${id}/convert-to-invoice`,
+  jobActivities: (id: string) => `provider/jobs/${id}/activities`,
+  jobActivity: (id: string, activityId: string) =>
+    `provider/jobs/${id}/activities/${activityId}`,
   tasks: "provider/tasks",
   task: (id: string) => `provider/tasks/${id}`,
   taskStatus: (id: string) => `provider/tasks/${id}/status`,

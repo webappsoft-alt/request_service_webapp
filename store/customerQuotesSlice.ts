@@ -57,6 +57,7 @@ export type CustomerApiEstimate = {
   shareToken: string;
   requestId: string | null;
   jobId: string | null;
+  jobNumber?: string | null;
   createdAt?: string;
   updatedAt?: string;
   provider?: {
@@ -231,6 +232,7 @@ export const fetchCustomerEstimates = createAsyncThunk(
           shareToken: stringValue(row.shareToken),
           requestId: stringValue(row.requestId) || null,
           jobId: stringValue(row.jobId) || null,
+          jobNumber: stringValue(row.jobNumber) || null,
           createdAt: stringValue(row.createdAt) || undefined,
           updatedAt: stringValue(row.updatedAt) || undefined,
           provider: provider

@@ -32,7 +32,6 @@ import {
   Receipt,
   RotateCcw,
   Search,
-  Settings,
   UserRound,
   Wallet,
   XCircle,
@@ -110,9 +109,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Textarea } from "@/components/ui/textarea";
 import { getAvatarColor, getInitials } from "@/lib/chat-format";
 import { CrmMark } from "@/components/portal/crm-mark";
 import { CustomerLocationMapLazy } from "@/components/portal/customer-location-map-lazy";
@@ -154,7 +150,6 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { id: "summary", label: "Summary", icon: LayoutDashboard },
   { id: "customer", label: "Customer", icon: UserRound },
-  { id: "qualify", label: "Qualify", icon: Settings },
   { id: "estimates", label: "Estimates", icon: FileText },
   { id: "jobs", label: "Jobs", icon: Briefcase },
   { id: "schedule", label: "Schedule", icon: CalendarDays },
@@ -168,7 +163,6 @@ const TABS = [
 type LeadTab =
   | "summary"
   | "customer"
-  | "qualify"
   | "estimates"
   | "jobs"
   | "schedule"
@@ -185,23 +179,6 @@ const LEAD_STEPS = [
   { id: "won", label: "Won" },
   { id: "job", label: "Job" },
 ] as const;
-
-const LEAD_WINDOWS: { value: PortalTimeWindow; label: string }[] = [
-  { value: "morning", label: "Morning" },
-  { value: "afternoon", label: "Afternoon" },
-  { value: "all_day", label: "All Day" },
-];
-const LEAD_STATUSES: RequestStatus[] = [
-  "new",
-  "viewed",
-  "contacted",
-  "scheduled",
-  "estimate_sent",
-  "accepted",
-  "declined",
-  "converted_to_job",
-  "closed",
-];
 
 const REMINDER_FILTER_OPTIONS = [
   { value: "", label: "All" },
@@ -228,38 +205,6 @@ function leadFlowIndex(status: RequestStatus, hasEstimate: boolean, hasJob: bool
   return 0;
 }
 
-function getAvailableLeadStatuses(
-  status: RequestStatus,
-  hasEstimate: boolean,
-  hasJob: boolean,
-): RequestStatus[] {
-  if (hasJob || status === "converted_to_job") {
-    return ["converted_to_job", "closed"];
-  }
-  if (status === "accepted") {
-    return ["accepted", "converted_to_job", "declined", "closed"];
-  }
-  if (hasEstimate || status === "estimate_sent") {
-    return ["estimate_sent", "scheduled", "accepted", "converted_to_job", "declined"];
-  }
-  if (status === "scheduled") {
-    return ["scheduled", "contacted", "estimate_sent", "declined", "closed"];
-  }
-  if (status === "contacted") {
-    return ["contacted", "scheduled", "estimate_sent", "declined"];
-  }
-  if (status === "viewed") {
-    return ["viewed", "contacted", "scheduled", "estimate_sent", "declined"];
-  }
-  if (status === "declined") {
-    return ["declined", "contacted", "scheduled"];
-  }
-  if (status === "closed") {
-    return ["closed", "contacted", "scheduled"];
-  }
-  return ["new", "viewed", "contacted", "scheduled", "estimate_sent", "declined"];
-}
-
 function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: boolean) {
   if (hasJob || status === "converted_to_job") return "This lead became a job. The signed scope is on the jobs board.";
   if (status === "declined") return "They passed. Keep the file for history or reopen it if they call back.";
@@ -267,7 +212,7 @@ function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: bool
   if (status === "accepted") return "They accepted. Start the job from the signed estimate.";
   if (status === "estimate_sent" || hasEstimate) return "A quote is on this lead. Follow up if they have not signed.";
   if (status === "scheduled") return "Visit is on the calendar. Confirm details, then write or send the estimate.";
-  if (status === "contacted") return "You spoke with them. Qualify the work, then write the estimate.";
+  if (status === "contacted") return "You spoke with them. Confirm the work, then write the estimate.";
   if (status === "viewed") return "Seen in the inbox. Call or text so this does not go cold.";
   return "New inbound request. Review their answers, then send a written estimate if you can take it.";
 }
@@ -1663,22 +1608,6 @@ export function RequestDetailView({ id }: { id: string }) {
                   </div>
                 </section>
               );
-            case "qualify":
-              return (
-                <QualifyTab
-                  request={request}
-                  hasEstimate={hasEstimate}
-                  hasJob={hasJob}
-                  onSave={(patch) => {
-                    records.updateRequest(request.id, patch);
-                    toast.success("Lead details saved.");
-                  }}
-                  onStatus={(status) => {
-                    records.setStatus("request", request.id, status);
-                    toast.success(`Lead marked ${requestStatusLabel(status).toLowerCase()}.`);
-                  }}
-                />
-              );
             case "estimates":
               return (
                 <div className="space-y-3">
@@ -2107,7 +2036,7 @@ export function RequestDetailView({ id }: { id: string }) {
                       <ListTodo className="mx-auto size-8 text-muted-foreground/60" />
                       <h4 className="mt-2 text-sm font-semibold">No tasks yet</h4>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Create a task against this lead — call back, qualify, or pull a permit.
+                        Create a task against this lead — call back, confirm scope, or pull a permit.
                       </p>
                       <Button size="sm" className="mt-4" onClick={() => { setEditingTask(null); setTaskOpen(true); }}>
                         + Create task
@@ -2417,15 +2346,37 @@ export function RequestDetailView({ id }: { id: string }) {
               return <NotesPanel kind="request" id={request.id} empty="Add the first note on this lead." />;
             case "photos":
               return request.photoUrls.length ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {request.photoUrls.map((src) => (
-                    <div key={src} className="relative h-56 overflow-hidden rounded-[4px] border border-black/10">
-                      <Image src={src} alt={request.serviceName} fill className="object-cover" sizes="(min-width: 640px) 50vw, 100vw" />
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {request.photoUrls.length} photo
+                    {request.photoUrls.length === 1 ? "" : "s"} from the customer
+                    request.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {request.photoUrls.map((src) => (
+                      <a
+                        key={src}
+                        href={src}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="relative block h-56 overflow-hidden rounded-[4px] border border-black/10 transition hover:border-primary/40"
+                      >
+                        <Image
+                          src={src}
+                          alt={request.serviceName}
+                          fill
+                          className="object-cover"
+                          sizes="(min-width: 640px) 50vw, 100vw"
+                          unoptimized={src.startsWith("http")}
+                        />
+                      </a>
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No photos came in with this request.</p>
+                <p className="text-sm text-muted-foreground">
+                  No photos came in with this request.
+                </p>
               );
             default: {
               const _never: never = leadTab;
@@ -2680,175 +2631,6 @@ function LeadPipeline({
         );
       })}
     </ol>
-  );
-}
-
-function QualifyTab({
-  request,
-  hasEstimate,
-  hasJob,
-  onSave,
-  onStatus,
-}: {
-  request: PortalRequest;
-  hasEstimate?: boolean;
-  hasJob?: boolean;
-  onSave: (patch: {
-    serviceName: string;
-    details: string;
-    preferredDate?: string;
-    preferredTimeWindow?: string;
-    zip: string;
-    city?: string;
-    state?: string;
-  }) => void;
-  onStatus: (status: RequestStatus) => void;
-}) {
-  const { customers } = useCrmDirectory();
-  const availableStatuses = useMemo(
-    () => getAvailableLeadStatuses(request.status, Boolean(hasEstimate), Boolean(hasJob)),
-    [request.status, hasEstimate, hasJob],
-  );
-  const [draft, setDraft] = useState<{
-    serviceName: string;
-    details: string;
-    preferredDate: string;
-    preferredTimeWindow: PortalTimeWindow;
-    zip: string;
-    city: string;
-    state: string;
-  }>({
-    serviceName: request.serviceName,
-    details: request.details,
-    preferredDate: request.preferredDate ?? "",
-    preferredTimeWindow: (request.preferredTimeWindow?.toLowerCase().startsWith("after")
-      ? "afternoon"
-      : request.preferredTimeWindow?.toLowerCase().startsWith("all")
-        ? "all_day"
-        : "morning") as PortalTimeWindow,
-    zip: request.zip,
-    city: request.city ?? "",
-    state: request.state ?? "",
-  });
-
-  return (
-    <div className="space-y-4">
-      {request.answers && request.answers.length > 0 ? (
-        <div className="rounded-[4px] border border-black/10 bg-slate-50 p-4">
-          <h3 className="text-sm font-semibold text-slate-800 mb-2.5">
-            Diagnostic Intake Answers
-          </h3>
-          <dl className="grid gap-2 sm:grid-cols-2">
-            {request.answers.map((ans, idx) => (
-              <div
-                key={ans.id || idx}
-                className="rounded bg-white p-2.5 border border-slate-200"
-              >
-                <dt className="text-xs font-medium text-muted-foreground">{ans.label}</dt>
-                <dd className="text-sm font-semibold text-foreground mt-0.5">{ans.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Qualify this lead</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Confirm the work, the window, and where you are going before you write a quote.
-          </p>
-        </div>
-        <Button
-          size="sm"
-          disabled={!draft.serviceName.trim() || !draft.details.trim() || !draft.preferredDate || !draft.preferredTimeWindow}
-          onClick={() => {
-            if (!draft.serviceName.trim()) {
-              toast.error("Please enter a service name.");
-              return;
-            }
-            if (!draft.details.trim()) {
-              toast.error("Please enter details.");
-              return;
-            }
-            if (!draft.preferredDate) {
-              toast.error("Please select a preferred date.");
-              return;
-            }
-            if (!draft.preferredTimeWindow) {
-              toast.error("Please select a time window.");
-              return;
-            }
-            onSave(draft);
-          }}
-        >
-          Save details
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 p-4 sm:grid-cols-2">
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">
-            Service <span className="text-destructive">*</span>
-          </span>
-          <Input value={draft.serviceName} onChange={(event) => setDraft({ ...draft, serviceName: event.target.value })} />
-        </label>
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">Status</span>
-          <NativeSelect className="w-full" value={request.status} onChange={(event) => onStatus(event.target.value as RequestStatus)}>
-            {availableStatuses.map((status: RequestStatus) => (
-              <NativeSelectOption key={status} value={status}>
-                {requestStatusLabel(status)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium">
-            What they asked for <span className="text-destructive">*</span>
-          </span>
-          <Textarea value={draft.details} onChange={(event) => setDraft({ ...draft, details: event.target.value })} />
-        </label>
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">
-            Preferred date <span className="text-destructive">*</span>
-          </span>
-          <Input
-            type="date"
-            value={draft.preferredDate}
-            onChange={(event) => setDraft({ ...draft, preferredDate: event.target.value })}
-          />
-        </label>
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">
-            Window <span className="text-destructive">*</span>
-          </span>
-          <NativeSelect
-            className="w-full"
-            value={draft.preferredTimeWindow}
-            onChange={(event) => setDraft({ ...draft, preferredTimeWindow: event.target.value as PortalTimeWindow })}
-          >
-            {LEAD_WINDOWS.map((item) => (
-              <NativeSelectOption key={item.value} value={item.value}>
-                {item.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </label>
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">City</span>
-          <Input value={draft.city} onChange={(event) => setDraft({ ...draft, city: event.target.value })} />
-        </label>
-        <label className="grid gap-1.5 text-sm">
-          <span className="font-medium">ZIP</span>
-          <Input value={draft.zip} onChange={(event) => setDraft({ ...draft, zip: event.target.value })} />
-        </label>
-        {customers.length && request.customerId ? (
-          <p className="text-sm text-muted-foreground sm:col-span-2">
-            Customer on file: {crmCustomerName(customers.find((item) => item.id === request.customerId) ?? customers[0])}
-          </p>
-        ) : null}
-      </div>
-    </div>
   );
 }
 

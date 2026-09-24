@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AddressFields,
@@ -11,6 +12,10 @@ import {
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { postData } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
+import {
+  extractUploadedUrl,
+  uploadFile,
+} from "@/components/api/uploadFile";
 import { PhoneOtpVerificationPanel } from "@/components/marketplace/phone-otp-verification-panel";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -25,6 +30,8 @@ import {
 import { getJobRecord } from "@/lib/data/jobs";
 import { isValidZip } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+const MAX_INTAKE_PHOTOS = 8;
 
 function hasUsableAddress(answers: IntakeAnswers) {
   const lat = Number(answers.lat);
@@ -84,6 +91,7 @@ export function RequestIntake({
       lastName: pending?.lastName || nameParts.slice(1).join(" ") || "",
       email: pending?.email || "",
       phone: pending?.phone || "",
+      photoUrls: Array.isArray(pending?.photoUrls) ? pending.photoUrls : [],
     };
   });
   const [stepIndex, setStepIndex] = useState(() => {
@@ -99,6 +107,8 @@ export function RequestIntake({
   const [submitting, setSubmitting] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
   const [showPhoneVerify, setShowPhoneVerify] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const steps = useMemo(
     () => getIntakeSteps(answers.service, startingZip || undefined),
@@ -180,9 +190,60 @@ export function RequestIntake({
       email: "",
       phone: "",
       details: "",
+      photoUrls: [],
     });
     setStepIndex(0);
     setShowPhoneVerify(false);
+  }
+
+  async function onPhotosSelected(fileList: FileList | null) {
+    if (!fileList?.length) return;
+    const existing = answers.photoUrls ?? [];
+    const remaining = MAX_INTAKE_PHOTOS - existing.length;
+    if (remaining <= 0) {
+      toast.error(`You can upload up to ${MAX_INTAKE_PHOTOS} photos.`);
+      return;
+    }
+    const files = Array.from(fileList).slice(0, remaining);
+    setUploadingPhotos(true);
+    try {
+      const uploaded: string[] = [];
+      for (const file of files) {
+        if (!file.type.startsWith("image/")) {
+          toast.error(`${file.name} is not an image.`);
+          continue;
+        }
+        const response = await uploadFile(file);
+        const url = extractUploadedUrl(response);
+        if (url) uploaded.push(url);
+      }
+      if (uploaded.length) {
+        setAnswers((current) => ({
+          ...current,
+          photoUrls: [...(current.photoUrls ?? []), ...uploaded].slice(
+            0,
+            MAX_INTAKE_PHOTOS,
+          ),
+        }));
+        toast.success(
+          uploaded.length === 1
+            ? "Photo added."
+            : `${uploaded.length} photos added.`,
+        );
+      }
+    } catch {
+      toast.error("Could not upload photos. Try again.");
+    } finally {
+      setUploadingPhotos(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
+
+  function removePhoto(url: string) {
+    setAnswers((current) => ({
+      ...current,
+      photoUrls: (current.photoUrls ?? []).filter((item) => item !== url),
+    }));
   }
 
   async function submitQuoteRequest() {
@@ -354,12 +415,79 @@ export function RequestIntake({
       ) : null}
 
       {step.type === "text" && step.id === "details" ? (
-        <Textarea
-          value={answers.details ?? ""}
-          onChange={(event) => setAnswer("details", event.target.value)}
-          placeholder="Describe the work, access notes, or what you already tried."
-          rows={5}
-        />
+        <div className="flex flex-col gap-4">
+          <Textarea
+            value={answers.details ?? ""}
+            onChange={(event) => setAnswer("details", event.target.value)}
+            placeholder="Describe the work, access notes, or what you already tried."
+            rows={5}
+          />
+          <div className="rounded-xl border border-dashed border-input bg-muted/20 p-4">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium">Photos of the work (optional)</p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Upload pictures of the area that needs work — for example a roof
+                leak, damaged pipe, or electrical panel. Pros see these with your
+                request. You can add up to {MAX_INTAKE_PHOTOS} images.
+              </p>
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              onChange={(event) => void onPhotosSelected(event.target.files)}
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={
+                  uploadingPhotos ||
+                  (answers.photoUrls?.length ?? 0) >= MAX_INTAKE_PHOTOS
+                }
+                onClick={() => photoInputRef.current?.click()}
+              >
+                <ImagePlus className="size-4" />
+                {uploadingPhotos ? "Uploading…" : "Add photos"}
+              </Button>
+              {(answers.photoUrls?.length ?? 0) > 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  {answers.photoUrls!.length} of {MAX_INTAKE_PHOTOS} added
+                </span>
+              ) : null}
+            </div>
+            {(answers.photoUrls?.length ?? 0) > 0 ? (
+              <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {answers.photoUrls!.map((src) => (
+                  <li
+                    key={src}
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-input bg-background"
+                  >
+                    <Image
+                      src={src}
+                      alt="Job photo"
+                      fill
+                      className="object-cover"
+                      sizes="120px"
+                      unoptimized={src.startsWith("http")}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove photo"
+                      className="absolute top-1 right-1 rounded-md bg-background/90 p-1 text-foreground shadow-sm opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={() => removePhoto(src)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
       ) : null}
 
       {step.type === "text" && step.id === "address" ? (

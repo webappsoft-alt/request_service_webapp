@@ -11,7 +11,7 @@ import { getStore } from "@/store";
 
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
 
-function matchQuoteProviders(categoryId: string, zip: string, limit = 6) {
+function matchQuoteProviders(categoryId: string, zip: string, limit = 5) {
   const all = getProvidersByCategoryId(categoryId);
   const local = all.filter((provider) => provider.zip === zip || provider.serviceArea.includes(zip));
   return (local.length ? local : all).slice(0, limit);
@@ -67,6 +67,8 @@ export async function createMarketplaceQuote(input: {
   preferredDate?: string;
   preferredTime?: string;
   provider?: Provider;
+  /** Optional customer-uploaded job photos (public URLs). */
+  photos?: string[];
 }) {
   if (typeof window === "undefined") {
     throw new Error("Marketplace quotes can only be created in the browser.");
@@ -81,6 +83,10 @@ export async function createMarketplaceQuote(input: {
     : category
       ? matchQuoteProviders(category.id, input.zip)
       : [];
+
+  const photoUrls = (input.photos ?? [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
 
   const addressLine = String(input.address || input.street || "").trim();
   const payload = {
@@ -108,7 +114,7 @@ export async function createMarketplaceQuote(input: {
     preferredDate: input.preferredDate || undefined,
     preferredTime: input.preferredTime || undefined,
     preferredTimeWindow: undefined,
-    photos: [],
+    photos: photoUrls,
     answers: input.answers ?? [],
   };
   const response = await postData<{
@@ -146,7 +152,7 @@ export async function createMarketplaceQuote(input: {
       details: payload.details,
       preferredDate: input.preferredDate || undefined,
       preferredTimeWindow: input.preferredTime || undefined,
-      photoUrls: [],
+      photoUrls,
       status: item.status || "new",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -205,6 +211,7 @@ export async function createQuoteFromIntake(answers: IntakeAnswers) {
       details: formatted.details,
       answers: formatted.answers,
       preferredTime: formatted.preferredTime,
+      photos: answers.photoUrls ?? [],
     });
     clearPendingQuote();
     return result;

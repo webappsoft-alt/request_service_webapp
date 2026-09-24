@@ -3,7 +3,10 @@ import { getQualifyQuestions } from "@/lib/data/service-directory";
 import { getServiceCategoryBySlug, serviceCategories } from "@/lib/data/services";
 import { isValidZip } from "@/lib/format";
 
-export type IntakeAnswers = Record<string, string>;
+export type IntakeAnswers = Record<string, string> & {
+  /** Optional job photos uploaded on the details step (URL strings). */
+  photoUrls?: string[];
+};
 
 export type IntakeStep = {
   id: string;
@@ -120,7 +123,7 @@ export function getIntakeSteps(serviceSlug?: string, prefilledZip?: string): Int
     {
       id: "details",
       title: "Anything else the pro should know?",
-      hint: "Access notes, photos to mention, or what you already tried.",
+      hint: "Describe the work, access notes, or what you already tried. You can also add photos below.",
       type: "text",
     }
   );

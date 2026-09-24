@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
-import { formatMoney, toTitleCase } from "@/lib/format";
+import { toTitleCase } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   clearPortfolioError,
@@ -26,7 +26,6 @@ import {
   portfolioCoverUrl,
   setPortfolioPage,
   setPortfolioSearch,
-  togglePortfolioFeature,
   type PortfolioProject,
 } from "@/store/portfolioSlice";
 
@@ -72,7 +71,6 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
   const [searchInput, setSearchInput] = useState(search);
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PortfolioProject | null>(null);
-  const [featuringId, setFeaturingId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -133,26 +131,6 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
     );
   }
 
-  async function onToggleFeature(row: PortfolioProject) {
-    setFeaturingId(row.id);
-    const result = await dispatch(togglePortfolioFeature(row.id));
-    setFeaturingId(null);
-    if (togglePortfolioFeature.fulfilled.match(result)) {
-      toast.success(
-        result.payload.isFeatured
-          ? `${toTitleCase(row.title)} is now featured.`
-          : `${toTitleCase(row.title)} is no longer featured.`,
-      );
-      void dispatch(fetchPortfolios());
-      return;
-    }
-    toast.error(
-      typeof result.payload === "string"
-        ? result.payload
-        : "Could not update featured status.",
-    );
-  }
-
   const table = (
     <PortalDataTable
       filename="portfolio"
@@ -182,7 +160,7 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
           header: "Project",
           sortValue: (row) => row.title,
           searchValue: (row) =>
-            `${row.title} ${row.description} ${row.tags.join(" ")}`,
+            `${row.title} ${row.description} ${row.categoryName} ${row.subcategoryName || ""}`,
           exportValue: (row) => row.title,
           cell: (row) => {
             const cover = portfolioCoverUrl(row);
@@ -208,7 +186,7 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
                     {toTitleCase(row.title)}
                   </Link>
                   <p className="max-w-md truncate text-xs text-muted-foreground">
-                    {row.description || row.tags[0] || "No description"}
+                    {row.description || "No description"}
                   </p>
                 </div>
               </div>
@@ -225,36 +203,13 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
             row.categoryName ? toTitleCase(row.categoryName) : "—",
         },
         {
-          id: "cost",
-          header: "Cost",
-          sortValue: (row) => row.cost,
-          searchValue: (row) => String(row.cost),
-          exportValue: (row) => (row.cost ? formatMoney(row.cost) : ""),
-          className: "tabular-nums",
-          cell: (row) => (row.cost ? formatMoney(row.cost) : "—"),
-        },
-        {
-          id: "featured",
-          header: "Featured",
-          sortValue: (row) => (row.isFeatured ? 1 : 0),
-          searchValue: (row) => (row.isFeatured ? "Featured" : ""),
-          exportValue: (row) => (row.isFeatured ? "Yes" : "No"),
-          cell: (row) => (
-            <Button
-              type="button"
-              size="sm"
-              variant={row.isFeatured ? "outline" : "default"}
-              disabled={featuringId === row.id || mutating}
-              onClick={() => {
-                void onToggleFeature(row);
-              }}
-            >
-              {featuringId === row.id ? (
-                <Spinner size="sm" label="Updating featured" />
-              ) : null}
-              {row.isFeatured ? "Unfeature" : "Feature"}
-            </Button>
-          ),
+          id: "subcategory",
+          header: "Subcategory",
+          sortValue: (row) => row.subcategoryName || "",
+          searchValue: (row) => row.subcategoryName || "",
+          exportValue: (row) => row.subcategoryName || "",
+          cell: (row) =>
+            row.subcategoryName ? toTitleCase(row.subcategoryName) : "—",
         },
         {
           id: "status",
@@ -332,7 +287,7 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
           <div>
             <p className="text-sm font-semibold">Project portfolio</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Before/after jobs on your public profile. You can also open this from Office → Portfolio.
+              Projects on your public profile. You can also open this from Office → Portfolio.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -354,7 +309,7 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
     <PortalPage
       eyebrow="Showcase"
       title="Portfolio"
-      description="Before/after projects customers see on your public profile. Open a project to edit media, tags, and linked services."
+      description="Projects customers see on your public profile. Open a project to edit title, category, description, and photos."
       actions={
         <Button asChild>
           <Link href="/pro/dashboard/portfolio/new">Add project</Link>

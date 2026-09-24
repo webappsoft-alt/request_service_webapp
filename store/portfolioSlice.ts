@@ -39,6 +39,8 @@ export type PortfolioProject = {
   linkedServices: PortfolioLinkedService[];
   categoryId: string;
   categoryName: string;
+  subcategoryId: string;
+  subcategoryName: string;
   tags: string[];
   projectDate: string;
   duration: string;
@@ -64,6 +66,7 @@ export type PortfolioInput = {
   media: PortfolioMediaInput[];
   fixedServiceIds?: string[];
   category?: string;
+  subcategory?: string;
   tags?: string[];
   projectDate?: string;
   duration?: string;
@@ -233,6 +236,11 @@ export function normalizePortfolioProject(raw: unknown): PortfolioProject | null
   const categoryName =
     nameOf(categoryRef) ||
     (typeof record.categoryName === "string" ? record.categoryName : "");
+  const subcategoryRef = record.subcategory;
+  const subcategoryId = idOf(subcategoryRef);
+  const subcategoryName =
+    nameOf(subcategoryRef) ||
+    (typeof record.subcategoryName === "string" ? record.subcategoryName : "");
 
   const mediaRaw = Array.isArray(record.media)
     ? record.media
@@ -273,6 +281,8 @@ export function normalizePortfolioProject(raw: unknown): PortfolioProject | null
     linkedServices,
     categoryId,
     categoryName,
+    subcategoryId,
+    subcategoryName,
     tags: toStringArray(record.tags),
     projectDate:
       typeof record.projectDate === "string"
@@ -423,7 +433,33 @@ export const createPortfolio = createAsyncThunk<
     });
     const entity = extractEntity(response);
     if (!entity) {
-      return rejectWithValue("Project was created but could not be read.");
+      const tempId = `portfolio_${Date.now()}`;
+      return {
+        id: tempId,
+        slug: tempId,
+        title: payload.title,
+        description: payload.description,
+        media: (payload.media || []).map((item, index) => ({
+          url: item.url,
+          type: item.type || "image",
+          caption: item.caption || "",
+          isBefore: Boolean(item.isBefore),
+          isAfter: Boolean(item.isAfter),
+          isCover: item.isCover ?? index === 0,
+        })),
+        fixedServiceIds: payload.fixedServiceIds || [],
+        linkedServices: [],
+        categoryId: payload.category || "",
+        categoryName: "",
+        subcategoryId: payload.subcategory || "",
+        subcategoryName: "",
+        tags: payload.tags || [],
+        projectDate: payload.projectDate || "",
+        duration: payload.duration || "",
+        cost: payload.cost || 0,
+        isFeatured: Boolean(payload.isFeatured),
+        status: (payload.status as PortfolioStatus) || "ACTIVE",
+      };
     }
     return entity;
   } catch (error) {
@@ -459,6 +495,8 @@ export const updatePortfolio = createAsyncThunk<
         linkedServices: [],
         categoryId: payload.category || "",
         categoryName: "",
+        subcategoryId: payload.subcategory || "",
+        subcategoryName: "",
         tags: payload.tags || [],
         projectDate: payload.projectDate || "",
         duration: payload.duration || "",

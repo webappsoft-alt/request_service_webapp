@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Pencil, Star } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
-import { formatMoney, toTitleCase } from "@/lib/format";
+import { toTitleCase } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -39,17 +39,6 @@ function statusTone(status: PortfolioStatus) {
   if (status === "ACTIVE") return "success" as const;
   if (status === "ARCHIVED") return "warning" as const;
   return "neutral" as const;
-}
-
-function formatProjectDate(value: string) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(0, 10) || "—";
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 export function PortfolioDetailView({ id }: { id: string }) {
@@ -126,9 +115,6 @@ export function PortfolioDetailView({ id }: { id: string }) {
             label={statusLabel(detail.status)}
             tone={statusTone(detail.status)}
           />
-          {detail.isFeatured ? (
-            <StatusPill label="Featured" tone="primary" />
-          ) : null}
         </div>
       }
       actions={
@@ -204,15 +190,14 @@ export function PortfolioDetailView({ id }: { id: string }) {
                   {detail.description || "No customer-facing description yet."}
                 </p>
               </div>
-              <div className="grid gap-4 rounded-xl bg-[#eef1f5] p-4 sm:grid-cols-3">
+              <div className="grid gap-4 rounded-xl bg-[#eef1f5] p-4 sm:grid-cols-2">
                 <Fact
-                  label="Cost"
-                  value={detail.cost ? formatMoney(detail.cost) : "—"}
+                  label="Category"
+                  value={toTitleCase(detail.categoryName) || "—"}
                 />
-                <Fact label="Duration" value={detail.duration || "—"} />
                 <Fact
-                  label="Project date"
-                  value={formatProjectDate(detail.projectDate)}
+                  label="Subcategory"
+                  value={toTitleCase(detail.subcategoryName) || "—"}
                 />
               </div>
             </div>
@@ -221,109 +206,29 @@ export function PortfolioDetailView({ id }: { id: string }) {
           <section className="rounded-xl border border-black/10 bg-card p-5">
             <p className="text-sm font-semibold">Project details</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Fact
-                label="Category"
-                value={toTitleCase(detail.categoryName) || "—"}
-              />
               <Fact label="Status" value={statusLabel(detail.status)} />
               <Fact
-                label="Featured"
-                value={detail.isFeatured ? "Yes" : "No"}
-              />
-              <Fact
-                label="Media"
-                value={`${detail.media.length} ${detail.media.length === 1 ? "asset" : "assets"}`}
+                label="Photos"
+                value={`${detail.media.length} ${detail.media.length === 1 ? "photo" : "photos"}`}
               />
             </div>
-            {detail.tags.length ? (
-              <div className="mt-5">
-                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Tags
-                </p>
-                <ul className="mt-2 flex flex-wrap gap-1.5">
-                  {detail.tags.map((tag) => (
-                    <li
-                      key={tag}
-                      className="rounded-full bg-[#eef1f5] px-2.5 py-1 text-xs font-medium"
-                    >
-                      {tag}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
           </section>
-
-          {detail.media.some((item) => item.caption || item.isBefore || item.isAfter) ? (
-            <section className="rounded-xl border border-black/10 bg-card p-5">
-              <p className="text-sm font-semibold">Media notes</p>
-              <ul className="mt-3 flex flex-col gap-2">
-                {detail.media.map((item, index) => (
-                  <li
-                    key={`${item.url}-${index}`}
-                    className="flex items-start gap-3 text-sm text-muted-foreground"
-                  >
-                    <span className="relative mt-0.5 size-12 shrink-0 overflow-hidden rounded-md bg-[#003F7D]">
-                      {item.url ? (
-                        <Image
-                          src={item.url}
-                          alt=""
-                          fill
-                          sizes="48px"
-                          className="object-cover"
-                          unoptimized={item.url.startsWith("http")}
-                        />
-                      ) : null}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground">
-                        {item.caption || `Photo ${index + 1}`}
-                      </p>
-                      <p className="mt-0.5 text-xs">
-                        {[
-                          item.isCover ? "Cover" : null,
-                          item.isBefore ? "Before" : null,
-                          item.isAfter ? "After" : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "Gallery"}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
         </div>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
           <section className="rounded-xl border border-black/10 bg-card p-5">
-            <p className="flex items-center gap-1.5 text-sm font-semibold">
-              <Star className="size-3.5" aria-hidden="true" />
-              Linked fixed services
-            </p>
-            {detail.linkedServices.length || detail.fixedServiceIds.length ? (
-              <ul className="mt-3 flex flex-col gap-2">
-                {(detail.linkedServices.length
-                  ? detail.linkedServices
-                  : detail.fixedServiceIds.map((serviceId) => ({
-                      id: serviceId,
-                      name: "Fixed service",
-                    }))
-                ).map((service) => (
-                  <li
-                    key={service.id}
-                    className="rounded-lg bg-[#eef1f5] px-3 py-2 text-sm"
-                  >
-                    {toTitleCase(service.name)}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">
-                No fixed services linked.
-              </p>
-            )}
+            <p className="text-sm font-semibold">Summary</p>
+            <div className="mt-3 grid gap-3">
+              <Fact
+                label="Category"
+                value={toTitleCase(detail.categoryName) || "—"}
+              />
+              <Fact
+                label="Subcategory"
+                value={toTitleCase(detail.subcategoryName) || "—"}
+              />
+              <Fact label="Status" value={statusLabel(detail.status)} />
+            </div>
           </section>
         </aside>
       </div>

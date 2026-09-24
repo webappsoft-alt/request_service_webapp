@@ -14,6 +14,8 @@ type PortfolioSlide = {
   alt: string;
   projectSlug: string;
   projectTitle: string;
+  projectCategory: string;
+  projectSubcategory: string;
   projectImageCount: number;
   imageIndexInProject: number;
 };
@@ -43,6 +45,8 @@ function buildPortfolioSlides(projects: ProviderProject[]): PortfolioSlide[] {
         alt: `${project.title} — photo ${imageIndexInProject + 1}`,
         projectSlug: project.slug,
         projectTitle: project.title,
+        projectCategory: project.categoryName || "",
+        projectSubcategory: project.subcategoryName || "",
         projectImageCount: urls.length,
         imageIndexInProject,
       });
@@ -61,6 +65,9 @@ export function ProviderProjectCard({
   onBeforeNavigate?: () => void;
 }) {
   const extraCount = Math.max(0, projectImageUrls(project).length - 1);
+  const meta = [project.categoryName, project.subcategoryName]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <Link
@@ -85,10 +92,18 @@ export function ProviderProjectCard({
           </span>
         ) : null}
       </div>
-      <div className="px-3 py-2.5">
+      <div className="flex flex-col gap-0.5 px-3 py-2.5">
         <h3 className="line-clamp-2 text-sm font-semibold leading-snug">
           {project.title}
         </h3>
+        {meta ? (
+          <p className="line-clamp-1 text-xs text-muted-foreground">{meta}</p>
+        ) : null}
+        {project.summary ? (
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {project.summary}
+          </p>
+        ) : null}
       </div>
     </Link>
   );
@@ -187,6 +202,20 @@ export function ProviderProjects({
                         unoptimized={slide.src.startsWith("http")}
                       />
                     </button>
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] bg-gradient-to-t from-black/70 via-black/35 to-transparent px-3 pt-8 pb-2.5">
+                      <p className="line-clamp-1 text-sm font-semibold text-white">
+                        {slide.projectTitle}
+                      </p>
+                      {[slide.projectCategory, slide.projectSubcategory]
+                        .filter(Boolean)
+                        .length ? (
+                        <p className="mt-0.5 line-clamp-1 text-[11px] text-white/85">
+                          {[slide.projectCategory, slide.projectSubcategory]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 </li>
               );

@@ -1291,17 +1291,27 @@ export function ProfileView() {
             embedded
             deferSubmit
             submitRef={portfolioSubmitRef}
+            allowedCategoryIds={categoryIds}
           />
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button type="button" variant="outline" onClick={onBack} disabled={busy}>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <Button
+            type="button"
+            size="xl"
+            variant="outline"
+            className="min-w-[7.5rem]"
+            onClick={onBack}
+            disabled={busy}
+          >
             Back
           </Button>
 
           {isLastStep ? (
             <Button
               type="button"
+              size="xl"
+              className="min-w-[7.5rem]"
               disabled={busy}
               onClick={() => void onFinalSubmit()}
             >
@@ -1316,7 +1326,13 @@ export function ProfileView() {
               )}
             </Button>
           ) : (
-            <Button type="button" disabled={busy} onClick={onNext}>
+            <Button
+              type="button"
+              size="xl"
+              className="min-w-[7.5rem]"
+              disabled={busy}
+              onClick={onNext}
+            >
               Next
             </Button>
           )}

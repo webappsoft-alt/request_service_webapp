@@ -608,6 +608,7 @@ export function PublicProfessionalDetail({
           : provider.companyName,
         completedOn: project.projectDate || project.createdAt || "",
         categoryName: project.categoryName || "Project",
+        subcategoryName: project.subcategoryName || "",
         cover,
         images,
         details: project.description ? [project.description] : [],

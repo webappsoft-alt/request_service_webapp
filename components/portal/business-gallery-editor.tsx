@@ -152,7 +152,7 @@ export function BusinessGalleryEditor({
       </div>
 
       {images.length ? (
-        <ul className="grid gap-3 sm:grid-cols-3">
+        <ul className="flex flex-wrap gap-2.5">
           {images.map((item, index) => (
             <li
               key={`${item.url}-${index}`}
@@ -161,35 +161,57 @@ export function BusinessGalleryEditor({
               onDragOver={(event) => event.preventDefault()}
               onDrop={() => onReorderDrop(index)}
               className={cn(
-                "group relative overflow-hidden rounded-lg border bg-card",
-                item.isBanner ? "border-primary" : "border-input",
+                "group relative size-[4.75rem] shrink-0 overflow-hidden rounded-md border bg-muted sm:size-[5.25rem]",
+                item.isBanner
+                  ? "border-primary ring-2 ring-primary/25"
+                  : "border-input",
+                dragIndex === index && "opacity-60",
               )}
             >
-              <div className="relative aspect-[4/3]">
-                <Image src={item.url} alt="" fill unoptimized className="object-cover" sizes="220px" />
-              </div>
-              <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <GripVertical className="size-3.5" />
-                  Drag
+              <Image
+                src={item.url}
+                alt=""
+                fill
+                unoptimized
+                className="object-cover"
+                sizes="84px"
+                draggable={false}
+              />
+
+              {item.isBanner ? (
+                <span className="absolute top-1 left-1 z-10 inline-flex items-center gap-0.5 rounded bg-primary px-1 py-0.5 text-[9px] font-semibold tracking-wide text-primary-foreground uppercase">
+                  <Star className="size-2.5 fill-current" />
+                  Banner
                 </span>
-                <div className="flex gap-1">
-                  <Button
+              ) : null}
+
+              <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between gap-0.5 bg-gradient-to-t from-black/75 via-black/45 to-transparent px-1 pt-4 pb-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                <span
+                  className="inline-flex cursor-grab items-center text-white/90 active:cursor-grabbing"
+                  title="Drag to reorder"
+                >
+                  <GripVertical className="size-3.5" />
+                  <span className="sr-only">Drag to reorder</span>
+                </span>
+                <div className="flex items-center gap-0.5">
+                  {!item.isBanner ? (
+                    <button
+                      type="button"
+                      title="Set as banner"
+                      className="rounded px-1 py-0.5 text-[9px] font-semibold text-white hover:bg-white/20"
+                      onClick={() => onChange(withBannerAt(images, item.url))}
+                    >
+                      Set
+                    </button>
+                  ) : null}
+                  <button
                     type="button"
-                    size="sm"
-                    variant={item.isBanner ? "default" : "outline"}
-                    className="h-7 px-2 text-[11px]"
-                    onClick={() => onChange(withBannerAt(images, item.url))}
-                  >
-                    {item.isBanner ? "Banner" : "Set banner"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-destructive"
+                    title="Remove photo"
+                    className="rounded p-0.5 text-white hover:bg-red-500/80"
                     onClick={() => {
-                      const next = images.filter((_, current) => current !== index);
+                      const next = images.filter(
+                        (_, current) => current !== index,
+                      );
                       onChange(
                         next.length && !next.some((photo) => photo.isBanner)
                           ? withBannerAt(next, next[0].url)
@@ -197,9 +219,9 @@ export function BusinessGalleryEditor({
                       );
                     }}
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 className="size-3" />
                     <span className="sr-only">Remove</span>
-                  </Button>
+                  </button>
                 </div>
               </div>
             </li>

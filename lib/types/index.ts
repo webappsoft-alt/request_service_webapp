@@ -514,6 +514,7 @@ export interface ProviderProject {
   location: string;
   completedOn: string;
   categoryName: string;
+  subcategoryName?: string;
   cover: string;
   images: string[];
   details: string[];

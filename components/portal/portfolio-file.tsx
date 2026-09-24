@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -13,30 +12,28 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ImagePlus, Trash2 } from "lucide-react";
-import { getData } from "@/components/api/apiFuntions";
-import { providerApi } from "@/components/api/ApiRoutesFile";
 import {
   extractUploadedUrl,
   uploadFile,
 } from "@/components/api/uploadFile";
 import { PaginatedCategorySelect } from "@/components/portal/paginated-category-select";
-import { PaginatedMultiSelect } from "@/components/portal/paginated-multi-select";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { CenteredSpinner, Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { formatMoney, toTitleCase } from "@/lib/format";
+import { getServiceCategoryById } from "@/lib/data/services";
+import { toTitleCase } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { selectAuthProvider } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchParentCategories } from "@/store/categoriesSlice";
 import {
-  normalizeFixedService,
-  type FixedService,
-} from "@/store/fixedServicesSlice";
+  fetchParentCategories,
+  fetchSubcategories,
+  type PublicCategory,
+} from "@/store/categoriesSlice";
 import {
   clearPortfolioDetail,
   createPortfolio,
@@ -46,22 +43,16 @@ import {
   type PortfolioStatus,
 } from "@/store/portfolioSlice";
 
-const SERVICES_PAGE_SIZE = 10;
-
 type DraftMedia = PortfolioMedia;
 
 type DraftState = {
   title: string;
   description: string;
   media: DraftMedia[];
-  fixedServiceIds: string[];
   categoryId: string;
   categoryName: string;
-  tagsInput: string;
-  projectDate: string;
-  duration: string;
-  cost: string;
-  isFeatured: boolean;
+  subcategoryId: string;
+  subcategoryName: string;
   status: "ACTIVE" | "HIDDEN" | "ARCHIVED";
 };
 
@@ -70,100 +61,12 @@ function emptyDraft(): DraftState {
     title: "",
     description: "",
     media: [],
-    fixedServiceIds: [],
     categoryId: "",
     categoryName: "",
-    tagsInput: "",
-    projectDate: "",
-    duration: "",
-    cost: "",
-    isFeatured: false,
+    subcategoryId: "",
+    subcategoryName: "",
     status: "ACTIVE",
   };
-}
-
-function parseCostInput(raw: string): string | null {
-  if (raw === "") return "";
-  if (!/^\d*\.?\d*$/.test(raw)) return null;
-  if (raw.startsWith("-")) return null;
-  const value = Number(raw);
-  if (raw !== "." && Number.isFinite(value) && value < 0) return null;
-  return raw;
-}
-
-function costNumber(value: string): number | null {
-  if (value.trim() === "" || value === ".") return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return parsed;
-}
-
-function toDateInputValue(iso: string): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso.slice(0, 10);
-  }
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function fromDateInputValue(value: string): string | undefined {
-  if (!value.trim()) return undefined;
-  return `${value.trim()}T00:00:00.000Z`;
-}
-
-function parseTags(raw: string): string[] {
-  return raw
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function extractFixedServicePage(response: unknown): {
-  items: FixedService[];
-  page: number;
-  totalPages: number;
-} {
-  const root = asRecord(response) ?? {};
-  const nested = asRecord(root.data);
-  const list =
-    (Array.isArray(root.data) && root.data) ||
-    (nested && Array.isArray(nested.data) && nested.data) ||
-    (Array.isArray(root.fixedServices) && root.fixedServices) ||
-    (Array.isArray(response) && response) ||
-    [];
-  const items = list
-    .map(normalizeFixedService)
-    .filter((item): item is FixedService => Boolean(item));
-
-  const paginationRaw =
-    asRecord(root.pagination) ||
-    (nested ? asRecord(nested.pagination) : null) ||
-    {};
-  const page = Math.max(1, Number(paginationRaw.page) || 1);
-  const limit = Math.max(
-    1,
-    Number(paginationRaw.limit) || SERVICES_PAGE_SIZE,
-  );
-  const total = Math.max(
-    0,
-    Number(paginationRaw.total ?? paginationRaw.totalDocs ?? items.length) || 0,
-  );
-  const totalPages = Math.max(
-    1,
-    Number(paginationRaw.totalPages) ||
-      Math.max(1, Math.ceil(total / limit) || 1),
-  );
-
-  return { items, page, totalPages };
 }
 
 function statusLabel(status: PortfolioStatus | DraftState["status"]) {
@@ -178,11 +81,44 @@ function statusTone(status: PortfolioStatus | DraftState["status"]) {
   return "neutral" as const;
 }
 
+/** Match signup catalog ids (`cat_plumbing`, etc.) to API parent categories. */
+function parentMatchesSignupId(
+  parent: PublicCategory,
+  signupId: string,
+): boolean {
+  const needle = signupId.trim().toLowerCase();
+  if (!needle) return false;
+
+  const parentId = parent.id?.trim().toLowerCase() ?? "";
+  const parentSlug = parent.slug?.trim().toLowerCase() ?? "";
+  const parentName = parent.name?.trim().toLowerCase() ?? "";
+
+  if (parentId === needle || parentSlug === needle || parentName === needle) {
+    return true;
+  }
+
+  const catalog = getServiceCategoryById(signupId);
+  if (!catalog) return false;
+
+  const catalogId = catalog.id.trim().toLowerCase();
+  const catalogSlug = catalog.slug.trim().toLowerCase();
+  const catalogName = catalog.name.trim().toLowerCase();
+
+  return (
+    parentId === catalogId ||
+    parentSlug === catalogSlug ||
+    parentName === catalogName ||
+    parentSlug === catalogId.replace(/^cat_/, "") ||
+    parentId === catalogSlug
+  );
+}
+
 type PortfolioFormViewProps = {
   id?: string;
   embedded?: boolean;
   deferSubmit?: boolean;
   submitRef?: MutableRefObject<(() => Promise<boolean>) | null>;
+  allowedCategoryIds?: string[];
 };
 
 export function PortfolioFormView({
@@ -190,11 +126,14 @@ export function PortfolioFormView({
   embedded = false,
   deferSubmit = false,
   submitRef,
+  allowedCategoryIds,
 }: PortfolioFormViewProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const lastSubFetchRef = useRef("");
 
+  const authProvider = useAppSelector(selectAuthProvider);
   const detail = useAppSelector((state) => state.portfolio?.detail ?? null);
   const detailLoading = useAppSelector(
     (state) => state.portfolio?.detailLoading ?? false,
@@ -220,22 +159,47 @@ export function PortfolioFormView({
     (state) => state.categories?.loadingMoreParents ?? false,
   );
 
+  const subcategoriesByParent = useAppSelector(
+    (state) => state.categories?.subcategoriesByParent ?? {},
+  );
+  const subMetaByParent = useAppSelector(
+    (state) => state.categories?.subMetaByParent ?? {},
+  );
+  const loadingSubcategories = useAppSelector(
+    (state) => state.categories?.loadingSubcategories ?? false,
+  );
+  const loadingMoreSubcategories = useAppSelector(
+    (state) => state.categories?.loadingMoreSubcategories ?? false,
+  );
+
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
   const [hydrated, setHydrated] = useState(!id);
   const [uploading, setUploading] = useState(false);
-  const [linkedServices, setLinkedServices] = useState<FixedService[]>([]);
-  const [servicesPage, setServicesPage] = useState(0);
-  const [servicesTotalPages, setServicesTotalPages] = useState(1);
-  const [loadingServices, setLoadingServices] = useState(false);
-  const [loadingMoreServices, setLoadingMoreServices] = useState(false);
-  const servicesLoadRef = useRef(false);
+
+  const signupCategoryIds = useMemo(() => {
+    if (allowedCategoryIds !== undefined) {
+      return allowedCategoryIds.filter((id): id is string => Boolean(id?.trim()));
+    }
+    const fromProvider = authProvider?.services?.categoryIds;
+    return Array.isArray(fromProvider)
+      ? fromProvider.filter((id): id is string => Boolean(id?.trim()))
+      : [];
+  }, [allowedCategoryIds, authProvider?.services?.categoryIds]);
 
   const categoryHasMore =
     Boolean(parentsHasMore) || parentsPage < parentsTotalPages;
-  const servicesHasMore = servicesPage < servicesTotalPages;
 
   const categoryOptions = useMemo(() => {
-    const list = parents.map((item) => ({ id: item.id, name: item.name }));
+    if (!signupCategoryIds.length) return [];
+
+    const matched = parents.filter((parent) =>
+      signupCategoryIds.some((signupId) =>
+        parentMatchesSignupId(parent, signupId),
+      ),
+    );
+
+    const list = matched.map((item) => ({ id: item.id, name: item.name }));
+
     if (
       draft.categoryId &&
       !list.some((item) => item.id === draft.categoryId)
@@ -246,70 +210,72 @@ export function PortfolioFormView({
       });
     }
     return list;
-  }, [parents, draft.categoryId, draft.categoryName]);
+  }, [
+    parents,
+    signupCategoryIds,
+    draft.categoryId,
+    draft.categoryName,
+  ]);
 
-  const serviceOptions = useMemo(() => {
-    const list = linkedServices.map((item) => ({
+  const subcategories = draft.categoryId
+    ? (subcategoriesByParent[draft.categoryId] ?? [])
+    : [];
+
+  const subcategoryHasMore = Boolean(
+    draft.categoryId &&
+      (subMetaByParent[draft.categoryId]?.hasMore ||
+        (subMetaByParent[draft.categoryId]?.page ?? 0) <
+          (subMetaByParent[draft.categoryId]?.totalPages ?? 1)),
+  );
+
+  const subcategoryOptions = useMemo(() => {
+    const list = subcategories.map((item) => ({
       id: item.id,
-      name: item.servicesName,
+      name: item.name,
     }));
-    const namesById = new Map(
-      (detail?.linkedServices ?? []).map((item) => [item.id, item.name]),
-    );
-    for (const serviceId of draft.fixedServiceIds) {
-      if (list.some((item) => item.id === serviceId)) continue;
+    if (
+      draft.subcategoryId &&
+      !list.some((item) => item.id === draft.subcategoryId)
+    ) {
       list.unshift({
-        id: serviceId,
-        name: namesById.get(serviceId) || "Selected service",
+        id: draft.subcategoryId,
+        name: draft.subcategoryName || "Selected subcategory",
       });
     }
     return list;
-  }, [linkedServices, draft.fixedServiceIds, detail?.linkedServices]);
-
-  const loadFixedServicesPage = useCallback(async (page: number, append: boolean) => {
-    if (append) setLoadingMoreServices(true);
-    else setLoadingServices(true);
-    try {
-      const response = await getData(
-        providerApi.fixedServices,
-        { page, limit: SERVICES_PAGE_SIZE },
-        { silent: true },
-      );
-      const parsed = extractFixedServicePage(response);
-      setLinkedServices((current) => {
-        if (!append) return parsed.items;
-        const seen = new Set(current.map((item) => item.id));
-        const next = [...current];
-        for (const item of parsed.items) {
-          if (seen.has(item.id)) continue;
-          seen.add(item.id);
-          next.push(item);
-        }
-        return next;
-      });
-      setServicesPage(parsed.page);
-      setServicesTotalPages(parsed.totalPages);
-    } catch {
-      if (!append) {
-        setLinkedServices([]);
-        setServicesPage(0);
-        setServicesTotalPages(1);
-      }
-    } finally {
-      if (append) setLoadingMoreServices(false);
-      else setLoadingServices(false);
-    }
-  }, []);
+  }, [
+    subcategories,
+    draft.subcategoryId,
+    draft.subcategoryName,
+  ]);
 
   useEffect(() => {
     void dispatch(fetchParentCategories());
   }, [dispatch]);
 
+  // Keep loading parents until all signup categories are matched (or exhausted).
   useEffect(() => {
-    if (servicesLoadRef.current) return;
-    servicesLoadRef.current = true;
-    void loadFixedServicesPage(1, false);
-  }, [loadFixedServicesPage]);
+    if (!signupCategoryIds.length || loadingParents || loadingMoreParents) {
+      return;
+    }
+    if (!categoryHasMore) return;
+
+    const matchedCount = parents.filter((parent) =>
+      signupCategoryIds.some((signupId) =>
+        parentMatchesSignupId(parent, signupId),
+      ),
+    ).length;
+    if (matchedCount >= signupCategoryIds.length) return;
+
+    void dispatch(fetchParentCategories({ append: true }));
+  }, [
+    signupCategoryIds,
+    parents,
+    categoryHasMore,
+    loadingParents,
+    loadingMoreParents,
+    dispatch,
+  ]);
 
   useEffect(() => {
     if (!id) {
@@ -330,14 +296,10 @@ export function PortfolioFormView({
       media: detail.media.length
         ? detail.media.map((item) => ({ ...item }))
         : [],
-      fixedServiceIds: detail.fixedServiceIds,
       categoryId: detail.categoryId,
       categoryName: detail.categoryName,
-      tagsInput: detail.tags.join(", "),
-      projectDate: toDateInputValue(detail.projectDate),
-      duration: detail.duration,
-      cost: detail.cost ? String(detail.cost) : "",
-      isFeatured: detail.isFeatured,
+      subcategoryId: detail.subcategoryId ?? "",
+      subcategoryName: detail.subcategoryName ?? "",
       status:
         detail.status === "ARCHIVED"
           ? "ARCHIVED"
@@ -346,13 +308,38 @@ export function PortfolioFormView({
             : "ACTIVE",
     });
     setHydrated(true);
-  }, [detail, hydrated, id]);
+
+    if (detail.categoryId) {
+      lastSubFetchRef.current = detail.categoryId;
+      void dispatch(fetchSubcategories({ parentId: detail.categoryId }));
+    }
+  }, [detail, hydrated, id, dispatch]);
+
+  useEffect(() => {
+    if (!draft.categoryId) return;
+    if (lastSubFetchRef.current === draft.categoryId) return;
+    if (
+      subcategoriesByParent[draft.categoryId] &&
+      subMetaByParent[draft.categoryId]
+    ) {
+      lastSubFetchRef.current = draft.categoryId;
+      return;
+    }
+    lastSubFetchRef.current = draft.categoryId;
+    void dispatch(fetchSubcategories({ parentId: draft.categoryId }));
+  }, [
+    dispatch,
+    draft.categoryId,
+    subcategoriesByParent,
+    subMetaByParent,
+  ]);
 
   const title = id
     ? toTitleCase(draft.title || detail?.title || "Portfolio project")
     : "New portfolio project";
 
-  const cover = draft.media.find((item) => item.isCover)?.url || draft.media[0]?.url;
+  const cover =
+    draft.media.find((item) => item.isCover)?.url || draft.media[0]?.url;
 
   async function onUploadPhotos(files: FileList | null) {
     if (!files?.length) return;
@@ -397,30 +384,15 @@ export function PortfolioFormView({
     }
   }
 
-  function updateMedia(index: number, patch: Partial<DraftMedia>) {
-    setDraft((current) => ({
-      ...current,
-      media: current.media.map((item, i) => {
-        if (i !== index) {
-          if (patch.isCover) return { ...item, isCover: false };
-          return item;
-        }
-        return { ...item, ...patch };
-      }),
-    }));
-  }
-
   function buildPayload() {
-    const cost = costNumber(draft.cost);
-    const tags = parseTags(draft.tagsInput);
     const media = draft.media
       .filter((item) => item.url.trim())
       .map((item, index, list) => ({
         url: item.url.trim(),
         type: item.type || "image",
-        caption: item.caption?.trim() || undefined,
-        isBefore: Boolean(item.isBefore),
-        isAfter: Boolean(item.isAfter),
+        caption: undefined,
+        isBefore: false,
+        isAfter: false,
         isCover: item.isCover || (index === 0 && !list.some((m) => m.isCover)),
       }));
 
@@ -428,13 +400,14 @@ export function PortfolioFormView({
       title: draft.title.trim(),
       description: draft.description.trim(),
       media,
-      fixedServiceIds: draft.fixedServiceIds,
+      fixedServiceIds: [] as string[],
       category: draft.categoryId || undefined,
-      tags: tags.length ? tags : undefined,
-      projectDate: fromDateInputValue(draft.projectDate),
-      duration: draft.duration.trim() || undefined,
-      cost: cost ?? undefined,
-      isFeatured: draft.isFeatured,
+      subcategory: draft.subcategoryId || undefined,
+      tags: undefined as string[] | undefined,
+      projectDate: undefined as string | undefined,
+      duration: undefined as string | undefined,
+      cost: undefined as number | undefined,
+      isFeatured: false,
       status: draft.status === "ARCHIVED" ? ("ARCHIVED" as const) : draft.status,
     };
   }
@@ -540,6 +513,8 @@ export function PortfolioFormView({
     }
   }
 
+  const noSignupCategories = !signupCategoryIds.length;
+
   const formFields = (
     <FieldGroup>
       <Field>
@@ -557,6 +532,87 @@ export function PortfolioFormView({
           required={!deferSubmit}
         />
       </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="pf-category">Category</FieldLabel>
+          <PaginatedCategorySelect
+            id="pf-category"
+            className="w-full"
+            value={draft.categoryId}
+            options={categoryOptions}
+            disabled={
+              noSignupCategories ||
+              (loadingParents && !categoryOptions.length)
+            }
+            loading={loadingParents}
+            loadingMore={loadingMoreParents}
+            hasMore={categoryHasMore && !noSignupCategories}
+            placeholder={
+              noSignupCategories
+                ? "No categories selected"
+                : "Select category"
+            }
+            onChange={(nextId, category) => {
+              lastSubFetchRef.current = "";
+              setDraft((current) => ({
+                ...current,
+                categoryId: nextId,
+                categoryName: category?.name ?? "",
+                subcategoryId: "",
+                subcategoryName: "",
+              }));
+            }}
+            onLoadMore={() => {
+              if (noSignupCategories) return;
+              void dispatch(fetchParentCategories({ append: true }));
+            }}
+          />
+          {noSignupCategories ? (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              No categories on your profile yet. Add services first.
+            </p>
+          ) : null}
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="pf-subcategory">Subcategory</FieldLabel>
+          <PaginatedCategorySelect
+            id="pf-subcategory"
+            className="w-full"
+            value={draft.subcategoryId}
+            options={subcategoryOptions}
+            disabled={
+              !draft.categoryId ||
+              (loadingSubcategories && !subcategoryOptions.length)
+            }
+            loading={loadingSubcategories}
+            loadingMore={loadingMoreSubcategories}
+            hasMore={subcategoryHasMore}
+            placeholder={
+              !draft.categoryId
+                ? "Select category first"
+                : loadingSubcategories && !subcategoryOptions.length
+                  ? "Loading subcategories…"
+                  : "Select subcategory"
+            }
+            onChange={(nextId, sub) => {
+              setDraft((current) => ({
+                ...current,
+                subcategoryId: nextId,
+                subcategoryName: sub?.name ?? "",
+              }));
+            }}
+            onLoadMore={() => {
+              if (!draft.categoryId) return;
+              void dispatch(
+                fetchSubcategories({
+                  parentId: draft.categoryId,
+                  append: true,
+                }),
+              );
+            }}
+          />
+        </Field>
+      </div>
       <Field>
         <FieldLabel htmlFor="pf-description">Description</FieldLabel>
         <Textarea
@@ -573,144 +629,6 @@ export function PortfolioFormView({
           required={!deferSubmit}
         />
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="pf-category">Category</FieldLabel>
-          <PaginatedCategorySelect
-            id="pf-category"
-            className="w-full"
-            value={draft.categoryId}
-            options={categoryOptions}
-            disabled={loadingParents && !categoryOptions.length}
-            loading={loadingParents}
-            loadingMore={loadingMoreParents}
-            hasMore={categoryHasMore}
-            placeholder="Select category"
-            onChange={(nextId, category) => {
-              setDraft((current) => ({
-                ...current,
-                categoryId: nextId,
-                categoryName: category?.name ?? "",
-              }));
-            }}
-            onLoadMore={() => {
-              void dispatch(fetchParentCategories({ append: true }));
-            }}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="pf-services">Fixed services</FieldLabel>
-          <PaginatedMultiSelect
-            id="pf-services"
-            className="w-full"
-            values={draft.fixedServiceIds}
-            options={serviceOptions}
-            disabled={loadingServices && !serviceOptions.length}
-            loading={loadingServices}
-            loadingMore={loadingMoreServices}
-            hasMore={servicesHasMore}
-            placeholder="Select fixed services"
-            emptyLabel="No fixed services yet"
-            emptyAction={{
-              label: "Add fixed service",
-              href: "/pro/dashboard/services/new",
-            }}
-            onChange={(ids) =>
-              setDraft((current) => ({
-                ...current,
-                fixedServiceIds: ids,
-              }))
-            }
-            onLoadMore={() => {
-              if (loadingMoreServices || !servicesHasMore) return;
-              void loadFixedServicesPage(servicesPage + 1, true);
-            }}
-          />
-        </Field>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="pf-date">Project date</FieldLabel>
-          <Input
-            id="pf-date"
-            type="date"
-            value={draft.projectDate}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                projectDate: event.target.value,
-              }))
-            }
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="pf-duration">Duration</FieldLabel>
-          <Input
-            id="pf-duration"
-            value={draft.duration}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                duration: event.target.value,
-              }))
-            }
-            placeholder="3 days"
-          />
-        </Field>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="pf-cost">Cost</FieldLabel>
-          <Input
-            id="pf-cost"
-            type="text"
-            inputMode="decimal"
-            placeholder="0"
-            value={draft.cost}
-            onChange={(event) => {
-              const next = parseCostInput(event.target.value);
-              if (next === null) return;
-              setDraft((current) => ({ ...current, cost: next }));
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.key === "-" ||
-                event.key === "e" ||
-                event.key === "E" ||
-                event.key === "+"
-              ) {
-                event.preventDefault();
-              }
-            }}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="pf-tags">Tags</FieldLabel>
-          <Input
-            id="pf-tags"
-            value={draft.tagsInput}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                tagsInput: event.target.value,
-              }))
-            }
-            placeholder="bathroom, remodel, plumbing"
-          />
-        </Field>
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox
-          checked={draft.isFeatured}
-          onCheckedChange={(checked) =>
-            setDraft((current) => ({
-              ...current,
-              isFeatured: checked === true,
-            }))
-          }
-        />
-        Feature this project on the public profile
-      </label>
     </FieldGroup>
   );
 
@@ -718,7 +636,7 @@ export function PortfolioFormView({
     <>
       <p className="text-sm font-semibold">Project photos</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Upload media assets. Mark cover, before, and after as needed.
+        Upload project photos.
         {deferSubmit
           ? " Optional — leave empty to skip adding a project on Submit."
           : ""}
@@ -760,90 +678,39 @@ export function PortfolioFormView({
       </button>
 
       {draft.media.length ? (
-        <ul className="mt-4 flex flex-col gap-3">
+        <ul className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {draft.media.map((item, index) => (
             <li
               key={`${item.url}-${index}`}
-              className={cn(
-                "flex flex-col gap-3 rounded-xl border p-3 sm:flex-row",
-                item.isCover
-                  ? "border-primary ring-2 ring-primary/20"
-                  : "border-input",
-              )}
+              className="group relative aspect-square overflow-hidden rounded-lg border border-input"
             >
-              <div className="relative h-28 w-full overflow-hidden rounded-lg sm:h-32 sm:w-40 shrink-0">
-                <Image
-                  src={item.url}
-                  alt=""
-                  fill
-                  sizes="160px"
-                  className="object-cover"
-                  unoptimized={item.url.startsWith("http")}
-                />
-                <button
-                  type="button"
-                  className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-600"
-                  aria-label="Remove photo"
-                  onClick={() =>
-                    setDraft((current) => {
-                      const next = current.media.filter((_, i) => i !== index);
-                      if (
-                        next.length &&
-                        !next.some((media) => media.isCover)
-                      ) {
-                        next[0] = { ...next[0], isCover: true };
-                      }
-                      return { ...current, media: next };
-                    })
-                  }
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <Input
-                  value={item.caption}
-                  placeholder="Caption"
-                  onChange={(event) =>
-                    updateMedia(index, { caption: event.target.value })
-                  }
-                />
-                <div className="flex flex-wrap gap-3 text-xs">
-                  <label className="flex items-center gap-2">
-                    <Checkbox
-                      checked={item.isCover}
-                      onCheckedChange={(checked) =>
-                        updateMedia(index, {
-                          isCover: checked === true,
-                        })
-                      }
-                    />
-                    Cover
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <Checkbox
-                      checked={item.isBefore}
-                      onCheckedChange={(checked) =>
-                        updateMedia(index, {
-                          isBefore: checked === true,
-                        })
-                      }
-                    />
-                    Before
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <Checkbox
-                      checked={item.isAfter}
-                      onCheckedChange={(checked) =>
-                        updateMedia(index, {
-                          isAfter: checked === true,
-                        })
-                      }
-                    />
-                    After
-                  </label>
-                </div>
-              </div>
+              <Image
+                src={item.url}
+                alt=""
+                fill
+                sizes="80px"
+                className="object-cover"
+                unoptimized={item.url.startsWith("http")}
+              />
+              <button
+                type="button"
+                className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-600"
+                aria-label="Remove photo"
+                onClick={() =>
+                  setDraft((current) => {
+                    const next = current.media.filter((_, i) => i !== index);
+                    if (
+                      next.length &&
+                      !next.some((media) => media.isCover)
+                    ) {
+                      next[0] = { ...next[0], isCover: true };
+                    }
+                    return { ...current, media: next };
+                  })
+                }
+              >
+                <Trash2 className="size-3" />
+              </button>
             </li>
           ))}
         </ul>
@@ -927,7 +794,7 @@ export function PortfolioFormView({
     <PortalPage
       eyebrow="Portfolio"
       title={title}
-      description="Showcase a completed job with before/after photos, cost, and linked fixed services."
+      description="Showcase a completed job with photos, category, and a short project summary."
       badge={
         <StatusPill
           label={statusLabel(draft.status)}
@@ -997,43 +864,19 @@ export function PortfolioFormView({
                     ? toTitleCase(draft.title)
                     : "Untitled project"}
                 </h2>
+                {(draft.categoryName || draft.subcategoryName) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {[draft.categoryName, draft.subcategoryName]
+                      .filter(Boolean)
+                      .map((label) => toTitleCase(label))
+                      .join(" · ")}
+                  </p>
+                )}
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   {draft.description.trim() ||
                     "Customer-facing project summary appears here."}
                 </p>
               </div>
-              <div className="grid gap-3 rounded-xl bg-[#eef1f5] p-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                    Cost
-                  </p>
-                  <p className="mt-1 text-sm font-medium">
-                    {costNumber(draft.cost) !== null
-                      ? formatMoney(costNumber(draft.cost)!)
-                      : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                    Duration
-                  </p>
-                  <p className="mt-1 text-sm font-medium">
-                    {draft.duration.trim() || "—"}
-                  </p>
-                </div>
-              </div>
-              {parseTags(draft.tagsInput).length ? (
-                <ul className="flex flex-wrap gap-1.5">
-                  {parseTags(draft.tagsInput).map((tag) => (
-                    <li
-                      key={tag}
-                      className="rounded-full bg-[#eef1f5] px-2.5 py-1 text-xs font-medium"
-                    >
-                      {tag}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </div>
           </section>
         </aside>

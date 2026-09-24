@@ -174,6 +174,13 @@ export function buildEstimateSnapshot(
         unitPrice: item.unitPrice,
       }));
   const money = moneyFromLines(lines);
+  const companySig = estimate.companySignature;
+  const companySignedBy =
+    extras.companySignedBy || companySig?.signedBy || undefined;
+  const companySignedAt =
+    extras.companySignedAt || companySig?.signedAt || undefined;
+  const companySignatureDataUrl =
+    extras.companySignatureDataUrl || companySig?.imageBase64 || undefined;
   return {
     token,
     estimateId: estimate.id,
@@ -213,9 +220,9 @@ export function buildEstimateSnapshot(
     tax: money.tax || estimate.tax,
     total: money.total || estimate.total,
     createdAt: new Date().toISOString(),
-    companySignedBy: extras.companySignedBy,
-    companySignedAt: extras.companySignedAt,
-    companySignatureDataUrl: extras.companySignatureDataUrl,
+    companySignedBy,
+    companySignedAt,
+    companySignatureDataUrl,
     siteVisit: estimate.siteVisit
       ? {
           employeeId: estimate.siteVisit.employeeId,

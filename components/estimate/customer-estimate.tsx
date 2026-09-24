@@ -194,17 +194,24 @@ function mapPublicEstimateToSnapshot(
     },
   );
 
-  const companySignedBy =
-    stringValue(companySignature?.signedBy) ||
-    stringValue(estimate.companySignedBy) ||
-    stringValue(provider.companyName);
-  const companySignedAt =
-    toIso(companySignature?.signedAt) || toIso(estimate.companySignedAt);
   const companySignatureDataUrl =
     stringValue(companySignature?.signatureImageBase64) ||
     stringValue(companySignature?.imageBase64) ||
+    stringValue(companySignature?.dataUrl) ||
     stringValue(companySignature?.signature) ||
     stringValue(estimate.companySignatureDataUrl);
+  const companySignedAt =
+    toIso(companySignature?.signedAt) || toIso(estimate.companySignedAt);
+  // Only treat as company-signed when we have an image and/or a real signedAt
+  // (do not fall back to companyName alone — that left a blank signature line).
+  const hasCompanySignature = Boolean(
+    companySignatureDataUrl || companySignedAt,
+  );
+  const companySignedBy = hasCompanySignature
+    ? stringValue(companySignature?.signedBy) ||
+      stringValue(estimate.companySignedBy) ||
+      stringValue(provider.companyName)
+    : "";
 
   const siteVisitRaw = asRecord(estimate.siteVisit);
   let siteVisit: EstimateShareSiteVisit | undefined = undefined;
@@ -448,6 +455,19 @@ export function CustomerEstimatePage({
         // hit /user/estimates/:id even if a share token also exists.
         if (useUserApi && lookupId) {
           mapped.snapshot.estimateId = lookupId;
+        }
+        // If API has no company signature yet, merge from local Pro share
+        // snapshot (same browser) so Send-for-approval signatures still show.
+        if (!mapped.snapshot.companySignatureDataUrl) {
+          const local = share.snapshotForEstimate(mapped.snapshot.estimateId);
+          if (local?.companySignatureDataUrl) {
+            mapped.snapshot.companySignatureDataUrl =
+              local.companySignatureDataUrl;
+            mapped.snapshot.companySignedBy =
+              local.companySignedBy || mapped.snapshot.companySignedBy;
+            mapped.snapshot.companySignedAt =
+              local.companySignedAt || mapped.snapshot.companySignedAt;
+          }
         }
         if (shareToken) rememberCustomerEstimateToken(shareToken);
         setAccessKey(

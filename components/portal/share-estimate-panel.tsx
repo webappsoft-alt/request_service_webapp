@@ -99,7 +99,27 @@ export function EstimateShareTab({
       return "";
     }
     try {
-      const shared = await shareEstimateApi(estimate.id);
+      const existingSig =
+        estimate.companySignature?.imageBase64 ||
+        snapshot?.companySignatureDataUrl ||
+        "";
+      const existingBy =
+        estimate.companySignature?.signedBy ||
+        snapshot?.companySignedBy ||
+        "";
+      const shared = await shareEstimateApi(
+        estimate.id,
+        existingSig || existingBy
+          ? {
+              companySignedBy: existingBy || undefined,
+              companySignedAt:
+                estimate.companySignature?.signedAt ||
+                snapshot?.companySignedAt ||
+                new Date().toISOString(),
+              companySignatureDataUrl: existingSig || undefined,
+            }
+          : undefined,
+      );
       const token = String(shared.shareToken || "").trim();
       if (!token) {
         toast.error("The CRM did not return a customer share link.");

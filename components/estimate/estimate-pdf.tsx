@@ -151,7 +151,12 @@ export function EstimatePdfDocument({
             title="Company authorization"
             name={snapshot.companySignedBy || snapshot.companyName}
             date={snapshot.companySignedAt}
-            image={snapshot.companySignatureDataUrl}
+            image={
+              snapshot.companySignatureDataUrl ||
+              (snapshot.companySignedAt && snapshot.companySignedBy
+                ? typedSignature(snapshot.companySignedBy)
+                : undefined)
+            }
             slot={companySlot}
             empty="Authorized company signature"
           />

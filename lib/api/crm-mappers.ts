@@ -1021,15 +1021,16 @@ function mapApprovalSignature(value: unknown): Estimate["signature"] | undefined
   if (!record) return undefined;
   const signedAt = toIsoString(record.signedAt);
   const signedBy = trimmed(record.signedBy);
-  if (!signedAt && !signedBy) return undefined;
   const imageBase64 =
     trimmed(record.signatureImageBase64) ||
     trimmed(record.imageBase64) ||
     trimmed(record.dataUrl) ||
+    trimmed(record.signature) ||
     undefined;
+  if (!signedAt && !signedBy && !imageBase64) return undefined;
   return {
-    signedBy,
-    signedAt,
+    signedBy: signedBy || "",
+    signedAt: signedAt || new Date().toISOString(),
     ipAddress: trimmed(record.ipAddress) || undefined,
     imageBase64,
   };

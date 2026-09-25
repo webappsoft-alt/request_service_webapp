@@ -125,6 +125,10 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       if (activeThreadIdRef.current) {
         joinChatThread(activeThreadIdRef.current);
       }
+      // Re-sync sidebar / badge counts after connect or reconnect (shared socket only).
+      broadcastRealtime({ type: "SOCKET_RECONNECTED" });
+      broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload: { reason: "socket_connect" } });
+      broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload: { reason: "socket_connect" } });
       socket.emit("presence:support", {}, (res: { ok?: boolean; isOnline?: boolean }) => {
         if (res?.ok) setSupportOnline(Boolean(res.isOnline));
       });

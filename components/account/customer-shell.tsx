@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search, X } from "lucide-react";
@@ -40,15 +40,38 @@ import { customerPaths } from "@/lib/customer-paths";
 import { getAdminDirectUnreadCount, listPublicChatThreads } from "@/lib/api/chat-client";
 import {
   fetchNotifications,
+  isEstimateNotification,
+  isInvoiceNotification,
+  isOrderNotification,
   markAllNotificationsRead,
   markNotificationRead,
+  markUnreadNotificationsWhere,
   normalizeSocketNotification,
   notificationHref,
   type AppNotification,
 } from "@/lib/api/notifications-client";
+import {
+  getCustomerInboxClearState,
+  reopenCustomerInboxBadge,
+  setCustomerInboxCleared,
+  subscribeCustomerInboxClears,
+} from "@/components/account/customer-inbox-clears";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser, type AuthUser } from "@/store/authSlice";
+
+function countUnreadByKind(items: AppNotification[]) {
+  let estimates = 0;
+  let invoices = 0;
+  let orders = 0;
+  for (const item of items) {
+    if (item.isRead) continue;
+    if (isEstimateNotification(item)) estimates += 1;
+    else if (isInvoiceNotification(item)) invoices += 1;
+    else if (isOrderNotification(item)) orders += 1;
+  }
+  return { estimates, invoices, orders };
+}
 
 function RecordTab({
   href,
@@ -236,6 +259,20 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  /** Sidebar badges — independent of header mark-all-read. */
+  const [sidebarBase, setSidebarBase] = useState({
+    estimates: 0,
+    invoices: 0,
+    orders: 0,
+  });
+  const [sidebarBump, setSidebarBump] = useState({
+    estimates: 0,
+    invoices: 0,
+    orders: 0,
+  });
+  const [clears, setClears] = useState(getCustomerInboxClearState);
+  const skipSidebarSyncRef = useRef(false);
+  const clearedTabRef = useRef<string | null>(null);
   const [headerSearch, setHeaderSearch] = useState("");
 
   const menuUser: AuthUser = authUser
@@ -281,15 +318,82 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       });
       setNotifications(result.items);
       setUnreadNotifications(result.unreadCount);
+      // Do not wipe sidebar counts when Mark all read just cleared the feed.
+      if (skipSidebarSyncRef.current) {
+        skipSidebarSyncRef.current = false;
+        return;
+      }
+      const counts = countUnreadByKind(result.items);
+      const clearState = getCustomerInboxClearState();
+      // Never lower sidebar badges from a notifications refetch (Mark all read
+      // zeros unread in DB). Tab-open and live bumps own decreases / increases.
+      setSidebarBase((prev) => ({
+        estimates: clearState.estimates
+          ? prev.estimates
+          : Math.max(prev.estimates, counts.estimates),
+        invoices: clearState.invoices
+          ? prev.invoices
+          : Math.max(prev.invoices, counts.invoices),
+        orders: clearState.orders
+          ? prev.orders
+          : Math.max(prev.orders, counts.orders),
+      }));
     } catch {
       // Keep last known counts if the feed fails.
     }
   }, [authUser?.email, authUser?.id]);
 
   useEffect(() => {
+    return subscribeCustomerInboxClears(() => {
+      setClears(getCustomerInboxClearState());
+    });
+  }, []);
+
+  useEffect(() => {
     void refreshChatBadge();
     void refreshNotifications();
   }, [pathname, refreshChatBadge, refreshNotifications]);
+
+  // Opening a customer tab resets only that sidebar badge (existing mark-read flow).
+  useEffect(() => {
+    if (pathname.startsWith(customerPaths.estimates)) {
+      if (clearedTabRef.current === "estimates") return;
+      clearedTabRef.current = "estimates";
+      setCustomerInboxCleared("estimates", true);
+      setSidebarBump((current) => ({ ...current, estimates: 0 }));
+      setSidebarBase((current) => ({ ...current, estimates: 0 }));
+      window.dispatchEvent(
+        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_ESTIMATES_TAB_OPENED" } }),
+      );
+      void markUnreadNotificationsWhere(isEstimateNotification).catch(() => undefined);
+      return;
+    }
+    if (pathname.startsWith(customerPaths.invoices)) {
+      if (clearedTabRef.current === "invoices") return;
+      clearedTabRef.current = "invoices";
+      setCustomerInboxCleared("invoices", true);
+      setSidebarBump((current) => ({ ...current, invoices: 0 }));
+      setSidebarBase((current) => ({ ...current, invoices: 0 }));
+      window.dispatchEvent(
+        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_INVOICES_TAB_OPENED" } }),
+      );
+      void markUnreadNotificationsWhere(isInvoiceNotification).catch(() => undefined);
+      return;
+    }
+    if (pathname.startsWith(customerPaths.orders)) {
+      if (clearedTabRef.current === "orders") return;
+      clearedTabRef.current = "orders";
+      setCustomerInboxCleared("orders", true);
+      setSidebarBump((current) => ({ ...current, orders: 0 }));
+      setSidebarBase((current) => ({ ...current, orders: 0 }));
+      window.dispatchEvent(
+        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_ORDERS_TAB_OPENED" } }),
+      );
+      void markUnreadNotificationsWhere(isOrderNotification).catch(() => undefined);
+      return;
+    }
+    clearedTabRef.current = null;
+  }, [pathname]);
 
   useEffect(() => {
     return subscribeRealtime((detail) => {
@@ -326,6 +430,25 @@ export function CustomerShell({ children }: { children: ReactNode }) {
           });
           if (!mapped.isRead && !(isChatMsg && viewingAdminDirect)) {
             setUnreadNotifications((count) => count + 1);
+            if (isEstimateNotification(mapped)) {
+              reopenCustomerInboxBadge("estimates");
+              setSidebarBump((current) => ({
+                ...current,
+                estimates: current.estimates + 1,
+              }));
+            } else if (isInvoiceNotification(mapped)) {
+              reopenCustomerInboxBadge("invoices");
+              setSidebarBump((current) => ({
+                ...current,
+                invoices: current.invoices + 1,
+              }));
+            } else if (isOrderNotification(mapped)) {
+              reopenCustomerInboxBadge("orders");
+              setSidebarBump((current) => ({
+                ...current,
+                orders: current.orders + 1,
+              }));
+            }
           }
         }
         void refreshNotifications();
@@ -389,35 +512,55 @@ export function CustomerShell({ children }: { children: ReactNode }) {
           });
           setUnreadNotifications((count) => count + 1);
         }
+        reopenCustomerInboxBadge("orders");
+        setSidebarBump((current) => ({ ...current, orders: current.orders + 1 }));
+        void refreshNotifications();
+        return;
+      }
+      if (
+        type === "ESTIMATE_SENT" ||
+        type === "ESTIMATE_UPDATED" ||
+        type === "ESTIMATE_ACCEPTED"
+      ) {
+        reopenCustomerInboxBadge("estimates");
+        setSidebarBump((current) => ({
+          ...current,
+          estimates: current.estimates + 1,
+        }));
+        void refreshNotifications();
+        return;
+      }
+      if (type === "INVOICE_SENT") {
+        reopenCustomerInboxBadge("invoices");
+        setSidebarBump((current) => ({
+          ...current,
+          invoices: current.invoices + 1,
+        }));
         void refreshNotifications();
         return;
       }
       if (
         type === "CUSTOMER_BADGE_INVALIDATE" ||
-        type === "ESTIMATE_SENT" ||
-        type === "INVOICE_SENT" ||
-        type === "SERVICE_SCHEDULED"
+        type === "SERVICE_SCHEDULED" ||
+        type === "SOCKET_RECONNECTED"
       ) {
         void refreshNotifications();
-        if (type === "CUSTOMER_BADGE_INVALIDATE" || type === "SERVICE_SCHEDULED") {
-          void refreshChatBadge();
-        }
+        void refreshChatBadge();
       }
     });
   }, [refreshChatBadge, refreshNotifications]);
 
-  const unreadEstimates = notifications.filter(
-    (item) => !item.isRead && /ESTIMATE/i.test(item.type),
-  ).length;
-  const unreadInvoices = notifications.filter(
-    (item) => !item.isRead && /INVOICE/i.test(item.type),
-  ).length;
-  const unreadOrders = notifications.filter(
-    (item) =>
-      !item.isRead &&
-      (/ORDER/i.test(item.type) || /BOOKING/i.test(item.type) || /WORK_/i.test(item.type)),
-  ).length;
-  const bellCount = unreadNotifications + unreadMessages;
+  const unreadEstimates = clears.estimates
+    ? sidebarBump.estimates
+    : Math.max(sidebarBase.estimates, sidebarBump.estimates);
+  const unreadInvoices = clears.invoices
+    ? sidebarBump.invoices
+    : Math.max(sidebarBase.invoices, sidebarBump.invoices);
+  const unreadOrders = clears.orders
+    ? sidebarBump.orders
+    : Math.max(sidebarBase.orders, sidebarBump.orders);
+  // Header notification count only — messages stay on the sidebar.
+  const bellCount = unreadNotifications;
 
   async function onOpenNotification(item: AppNotification) {
     const href = notificationHref(item);
@@ -438,14 +581,18 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   }
 
   async function onMarkAllRead() {
+    // Optimistic header clear — do not touch sidebar badge state.
+    skipSidebarSyncRef.current = true;
+    setUnreadNotifications(0);
+    setNotifications((current) =>
+      current.map((row) => ({ ...row, isRead: true, readAt: new Date().toISOString() })),
+    );
     try {
       await markAllNotificationsRead();
       setUnreadNotifications(0);
-      setNotifications((current) =>
-        current.map((row) => ({ ...row, isRead: true, readAt: new Date().toISOString() })),
-      );
     } catch {
-      // ignore
+      skipSidebarSyncRef.current = false;
+      void refreshNotifications();
     }
   }
 

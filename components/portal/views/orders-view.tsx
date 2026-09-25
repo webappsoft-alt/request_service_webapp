@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { FilterTabs } from "@/components/portal/filter-tabs";
 import { markUnreadBookingNotificationsRead } from "@/lib/api/notifications-client";
+import { ackInboxBadges } from "@/lib/api/crm-client";
 import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import {
   AcceptOrderModal,
@@ -144,13 +145,14 @@ export function OrdersView() {
     setSearchInput(search);
   }, [search]);
 
-  // Opening Fixed service orders clears sidebar badge + dashboard booking alert.
+  // Opening Fixed service orders ACKs the sidebar badge (persists across refresh).
   useEffect(() => {
     setPortalInboxCleared("orders", true);
     window.dispatchEvent(
       new CustomEvent("rs-realtime", { detail: { type: "ORDERS_TAB_OPENED" } }),
     );
     void markUnreadBookingNotificationsRead().catch(() => undefined);
+    void ackInboxBadges(["orders"]).catch(() => undefined);
   }, []);
 
   // Sync URL tab status with Redux statusFilter

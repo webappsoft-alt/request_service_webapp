@@ -2241,6 +2241,24 @@ export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmI
   };
 }
 
+/** Persist sidebar badge ACK when opening Leads / Orders / Estimates. */
+export async function ackInboxBadges(
+  kinds: Array<"leads" | "orders" | "estimates">,
+  options?: CrmRequestOptions,
+): Promise<CrmInboxSummary> {
+  const response = await postData(
+    providerCrmApi.inboxSummaryAck,
+    { kinds },
+    { silent: options?.silent ?? true },
+  );
+  return mapInboxSummary(response) || {
+    newLeads: 0,
+    unreadChats: 0,
+    pendingOrders: 0,
+    total: 0,
+  };
+}
+
 export type ProviderReportsQuery = CrmRequestOptions & {
   months?: number;
 };

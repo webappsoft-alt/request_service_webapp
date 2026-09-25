@@ -184,6 +184,48 @@ export async function markUnreadBookingNotificationsRead() {
   return { updatedCount: bookings.length, unreadCount: refreshed.unreadCount };
 }
 
+/** Mark unread notifications matching a type predicate (customer tab open). */
+export async function markUnreadNotificationsWhere(
+  predicate: (item: AppNotification) => boolean,
+) {
+  const unread = await fetchNotifications({
+    page: 1,
+    limit: 50,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  const matched = unread.items.filter(predicate);
+  if (!matched.length) {
+    return { updatedCount: 0, unreadCount: unread.unreadCount };
+  }
+  await Promise.allSettled(matched.map((item) => markNotificationRead(item.id)));
+  const refreshed = await fetchNotifications({
+    page: 1,
+    limit: 1,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  return { updatedCount: matched.length, unreadCount: refreshed.unreadCount };
+}
+
+export function isEstimateNotification(item: AppNotification) {
+  return /ESTIMATE/i.test(item.type);
+}
+
+export function isInvoiceNotification(item: AppNotification) {
+  return /INVOICE/i.test(item.type);
+}
+
+export function isOrderNotification(item: AppNotification) {
+  return (
+    /ORDER/i.test(item.type) ||
+    /BOOKING/i.test(item.type) ||
+    /WORK_/i.test(item.type)
+  );
+}
+
 export function notificationHref(
   item: AppNotification,
   portal: "customer" | "provider" = "customer",

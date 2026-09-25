@@ -50,9 +50,11 @@ export function WorkSubnav() {
             ? inbox.newLeads
             : item.href === "/pro/dashboard/messages"
               ? inbox.unreadChats
-              : item.href === "/pro/dashboard/orders"
-                ? inbox.pendingOrders
-                : undefined,
+              : item.href === "/pro/dashboard/estimates"
+                ? inbox.pendingEstimates
+                : item.href === "/pro/dashboard/orders"
+                  ? inbox.pendingOrders
+                  : undefined,
       }))}
     />
   );

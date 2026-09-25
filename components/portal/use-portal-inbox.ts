@@ -261,10 +261,11 @@ export function usePortalInbox() {
         type === "INBOX_SUMMARY_INVALIDATE" ||
         type === "CHAT_MESSAGE" ||
         type === "CHAT_THREAD_UPDATED" ||
-        type === "CHAT_READ_RECEIPT"
+        type === "CHAT_READ_RECEIPT" ||
+        type === "SOCKET_RECONNECTED"
       ) {
         void refreshNotifBadges();
-        if (type === "INBOX_SUMMARY_INVALIDATE") {
+        if (type === "INBOX_SUMMARY_INVALIDATE" || type === "SOCKET_RECONNECTED") {
           void refreshPendingOrders();
         }
       }
@@ -298,9 +299,11 @@ export function usePortalInbox() {
   }, [chat.threads, newLeads]);
 
   const summaryLeads = crm.enabled ? crm.inboxSummary.newLeads || 0 : 0;
+  // Badge = unseen items only (inbox-summary respects server ACK watermarks).
+  // Do not use full CRM list lengths (status=new / BOOKING_REQUESTED totals).
   const newLeadCount = clears.leads
     ? Math.max(unreadLeadNotifs, liveLeadBump)
-    : Math.max(summaryLeads, newLeads.length, unreadLeadNotifs, liveLeadBump);
+    : Math.max(summaryLeads, unreadLeadNotifs, liveLeadBump);
 
   const unreadChats = Math.max(
     chat.threads.length > 0
@@ -312,9 +315,7 @@ export function usePortalInbox() {
   );
 
   const pendingOrdersRaw = Math.max(
-    pendingFromApi,
-    pendingFromStore,
-    crm.enabled ? crm.inboxSummary.pendingOrders || 0 : 0,
+    crm.enabled ? crm.inboxSummary.pendingOrders || 0 : pendingFromApi,
     unreadBookingNotifs,
     liveOrderBump,
   );

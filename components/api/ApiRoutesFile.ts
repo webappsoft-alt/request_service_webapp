@@ -169,6 +169,7 @@ export const providerCrmApi = {
   chatMessages: (id: string) => `provider/chats/${id}/messages`,
   chatRead: (id: string) => `provider/chats/${id}/read`,
   inboxSummary: "provider/chats/inbox-summary",
+  inboxSummaryAck: "provider/chats/inbox-summary/ack",
   /** GET list / POST create universal CRM notes */
   notes: "provider/notes",
   /** GET/PUT/DELETE one note by id */

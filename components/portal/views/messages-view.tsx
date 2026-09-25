@@ -34,6 +34,7 @@ import {
   getInitials,
 } from "@/lib/chat-format";
 import { cn } from "@/lib/utils";
+import { ADMIN_DIRECT_THREAD_ID } from "@/lib/api/crm-mappers";
 
 type FilterTab = "all" | "unread" | "leads";
 
@@ -48,6 +49,7 @@ export function MessagesView() {
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const viewingThreadIdRef = useRef<string | null>(null);
 
   const { threads, send, markRead, loading, refresh } = useChatThreads();
   const {
@@ -58,6 +60,7 @@ export function MessagesView() {
     markThreadRead,
     getPresence,
     queryUserPresence,
+    supportOnline,
   } = useRealtime();
 
   const lastMarkedThreadIdRef = useRef<string | null>(null);
@@ -108,6 +111,8 @@ export function MessagesView() {
     return filtered[0] ?? threads[0] ?? null;
   }, [filtered, selectedId, threads]);
 
+  viewingThreadIdRef.current = selected?.id ?? null;
+
   // Open mobile chat when a thread is selected
   useEffect(() => {
     if (selectedId) {
@@ -130,11 +135,14 @@ export function MessagesView() {
       (selected.unreadForProvider ?? 0) > 0 ||
       selected.messages.some((m) => m.from !== "provider" && !m.isRead);
 
-    if (hasUnread || lastMarkedThreadIdRef.current !== selected.id) {
-      lastMarkedThreadIdRef.current = selected.id;
-      markThreadReadCallbackRef.current(selected.id);
-      markReadCallbackRef.current(selected.id);
+    // Only mark when there is unread content — not on bare first-select
+    if (!hasUnread) return;
+    if (lastMarkedThreadIdRef.current === `${selected.id}:${selected.messages.length}`) {
+      return;
     }
+    lastMarkedThreadIdRef.current = `${selected.id}:${selected.messages.length}`;
+    markThreadReadCallbackRef.current(selected.id);
+    markReadCallbackRef.current(selected.id);
   }, [selected?.id, selected?.messages?.length, selected?.unreadForProvider]);
 
   // Query live presence only when the set of customer IDs changes, not on every message
@@ -185,7 +193,7 @@ export function MessagesView() {
   }, [selected?.id]);
 
   useEffect(() => {
-    if (!selected?.id || selected.id === "admin-direct") return;
+    if (!selected?.id) return;
     joinThread(selected.id);
     return () => leaveThread(selected.id);
   }, [joinThread, leaveThread, selected?.id]);
@@ -194,10 +202,12 @@ export function MessagesView() {
     ? getPresence(selected.customerUserId)
     : undefined;
   const isParticipantOnline =
-    participantPresence?.isOnline ??
-    selected?.presence?.customer?.isOnline ??
-    selected?.isOnline ??
-    false;
+    selected?.id === ADMIN_DIRECT_THREAD_ID
+      ? supportOnline || Boolean(selected?.isOnline)
+      : participantPresence?.isOnline ??
+        selected?.presence?.customer?.isOnline ??
+        selected?.isOnline ??
+        false;
 
   const unreadCount = useMemo(
     () => threads.filter((item) => item.unreadForProvider > 0).length,
@@ -330,15 +340,21 @@ export function MessagesView() {
                     ? getPresence(thread.customerUserId)
                     : undefined;
                   const isCustomerOnline =
-                    customerPresence?.isOnline ??
-                    thread.presence?.customer?.isOnline ??
-                    thread.isOnline ??
-                    false;
+                    thread.id === ADMIN_DIRECT_THREAD_ID
+                      ? supportOnline || Boolean(thread.isOnline)
+                      : customerPresence?.isOnline ??
+                        thread.presence?.customer?.isOnline ??
+                        thread.isOnline ??
+                        false;
 
                   return (
                     <Link
                       key={thread.id}
-                      href={`/pro/dashboard/messages?thread=${thread.id}`}
+                      href={
+                        thread.id === ADMIN_DIRECT_THREAD_ID
+                          ? `/pro/dashboard/messages?direct=admin`
+                          : `/pro/dashboard/messages?thread=${thread.id}`
+                      }
                       onClick={() => setMobileChatOpen(true)}
                       className={cn(
                         "group relative flex items-start gap-3 p-3 transition-colors text-left",
@@ -600,11 +616,23 @@ export function MessagesView() {
                 <ChatPanel
                   messages={selected.messages}
                   self="provider"
-                  recipientUnreadCount={selected.unreadForCustomer}
-                  otherName={selected.customerName}
+                  recipientUnreadCount={
+                    selected.id === ADMIN_DIRECT_THREAD_ID
+                      ? (selected.unreadForAdmin ?? 0)
+                      : selected.unreadForCustomer
+                  }
+                  otherName={
+                    selected.id === ADMIN_DIRECT_THREAD_ID
+                      ? "Platform Support"
+                      : selected.customerName
+                  }
                   otherAvatar={selected.customerAvatar}
                   isOtherTyping={isOtherTyping}
-                  otherTypingName={selected.customerName}
+                  otherTypingName={
+                    selected.id === ADMIN_DIRECT_THREAD_ID
+                      ? "Platform Support"
+                      : selected.customerName
+                  }
                   onSend={async (text, attachments) => {
                     await send(selected.id, "provider", text, attachments);
                   }}

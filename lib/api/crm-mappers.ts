@@ -1745,6 +1745,7 @@ export function mapAdminDirectChat(
     unreadForProvider: viewer === "provider" ? unreadPeer : 0,
     unreadForCustomer: viewer === "customer" ? unreadPeer : 0,
     unreadForAdmin: Math.max(0, numberValue(record.unreadForAdmin)),
+    isOnline: Boolean(record.supportOnline ?? record.isOnline),
     messages,
     updatedAt: lastAt,
   };

@@ -302,15 +302,29 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         type === "DIRECT_CHAT_READ"
       ) {
         void refreshChatBadge();
+        if (type === "DIRECT_CHAT_READ") {
+          void refreshNotifications();
+        }
       }
       if (type === "NEW_NOTIFICATION") {
         const mapped = normalizeSocketNotification(detail.payload);
         if (mapped) {
+          const isChatMsg = String(mapped.type || "") === "NEW_CHAT_MESSAGE";
+          const viewingAdminDirect =
+            typeof window !== "undefined" &&
+            window.location.pathname.includes("/messages") &&
+            (new URLSearchParams(window.location.search).get("direct") === "admin" ||
+              new URLSearchParams(window.location.search).get("thread") === "admin-direct");
+
           setNotifications((current) => {
             if (current.some((row) => row.id === mapped.id)) return current;
-            return [mapped, ...current].slice(0, 20);
+            const entry =
+              isChatMsg && viewingAdminDirect
+                ? { ...mapped, isRead: true }
+                : mapped;
+            return [entry, ...current].slice(0, 20);
           });
-          if (!mapped.isRead) {
+          if (!mapped.isRead && !(isChatMsg && viewingAdminDirect)) {
             setUnreadNotifications((count) => count + 1);
           }
         }

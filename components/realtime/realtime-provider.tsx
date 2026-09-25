@@ -40,6 +40,10 @@ type RealtimeContextValue = {
   queryUserPresence: (userIds: string | string[]) => void;
   getPresence: (userId?: string | null) => UserPresence | undefined;
   presenceMap: Record<string, UserPresence>;
+  /** Platform Support (any admin) online for admin-direct chats */
+  supportOnline: boolean;
+  /** Currently joined/active thread id (incl. admin-direct) */
+  activeThreadId: string | null;
   lastChatThreadId: string | null;
   lastNotificationAt: number;
 };
@@ -53,6 +57,8 @@ const RealtimeContext = createContext<RealtimeContextValue>({
   queryUserPresence: () => {},
   getPresence: () => undefined,
   presenceMap: {},
+  supportOnline: false,
+  activeThreadId: null,
   lastChatThreadId: null,
   lastNotificationAt: 0,
 });
@@ -105,6 +111,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   const [lastChatThreadId, setLastChatThreadId] = useState<string | null>(null);
   const [lastNotificationAt, setLastNotificationAt] = useState(0);
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
+  const [supportOnline, setSupportOnline] = useState(false);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const activeThreadIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -117,6 +125,58 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       if (activeThreadIdRef.current) {
         joinChatThread(activeThreadIdRef.current);
       }
+      socket.emit("presence:support", {}, (res: { ok?: boolean; isOnline?: boolean }) => {
+        if (res?.ok) setSupportOnline(Boolean(res.isOnline));
+      });
+      // Ask for full live online list (also pushed automatically as presence:snapshot)
+      socket.emit("presence:snapshot:get", {}, (res: {
+        ok?: boolean;
+        users?: Array<{
+          userId?: string | null;
+          guestEmail?: string | null;
+          isOnline?: boolean;
+          lastSeen?: string;
+          lastActiveAt?: string;
+          role?: string | null;
+        }>;
+        supportOnline?: boolean;
+      }) => {
+        if (!res?.ok) return;
+        applyPresenceSnapshot(res);
+      });
+    };
+
+    const applyPresenceSnapshot = (snapshot: {
+      users?: Array<{
+        userId?: string | null;
+        guestEmail?: string | null;
+        isOnline?: boolean;
+        lastSeen?: string;
+        lastActiveAt?: string;
+        role?: string | null;
+      }>;
+      supportOnline?: boolean;
+    }) => {
+      const users = Array.isArray(snapshot.users) ? snapshot.users : [];
+      if (users.length) {
+        setPresenceMap((prev) => {
+          const next = { ...prev };
+          for (const item of users) {
+            const key = item.userId || item.guestEmail?.toLowerCase();
+            if (!key) continue;
+            next[key] = {
+              isOnline: Boolean(item.isOnline ?? true),
+              lastSeen: item.lastSeen,
+              lastActiveAt: item.lastActiveAt,
+            };
+          }
+          return next;
+        });
+      }
+      if (typeof snapshot.supportOnline === "boolean") {
+        setSupportOnline(snapshot.supportOnline);
+      }
+      broadcastRealtime({ type: "PRESENCE_SNAPSHOT", payload: snapshot });
     };
 
     socket.on("connect", onConnect);
@@ -125,10 +185,33 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
     const handlePresence = (payload: {
       userId?: string | null;
       guestEmail?: string | null;
+      role?: string;
+      support?: boolean;
       isOnline: boolean;
       lastSeen?: string;
       lastActiveAt?: string;
     }) => {
+      if (payload?.support) {
+        setSupportOnline(Boolean(payload.isOnline));
+        broadcastRealtime({ type: "SUPPORT_PRESENCE", payload });
+        return;
+      }
+      const role = String(payload?.role || "").toLowerCase();
+      if (["admin", "owner", "moderator"].includes(role)) {
+        if (payload.isOnline) {
+          setSupportOnline(true);
+        } else {
+          // An admin went offline — re-check if any other admin remains
+          socket.emit(
+            "presence:support",
+            {},
+            (res: { ok?: boolean; isOnline?: boolean }) => {
+              if (res?.ok) setSupportOnline(Boolean(res.isOnline));
+            },
+          );
+        }
+        broadcastRealtime({ type: "SUPPORT_PRESENCE", payload: { isOnline: Boolean(payload.isOnline), support: true } });
+      }
       const key = payload?.userId || payload?.guestEmail?.toLowerCase();
       if (!key) return;
       setPresenceMap((prev) => ({
@@ -140,6 +223,28 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         },
       }));
       broadcastRealtime({ type: "USER_PRESENCE", payload });
+    };
+
+    const handleSupportPresence = (payload: {
+      isOnline?: boolean;
+      support?: boolean;
+    }) => {
+      setSupportOnline(Boolean(payload?.isOnline));
+      broadcastRealtime({ type: "SUPPORT_PRESENCE", payload });
+    };
+
+    const handlePresenceSnapshot = (payload: {
+      users?: Array<{
+        userId?: string | null;
+        guestEmail?: string | null;
+        isOnline?: boolean;
+        lastSeen?: string;
+        lastActiveAt?: string;
+        role?: string | null;
+      }>;
+      supportOnline?: boolean;
+    }) => {
+      applyPresenceSnapshot(payload || {});
     };
 
     const onNewNotification = (raw: unknown) => {
@@ -207,6 +312,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       }),
       onSocketEvent("USER_PRESENCE", handlePresence),
       onSocketEvent("chat:presence", handlePresence),
+      onSocketEvent("SUPPORT_PRESENCE", handleSupportPresence),
+      onSocketEvent("presence:snapshot", handlePresenceSnapshot),
       onSocketEvent("LEAD_CREATED", (payload) => {
         broadcastRealtime({ type: "LEAD_CREATED", payload });
         window.dispatchEvent(
@@ -392,12 +499,14 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
 
   const joinThread = useCallback((threadId: string) => {
     activeThreadIdRef.current = threadId;
+    setActiveThreadId(threadId);
     joinChatThread(threadId);
   }, []);
 
   const leaveThread = useCallback((threadId: string) => {
     if (activeThreadIdRef.current === threadId) {
       activeThreadIdRef.current = null;
+      setActiveThreadId(null);
     }
     leaveChatThread(threadId);
   }, []);
@@ -447,6 +556,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       queryUserPresence,
       getPresence,
       presenceMap,
+      supportOnline,
+      activeThreadId,
       lastChatThreadId,
       lastNotificationAt,
     }),
@@ -460,6 +571,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       queryUserPresence,
       getPresence,
       presenceMap,
+      supportOnline,
+      activeThreadId,
       lastChatThreadId,
       lastNotificationAt,
     ],

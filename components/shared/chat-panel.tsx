@@ -289,7 +289,10 @@ export function ChatPanel({
     unreadCount: number,
   ): boolean {
     if (msg.isRead || Boolean(msg.readAt) || msg.status === "read") return true;
-    if (unreadCount <= 0) return true;
+    // Do NOT treat unreadCount <= 0 as "all read" — that false-positive marked
+    // every outgoing message read when the wrong unread field was passed (0).
+    // Only use the unread-tail heuristic when we know how many are still unread.
+    if (unreadCount <= 0) return false;
 
     // Count how many sent messages from `self` exist AFTER this message
     const myLaterDeliveredCount = all

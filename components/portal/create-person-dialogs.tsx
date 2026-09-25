@@ -100,7 +100,7 @@ export function CreateCustomerDialog({
   onOpenChange: (open: boolean) => void;
   customer?: PortalCustomerCrm | null;
   /** Fired after a successful create/update — not when the dialog is dismissed. */
-  onSaved?: () => void;
+  onSaved?: (customer: PortalCustomerCrm) => void;
 }) {
   const { addCustomer, updateCustomer, provider, customers } = useCrmDirectory();
   const isEdit = Boolean(customer);
@@ -231,8 +231,22 @@ export function CreateCustomerDialog({
         toast.success(
           `${companyName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim() || "Customer"} updated.`,
         );
+        const saved: PortalCustomerCrm = {
+          ...customer,
+          firstName: firstName.trim() || companyName.trim() || customer.firstName,
+          lastName: lastName.trim() || customer.lastName,
+          email: email.trim() || customer.email,
+          phone: phone.trim() || undefined,
+          entityKind,
+          customerType,
+          source,
+          companyName: entityKind === "company" ? companyName.trim() : "",
+          ein: ein.trim() || undefined,
+          website: website.trim() || undefined,
+          notes: notes.trim(),
+        };
         reset();
-        onSaved?.();
+        onSaved?.(saved);
         onOpenChange(false);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not update this customer.");
@@ -288,13 +302,23 @@ export function CreateCustomerDialog({
       notes: notes.trim(),
       amountOwing: 0,
     };
-    addCustomer(nextCustomer);
-    toast.success(
-      `${nextCustomer.companyName ?? `${nextCustomer.firstName} ${nextCustomer.lastName}`} added to the directory.`,
-    );
-    reset();
-    onSaved?.();
-    onOpenChange(false);
+    setSaving(true);
+    try {
+      const created = await Promise.resolve(addCustomer(nextCustomer));
+      const saved = created ?? nextCustomer;
+      toast.success(
+        `${saved.companyName ?? `${saved.firstName} ${saved.lastName}`} added to the directory.`,
+      );
+      reset();
+      onSaved?.(saved);
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not create this customer.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

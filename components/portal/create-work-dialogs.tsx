@@ -729,6 +729,8 @@ export function CreateEstimateDialog({
                     searchValue={useApi ? customerPaging.search : ""}
                     onSearchChange={useApi ? customerPaging.setSearch : undefined}
                     searchPlaceholder="Search customers…"
+                    addLabel="Add customer"
+                    onAdd={() => setCreateCustomerOpen(true)}
                     onChange={(id, option) => pickCustomer(id, option)}
                   />
                 </Field>
@@ -907,6 +909,16 @@ export function CreateEstimateDialog({
       <CreateCustomerDialog
         open={createCustomerOpen}
         onOpenChange={setCreateCustomerOpen}
+        onSaved={(created) => {
+          pickCustomer(created.id, {
+            id: created.id,
+            label: crmCustomerName(created),
+          });
+          customerPaging.prependOption({
+            id: created.id,
+            label: crmCustomerName(created),
+          });
+        }}
       />
     </>
   );
@@ -961,6 +973,7 @@ export function CreateJobDialog({
     customerId ?? estimate?.customerId ?? first?.id ?? "",
   );
   const [customerLabel, setCustomerLabel] = useState("");
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const customer =
     customers.find((item) => item.id === selectedCustomer) ?? first;
   const address = source?.propertyAddress ?? customer?.addresses[0];
@@ -1428,6 +1441,7 @@ export function CreateJobDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
@@ -1456,7 +1470,7 @@ export function CreateJobDialog({
                   value={sourceId}
                   options={estimateOptions}
                   placeholder="Select estimate"
-                  emptyLabel="No estimates found."
+                  emptyLabel="No estimates found. Create an estimate first."
                   loading={useApi ? estimatePaging.loading : false}
                   loadingMore={useApi ? estimatePaging.loadingMore : false}
                   hasMore={useApi ? estimatePaging.hasMore : false}
@@ -1465,6 +1479,11 @@ export function CreateJobDialog({
                   searchValue={useApi ? estimatePaging.search : ""}
                   onSearchChange={useApi ? estimatePaging.setSearch : undefined}
                   searchPlaceholder="Search estimates…"
+                  addLabel="Create estimate"
+                  onAdd={() => {
+                    onOpenChange(false);
+                    router.push("/pro/dashboard/estimates");
+                  }}
                   onChange={(id) => void pickSource(id)}
                 />
               </Field>
@@ -1486,6 +1505,8 @@ export function CreateJobDialog({
                   searchValue={useApi ? customerPaging.search : ""}
                   onSearchChange={useApi ? customerPaging.setSearch : undefined}
                   searchPlaceholder="Search customers…"
+                  addLabel="Add customer"
+                  onAdd={() => setCreateCustomerOpen(true)}
                   onChange={(id, option) => {
                     setSelectedCustomer(id);
                     if (option?.label) setCustomerLabel(option.label);
@@ -1570,6 +1591,11 @@ export function CreateJobDialog({
                 searchValue={useApi ? assigneePaging.search : ""}
                 onSearchChange={useApi ? assigneePaging.setSearch : undefined}
                 searchPlaceholder="Search team members…"
+                addLabel="Add team member"
+                onAdd={() => {
+                  onOpenChange(false);
+                  router.push("/pro/dashboard/team");
+                }}
                 onChange={(id, option) => {
                   setEmployeeId(id);
                   setEmployeeLabel(option?.label && id ? option.label : "");
@@ -1643,6 +1669,17 @@ export function CreateJobDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <CreateCustomerDialog
+      open={createCustomerOpen}
+      onOpenChange={setCreateCustomerOpen}
+      onSaved={(created) => {
+        const label = crmCustomerName(created);
+        setSelectedCustomer(created.id);
+        setCustomerLabel(label);
+        customerPaging.prependOption({ id: created.id, label });
+      }}
+    />
+    </>
   );
 }
 
@@ -1697,6 +1734,7 @@ export function CreateLeadDialog({
   const [details, setDetails] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
   const [preferredTimeWindow, setPreferredTimeWindow] = useState<PortalTimeWindow>("morning");
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const customer = customers.find((item) => item.id === customerId) ?? first;
   const address = customer?.addresses[0];
 
@@ -1814,6 +1852,7 @@ export function CreateLeadDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
@@ -1840,6 +1879,8 @@ export function CreateLeadDialog({
               searchValue={useApi ? customerPaging.search : ""}
               onSearchChange={useApi ? customerPaging.setSearch : undefined}
               searchPlaceholder="Search customers…"
+              addLabel="Add customer"
+              onAdd={() => setCreateCustomerOpen(true)}
               onChange={(id, option) => {
                 setCustomerId(id);
                 if (option?.label) setCustomerLabel(option.label);
@@ -1908,6 +1949,17 @@ export function CreateLeadDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <CreateCustomerDialog
+      open={createCustomerOpen}
+      onOpenChange={setCreateCustomerOpen}
+      onSaved={(created) => {
+        const label = crmCustomerName(created);
+        setCustomerId(created.id);
+        setCustomerLabel(label);
+        customerPaging.prependOption({ id: created.id, label });
+      }}
+    />
+    </>
   );
 }
 

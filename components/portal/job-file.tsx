@@ -35,6 +35,7 @@ import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type Costin
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
+import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { useEstimateActivities } from "@/components/portal/use-estimate-activities";
@@ -665,6 +666,7 @@ export function JobSettingsTab({
     undefined,
     technicianFilter,
   );
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const { employees, events } = usePortalCrew();
   const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
 
@@ -962,6 +964,7 @@ export function JobSettingsTab({
   }
 
   return (
+    <>
     <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
       <div data-job-settings-form className="rounded-[4px] border border-black/10 bg-card p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -1023,6 +1026,8 @@ export function JobSettingsTab({
               searchValue={useApi ? customerPaging.search : ""}
               onSearchChange={useApi ? customerPaging.setSearch : undefined}
               searchPlaceholder="Search customers…"
+              addLabel="Add customer"
+              onAdd={() => setCreateCustomerOpen(true)}
               onChange={(id) => patch({ customerId: id })}
             />
           </Field>
@@ -1046,6 +1051,10 @@ export function JobSettingsTab({
               searchValue={useApi ? assigneePaging.search : ""}
               onSearchChange={useApi ? assigneePaging.setSearch : undefined}
               searchPlaceholder="Search team members…"
+              addLabel="Add team member"
+              onAdd={() => {
+                window.location.assign("/pro/dashboard/team");
+              }}
               onChange={(id, option) =>
                 patch({
                   employeeId: id,
@@ -1232,6 +1241,16 @@ export function JobSettingsTab({
         </section>
       </div>
     </div>
+    <CreateCustomerDialog
+      open={createCustomerOpen}
+      onOpenChange={setCreateCustomerOpen}
+      onSaved={(created) => {
+        const label = crmCustomerName(created);
+        patch({ customerId: created.id });
+        customerPaging.prependOption({ id: created.id, label });
+      }}
+    />
+    </>
   );
 }
 

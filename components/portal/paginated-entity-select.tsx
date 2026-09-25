@@ -9,7 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, Plus } from "lucide-react";
 import { SelectLoadingDots } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,12 @@ type PaginatedEntitySelectProps = {
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
+  /**
+   * When set, an Add action is shown in the menu (always at the bottom,
+   * and also as the primary empty-state CTA when there are no options).
+   */
+  onAdd?: () => void;
+  addLabel?: string;
 };
 
 function isNearBottom(el: HTMLElement, threshold = 72) {
@@ -85,6 +91,8 @@ export function PaginatedEntitySelect({
   searchValue = "",
   onSearchChange,
   searchPlaceholder = "Search…",
+  onAdd,
+  addLabel = "Add",
 }: PaginatedEntitySelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -266,11 +274,28 @@ export function PaginatedEntitySelect({
         ) : null}
 
         {!loading && !loadingMore && options.length === 0 ? (
-          <div className="flex min-h-40 flex-col items-center justify-center gap-1 px-4 py-6 text-center">
-            <p className="text-sm font-medium text-foreground">No results</p>
-            <p className="max-w-[14rem] text-xs text-muted-foreground">
-              {emptyLabel}
-            </p>
+          <div className="flex min-h-32 flex-col items-center justify-center gap-3 px-4 py-6 text-center">
+            <div>
+              <p className="text-sm font-medium text-foreground">No results</p>
+              <p className="mx-auto mt-1 max-w-[14rem] text-xs text-muted-foreground">
+                {emptyLabel}
+              </p>
+            </div>
+            {onAdd ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  closeMenu();
+                  onAdd();
+                }}
+              >
+                <Plus className="size-3.5" aria-hidden />
+                {addLabel}
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -310,6 +335,23 @@ export function PaginatedEntitySelect({
           <div aria-hidden className="h-1 w-full" data-paginated-sentinel="" />
         ) : null}
       </div>
+      {onAdd && options.length > 0 ? (
+        <div className="shrink-0 border-t border-border bg-muted/30 p-1.5">
+          <button
+            type="button"
+            className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-left text-sm font-medium text-primary hover:bg-primary/5"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              closeMenu();
+              onAdd();
+            }}
+          >
+            <Plus className="size-3.5 shrink-0" aria-hidden />
+            {addLabel}
+          </button>
+        </div>
+      ) : null}
     </div>
   ) : null;
 

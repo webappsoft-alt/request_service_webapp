@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { StatusDot, moneyTone } from "@/components/portal/status-pill";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
+import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
@@ -507,6 +508,7 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
   const records = usePortalRecords();
   const asJob = invoiceAsJob(invoice, job);
   const file = useJobFile(asJob, undefined, invoice, "");
+  const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const [draft, setDraft] = useState<InvoiceSettingsDraft>(() => ({
     customerId: invoice.customerId,
     issuedAt: invoice.issuedAt.slice(0, 10),
@@ -535,6 +537,7 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
   }
 
   return (
+    <>
     <div className="rounded-[4px] border border-black/10 bg-card p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Invoice settings</h2>
@@ -587,6 +590,8 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
             searchValue={useApi ? customerPaging.search : ""}
             onSearchChange={useApi ? customerPaging.setSearch : undefined}
             searchPlaceholder="Search customers…"
+            addLabel="Add customer"
+            onAdd={() => setCreateCustomerOpen(true)}
             onChange={(id) => patch({ customerId: id })}
           />
         </Field>
@@ -617,6 +622,16 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
         ) : null}
       </div>
     </div>
+    <CreateCustomerDialog
+      open={createCustomerOpen}
+      onOpenChange={setCreateCustomerOpen}
+      onSaved={(created) => {
+        const label = crmCustomerName(created);
+        patch({ customerId: created.id });
+        customerPaging.prependOption({ id: created.id, label });
+      }}
+    />
+    </>
   );
 }
 

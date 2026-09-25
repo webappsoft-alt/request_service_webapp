@@ -295,12 +295,21 @@ export function usePaginatedCrmOptions(
     void loadPage(page + 1, true);
   }, [enabled, kind, hasMore, loading, loadingMore, loadPage, page]);
 
+  const prependOption = useCallback((option: PaginatedEntityOption) => {
+    if (!option?.id) return;
+    const without = optionsRef.current.filter((item) => item.id !== option.id);
+    const next = [option, ...without];
+    optionsRef.current = next;
+    setOptions(next);
+  }, []);
+
   return {
     options,
     loading,
     loadingMore,
     hasMore,
     loadMore,
+    prependOption,
     search: searchInput,
     setSearch: setSearchInput,
   };

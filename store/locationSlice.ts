@@ -7,6 +7,7 @@ import {
   reverseGeocodeCoordinates,
   type PlaceAddress,
 } from "@/lib/google-places";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 
 export type CustomerLocation = {
   address: string;
@@ -45,11 +46,11 @@ const initialState: LocationState = {
 export function locationFromPlace(place: PlaceAddress): CustomerLocation {
   const cityLabel = [place.city, place.state].filter(Boolean).join(", ").trim();
   return {
-    // Keep structured street in address for booking; city search UIs use locationDisplayLabel.
-    address: place.formattedAddress || place.streetAddress || cityLabel || "",
+    // Structured street for booking address fields; city search UIs use locationDisplayLabel.
+    address: place.streetAddress || place.formattedAddress || cityLabel || "",
     zip: place.zipCode || "",
     city: place.city || "",
-    state: place.state || "",
+    state: normalizeUsStateCode(place.state) || place.state || "",
     country: place.country || "",
     latitude: place.latitude,
     longitude: place.longitude,

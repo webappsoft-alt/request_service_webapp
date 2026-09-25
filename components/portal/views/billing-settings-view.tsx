@@ -15,9 +15,9 @@ import {
 } from "@/components/api/uploadFile";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import { CityStateZipFields } from "@/components/shared/city-state-zip-fields";
 import { HoursEditor } from "@/components/portal/hours-editor";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -224,9 +224,9 @@ export function SettingsView() {
   }, [previewUrl]);
 
   function applyAddress(address: PlaceAddress) {
-    setStreetAddress(address.formattedAddress || address.streetAddress);
+    setStreetAddress(address.streetAddress.trim());
     setCity(address.city);
-    setState(normalizeUsStateCode(address.state) || address.state || "");
+    setState(normalizeUsStateCode(address.state) || "");
     setZip(address.zipCode);
     setCountry(address.country || "");
     setLatitude(address.latitude != null ? String(address.latitude) : "");
@@ -509,7 +509,7 @@ export function SettingsView() {
 
           <Field>
             <FieldLabel htmlFor="settings-location">Address</FieldLabel>
-            <AddressAutocomplete
+            <GoogleAddressAutocomplete
               id="settings-location"
               value={streetAddress}
               onChange={setStreetAddress}

@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import { CityStateZipFields } from "@/components/shared/city-state-zip-fields";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
@@ -45,13 +45,18 @@ export function AddressFields({
   const autocompleteValue = value.label ?? value.address;
 
   function applyPlace(place: PlaceAddress) {
+    const streetOnly =
+      place.streetAddress.trim() ||
+      place.formattedAddress.split(",")[0]?.trim() ||
+      "";
     onChange({
       ...value,
-      label:
-        place.formattedAddress || place.streetAddress || value.label || "",
-      address: place.streetAddress || place.formattedAddress || "",
+      // Address field = street / place line only (never city/state/ZIP).
+      label: streetOnly,
+      address: streetOnly,
       city: place.city || "",
-      state: normalizeUsStateCode(place.state) || place.state || "",
+      // Match US dropdown when Google's state maps to a known code; else "".
+      state: normalizeUsStateCode(place.state) || "",
       zip: place.zipCode || "",
       lat:
         typeof place.latitude === "number" && Number.isFinite(place.latitude)
@@ -68,25 +73,21 @@ export function AddressFields({
     <div className="flex flex-col gap-4">
       <Field>
         <FieldLabel htmlFor={`${idPrefix}-address`}>{addressLabel}</FieldLabel>
-        <AddressAutocomplete
+        <GoogleAddressAutocomplete
           id={`${idPrefix}-address`}
           value={autocompleteValue}
           onChange={(next) =>
             onChange({
               ...value,
               label: next,
-              address: "",
-              city: "",
-              state: "",
-              zip: "",
-              lat: null,
-              lng: null,
+              address: next,
             })
           }
           onSelect={applyPlace}
           placeholder={addressPlaceholder}
           required={required}
           disabled={disabled}
+          autoComplete="off"
         />
       </Field>
 

@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import { UsStateSelect } from "@/components/shared/us-state-select";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
@@ -441,9 +441,9 @@ export function CreateEstimateDialog({
   }
 
   function applyJobAddress(address: PlaceAddress) {
-    setStreet(address.streetAddress || address.formattedAddress || "");
+    setStreet(address.streetAddress.trim());
     setCity(address.city || "");
-    setState(normalizeUsStateCode(address.state) || address.state || "");
+    setState(normalizeUsStateCode(address.state) || "");
     // Keep ZIP manually editable when Places has no postal code.
     if (address.zipCode) setZip(address.zipCode);
     setLatitude(
@@ -755,12 +755,13 @@ export function CreateEstimateDialog({
                 />
               </Field>
               <Field label="Address" className="sm:col-span-2">
-                <AddressAutocomplete
+                <GoogleAddressAutocomplete
                   id="estimate-job-address"
                   value={street}
                   onChange={setStreet}
                   onSelect={applyJobAddress}
                   placeholder="Start typing your address…"
+                  autoComplete="off"
                 />
               </Field>
               <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(6.5rem,0.7fr)_minmax(5rem,0.55fr)]">
@@ -1260,9 +1261,9 @@ export function CreateJobDialog({
   }
 
   function applyJobAddress(address: PlaceAddress) {
-    setStreet(address.formattedAddress || address.streetAddress);
+    setStreet(address.streetAddress.trim());
     setCity(address.city || "");
-    setState(normalizeUsStateCode(address.state) || address.state || "");
+    setState(normalizeUsStateCode(address.state) || "");
     // Keep ZIP editable — only fill when Places returns one.
     if (address.zipCode) setZip(address.zipCode);
     setLatitude(address.latitude);
@@ -1497,12 +1498,13 @@ export function CreateJobDialog({
               />
             </Field>
             <Field label="Address" className="sm:col-span-2">
-              <AddressAutocomplete
+              <GoogleAddressAutocomplete
                 id="job-address-autocomplete"
                 value={street}
                 onChange={setStreet}
                 onSelect={applyJobAddress}
                 placeholder="Start typing your address…"
+                autoComplete="off"
               />
             </Field>
             <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(6.5rem,0.7fr)_minmax(5rem,0.55fr)]">

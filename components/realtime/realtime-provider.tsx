@@ -21,9 +21,10 @@ import {
   queryPresence,
   type RealtimeEvents,
 } from "@/components/socket";
-import { normalizeSocketNotification } from "@/lib/api/notifications-client";
+import { normalizeSocketNotification, notificationHref } from "@/lib/api/notifications-client";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
+import { useRouter } from "next/navigation";
 
 export type UserPresence = {
   isOnline: boolean;
@@ -69,7 +70,11 @@ const REALTIME_EVENT = "rs-realtime";
 const recentToastKeys = new Map<string, number>();
 const TOAST_DEDUPE_MS = 4000;
 
-function showNotificationToast(title: string, message?: string) {
+function showNotificationToast(
+  title: string,
+  message?: string,
+  options?: { href?: string; onOpen?: () => void },
+) {
   // Dedupe on content only — ignore notification id (two DB rows must not double-toast).
   const key = `${title.trim()}::${String(message || "").trim()}`.toLowerCase();
   const now = Date.now();
@@ -91,6 +96,13 @@ function showNotificationToast(title: string, message?: string) {
     id: `notif:${key}`,
     description: message || undefined,
     duration: 3500,
+    action:
+      options?.href && options?.onOpen
+        ? {
+            label: "Open",
+            onClick: options.onOpen,
+          }
+        : undefined,
     classNames: {
       toast: "cn-toast !py-2 !gap-1.5",
       title: "!text-sm !font-medium",
@@ -108,6 +120,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
   const { socket, isConnected } = useSocket();
   const authUser = useAppSelector(selectAuthUser);
   const authRole = String(authUser?.role || "").toLowerCase();
+  const router = useRouter();
   const [lastChatThreadId, setLastChatThreadId] = useState<string | null>(null);
   const [lastNotificationAt, setLastNotificationAt] = useState(0);
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
@@ -270,6 +283,26 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         if (type === "NEW_LEAD") return;
         // Provider-only booking request toast (customer gets "Booking request sent").
         if (type === "NEW_BOOKING_REQUEST" && authRole === "customer") return;
+
+        // Don't toast chat messages when that exact thread is already open
+        if (type === "NEW_CHAT_MESSAGE") {
+          const active = activeThreadIdRef.current;
+          const data =
+            payload.data && typeof payload.data === "object"
+              ? (payload.data as Record<string, unknown>)
+              : {};
+          const threadId = String(data.threadId || data.chatId || "");
+          const href = String(data.href || "");
+          const isAdminDirectNotif =
+            data.direct === true ||
+            data.tab === "direct" ||
+            href.includes("direct=admin") ||
+            threadId === "admin-direct";
+          if (active === "admin-direct" && isAdminDirectNotif) return;
+          if (active && threadId && active === threadId) return;
+          if (active && href.includes(`thread=${active}`)) return;
+        }
+
         const title =
           type === "NEW_BOOKING_REQUEST"
             ? "New booking request"
@@ -280,7 +313,29 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
                 : type === "SERVICE_SCHEDULED"
                   ? "Service scheduled"
                   : String(payload.title);
-        showNotificationToast(title, payload.message || undefined);
+        const portal = authRole === "provider" ? "provider" : "customer";
+        const href = notificationHref(
+          {
+            id: String(payload.id || ""),
+            type: String(payload.type || "SYSTEM"),
+            title: String(payload.title || ""),
+            message: String(payload.message || ""),
+            data:
+              payload.data && typeof payload.data === "object"
+                ? (payload.data as Record<string, unknown>)
+                : {},
+            isRead: false,
+            href:
+              typeof (payload as { href?: string }).href === "string"
+                ? (payload as { href?: string }).href
+                : undefined,
+          },
+          portal,
+        );
+        showNotificationToast(title, payload.message || undefined, {
+          href,
+          onOpen: () => router.push(href),
+        });
       }
     };
 
@@ -495,7 +550,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       socket.off("NEW_NOTIFICATION", onNewNotification);
       socket.removeAllListeners("NEW_NOTIFICATION");
     };
-  }, [socket, authRole]);
+  }, [socket, authRole, router]);
 
   const joinThread = useCallback((threadId: string) => {
     activeThreadIdRef.current = threadId;

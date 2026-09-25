@@ -37,7 +37,7 @@ import {
   isCustomerOverviewPath,
 } from "@/lib/data/customer-nav";
 import { customerPaths } from "@/lib/customer-paths";
-import { getAdminDirectUnreadCount, listPublicChatThreads } from "@/lib/api/chat-client";
+import { listPublicChatThreads } from "@/lib/api/chat-client";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -251,15 +251,16 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const [threads, adminUnread] = await Promise.all([
-        listPublicChatThreads(email, { silent: true }),
-        getAdminDirectUnreadCount({ silent: true }),
+      const [threadsResult] = await Promise.all([
+        listPublicChatThreads(email, { silent: true, page: 1, limit: 10 }),
       ]);
+      const threads = threadsResult.items;
       const threadUnread = threads.reduce(
         (sum, thread) => sum + (thread.unreadForCustomer || 0),
         0,
       );
-      setUnreadMessages(threadUnread + adminUnread);
+      // Server unread already includes Platform Support
+      setUnreadMessages(threadsResult.unread || threadUnread);
     } catch {
       setUnreadMessages(0);
     }
@@ -310,21 +311,39 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         const mapped = normalizeSocketNotification(detail.payload);
         if (mapped) {
           const isChatMsg = String(mapped.type || "") === "NEW_CHAT_MESSAGE";
-          const viewingAdminDirect =
+          const viewingThisChat =
             typeof window !== "undefined" &&
             window.location.pathname.includes("/messages") &&
-            (new URLSearchParams(window.location.search).get("direct") === "admin" ||
-              new URLSearchParams(window.location.search).get("thread") === "admin-direct");
+            (() => {
+              const params = new URLSearchParams(window.location.search);
+              const directAdmin =
+                params.get("direct") === "admin" ||
+                params.get("thread") === "admin-direct";
+              const openThread = params.get("thread") || "";
+              const notifThread = String(
+                mapped.data?.threadId || mapped.data?.chatId || "",
+              );
+              const href = String(mapped.href || mapped.data?.href || "");
+              const isAdminDirectNotif =
+                mapped.data?.direct === true ||
+                mapped.data?.tab === "direct" ||
+                href.includes("direct=admin") ||
+                notifThread === "admin-direct";
+              if (directAdmin && isAdminDirectNotif) return true;
+              if (openThread && notifThread && openThread === notifThread) return true;
+              if (openThread && href.includes(`thread=${openThread}`)) return true;
+              return false;
+            })();
 
           setNotifications((current) => {
             if (current.some((row) => row.id === mapped.id)) return current;
             const entry =
-              isChatMsg && viewingAdminDirect
+              isChatMsg && viewingThisChat
                 ? { ...mapped, isRead: true }
                 : mapped;
             return [entry, ...current].slice(0, 20);
           });
-          if (!mapped.isRead && !(isChatMsg && viewingAdminDirect)) {
+          if (!mapped.isRead && !(isChatMsg && viewingThisChat)) {
             setUnreadNotifications((count) => count + 1);
           }
         }
@@ -589,7 +608,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
                   >
                     <Bell className="size-4" />
                     {bellCount > 0 ? (
-                      <span className="absolute top-1 right-1 flex size-2 rounded-full bg-[#c2410c]" />
+                      <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] font-semibold leading-none text-white">
+                        {bellCount > 99 ? "99+" : bellCount}
+                      </span>
                     ) : null}
                   </Button>
                 </DropdownMenuTrigger>

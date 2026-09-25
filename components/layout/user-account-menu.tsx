@@ -72,7 +72,7 @@ export function UserAccountMenu({
       try {
         const threads = await listPublicChatThreads(email, { silent: true });
         if (cancelled) return;
-        const total = threads.reduce(
+        const total = threads.items.reduce(
           (sum, thread) => sum + (thread.unreadForCustomer || 0),
           0,
         );

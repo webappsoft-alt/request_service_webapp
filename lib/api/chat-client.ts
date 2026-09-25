@@ -8,7 +8,7 @@ import {
   mapInboxSummary,
   ADMIN_DIRECT_THREAD_ID,
 } from "@/lib/api/crm-mappers";
-import type { ChatAttachment } from "@/lib/booking/chat-store";
+import type { ChatAttachment, ChatThread } from "@/lib/booking/chat-store";
 
 export { ADMIN_DIRECT_THREAD_ID };
 
@@ -87,12 +87,27 @@ export async function getProviderInboxSummary(options?: { silent?: boolean }) {
   return mapInboxSummary(response);
 }
 
-export async function listPublicChatThreads(email: string, options?: { silent?: boolean }) {
+export async function listPublicChatThreads(
+  email: string,
+  options?: { silent?: boolean; page?: number; limit?: number },
+) {
   const normalizedEmail = email.trim();
-  if (!normalizedEmail) return [];
+  if (!normalizedEmail) {
+    return { items: [] as ChatThread[], pagination: null as null | {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+      hasAdminChat?: boolean;
+    }, unread: 0 };
+  }
   const response = await getData(
     chatApi.publicThreads,
-    { email: normalizedEmail },
+    {
+      email: normalizedEmail,
+      page: options?.page ?? 1,
+      limit: options?.limit ?? 10,
+    },
     {
       silent: options?.silent ?? true,
       token: null,
@@ -100,7 +115,45 @@ export async function listPublicChatThreads(email: string, options?: { silent?: 
       force: true,
     },
   );
-  return mapCrmList(response, mapChatThread).items;
+  const listed = mapCrmList(response, mapChatThread);
+  const root =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : {};
+  const pagination =
+    root.pagination && typeof root.pagination === "object"
+      ? (root.pagination as {
+          page: number;
+          limit: number;
+          total: number;
+          pages: number;
+          hasAdminChat?: boolean;
+        })
+      : null;
+  return {
+    items: listed.items,
+    pagination,
+    unread: Number(root.unread || 0),
+  };
+}
+
+export async function fetchPublicChatThread(
+  threadId: string,
+  options?: { silent?: boolean; limit?: number },
+) {
+  const id = String(threadId || "").trim();
+  if (!id) return null;
+  const response = await getData(
+    chatApi.publicThread(id),
+    {
+      limit: options?.limit ?? 50,
+    },
+    {
+      silent: options?.silent ?? true,
+      force: true,
+    },
+  );
+  return mapCrmEntity(response, mapChatThread);
 }
 
 export async function openPublicChatThread(input: PublicThreadInput) {

@@ -168,7 +168,7 @@ export function CustomerDashboardView() {
         const threads = await listPublicChatThreads(email, { silent: true });
         if (!cancelled) {
           setUnreadMessages(
-            threads.reduce(
+            threads.items.reduce(
               (sum, thread) => sum + (thread.unreadForCustomer || 0),
               0,
             ),

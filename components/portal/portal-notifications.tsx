@@ -118,21 +118,39 @@ export function PortalNotifications() {
         const mapped = normalizeSocketNotification(detail.payload);
         if (mapped) {
           const isChatMsg = String(mapped.type || "") === "NEW_CHAT_MESSAGE";
-          const viewingAdminDirect =
+          const viewingThisChat =
             typeof window !== "undefined" &&
             window.location.pathname.includes("/messages") &&
-            (new URLSearchParams(window.location.search).get("direct") === "admin" ||
-              new URLSearchParams(window.location.search).get("thread") === "admin-direct");
+            (() => {
+              const params = new URLSearchParams(window.location.search);
+              const directAdmin =
+                params.get("direct") === "admin" ||
+                params.get("thread") === "admin-direct";
+              const openThread = params.get("thread") || "";
+              const notifThread = String(
+                mapped.data?.threadId || mapped.data?.chatId || "",
+              );
+              const href = String(mapped.href || mapped.data?.href || "");
+              const isAdminDirectNotif =
+                mapped.data?.direct === true ||
+                mapped.data?.tab === "direct" ||
+                href.includes("direct=admin") ||
+                notifThread === "admin-direct";
+              if (directAdmin && isAdminDirectNotif) return true;
+              if (openThread && notifThread && openThread === notifThread) return true;
+              if (openThread && href.includes(`thread=${openThread}`)) return true;
+              return false;
+            })();
 
           setNotifications((current) => {
             if (current.some((row) => row.id === mapped.id)) return current;
             const entry =
-              isChatMsg && viewingAdminDirect
+              isChatMsg && viewingThisChat
                 ? { ...mapped, isRead: true }
                 : mapped;
             return [entry, ...current].slice(0, 30);
           });
-          if (!mapped.isRead && !(isChatMsg && viewingAdminDirect)) {
+          if (!mapped.isRead && !(isChatMsg && viewingThisChat)) {
             setUnreadNotifications((count) => count + 1);
           }
           return;

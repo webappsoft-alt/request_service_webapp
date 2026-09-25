@@ -369,6 +369,10 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         broadcastRealtime({ type: "INVOICE_SENT", payload });
         broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
       }),
+      onSocketEvent("PAYMENT_RECEIVED", (payload) => {
+        broadcastRealtime({ type: "PAYMENT_RECEIVED", payload });
+        broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+      }),
       onSocketEvent("CUSTOMER_BADGE_INVALIDATE", (payload) => {
         broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
       }),

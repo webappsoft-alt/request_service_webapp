@@ -1,5 +1,6 @@
 import {
   ClipboardList,
+  CreditCard,
   FileText,
   Home,
   Inbox,
@@ -44,6 +45,7 @@ export const customerNavGroups: CustomerNavGroup[] = [
       { href: customerPaths.orders, label: "Orders", icon: ClipboardList },
       { href: customerPaths.estimates, label: "Estimates", icon: FileText },
       { href: customerPaths.invoices, label: "Invoices", icon: Receipt },
+      { href: customerPaths.payments, label: "Payments", icon: CreditCard },
       { href: customerPaths.messages, label: "Messages", icon: MessageCircle },
     ],
   },

@@ -21,6 +21,7 @@ import {
 
 function statusLabel(status: string) {
   const clean = String(status || "").toLowerCase();
+  if (clean === "sent") return "Pending";
   if (clean === "partially_paid") return "Partially Paid";
   return clean
     .split("_")
@@ -69,7 +70,7 @@ export function CustomerInvoicesDashboardView() {
         filename="customer-invoices"
         countLabel="Invoices"
         searchPlaceholder="Search invoices…"
-        loading={loading}
+        loading={loading && !invoices.length}
         rows={invoices}
         rowKey={(row) => row.id}
         rowHref={(row) => customerPaths.invoice(row.id)}

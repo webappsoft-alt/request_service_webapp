@@ -11,6 +11,8 @@ export const customerPaths = {
     `/account/dashboard/estimates/requests/${batchId}`,
   invoices: "/account/dashboard/invoices",
   invoice: (id: string) => `/account/dashboard/invoices/${id}`,
+  payments: "/account/dashboard/payments",
+  payment: (id: string) => `/account/dashboard/payments/${id}`,
   messages: "/account/dashboard/messages",
   settings: "/account/dashboard/settings",
   site: "/",

@@ -297,6 +297,7 @@ export function InvoiceSummaryTab({
   job,
   estimate,
   payments,
+  onPaid,
 }: {
   invoice: Invoice;
   customer?: PortalCustomerCrm;
@@ -305,6 +306,7 @@ export function InvoiceSummaryTab({
   job?: Job;
   estimate?: Estimate;
   payments: Payment[];
+  onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
 }) {
   const contact = customer ? `${customer.firstName} ${customer.lastName}`.trim() : "";
   const address = job?.address;
@@ -460,7 +462,7 @@ export function InvoiceSummaryTab({
               {payments.length ? `${payments.length} recorded` : "None recorded"}
             </p>
           </div>
-          <ApplyPaymentButton invoice={invoice} />
+          <ApplyPaymentButton invoice={invoice} onPaid={onPaid} />
         </div>
         {payments.length ? (
           <Table>
@@ -618,7 +620,15 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
   );
 }
 
-export function InvoicePaymentsTab({ invoice, payments }: { invoice: Invoice; payments: Payment[] }) {
+export function InvoicePaymentsTab({
+  invoice,
+  payments,
+  onPaid,
+}: {
+  invoice: Invoice;
+  payments: Payment[];
+  onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
+}) {
   return (
     <div className="rounded-[4px] border border-black/10 bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -628,7 +638,7 @@ export function InvoicePaymentsTab({ invoice, payments }: { invoice: Invoice; pa
             Balance due {formatMoney(invoice.balanceDue)} · paid {formatMoney(invoice.amountPaid)} of {formatMoney(invoice.total)}.
           </p>
         </div>
-        <ApplyPaymentButton invoice={invoice} />
+        <ApplyPaymentButton invoice={invoice} onPaid={onPaid} />
       </div>
       {payments.length ? (
         <ul className="mt-4 divide-y divide-black/10 border border-black/10">

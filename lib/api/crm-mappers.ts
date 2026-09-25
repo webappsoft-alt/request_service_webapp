@@ -1476,15 +1476,36 @@ export function mapPayment(raw: unknown): Payment | null {
       ? statusRaw
       : "succeeded";
 
+  const invoiceRec = asRecord(record.invoiceId);
+  const customerRec = asRecord(record.customerId);
+  const invoiceId = invoiceRec ? crmIdOf(invoiceRec) : crmIdOf(record.invoiceId);
+  const customerId = customerRec
+    ? crmIdOf(customerRec)
+    : crmIdOf(record.customerId) || undefined;
+  const customerName = customerRec
+    ? (
+        trimmed(customerRec.companyName) ||
+        `${trimmed(customerRec.firstName)} ${trimmed(customerRec.lastName)}`.trim() ||
+        trimmed(customerRec.email)
+      )
+    : undefined;
+
   return {
     id,
-    invoiceId: crmIdOf(record.invoiceId),
+    invoiceId,
     scheduleId: crmIdOf(record.scheduleId) || undefined,
     amount: numberValue(record.amount),
     method,
     status,
     paidAt: toIsoString(record.paidAt) || undefined,
     createdAt: toIsoString(record.createdAt) || toIsoString(record.paidAt),
+    isArchived: Boolean(record.isArchived),
+    customerId,
+    customerName: customerName || undefined,
+    invoiceNumber: invoiceRec ? trimmed(invoiceRec.number) || undefined : undefined,
+    jobId: invoiceRec ? crmIdOf(invoiceRec.jobId) || undefined : undefined,
+    notes: trimmed(record.notes) || undefined,
+    transactionReference: trimmed(record.transactionReference) || undefined,
   };
 }
 

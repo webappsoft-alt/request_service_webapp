@@ -145,6 +145,13 @@ export type RealtimeEvents = {
     number?: string;
     href?: string;
   };
+  PAYMENT_RECEIVED: {
+    invoiceId?: string;
+    paymentId?: string;
+    number?: string;
+    amount?: number;
+    href?: string;
+  };
   ORDER_UPDATED: Record<string, unknown>;
   LEAD_STATUS_UPDATED: {
     id: string;

@@ -371,6 +371,15 @@ export interface Payment {
   status: PaymentStatus;
   paidAt?: string;
   createdAt: string;
+  /** Soft-archive on the provider Payments board. */
+  isArchived?: boolean;
+  /** Populated convenience fields from API. */
+  customerId?: string;
+  customerName?: string;
+  invoiceNumber?: string;
+  jobId?: string;
+  notes?: string;
+  transactionReference?: string;
 }
 
 export type PaymentScheduleType = "upfront" | "completion" | "milestone";

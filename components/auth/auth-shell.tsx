@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { ReactNode } from "react";
 import {
   ClipboardList,
   FileCheck2,
@@ -60,14 +61,17 @@ export function AuthShell({
   children,
   footer,
   eyebrow,
+  headerAction,
   size = "md",
   audience = "customer",
 }: {
   title: string;
-  description: React.ReactNode;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
+  description: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
   eyebrow?: string;
+  /** Optional control aligned to the top-right of the form header (e.g. Skip). */
+  headerAction?: ReactNode;
   size?: "md" | "lg";
   audience?: DemoRole;
 }) {
@@ -150,8 +154,15 @@ export function AuthShell({
             )}
           >
             <div className="mb-6 flex flex-col gap-2">
-              {eyebrow ? <p className="eyebrow text-muted-foreground">{eyebrow}</p> : null}
-              <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex flex-col gap-2">
+                  {eyebrow ? <p className="eyebrow text-muted-foreground">{eyebrow}</p> : null}
+                  <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
+                </div>
+                {headerAction ? (
+                  <div className="shrink-0 pt-0.5">{headerAction}</div>
+                ) : null}
+              </div>
               <p className="text-sm leading-6 text-muted-foreground">{description}</p>
             </div>
             {children}

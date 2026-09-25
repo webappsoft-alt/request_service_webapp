@@ -43,6 +43,7 @@ import {
   isEstimateNotification,
   isInvoiceNotification,
   isOrderNotification,
+  isPaymentNotification,
   markAllNotificationsRead,
   markNotificationRead,
   markUnreadNotificationsWhere,
@@ -63,14 +64,16 @@ import { selectAuthUser, type AuthUser } from "@/store/authSlice";
 function countUnreadByKind(items: AppNotification[]) {
   let estimates = 0;
   let invoices = 0;
+  let payments = 0;
   let orders = 0;
   for (const item of items) {
     if (item.isRead) continue;
     if (isEstimateNotification(item)) estimates += 1;
+    else if (isPaymentNotification(item)) payments += 1;
     else if (isInvoiceNotification(item)) invoices += 1;
     else if (isOrderNotification(item)) orders += 1;
   }
-  return { estimates, invoices, orders };
+  return { estimates, invoices, payments, orders };
 }
 
 function RecordTab({
@@ -130,6 +133,9 @@ function getCurrentCustomerSection(pathname: string) {
   if (pathname.startsWith(customerPaths.invoices)) {
     return { href: customerPaths.invoices, label: "Invoices" };
   }
+  if (pathname.startsWith(customerPaths.payments)) {
+    return { href: customerPaths.payments, label: "Payments" };
+  }
   if (pathname.startsWith(customerPaths.messages)) {
     return { href: customerPaths.messages, label: "Messages" };
   }
@@ -145,6 +151,7 @@ function NavLinks({
   unreadMessages = 0,
   unreadEstimates = 0,
   unreadInvoices = 0,
+  unreadPayments = 0,
   unreadOrders = 0,
 }: {
   collapsed?: boolean;
@@ -152,6 +159,7 @@ function NavLinks({
   unreadMessages?: number;
   unreadEstimates?: number;
   unreadInvoices?: number;
+  unreadPayments?: number;
   unreadOrders?: number;
 }) {
   const pathname = usePathname();
@@ -160,6 +168,7 @@ function NavLinks({
     if (href === customerPaths.messages) return unreadMessages;
     if (href === customerPaths.estimates) return unreadEstimates;
     if (href === customerPaths.invoices) return unreadInvoices;
+    if (href === customerPaths.payments) return unreadPayments;
     if (href === customerPaths.orders) return unreadOrders;
     return 0;
   }
@@ -263,11 +272,13 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const [sidebarBase, setSidebarBase] = useState({
     estimates: 0,
     invoices: 0,
+    payments: 0,
     orders: 0,
   });
   const [sidebarBump, setSidebarBump] = useState({
     estimates: 0,
     invoices: 0,
+    payments: 0,
     orders: 0,
   });
   const [clears, setClears] = useState(getCustomerInboxClearState);
@@ -334,6 +345,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         invoices: clearState.invoices
           ? prev.invoices
           : Math.max(prev.invoices, counts.invoices),
+        payments: clearState.payments
+          ? prev.payments
+          : Math.max(prev.payments, counts.payments),
         orders: clearState.orders
           ? prev.orders
           : Math.max(prev.orders, counts.orders),
@@ -378,6 +392,18 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_INVOICES_TAB_OPENED" } }),
       );
       void markUnreadNotificationsWhere(isInvoiceNotification).catch(() => undefined);
+      return;
+    }
+    if (pathname.startsWith(customerPaths.payments)) {
+      if (clearedTabRef.current === "payments") return;
+      clearedTabRef.current = "payments";
+      setCustomerInboxCleared("payments", true);
+      setSidebarBump((current) => ({ ...current, payments: 0 }));
+      setSidebarBase((current) => ({ ...current, payments: 0 }));
+      window.dispatchEvent(
+        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_PAYMENTS_TAB_OPENED" } }),
+      );
+      void markUnreadNotificationsWhere(isPaymentNotification).catch(() => undefined);
       return;
     }
     if (pathname.startsWith(customerPaths.orders)) {
@@ -435,6 +461,12 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               setSidebarBump((current) => ({
                 ...current,
                 estimates: current.estimates + 1,
+              }));
+            } else if (isPaymentNotification(mapped)) {
+              reopenCustomerInboxBadge("payments");
+              setSidebarBump((current) => ({
+                ...current,
+                payments: current.payments + 1,
               }));
             } else if (isInvoiceNotification(mapped)) {
               reopenCustomerInboxBadge("invoices");
@@ -539,6 +571,15 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         void refreshNotifications();
         return;
       }
+      if (type === "PAYMENT_RECEIVED") {
+        reopenCustomerInboxBadge("payments");
+        setSidebarBump((current) => ({
+          ...current,
+          payments: current.payments + 1,
+        }));
+        void refreshNotifications();
+        return;
+      }
       if (
         type === "CUSTOMER_BADGE_INVALIDATE" ||
         type === "SERVICE_SCHEDULED" ||
@@ -556,6 +597,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const unreadInvoices = clears.invoices
     ? sidebarBump.invoices
     : Math.max(sidebarBase.invoices, sidebarBump.invoices);
+  const unreadPayments = clears.payments
+    ? sidebarBump.payments
+    : Math.max(sidebarBase.payments, sidebarBump.payments);
   const unreadOrders = clears.orders
     ? sidebarBump.orders
     : Math.max(sidebarBase.orders, sidebarBump.orders);
@@ -629,6 +673,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             unreadMessages={unreadMessages}
             unreadEstimates={unreadEstimates}
             unreadInvoices={unreadInvoices}
+            unreadPayments={unreadPayments}
             unreadOrders={unreadOrders}
           />
         </div>
@@ -676,6 +721,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
                     unreadMessages={unreadMessages}
                     unreadEstimates={unreadEstimates}
                     unreadInvoices={unreadInvoices}
+                    unreadPayments={unreadPayments}
                     unreadOrders={unreadOrders}
                   />
                 </div>

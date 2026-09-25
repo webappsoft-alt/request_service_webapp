@@ -14,6 +14,17 @@ export type CustomerInvoiceItem = {
   total: number;
 };
 
+export type CustomerInvoicePayment = {
+  id: string;
+  amount: number;
+  method: string;
+  status: string;
+  paidAt: string | null;
+  createdAt?: string | null;
+  notes?: string;
+  transactionReference?: string;
+};
+
 export type CustomerInvoice = {
   id: string;
   number: string;
@@ -30,6 +41,7 @@ export type CustomerInvoice = {
   jobId: string | null;
   jobNumber: string | null;
   items: CustomerInvoiceItem[];
+  payments?: CustomerInvoicePayment[];
   createdAt?: string;
   updatedAt?: string;
   provider?: {
@@ -117,6 +129,25 @@ function mapInvoice(raw: unknown): CustomerInvoice | null {
       };
       return [mapped];
     }),
+    payments: (Array.isArray(row.payments) ? row.payments : []).flatMap(
+      (item) => {
+        const entry = asRecord(item);
+        if (!entry) return [];
+        const paymentId = stringValue(entry.id);
+        if (!paymentId) return [];
+        const mapped: CustomerInvoicePayment = {
+          id: paymentId,
+          amount: numberValue(entry.amount),
+          method: stringValue(entry.method) || "check",
+          status: stringValue(entry.status) || "succeeded",
+          paidAt: stringValue(entry.paidAt) || null,
+          createdAt: stringValue(entry.createdAt) || null,
+          notes: stringValue(entry.notes),
+          transactionReference: stringValue(entry.transactionReference),
+        };
+        return [mapped];
+      },
+    ),
     createdAt: stringValue(row.createdAt) || undefined,
     updatedAt: stringValue(row.updatedAt) || undefined,
     provider: provider
@@ -186,7 +217,7 @@ const customerInvoicesSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchCustomerInvoices.pending, (state) => {
-        state.loading = true;
+        state.loading = !state.loaded;
         state.error = null;
       })
       .addCase(fetchCustomerInvoices.fulfilled, (state, action) => {
@@ -203,7 +234,7 @@ const customerInvoicesSlice = createSlice({
             : "Could not load invoices.";
       })
       .addCase(fetchCustomerInvoiceDetail.pending, (state) => {
-        state.detailLoading = true;
+        state.detailLoading = !state.detail;
         state.detailError = null;
       })
       .addCase(fetchCustomerInvoiceDetail.fulfilled, (state, action) => {

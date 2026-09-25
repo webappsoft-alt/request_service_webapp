@@ -109,6 +109,7 @@ export function useCustomerPendingBadge(enabled = true) {
         type === "CUSTOMER_BADGE_INVALIDATE" ||
         type === "ESTIMATE_SENT" ||
         type === "INVOICE_SENT" ||
+        type === "PAYMENT_RECEIVED" ||
         type === "SERVICE_SCHEDULED"
       ) {
         void refreshNotifications();

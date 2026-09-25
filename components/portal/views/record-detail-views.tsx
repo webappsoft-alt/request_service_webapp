@@ -17,7 +17,7 @@ import {
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ArchiveBadge, ArchiveButton, ConfirmArchiveDialog } from "@/components/portal/archive-control";
+import { ArchiveBadge, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import {
   NotesPanel,
   CreateNoteDialogForSubject,
@@ -56,6 +56,13 @@ import {
   patchInvoiceArchive,
   sendInvoiceRecord,
 } from "@/store/invoicesSlice";
+import {
+  fetchPaymentDetail,
+  fetchPayments,
+  invalidatePaymentsCache,
+  patchPaymentArchive,
+  upsertPaymentItem,
+} from "@/store/paymentsSlice";
 import {
   PaymentFileChrome,
   PaymentSummaryTab,
@@ -129,7 +136,7 @@ import {
   updateEstimateArchive as updateEstimateArchiveApi,
   updateEstimateSiteVisit,
 } from "@/lib/api/crm-client";
-import type { Estimate, Invoice, Job } from "@/lib/types";
+import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 import {
   extractErrorMessage,
   getAuthToken,
@@ -1861,6 +1868,16 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const [archiving, setArchiving] = useState(false);
   const [resolvingStale, setResolvingStale] = useState(false);
 
+  function handlePaymentApplied(result: {
+    invoice: Invoice | null;
+    payment: Payment | null;
+  }) {
+    if (!useApi) return;
+    if (result.payment) dispatch(upsertPaymentItem(result.payment));
+    dispatch(invalidatePaymentsCache());
+    void dispatch(fetchPayments({ force: true, silent: true }));
+  }
+
   useEffect(() => {
     if (!useApi || !invoiceRef) return;
     let cancelled = false;
@@ -2054,9 +2071,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
           </Button>
           <ApplyPaymentButton
             invoice={invoice}
-            onPaid={() => {
-              if (useApi) void dispatch(fetchInvoiceDetail(invoice.id));
-            }}
+            onPaid={handlePaymentApplied}
           />
           {job ? (
             <Button size="sm" variant="outline" asChild>
@@ -2095,6 +2110,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   job={job}
                   estimate={estimate}
                   payments={relatedPayments}
+                  onPaid={handlePaymentApplied}
                 />
               );
             case "materials":
@@ -2112,6 +2128,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
                 <InvoicePaymentsTab
                   invoice={invoice}
                   payments={relatedPayments}
+                  onPaid={handlePaymentApplied}
                 />
               );
             case "attachments":
@@ -2144,6 +2161,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   job={job}
                   estimate={estimate}
                   payments={relatedPayments}
+                  onPaid={handlePaymentApplied}
                 />
               );
           }
@@ -2167,35 +2185,113 @@ export function InvoiceDetailView({ id }: { id: string }) {
 }
 
 export function PaymentDetailView({ id }: { id: string }) {
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+  const paymentRef = String(id || "").trim();
+
+  const cachedPayment = useAppSelector(
+    (state) => state.payments?.detailsCache?.[paymentRef],
+  );
+  const detailLoading = useAppSelector((state) =>
+    Boolean(state.payments?.detailLoading),
+  );
+  const listMatch = useAppSelector((state) =>
+    state.payments?.items?.find((item) => item.id === paymentRef),
+  );
+
   const { invoices, jobs, estimates, requests, payments, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
-  const payment = records
+  const [archiving, setArchiving] = useState(false);
+
+  const localPayment = records
     .mergePayments(payments)
     .map((item) => ({
       ...item,
       status: records.statusOf("payment", item.id, item.status),
     }))
-    .find((item) => item.id === id);
+    .find((item) => item.id === paymentRef);
+
+  const payment = useApi
+    ? cachedPayment || listMatch || localPayment
+    : localPayment;
+
+  useEffect(() => {
+    if (!useApi || !paymentRef) return;
+    void dispatch(fetchPaymentDetail(paymentRef));
+  }, [dispatch, paymentRef, useApi]);
+
   const allInvoices = records.mergeInvoices(invoices);
   const allJobs = records.mergeJobs(jobs);
   const allEstimates = records.mergeEstimates(estimates);
   const invoice = allInvoices.find((item) => item.id === payment?.invoiceId);
-  const job = allJobs.find((item) => item.id === invoice?.jobId);
-  const customer = customers.find((item) => item.id === invoice?.customerId);
+  const job = allJobs.find(
+    (item) => item.id === (payment?.jobId || invoice?.jobId),
+  );
+  const customer = customers.find(
+    (item) =>
+      item.id === (invoice?.customerId || payment?.customerId || ""),
+  );
   const customerLabel = customer
     ? crmCustomerName(customer)
-    : invoice
-      ? getPortalCustomerName(provider, invoice.customerId)
-      : "Customer";
+    : payment?.customerName?.trim()
+      ? payment.customerName.trim()
+      : invoice
+        ? getPortalCustomerName(provider, invoice.customerId)
+        : "Customer";
   const service = job
     ? jobServiceLabel(job, allEstimates, requests)
     : invoice?.items[0]?.description || "Service";
   const pending = useCrmRecordPending();
+  const archived =
+    Boolean(payment?.isArchived) ||
+    (payment ? records.isArchived("payment", payment.id) : false);
+
+  async function toggleArchive() {
+    if (!payment || archiving) return;
+    setArchiving(true);
+    try {
+      if (useApi) {
+        await dispatch(
+          patchPaymentArchive({
+            id: payment.id,
+            isArchived: !archived,
+          }),
+        ).unwrap();
+        void dispatch(fetchPayments({ force: true, silent: true }));
+      } else if (archived) {
+        await records.unarchive("payment", payment.id);
+      } else {
+        await records.archive("payment", payment.id);
+      }
+      toast.success(
+        archived
+          ? `${paymentNumber(payment)} restored.`
+          : `${paymentNumber(payment)} archived.`,
+      );
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : archived
+              ? "Could not restore this payment."
+              : "Could not archive this payment.",
+      );
+    } finally {
+      setArchiving(false);
+    }
+  }
 
   if (!payment) {
-    return pending ? (
+    return (useApi && detailLoading) || pending ? (
       <div className="flex min-h-[50vh] items-center justify-center py-12">
         <Loader2 className="size-8 animate-spin text-primary" />
       </div>
@@ -2217,15 +2313,19 @@ export function PaymentDetailView({ id }: { id: string }) {
             className={paymentStatusTone(payment.status)}
           />
           <StatusPill label={paymentKindLabel(paymentKind(payment))} />
-          <ArchiveBadge kind="payment" id={payment.id} />
+          {archived ? (
+            <StatusPill label="Archived" className="bg-slate-100 text-slate-700" />
+          ) : (
+            <ArchiveBadge kind="payment" id={payment.id} />
+          )}
         </>
       }
       actions={
         <>
-          {invoice ? (
+          {payment.invoiceId ? (
             <Button size="sm" variant="outline" asChild>
-              <Link href={`/pro/dashboard/invoices/${invoice.id}`}>
-                Open {invoice.number}
+              <Link href={`/pro/dashboard/invoices/${payment.invoiceId}`}>
+                Open {invoice?.number || payment.invoiceNumber || "invoice"}
               </Link>
             </Button>
           ) : null}
@@ -2236,11 +2336,20 @@ export function PaymentDetailView({ id }: { id: string }) {
               </Link>
             </Button>
           ) : null}
-          <ArchiveButton
-            kind="payment"
-            id={payment.id}
-            label={paymentNumber(payment)}
-          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={archiving}
+            onClick={() => void toggleArchive()}
+          >
+            {archiving
+              ? archived
+                ? "Restoring…"
+                : "Archiving…"
+              : archived
+                ? "Restore"
+                : "Archive"}
+          </Button>
         </>
       }
     >

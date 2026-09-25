@@ -115,6 +115,7 @@ function orderTone(status: string) {
 
 function invoiceStatusLabel(status: string) {
   const clean = String(status || "").toLowerCase();
+  if (clean === "sent") return "Pending";
   if (clean === "partially_paid") return "Partially Paid";
   return clean
     .split("_")

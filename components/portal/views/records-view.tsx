@@ -67,10 +67,22 @@ import {
   INVOICES_DEFAULT_LIMIT,
   patchInvoiceArchive,
   patchInvoiceStatus,
+  sendInvoiceRecord,
   setInvoicesListFilter,
   setInvoicesPage,
   setInvoicesSearch,
 } from "@/store/invoicesSlice";
+import {
+  clearPaymentsError,
+  fetchPayments,
+  invalidatePaymentsCache,
+  PAYMENTS_DEFAULT_LIMIT,
+  patchPaymentArchive,
+  setPaymentsListFilter,
+  setPaymentsPage,
+  setPaymentsSearch,
+  upsertPaymentItem,
+} from "@/store/paymentsSlice";
 import {
   deleteEstimate,
   queryEstimates,
@@ -1206,7 +1218,7 @@ export function InvoicesView() {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, useApi, page, search, slice?.status, slice?.isArchived]);
+  }, [dispatch, useApi, page, search, slice?.status, slice?.isArchived, limit]);
 
   useEffect(() => {
     return () => {
@@ -1236,21 +1248,22 @@ export function InvoicesView() {
 
   const rows = useApi ? items : localRows;
   const tableLoading =
-    actionLoading || (useApi && loading && items.length === 0);
+    (actionLoading && items.length === 0) || (useApi && loading && items.length === 0);
 
   function onSearchChange(value: string) {
     setSearchInput(value);
     if (!useApi) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setActionLoading(true);
       dispatch(setInvoicesSearch(value.trim()));
     }, 350);
   }
 
   function onPageChange(nextPage: number) {
     if (!useApi || nextPage === page) return;
-    setActionLoading(true);
+    const cacheKey = `${slice?.isArchived ? "archived" : "active"}|${slice?.status || ""}|${search}|${nextPage}|${limit}`;
+    const hasCache = Boolean(slice?.pagesCache?.[cacheKey]?.length);
+    if (!hasCache) setActionLoading(true);
     dispatch(setInvoicesPage(nextPage));
   }
 
@@ -1259,9 +1272,20 @@ export function InvoicesView() {
     setBusyIds((prev) => [...prev, row.id]);
     try {
       if (useApi) {
-        await dispatch(patchInvoiceStatus({ id: row.id, status: next })).unwrap();
+        if (next === "sent" && row.status === "draft") {
+          await dispatch(sendInvoiceRecord(row.id)).unwrap();
+        } else {
+          await dispatch(patchInvoiceStatus({ id: row.id, status: next })).unwrap();
+        }
       } else {
         await records.setStatus("invoice", row.id, next);
+        if (next === "paid") {
+          await records.patchInvoice(row.id, {
+            amountPaid: row.total,
+            balanceDue: 0,
+            status: "paid",
+          });
+        }
       }
       toast.success(`Invoice marked ${next.replaceAll("_", " ")}.`);
     } catch (err) {
@@ -1514,8 +1538,12 @@ export function InvoicesView() {
           }
         }}
         invoice={paying}
-        onPaid={() => {
-          if (useApi) void dispatch(fetchInvoices({ force: true }));
+        onPaid={(result) => {
+          if (!useApi) return;
+          if (result.payment) dispatch(upsertPaymentItem(result.payment));
+          dispatch(invalidatePaymentsCache());
+          void dispatch(fetchInvoices({ force: true, silent: true }));
+          void dispatch(fetchPayments({ force: true, silent: true }));
         }}
       />
       <DeleteConfirmDialog
@@ -1537,12 +1565,48 @@ export function InvoicesView() {
 }
 
 export function PaymentsView() {
+  const dispatch = useAppDispatch();
   const status = useSearchParams().get("status") ?? "";
+  const archivedOnly = status === "archived";
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+
   const { payments, invoices, jobs, estimates, requests, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
-  const archivedOnly = status === "archived";
+  const [archiveTarget, setArchiveTarget] = useState<(typeof payments)[number] | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const slice = useAppSelector((state) => state.payments);
+  const {
+    items,
+    page,
+    limit,
+    total,
+    totalPages,
+    search,
+    loading,
+    error,
+  } = slice ?? {
+    items: [],
+    page: 1,
+    limit: PAYMENTS_DEFAULT_LIMIT,
+    total: 0,
+    totalPages: 1,
+    search: "",
+    loading: true,
+    error: null,
+  };
+  const [searchInput, setSearchInput] = useState(search);
+
   const allInvoices = useMemo(
     () => records.mergeInvoices(invoices),
     [records, invoices],
@@ -1552,7 +1616,41 @@ export function PaymentsView() {
     () => records.mergeEstimates(estimates),
     [records, estimates],
   );
-  const rows = useMemo(
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    if (!useApi) return;
+    dispatch(setPaymentsListFilter(status));
+  }, [dispatch, useApi, status]);
+
+  useEffect(() => {
+    if (!useApi) return;
+    let cancelled = false;
+    setActionLoading(true);
+    void dispatch(fetchPayments()).finally(() => {
+      if (!cancelled) setActionLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, useApi, page, search, slice?.status, slice?.isArchived, limit]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!useApi || !error || loading) return;
+    toast.error(error);
+    dispatch(clearPaymentsError());
+  }, [dispatch, error, loading, useApi]);
+
+  const localRows = useMemo(
     () =>
       records
         .listed("payment", records.mergePayments(payments), archivedOnly)
@@ -1566,10 +1664,47 @@ export function PaymentsView() {
     [archivedOnly, payments, records, status],
   );
 
+  const rows = useMemo(() => {
+    if (!useApi) return localRows;
+    return items.filter((item) => {
+      if (archivedOnly) return Boolean(item.isArchived);
+      if (item.isArchived) return false;
+      return paymentMatchesBoardFilter(item, status);
+    });
+  }, [archivedOnly, items, localRows, status, useApi]);
+
+  const tableLoading =
+    (actionLoading && rows.length === 0) ||
+    (useApi && loading && rows.length === 0);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (!useApi) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      dispatch(setPaymentsSearch(value.trim()));
+    }, 350);
+  }
+
+  function onPageChange(nextPage: number) {
+    if (!useApi || nextPage === page) return;
+    const cacheKey = `${slice?.isArchived ? "archived" : "active"}|${slice?.status || ""}|${search}|${nextPage}|${limit}`;
+    const hasCache = Boolean(slice?.pagesCache?.[cacheKey]?.length);
+    if (!hasCache) setActionLoading(true);
+    dispatch(setPaymentsPage(nextPage));
+  }
+
+  function customerLabel(customerId: string) {
+    const match = customers.find((item) => item.id === customerId);
+    return match
+      ? crmCustomerName(match)
+      : getPortalCustomerName(provider, customerId);
+  }
+
   return (
     <PortalPage
       eyebrow="Money in"
-      title="Payments"
+      title={`Payments${useApi ? ` (${total})` : ""}`}
       description="Deposits, progress payments, and completion balances recorded against invoices."
     >
       <FilterTabs
@@ -1580,50 +1715,144 @@ export function PaymentsView() {
       <PortalDataTable
         filename="payments"
         countLabel="Payments"
-        searchPlaceholder="Search by payment #, invoice #, or job #"
+        searchPlaceholder="Search by payment #, invoice #, customer, or job #"
+        loading={tableLoading}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/payments/${row.id}`}
+        pageSize={useApi ? limit : undefined}
+        empty={
+          search
+            ? "No payments match this search."
+            : archivedOnly
+              ? "No archived payments."
+              : status
+                ? "No payments match this status."
+                : "No records found."
+        }
+        serverPagination={
+          useApi
+            ? {
+                page,
+                pageSize: limit,
+                total,
+                totalPages,
+                onPageChange,
+                search: searchInput,
+                onSearchChange,
+              }
+            : undefined
+        }
         columns={paymentBoardColumns({
           invoices: allInvoices,
           jobs: allJobs,
           estimates: allEstimates,
           requests,
-          customerName: (customerId) => {
-            const match = customers.find((item) => item.id === customerId);
-            return match
-              ? crmCustomerName(match)
-              : getPortalCustomerName(provider, customerId);
-          },
+          customerName: customerLabel,
         })}
         actions={(row) => {
-          const invoice = allInvoices.find((item) => item.id === row.invoiceId);
-          const job = invoice
-            ? allJobs.find((item) => item.id === invoice.jobId)
+          const invoice =
+            allInvoices.find((item) => item.id === row.invoiceId) ||
+            (row.invoiceNumber
+              ? ({ id: row.invoiceId, number: row.invoiceNumber } as Invoice)
+              : undefined);
+          const jobId = row.jobId || invoice?.jobId;
+          const job = jobId
+            ? allJobs.find((item) => item.id === jobId)
             : undefined;
+          const archived =
+            Boolean(row.isArchived) || records.isArchived("payment", row.id);
           return [
             { label: "View", href: `/pro/dashboard/payments/${row.id}` },
-            ...(invoice
+            ...(row.invoiceId
               ? [
                   {
                     label: "Open invoice",
-                    href: `/pro/dashboard/invoices/${invoice.id}`,
+                    href: `/pro/dashboard/invoices/${row.invoiceId}`,
                   },
                 ]
               : []),
             ...(job
               ? [{ label: "Open job", href: `/pro/dashboard/jobs/${job.id}` }]
               : []),
-            archiveRowAction(records, "payment", row.id, paymentNumber(row)),
-            {
-              label: "Delete",
-              variant: "destructive",
-              onSelect: () => {
-                records.remove("payment", row.id);
-                toast.success(`${paymentNumber(row)} removed from this board.`);
-              },
-            },
+            archived
+              ? {
+                  label: restoringId === row.id ? "Restoring…" : "Restore",
+                  onSelect: () => {
+                    if (restoringId) return;
+                    void (async () => {
+                      setRestoringId(row.id);
+                      try {
+                        if (useApi) {
+                          await dispatch(
+                            patchPaymentArchive({
+                              id: row.id,
+                              isArchived: false,
+                            }),
+                          ).unwrap();
+                          void dispatch(fetchPayments({ force: true, silent: true }));
+                        } else {
+                          await records.unarchive("payment", row.id);
+                        }
+                        toast.success(`${paymentNumber(row)} restored.`);
+                      } catch (err) {
+                        toast.error(
+                          typeof err === "string"
+                            ? err
+                            : "Could not restore this payment.",
+                        );
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    })();
+                  },
+                }
+              : archiveRowAction(
+                  records,
+                  "payment",
+                  row.id,
+                  paymentNumber(row),
+                  () => setArchiveTarget(row),
+                ),
           ];
+        }}
+      />
+      <ConfirmArchiveDialog
+        open={Boolean(archiveTarget)}
+        onOpenChange={(open) => {
+          if (!archiving && !open) setArchiveTarget(null);
+        }}
+        kind="payment"
+        number={archiveTarget ? paymentNumber(archiveTarget) : undefined}
+        loading={archiving}
+        onConfirm={() => {
+          if (!archiveTarget || archiving) return;
+          void (async () => {
+            setArchiving(true);
+            try {
+              if (useApi) {
+                await dispatch(
+                  patchPaymentArchive({
+                    id: archiveTarget.id,
+                    isArchived: true,
+                  }),
+                ).unwrap();
+                void dispatch(fetchPayments({ force: true, silent: true }));
+              } else {
+                await records.archive("payment", archiveTarget.id);
+              }
+              toast.success(`${paymentNumber(archiveTarget)} archived.`);
+              setArchiveTarget(null);
+            } catch (err) {
+              toast.error(
+                typeof err === "string"
+                  ? err
+                  : "Could not archive this payment.",
+              );
+            } finally {
+              setArchiving(false);
+            }
+          })();
         }}
       />
     </PortalPage>

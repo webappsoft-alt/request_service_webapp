@@ -37,6 +37,10 @@ export const userApi = {
   invoices: "user/invoices",
   /** GET one customer invoice by id */
   invoice: (id: string) => `user/invoices/${id}`,
+  /** GET customer payments recorded by providers */
+  payments: "user/payments",
+  /** GET one customer payment by id */
+  payment: (id: string) => `user/payments/${id}`,
 } as const;
 
 /** Customer bookings & orders (Bearer JWT, role: customer). */

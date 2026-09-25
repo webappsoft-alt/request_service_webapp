@@ -37,6 +37,7 @@ import {
 
 function statusLabel(status: string) {
   const clean = String(status || "").toLowerCase();
+  if (clean === "sent") return "Pending";
   if (clean === "partially_paid") return "Partially Paid";
   return clean
     .split("_")
@@ -447,6 +448,66 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
               </div>
             </section>
           ) : null}
+
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4 sm:px-6">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="size-4 text-primary" />
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    Payments ({invoice.payments?.length || 0})
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Settlements your professional recorded against this invoice
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="outline" size="sm">
+                <Link href={customerPaths.payments}>View all payments</Link>
+              </Button>
+            </div>
+            {invoice.payments?.length ? (
+              <ul className="divide-y divide-border">
+                {invoice.payments.map((payment) => (
+                  <li
+                    key={payment.id}
+                    className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-6"
+                  >
+                    <div>
+                      <Link
+                        href={customerPaths.payment(payment.id)}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        PMT-{payment.id.replace(/^pay_?/i, "")}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">
+                        {payment.method
+                          ? `${payment.method.charAt(0).toUpperCase()}${payment.method.slice(1)}`
+                          : "Payment"}
+                        {payment.paidAt
+                          ? ` · ${formatDate(payment.paidAt.slice(0, 10))}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <StatusPill
+                        label={statusLabel(payment.status)}
+                        tone={moneyTone(payment.status)}
+                      />
+                      <span className="font-semibold tabular-nums">
+                        {formatMoney(payment.amount)}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 py-8 text-sm text-muted-foreground sm:px-6">
+                No payments recorded yet. When your professional applies a payment,
+                it will appear here and under Payments.
+              </p>
+            )}
+          </section>
 
           {/* Guarantee & Protection Notice */}
           <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground">

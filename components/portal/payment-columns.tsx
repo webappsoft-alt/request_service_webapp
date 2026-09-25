@@ -28,16 +28,35 @@ export function paymentBoardColumns({
   requests: PortalRequest[];
   customerName: (customerId: string) => string;
 }): PortalTableColumn<Payment>[] {
-  const invoiceOf = (payment: Payment) => invoices.find((item) => item.id === payment.invoiceId);
+  const invoiceOf = (payment: Payment) =>
+    invoices.find((item) => item.id === payment.invoiceId);
   const jobOf = (payment: Payment) => {
+    if (payment.jobId) {
+      const byId = jobs.find((item) => item.id === payment.jobId);
+      if (byId) return byId;
+    }
     const invoice = invoiceOf(payment);
     return invoice ? jobs.find((item) => item.id === invoice.jobId) : undefined;
+  };
+  const invoiceNumberOf = (payment: Payment) =>
+    invoiceOf(payment)?.number || payment.invoiceNumber || "";
+  const customerIdOf = (payment: Payment) =>
+    invoiceOf(payment)?.customerId || payment.customerId || "";
+  const customerLabelOf = (payment: Payment) => {
+    if (payment.customerName?.trim()) return payment.customerName.trim();
+    const customerId = customerIdOf(payment);
+    return customerId ? customerName(customerId) : "";
   };
   const jobNameOf = (payment: Payment) => {
     const invoice = invoiceOf(payment);
     const job = jobOf(payment);
     if (job) return jobServiceLabel(job, estimates, requests);
     return invoice?.items[0]?.description.replace(/ labor$/i, "") || "Service";
+  };
+  const siteOf = (payment: Payment) => {
+    const job = jobOf(payment);
+    if (!job?.address) return "";
+    return `${job.address.street || ""} ${job.address.city || ""} ${job.address.zip || ""}`.trim();
   };
 
   return [
@@ -97,17 +116,18 @@ export function paymentBoardColumns({
     {
       id: "invoice",
       header: "Invoice no.",
-      sortValue: (row) => invoiceOf(row)?.number ?? "",
-      searchValue: (row) => invoiceOf(row)?.number ?? "",
-      exportValue: (row) => invoiceOf(row)?.number ?? "",
+      sortValue: (row) => invoiceNumberOf(row),
+      searchValue: (row) => invoiceNumberOf(row),
+      exportValue: (row) => invoiceNumberOf(row),
       cell: (row) => {
-        const invoice = invoiceOf(row);
-        return invoice ? (
-          <Link href={`/pro/dashboard/invoices/${invoice.id}`} className="text-primary hover:underline">
-            {invoice.number}
+        const number = invoiceNumberOf(row);
+        if (!number) return "—";
+        return row.invoiceId ? (
+          <Link href={`/pro/dashboard/invoices/${row.invoiceId}`} className="text-primary hover:underline">
+            {number}
           </Link>
         ) : (
-          "—"
+          number
         );
       },
     },
@@ -131,26 +151,19 @@ export function paymentBoardColumns({
     {
       id: "customer",
       header: "Customer",
-      sortValue: (row) => {
-        const invoice = invoiceOf(row);
-        return invoice ? customerName(invoice.customerId) : "";
-      },
-      searchValue: (row) => {
-        const invoice = invoiceOf(row);
-        return invoice ? customerName(invoice.customerId) : "";
-      },
-      exportValue: (row) => {
-        const invoice = invoiceOf(row);
-        return invoice ? customerName(invoice.customerId) : "";
-      },
+      sortValue: (row) => customerLabelOf(row),
+      searchValue: (row) => customerLabelOf(row),
+      exportValue: (row) => customerLabelOf(row),
       cell: (row) => {
-        const invoice = invoiceOf(row);
-        return invoice ? (
-          <Link href={`/pro/dashboard/customers/${invoice.customerId}`} className="text-primary hover:underline">
-            {customerName(invoice.customerId)}
+        const label = customerLabelOf(row);
+        const customerId = customerIdOf(row);
+        if (!label) return "—";
+        return customerId ? (
+          <Link href={`/pro/dashboard/customers/${customerId}`} className="text-primary hover:underline">
+            {label}
           </Link>
         ) : (
-          "—"
+          label
         );
       },
     },
@@ -158,10 +171,7 @@ export function paymentBoardColumns({
       id: "site",
       header: "Site",
       sortValue: (row) => jobOf(row)?.address.street ?? "",
-      searchValue: (row) => {
-        const job = jobOf(row);
-        return job ? `${job.address.street} ${job.address.city} ${job.address.zip}` : "";
-      },
+      searchValue: (row) => siteOf(row),
       exportValue: (row) => jobOf(row)?.address.street ?? "",
       cell: (row) => jobOf(row)?.address.street || "—",
     },

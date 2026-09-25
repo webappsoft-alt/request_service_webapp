@@ -4,13 +4,14 @@
  * Independent of header "Mark all read".
  */
 
-export type CustomerInboxClearKind = "estimates" | "invoices" | "orders";
+export type CustomerInboxClearKind = "estimates" | "invoices" | "payments" | "orders";
 
 type ClearState = Record<CustomerInboxClearKind, boolean>;
 
 const cleared: ClearState = {
   estimates: false,
   invoices: false,
+  payments: false,
   orders: false,
 };
 

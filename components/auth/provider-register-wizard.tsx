@@ -64,6 +64,9 @@ const STEPS = [
 type Step = (typeof STEPS)[number];
 
 const OPTIONAL_STEPS: Step[] = ["services", "profile", "preferences", "coverage"];
+/** Steps that show "· optional" in the stepper (Services/Profile use a Skip control instead). */
+const STEPPER_OPTIONAL_LABEL: Step[] = ["preferences", "coverage"];
+const SKIP_TO_NEXT_STEPS: Step[] = ["services", "profile"];
 
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
 
@@ -450,6 +453,17 @@ export function ProviderRegisterWizard() {
       eyebrow="Join as Pro"
       title={copy.title}
       description={copy.description}
+      headerAction={
+        SKIP_TO_NEXT_STEPS.includes(step) ? (
+          <button
+            type="button"
+            className="text-sm font-medium text-primary hover:underline"
+            onClick={() => goTo(STEPS[stepIndex + 1])}
+          >
+            Skip
+          </button>
+        ) : null
+      }
       footer={
         <>
           Already have an account?{" "}
@@ -478,7 +492,7 @@ export function ProviderRegisterWizard() {
                 )}
               >
                 {item}
-                {OPTIONAL_STEPS.includes(item) ? " · optional" : ""}
+                {STEPPER_OPTIONAL_LABEL.includes(item) ? " · optional" : ""}
               </span>
             </li>
           );

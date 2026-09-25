@@ -33,6 +33,7 @@ import customersReducer from "./customersSlice";
 import estimatesReducer from "./estimatesSlice";
 import customerQuotesReducer from "./customerQuotesSlice";
 import customerInvoicesReducer from "./customerInvoicesSlice";
+import customerPaymentsReducer from "./customerPaymentsSlice";
 import teamReducer from "./teamSlice";
 import contractorsReducer from "./contractorsSlice";
 import vendorsReducer from "./vendorsSlice";
@@ -40,6 +41,7 @@ import remindersReducer from "./remindersSlice";
 import tasksReducer from "./tasksSlice";
 import jobsReducer from "./jobsSlice";
 import invoicesReducer from "./invoicesSlice";
+import paymentsReducer from "./paymentsSlice";
 import requestsReducer from "./requestsSlice";
 import reportsReducer from "./reportsSlice";
 import {
@@ -82,6 +84,7 @@ const rootReducer = combineReducers({
   estimates: estimatesReducer,
   customerQuotes: customerQuotesReducer,
   customerInvoices: customerInvoicesReducer,
+  customerPayments: customerPaymentsReducer,
   team: teamReducer,
   contractors: contractorsReducer,
   vendors: vendorsReducer,
@@ -89,6 +92,7 @@ const rootReducer = combineReducers({
   tasks: tasksReducer,
   jobs: jobsReducer,
   invoices: invoicesReducer,
+  payments: paymentsReducer,
   requests: requestsReducer,
   reports: reportsReducer,
   customerNotes: customerNotesModule.reducer,
@@ -154,6 +158,7 @@ function needsReducerHotReplace(state: RootState) {
     state.estimates === undefined ||
     state.customerQuotes === undefined ||
     state.customerInvoices === undefined ||
+    state.customerPayments === undefined ||
     state.team === undefined ||
     state.contractors === undefined ||
     state.vendors === undefined ||
@@ -161,6 +166,7 @@ function needsReducerHotReplace(state: RootState) {
     state.tasks === undefined ||
     state.jobs === undefined ||
     state.invoices === undefined ||
+    state.payments === undefined ||
     state.requests === undefined ||
     state.customerNotes === undefined ||
     state.estimateNotes === undefined ||

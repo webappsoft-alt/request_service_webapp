@@ -215,7 +215,11 @@ export function isEstimateNotification(item: AppNotification) {
 }
 
 export function isInvoiceNotification(item: AppNotification) {
-  return /INVOICE/i.test(item.type);
+  return /INVOICE/i.test(item.type) && !/PAYMENT/i.test(item.type);
+}
+
+export function isPaymentNotification(item: AppNotification) {
+  return /PAYMENT/i.test(item.type);
 }
 
 export function isOrderNotification(item: AppNotification) {
@@ -254,6 +258,7 @@ export function notificationHref(
     if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
       return "/pro/dashboard/estimates";
     }
+    if (type.includes("PAYMENT")) return "/pro/dashboard/payments";
     if (type.includes("INVOICE")) return "/pro/dashboard/invoices";
     if (type.includes("ORDER") || type.includes("BOOKING") || type.includes("WORK_")) {
       return "/pro/dashboard/orders";
@@ -273,6 +278,7 @@ export function notificationHref(
   if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
     return "/account/dashboard/estimates";
   }
+  if (type.includes("PAYMENT")) return "/account/dashboard/payments";
   if (type.includes("INVOICE")) return "/account/dashboard/invoices";
   if (type.includes("ORDER") || type.includes("BOOKING") || type.includes("WORK_")) {
     return "/account/dashboard/orders";

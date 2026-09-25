@@ -2083,20 +2083,31 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
     amount: payment.amount,
     method: payment.method,
     scheduleId: payment.scheduleId || null,
-    notes: "",
-    transactionReference: "",
+    notes: payment.notes || "",
+    transactionReference: payment.transactionReference || "",
+    ...(payment.paidAt ? { paidAt: payment.paidAt } : {}),
   });
   invalidateGetCache(providerCrmApi.invoices);
   invalidateGetCache(providerCrmApi.invoice(invoiceRef));
+  invalidateGetCache(providerCrmApi.payments);
   const data =
     response && typeof response === "object" && "data" in response
       ? ((response as { data?: unknown }).data as Record<string, unknown> | undefined)
       : (response as Record<string, unknown> | undefined);
   const paymentRaw = data && typeof data === "object" ? data.payment ?? data : response;
   const invoiceRaw = data && typeof data === "object" ? data.invoice ?? data : response;
+  const mappedPayment = mapPayment(paymentRaw);
+  const mappedInvoice = mapInvoice(invoiceRaw);
+  if (mappedPayment && mappedInvoice) {
+    mappedPayment.invoiceNumber =
+      mappedPayment.invoiceNumber || mappedInvoice.number;
+    mappedPayment.customerId =
+      mappedPayment.customerId || mappedInvoice.customerId;
+    mappedPayment.jobId = mappedPayment.jobId || mappedInvoice.jobId;
+  }
   return {
-    payment: mapPayment(paymentRaw),
-    invoice: mapInvoice(invoiceRaw),
+    payment: mappedPayment,
+    invoice: mappedInvoice,
   };
 }
 
@@ -2108,8 +2119,70 @@ export async function deleteInvoice(id: string) {
   return result;
 }
 
+export type PaymentsQuery = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  method?: string;
+  invoiceId?: string;
+  customerId?: string;
+  isArchived?: boolean;
+  force?: boolean;
+  silent?: boolean;
+};
+
+export async function queryPayments(query: PaymentsQuery = {}) {
+  const params: Record<string, string | number | boolean> = {
+    page: query.page ?? 1,
+    limit: query.limit ?? 20,
+  };
+  if (query.search?.trim()) params.search = query.search.trim();
+  if (query.status?.trim()) params.status = query.status.trim();
+  if (query.method?.trim()) params.method = query.method.trim();
+  if (query.invoiceId?.trim()) params.invoiceId = query.invoiceId.trim();
+  if (query.customerId?.trim()) params.customerId = query.customerId.trim();
+  if (query.isArchived !== undefined) params.isArchived = query.isArchived;
+
+  const response = await getData(providerCrmApi.payments, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  const mapped = mapCrmList(response, mapPayment);
+  return {
+    items: mapped.items.filter((item): item is Payment => Boolean(item)),
+    page: mapped.page,
+    total: mapped.total,
+    totalPages: mapped.totalPages,
+  };
+}
+
 export async function listPayments(options?: CrmRequestOptions) {
-  return listMapped(providerCrmApi.payments, mapPayment, options);
+  return queryPayments({
+    page: 1,
+    limit: 50,
+    silent: options?.silent ?? true,
+    force: options?.force ?? false,
+  }).then((result) => result.items);
+}
+
+export async function getPayment(id: string) {
+  const response = await getData(providerCrmApi.payment(id), undefined, {
+    silent: true,
+    force: true,
+  });
+  return mapCrmEntity(response, mapPayment);
+}
+
+export async function updatePaymentArchive(id: string, isArchived: boolean) {
+  const response = await putData(
+    providerCrmApi.payment(id),
+    { isArchived },
+    { silent: false },
+  );
+  invalidateGetCache(providerCrmApi.payments);
+  invalidateGetCache(providerCrmApi.payment(id));
+  return mapCrmEntity(response, mapPayment);
 }
 
 export async function listSchedule(options?: CrmRequestOptions) {

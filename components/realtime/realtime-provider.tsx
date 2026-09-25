@@ -197,6 +197,14 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("CHAT_READ_RECEIPT", (payload) => {
         broadcastRealtime({ type: "CHAT_READ_RECEIPT", payload });
       }),
+      onSocketEvent("DIRECT_CHAT_MESSAGE", (payload) => {
+        broadcastRealtime({ type: "DIRECT_CHAT_MESSAGE", payload });
+        broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+      }),
+      onSocketEvent("DIRECT_CHAT_READ", (payload) => {
+        broadcastRealtime({ type: "DIRECT_CHAT_READ", payload });
+        broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+      }),
       onSocketEvent("USER_PRESENCE", handlePresence),
       onSocketEvent("chat:presence", handlePresence),
       onSocketEvent("LEAD_CREATED", (payload) => {

@@ -1,7 +1,16 @@
-import { getData, postData, putData } from "@/components/api/apiFuntions";
-import { chatApi } from "@/components/api/ApiRoutesFile";
-import { mapChatThread, mapCrmEntity, mapCrmList, mapInboxSummary } from "@/lib/api/crm-mappers";
+import { getData, patchData, postData, putData } from "@/components/api/apiFuntions";
+import { chatApi, directChatApi } from "@/components/api/ApiRoutesFile";
+import {
+  mapAdminDirectChat,
+  mapChatThread,
+  mapCrmEntity,
+  mapCrmList,
+  mapInboxSummary,
+  ADMIN_DIRECT_THREAD_ID,
+} from "@/lib/api/crm-mappers";
 import type { ChatAttachment } from "@/lib/booking/chat-store";
+
+export { ADMIN_DIRECT_THREAD_ID };
 
 type ProviderThreadInput = {
   customerName: string;
@@ -153,4 +162,69 @@ export async function markPublicChatRead(threadId: string, customerEmail: string
     },
   );
   return mapCrmEntity(response, mapChatThread);
+}
+
+export async function fetchAdminDirectChatForPeer(
+  viewer: "customer" | "provider",
+  options?: { silent?: boolean; limit?: number },
+) {
+  const response = await getData(
+    directChatApi.admin,
+    { limit: options?.limit ?? 50 },
+    {
+      silent: options?.silent ?? true,
+      force: true,
+    },
+  );
+  const root =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : {};
+  const data = root.data ?? root;
+  return mapAdminDirectChat(data, viewer);
+}
+
+export async function sendAdminDirectChatMessage(
+  viewer: "customer" | "provider",
+  text: string,
+  attachments: ChatAttachment[] = [],
+) {
+  const response = await postData(directChatApi.adminMessages, {
+    text,
+    attachments,
+  });
+  const root =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : {};
+  const data = root.data ?? root;
+  return mapAdminDirectChat(data, viewer);
+}
+
+export async function markAdminDirectChatReadForPeer(
+  viewer: "customer" | "provider",
+) {
+  const response = await patchData(directChatApi.adminRead, {});
+  const root =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : {};
+  const data = root.data ?? root;
+  return mapAdminDirectChat(data, viewer);
+}
+
+export async function getAdminDirectUnreadCount(options?: { silent?: boolean }) {
+  try {
+    const chat = await fetchAdminDirectChatForPeer("customer", {
+      silent: options?.silent ?? true,
+      limit: 1,
+    });
+    return Math.max(
+      0,
+      chat?.unreadForCustomer || 0,
+      chat?.unreadForProvider || 0,
+    );
+  } catch {
+    return 0;
+  }
 }

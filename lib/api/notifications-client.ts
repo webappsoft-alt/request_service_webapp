@@ -196,9 +196,19 @@ export function notificationHref(
     }
   }
   const type = item.type;
+  const data = item.data || {};
+  const isAdminDirect =
+    data.direct === true ||
+    data.tab === "direct" ||
+    String(data.href || "").includes("direct=admin");
+
   if (portal === "provider") {
     if (type === "NEW_LEAD") return "/pro/dashboard/requests?status=new";
-    if (type === "NEW_CHAT_MESSAGE") return "/pro/dashboard/messages";
+    if (type === "NEW_CHAT_MESSAGE") {
+      return isAdminDirect
+        ? "/pro/dashboard/messages?direct=admin"
+        : "/pro/dashboard/messages";
+    }
     if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
       return "/pro/dashboard/estimates";
     }
@@ -208,7 +218,11 @@ export function notificationHref(
     }
     return "/pro/dashboard";
   }
-  if (type === "NEW_CHAT_MESSAGE") return "/account/dashboard/messages";
+  if (type === "NEW_CHAT_MESSAGE") {
+    return isAdminDirect
+      ? "/account/dashboard/messages?direct=admin"
+      : "/account/dashboard/messages";
+  }
   if (type === "SERVICE_SCHEDULED") {
     const kind = String(item.data?.kind || "");
     if (kind === "estimate") return "/account/dashboard/estimates";

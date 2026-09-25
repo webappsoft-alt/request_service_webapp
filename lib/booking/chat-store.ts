@@ -25,11 +25,13 @@ export type ChatMessage = {
 export type ChatThread = {
   id: string;
   providerId: string;
+  providerUserId?: string;
   providerName?: string;
   providerAvatar?: string;
   providerPhone?: string;
   providerSlug?: string;
   customerId?: string;
+  customerUserId?: string;
   customerName: string;
   customerEmail: string;
   customerPhone?: string;
@@ -39,6 +41,10 @@ export type ChatThread = {
   unreadForCustomer: number;
   unreadForAdmin?: number;
   isOnline?: boolean;
+  presence?: {
+    customer?: { isOnline?: boolean; lastSeen?: string };
+    provider?: { isOnline?: boolean; lastSeen?: string };
+  };
   lastSeen?: string;
   lastActiveAt?: string;
   messages: ChatMessage[];

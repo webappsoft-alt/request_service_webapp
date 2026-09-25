@@ -47,6 +47,18 @@ export type RealtimeEvents = {
     unreadForCustomer?: number;
     unreadForAdmin?: number;
   };
+  DIRECT_CHAT_MESSAGE: {
+    chatId?: string;
+    peerUserId?: string;
+    message?: Record<string, unknown>;
+    chat?: Record<string, unknown>;
+  };
+  DIRECT_CHAT_READ: {
+    chatId?: string;
+    peerUserId?: string;
+    unreadForAdmin?: number;
+    unreadForPeer?: number;
+  };
   USER_PRESENCE: {
     userId: string;
     isOnline: boolean;

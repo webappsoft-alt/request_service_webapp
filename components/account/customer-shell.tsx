@@ -37,7 +37,7 @@ import {
   isCustomerOverviewPath,
 } from "@/lib/data/customer-nav";
 import { customerPaths } from "@/lib/customer-paths";
-import { listPublicChatThreads } from "@/lib/api/chat-client";
+import { getAdminDirectUnreadCount, listPublicChatThreads } from "@/lib/api/chat-client";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -251,10 +251,15 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const threads = await listPublicChatThreads(email, { silent: true });
-      setUnreadMessages(
-        threads.reduce((sum, thread) => sum + (thread.unreadForCustomer || 0), 0),
+      const [threads, adminUnread] = await Promise.all([
+        listPublicChatThreads(email, { silent: true }),
+        getAdminDirectUnreadCount({ silent: true }),
+      ]);
+      const threadUnread = threads.reduce(
+        (sum, thread) => sum + (thread.unreadForCustomer || 0),
+        0,
       );
+      setUnreadMessages(threadUnread + adminUnread);
     } catch {
       setUnreadMessages(0);
     }
@@ -292,7 +297,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       if (
         type === "CHAT_MESSAGE" ||
         type === "CHAT_THREAD_UPDATED" ||
-        type === "CHAT_READ_RECEIPT"
+        type === "CHAT_READ_RECEIPT" ||
+        type === "DIRECT_CHAT_MESSAGE" ||
+        type === "DIRECT_CHAT_READ"
       ) {
         void refreshChatBadge();
       }

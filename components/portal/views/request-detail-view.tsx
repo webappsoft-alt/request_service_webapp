@@ -917,11 +917,11 @@ export function RequestDetailView({ id }: { id: string }) {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
 
   useEffect(() => {
-    const custId = thread?.customerId || request?.customerId;
+    const custId = thread?.customerUserId || request?.customerUserId;
     if (custId && /^[0-9a-fA-F]{24}$/.test(custId)) {
       queryUserPresence(custId);
     }
-  }, [thread?.customerId, request?.customerId, queryUserPresence]);
+  }, [thread?.customerUserId, request?.customerUserId, queryUserPresence]);
 
   useEffect(() => {
     setIsOtherTyping(false);
@@ -2185,12 +2185,14 @@ export function RequestDetailView({ id }: { id: string }) {
               const customerEmail = thread?.customerEmail || customer?.email || request.customerEmail;
               const customerPhone = thread?.customerPhone || customer?.phone || request.customerPhone;
               const customerAvatar = thread?.customerAvatar;
-              const custPresence = thread?.customerId
-                ? getPresence(thread.customerId)
-                : request?.customerId
-                  ? getPresence(request.customerId)
-                  : undefined;
-              const isCustomerOnline = custPresence?.isOnline ?? thread?.isOnline ?? false;
+              const custUserId =
+                thread?.customerUserId ||
+                request?.customerUserId ||
+                null;
+              const custPresence = custUserId
+                ? getPresence(custUserId)
+                : undefined;
+              const isCustomerOnline = custPresence?.isOnline ?? thread?.presence?.customer?.isOnline ?? thread?.isOnline ?? false;
 
               return (
                 <div className="flex h-[calc(100vh-270px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xs">

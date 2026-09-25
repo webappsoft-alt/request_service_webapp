@@ -30,7 +30,12 @@ import {
   listPublicChatThreads,
   markPublicChatRead,
   sendPublicChatMessage,
+  fetchAdminDirectChatForPeer,
+  sendAdminDirectChatMessage,
+  markAdminDirectChatReadForPeer,
+  ADMIN_DIRECT_THREAD_ID,
 } from "@/lib/api/chat-client";
+import { mapAdminDirectChat } from "@/lib/api/crm-mappers";
 import {
   readChatGuest,
   type ChatAttachment,
@@ -201,7 +206,10 @@ export function CustomerMessagesView({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const selectedId = searchParams.get("thread") ?? "";
+  const directAdmin = searchParams.get("direct") === "admin";
+  const selectedId = directAdmin
+    ? ADMIN_DIRECT_THREAD_ID
+    : (searchParams.get("thread") ?? "");
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
@@ -252,11 +260,19 @@ export function CustomerMessagesView({
       }
       if (!options?.silent) setLoading(true);
       try {
-        const next = await listPublicChatThreads(listingEmail, {
-          silent: options?.silent ?? true,
-        });
+        const [next, adminChat] = await Promise.all([
+          listPublicChatThreads(listingEmail, {
+            silent: options?.silent ?? true,
+          }),
+          fetchAdminDirectChatForPeer("customer", {
+            silent: options?.silent ?? true,
+          }).catch(() => null),
+        ]);
         const enriched = await enrichThreadsWithProviderNames(next);
-        setThreads(enriched);
+        const merged = adminChat
+          ? [adminChat, ...enriched.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID)]
+          : enriched;
+        setThreads(merged);
         setError(null);
       } catch (err) {
         const message =
@@ -369,6 +385,40 @@ export function CustomerMessagesView({
         );
         return;
       }
+
+      if (detail.type === "DIRECT_CHAT_MESSAGE") {
+        const payload = detail.payload as { chat?: unknown };
+        const mapped = payload?.chat
+          ? mapAdminDirectChat(payload.chat, "customer")
+          : null;
+        if (mapped) {
+          setThreads((current) => {
+            const without = current.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID);
+            const isViewing = selectedId === ADMIN_DIRECT_THREAD_ID;
+            return [
+              {
+                ...mapped,
+                unreadForCustomer: isViewing ? 0 : mapped.unreadForCustomer,
+              },
+              ...without,
+            ];
+          });
+        } else {
+          void loadThreads({ silent: true });
+        }
+        return;
+      }
+
+      if (detail.type === "DIRECT_CHAT_READ") {
+        setThreads((current) =>
+          current.map((t) =>
+            t.id === ADMIN_DIRECT_THREAD_ID
+              ? { ...t, unreadForCustomer: 0 }
+              : t,
+          ),
+        );
+        return;
+      }
     });
 
     return () => {
@@ -431,6 +481,15 @@ export function CustomerMessagesView({
 
     if (hasUnread || isNewIncoming || lastMarkedReadRef.current !== selected.id) {
       lastMarkedReadRef.current = selected.id;
+      if (selected.id === ADMIN_DIRECT_THREAD_ID) {
+        void markAdminDirectChatReadForPeer("customer").catch(() => undefined);
+        setThreads((current) =>
+          current.map((t) =>
+            t.id === ADMIN_DIRECT_THREAD_ID ? { ...t, unreadForCustomer: 0 } : t,
+          ),
+        );
+        return;
+      }
       markThreadRead(selected.id);
       if (hasUnread || isNewIncoming) {
         void markPublicChatRead(selected.id, listingEmail).catch(() => undefined);
@@ -490,7 +549,7 @@ export function CustomerMessagesView({
   }, [selected?.id]);
 
   useEffect(() => {
-    if (!selected?.id) return;
+    if (!selected?.id || selected.id === ADMIN_DIRECT_THREAD_ID) return;
     joinThread(selected.id);
     return () => leaveThread(selected.id);
   }, [joinThread, leaveThread, selected?.id]);
@@ -501,6 +560,19 @@ export function CustomerMessagesView({
       return;
     }
     try {
+      if (selected.id === ADMIN_DIRECT_THREAD_ID) {
+        const updated = await sendAdminDirectChatMessage(
+          "customer",
+          text,
+          attachments,
+        );
+        if (!updated) throw new Error("Unable to send the message.");
+        setThreads((current) => {
+          const without = current.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID);
+          return [updated, ...without];
+        });
+        return;
+      }
       const updated = await sendPublicChatMessage(
         selected.id,
         listingEmail,

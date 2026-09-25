@@ -1657,11 +1657,16 @@ export function mapChatThread(raw: unknown): ChatThread | null {
   return {
     id,
     providerId: crmIdOf(record.providerId),
+    providerUserId:
+      crmIdOf(record.providerUserId) ||
+      crmIdOf(prov?.userId) ||
+      undefined,
     providerName,
     providerAvatar,
     providerPhone,
     providerSlug,
     customerId: crmIdOf(record.customerId) || undefined,
+    customerUserId: crmIdOf(record.customerUserId) || undefined,
     customerName: trimmed(record.customerName) || trimmed(cust?.name) || "Customer",
     customerEmail: trimmed(record.customerEmail) || trimmed(cust?.email),
     customerPhone: trimmed(record.customerPhone) || trimmed(cust?.phone) || undefined,
@@ -1670,13 +1675,78 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     unreadForProvider: Math.max(0, numberValue(record.unreadForProvider)),
     unreadForCustomer: Math.max(0, numberValue(record.unreadForCustomer)),
     unreadForAdmin: Math.max(0, numberValue(record.unreadForAdmin)),
-    isOnline: booleanValue(record.isOnline, false),
+    isOnline: booleanValue(
+      record.isOnline ?? asRecord(record.presence)?.customer?.isOnline,
+      false,
+    ),
+    presence: asRecord(record.presence)
+      ? {
+          customer: {
+            isOnline: Boolean(asRecord(asRecord(record.presence)?.customer)?.isOnline),
+            lastSeen: toIsoString(asRecord(asRecord(record.presence)?.customer)?.lastSeen) || undefined,
+          },
+          provider: {
+            isOnline: Boolean(asRecord(asRecord(record.presence)?.provider)?.isOnline),
+            lastSeen: toIsoString(asRecord(asRecord(record.presence)?.provider)?.lastSeen) || undefined,
+          },
+        }
+      : undefined,
     lastSeen: toIsoString(record.lastSeen) || undefined,
     lastActiveAt: toIsoString(record.lastActiveAt) || undefined,
     messages: asArray(record.messages)
       .map(mapChatMessage)
       .filter((item): item is ChatMessage => Boolean(item)),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
+  };
+}
+
+/** Stable thread id for customer/provider ↔ admin DM in message lists. */
+export const ADMIN_DIRECT_THREAD_ID = "admin-direct";
+
+/**
+ * Map AdminDirectChat payload into a ChatThread shape for portal/customer UIs.
+ * Peer messages (`from: user`) become customer or provider based on viewer role.
+ */
+export function mapAdminDirectChat(
+  raw: unknown,
+  viewer: "customer" | "provider",
+): ChatThread | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+
+  const unreadPeer = Math.max(0, numberValue(record.unreadForPeer));
+  const peerFrom: ChatMessage["from"] =
+    viewer === "provider" ? "provider" : "customer";
+
+  const messages = asArray(record.messages)
+    .map((entry) => {
+      const msgRecord = asRecord(entry);
+      if (!msgRecord) return null;
+      const fromRaw = trimmed(msgRecord.from);
+      const normalizedFrom: ChatMessage["from"] =
+        fromRaw === "admin" ? "admin" : fromRaw === "user" ? peerFrom : peerFrom;
+      const mapped = mapChatMessage({ ...msgRecord, from: normalizedFrom });
+      return mapped;
+    })
+    .filter((item): item is ChatMessage => Boolean(item));
+
+  const lastAt =
+    toIsoString(record.lastMessageAt) ||
+    messages.at(-1)?.at ||
+    toIsoString(record.updatedAt) ||
+    new Date().toISOString();
+
+  return {
+    id: ADMIN_DIRECT_THREAD_ID,
+    providerId: viewer === "customer" ? "platform-support" : "",
+    providerName: viewer === "customer" ? "Platform Support" : undefined,
+    customerName: viewer === "provider" ? "Platform Support" : "You",
+    customerEmail: "",
+    unreadForProvider: viewer === "provider" ? unreadPeer : 0,
+    unreadForCustomer: viewer === "customer" ? unreadPeer : 0,
+    unreadForAdmin: Math.max(0, numberValue(record.unreadForAdmin)),
+    messages,
+    updatedAt: lastAt,
   };
 }
 

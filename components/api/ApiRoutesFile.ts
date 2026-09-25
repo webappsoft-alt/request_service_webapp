@@ -246,6 +246,13 @@ export const notificationsApi = {
   markAllRead: "notifications/mark-all-read",
 } as const;
 
+/** Customer / provider ↔ admin direct messaging */
+export const directChatApi = {
+  admin: "direct-chats/admin",
+  adminMessages: "direct-chats/admin/messages",
+  adminRead: "direct-chats/admin/read",
+} as const;
+
 export const uploadApi = {
   /** POST multipart field `image` → `{ image: url }` */
   image: "upload-image",

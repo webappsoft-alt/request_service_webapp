@@ -40,7 +40,10 @@ type FilterTab = "all" | "unread" | "leads";
 export function MessagesView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const selectedId = searchParams.get("thread") ?? "";
+  const directAdmin = searchParams.get("direct") === "admin";
+  const selectedId = directAdmin
+    ? "admin-direct"
+    : (searchParams.get("thread") ?? "");
   const [query, setQuery] = useState("");
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -139,7 +142,7 @@ export function MessagesView() {
     const ids = Array.from(
       new Set(
         threads
-          .map((t) => t.customerId)
+          .map((t) => t.customerUserId)
           .filter((id): id is string => Boolean(id && /^[0-9a-fA-F]{24}$/.test(id))),
       ),
     ).sort();
@@ -182,13 +185,19 @@ export function MessagesView() {
   }, [selected?.id]);
 
   useEffect(() => {
-    if (!selected?.id) return;
+    if (!selected?.id || selected.id === "admin-direct") return;
     joinThread(selected.id);
     return () => leaveThread(selected.id);
   }, [joinThread, leaveThread, selected?.id]);
 
-  const participantPresence = selected?.customerId ? getPresence(selected.customerId) : undefined;
-  const isParticipantOnline = participantPresence?.isOnline ?? selected?.isOnline ?? false;
+  const participantPresence = selected?.customerUserId
+    ? getPresence(selected.customerUserId)
+    : undefined;
+  const isParticipantOnline =
+    participantPresence?.isOnline ??
+    selected?.presence?.customer?.isOnline ??
+    selected?.isOnline ??
+    false;
 
   const unreadCount = useMemo(
     () => threads.filter((item) => item.unreadForProvider > 0).length,
@@ -317,11 +326,14 @@ export function MessagesView() {
                   const last = thread.messages.at(-1);
                   const lastTime = formatThreadTime(last?.at || thread.updatedAt);
                   const hasUnread = thread.unreadForProvider > 0;
-                  const customerPresence = thread.customerId
-                    ? getPresence(thread.customerId)
+                  const customerPresence = thread.customerUserId
+                    ? getPresence(thread.customerUserId)
                     : undefined;
                   const isCustomerOnline =
-                    customerPresence?.isOnline ?? thread.isOnline ?? false;
+                    customerPresence?.isOnline ??
+                    thread.presence?.customer?.isOnline ??
+                    thread.isOnline ??
+                    false;
 
                   return (
                     <Link

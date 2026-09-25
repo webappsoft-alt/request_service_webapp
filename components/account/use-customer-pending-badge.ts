@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
-import { listPublicChatThreads } from "@/lib/api/chat-client";
+import { listPublicChatThreads, getAdminDirectUnreadCount } from "@/lib/api/chat-client";
 import {
   fetchNotifications,
   normalizeSocketNotification,
@@ -35,10 +35,15 @@ export function useCustomerPendingBadge(enabled = true) {
       return;
     }
     try {
-      const threads = await listPublicChatThreads(email, { silent: true });
-      setUnreadMessages(
-        threads.reduce((sum, thread) => sum + (thread.unreadForCustomer || 0), 0),
+      const [threads, adminUnread] = await Promise.all([
+        listPublicChatThreads(email, { silent: true }),
+        getAdminDirectUnreadCount({ silent: true }),
+      ]);
+      const threadUnread = threads.reduce(
+        (sum, thread) => sum + (thread.unreadForCustomer || 0),
+        0,
       );
+      setUnreadMessages(threadUnread + adminUnread);
     } catch {
       setUnreadMessages(0);
     }
@@ -84,7 +89,9 @@ export function useCustomerPendingBadge(enabled = true) {
       if (
         type === "CHAT_MESSAGE" ||
         type === "CHAT_THREAD_UPDATED" ||
-        type === "CHAT_READ_RECEIPT"
+        type === "CHAT_READ_RECEIPT" ||
+        type === "DIRECT_CHAT_MESSAGE" ||
+        type === "DIRECT_CHAT_READ"
       ) {
         void refreshChatBadge();
       }

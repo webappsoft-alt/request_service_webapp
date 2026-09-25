@@ -6,8 +6,12 @@ import {
   listProviderChatThreads,
   markProviderChatRead,
   sendProviderChatMessage,
+  fetchAdminDirectChatForPeer,
+  sendAdminDirectChatMessage,
+  markAdminDirectChatReadForPeer,
+  ADMIN_DIRECT_THREAD_ID,
 } from "@/lib/api/chat-client";
-import { mapChatThread } from "@/lib/api/crm-mappers";
+import { mapAdminDirectChat, mapChatThread } from "@/lib/api/crm-mappers";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -103,11 +107,19 @@ export function useChatThreads(options?: { enabled?: boolean }) {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       try {
-        const items = await listProviderChatThreads({
-          silent: options?.silent ?? true,
-          force: options?.force ?? true,
-        });
-        setApiThreads((prev) => mergeThreads(prev, items));
+        const [items, adminChat] = await Promise.all([
+          listProviderChatThreads({
+            silent: options?.silent ?? true,
+            force: options?.force ?? true,
+          }),
+          fetchAdminDirectChatForPeer("provider", {
+            silent: options?.silent ?? true,
+          }).catch(() => null),
+        ]);
+        const withAdmin = adminChat
+          ? [adminChat, ...items.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID)]
+          : items;
+        setApiThreads((prev) => mergeThreads(prev, withAdmin));
       } catch (err) {
         console.error("Failed to load provider chats:", err);
       } finally {
@@ -216,6 +228,36 @@ export function useChatThreads(options?: { enabled?: boolean }) {
         return;
       }
 
+      if (detail?.type === "DIRECT_CHAT_MESSAGE" && detail.payload) {
+        const payload = detail.payload as {
+          message?: Record<string, unknown>;
+          chat?: unknown;
+        };
+        const mapped = payload.chat
+          ? mapAdminDirectChat(payload.chat, "provider")
+          : null;
+        if (mapped) {
+          setApiThreads((prev) => {
+            const without = prev.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID);
+            return [mapped, ...without];
+          });
+          return;
+        }
+        onRefresh();
+        return;
+      }
+
+      if (detail?.type === "DIRECT_CHAT_READ" && detail.payload) {
+        setApiThreads((prev) =>
+          prev.map((t) =>
+            t.id === ADMIN_DIRECT_THREAD_ID
+              ? { ...t, unreadForProvider: 0 }
+              : t,
+          ),
+        );
+        return;
+      }
+
       if (detail?.type === "INBOX_SUMMARY_INVALIDATE") {
         // Do not call onRefresh() here — INBOX_SUMMARY_INVALIDATE is emitted by
         // the backend after every chat message send, which would trigger a full
@@ -271,6 +313,20 @@ export function useChatThreads(options?: { enabled?: boolean }) {
       if (isLive) {
         if (from !== "provider") return;
         try {
+          if (threadId === ADMIN_DIRECT_THREAD_ID) {
+            const updated = await sendAdminDirectChatMessage(
+              "provider",
+              text,
+              attachments || [],
+            );
+            if (updated) {
+              setApiThreads((prev) => {
+                const without = prev.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID);
+                return [updated, ...without];
+              });
+            }
+            return;
+          }
           const updated = await sendProviderChatMessage(threadId, text, attachments);
           if (updated) {
             setApiThreads((prev) => {
@@ -321,6 +377,10 @@ export function useChatThreads(options?: { enabled?: boolean }) {
               : t,
           ),
         );
+        if (threadId === ADMIN_DIRECT_THREAD_ID) {
+          void markAdminDirectChatReadForPeer("provider").catch(() => undefined);
+          return;
+        }
         if (typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("rs-realtime", {

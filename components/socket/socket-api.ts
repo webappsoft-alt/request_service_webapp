@@ -65,6 +65,23 @@ export type RealtimeEvents = {
     lastSeen?: string;
     lastActiveAt?: string;
   };
+  SUPPORT_PRESENCE: {
+    isOnline: boolean;
+    support?: boolean;
+    role?: string;
+    lastSeen?: string;
+  };
+  "presence:snapshot": {
+    users: Array<{
+      userId?: string | null;
+      guestEmail?: string | null;
+      role?: string | null;
+      isOnline: boolean;
+      lastSeen?: string;
+    }>;
+    supportOnline?: boolean;
+    at?: string;
+  };
   "chat:presence": {
     userId: string;
     isOnline: boolean;

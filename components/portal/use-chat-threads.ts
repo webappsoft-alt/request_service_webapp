@@ -241,6 +241,29 @@ export function useChatThreads(options?: { enabled?: boolean }) {
             const without = prev.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID);
             return [mapped, ...without];
           });
+          // Mark read if Platform Support is actively open (URL or auto-select)
+          if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const urlActive =
+              params.get("direct") === "admin" ||
+              params.get("thread") === ADMIN_DIRECT_THREAD_ID;
+            // Also check path — provider messages page with admin-direct auto-selected
+            const onMessages = window.location.pathname.includes("/messages");
+            if (urlActive || (onMessages && params.get("thread") == null && params.get("direct") == null)) {
+              // Only auto-mark when URL explicitly selects admin-direct;
+              // auto-select without URL is handled by the messages-view mark-read effect.
+              if (urlActive) {
+                void markAdminDirectChatReadForPeer("provider").catch(() => undefined);
+                setApiThreads((prev) =>
+                  prev.map((t) =>
+                    t.id === ADMIN_DIRECT_THREAD_ID
+                      ? { ...t, unreadForProvider: 0 }
+                      : t,
+                  ),
+                );
+              }
+            }
+          }
           return;
         }
         onRefresh();
@@ -248,12 +271,39 @@ export function useChatThreads(options?: { enabled?: boolean }) {
       }
 
       if (detail?.type === "DIRECT_CHAT_READ" && detail.payload) {
+        const payload = detail.payload as {
+          readBy?: string;
+          unreadForAdmin?: number;
+          unreadForPeer?: number;
+        };
         setApiThreads((prev) =>
-          prev.map((t) =>
-            t.id === ADMIN_DIRECT_THREAD_ID
-              ? { ...t, unreadForProvider: 0 }
-              : t,
-          ),
+          prev.map((t) => {
+            if (t.id !== ADMIN_DIRECT_THREAD_ID) return t;
+            const readBy = payload?.readBy;
+            if (readBy === "admin") {
+              return {
+                ...t,
+                unreadForAdmin: payload.unreadForAdmin ?? 0,
+                messages: t.messages.map((m) =>
+                  m.from === "provider"
+                    ? { ...m, isRead: true, status: "read" as const }
+                    : m,
+                ),
+              };
+            }
+            if (readBy === "customer" || readBy === "provider") {
+              return {
+                ...t,
+                unreadForProvider: payload.unreadForPeer ?? 0,
+                messages: t.messages.map((m) =>
+                  m.from === "admin"
+                    ? { ...m, isRead: true, status: "read" as const }
+                    : m,
+                ),
+              };
+            }
+            return { ...t, unreadForProvider: 0 };
+          }),
         );
         return;
       }
@@ -364,6 +414,25 @@ export function useChatThreads(options?: { enabled?: boolean }) {
   const markRead = useCallback(
     (threadId: string) => {
       if (isLive) {
+        if (threadId === ADMIN_DIRECT_THREAD_ID) {
+          setApiThreads((prev) =>
+            prev.map((t) =>
+              t.id === threadId
+                ? {
+                    ...t,
+                    unreadForProvider: 0,
+                    messages: t.messages.map((m) =>
+                      m.from === "admin"
+                        ? { ...m, isRead: true, status: "read" as const }
+                        : m,
+                    ),
+                  }
+                : t,
+            ),
+          );
+          void markAdminDirectChatReadForPeer("provider").catch(() => undefined);
+          return;
+        }
         setApiThreads((prev) =>
           prev.map((t) =>
             t.id === threadId
@@ -377,10 +446,6 @@ export function useChatThreads(options?: { enabled?: boolean }) {
               : t,
           ),
         );
-        if (threadId === ADMIN_DIRECT_THREAD_ID) {
-          void markAdminDirectChatReadForPeer("provider").catch(() => undefined);
-          return;
-        }
         if (typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("rs-realtime", {

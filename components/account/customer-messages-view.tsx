@@ -221,6 +221,7 @@ export function CustomerMessagesView({
     getPresence,
     queryUserPresence,
     markThreadRead,
+    supportOnline,
   } = useRealtime();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -231,6 +232,8 @@ export function CustomerMessagesView({
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [guestEmail, setGuestEmail] = useState("");
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  // Tracks the thread currently shown in the panel (incl. auto-select without URL)
+  const viewingThreadIdRef = useRef<string | null>(null);
 
   const listingEmail = useMemo(
     () => resolveListingEmail(user?.email, guestEmail),
@@ -331,7 +334,7 @@ export function CustomerMessagesView({
             if (msgId && thread.messages.some((m) => (m.id || (m as any)._id) === msgId)) {
               return current;
             }
-            const isViewing = selectedId === thread.id;
+            const isViewing = viewingThreadIdRef.current === thread.id;
             const normalizedMsg = {
               ...payload.message,
               id: msgId || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -387,22 +390,26 @@ export function CustomerMessagesView({
       }
 
       if (detail.type === "DIRECT_CHAT_MESSAGE") {
-        const payload = detail.payload as { chat?: unknown };
+        const payload = detail.payload as { chat?: unknown; message?: { from?: string } };
         const mapped = payload?.chat
           ? mapAdminDirectChat(payload.chat, "customer")
           : null;
         if (mapped) {
           setThreads((current) => {
             const without = current.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID);
-            const isViewing = selectedId === ADMIN_DIRECT_THREAD_ID;
+            const isViewing = viewingThreadIdRef.current === ADMIN_DIRECT_THREAD_ID;
             return [
               {
                 ...mapped,
                 unreadForCustomer: isViewing ? 0 : mapped.unreadForCustomer,
+                unreadForAdmin: mapped.unreadForAdmin,
               },
               ...without,
             ];
           });
+          if (viewingThreadIdRef.current === ADMIN_DIRECT_THREAD_ID) {
+            void markAdminDirectChatReadForPeer("customer").catch(() => undefined);
+          }
         } else {
           void loadThreads({ silent: true });
         }
@@ -410,12 +417,35 @@ export function CustomerMessagesView({
       }
 
       if (detail.type === "DIRECT_CHAT_READ") {
+        const payload = detail.payload as {
+          readBy?: string;
+          unreadForAdmin?: number;
+          unreadForPeer?: number;
+        };
         setThreads((current) =>
-          current.map((t) =>
-            t.id === ADMIN_DIRECT_THREAD_ID
-              ? { ...t, unreadForCustomer: 0 }
-              : t,
-          ),
+          current.map((t) => {
+            if (t.id !== ADMIN_DIRECT_THREAD_ID) return t;
+            const readBy = payload?.readBy;
+            const next = { ...t };
+            if (readBy === "admin") {
+              next.unreadForAdmin = payload.unreadForAdmin ?? 0;
+              next.messages = t.messages.map((m) =>
+                m.from === "customer"
+                  ? { ...m, isRead: true, status: "read" as const }
+                  : m,
+              );
+            } else if (readBy === "customer" || readBy === "provider") {
+              next.unreadForCustomer = payload.unreadForPeer ?? 0;
+              next.messages = t.messages.map((m) =>
+                m.from === "admin"
+                  ? { ...m, isRead: true, status: "read" as const }
+                  : m,
+              );
+            } else {
+              next.unreadForCustomer = 0;
+            }
+            return next;
+          }),
         );
         return;
       }
@@ -464,6 +494,8 @@ export function CustomerMessagesView({
     return filteredThreads[0] ?? threads[0] ?? null;
   }, [filteredThreads, selectedId, threads]);
 
+  viewingThreadIdRef.current = selected?.id ?? null;
+
   useEffect(() => {
     if (selectedId) {
       setMobileChatOpen(true);
@@ -476,28 +508,36 @@ export function CustomerMessagesView({
   useEffect(() => {
     if (!selected?.id || !listingEmail) return;
     const lastMsg = selected.messages.at(-1);
-    const hasUnread = (selected.unreadForCustomer ?? 0) > 0;
-    const isNewIncoming = lastMsg && lastMsg.from !== "customer" && !lastMsg.isRead;
+    const hasUnread =
+      selected.id === ADMIN_DIRECT_THREAD_ID
+        ? (selected.unreadForCustomer ?? 0) > 0
+        : (selected.unreadForCustomer ?? 0) > 0;
+    const isNewIncoming =
+      lastMsg &&
+      lastMsg.from !== "customer" &&
+      !lastMsg.isRead;
 
-    if (hasUnread || isNewIncoming || lastMarkedReadRef.current !== selected.id) {
-      lastMarkedReadRef.current = selected.id;
-      if (selected.id === ADMIN_DIRECT_THREAD_ID) {
-        void markAdminDirectChatReadForPeer("customer").catch(() => undefined);
-        setThreads((current) =>
-          current.map((t) =>
-            t.id === ADMIN_DIRECT_THREAD_ID ? { ...t, unreadForCustomer: 0 } : t,
-          ),
-        );
-        return;
-      }
-      markThreadRead(selected.id);
-      if (hasUnread || isNewIncoming) {
-        void markPublicChatRead(selected.id, listingEmail).catch(() => undefined);
-        setThreads((current) =>
-          current.map((t) => (t.id === selected.id ? { ...t, unreadForCustomer: 0 } : t)),
-        );
-      }
+    // Only mark when there is something unread — never on mere first-select
+    if (!(hasUnread || isNewIncoming)) return;
+    if (lastMarkedReadRef.current === `${selected.id}:${selected.messages.length}`) {
+      return;
     }
+    lastMarkedReadRef.current = `${selected.id}:${selected.messages.length}`;
+
+    if (selected.id === ADMIN_DIRECT_THREAD_ID) {
+      void markAdminDirectChatReadForPeer("customer").catch(() => undefined);
+      setThreads((current) =>
+        current.map((t) =>
+          t.id === ADMIN_DIRECT_THREAD_ID ? { ...t, unreadForCustomer: 0 } : t,
+        ),
+      );
+      return;
+    }
+    markThreadRead(selected.id);
+    void markPublicChatRead(selected.id, listingEmail).catch(() => undefined);
+    setThreads((current) =>
+      current.map((t) => (t.id === selected.id ? { ...t, unreadForCustomer: 0 } : t)),
+    );
   }, [listingEmail, selected?.id, selected?.messages?.length, selected?.unreadForCustomer, markThreadRead]);
 
   // Query presence only when the set of provider IDs changes — not on every message.
@@ -549,7 +589,9 @@ export function CustomerMessagesView({
   }, [selected?.id]);
 
   useEffect(() => {
-    if (!selected?.id || selected.id === ADMIN_DIRECT_THREAD_ID) return;
+    if (!selected?.id) return;
+    // Join room for both C↔P threads and Platform Support so backend can
+    // skip notifications while this chat is active.
     joinThread(selected.id);
     return () => leaveThread(selected.id);
   }, [joinThread, leaveThread, selected?.id]);
@@ -732,13 +774,21 @@ export function CustomerMessagesView({
                   const last = thread.messages.at(-1);
                   const lastTime = formatThreadTime(last?.at || thread.updatedAt);
                   const hasUnread = (thread.unreadForCustomer || 0) > 0;
-                  const provPresence = thread.providerId ? getPresence(thread.providerId) : undefined;
-                  const isProvOnline = provPresence?.isOnline ?? thread.isOnline ?? false;
+                  const isProvOnline =
+                    thread.id === ADMIN_DIRECT_THREAD_ID
+                      ? supportOnline || Boolean(thread.isOnline)
+                      : (thread.providerId ? getPresence(thread.providerId)?.isOnline : undefined) ??
+                        thread.isOnline ??
+                        false;
 
                   return (
                     <Link
                       key={thread.id}
-                      href={`${customerPaths.messages}?thread=${thread.id}`}
+                      href={
+                        thread.id === ADMIN_DIRECT_THREAD_ID
+                          ? `${customerPaths.messages}?direct=admin`
+                          : `${customerPaths.messages}?thread=${thread.id}`
+                      }
                       onClick={() => setMobileChatOpen(true)}
                       className={cn(
                         "group relative flex items-start gap-3 p-3 transition-colors text-left",
@@ -902,12 +952,24 @@ export function CustomerMessagesView({
                       <span
                         className={cn(
                           "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
-                          (selected.providerId ? getPresence(selected.providerId)?.isOnline : selected.isOnline)
+                          (
+                            selected.id === ADMIN_DIRECT_THREAD_ID
+                              ? supportOnline || Boolean(selected.isOnline)
+                              : selected.providerId
+                                ? getPresence(selected.providerId)?.isOnline
+                                : selected.isOnline
+                          )
                             ? "bg-emerald-500"
                             : "bg-muted-foreground/30",
                         )}
                         aria-label={
-                          (selected.providerId ? getPresence(selected.providerId)?.isOnline : selected.isOnline)
+                          (
+                            selected.id === ADMIN_DIRECT_THREAD_ID
+                              ? supportOnline || Boolean(selected.isOnline)
+                              : selected.providerId
+                                ? getPresence(selected.providerId)?.isOnline
+                                : selected.isOnline
+                          )
                             ? "Online"
                             : "Offline"
                         }
@@ -920,7 +982,13 @@ export function CustomerMessagesView({
                         <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
                           {selectedProvider.name}
                         </h2>
-                        {(selected.providerId ? getPresence(selected.providerId)?.isOnline : selected.isOnline) ? (
+                        {(
+                          selected.id === ADMIN_DIRECT_THREAD_ID
+                            ? supportOnline || Boolean(selected.isOnline)
+                            : selected.providerId
+                              ? getPresence(selected.providerId)?.isOnline
+                              : selected.isOnline
+                        ) ? (
                           <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 sm:inline-flex">
                             <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
                             Online
@@ -977,7 +1045,11 @@ export function CustomerMessagesView({
                 <ChatPanel
                   messages={selected.messages}
                   self="customer"
-                  recipientUnreadCount={selected.unreadForProvider}
+                  recipientUnreadCount={
+                    selected.id === ADMIN_DIRECT_THREAD_ID
+                      ? (selected.unreadForAdmin ?? 0)
+                      : selected.unreadForProvider
+                  }
                   otherName={selectedProvider.name}
                   otherAvatar={selectedProvider.avatar}
                   isOtherTyping={isOtherTyping}

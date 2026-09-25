@@ -544,7 +544,7 @@ function lineItems(estimateId: string, serviceName: string, price: number): Esti
       quantity: 1,
       unit: "job",
       unitPrice: labor,
-      taxRate: 0.0825,
+      taxRate: 0,
       discount: 0,
       total: labor,
     },
@@ -556,7 +556,7 @@ function lineItems(estimateId: string, serviceName: string, price: number): Esti
       quantity: 1,
       unit: "lot",
       unitPrice: materials,
-      taxRate: 0.0825,
+      taxRate: 0,
       discount: 0,
       total: materials,
     },
@@ -570,7 +570,7 @@ export function getPortalEstimates(provider: Provider): Estimate[] {
     const customer = customers.find((item) => item.id === request.customerId) ?? customers[0];
     const address = customer.addresses[0] ?? addressFor(provider, request.zip, index);
     const price = money(provider.startingPrice ?? 149, index + 3);
-    const tax = Math.round(price * 0.0825);
+    const tax = Math.round(price * 0);
     const id = `est_${pad(index + 1)}`;
     return {
       id,
@@ -675,7 +675,7 @@ export function getPortalInvoices(provider: Provider): Invoice[] {
       const extras = job.changeOrders.reduce((sum, order) => sum + order.total, 0);
       const estimateTotal = job.items.reduce((sum, item) => sum + item.total, 0);
       const subtotal = estimateTotal + extras;
-      const tax = Math.round(subtotal * 0.0825);
+      const tax = Math.round(subtotal * 0);
       const total = subtotal + tax;
       const status = INVOICE_STATUSES[index % INVOICE_STATUSES.length];
       const amountPaid =

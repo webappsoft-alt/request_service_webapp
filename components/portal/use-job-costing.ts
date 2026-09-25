@@ -126,11 +126,14 @@ export function jobCostMix(lines: JobCostLine[]) {
   );
 }
 
-const TAX_RATE = 0.0825;
-
-export function jobMoneySheet(mix: { labor: number; materials: number; total: number }) {
+export function jobMoneySheet(
+  mix: { labor: number; materials: number; total: number },
+  /** Sales tax percent (e.g. 8.25). 0 = no tax. */
+  taxRatePercent = 0,
+) {
   const subtotal = mix.labor + mix.materials;
-  const tax = Math.round(subtotal * TAX_RATE);
+  const fraction = Math.max(0, Number(taxRatePercent) || 0) / 100;
+  const tax = Math.round(subtotal * fraction);
   return { labor: mix.labor, materials: mix.materials, subtotal, tax, total: subtotal + tax };
 }
 

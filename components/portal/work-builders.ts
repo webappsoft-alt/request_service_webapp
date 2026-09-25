@@ -41,7 +41,13 @@ export function addressFrom(
   };
 }
 
-export function linesToEstimateItems(estimateId: string, lines: JobCostLine[]): EstimateItem[] {
+export function linesToEstimateItems(
+  estimateId: string,
+  lines: JobCostLine[],
+  /** Sales tax percent (e.g. 8.25). */
+  taxRatePercent = 0,
+): EstimateItem[] {
+  const rate = Math.max(0, Number(taxRatePercent) || 0);
   return lines.map((line) => ({
     id: line.id,
     estimateId,
@@ -50,7 +56,7 @@ export function linesToEstimateItems(estimateId: string, lines: JobCostLine[]): 
     quantity: line.quantity,
     unit: line.unit,
     unitPrice: line.unitPrice,
-    taxRate: 0.0825,
+    taxRate: rate,
     discount: 0,
     total: lineTotal(line),
     ...(line.kind === "materials"
@@ -99,8 +105,8 @@ export function linesToInvoiceItems(invoiceId: string, lines: JobCostLine[]): In
   }));
 }
 
-export function moneyFromLines(lines: JobCostLine[]) {
-  return jobMoneySheet(jobCostMix(lines));
+export function moneyFromLines(lines: JobCostLine[], taxRatePercent = 0) {
+  return jobMoneySheet(jobCostMix(lines), taxRatePercent);
 }
 
 export function invoiceAsJob(invoice: Invoice, job?: Job): Job {
@@ -178,11 +184,14 @@ export function buildEstimate(input: {
   terms?: string;
   siteVisit?: EstimateSiteVisitRecord;
   lines: JobCostLine[];
+  /** Sales tax percent for the property state (e.g. 8.25). */
+  taxRatePercent?: number;
 }): Estimate {
   const id = input.id ?? `est_${Date.now().toString(36)}`;
   const now = new Date().toISOString();
   const lines = filledWorkLines(input.lines);
-  const money = moneyFromLines(lines);
+  const taxRatePercent = Math.max(0, Number(input.taxRatePercent) || 0);
+  const money = moneyFromLines(lines, taxRatePercent);
   return {
     id,
     number: input.number,
@@ -201,7 +210,7 @@ export function buildEstimate(input: {
     discount: 0,
     tax: money.tax,
     total: money.total,
-    items: linesToEstimateItems(id, lines),
+    items: linesToEstimateItems(id, lines, taxRatePercent),
     siteVisit: input.siteVisit,
     createdAt: now,
     updatedAt: now,
@@ -254,10 +263,12 @@ export function buildInvoice(input: {
   customerId: string;
   jobId: string;
   lines: JobCostLine[];
+  taxRatePercent?: number;
 }): Invoice {
   const id = input.id ?? `inv_${Date.now().toString(36)}`;
   const now = new Date().toISOString();
-  const money = moneyFromLines(input.lines);
+  const taxRatePercent = Math.max(0, Number(input.taxRatePercent) || 0);
+  const money = moneyFromLines(input.lines, taxRatePercent);
   return {
     id,
     number: input.number,

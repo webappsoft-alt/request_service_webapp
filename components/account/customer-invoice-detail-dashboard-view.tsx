@@ -332,7 +332,13 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                             <p className="mt-0.5 text-xs text-muted-foreground capitalize">
                               {item.kind}
                               {item.taxRate
-                                ? ` · Tax ${(item.taxRate * 100).toFixed(0)}%`
+                                ? ` · Tax ${
+                                    Number(item.taxRate) > 1
+                                      ? Number(item.taxRate).toFixed(
+                                          Number(item.taxRate) % 1 ? 2 : 0,
+                                        )
+                                      : (Number(item.taxRate) * 100).toFixed(0)
+                                  }%`
                                 : ""}
                             </p>
                           ) : null}

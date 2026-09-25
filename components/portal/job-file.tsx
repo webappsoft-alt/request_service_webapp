@@ -255,7 +255,23 @@ export function JobSummaryTab({
     // kinds stay aligned with API (and labour spelling repairs), not stale localStorage.
     preferApi: noun === "job" || Boolean(estimate),
   });
-  const sheet = jobMoneySheet(mix);
+  const [taxRatePercent, setTaxRatePercent] = useState(0);
+  const addressState =
+    estimate?.propertyAddress?.state ||
+    job?.address?.state ||
+    "";
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
+      const rate = await fetchTaxRatePercent(addressState);
+      if (!cancelled) setTaxRatePercent(rate);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [addressState]);
+  const sheet = jobMoneySheet(mix, taxRatePercent);
   const file = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();
   const isEstimate = noun === "estimate" && Boolean(estimate?.id);

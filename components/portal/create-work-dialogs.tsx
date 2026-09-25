@@ -494,6 +494,9 @@ export function CreateEstimateDialog({
           : estimate?.siteVisit;
 
       if (isEdit && estimate) {
+        const taxRatePercent = await (
+          await import("@/lib/tax/state-tax")
+        ).fetchTaxRatePercent(state);
         const nextEstimate = buildEstimate({
           id: estimate.id,
           number: estimate.number,
@@ -520,6 +523,7 @@ export function CreateEstimateDialog({
           terms,
           siteVisit: siteVisitPayload,
           lines,
+          taxRatePercent,
         });
         const updated = await updateEstimateApi(estimate.id, {
           ...nextEstimate,
@@ -558,6 +562,9 @@ export function CreateEstimateDialog({
         return;
       }
 
+      const taxRatePercent = await (
+        await import("@/lib/tax/state-tax")
+      ).fetchTaxRatePercent(state);
       const estimateDraft = buildEstimate({
         number: nextRecordNumber(
           "EST",
@@ -582,6 +589,7 @@ export function CreateEstimateDialog({
         terms,
         siteVisit: path === "site_visit" ? siteVisitPayload : undefined,
         lines,
+        taxRatePercent,
       });
       const created = await createEstimateApi(estimateDraft);
       if (!created?.id) {
@@ -1365,6 +1373,9 @@ export function CreateJobDialog({
 
       // Offline / local-only path still keeps a draft quote on file.
       if (!source && !useApi) {
+        const taxRatePercent = await (
+          await import("@/lib/tax/state-tax")
+        ).fetchTaxRatePercent(state);
         const linked = buildEstimate({
           number: nextRecordNumber(
             "EST",
@@ -1378,6 +1389,7 @@ export function CreateJobDialog({
           status: "accepted",
           notes,
           lines: workLines,
+          taxRatePercent,
         });
         records.addEstimate(linked);
         estimateId = linked.id;

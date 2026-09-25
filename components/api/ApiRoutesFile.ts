@@ -180,6 +180,8 @@ export const providerCrmApi = {
   note: (id: string) => `provider/notes/${id}`,
   /** GET aggregated business reports dashboard */
   reports: "provider/reports",
+  /** GET sales tax percent for a U.S. state — query: `state` */
+  taxRate: "provider/tax-rate",
 } as const;
 
 /** Public catalog endpoints (no provider auth required for reads). */
@@ -226,6 +228,8 @@ export const publicApi = {
   blogComments: (slug: string) => `public/blogs/${slug}/comments`,
   /** GET active FAQs — query: audience (`customer` | `provider`), optional domain */
   faqs: "public/faqs",
+  /** GET sales tax percent for a U.S. state — query: `state` */
+  taxRate: "public/tax-rate",
 } as const;
 
 export const publicQuoteApi = {

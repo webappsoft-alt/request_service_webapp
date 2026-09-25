@@ -412,8 +412,11 @@ export function EstimateDetailView({ id }: { id: string }) {
     setFinalizing(true);
     try {
       const lines = filledWorkLines(readCostLines(session?.email, asJob));
+      const taxRatePercent = await (
+        await import("@/lib/tax/state-tax")
+      ).fetchTaxRatePercent(quote.propertyAddress?.state);
       const items = lines.length
-        ? linesToEstimateItems(quote.id, lines)
+        ? linesToEstimateItems(quote.id, lines, taxRatePercent)
         : quote.items;
       if (apiReady) {
         const saved = await finalizeEstimateApi(quote.id, { ...quote, items });
@@ -462,8 +465,11 @@ export function EstimateDetailView({ id }: { id: string }) {
     setConverting(true);
     try {
       const lines = filledWorkLines(readCostLines(session?.email, asJob));
+      const taxRatePercent = await (
+        await import("@/lib/tax/state-tax")
+      ).fetchTaxRatePercent(quote.propertyAddress?.state);
       const items = lines.length
-        ? linesToEstimateItems(quote.id, lines)
+        ? linesToEstimateItems(quote.id, lines, taxRatePercent)
         : quote.items;
       const siteVisitRecord = siteVisit
         ? siteVisitToRecord(siteVisit)
@@ -822,7 +828,13 @@ export function EstimateDetailView({ id }: { id: string }) {
                         if (!prev?.images?.length) return line;
                         return { ...line, images: [...prev.images] };
                       });
-                      const items = linesToEstimateItems(quote.id, filled);
+                      const items = linesToEstimateItems(
+                        quote.id,
+                        filled,
+                        await (
+                          await import("@/lib/tax/state-tax")
+                        ).fetchTaxRatePercent(quote.propertyAddress?.state),
+                      );
                       writeCostLines(session?.email, quote.id, filled);
                       if (apiReady) {
                         try {

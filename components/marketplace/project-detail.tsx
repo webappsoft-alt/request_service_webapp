@@ -115,7 +115,7 @@ export function ProjectDetail({
 
           <ProjectPortfolioGallery photos={photos} title={title} />
 
-          <div className="mt-1 grid gap-8 border-t border-black/10 pt-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+          <div className="mt-1 grid gap-8 border-t border-input pt-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
             <div className="flex flex-col gap-6">
               <header className="flex flex-col gap-1.5">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
@@ -151,8 +151,8 @@ export function ProjectDetail({
             </div>
 
             <aside className="flex flex-col gap-3 lg:sticky lg:top-24 lg:self-start">
-              <Card className="border-black/15 shadow-none">
-                <CardHeader className="border-b border-black/10 pb-4">
+              <Card className="border-input shadow-none">
+                <CardHeader className="border-b border-input pb-4">
                   <CardTitle className="text-base">Completed by</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4 pt-4">
@@ -174,7 +174,7 @@ export function ProjectDetail({
                   </Link>
 
                   {(categoryName || subcategoryName) && (
-                    <dl className="divide-y divide-black/10 rounded-xl border border-black/10 text-sm">
+                    <dl className="divide-y divide-input rounded-xl border border-input text-sm">
                       {categoryName ? (
                         <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                           <dt className="text-muted-foreground">Category</dt>
@@ -211,7 +211,7 @@ export function ProjectDetail({
           </div>
 
           {related.length ? (
-            <section className="flex flex-col gap-4 border-t border-black/10 pt-8">
+            <section className="flex flex-col gap-4 border-t border-input pt-8">
               <h2 className="text-xl font-semibold">Other projects</h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {related.map((item) => (

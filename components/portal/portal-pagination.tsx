@@ -47,7 +47,7 @@ export function PortalPagination({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-between gap-3 border-t border-black/10 px-2 pt-3 sm:flex-row",
+        "flex flex-col items-center justify-between gap-3 border-t border-input px-2 pt-3 sm:flex-row",
         className,
       )}
     >

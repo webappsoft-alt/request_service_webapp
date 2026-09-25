@@ -983,7 +983,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                   </div>
                 </div>
               ) : canConvert ? (
-                <div className="rounded-lg border border-[#003F7D]/20 bg-[#f4f7fb] px-4 py-3">
+                <div className="rounded-lg border border-input bg-[#f4f7fb] px-4 py-3">
                   <p className="text-sm font-semibold text-[#003F7D]">
                     Convert to job
                   </p>
@@ -1289,7 +1289,7 @@ export function JobDetailView({ id }: { id: string }) {
     // Only show spinner if no cached data exists yet
     if (pending || (!cachedJob && detailLoading) || crm.refreshing) {
       return (
-        <div className="border border-black/15 bg-card" aria-busy="true">
+        <div className="border border-input bg-card" aria-busy="true">
           <CenteredSpinner className="min-h-[22rem]" />
         </div>
       );
@@ -1728,7 +1728,7 @@ export function JobDetailView({ id }: { id: string }) {
           return (
             <div className="space-y-4">
               {estimate ? (
-                <div className="rounded-[4px] border border-[#003F7D]/15 bg-[#f4f7fb] px-4 py-3">
+                <div className="rounded-[4px] border border-input bg-[#f4f7fb] px-4 py-3">
                   <p className="text-sm font-semibold text-[#003F7D]">
                     Estimate converted to {job.number}
                   </p>
@@ -1745,7 +1745,7 @@ export function JobDetailView({ id }: { id: string }) {
                   </p>
                 </div>
               ) : job.estimateId ? (
-                <div className="rounded-[4px] border border-[#003F7D]/15 bg-[#f4f7fb] px-4 py-3">
+                <div className="rounded-[4px] border border-input bg-[#f4f7fb] px-4 py-3">
                   <p className="text-sm font-semibold text-[#003F7D]">
                     Estimate converted to {job.number}
                   </p>

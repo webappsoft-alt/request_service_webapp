@@ -673,7 +673,7 @@ export function CreateEstimateDialog({
                     "rounded-[4px] border px-3 py-3 text-left",
                     path === "site_visit"
                       ? "border-[#003F7D] bg-[#e8eef5]"
-                      : "border-black/15 bg-card",
+                      : "border-input bg-card",
                   )}
                   onClick={() => {
                     setPath("site_visit");
@@ -694,7 +694,7 @@ export function CreateEstimateDialog({
                     "rounded-[4px] border px-3 py-3 text-left",
                     path === "office"
                       ? "border-[#003F7D] bg-[#e8eef5]"
-                      : "border-black/15 bg-card",
+                      : "border-input bg-card",
                   )}
                   onClick={() => {
                     setPath("office");
@@ -1985,7 +1985,7 @@ function WizardTabs<T extends string>({
   options: { id: T; label: string }[];
 }) {
   return (
-    <div className="flex gap-1 border-b border-black/10 pb-2">
+    <div className="flex gap-1 border-b border-input pb-2">
       {options.map((option) => (
         <button
           key={option.id}

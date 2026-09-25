@@ -26,6 +26,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-border-soft: var(--border-soft);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -81,8 +82,11 @@
   --accent: oklch(0.948 0.024 254);
   --accent-foreground: #003f7d;
   --destructive: oklch(0.577 0.2 27);
-  --border: oklch(0.91 0.02 254);
-  --input: color-mix(in oklab, var(--foreground) 35%, transparent);
+  /* Shared UI border — #969FAB everywhere. */
+  --border: #969FAB;
+  --input: #969FAB;
+  /* Soft border for greyish info/field tiles (lighter than --border). */
+  --border-soft: #e2e8f0;
   --ring: oklch(0.42 0.1 254);
   --success: oklch(0.5 0.1 155);
   --success-foreground: oklch(0.985 0.01 155);
@@ -116,7 +120,7 @@
   --sidebar-primary-foreground: oklch(0.99 0.005 254);
   --sidebar-accent: oklch(0.955 0.02 254);
   --sidebar-accent-foreground: #003f7d;
-  --sidebar-border: oklch(0.91 0.02 254);
+  --sidebar-border: #969FAB;
   --sidebar-ring: oklch(0.42 0.1 254);
 }
 
@@ -137,8 +141,8 @@
   --accent: oklch(0.3 0.04 254);
   --accent-foreground: oklch(0.985 0.008 254);
   --destructive: oklch(0.7 0.18 22);
-  --border: oklch(1 0 0 / 10%);
-  --input: color-mix(in oklab, white 28%, transparent);
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 18%);
   --ring: oklch(0.68 0.08 254);
   --success: oklch(0.7 0.12 155);
   --success-foreground: oklch(0.2 0.04 155);
@@ -162,14 +166,13 @@
   --sidebar-primary-foreground: #003f7d;
   --sidebar-accent: oklch(0.3 0.04 254);
   --sidebar-accent-foreground: oklch(0.985 0.008 254);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 18%);
   --sidebar-ring: oklch(0.68 0.08 254);
 }
 
-/* Pro portal cards sit on a gray canvas — the default --border is too faint. */
+/* Portal uses the same global border/input tokens as the rest of the app. */
 .portal-app {
-  --border: oklch(0.70 0.02 254);
-  --sidebar-border: oklch(0.70 0.02 254);
+  --sidebar-border: var(--border);
 }
 
 @layer base {
@@ -732,7 +735,7 @@
 
 .job-rich-text .ck.ck-toolbar {
   border: 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--input);
   background: #f8fafc;
 }
 
@@ -1255,7 +1258,7 @@
 
 /* Leads — brand blue */
 .dashboard-alert--leads {
-  border-color: color-mix(in oklab, #003f7d 22%, white);
+  border-color: var(--input);
   background: linear-gradient(90deg, #e8f1fb 0%, #f4f8fd 55%, #eef5fc 100%);
   color: #062a52;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 6px 18px -14px rgba(0, 63, 125, 0.45);
@@ -1281,7 +1284,7 @@
 
 /* Estimates — teal */
 .dashboard-alert--estimates {
-  border-color: color-mix(in oklab, #0f766e 22%, white);
+  border-color: var(--input);
   background: linear-gradient(90deg, #e6f7f5 0%, #f3fbfa 55%, #eef9f7 100%);
   color: #134e4a;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 6px 18px -14px rgba(15, 118, 110, 0.4);
@@ -1307,7 +1310,7 @@
 
 /* Bookings — warm coral (attention, not amber mud) */
 .dashboard-alert--orders {
-  border-color: color-mix(in oklab, #c2410c 20%, white);
+  border-color: var(--input);
   background: linear-gradient(90deg, #fff1e8 0%, #fff7f2 55%, #ffefe6 100%);
   color: #7c2d12;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 6px 18px -14px rgba(194, 65, 12, 0.35);
@@ -1344,7 +1347,7 @@
 .pac-container {
   z-index: 200000 !important;
   border-radius: 0.5rem;
-  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  border: 1px solid var(--input);
   box-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.35);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   margin-top: 4px;

@@ -97,7 +97,7 @@ export function SendApprovalDialog({
         className="max-h-[92vh] overflow-hidden p-0 sm:max-w-4xl"
         showCloseButton
       >
-        <DialogHeader className="border-b border-black/10 px-5 py-4">
+        <DialogHeader className="border-b border-input px-5 py-4">
           <DialogTitle>Send {estimate.number} for approval</DialogTitle>
           <DialogDescription>
             Review the estimate as the customer will see it. Sign for the

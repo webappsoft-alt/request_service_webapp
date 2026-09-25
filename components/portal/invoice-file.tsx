@@ -198,7 +198,7 @@ export function ApplyPaymentDialog({
         </DialogHeader>
         <div className="grid gap-4">
           {invoice ? (
-            <div className="grid grid-cols-2 gap-3 rounded-[4px] border border-black/10 bg-muted/40 px-3 py-2.5 text-sm">
+            <div className="grid grid-cols-2 gap-3 rounded-[4px] border border-input bg-muted/40 px-3 py-2.5 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">Invoice</p>
                 <p className="font-medium">{invoice.number}</p>
@@ -328,7 +328,7 @@ export function InvoiceSummaryTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-[4px] border border-black/10 bg-card p-4">
+        <section className="rounded-[4px] border border-input bg-card p-4">
           <h2 className="text-sm font-semibold">Bill to</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
@@ -351,7 +351,7 @@ export function InvoiceSummaryTab({
             <Detail label="Due date" value={invoice.dueAt ? formatDate(invoice.dueAt) : "—"} />
           </dl>
         </section>
-        <section className="rounded-[4px] border border-black/10 bg-card p-4">
+        <section className="rounded-[4px] border border-input bg-card p-4">
           <h2 className="text-sm font-semibold">Job / site</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
@@ -387,8 +387,8 @@ export function InvoiceSummaryTab({
         </section>
       </div>
 
-      <section className="rounded-[4px] border border-black/10 bg-card">
-        <div className="border-b border-black/10 px-4 py-3">
+      <section className="rounded-[4px] border border-input bg-card">
+        <div className="border-b border-input px-4 py-3">
           <h2 className="text-sm font-semibold">Line items</h2>
         </div>
         <Table>
@@ -411,7 +411,7 @@ export function InvoiceSummaryTab({
                       {item.images.map((src, index) => (
                         <span
                           key={`${src}-${index}`}
-                          className="relative inline-block h-12 w-14 overflow-hidden rounded border border-black/10"
+                          className="relative inline-block h-12 w-14 overflow-hidden rounded border border-input"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -435,7 +435,7 @@ export function InvoiceSummaryTab({
             ))}
           </TableBody>
         </Table>
-        <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-black/10 px-4 py-3 text-sm">
+        <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-input px-4 py-3 text-sm">
           <dt className="text-muted-foreground">Subtotal</dt>
           <dd className="text-right tabular-nums">{formatMoney(invoice.subtotal)}</dd>
           {invoice.discount ? (
@@ -455,7 +455,7 @@ export function InvoiceSummaryTab({
         </dl>
       </section>
 
-      <section className="rounded-[4px] border border-black/10 bg-card p-4">
+      <section className="rounded-[4px] border border-input bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">Payments</h2>
@@ -538,7 +538,7 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
 
   return (
     <>
-    <div className="rounded-[4px] border border-black/10 bg-card p-4">
+    <div className="rounded-[4px] border border-input bg-card p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Invoice settings</h2>
         <Button
@@ -645,7 +645,7 @@ export function InvoicePaymentsTab({
   onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
 }) {
   return (
-    <div className="rounded-[4px] border border-black/10 bg-card p-4">
+    <div className="rounded-[4px] border border-input bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Payments</h2>
@@ -656,7 +656,7 @@ export function InvoicePaymentsTab({
         <ApplyPaymentButton invoice={invoice} onPaid={onPaid} />
       </div>
       {payments.length ? (
-        <ul className="mt-4 divide-y divide-black/10 border border-black/10">
+        <ul className="mt-4 divide-y divide-input border border-input">
           {payments.map((payment) => (
             <li key={payment.id} className="flex items-center justify-between gap-3 px-3 py-3 text-sm">
               <div>
@@ -691,7 +691,7 @@ function MoneyStat({
   warn?: boolean;
 }) {
   return (
-    <div className="rounded-[4px] border border-black/10 bg-card px-4 py-3">
+    <div className="rounded-[4px] border border-input bg-card px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p
         className={

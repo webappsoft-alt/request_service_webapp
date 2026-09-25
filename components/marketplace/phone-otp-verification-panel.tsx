@@ -101,7 +101,7 @@ function OtpBoxes({
             "h-12 w-10 rounded-xl border-2 text-center text-xl font-semibold text-foreground outline-none transition-all sm:h-14 sm:w-12 sm:rounded-2xl sm:text-2xl",
             digit
               ? "border-primary bg-primary/5 shadow-[0_0_0_3px_rgba(0,63,125,0.12)]"
-              : "border-[#d7dee8] bg-[#f7f9fc]",
+              : "border-input bg-[#f7f9fc]",
             "focus:border-primary focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,63,125,0.18)]",
             "disabled:cursor-not-allowed disabled:opacity-60",
           )}
@@ -205,7 +205,7 @@ export function PhoneOtpVerificationPanel({
 
       <form onSubmit={onSubmit} className="flex flex-col gap-6">
         {email ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-[#d7dee8] bg-[#f4f7fb] px-4 py-3.5">
+          <div className="flex items-center gap-3 rounded-2xl border border-input bg-[#f4f7fb] px-4 py-3.5">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Mail className="size-4" aria-hidden="true" />
             </span>
@@ -220,7 +220,7 @@ export function PhoneOtpVerificationPanel({
           </div>
         ) : null}
 
-        <div className="rounded-2xl border border-[#e6ebf2] bg-white px-4 py-6 sm:px-6">
+        <div className="rounded-2xl border border-input bg-white px-4 py-6 sm:px-6">
           <p className="mb-5 text-center text-sm font-semibold text-foreground">
             Enter verification code
           </p>

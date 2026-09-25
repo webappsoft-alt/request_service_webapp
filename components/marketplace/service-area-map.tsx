@@ -47,7 +47,7 @@ export function ServiceAreaMap({ provider }: { provider: Provider }) {
   );
 
   return (
-    <div className="rs-map h-80 overflow-hidden rounded-xl border border-black/15">
+    <div className="rs-map h-80 overflow-hidden rounded-xl border border-input">
       <MapContainer
         center={[provider.lat, provider.lng]}
         zoom={12}

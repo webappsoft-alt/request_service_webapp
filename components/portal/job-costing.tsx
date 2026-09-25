@@ -418,7 +418,7 @@ export function EstimateCostChart({ labor, materials }: { labor: number; materia
         <div className="h-full bg-[#003F7D]" style={{ width: `${laborPct}%` }} />
         <div className="h-full bg-[#5b8fa8]" style={{ width: `${materialPct}%` }} />
       </div>
-      <div className="flex items-baseline justify-between border-t border-black/10 pt-3">
+      <div className="flex items-baseline justify-between border-t border-input pt-3">
         <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Quote</p>
         <p className="text-xl font-semibold tabular-nums text-[#003F7D]">{formatMoney(total)}</p>
       </div>
@@ -438,7 +438,7 @@ function EstimateMixTile({
   color: string;
 }) {
   return (
-    <div className="rounded-[4px] border border-black/8 bg-[#f7f9fb] px-3 py-3">
+    <div className="rounded-[4px] border border-input bg-[#f7f9fb] px-3 py-3">
       <div className="flex items-center gap-2">
         <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
         <p className="text-xs font-medium text-muted-foreground">{label}</p>

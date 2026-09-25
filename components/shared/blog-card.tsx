@@ -54,7 +54,7 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
   const isExternalImage = Boolean(imageSrc?.startsWith("http"));
 
   return (
-    <Card className="h-full gap-0 border-black/15 pt-0 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:elevate">
+    <Card className="h-full gap-0 border-input pt-0 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:elevate">
       <Link href={`/blog/${post.slug}`} className="group flex h-full flex-col">
         <div className="relative aspect-[16/10] overflow-hidden bg-primary">
           {imageSrc ? (

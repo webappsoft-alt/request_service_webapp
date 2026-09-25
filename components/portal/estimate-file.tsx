@@ -74,7 +74,7 @@ export function EstimateFileChrome({
           "mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
           open
             ? "border-primary/25 bg-primary/5 text-primary"
-            : "border-black/10 bg-card text-foreground hover:border-primary/30 hover:bg-muted/40",
+            : "border-input bg-card text-foreground hover:border-primary/30 hover:bg-muted/40",
         )}
         onClick={() => setOpen((value) => !value)}
       >
@@ -95,13 +95,13 @@ export function EstimateFileChrome({
       </button>
 
       {open ? (
-        <div className="mt-3 overflow-hidden rounded-lg border border-black/10 bg-card shadow-sm">
-          <div className="border-b border-black/5 bg-[#f8fafc] px-4 py-2.5">
+        <div className="mt-3 overflow-hidden rounded-lg border border-input bg-card shadow-sm">
+          <div className="border-b border-input bg-[#f8fafc] px-4 py-2.5">
             <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
               Estimate overview
             </p>
           </div>
-          <div className="grid divide-y divide-black/5 sm:grid-cols-2 sm:divide-x xl:grid-cols-4">
+          <div className="grid divide-y divide-input sm:grid-cols-2 sm:divide-x xl:grid-cols-4">
             <Detail
               label="Customer"
               value={
@@ -372,7 +372,7 @@ export function EstimateSettingsTab({
   const customerEmail = selected?.email || estimate.customerEmail || "";
 
   return (
-    <div data-estimate-settings-form className="rounded-[4px] border border-black/10 bg-card p-4">
+    <div data-estimate-settings-form className="rounded-[4px] border border-input bg-card p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">Estimate settings</h2>

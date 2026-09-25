@@ -151,7 +151,7 @@ function DeskTabButton({
         "cursor-pointer rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground"
-          : "border-black/15 bg-card text-foreground hover:border-black/25",
+          : "border-input bg-card text-foreground hover:border-input",
       )}
     >
       {tab.tab}
@@ -197,7 +197,7 @@ export function ProDeskTabs() {
         </div>
       </div>
 
-      <div className="grid w-full items-start gap-10 rounded-2xl border border-black/10 bg-[#eef3f8] px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+      <div className="grid w-full items-start gap-10 rounded-2xl border border-input bg-[#eef3f8] px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
         <div className="flex flex-col gap-4 lg:pt-1">
           <p className="inline-flex w-fit rounded-full bg-primary/10 px-3 py-1 font-mono text-[0.7rem] tracking-[0.16em] text-primary uppercase">
             {current.eyebrow}
@@ -223,7 +223,7 @@ export function ProDeskTabs() {
           </Link>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-black/15 bg-card shadow-[0_18px_40px_-24px_rgba(0,63,125,0.4)]">
+        <div className="overflow-hidden rounded-xl border border-input bg-card shadow-[0_18px_40px_-24px_rgba(0,63,125,0.4)]">
           <DeskPreview id={active} beat={beat} onPick={setBeat} />
         </div>
       </div>
@@ -271,7 +271,7 @@ function DeskPreview({
 function PreviewChrome({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 border-b border-black/8 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-input px-4 py-3">
         <p className="text-sm font-semibold">{title}</p>
         <span className="rounded-full bg-primary/8 px-2.5 py-1 text-[11px] font-medium text-primary">
           {meta}
@@ -302,7 +302,7 @@ function BookingPreview({ beat, onPick }: { beat: number; onPick: (value: number
               onClick={() => onPick(index)}
               className={cn(
                 "rounded-lg border px-2 py-2.5 text-left",
-                index === picked ? "border-primary bg-primary/[0.05]" : "border-black/10",
+                index === picked ? "border-primary bg-primary/[0.05]" : "border-input",
               )}
             >
               <p className="text-[10px] tracking-wide text-muted-foreground uppercase">{cell.day}</p>
@@ -371,7 +371,7 @@ function JobsPreview({ beat, onPick }: { beat: number; onPick: (value: number) =
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 border-b border-black/8 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-input px-4 py-3">
         <p className="text-sm font-semibold">Jobs</p>
         <span className="rounded-full bg-primary/8 px-2.5 py-1 text-[11px] font-medium text-primary">
           3 today
@@ -379,7 +379,7 @@ function JobsPreview({ beat, onPick }: { beat: number; onPick: (value: number) =
       </div>
       <ul>
         {jobs.map((item, index) => (
-          <li key={item.id} className={index < jobs.length - 1 ? "border-b border-black/6" : undefined}>
+          <li key={item.id} className={index < jobs.length - 1 ? "border-b border-input" : undefined}>
             <button
               type="button"
               onClick={() => onPick(index)}
@@ -419,7 +419,7 @@ function JobsPreview({ beat, onPick }: { beat: number; onPick: (value: number) =
           </li>
         ))}
       </ul>
-      <div className="flex items-center justify-between gap-3 border-t border-black/8 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-t border-input px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-[12px] font-semibold">{job.tech}</p>
           <p className="truncate text-[11px] text-muted-foreground">{job.scope}</p>
@@ -464,7 +464,7 @@ function CustomersPreview({ beat, onPick }: { beat: number; onPick: (value: numb
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 border-b border-black/8 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-input px-4 py-3">
         <p className="text-sm font-semibold">Customers</p>
         <span className="rounded-full bg-primary/8 px-2.5 py-1 text-[11px] font-medium text-primary">
           3 on file
@@ -472,7 +472,7 @@ function CustomersPreview({ beat, onPick }: { beat: number; onPick: (value: numb
       </div>
       <table className="w-full border-collapse text-left">
         <thead>
-          <tr className="border-b border-black/8 text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          <tr className="border-b border-input text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
             <th className="px-4 py-2 font-medium">Customer</th>
             <th className="hidden px-2 py-2 font-medium sm:table-cell">Last job</th>
             <th className="px-2 py-2 text-right font-medium">Jobs</th>
@@ -489,7 +489,7 @@ function CustomersPreview({ beat, onPick }: { beat: number; onPick: (value: numb
                   className={cn(
                     "grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-4 py-2.5 text-left sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto_auto]",
                     index === active ? "bg-primary/[0.06]" : "hover:bg-[#F3F7FB]",
-                    index < people.length - 1 && "border-b border-black/6",
+                    index < people.length - 1 && "border-b border-input",
                   )}
                 >
                   <span className="flex min-w-0 items-center gap-2.5">
@@ -543,7 +543,7 @@ function TeamPreview({ beat, onPick }: { beat: number; onPick: (value: number) =
             onClick={() => onPick(index)}
             className={cn(
               "flex items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left",
-              index === active ? "border-primary bg-primary/[0.04]" : "border-black/8",
+              index === active ? "border-primary bg-primary/[0.04]" : "border-input",
             )}
           >
             <span className="relative size-9 overflow-hidden rounded-full ring-1 ring-black/10">
@@ -588,7 +588,7 @@ function MobilePreview({ beat, onPick }: { beat: number; onPick: (value: number)
             <div className="min-h-[392px] px-3 pt-2 pb-9">
               <MobileAppScreen id={screens[active].id} onOpenJob={() => onPick(1)} />
             </div>
-            <div className="absolute inset-x-0 bottom-0 border-t border-black/6 bg-white/95">
+            <div className="absolute inset-x-0 bottom-0 border-t border-input bg-white/95">
               <div className="grid grid-cols-2 px-2 pt-1.5 pb-3">
                 {screens.map((screen, index) => (
                   <button
@@ -760,7 +760,7 @@ function LocationsPreview({ beat, onPick }: { beat: number; onPick: (value: numb
   return (
     <div>
       <ProLocationsMapLazy active={active} onPick={onPick} />
-      <div className="flex items-center justify-between gap-3 border-t border-black/8 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-t border-input px-4 py-3">
         <div>
           <p className="text-sm font-semibold">{shop.name}</p>
           <p className="text-[11px] text-muted-foreground">Covers {shop.area}</p>
@@ -781,7 +781,7 @@ function InvoicePreview({ beat, onPick }: { beat: number; onPick: (value: number
 
   return (
     <button type="button" onClick={() => onPick(beat + 1)} className="w-full text-left">
-      <div className="flex items-center justify-between border-b border-black/8 px-4 py-2.5">
+      <div className="flex items-center justify-between border-b border-input px-4 py-2.5">
         <p className="text-[11px] text-muted-foreground">INV-1042.pdf</p>
         <span
           className={cn(
@@ -843,7 +843,7 @@ function InvoicePreview({ beat, onPick }: { beat: number; onPick: (value: number
 
         <table className="mt-4 w-full border-collapse text-[12px]">
           <thead>
-            <tr className="border-y border-black/8 bg-[#F3F7FB] text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+            <tr className="border-y border-input bg-[#F3F7FB] text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
               <th className="px-2 py-1.5 text-left font-medium">Description</th>
               <th className="px-2 py-1.5 text-right font-medium">Qty</th>
               <th className="px-2 py-1.5 text-right font-medium">Amount</th>
@@ -851,7 +851,7 @@ function InvoicePreview({ beat, onPick }: { beat: number; onPick: (value: number
           </thead>
           <tbody>
             {lines.map((line) => (
-              <tr key={line.item} className="border-b border-black/6">
+              <tr key={line.item} className="border-b border-input">
                 <td className="px-2 py-2">
                   <p className="font-medium">{line.item}</p>
                   <p className="text-[10px] text-muted-foreground">{line.source}</p>
@@ -872,13 +872,13 @@ function InvoicePreview({ beat, onPick }: { beat: number; onPick: (value: number
             <span>Tax</span>
             <span className="tabular-nums">$61.95</span>
           </div>
-          <div className="mt-1 flex justify-between border-t border-primary/20 pt-1.5 text-sm font-semibold">
+          <div className="mt-1 flex justify-between border-t border-input pt-1.5 text-sm font-semibold">
             <span>Total</span>
             <span className="tabular-nums">$1,796.95</span>
           </div>
         </div>
 
-        <div className="mt-4 border-t border-dashed border-black/12 pt-3">
+        <div className="mt-4 border-t border-dashed border-input pt-3">
           <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Authorized
           </p>
@@ -905,7 +905,7 @@ function InvoicePreview({ beat, onPick }: { beat: number; onPick: (value: number
               </p>
             </div>
           ) : (
-            <div className="mt-2 border-b border-black/25 pb-6">
+            <div className="mt-2 border-b border-input pb-6">
               <p className="text-[11px] text-muted-foreground">Customer signature</p>
             </div>
           )}
@@ -992,7 +992,7 @@ function ReportingPreview({ beat, onPick }: { beat: number; onPick: (value: numb
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 border-b border-black/8 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-input px-4 py-3">
         <p className="text-sm font-semibold">Reports</p>
         <span className="rounded-full bg-primary/8 px-2.5 py-1 text-[11px] font-medium text-primary">
           Mar–Aug 2026
@@ -1132,7 +1132,7 @@ function AiPreview({ beat, onPick }: { beat: number; onPick: (value: number) => 
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 border-b border-black/8 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-input px-4 py-3">
         <p className="flex items-center gap-1.5 text-sm font-semibold">
           <Sparkles className="size-3.5 text-primary" aria-hidden="true" />
           AI on RS-2841
@@ -1180,7 +1180,7 @@ function AiToolBody({ id }: { id: "scope" | "followup" | "photo" }) {
             ].map((row) => (
               <li
                 key={row.item}
-                className="flex items-center justify-between gap-3 rounded-lg border border-black/8 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-lg border border-input px-3 py-2"
               >
                 <span className="min-w-0">
                   <span className="mb-0.5 inline-block rounded bg-primary/8 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-primary uppercase">
@@ -1199,7 +1199,7 @@ function AiToolBody({ id }: { id: "scope" | "followup" | "photo" }) {
       return (
         <div className="flex flex-col gap-2.5">
           <p className="text-[11px] text-muted-foreground">To Maya Chen · not sent</p>
-          <div className="rounded-lg border border-black/8 px-3 py-3">
+          <div className="rounded-lg border border-input px-3 py-3">
             <p className="text-[12px] leading-5">
               Hi Maya — we can replace the 50-gal heater this week. The draft includes the expansion
               tank from the photos. Reply here if Thursday 9:00 still works.

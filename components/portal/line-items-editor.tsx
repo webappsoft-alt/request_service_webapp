@@ -102,7 +102,7 @@ export function LineItemsEditor({
     : "min-w-[220px]";
 
   return (
-    <div className={cn("w-full overflow-x-auto rounded-[4px] border border-black/10", className)}>
+    <div className={cn("w-full overflow-x-auto rounded-[4px] border border-input", className)}>
       <Table className={cn(wideDescription ? "min-w-[820px]" : "min-w-[760px]", !showUnit && "min-w-[640px]")}>
         <TableHeader>
           <TableRow>
@@ -324,7 +324,7 @@ function LineItemRow({
         </TableCell>
       </TableRow>
       {showImages ? (
-        <TableRow className="border-b border-black/8 bg-[#fafbfc] hover:bg-[#fafbfc]">
+        <TableRow className="border-b border-input bg-[#fafbfc] hover:bg-[#fafbfc]">
           <TableCell colSpan={showUnit ? 7 : 6} className="py-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -360,7 +360,7 @@ function LineItemRow({
                 {images.map((src, index) => (
                   <li
                     key={`${src}-${index}`}
-                    className="group relative h-16 w-20 overflow-hidden rounded-md border border-black/10 bg-white"
+                    className="group relative h-16 w-20 overflow-hidden rounded-md border border-input bg-white"
                   >
                     <Image
                       src={src}

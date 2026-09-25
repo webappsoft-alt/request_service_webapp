@@ -89,7 +89,7 @@ export function PaymentSummaryTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-[4px] border border-black/10 bg-card p-4">
+        <section className="rounded-[4px] border border-input bg-card p-4">
           <h2 className="text-sm font-semibold">Received from</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
@@ -117,7 +117,7 @@ export function PaymentSummaryTab({
             />
           </dl>
         </section>
-        <section className="rounded-[4px] border border-black/10 bg-card p-4">
+        <section className="rounded-[4px] border border-input bg-card p-4">
           <h2 className="text-sm font-semibold">Applied to</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
@@ -162,8 +162,8 @@ export function PaymentSummaryTab({
         </section>
       </div>
 
-      <section className="rounded-[4px] border border-black/10 bg-card">
-        <div className="border-b border-black/10 px-4 py-3">
+      <section className="rounded-[4px] border border-input bg-card">
+        <div className="border-b border-input px-4 py-3">
           <h2 className="text-sm font-semibold">Allocation</h2>
         </div>
         <Table>
@@ -215,7 +215,7 @@ function MoneyStat({
   emphasize?: boolean;
 }) {
   return (
-    <div className="rounded-[4px] border border-black/10 bg-card px-4 py-3">
+    <div className="rounded-[4px] border border-input bg-card px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p className={emphasize ? "mt-1 text-xl font-semibold tabular-nums text-[#003F7D]" : "mt-1 text-xl font-semibold tabular-nums"}>
         {value}

@@ -924,7 +924,7 @@ export function ReminderDetailView({ id }: { id: string }) {
   if (!reminder) {
     if (pending || (useApi && remindersLoading)) {
       return (
-        <div className="border border-black/15 bg-card p-6">
+        <div className="border border-input bg-card p-6">
           <h1 className="text-lg font-semibold">Loading reminder…</h1>
         </div>
       );
@@ -1326,7 +1326,7 @@ function Missing({ href, label }: { href: string; label: string }) {
         ? label.toLowerCase()
         : `${label.toLowerCase()}s`;
   return (
-    <div className="border border-black/15 bg-card p-6">
+    <div className="border border-input bg-card p-6">
       <h1 className="text-lg font-semibold">{label} not found</h1>
       <Button asChild className="mt-4" size="sm">
         <Link href={href}>Back to {plural}</Link>

@@ -202,13 +202,13 @@ export function CustomerDetailView({ id }: { id: string }) {
   if (!customer) {
     if (detailLoading || pending) {
       return (
-        <div className="border border-black/15 bg-card" aria-busy="true">
+        <div className="border border-input bg-card" aria-busy="true">
           <CenteredSpinner label="Loading customer" className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-black/15 bg-card p-6">
+      <div className="border border-input bg-card p-6">
         <h1 className="text-lg font-semibold">{detailError || "Customer not found"}</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/customers">Back to customers</Link>
@@ -338,8 +338,8 @@ export function CustomerDetailView({ id }: { id: string }) {
               return (
                 <div className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-                  <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                    <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                  <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                    <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                       <CrmMark
                         name={name}
                         kind={customer.entityKind === "company" ? "company" : "person"}
@@ -411,8 +411,8 @@ export function CustomerDetailView({ id }: { id: string }) {
                   </section>
 
                   <div className="grid gap-4">
-                    <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                      <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                    <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                      <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
                         <Wallet className="size-4 text-primary" aria-hidden="true" />
                         <h3 className="text-sm font-semibold">Account</h3>
                       </header>
@@ -437,8 +437,8 @@ export function CustomerDetailView({ id }: { id: string }) {
                     </section>
 
                     {assigned ? (
-                      <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                        <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                      <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                        <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
                           <UserRound className="size-4 text-primary" aria-hidden="true" />
                           <h3 className="text-sm font-semibold">Preferred team member</h3>
                         </header>
@@ -1835,8 +1835,8 @@ function CustomerHistoryPanel({
         <Stat label="Invoices" value={String(invoiceCount)} />
         <Stat label="Paid" value={formatMoney(paid)} />
       </div>
-      <div className="border border-black/15 bg-card">
-        <div className="border-b border-black/10 px-4 py-3">
+      <div className="border border-input bg-card">
+        <div className="border-b border-input px-4 py-3">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Activity</p>
           <p className="text-sm text-muted-foreground">
             {total} events since {formatDate(customer.createdAt)} · {crmSourceLabel(customer.source)}
@@ -1847,7 +1847,7 @@ function CustomerHistoryPanel({
         ) : events.length === 0 ? (
           <Empty title="No history yet">Activity for this customer will show up here.</Empty>
         ) : (
-          <ol className="divide-y divide-black/10">
+          <ol className="divide-y divide-input">
             {events.map((item) => {
               if ("kind" in item) {
                 return (
@@ -1889,7 +1889,7 @@ function CustomerHistoryPanel({
           </ol>
         )}
         {hasMore ? (
-          <div className="flex justify-center border-t border-black/10 px-3 py-3">
+          <div className="flex justify-center border-t border-input px-3 py-3">
             <Button
               variant="outline"
               size="sm"
@@ -1977,7 +1977,7 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
         <CenteredSpinner label="Loading tasks" className="min-h-[12rem]" />
       ) : rows.length ? (
         rows.map((item) => (
-          <div key={item.id} className="flex items-center justify-between gap-3 border border-black/10 px-3 py-2.5">
+          <div key={item.id} className="flex items-center justify-between gap-3 border border-input px-3 py-2.5">
             <div className="flex min-w-0 items-start gap-3">
               {busyTaskId === item.id ? (
                 <Loader2 className="mt-1 size-4 animate-spin text-primary" />
@@ -2299,7 +2299,7 @@ function InfoRow({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start gap-3 border-b border-black/5 px-5 py-3 last:border-b-0", className)}>
+    <div className={cn("flex items-start gap-3 border-b border-input px-5 py-3 last:border-b-0", className)}>
       <Icon className="mt-0.5 size-3.5 shrink-0 text-primary/70" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
@@ -2338,7 +2338,7 @@ function MoneyCell({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-black/10 px-3 py-2">
+    <div className="border border-input px-3 py-2">
       <p className="text-[11px] text-muted-foreground uppercase">{label}</p>
       <p className="text-lg font-semibold tabular-nums">{value}</p>
     </div>

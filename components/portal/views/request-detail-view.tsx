@@ -1005,13 +1005,13 @@ export function RequestDetailView({ id }: { id: string }) {
   if (!request) {
     if (pending) {
       return (
-        <div className="border border-black/15 bg-card" aria-busy="true">
+        <div className="border border-input bg-card" aria-busy="true">
           <CenteredSpinner label="Loading lead details" className="min-h-[28rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-black/15 bg-card p-6">
+      <div className="border border-input bg-card p-6">
         <h1 className="text-lg font-semibold">Lead not found</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/requests">Back to leads</Link>
@@ -1336,15 +1336,15 @@ export function RequestDetailView({ id }: { id: string }) {
                       "flex items-center gap-2.5 rounded-lg border px-4 py-2.5 text-xs font-medium",
                       lost
                         ? "border-red-200 bg-red-50 text-red-950"
-                        : "border-black/10 bg-[#e8eef5]/60 text-[#003F7D]",
+                        : "border-input bg-[#e8eef5]/60 text-[#003F7D]",
                     )}
                   >
                     <Info className="size-4 shrink-0 text-[#003F7D]/70" aria-hidden="true" />
                     <span>{leadStageCopy(request.status, hasEstimate, hasJob)}</span>
                   </div>
                   <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-                    <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                      <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                    <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                      <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                         <CrmMark
                           name={request.serviceName || "Lead"}
                           kind="person"
@@ -1436,7 +1436,7 @@ export function RequestDetailView({ id }: { id: string }) {
                           />
                         ) : null}
                         {request.answers?.length ? (
-                          <div className="sm:col-span-2 border-b border-black/5 bg-[#f8fafc] px-5 py-4">
+                          <div className="sm:col-span-2 border-b border-input bg-[#f8fafc] px-5 py-4">
                             <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase mb-3">
                               Quote answers
                             </p>
@@ -1444,7 +1444,7 @@ export function RequestDetailView({ id }: { id: string }) {
                               {request.answers.map((item) => (
                                 <div
                                   key={item.id}
-                                  className="rounded-md border border-black/5 bg-card p-3 shadow-2xs"
+                                  className="rounded-md border border-input bg-card p-3 shadow-2xs"
                                 >
                                   <dt className="text-[11px] font-medium text-muted-foreground">{item.label}</dt>
                                   <dd className="mt-1 text-sm font-semibold text-foreground">{item.value}</dd>
@@ -1473,8 +1473,8 @@ export function RequestDetailView({ id }: { id: string }) {
                     </section>
 
                     <div className="grid gap-4 self-start">
-                      <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                        <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                      <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                        <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
                           <Wallet className="size-4 text-primary" aria-hidden="true" />
                           <h3 className="text-sm font-semibold">Account</h3>
                         </header>
@@ -1495,8 +1495,8 @@ export function RequestDetailView({ id }: { id: string }) {
                         </div>
                       </section>
 
-                      <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                        <header className="flex items-center justify-between border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                      <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                        <header className="flex items-center justify-between border-b border-input bg-[#f7f8fa] px-5 py-3">
                           <div className="flex items-center gap-2">
                             <UserRound className="size-4 text-primary" aria-hidden="true" />
                             <h3 className="text-sm font-semibold">Customer</h3>
@@ -1551,14 +1551,14 @@ export function RequestDetailView({ id }: { id: string }) {
             case "customer":
               if (customerLoading && !customer) {
                 return (
-                  <div className="flex min-h-[16rem] items-center justify-center rounded-lg border border-black/10 bg-card p-6">
+                  <div className="flex min-h-[16rem] items-center justify-center rounded-lg border border-input bg-card p-6">
                     <CenteredSpinner label="Loading customer details..." />
                   </div>
                 );
               }
               return (
-                <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                  <header className="flex items-center justify-between border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                  <header className="flex items-center justify-between border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                     <div className="flex items-center gap-4">
                       <CrmMark name={customerLabel} kind="person" photoKey={customer?.firstName} />
                       <div>
@@ -1734,10 +1734,10 @@ export function RequestDetailView({ id }: { id: string }) {
                         return (
                           <div
                             key={v.id || index}
-                            className="rounded-[4px] border border-black/10 bg-card p-4 shadow-2xs hover:border-black/20 transition-colors flex flex-col justify-between"
+                            className="rounded-[4px] border border-input bg-card p-4 shadow-2xs hover:border-input transition-colors flex flex-col justify-between"
                           >
                             <div>
-                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 pb-2.5 mb-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input pb-2.5 mb-3">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <CalendarDays className="size-4 text-[#003F7D] shrink-0" />
                                   <span className="font-semibold text-foreground text-sm truncate">
@@ -1778,7 +1778,7 @@ export function RequestDetailView({ id }: { id: string }) {
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-black/5 mt-auto">
+                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-input mt-auto">
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -2032,7 +2032,7 @@ export function RequestDetailView({ id }: { id: string }) {
                       ]}
                     />
                   ) : (
-                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-8 text-center">
+                    <div className="rounded-lg border border-dashed border-input bg-card p-8 text-center">
                       <ListTodo className="mx-auto size-8 text-muted-foreground/60" />
                       <h4 className="mt-2 text-sm font-semibold">No tasks yet</h4>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -2167,7 +2167,7 @@ export function RequestDetailView({ id }: { id: string }) {
                       ]}
                     />
                   ) : (
-                    <div className="rounded-lg border border-dashed border-black/15 bg-card p-8 text-center">
+                    <div className="rounded-lg border border-dashed border-input bg-card p-8 text-center">
                       <Bell className="mx-auto size-8 text-muted-foreground/60" />
                       <h4 className="mt-2 text-sm font-semibold">No reminders yet</h4>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -2361,7 +2361,7 @@ export function RequestDetailView({ id }: { id: string }) {
                         href={src}
                         target="_blank"
                         rel="noreferrer"
-                        className="relative block h-56 overflow-hidden rounded-[4px] border border-black/10 transition hover:border-primary/40"
+                        className="relative block h-56 overflow-hidden rounded-[4px] border border-input transition hover:border-primary/40"
                       >
                         <Image
                           src={src}
@@ -2602,7 +2602,7 @@ function LeadPipeline({
   const current = leadFlowIndex(status, hasEstimate, hasJob);
   const lost = status === "declined" || status === "closed";
   return (
-    <ol className="grid grid-cols-2 gap-2 rounded-lg border border-black/10 bg-card p-2 shadow-[0_4px_16px_rgba(4,26,54,0.04)] sm:grid-cols-5">
+    <ol className="grid grid-cols-2 gap-2 rounded-lg border border-input bg-card p-2 shadow-[0_4px_16px_rgba(4,26,54,0.04)] sm:grid-cols-5">
       {LEAD_STEPS.map((step, index) => {
         const done = !lost && index < current;
         const active = !lost && index === current;
@@ -2650,7 +2650,7 @@ function InfoRow({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start gap-3 border-b border-black/5 px-5 py-3 last:border-b-0", className)}>
+    <div className={cn("flex items-start gap-3 border-b border-input px-5 py-3 last:border-b-0", className)}>
       <Icon className="mt-0.5 size-3.5 shrink-0 text-primary/70" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>

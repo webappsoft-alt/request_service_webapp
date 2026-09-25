@@ -11,7 +11,7 @@ export function FilterTabs({
   options: { value: string; label: string; href?: string }[];
 }) {
   return (
-    <div className="flex flex-wrap gap-x-5 border-b border-black/10 bg-card px-4">
+    <div className="flex flex-wrap gap-x-5 border-b border-input bg-card px-4">
       {options.map((option) => {
         const href = option.href ?? (option.value ? `${baseHref}?status=${option.value}` : baseHref);
         const active = value === option.value;

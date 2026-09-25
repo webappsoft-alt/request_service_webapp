@@ -1454,7 +1454,7 @@ export function ServicesDirectory({
             </div>
 
             {Object.keys(answers).length && activeCategory ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-[#003F7D]/15 bg-[#e8eef5] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-xl border border-input bg-[#e8eef5] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-[#003F7D]">Send these answers as a quote request</p>
                   <p className="text-sm text-muted-foreground">

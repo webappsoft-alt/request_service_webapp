@@ -154,7 +154,7 @@ export function getOrderStatusConfig(status?: string | null) {
       return {
         label: formatOrderStatus(status),
         fullLabel: formatOrderStatus(status),
-        pillClass: "bg-slate-50 text-slate-700 border-slate-200",
+        pillClass: "bg-slate-50 text-slate-700 border-input",
         dotClass: "bg-slate-400",
       };
   }

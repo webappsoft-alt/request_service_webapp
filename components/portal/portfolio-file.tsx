@@ -778,7 +778,7 @@ export function PortfolioFormView({
         </form>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
-          <section className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_18px_40px_-28px_rgba(0,63,125,0.45)]">
+          <section className="overflow-hidden rounded-2xl border border-input bg-white shadow-[0_18px_40px_-28px_rgba(0,63,125,0.45)]">
             <div className="relative aspect-[16/10] bg-[#003F7D]">
               {cover ? (
                 <Image

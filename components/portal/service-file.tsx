@@ -182,7 +182,7 @@ function ServicePreview({
   }, [images.length, service.id, active]);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_18px_40px_-28px_rgba(0,63,125,0.45)]">
+    <article className="overflow-hidden rounded-2xl border border-input bg-white shadow-[0_18px_40px_-28px_rgba(0,63,125,0.45)]">
       <div className="relative aspect-[16/10] bg-[#003F7D]">
         {photo ? (
           <Image
@@ -215,7 +215,7 @@ function ServicePreview({
               onClick={() => setActive(index)}
               className={cn(
                 "relative size-12 overflow-hidden rounded-md border",
-                index === active ? "border-[#003F7D] ring-2 ring-[#003F7D]/30" : "border-black/10",
+                index === active ? "border-[#003F7D] ring-2 ring-[#003F7D]/30" : "border-input",
               )}
               aria-label={`Show photo ${index + 1}`}
             >

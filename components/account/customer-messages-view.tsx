@@ -710,7 +710,7 @@ export function CustomerMessagesView({
         "flex flex-1 flex-col overflow-hidden bg-background",
         embedded
           ? "-m-3 sm:-m-4 h-[calc(100vh-48px)] min-h-[580px]"
-          : "h-[calc(100vh-120px)] min-h-[600px] rounded-xl border border-border",
+          : "h-[calc(100vh-120px)] min-h-[600px] rounded-xl border border-input",
       )}
     >
       {showInitialLoading ? (
@@ -749,12 +749,12 @@ export function CustomerMessagesView({
           {/* Left Sidebar: Threads Inbox */}
           <aside
             className={cn(
-              "flex h-full w-full flex-col border-r border-border bg-card transition-all md:w-80 lg:w-[23rem]",
+              "flex h-full w-full flex-col border-r border-input bg-card transition-all md:w-80 lg:w-[23rem]",
               mobileChatOpen && selected ? "hidden md:flex" : "flex",
             )}
           >
             {/* Sidebar Header */}
-            <div className="flex flex-col gap-2.5 border-b border-border p-3 sm:p-4">
+            <div className="flex flex-col gap-2.5 border-b border-input p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <h1 className="text-base font-semibold tracking-tight text-foreground">
@@ -823,7 +823,7 @@ export function CustomerMessagesView({
             </div>
 
             {/* Threads List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-border/60">
+            <div className="flex-1 overflow-y-auto divide-y divide-input">
               {filteredThreads.length ? (
                 filteredThreads.map((thread) => {
                   const active = selected?.id === thread.id;
@@ -851,7 +851,7 @@ export function CustomerMessagesView({
                     >
                       {/* Provider Avatar */}
                       <div className="relative shrink-0">
-                        <Avatar className="size-10 shadow-2xs ring-1 ring-border">
+                        <Avatar className="size-10 shadow-2xs ring-1 ring-input">
                           {prov.avatar ? (
                             <AvatarImage src={prov.avatar} alt={prov.name} />
                           ) : null}
@@ -999,7 +999,7 @@ export function CustomerMessagesView({
             {selected && selectedProvider ? (
               <div className="flex h-full min-h-0 flex-1 flex-col">
                 {/* Chat Top Header */}
-                <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6 shadow-2xs">
+                <header className="flex h-16 shrink-0 items-center justify-between border-b border-input bg-card px-4 sm:px-6 shadow-2xs">
                   <div className="flex min-w-0 items-center gap-3">
                     {/* Mobile Back Button */}
                     <button
@@ -1013,7 +1013,7 @@ export function CustomerMessagesView({
 
                     {/* Provider Avatar */}
                     <div className="relative shrink-0">
-                      <Avatar className="size-10 shadow-2xs ring-1 ring-border">
+                      <Avatar className="size-10 shadow-2xs ring-1 ring-input">
                         {selectedProvider.avatar ? (
                           <AvatarImage
                             src={selectedProvider.avatar}

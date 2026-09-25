@@ -29,7 +29,7 @@ export function NoData({
   icon?: ReactNode;
 }) {
   return (
-    <Empty className={cn("border border-dashed border-black/15 bg-card", className)}>
+    <Empty className={cn("border border-dashed border-input bg-card", className)}>
       <EmptyHeader>
         <EmptyMedia variant="icon">{icon ?? <Inbox className="size-4" />}</EmptyMedia>
         <EmptyTitle>{title}</EmptyTitle>

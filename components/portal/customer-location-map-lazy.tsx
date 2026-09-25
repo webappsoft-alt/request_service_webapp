@@ -8,7 +8,7 @@ const CustomerLocationMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-72 items-center justify-center rounded-lg border border-black/10 bg-card text-sm text-muted-foreground">
+      <div className="flex h-72 items-center justify-center rounded-lg border border-input bg-card text-sm text-muted-foreground">
         Loading map…
       </div>
     ),

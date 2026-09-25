@@ -385,7 +385,7 @@ export function ChatPanel({
                 {/* Date Divider */}
                 {showDateDivider ? (
                   <div className="my-3 flex items-center justify-center">
-                    <span className="rounded-full border border-black/10 bg-background/95 px-3 py-1 text-[11px] font-semibold text-muted-foreground shadow-2xs">
+                    <span className="rounded-full border border-input bg-background/95 px-3 py-1 text-[11px] font-semibold text-muted-foreground shadow-2xs">
                       {formatDateDivider(message.at)}
                     </span>
                   </div>
@@ -443,7 +443,7 @@ export function ChatPanel({
                           ? "rounded-bl-xs border border-indigo-200/80 bg-indigo-50/80 text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100"
                           : mine
                             ? "rounded-br-xs bg-[#003F7D] text-white"
-                            : "rounded-bl-xs border border-black/10 bg-card text-foreground",
+                            : "rounded-bl-xs border border-input bg-card text-foreground",
                         message.status === "failed" && "border-rose-400 bg-rose-50 text-rose-950 dark:bg-rose-950/40 dark:text-rose-100",
                         message.status === "pending" && "opacity-85",
                       )}
@@ -473,7 +473,7 @@ export function ChatPanel({
                                       name: file.name,
                                     })
                                   }
-                                  className="group/img relative block overflow-hidden rounded-xl border border-black/10 shadow-xs transition-transform hover:scale-[1.02]"
+                                  className="group/img relative block overflow-hidden rounded-xl border border-input shadow-xs transition-transform hover:scale-[1.02]"
                                   aria-label={`View photo: ${file.name}`}
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -581,7 +581,7 @@ export function ChatPanel({
             {pending.map((item) => (
               <li
                 key={item.id}
-                className="relative overflow-hidden rounded-xl border border-black/10 bg-muted/60 shadow-2xs"
+                className="relative overflow-hidden rounded-xl border border-input bg-muted/60 shadow-2xs"
               >
                 {item.file.type.startsWith("image/") ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -622,7 +622,7 @@ export function ChatPanel({
                 key={reply}
                 type="button"
                 onClick={() => setDraft(reply)}
-                className="rounded-full border border-black/10 bg-muted/60 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted"
+                className="rounded-full border border-input bg-muted/60 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted"
               >
                 {reply}
               </button>
@@ -693,7 +693,7 @@ export function ChatPanel({
         open={Boolean(lightboxAttachment)}
         onOpenChange={(open) => !open && setLightboxAttachment(null)}
       >
-        <DialogContent className="max-w-4xl border-black/10 bg-background/95 p-3 backdrop-blur-md sm:p-5">
+        <DialogContent className="max-w-4xl border-input bg-background/95 p-3 backdrop-blur-md sm:p-5">
           <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b">
             <DialogTitle className="max-w-[70%] truncate text-sm font-semibold">
               {lightboxAttachment?.name}

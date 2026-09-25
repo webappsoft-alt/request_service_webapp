@@ -14,7 +14,7 @@ export function HoursEditor({
   onChange: (next: WorkingHours[]) => void;
 }) {
   return (
-    <ul className="divide-y divide-black/8 rounded-lg border border-input">
+    <ul className="divide-y divide-input rounded-lg border border-input">
       {cloneWorkingHours(hours).map((entry) => (
         <li key={entry.day} className="grid grid-cols-[7rem_auto_1fr] items-center gap-3 px-3 py-2.5">
           <span className="text-sm font-medium">{formatWorkingDay(entry.day)}</span>

@@ -184,7 +184,7 @@ export function PortfolioGallery({
 
   return (
     <>
-      <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
+      <div className="overflow-hidden rounded-xl border border-input bg-card">
         <div className="relative">
           <button
             type="button"

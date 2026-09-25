@@ -213,7 +213,7 @@ export function BookServiceProvider({
 
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="flex max-h-[min(90dvh,40rem)] w-[min(100%,42rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
-          <DialogHeader className="border-b border-black/10 px-5 py-4 text-left">
+          <DialogHeader className="border-b border-input px-5 py-4 text-left">
             <DialogTitle>Book a service</DialogTitle>
             <DialogDescription>
               Choose a priced service from {provider.companyName}, then complete
@@ -271,7 +271,7 @@ export function BookServiceProvider({
                         "flex w-[min(15.5rem,72vw)] shrink-0 snap-start flex-col overflow-hidden rounded-xl border bg-card transition-all duration-200",
                         selected
                           ? "border-[#003F7D] ring-2 ring-[#003F7D]/20"
-                          : "border-black/10 hover:border-[#003F7D]/35",
+                          : "border-input hover:border-[#003F7D]/35",
                       )}
                     >
                       <button
@@ -345,13 +345,13 @@ export function BookServiceProvider({
                 })}
               </div>
             ) : (
-              <p className="rounded-lg border border-dashed border-black/15 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+              <p className="rounded-lg border border-dashed border-input bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
                 This professional has not published bookable services yet.
               </p>
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-black/10 px-5 py-3.5">
+          <div className="flex items-center justify-end gap-2 border-t border-input px-5 py-3.5">
             <Button
               type="button"
               variant="outline"

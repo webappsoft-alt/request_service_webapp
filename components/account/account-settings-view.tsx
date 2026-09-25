@@ -440,11 +440,11 @@ export function AccountSettingsView({
   }
 
   const formCard = (
-        <div className="overflow-hidden rounded-2xl border border-border/80 bg-card/95 shadow-[0_1px_0_rgba(15,23,42,0.04),0_18px_48px_-28px_rgba(0,63,125,0.4)] backdrop-blur-sm">
-          <div className="border-b border-border/70 bg-linear-to-br from-primary/[0.07] via-card to-card px-5 py-7 sm:px-8">
+        <div className="overflow-hidden rounded-2xl border border-input bg-card/95 shadow-[0_1px_0_rgba(15,23,42,0.04),0_18px_48px_-28px_rgba(0,63,125,0.4)] backdrop-blur-sm">
+          <div className="border-b border-input bg-linear-to-br from-primary/[0.07] via-card to-card px-5 py-7 sm:px-8">
             <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
               <div className="relative">
-                <Avatar className="size-24 border-2 border-background shadow-md ring-1 ring-border/80">
+                <Avatar className="size-24 border-2 border-background shadow-md ring-1 ring-input/80">
                   {displayAvatar ? (
                     <AvatarImage src={displayAvatar} alt={displayName} />
                   ) : null}
@@ -455,7 +455,7 @@ export function AccountSettingsView({
                 <label
                   htmlFor={fileInputId}
                   className={cn(
-                    "absolute -right-1 -bottom-1 inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-primary shadow-sm transition hover:bg-muted",
+                    "absolute -right-1 -bottom-1 inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-input bg-background text-primary shadow-sm transition hover:bg-muted",
                     uploadingImage && "pointer-events-none opacity-70",
                   )}
                   title="Change profile photo"
@@ -505,7 +505,7 @@ export function AccountSettingsView({
             <Tabs defaultValue="profile" className="gap-6">
               <TabsList
                 variant="line"
-                className="h-auto w-full justify-start gap-0 border-b border-border/80 pb-0"
+                className="h-auto w-full justify-start gap-0 border-b border-input pb-0"
               >
                 <TabsTrigger
                   value="profile"
@@ -607,7 +607,7 @@ export function AccountSettingsView({
                     />
                   </FieldGroup>
 
-                  <div className="flex flex-wrap items-center gap-3 border-t border-border/70 pt-5">
+                  <div className="flex flex-wrap items-center gap-3 border-t border-input pt-5">
                     <Button
                       type="submit"
                       disabled={savingProfile || uploadingImage}
@@ -630,7 +630,7 @@ export function AccountSettingsView({
 
               <TabsContent value="password" className="mt-2 outline-none">
                 <form onSubmit={onSavePassword} className="grid gap-6">
-                  <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-sm leading-6 text-muted-foreground">
+                  <div className="rounded-xl border border-input bg-muted/40 px-4 py-3 text-sm leading-6 text-muted-foreground">
                     Choose a strong password you do not use elsewhere. You will
                     stay signed in after updating it.
                   </div>
@@ -681,7 +681,7 @@ export function AccountSettingsView({
                     </Field>
                   </FieldGroup>
 
-                  <div className="flex flex-wrap items-center gap-3 border-t border-border/70 pt-5">
+                  <div className="flex flex-wrap items-center gap-3 border-t border-input pt-5">
                     <Button type="submit" disabled={savingPassword}>
                       {savingPassword ? (
                         <>

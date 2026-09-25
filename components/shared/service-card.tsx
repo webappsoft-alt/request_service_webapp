@@ -69,7 +69,7 @@ export function ServiceOfferCard({ category }: { category: ServiceCategory }) {
   return (
     <Link
       href={categoryServicesHref(category)}
-      className="group flex h-full flex-col gap-3 rounded-xl border border-black/10 bg-card p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/20 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="group flex h-full flex-col gap-3 rounded-xl border border-input bg-card p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-input hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <div className="flex items-start gap-3">
         <span

@@ -30,8 +30,8 @@ export function ProProduct() {
         </div>
 
         <div className="w-full max-w-4xl rounded-2xl bg-primary/[0.06] p-3 sm:p-4">
-          <div className="overflow-hidden rounded-xl border border-black/15 bg-card text-left shadow-[0_22px_48px_-28px_rgba(0,63,125,0.45)]">
-            <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3">
+          <div className="overflow-hidden rounded-xl border border-input bg-card text-left shadow-[0_22px_48px_-28px_rgba(0,63,125,0.45)]">
+            <div className="flex items-center justify-between gap-3 border-b border-input px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 <span className="hidden items-center gap-1.5 sm:flex" aria-hidden="true">
                   <span className="size-2 rounded-full bg-black/15" />
@@ -50,12 +50,12 @@ export function ProProduct() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 border-b border-black/10 sm:grid-cols-4">
+            <div className="grid grid-cols-2 border-b border-input sm:grid-cols-4">
               {beats.map((beat) => (
                 <div
                   key={beat.id}
                   className={cn(
-                    "border-black/8 px-3 py-3 sm:border-l sm:first:border-l-0",
+                    "border-input px-3 py-3 sm:border-l sm:first:border-l-0",
                     beat.active && "bg-primary text-primary-foreground",
                   )}
                 >
@@ -76,7 +76,7 @@ export function ProProduct() {
               {serviceCategories.map((category) => (
                 <div
                   key={category.id}
-                  className="flex items-center gap-2.5 border-r border-b border-black/8 px-4 py-4"
+                  className="flex items-center gap-2.5 border-r border-b border-input px-4 py-4"
                 >
                   <span
                     className={cn(

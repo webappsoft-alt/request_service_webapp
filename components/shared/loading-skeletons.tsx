@@ -8,7 +8,7 @@ export function ProviderCardSkeleton({ className }: { className?: string }) {
   return (
     <Card
       className={cn(
-        "h-full gap-0 overflow-hidden border-black/15 pt-0 pb-2",
+        "h-full gap-0 overflow-hidden border-input pt-0 pb-2",
         className,
       )}
       aria-hidden="true"
@@ -42,7 +42,7 @@ export function ProviderListCardSkeleton({ className }: { className?: string }) 
   return (
     <Card
       className={cn(
-        "flex h-full flex-col gap-5 border-black/15 p-5 sm:flex-row sm:items-stretch sm:gap-6",
+        "flex h-full flex-col gap-5 border-input p-5 sm:flex-row sm:items-stretch sm:gap-6",
         className,
       )}
       aria-hidden="true"
@@ -114,7 +114,7 @@ export function ServiceJobCardSkeleton({
 export function BlogCardSkeleton({ className }: { className?: string }) {
   return (
     <Card
-      className={cn("h-full gap-0 border-black/15 pt-0", className)}
+      className={cn("h-full gap-0 border-input pt-0", className)}
       aria-hidden="true"
     >
       <Skeleton className="aspect-[16/10] w-full rounded-none rounded-t-xl" />
@@ -207,7 +207,7 @@ export function ServiceDetailSkeleton({ className }: { className?: string }) {
 
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,22rem)] lg:gap-12">
           <div className="flex flex-col gap-6">
-            <div className="overflow-hidden rounded-2xl border border-black/10 bg-card">
+            <div className="overflow-hidden rounded-2xl border border-input bg-card">
               <Skeleton className="aspect-[16/10] w-full rounded-none" />
               <div className="flex gap-2 p-2">
                 {Array.from({ length: 4 }, (_, i) => (
@@ -286,7 +286,7 @@ export function ProfessionalDetailSkeleton({ className }: { className?: string }
 
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
             <div className="flex flex-col gap-8">
-              <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
+              <div className="overflow-hidden rounded-xl border border-input bg-card">
                 <Skeleton className="h-[min(22rem,50svh)] w-full rounded-none md:h-[min(28rem,48svh)] lg:h-[min(32rem,46svh)]" />
                 <div className="flex gap-2 p-2">
                   {Array.from({ length: 3 }, (_, i) => (
@@ -357,7 +357,7 @@ export function ProfessionalDetailSkeleton({ className }: { className?: string }
                   <Skeleton className="mt-2 h-7 w-44" />
                 </div>
                 <Skeleton className="h-4 w-72" />
-                <div className="relative h-80 overflow-hidden rounded-xl border border-black/15">
+                <div className="relative h-80 overflow-hidden rounded-xl border border-input">
                   <MapPaneSkeleton />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -501,7 +501,7 @@ export function ProfessionalDetailSkeleton({ className }: { className?: string }
 
 function FixedServiceCardSkeleton() {
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl border border-black/10 bg-card">
+    <article className="flex flex-col overflow-hidden rounded-xl border border-input bg-card">
       <Skeleton className="aspect-[2/1] w-full rounded-none" />
       <div className="flex flex-1 flex-col gap-2 p-3">
         <Skeleton className="h-4 w-4/5" />
@@ -518,7 +518,7 @@ function FixedServiceCardSkeleton() {
 
 function ServiceOfferCardSkeleton() {
   return (
-    <div className="flex h-full flex-col gap-3 rounded-xl border border-black/10 bg-card p-4">
+    <div className="flex h-full flex-col gap-3 rounded-xl border border-input bg-card p-4">
       <div className="flex items-start gap-3">
         <Skeleton className="size-10 shrink-0 rounded-lg" />
         <div className="min-w-0 flex-1">
@@ -537,7 +537,7 @@ function ServiceOfferCardSkeleton() {
 
 function ProjectCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
+    <div className="overflow-hidden rounded-xl border border-input bg-card">
       <Skeleton className="aspect-[4/3] w-full rounded-none" />
       <div className="px-3 py-2.5">
         <Skeleton className="h-4 w-4/5" />
@@ -875,7 +875,7 @@ export function FaqCardsSkeleton({
       {Array.from({ length: count }, (_, index) => (
         <div
           key={index}
-          className="flex items-center gap-3 rounded-xl border border-black/15 bg-card px-3.5 py-3.5 shadow-[0_1px_2px_rgb(0_63_125/6%),0_6px_14px_-6px_rgb(0_63_125/12%)]"
+          className="flex items-center gap-3 rounded-xl border border-input bg-card px-3.5 py-3.5 shadow-[0_1px_2px_rgb(0_63_125/6%),0_6px_14px_-6px_rgb(0_63_125/12%)]"
         >
           <Skeleton className="size-7 shrink-0 rounded-full" />
           <Skeleton

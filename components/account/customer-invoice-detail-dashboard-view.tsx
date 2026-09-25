@@ -57,7 +57,7 @@ function StatCard({
   tone?: "emerald" | "primary" | "amber" | "default";
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-5 py-5 shadow-xs transition-colors hover:bg-muted/40">
+    <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs transition-colors hover:bg-muted/40">
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </p>
@@ -155,7 +155,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
           </Button>
         }
       >
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
+        <div className="rounded-xl border border-input bg-card p-8 text-center">
           <AlertCircle className="mx-auto size-8 text-muted-foreground/50" />
           <p className="mt-3 text-base font-medium text-foreground">
             Invoice could not be located
@@ -188,7 +188,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
           {invoice.jobNumber ? (
             <Badge
               variant="outline"
-              className="border-border bg-muted/30 font-mono text-xs text-muted-foreground"
+              className="border-input bg-muted/30 font-mono text-xs text-muted-foreground"
             >
               Job {invoice.jobNumber}
             </Badge>
@@ -287,8 +287,8 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         {/* Left Column: Line Items Table & Breakdown */}
         <div className="space-y-6">
-          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4 sm:px-6">
+          <section className="overflow-hidden rounded-xl border border-input bg-card shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input px-5 py-4 sm:px-6">
               <div className="flex items-center gap-2.5">
                 <Receipt className="size-4 text-primary" />
                 <div>
@@ -309,7 +309,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[540px] text-left text-sm">
-                <thead className="border-b border-border bg-muted/40 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                <thead className="border-b border-input bg-muted/40 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                   <tr>
                     <th className="px-5 py-3 sm:px-6">Description</th>
                     <th className="px-4 py-3 text-center">Qty</th>
@@ -317,7 +317,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                     <th className="px-5 py-3 text-right sm:px-6">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody className="divide-y divide-input">
                   {invoice.items.length ? (
                     invoice.items.map((item, index) => (
                       <tr
@@ -375,7 +375,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
             </div>
 
             {/* Financial Totals Summary */}
-            <div className="border-t border-border bg-muted/10 p-5 sm:p-6">
+            <div className="border-t border-input bg-muted/10 p-5 sm:p-6">
               <div className="ml-auto w-full max-w-sm space-y-2.5 text-sm">
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span>Subtotal</span>
@@ -402,7 +402,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                   </div>
                 ) : null}
 
-                <div className="flex items-center justify-between border-t border-border pt-2 text-base font-bold text-foreground">
+                <div className="flex items-center justify-between border-t border-input pt-2 text-base font-bold text-foreground">
                   <span>Invoice total</span>
                   <span className="tabular-nums">
                     {formatMoney(invoice.total)}
@@ -442,21 +442,21 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
 
           {/* Notes & Special Instructions */}
           {invoice.notes ? (
-            <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-              <div className="flex items-center gap-2 border-b border-border pb-3">
+            <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+              <div className="flex items-center gap-2 border-b border-input pb-3">
                 <FileText className="size-4 text-primary" />
                 <h3 className="text-sm font-semibold text-foreground">
                   Notes & payment instructions
                 </h3>
               </div>
-              <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+              <div className="mt-4 rounded-lg border border-input bg-muted/20 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
                 {invoice.notes}
               </div>
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4 sm:px-6">
+          <section className="overflow-hidden rounded-xl border border-input bg-card shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input px-5 py-4 sm:px-6">
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="size-4 text-primary" />
                 <div>
@@ -473,7 +473,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
               </Button>
             </div>
             {invoice.payments?.length ? (
-              <ul className="divide-y divide-border">
+              <ul className="divide-y divide-input">
                 {invoice.payments.map((payment) => (
                   <li
                     key={payment.id}
@@ -516,7 +516,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
           </section>
 
           {/* Guarantee & Protection Notice */}
-          <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground">
+          <div className="flex items-start gap-3 rounded-xl border border-input bg-muted/30 p-4 text-xs text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-4.5 shrink-0 text-primary" />
             <div>
               <strong className="font-semibold text-foreground">
@@ -532,8 +532,8 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
         {/* Right Column: Professional Profile & Metadata */}
         <aside className="space-y-6">
           {/* Professional Profile Card */}
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-border pb-3">
+          <div className="rounded-xl border border-input bg-card p-5 shadow-xs">
+            <div className="flex items-center gap-2 border-b border-input pb-3">
               <Building2 className="size-4 text-primary" />
               <h2 className="text-sm font-semibold text-foreground">
                 Service professional
@@ -542,7 +542,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
 
             <div className="mt-4 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border bg-muted font-bold text-base text-foreground shadow-xs">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-full border border-input bg-muted font-bold text-base text-foreground shadow-xs">
                   {initial}
                 </div>
                 <div className="min-w-0">
@@ -555,7 +555,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                 </div>
               </div>
 
-              <div className="space-y-2 border-t border-border pt-3 text-xs">
+              <div className="space-y-2 border-t border-input pt-3 text-xs">
                 {invoice.provider?.email ? (
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Mail className="size-3.5 shrink-0 text-primary" />
@@ -591,20 +591,20 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
           </div>
 
           {/* Invoice Metadata & Reference Card */}
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+          <div className="rounded-xl border border-input bg-card p-5 shadow-xs">
             <h2 className="text-sm font-semibold text-foreground">
               Invoice metadata
             </h2>
 
             <dl className="mt-4 space-y-3 text-xs">
-              <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center justify-between border-b border-input pb-2.5">
                 <dt className="text-muted-foreground">Invoice #</dt>
                 <dd className="font-mono font-medium text-foreground">
                   {invoice.number}
                 </dd>
               </div>
 
-              <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center justify-between border-b border-input pb-2.5">
                 <dt className="text-muted-foreground">Status</dt>
                 <dd>
                   <StatusPill
@@ -615,7 +615,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
               </div>
 
               {invoice.jobNumber ? (
-                <div className="flex items-center justify-between border-b border-border pb-2.5">
+                <div className="flex items-center justify-between border-b border-input pb-2.5">
                   <dt className="text-muted-foreground">Job reference</dt>
                   <dd className="font-mono font-medium text-foreground">
                     Job {invoice.jobNumber}
@@ -623,7 +623,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                 </div>
               ) : null}
 
-              <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center justify-between border-b border-input pb-2.5">
                 <dt className="text-muted-foreground">Issued date</dt>
                 <dd className="font-medium text-foreground">
                   {invoice.issuedAt
@@ -649,7 +649,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
           </div>
 
           {/* Assistance & Questions Card */}
-          <div className="rounded-xl border border-border bg-muted/40 p-4 text-xs text-foreground">
+          <div className="rounded-xl border border-input bg-muted/40 p-4 text-xs text-foreground">
             <div className="flex items-center gap-1.5 font-semibold text-foreground">
               <HelpCircle className="size-4 shrink-0 text-primary" />
               <span>Questions about this invoice?</span>

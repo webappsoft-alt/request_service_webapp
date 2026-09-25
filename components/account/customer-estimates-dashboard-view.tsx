@@ -276,7 +276,7 @@ export function CustomerEstimatesDashboardView({
       }
     >
       {/* Provider-style FilterTabs Bar */}
-      <div className="flex flex-wrap gap-x-6 border-b border-border bg-card px-4">
+      <div className="flex flex-wrap gap-x-6 border-b border-input bg-card px-4">
         <button
           type="button"
           onClick={() => setTab("requests")}
@@ -435,7 +435,7 @@ export function CustomerEstimatesDashboardView({
                 value={openLink}
                 onChange={(event) => setOpenLink(event.target.value)}
                 placeholder="Paste estimate link or token…"
-                className="h-8.5 w-48 sm:w-60 text-xs bg-card"
+                className="h-8.5 w-48 sm:w-60 text-xs bg-card border-input"
               />
               <Button
                 type="submit"

@@ -64,7 +64,7 @@ export function EstimatePdfDocument({
             lines={[snapshot.customerPhone, snapshot.customerEmail, snapshot.street, formatLocation(snapshot.city, snapshot.state, snapshot.zip)]}
           />
         </div>
-        <div className="mt-6 grid grid-cols-3 gap-3 border border-black/10 bg-[#f8fafc] px-3 py-2.5 text-[11px] print:bg-transparent">
+        <div className="mt-6 grid grid-cols-3 gap-3 border border-input bg-[#f8fafc] px-3 py-2.5 text-[11px] print:bg-transparent">
           <Meta label="Estimate" value={snapshot.number} />
           <Meta label="Issued" value={formatDate(snapshot.issuedAt)} />
           <Meta label="Expires" value={snapshot.expiresAt ? formatDate(snapshot.expiresAt) : "30 days"} />
@@ -80,7 +80,7 @@ export function EstimatePdfDocument({
               <col className="w-[13%]" />
             </colgroup>
             <thead>
-              <tr className="border-y border-black/10 bg-[#e8eef5] text-[10px] tracking-[0.12em] text-[#003F7D] uppercase print:bg-transparent">
+              <tr className="border-y border-input bg-[#e8eef5] text-[10px] tracking-[0.12em] text-[#003F7D] uppercase print:bg-transparent">
                 <th className="px-2 py-2 text-left font-semibold">Description</th>
                 <th className="px-1.5 py-2 text-left font-semibold">Type</th>
                 <th className="px-1.5 py-2 text-right font-semibold">Qty</th>
@@ -90,7 +90,7 @@ export function EstimatePdfDocument({
             </thead>
             <tbody>
               {snapshot.items.map((row, index) => (
-                <tr key={`${row.description}-${index}`} className="border-b border-black/8">
+                <tr key={`${row.description}-${index}`} className="border-b border-input">
                   <td className="px-2 py-2 break-words font-medium align-top">
                     <div className="whitespace-pre-wrap">
                       {row.description || (row.kind === "labor" ? "Labor" : "Material")}
@@ -100,7 +100,7 @@ export function EstimatePdfDocument({
                         {row.images.map((src, imgIndex) => (
                           <span
                             key={`${src}-${imgIndex}`}
-                            className="relative inline-block h-12 w-14 overflow-hidden rounded border border-black/10"
+                            className="relative inline-block h-12 w-14 overflow-hidden rounded border border-input"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -153,7 +153,7 @@ export function EstimatePdfDocument({
         <PdfHeader snapshot={snapshot} compact />
         <p className="mt-6 text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Terms and conditions</p>
         {snapshot.terms ? (
-          <p className="mt-2 border border-black/10 bg-[#f8fafc] px-3 py-2 text-[12px] leading-5 print:bg-transparent">
+          <p className="mt-2 border border-input bg-[#f8fafc] px-3 py-2 text-[12px] leading-5 print:bg-transparent">
             <span className="font-semibold">Project terms. </span>
             {snapshot.terms}
           </p>
@@ -214,7 +214,7 @@ function PdfPage({
   return (
     <article
       className={cn(
-        "mx-auto flex w-full max-w-[8.5in] flex-col justify-between overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]",
+        "mx-auto flex w-full max-w-[8.5in] flex-col justify-between overflow-hidden rounded-[2px] border border-input bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]",
         "print:m-0 print:flex print:min-h-[10.4in] print:w-full print:max-w-none print:flex-col print:justify-between print:rounded-none print:border-none print:bg-white print:p-0 print:shadow-none",
         isLast ? "print:break-after-avoid" : "print:break-after-page",
       )}
@@ -222,7 +222,7 @@ function PdfPage({
       <div className="flex-1 min-h-[10in] px-8 py-7 print:min-h-0 print:px-0 print:py-0">
         {children}
       </div>
-      <footer className="mt-auto flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2 text-[10px] text-muted-foreground print:bg-transparent print:px-0">
+      <footer className="mt-auto flex items-center justify-between border-t border-input bg-[#f8fafc] px-8 py-2 text-[10px] text-muted-foreground print:bg-transparent print:px-0">
         <span>
           {snapshot.number} · {snapshot.companyName}
         </span>
@@ -236,7 +236,7 @@ function PdfPage({
 
 function PdfHeader({ snapshot, compact = false }: { snapshot: EstimateShareSnapshot; compact?: boolean }) {
   return (
-    <header className={cn("flex items-start justify-between gap-4", compact && "border-b border-black/10 pb-4")}>
+    <header className={cn("flex items-start justify-between gap-4", compact && "border-b border-input pb-4")}>
       <div className="flex min-w-0 items-start gap-3">
         <CompanyMark snapshot={snapshot} />
         <div className="min-w-0">
@@ -266,7 +266,7 @@ function PdfHeader({ snapshot, compact = false }: { snapshot: EstimateShareSnaps
 function CompanyMark({ snapshot }: { snapshot: EstimateShareSnapshot }) {
   const initials = snapshot.logoInitials || snapshot.companyName.slice(0, 2).toUpperCase();
   return (
-    <span className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-black/10 bg-[#003F7D] text-[13px] font-semibold text-white">
+    <span className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-input bg-[#003F7D] text-[13px] font-semibold text-white">
       {snapshot.logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img alt="" src={snapshot.logoUrl} className="size-full object-cover" />
@@ -335,7 +335,7 @@ function SignatureBlock({
         slot
       ) : image ? (
         <div className="mt-2">
-          <div className="h-20 border-b border-black/25">
+          <div className="h-20 border-b border-input">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img alt={name ? `Signature of ${name}` : "Signature"} src={image} className="h-full w-full object-contain object-left" />
           </div>
@@ -344,7 +344,7 @@ function SignatureBlock({
           {date ? <p className="text-[11px] text-muted-foreground">{formatDate(date.slice(0, 10))}</p> : null}
           {isCustomer && snapshot ? (
             <div className="mt-3 flex items-start gap-2 text-[11px] leading-4 text-foreground">
-              <span className="mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded-[2px] border border-black/40 bg-white text-[10px] font-bold text-[#003F7D]">
+              <span className="mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded-[2px] border border-input bg-white text-[10px] font-bold text-[#003F7D]">
                 ✓
               </span>
               <span>
@@ -356,11 +356,11 @@ function SignatureBlock({
         </div>
       ) : (
         <div className="mt-2">
-          <div className="h-20 border-b border-black/25" />
+          <div className="h-20 border-b border-input" />
           <p className="mt-2 text-[11px] text-muted-foreground">{empty}</p>
           {isCustomer && snapshot ? (
             <div className="mt-3 flex items-start gap-2 text-[11px] leading-4 text-foreground">
-              <span className="mt-0.5 inline-block size-3.5 shrink-0 rounded-[2px] border border-black/40 bg-white" />
+              <span className="mt-0.5 inline-block size-3.5 shrink-0 rounded-[2px] border border-input bg-white" />
               <span>
                 I have read pages 1 and 2 and authorize <strong>{snapshot.companyName}</strong> to proceed for{" "}
                 <strong>{formatMoney(snapshot.total)}</strong>.
@@ -487,7 +487,7 @@ export function SignaturePadField({
         <canvas
           ref={pad.ref}
           style={{ touchAction: "none" }}
-          className="h-20 w-full cursor-crosshair border-b border-black/25 bg-transparent"
+          className="h-20 w-full cursor-crosshair border-b border-input bg-transparent"
           onPointerDown={pad.start}
           onPointerMove={pad.move}
           onPointerUp={pad.end}
@@ -498,7 +498,7 @@ export function SignaturePadField({
       {showNameInput && onName ? (
         <div className="mt-1">
           <input
-            className="h-7 w-full max-w-[220px] rounded-[4px] border border-black/15 bg-white px-2 text-[12px] font-medium placeholder:text-muted-foreground/60 focus:border-[#003F7D] focus:outline-none"
+            className="h-7 w-full max-w-[220px] rounded-[4px] border border-input bg-white px-2 text-[12px] font-medium placeholder:text-muted-foreground/60 focus:border-[#003F7D] focus:outline-none"
             value={name || ""}
             onChange={(event) => onName(event.target.value)}
             placeholder="Signer name"

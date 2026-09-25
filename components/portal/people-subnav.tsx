@@ -10,7 +10,7 @@ export function ModuleSubnav({ items }: { items: { href: string; label: string; 
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-wrap gap-x-5 border-b border-black/10 bg-card px-4">
+    <div className="flex flex-wrap gap-x-5 border-b border-input bg-card px-4">
       {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (

@@ -222,7 +222,7 @@ function IndustriesMega() {
           </li>
         ))}
       </ul>
-      <div className="border-t border-black/10 pt-4">
+      <div className="border-t border-input pt-4">
         <Link href={`${proPaths.home}#process`} className="text-sm font-medium text-brand hover:text-foreground">
           See how every trade runs on one file
         </Link>
@@ -302,7 +302,7 @@ function MegaGrid({
           </li>
         ))}
       </ul>
-      <div className="border-t border-black/10 pt-4">
+      <div className="border-t border-input pt-4">
         <Link href={footer.href} className="text-sm font-medium text-brand hover:text-foreground">
           {footer.label}
         </Link>

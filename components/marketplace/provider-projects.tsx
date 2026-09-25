@@ -73,7 +73,7 @@ export function ProviderProjectCard({
     <Link
       href={`/professionals/${provider.slug}/projects/${project.slug}`}
       onClick={() => onBeforeNavigate?.()}
-      className="group flex flex-col overflow-hidden rounded-xl border border-black/15 bg-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="group flex flex-col overflow-hidden rounded-xl border border-input bg-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
         {project.cover ? (
@@ -182,7 +182,7 @@ export function ProviderProjects({
                   data-portfolio-slide
                   className="w-[min(100%,18.5rem)] shrink-0 snap-start sm:w-[min(48%,20rem)] lg:w-[min(42%,22rem)]"
                 >
-                  <div className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-black/15 bg-muted">
+                  <div className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-input bg-muted">
                     <button
                       type="button"
                       className="absolute inset-0 z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none"
@@ -227,7 +227,7 @@ export function ProviderProjects({
               <button
                 type="button"
                 className={cn(
-                  "absolute top-1/2 left-0 z-20 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white text-foreground shadow-md transition-[opacity,transform] hover:scale-105 hover:bg-white md:size-11",
+                  "absolute top-1/2 left-0 z-20 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-input bg-white text-foreground shadow-md transition-[opacity,transform] hover:scale-105 hover:bg-white md:size-11",
                   canScrollPrev
                     ? "opacity-100"
                     : "pointer-events-none opacity-0",
@@ -240,7 +240,7 @@ export function ProviderProjects({
               <button
                 type="button"
                 className={cn(
-                  "absolute top-1/2 right-0 z-20 flex size-10 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white text-foreground shadow-md transition-[opacity,transform] hover:scale-105 hover:bg-white md:size-11",
+                  "absolute top-1/2 right-0 z-20 flex size-10 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-input bg-white text-foreground shadow-md transition-[opacity,transform] hover:scale-105 hover:bg-white md:size-11",
                   canScrollNext
                     ? "opacity-100"
                     : "pointer-events-none opacity-0",
@@ -254,7 +254,7 @@ export function ProviderProjects({
           ) : null}
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-8 text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-input bg-card px-4 py-8 text-sm text-muted-foreground">
           Photos of completed work will appear here.
         </p>
       )}

@@ -130,13 +130,13 @@ export function ProviderProfile({
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
           <div className="flex flex-col gap-8">
             {live?.portfolioLoading && !photos.length ? (
-              <div className="overflow-hidden rounded-xl border border-black/15 bg-card">
+              <div className="overflow-hidden rounded-xl border border-input bg-card">
                 <Skeleton className="h-[min(22rem,50svh)] w-full rounded-none md:h-[min(28rem,48svh)]" />
               </div>
             ) : photos.length ? (
               <PortfolioGallery photos={photos} companyName={provider.companyName} />
             ) : isLive ? (
-              <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-16 text-center text-sm text-muted-foreground">
+              <p className="rounded-xl border border-dashed border-input bg-card px-4 py-16 text-center text-sm text-muted-foreground">
                 Photos will appear here when this company adds a business gallery.
               </p>
             ) : null}
@@ -434,7 +434,7 @@ export function ProviderProfile({
                 ))}
               </div>
             ) : (
-              <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-8 text-sm text-muted-foreground">
+              <p className="rounded-xl border border-dashed border-input bg-card px-4 py-8 text-sm text-muted-foreground">
                 Related professionals will appear here when matches are available.
               </p>
             )}

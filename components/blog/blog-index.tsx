@@ -196,7 +196,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
                 className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
                   isActive
                     ? "bg-primary text-primary-foreground shadow-xs"
-                    : "border border-black/10 bg-card text-muted-foreground hover:border-black/20 hover:bg-accent hover:text-foreground"
+                    : "border border-input bg-card text-muted-foreground hover:border-input hover:bg-accent hover:text-foreground"
                 }`}
               >
                 {item.value === "" && <Sparkles className="size-3" />}
@@ -234,7 +234,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
                 variant="outline"
                 onClick={handleSeeMore}
                 disabled={loadingMore}
-                className="h-11 rounded-full border-black/15 bg-card px-8 font-medium shadow-xs transition-all hover:bg-accent hover:text-foreground"
+                className="h-11 rounded-full border-input bg-card px-8 font-medium shadow-xs transition-all hover:bg-accent hover:text-foreground"
               >
                 {loadingMore ? (
                   <>
@@ -256,7 +256,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
         </div>
       ) : (
         /* Empty State */
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-black/15 bg-card px-6 py-16 text-center shadow-xs">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-input bg-card px-6 py-16 text-center shadow-xs">
           <div className="flex size-12 items-center justify-center rounded-full bg-muted">
             <Search className="size-6 text-muted-foreground" />
           </div>

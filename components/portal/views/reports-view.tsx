@@ -151,7 +151,7 @@ export function ReportsView() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader className="gap-1">
             <CardTitle className="text-sm font-medium text-muted-foreground">Monthly volume</CardTitle>
             <p className="text-3xl font-semibold tracking-tight tabular-nums">
@@ -196,7 +196,7 @@ export function ReportsView() {
           </CardContent>
         </Card>
 
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader className="gap-1">
             <CardTitle className="text-sm font-medium text-muted-foreground">Pipeline</CardTitle>
             <p className="text-sm text-muted-foreground">How work moves from request to paid invoice.</p>
@@ -230,7 +230,7 @@ export function ReportsView() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Request mix</CardTitle>
           </CardHeader>
@@ -249,7 +249,7 @@ export function ReportsView() {
             )}
           </CardContent>
         </Card>
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Money on the books</CardTitle>
           </CardHeader>
@@ -472,7 +472,7 @@ function Kpi({
   return (
     <Link
       href={href}
-      className="rounded-xl border border-black/30 bg-card px-5 py-4 transition-colors hover:bg-muted/40"
+      className="rounded-xl border border-input bg-card px-5 py-4 transition-colors hover:bg-muted/40"
     >
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>

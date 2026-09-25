@@ -9,7 +9,7 @@ export function DashboardSwitcher() {
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-wrap gap-1 rounded-md border border-black/10 bg-card p-0.5">
+    <div className="flex flex-wrap gap-1 rounded-md border border-input bg-card p-0.5">
       {dashboardViews.map((view) => {
         const active = pathname === view.href;
         return (

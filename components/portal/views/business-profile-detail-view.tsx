@@ -137,7 +137,7 @@ export function BusinessProfileDetailView() {
       }
     >
       {setup.percent < 100 ? (
-        <Card className="border-primary/20 bg-primary/[0.03]">
+        <Card className="border-input bg-primary/[0.03]">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">Set up your business profile</CardTitle>

@@ -110,7 +110,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </Button>
         }
       >
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
+        <div className="rounded-xl border border-input bg-card p-8 text-center">
           <AlertCircle className="mx-auto size-8 text-muted-foreground/50" />
           <p className="mt-3 text-base font-medium text-foreground">
             Payment could not be located
@@ -138,7 +138,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           />
           <Badge
             variant="outline"
-            className="border-border bg-muted/30 text-xs text-muted-foreground"
+            className="border-input bg-muted/30 text-xs text-muted-foreground"
           >
             {methodLabel(payment.method)}
           </Badge>
@@ -170,7 +170,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
       }
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card px-5 py-5 shadow-xs">
+        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Amount
           </p>
@@ -179,7 +179,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">Recorded payment</p>
         </div>
-        <div className="rounded-xl border border-border bg-card px-5 py-5 shadow-xs">
+        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Status
           </p>
@@ -191,7 +191,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Settlement state</p>
         </div>
-        <div className="rounded-xl border border-border bg-card px-5 py-5 shadow-xs">
+        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Method
           </p>
@@ -200,7 +200,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">How it was paid</p>
         </div>
-        <div className="rounded-xl border border-border bg-card px-5 py-5 shadow-xs">
+        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Paid on
           </p>
@@ -214,19 +214,19 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <section className="rounded-xl border border-border bg-card p-5 shadow-xs sm:p-6">
-          <div className="flex items-center gap-2 border-b border-border pb-3">
+        <section className="rounded-xl border border-input bg-card p-5 shadow-xs sm:p-6">
+          <div className="flex items-center gap-2 border-b border-input pb-3">
             <CreditCard className="size-4 text-primary" />
             <h2 className="text-base font-semibold text-foreground">
               Payment details
             </h2>
           </div>
           <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex items-center justify-between border-b border-border pb-2.5">
+            <div className="flex items-center justify-between border-b border-input pb-2.5">
               <dt className="text-muted-foreground">Payment #</dt>
               <dd className="font-mono font-medium">{paymentNumber(payment.id)}</dd>
             </div>
-            <div className="flex items-center justify-between border-b border-border pb-2.5">
+            <div className="flex items-center justify-between border-b border-input pb-2.5">
               <dt className="text-muted-foreground">Invoice</dt>
               <dd>
                 {payment.invoiceId ? (
@@ -242,7 +242,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
               </dd>
             </div>
             {payment.invoiceStatus ? (
-              <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center justify-between border-b border-input pb-2.5">
                 <dt className="text-muted-foreground">Invoice status</dt>
                 <dd>
                   <StatusPill
@@ -253,7 +253,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
               </div>
             ) : null}
             {payment.transactionReference ? (
-              <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center justify-between border-b border-input pb-2.5">
                 <dt className="text-muted-foreground">Reference</dt>
                 <dd className="font-mono text-xs">{payment.transactionReference}</dd>
               </div>
@@ -269,8 +269,8 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </dl>
         </section>
 
-        <aside className="rounded-xl border border-border bg-card p-5 shadow-xs">
-          <div className="flex items-center gap-2 border-b border-border pb-3">
+        <aside className="rounded-xl border border-input bg-card p-5 shadow-xs">
+          <div className="flex items-center gap-2 border-b border-input pb-3">
             <Building2 className="size-4 text-primary" />
             <h2 className="text-sm font-semibold text-foreground">
               Service professional

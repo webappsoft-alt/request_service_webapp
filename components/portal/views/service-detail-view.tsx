@@ -166,7 +166,7 @@ export function ServiceDetailView({ id }: { id: string }) {
     >
       <div className="grid items-start gap-6 px-4 pb-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,22rem)]">
         <div className="flex flex-col gap-4">
-          <section className="overflow-hidden rounded-xl border border-black/10 bg-card">
+          <section className="overflow-hidden rounded-xl border border-input bg-card">
             <div className="relative aspect-[16/9] bg-[#003F7D]">
               {cover ? (
                 <Image
@@ -194,7 +194,7 @@ export function ServiceDetailView({ id }: { id: string }) {
                       "relative size-16 shrink-0 overflow-hidden rounded-lg border transition",
                       index === activePhoto
                         ? "border-[#003F7D] ring-2 ring-[#003F7D]/30"
-                        : "border-black/10 hover:border-[#003F7D]/40",
+                        : "border-input hover:border-[#003F7D]/40",
                     )}
                     aria-label={`Show photo ${index + 1}`}
                     aria-pressed={index === activePhoto}
@@ -232,7 +232,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             </div>
           </section>
 
-          <section className="rounded-xl border border-black/10 bg-card p-5">
+          <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">Service details</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Fact
@@ -285,7 +285,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             ) : null}
           </section>
 
-          <section className="rounded-xl border border-black/10 bg-card p-5">
+          <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">What’s covered</p>
             {service.coverage.filter((item) => item.trim()).length ? (
               <ul className="mt-3 flex flex-col gap-2">
@@ -311,7 +311,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             )}
           </section>
 
-          <section className="rounded-xl border border-black/10 bg-card p-5">
+          <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">FAQ</p>
             {(service.faqs ?? []).filter(
               (item) => item.question.trim() && item.answer.trim(),
@@ -339,7 +339,7 @@ export function ServiceDetailView({ id }: { id: string }) {
         </div>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
-          <section className="rounded-xl border border-black/10 bg-card p-5">
+          <section className="rounded-xl border border-input bg-card p-5">
             <p className="flex items-center gap-1.5 text-sm font-semibold">
               <MapPin className="size-3.5" aria-hidden="true" />
               Service areas
@@ -362,7 +362,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             )}
           </section>
 
-          <section className="rounded-xl border border-black/10 bg-card p-5">
+          <section className="rounded-xl border border-input bg-card p-5">
             <p className="flex items-center gap-1.5 text-sm font-semibold">
               <Clock3 className="size-3.5" aria-hidden="true" />
               Availability

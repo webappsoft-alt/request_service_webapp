@@ -433,7 +433,7 @@ export function EventCalendar({
         >
           Today
         </Button>
-        <div className="inline-flex overflow-hidden rounded-md border border-black/15">
+        <div className="inline-flex overflow-hidden rounded-md border border-input">
           {VIEWS.map((item) => (
             <button
               key={item}
@@ -546,14 +546,14 @@ export function EventCalendar({
           />
         )}
 
-        <aside className="border border-black/15 bg-card">
-          <div className="border-b border-black/10 px-4 py-3">
+        <aside className="border border-input bg-card">
+          <div className="border-b border-input px-4 py-3">
             <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Day roster</p>
             <h2 className="mt-1 text-sm font-semibold">{formatDate(selectedDay)}</h2>
             <p className="text-xs text-muted-foreground">{dayEvents.length ? `${dayEvents.length} booked` : "Free"}</p>
           </div>
           <div
-            className="min-h-32 divide-y divide-black/10"
+            className="min-h-32 divide-y divide-input"
             onDragOver={(drag) => drag.preventDefault()}
             onDrop={(drag) => dropOnDay(selectedDay, drag)}
           >
@@ -589,7 +589,7 @@ export function EventCalendar({
             )}
           </div>
           <div
-            className="border-t border-black/10 px-4 py-3"
+            className="border-t border-input px-4 py-3"
             onDragOver={(drag) => drag.preventDefault()}
             onDrop={(drag) => {
               drag.preventDefault();
@@ -635,8 +635,8 @@ function MonthGrid({
   onOpen?: (event: PortalCalendarEvent) => void;
 }) {
   return (
-    <div className="overflow-hidden border border-black/15 bg-card">
-      <div className="grid grid-cols-7 border-b border-black/10 bg-[#f7f8fa]">
+    <div className="overflow-hidden border border-input bg-card">
+      <div className="grid grid-cols-7 border-b border-input bg-[#f7f8fa]">
         {WEEKDAYS.map((day) => (
           <p key={day} className="px-2 py-2 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
             {day}
@@ -655,7 +655,7 @@ function MonthGrid({
             onDragLeave={() => onOver(null)}
             onDrop={(drag) => onDrop(cell.iso, drag)}
             className={cn(
-              "min-h-28 border-b border-r border-black/10 p-1.5 last:border-r-0",
+              "min-h-28 border-b border-r border-input p-1.5 last:border-r-0",
               !cell.inMonth && "bg-[#f7f8fa] text-muted-foreground",
               selectedDay === cell.iso && "bg-secondary/50",
               overDay === cell.iso && "bg-primary/10",
@@ -739,8 +739,8 @@ function TimeGrid({
   }, [events, days]);
 
   return (
-    <div className="border border-black/15 bg-card">
-      <div className={cn("grid border-b border-black/10 bg-[#f7f8fa]", columns)}>
+    <div className="border border-input bg-card">
+      <div className={cn("grid border-b border-input bg-[#f7f8fa]", columns)}>
         <div />
         {days.map((iso) => (
           <button
@@ -758,14 +758,14 @@ function TimeGrid({
         ))}
       </div>
 
-      <div className={cn("grid border-b border-black/10", columns)}>
+      <div className={cn("grid border-b border-input", columns)}>
         <p className="flex items-center justify-end px-2 py-1 text-[10px] text-muted-foreground">All day</p>
         {days.map((iso) => {
           const allDay = events.filter((item) => eventCovers(item, iso) && isAllDay(item));
           return (
             <div
               key={iso}
-              className="min-h-10 space-y-1 border-l border-black/10 p-1"
+              className="min-h-10 space-y-1 border-l border-input p-1"
               onDragOver={(drag) => drag.preventDefault()}
               onDrop={(drag) => onDropSlot(iso, DAY_START, drag)}
             >
@@ -779,7 +779,7 @@ function TimeGrid({
 
       <div className="max-h-[42rem] overflow-auto" ref={scrollRef}>
         <div className={cn("grid", columns)}>
-          <div className="relative border-r border-black/10" style={{ height }}>
+          <div className="relative border-r border-input" style={{ height }}>
             {SLOTS.filter((slot) => slot % 60 === 0).map((slot) => (
               <p
                 key={slot}
@@ -823,7 +823,7 @@ function TimeGrid({
               {days.map((iso) => (
                 <div
                   key={iso}
-                  className="relative border-r border-black/10 last:border-r-0"
+                  className="relative border-r border-input last:border-r-0"
                   style={{ height }}
                 >
                   {SLOTS.map((slot) => (
@@ -842,8 +842,8 @@ function TimeGrid({
                       className={cn(
                         "absolute inset-x-0 border-t",
                         slot % 60 === 0
-                          ? "border-black/15"
-                          : "border-dashed border-black/10",
+                          ? "border-input"
+                          : "border-dashed border-input",
                         hover?.iso === iso && hover.slot === slot && "bg-primary/10",
                       )}
                       style={{

@@ -157,11 +157,11 @@ export function ServiceAreasView() {
       }
     >
       {showBlockingLoader ? (
-        <div className="flex min-h-48 items-center justify-center border border-black/15 bg-card">
+        <div className="flex min-h-48 items-center justify-center border border-input bg-card">
           <Loader2 className="size-6 animate-spin text-primary" aria-label="Loading service areas" />
         </div>
       ) : isTrulyEmpty ? (
-        <div className="flex min-h-[50vh] items-center justify-center border border-black/15 bg-card px-6 py-16 text-center">
+        <div className="flex min-h-[50vh] items-center justify-center border border-input bg-card px-6 py-16 text-center">
           <p className="max-w-md text-base text-muted-foreground">
             No service areas yet. Add your first coverage zone.
           </p>

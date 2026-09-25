@@ -18,7 +18,7 @@ export function PortalPage({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 border-b border-black/10 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-input bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           {eyebrow ? (
             <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{eyebrow}</p>

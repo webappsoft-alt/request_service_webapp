@@ -86,7 +86,7 @@ export function BusinessGalleryEditor({
       <div
         className={cn(
           "relative overflow-hidden rounded-xl border bg-muted/30",
-          banner ? "border-input" : "border-dashed border-black/20",
+          banner ? "border-input" : "border-dashed border-input",
         )}
       >
         {banner ? (
@@ -118,7 +118,7 @@ export function BusinessGalleryEditor({
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDropFiles}
-        className="rounded-xl border border-dashed border-black/20 bg-card px-4 py-5 text-center"
+        className="rounded-xl border border-dashed border-input bg-card px-4 py-5 text-center"
       >
         <p className="text-sm font-medium">Drag photos here or browse</p>
         <p className="mt-1 text-xs text-muted-foreground">

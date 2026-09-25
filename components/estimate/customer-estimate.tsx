@@ -897,14 +897,14 @@ export function CustomerEstimatePage({
         ) : null}
 
         {showChangeForm && canRequestChanges ? (
-          <div className="rounded-md border border-black/10 bg-card p-4 print:hidden">
+          <div className="rounded-md border border-input bg-card p-4 print:hidden">
             <p className="text-sm font-medium">What should be changed?</p>
             <p className="mt-1 text-xs text-muted-foreground">
               The professional will update this same estimate and send it back
               for your review.
             </p>
             <textarea
-              className="mt-3 w-full min-h-24 rounded-md border border-black/15 bg-background px-3 py-2 text-sm"
+              className="mt-3 w-full min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={changeReason}
               onChange={(event) => setChangeReason(event.target.value)}
               placeholder="Example: Please reduce labor hours and add materials for the kitchen repair."
@@ -1028,7 +1028,7 @@ function CustomerSignSlot({
         <label className="mt-3 flex items-start gap-2 text-[11px] leading-4 text-foreground cursor-pointer">
           <input
             type="checkbox"
-            className="mt-0.5 rounded border-black/20"
+            className="mt-0.5 rounded border-input"
             checked={agreed}
             onChange={(event) => setAgreed(event.target.checked)}
           />
@@ -1112,12 +1112,12 @@ function CustomerSiteInspectionSection({
     <>
       <section
         id="site-inspection-section"
-        className="scroll-mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-xs print:m-0 print:break-before-page print:border-black/15 print:p-0 print:shadow-none"
+        className="scroll-mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-xs print:m-0 print:break-before-page print:border-input print:p-0 print:shadow-none"
       >
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4 sm:px-6 print:border-black/10 print:bg-transparent">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4 sm:px-6 print:border-input print:bg-transparent">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-input bg-primary/10 text-primary">
               <Camera className="size-4.5" />
             </div>
             <div>
@@ -1242,7 +1242,7 @@ function CustomerSiteInspectionSection({
                   <div
                     key={photo.id || index}
                     onClick={() => setSelectedPhotoIndex(index)}
-                    className="group relative cursor-pointer overflow-hidden rounded-lg border border-border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-md print:cursor-default print:border-black/15 print:shadow-none"
+                    className="group relative cursor-pointer overflow-hidden rounded-lg border border-border bg-card transition-all duration-200 hover:border-primary/40 hover:shadow-md print:cursor-default print:border-input print:shadow-none"
                   >
                     <div className="relative aspect-4/3 w-full overflow-hidden bg-muted/30">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1259,7 +1259,7 @@ function CustomerSiteInspectionSection({
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between gap-2 border-t border-border bg-card p-2.5 print:border-black/10">
+                    <div className="flex items-center justify-between gap-2 border-t border-border bg-card p-2.5 print:border-input">
                       <p className="truncate text-xs font-medium text-foreground">
                         {photo.name || `Photo ${index + 1}`}
                       </p>
@@ -1409,7 +1409,7 @@ export function EstimateDocumentSkeleton({
         </div>
 
         {/* Page 1 Skeleton */}
-        <article className="mx-auto w-full max-w-204 overflow-hidden rounded-xs border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+        <article className="mx-auto w-full max-w-204 overflow-hidden rounded-xs border border-input bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
           <div className="min-h-[10.4in] px-8 py-7">
             {/* Header */}
             <div className="flex items-start justify-between gap-4">
@@ -1446,7 +1446,7 @@ export function EstimateDocumentSkeleton({
             </div>
 
             {/* Meta bar */}
-            <div className="mt-6 grid grid-cols-3 gap-3 border border-black/10 bg-[#f8fafc] px-3 py-2.5">
+            <div className="mt-6 grid grid-cols-3 gap-3 border border-input bg-[#f8fafc] px-3 py-2.5">
               <div className="space-y-1">
                 <Skeleton className="h-2.5 w-16" />
                 <Skeleton className="h-4 w-20" />
@@ -1464,7 +1464,7 @@ export function EstimateDocumentSkeleton({
             {/* Work details table */}
             <div className="mt-6 space-y-2">
               <Skeleton className="h-3 w-24" />
-              <div className="overflow-hidden rounded-[2px] border border-black/10">
+              <div className="overflow-hidden rounded-[2px] border border-input">
                 <div className="flex h-8 items-center justify-between bg-[#e8eef5] px-2">
                   <Skeleton className="h-3 w-28" />
                   <Skeleton className="h-3 w-16" />
@@ -1472,7 +1472,7 @@ export function EstimateDocumentSkeleton({
                   <Skeleton className="h-3 w-16" />
                   <Skeleton className="h-3 w-20" />
                 </div>
-                <div className="divide-y divide-black/8 bg-white">
+                <div className="divide-y divide-input bg-white">
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
@@ -1499,23 +1499,23 @@ export function EstimateDocumentSkeleton({
                 <Skeleton className="h-3 w-12" />
                 <Skeleton className="h-3 w-16" />
               </div>
-              <div className="flex justify-between border-t border-black/10 pt-2">
+              <div className="flex justify-between border-t border-input pt-2">
                 <Skeleton className="h-4 w-14" />
                 <Skeleton className="h-4 w-24" />
               </div>
             </div>
           </div>
-          <footer className="flex items-center justify-between border-t border-black/10 bg-[#f8fafc] px-8 py-2">
+          <footer className="flex items-center justify-between border-t border-input bg-[#f8fafc] px-8 py-2">
             <Skeleton className="h-3 w-36" />
             <Skeleton className="h-3 w-16" />
           </footer>
         </article>
 
         {/* Page 2 Skeleton */}
-        <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-black/15 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+        <article className="mx-auto w-full max-w-[8.5in] overflow-hidden rounded-[2px] border border-input bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
           <div className="min-h-[10.4in] space-y-6 px-8 py-7">
             {/* Header compact */}
-            <div className="flex items-start justify-between border-b border-black/10 pb-4">
+            <div className="flex items-start justify-between border-b border-input pb-4">
               <div className="flex items-center gap-3">
                 <Skeleton className="size-10 rounded-[4px]" />
                 <Skeleton className="h-4 w-36" />

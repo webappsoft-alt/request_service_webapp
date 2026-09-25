@@ -241,7 +241,7 @@ export function PortalDataTable<T>({
                 setPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="h-8.5 pl-8 text-xs"
+              className="h-8.5 pl-8 text-xs border-input"
             />
           </div>
           {countLabel ? (
@@ -268,7 +268,7 @@ export function PortalDataTable<T>({
       </div>
 
       {letters ? (
-        <div className="flex flex-wrap items-center gap-1 border-y border-black/10 py-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1 border-y border-input py-1.5 text-xs">
           <button
             type="button"
             onClick={() => applyLetter("")}
@@ -299,7 +299,7 @@ export function PortalDataTable<T>({
         </div>
       ) : null}
 
-      <div className="relative overflow-x-auto rounded-lg border border-black/10 bg-card">
+      <div className="relative overflow-x-auto rounded-lg border border-input bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -401,7 +401,7 @@ export function PortalDataTable<T>({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-black/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-t border-input px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
           {totalCount ? `Showing ${from}–${to} of ${totalCount}` : "No results"}
         </p>

@@ -51,8 +51,8 @@ export function RecordWorkspace({
   }
 
   return (
-    <div className="border border-black/15 bg-card">
-      <div className="flex flex-col gap-3 border-b border-black/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="border border-input bg-card">
+      <div className="flex flex-col gap-3 border-b border-input px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold tracking-tight">{label}</h1>
           {badge}
@@ -73,7 +73,7 @@ export function RecordWorkspace({
                 className={cn(
                   "cursor-pointer inline-flex items-center gap-1.5 rounded-t-md border px-3 py-2 text-[13px] font-medium",
                   active
-                    ? "-mb-px border-black/10 border-b-card bg-card text-primary shadow-[0_-1px_0_#003F7D]"
+                    ? "-mb-px border-input border-b-card bg-card text-primary shadow-[0_-1px_0_#003F7D]"
                     : "border-transparent text-muted-foreground hover:bg-white/70 hover:text-foreground",
                 )}
               >
@@ -84,7 +84,7 @@ export function RecordWorkspace({
           })}
         </div>
       </div>
-      <div className="border-t border-black/10 bg-card p-4">
+      <div className="border-t border-input bg-card p-4">
         {notice ? <div className="mb-4">{notice}</div> : null}
         {children(tab)}
       </div>

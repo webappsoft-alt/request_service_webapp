@@ -198,13 +198,13 @@ function CustomerOrderActions({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+    <div className="rounded-xl border border-input bg-card p-5 shadow-xs">
       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
         Order actions
       </h3>
 
       {canSignOff ? (
-        <div className="mt-4 space-y-2.5 border-b border-border pb-4">
+        <div className="mt-4 space-y-2.5 border-b border-input pb-4">
           <p className="text-sm font-semibold text-foreground">
             Confirm work completion
           </p>
@@ -251,7 +251,7 @@ function CustomerOrderActions({
       ) : null}
 
       {canDispute ? (
-        <div className={cn("space-y-2.5", canSignOff ? "mt-4 border-t border-border pt-4" : "mt-4")}>
+        <div className={cn("space-y-2.5", canSignOff ? "mt-4 border-t border-input pt-4" : "mt-4")}>
           <p className="text-sm font-semibold text-foreground">
             Report an issue
           </p>
@@ -418,7 +418,7 @@ export function CustomerOrderDetailView({
           </Button>
         }
       >
-        <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
+        <div className="space-y-4 rounded-xl border border-input bg-card px-5 py-12 text-center">
           <p className="text-base font-semibold text-foreground">
             Couldn’t load this order
           </p>
@@ -501,7 +501,7 @@ export function CustomerOrderDetailView({
           {/* TOP METRICS / STATS BAR */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
             {/* 1. Order Total */}
-            <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs">
+            <div className="rounded-xl border border-input bg-card p-4 sm:p-5 shadow-xs">
               <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
                 Order total
               </p>
@@ -516,7 +516,7 @@ export function CustomerOrderDetailView({
             </div>
 
             {/* 2. Status */}
-            <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs">
+            <div className="rounded-xl border border-input bg-card p-4 sm:p-5 shadow-xs">
               <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
                 Current status
               </p>
@@ -538,7 +538,7 @@ export function CustomerOrderDetailView({
             </div>
 
             {/* 3. Appointment Window */}
-            <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs">
+            <div className="rounded-xl border border-input bg-card p-4 sm:p-5 shadow-xs">
               <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
                 Schedule window
               </p>
@@ -558,7 +558,7 @@ export function CustomerOrderDetailView({
             </div>
 
             {/* 4. Provider */}
-            <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-xs">
+            <div className="rounded-xl border border-input bg-card p-4 sm:p-5 shadow-xs">
               <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
                 Provider
               </p>
@@ -573,8 +573,8 @@ export function CustomerOrderDetailView({
           </div>
 
           {/* PROGRESS STEPPER */}
-          <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-            <div className="border-b border-border pb-4">
+          <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+            <div className="border-b border-input pb-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">
@@ -616,7 +616,7 @@ export function CustomerOrderDetailView({
                             ? "bg-primary text-primary-foreground shadow-xs"
                             : step.current
                               ? "border-2 border-primary bg-background text-primary"
-                              : "border border-border bg-muted text-muted-foreground",
+                              : "border border-input bg-muted text-muted-foreground",
                         )}
                       >
                         {step.done ? (
@@ -652,8 +652,8 @@ export function CustomerOrderDetailView({
             {/* LEFT COLUMN: Specifications, Items Table, Team, Attachments, Logs */}
             <div className="space-y-6">
               {/* SECTION 1: Service Specifications & Scope Breakdown */}
-              <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-                <div className="border-b border-border pb-4">
+              <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+                <div className="border-b border-input pb-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-base font-semibold text-foreground">
                       Service specifications & scope
@@ -669,7 +669,7 @@ export function CustomerOrderDetailView({
 
                 <div className="mt-5 space-y-4">
                   {/* Service Header card */}
-                  <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-input bg-muted/20 p-4">
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground text-base">
                         {title}
@@ -707,7 +707,7 @@ export function CustomerOrderDetailView({
                       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                         Work instructions & customer specifications
                       </h3>
-                      <div className="mt-2 rounded-lg border border-border bg-muted/20 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                      <div className="mt-2 rounded-lg border border-input bg-muted/20 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
                         {activeOrder.customerNotes || activeOrder.address?.notes}
                       </div>
                     </div>
@@ -719,9 +719,9 @@ export function CustomerOrderDetailView({
                       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                         Itemized service tasks & materials ({items.length})
                       </h3>
-                      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                      <div className="overflow-x-auto rounded-lg border border-input bg-card">
                         <table className="w-full text-left text-sm">
-                          <thead className="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          <thead className="border-b border-input bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             <tr>
                               <th className="px-4 py-3">#</th>
                               <th className="px-4 py-3">Description</th>
@@ -731,7 +731,7 @@ export function CustomerOrderDetailView({
                               <th className="px-4 py-3 text-right">Total</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-border">
+                          <tbody className="divide-y divide-input">
                             {items.map((item, idx) => (
                               <tr
                                 key={item.id || item._id || idx}
@@ -773,7 +773,7 @@ export function CustomerOrderDetailView({
                               </tr>
                             ))}
                           </tbody>
-                          <tfoot className="border-t border-border bg-muted/20 font-medium">
+                          <tfoot className="border-t border-input bg-muted/20 font-medium">
                             <tr>
                               <td colSpan={5} className="px-4 py-2.5 text-right text-xs">
                                 Scope Subtotal:
@@ -801,7 +801,7 @@ export function CustomerOrderDetailView({
                         {covered.map((item, idx) => (
                           <div
                             key={idx}
-                            className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground"
+                            className="flex items-start gap-2.5 rounded-lg border border-input bg-muted/20 p-3 text-sm text-foreground"
                           >
                             <Check className="mt-0.5 size-4 shrink-0 text-primary" />
                             <span>{item}</span>
@@ -829,7 +829,7 @@ export function CustomerOrderDetailView({
                             key={idx}
                             type="button"
                             onClick={() => setLightboxIndex(idx)}
-                            className="group relative aspect-4/3 overflow-hidden rounded-lg border border-border bg-muted/40 transition-all hover:border-primary/60 hover:shadow-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
+                            className="group relative aspect-4/3 overflow-hidden rounded-lg border border-input bg-muted/40 transition-all hover:border-primary/60 hover:shadow-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
                             title="View full image"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -860,8 +860,8 @@ export function CustomerOrderDetailView({
                 activeOrder.assignedEmployees.length > 0) ||
               (activeOrder.assignedContractors &&
                 activeOrder.assignedContractors.length > 0) ? (
-                <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-                  <div className="border-b border-border pb-4">
+                <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+                  <div className="border-b border-input pb-4">
                     <h2 className="text-base font-semibold text-foreground">
                       Assigned service personnel
                     </h2>
@@ -875,7 +875,7 @@ export function CustomerOrderDetailView({
                     {activeOrder.assignedEmployees?.map((emp) => (
                       <div
                         key={emp.id || emp._id}
-                        className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3.5"
+                        className="flex items-start gap-3 rounded-lg border border-input bg-muted/20 p-3.5"
                       >
                         <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
                           {emp.firstName?.charAt(0) ||
@@ -903,7 +903,7 @@ export function CustomerOrderDetailView({
                     {activeOrder.assignedContractors?.map((con) => (
                       <div
                         key={con.id || con._id}
-                        className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3.5"
+                        className="flex items-start gap-3 rounded-lg border border-input bg-muted/20 p-3.5"
                       >
                         <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-semibold text-sm">
                           <Wrench className="size-4" />
@@ -929,8 +929,8 @@ export function CustomerOrderDetailView({
 
               {/* SECTION 3: Change Orders */}
               {activeOrder.changeOrders.length > 0 ? (
-                <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-                  <div className="border-b border-border pb-4">
+                <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+                  <div className="border-b border-input pb-4">
                     <h2 className="text-base font-semibold text-foreground">
                       Change orders & scope adjustments
                     </h2>
@@ -944,7 +944,7 @@ export function CustomerOrderDetailView({
                     {activeOrder.changeOrders.map((co) => (
                       <div
                         key={co.id}
-                        className="rounded-lg border border-border bg-muted/20 p-4"
+                        className="rounded-lg border border-input bg-muted/20 p-4"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="font-medium text-foreground text-sm">
@@ -991,8 +991,8 @@ export function CustomerOrderDetailView({
 
               {/* SECTION 4: Activity & Progress History */}
               {activeOrder.lifecycleAudit.length > 0 ? (
-                <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-                  <div className="border-b border-border pb-4">
+                <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+                  <div className="border-b border-input pb-4">
                     <h2 className="text-base font-semibold text-foreground">
                       Activity & event log
                     </h2>
@@ -1041,7 +1041,7 @@ export function CustomerOrderDetailView({
             {/* RIGHT SIDEBAR: Financial Summary, Quick CTAs, Appointment, Location, Provider */}
             <aside className="space-y-5 lg:sticky lg:top-20">
               {/* Financial Summary Card */}
-              <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div className="rounded-xl border border-input bg-card p-5 shadow-xs">
                 <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                   Order financial summary
                 </p>
@@ -1052,7 +1052,7 @@ export function CustomerOrderDetailView({
                   Order #{activeOrder.orderNumber}
                 </p>
 
-                <div className="mt-4 space-y-2 border-t border-border pt-4 text-xs">
+                <div className="mt-4 space-y-2 border-t border-input pt-4 text-xs">
                   <div className="flex justify-between gap-3 text-muted-foreground">
                     <span>Base amount:</span>
                     <span className="font-mono font-medium text-foreground">
@@ -1095,7 +1095,7 @@ export function CustomerOrderDetailView({
                   ) : null}
 
                   {activeOrder.payment?.status ? (
-                    <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3 border-t border-input pt-2 text-muted-foreground">
                       <span>Payment status:</span>
                       <Badge variant="outline" className="text-[11px] capitalize">
                         {formatPaymentStatus(activeOrder.payment.status)}
@@ -1106,7 +1106,7 @@ export function CustomerOrderDetailView({
 
                 {/* Quick links to Estimate / Invoice */}
                 {(activeOrder.invoiceId || activeOrder.estimateId) && (
-                  <div className="mt-4 space-y-2 border-t border-border pt-4">
+                  <div className="mt-4 space-y-2 border-t border-input pt-4">
                     {activeOrder.invoiceId ? (
                       <Button
                         asChild
@@ -1138,7 +1138,7 @@ export function CustomerOrderDetailView({
               </div>
 
               {/* Appointment / Timing Card */}
-              <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div className="rounded-xl border border-input bg-card p-5 shadow-xs">
                 <h3 className="flex items-center gap-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                   <CalendarDays className="size-3.5 text-primary" />
                   Service schedule & timing
@@ -1156,7 +1156,7 @@ export function CustomerOrderDetailView({
                     </p>
                   </div>
                   {activeOrder.createdAt ? (
-                    <div className="border-t border-border pt-2 text-muted-foreground">
+                    <div className="border-t border-input pt-2 text-muted-foreground">
                       <span>Date requested:</span>{" "}
                       <span className="font-medium text-foreground">
                         {formatOrderDateTime(activeOrder.createdAt)}
@@ -1167,7 +1167,7 @@ export function CustomerOrderDetailView({
               </div>
 
               {/* Service Location Card */}
-              <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div className="rounded-xl border border-input bg-card p-5 shadow-xs">
                 <h3 className="flex items-center gap-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
                   <MapPin className="size-3.5 text-primary" />
                   Service address
@@ -1186,12 +1186,12 @@ export function CustomerOrderDetailView({
 
               {/* Provider Business Profile Card */}
               {provider ? (
-                <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+                <div className="rounded-xl border border-input bg-card p-5 shadow-xs">
                   <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                     Service professional
                   </h3>
                   <div className="mt-3 flex items-start gap-3">
-                    <div className="relative size-11 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
+                    <div className="relative size-11 shrink-0 overflow-hidden rounded-full border border-input bg-muted">
                       {provider.avatarUrl ? (
                         <Image
                           src={provider.avatarUrl}

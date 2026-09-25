@@ -97,7 +97,7 @@ export function CustomerEstimateRequestView() {
       }
     >
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] xl:gap-8">
-        <div className="min-w-0 rounded-[4px] border border-black/10 bg-card p-4 sm:p-6">
+        <div className="min-w-0 rounded-[4px] border border-input bg-card p-4 sm:p-6">
           {submitting ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
               Sending your request to matching professionals…

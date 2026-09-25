@@ -95,9 +95,9 @@ export function FixedServiceCatalog({
               <article
                 key={service.id}
                 className={cn(
-                  "relative flex flex-col overflow-hidden rounded-xl border border-black/10 bg-card",
+                  "relative flex flex-col overflow-hidden rounded-xl border border-input bg-card",
                   detailHref &&
-                    "transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-black/20 hover:elevate",
+                    "transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-input hover:elevate",
                 )}
               >
                 {detailHref ? (
@@ -183,7 +183,7 @@ export function FixedServiceCatalog({
           })}
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed border-black/15 bg-card px-4 py-8 text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-input bg-card px-4 py-8 text-sm text-muted-foreground">
           Fixed services will appear here when this company publishes priced jobs.
         </p>
       )}

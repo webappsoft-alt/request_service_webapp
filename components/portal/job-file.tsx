@@ -159,7 +159,7 @@ export function JobFileChrome({
         <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
-        <div className="mt-3 grid gap-3 border border-black/10 bg-[#f8fafc] p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-3 border border-input bg-[#f8fafc] p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
           <Detail
             label="Customer"
             value={
@@ -478,7 +478,7 @@ export function JobSummaryTab({
         <div className="space-y-4 text-sm">
           <LineGroup title="Labor" lines={laborLines} />
           <LineGroup title="Materials" lines={materialLines} />
-          <dl className="space-y-2 border-t border-black/10 pt-3">
+          <dl className="space-y-2 border-t border-input pt-3">
             <MoneyRow label="Subtotal" value={sheet.subtotal} />
             <MoneyRow label="Tax (8.25%)" value={sheet.tax} />
             <MoneyRow label="Total" value={sheet.total} strong />
@@ -982,7 +982,7 @@ export function JobSettingsTab({
   return (
     <>
     <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-      <div data-job-settings-form className="rounded-[4px] border border-black/10 bg-card p-4">
+      <div data-job-settings-form className="rounded-[4px] border border-input bg-card p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">Job settings</h2>
@@ -1150,8 +1150,8 @@ export function JobSettingsTab({
       </div>
 
       <div className="grid gap-4 content-start">
-        <section className="overflow-hidden rounded-[4px] border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-          <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-4 py-3">
+        <section className="overflow-hidden rounded-[4px] border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+          <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-4 py-3">
             <FileText className="size-4 text-primary" aria-hidden="true" />
             <h3 className="text-sm font-semibold">Job snapshot</h3>
           </header>
@@ -1161,7 +1161,7 @@ export function JobSettingsTab({
               <StatusPill label={jobStatusLabel(draft.status)} className={jobStatusTone(draft.status)} />
             </div>
             <p className="text-muted-foreground">{draft.name || service || "Untitled job"}</p>
-            <dl className="space-y-2.5 border-t border-black/10 pt-3">
+            <dl className="space-y-2.5 border-t border-input pt-3">
               <div className="flex items-start gap-2">
                 <UserRound className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
@@ -1220,8 +1220,8 @@ export function JobSettingsTab({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-[4px] border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-          <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-4 py-3">
+        <section className="overflow-hidden rounded-[4px] border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+          <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-4 py-3">
             <Receipt className="size-4 text-primary" aria-hidden="true" />
             <h3 className="text-sm font-semibold">Billing</h3>
           </header>
@@ -1243,7 +1243,7 @@ export function JobSettingsTab({
               </p>
             )}
             {estimate ? (
-              <p className="text-xs text-muted-foreground border-t border-black/10 pt-3">
+              <p className="text-xs text-muted-foreground border-t border-input pt-3">
                 Source estimate{" "}
                 <Link
                   href={`/pro/dashboard/estimates/${estimate.id}`}
@@ -1692,7 +1692,7 @@ export function JobAttachmentsTab({
         <label
           className={cn(
             "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors",
-            over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+            over ? "border-primary bg-[#003F7D]/5" : "border-input bg-[#f8fafc]",
             uploading && "pointer-events-none opacity-60",
           )}
           onDragEnter={(event) => {
@@ -1729,7 +1729,7 @@ export function JobAttachmentsTab({
         </label>
       ) : null}
       {activeAttachments.length ? (
-        <ul className="mt-4 divide-y divide-black/10 border border-black/10">
+        <ul className="mt-4 divide-y divide-input border border-input">
           {activeAttachments.map((fileItem) => (
             <li key={fileItem.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-md bg-[#eef1f5] text-primary">
@@ -1834,7 +1834,7 @@ function LineGroup({ title, lines }: { title: string; lines: JobCostLine[] }) {
 
 function Panel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-[4px] border border-black/10 bg-card p-4">
+    <section className="rounded-[4px] border border-input bg-card p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{title}</h2>
         {action}
@@ -1877,7 +1877,7 @@ function ActivityCard({
   const timestamp = item.at || item.createdAt || "";
   const content = item.html ?? item.description ?? "";
   return (
-    <li className="rounded-[4px] border border-black/10 p-3">
+    <li className="rounded-[4px] border border-input p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium">{item.title}</p>

@@ -41,7 +41,7 @@ export function CrmMark({
     return (
       <span
         className={cn(
-          "relative grid shrink-0 place-items-center overflow-hidden rounded-md border border-black/10 bg-muted shadow-[0_6px_16px_rgba(4,26,54,0.12)]",
+          "relative grid shrink-0 place-items-center overflow-hidden rounded-md border border-input bg-muted shadow-[0_6px_16px_rgba(4,26,54,0.12)]",
           box,
         )}
         aria-hidden="true"
@@ -55,7 +55,7 @@ export function CrmMark({
   return (
     <span
       className={cn(
-        "relative grid shrink-0 place-items-center overflow-hidden rounded-md border border-black/10 text-white shadow-[0_6px_16px_rgba(4,26,54,0.12)]",
+        "relative grid shrink-0 place-items-center overflow-hidden rounded-md border border-input text-white shadow-[0_6px_16px_rgba(4,26,54,0.12)]",
         box,
       )}
       style={{ background: toneFor(name) }}

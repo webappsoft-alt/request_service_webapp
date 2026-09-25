@@ -133,7 +133,7 @@ function OrderCard({
   return (
     <article
       className={cn(
-        "relative flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card",
+        "relative flex h-full flex-col overflow-hidden rounded-xl border border-input bg-card",
         "animate-in fade-in-0 zoom-in-95 duration-300",
         "transition-[transform,box-shadow,border-color] duration-300 ease-out",
         "hover:-translate-y-0.5 hover:border-foreground/35 hover:shadow-sm",
@@ -187,7 +187,7 @@ function OrderCard({
           ) : null}
         </div>
 
-        <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3">
+        <div className="mt-auto flex items-center justify-between gap-3 border-t border-input pt-3">
           <p className="text-base font-semibold text-primary">
             {formatOrderMoney(
               order.pricing.totalAmount,
@@ -339,7 +339,7 @@ export function CustomerOrdersView() {
             ))}
           </div>
         ) : error && !orders.length ? (
-          <div className="space-y-4 rounded-xl border border-border bg-card px-5 py-12 text-center">
+          <div className="space-y-4 rounded-xl border border-input bg-card px-5 py-12 text-center">
             <p className="text-base font-medium text-foreground">
               Couldn’t load your orders
             </p>
@@ -369,7 +369,7 @@ export function CustomerOrdersView() {
         ) : (
           <div className="space-y-4">
             {error ? (
-              <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-input bg-card px-4 py-3 text-sm text-muted-foreground">
                 {error}{" "}
                 <button
                   type="button"

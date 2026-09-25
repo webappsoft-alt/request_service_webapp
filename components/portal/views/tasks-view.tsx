@@ -889,13 +889,13 @@ export function TaskDetailView({ id }: { id: string }) {
   if (!task) {
     if (fetching) {
       return (
-        <div className="border border-black/15 bg-card" aria-busy="true">
+        <div className="border border-input bg-card" aria-busy="true">
           <CenteredSpinner className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-black/15 bg-card p-6">
+      <div className="border border-input bg-card p-6">
         <h1 className="text-lg font-semibold">{fetchError || "Task not found"}</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/tasks">Back to tasks</Link>
@@ -1097,7 +1097,7 @@ export function TaskDetailView({ id }: { id: string }) {
           if (tab === "linked") {
             if (!subject.id) {
               return (
-                <div className="rounded-lg border border-black/10 bg-card p-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-lg border border-input bg-card p-8 text-center text-sm text-muted-foreground">
                   <Link2 className="size-8 mx-auto mb-2 text-muted-foreground/40" />
                   <p className="font-medium text-foreground">No Linked Record</p>
                   <p className="mt-1 text-xs">This task is not linked to any customer, job, lead, or estimate.</p>
@@ -1110,8 +1110,8 @@ export function TaskDetailView({ id }: { id: string }) {
                 <div className="space-y-4">
                   <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
                     {/* Customer Main Profile Card */}
-                    <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                      <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                    <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                      <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                         <CrmMark
                           name={customerDisplayName}
                           kind={linkedCustomer?.entityKind === "company" ? "company" : "person"}
@@ -1230,8 +1230,8 @@ export function TaskDetailView({ id }: { id: string }) {
 
                     {/* Right Column: Account / Dossier Summary */}
                     <div className="grid gap-4">
-                      <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                        <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                      <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                        <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
                           <Wallet className="size-4 text-primary" aria-hidden="true" />
                           <h3 className="text-sm font-semibold">Customer Account</h3>
                         </header>
@@ -1280,8 +1280,8 @@ export function TaskDetailView({ id }: { id: string }) {
             if (subject.kind === "job") {
               return (
                 <div className="space-y-4">
-                  <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                    <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                  <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                    <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                       <CrmMark name={linkedJob?.title || "Job"} kind="person" photoKey={linkedJob?.title} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1344,8 +1344,8 @@ export function TaskDetailView({ id }: { id: string }) {
             if (subject.kind === "request") {
               return (
                 <div className="space-y-4">
-                  <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                    <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                  <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                    <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                       <CrmMark name={linkedRequest?.serviceName || "Lead"} kind="person" photoKey={linkedRequest?.serviceName} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1400,8 +1400,8 @@ export function TaskDetailView({ id }: { id: string }) {
             if (subject.kind === "estimate") {
               return (
                 <div className="space-y-4">
-                  <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                    <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                  <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                    <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                       <CrmMark name={linkedEstimate?.number || "Estimate"} kind="person" photoKey={linkedEstimate?.number} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1444,7 +1444,7 @@ export function TaskDetailView({ id }: { id: string }) {
             }
 
             return (
-              <div className="rounded-lg border border-black/10 bg-card p-6">
+              <div className="rounded-lg border border-input bg-card p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
@@ -1464,8 +1464,8 @@ export function TaskDetailView({ id }: { id: string }) {
             <div className="space-y-4">
               <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
                 {/* Main Task Profile Card */}
-                <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                  <header className="flex items-center gap-4 border-b border-black/10 bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
+                <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                  <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
                     <CrmMark name={task.title} kind="person" photoKey={task.title} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1516,8 +1516,8 @@ export function TaskDetailView({ id }: { id: string }) {
                 {/* Right Column: Assignment & Quick Linked Card */}
                 <div className="grid gap-4">
                   {/* Assignee Card */}
-                  <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                    <header className="flex items-center gap-2 border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                  <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                    <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
                       <UserRound className="size-4 text-primary" aria-hidden="true" />
                       <h3 className="text-sm font-semibold">Assigned Team Member</h3>
                     </header>
@@ -1539,8 +1539,8 @@ export function TaskDetailView({ id }: { id: string }) {
                   </section>
 
                   {/* Customer Details Card */}
-                  <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                    <header className="flex items-center justify-between border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+                  <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+                    <header className="flex items-center justify-between border-b border-input bg-[#f7f8fa] px-5 py-3">
                       <div className="flex items-center gap-2">
                         <UserRound className="size-4 text-primary" aria-hidden="true" />
                         <h3 className="text-sm font-semibold">Customer Details</h3>
@@ -1584,7 +1584,7 @@ export function TaskDetailView({ id }: { id: string }) {
                             </div>
                           </div>
 
-                          <div className="space-y-2 pt-3 border-t border-black/5 text-xs">
+                          <div className="space-y-2 pt-3 border-t border-input text-xs">
                             {customerEmail ? (
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Mail className="size-3.5 shrink-0 text-primary/70" />
@@ -1610,7 +1610,7 @@ export function TaskDetailView({ id }: { id: string }) {
                           </div>
 
                           {subject.kind !== "customer" && subject.id ? (
-                            <div className="pt-2 border-t border-black/5 flex items-center justify-between text-xs">
+                            <div className="pt-2 border-t border-input flex items-center justify-between text-xs">
                               <span className="text-muted-foreground">Linked {reminderSubjectKindLabel(subject.kind)}:</span>
                               <ReminderSubjectLink kind={subject.kind} id={subject.id} name={linkedName} />
                             </div>
@@ -1663,7 +1663,7 @@ function InfoRow({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start gap-3 border-b border-black/5 px-5 py-3 last:border-b-0", className)}>
+    <div className={cn("flex items-start gap-3 border-b border-input px-5 py-3 last:border-b-0", className)}>
       <Icon className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>

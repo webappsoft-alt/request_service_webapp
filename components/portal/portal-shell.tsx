@@ -166,7 +166,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-16" : "lg:pl-56")}>
-        <header className="sticky top-0 z-20 border-b border-black/20 bg-card">
+        <header className="sticky top-0 z-20 border-b border-input bg-card">
           <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
             <Sheet>
               <SheetTrigger asChild>
@@ -225,7 +225,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
             </div>
             <div className="ml-auto flex items-center gap-1 lg:ml-0">
               <PortalNotifications />
-              <UserAccountMenu user={menuUser} className="size-8 border-black/10" />
+              <UserAccountMenu user={menuUser} className="size-8 border-input" />
             </div>
           </div>
           {showPeople ? <PeopleSubnav /> : null}
@@ -256,7 +256,7 @@ function RecordTab({
         "flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-[4px] border px-2.5 text-xs",
         active
           ? "border-[#003F7D]/25 bg-[#e8eef5] font-semibold text-[#003F7D] shadow-[inset_0_-2px_0_#003F7D]"
-          : "border-black/10 bg-[#f7f8fa] text-muted-foreground hover:border-black/20 hover:bg-white hover:text-foreground",
+          : "border-input bg-[#f7f8fa] text-muted-foreground hover:border-input hover:bg-white hover:text-foreground",
       )}
     >
       <span

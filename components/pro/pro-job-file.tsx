@@ -64,9 +64,9 @@ export function ProJobFile() {
   return (
     <div
       ref={rootRef}
-      className="relative overflow-hidden rounded-2xl border border-black/15 bg-card shadow-[0_28px_64px_-28px_rgba(0,63,125,0.35)]"
+      className="relative overflow-hidden rounded-2xl border border-input bg-card shadow-[0_28px_64px_-28px_rgba(0,63,125,0.35)]"
     >
-      <div className="flex items-center justify-between gap-4 border-b border-black/10 px-5 py-3.5">
+      <div className="flex items-center justify-between gap-4 border-b border-input px-5 py-3.5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="hidden items-center gap-1.5 sm:flex" aria-hidden="true">
             <span className="size-2 rounded-full bg-black/15" />
@@ -138,7 +138,7 @@ export function ProJobFile() {
               <div
                 className={cn(
                   "w-full rounded-xl px-3 py-2.5 transition-colors duration-500",
-                  on ? "bg-primary/8" : "border border-primary/10 bg-[#F3F7FB]",
+                  on ? "bg-primary/8" : "border border-input bg-[#F3F7FB]",
                 )}
               >
                 <p

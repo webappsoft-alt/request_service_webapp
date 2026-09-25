@@ -324,7 +324,7 @@ function getOverallStatusBadge(batch: CustomerQuoteBatch) {
     );
   }
   return (
-    <Badge variant="outline" className="border-border text-muted-foreground">
+    <Badge variant="outline" className="border-input text-muted-foreground">
       Awaiting Pros
     </Badge>
   );
@@ -342,7 +342,7 @@ function StatCard({
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-5 py-5 transition-colors hover:bg-muted/40">
+    <div className="rounded-xl border border-input bg-card px-5 py-5 transition-colors hover:bg-muted/40">
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </p>
@@ -576,7 +576,7 @@ export function CustomerQuoteRequestDetailView() {
           </Button>
         }
       >
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
+        <div className="rounded-xl border border-input bg-card p-8 text-center">
           <p className="text-base font-medium text-foreground">
             Quote request could not be located
           </p>
@@ -713,8 +713,8 @@ export function CustomerQuoteRequestDetailView() {
         <div className="space-y-6">
           {/* SECTION 1: Received Estimates Spotlight (If Any) */}
           {consolidatedEstimates.length > 0 ? (
-            <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-4">
+            <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input pb-4">
                 <div>
                   <h2 className="text-base font-semibold text-foreground">
                     Estimates received ({consolidatedEstimates.length})
@@ -744,7 +744,7 @@ export function CustomerQuoteRequestDetailView() {
               </div>
 
               {/* Informative Guidance Notice */}
-              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3.5 text-xs text-foreground">
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-input bg-muted/40 p-3.5 text-xs text-foreground">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
                 <p>
                   <strong className="font-semibold">Single-Approval Guarantee:</strong>{" "}
@@ -776,9 +776,9 @@ export function CustomerQuoteRequestDetailView() {
                     <div
                       key={est.id || est.shareToken || est.number}
                       className={cn(
-                        "group relative rounded-lg border border-border bg-card p-4 transition-all sm:p-5",
+                        "group relative rounded-lg border border-input bg-card p-4 transition-all sm:p-5",
                         isAccepted && "border-emerald-500/40 bg-emerald-50/20",
-                        isRejected && "border-border bg-muted/30 opacity-80",
+                        isRejected && "border-input bg-muted/30 opacity-80",
                         !isAccepted &&
                           !isRejected &&
                           "hover:border-primary/50",
@@ -787,7 +787,7 @@ export function CustomerQuoteRequestDetailView() {
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="space-y-1.5">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="flex size-7 items-center justify-center rounded-full bg-muted font-semibold text-xs text-foreground border border-border">
+                            <span className="flex size-7 items-center justify-center rounded-full bg-muted font-semibold text-xs text-foreground border border-input">
                               {est.providerName.charAt(0).toUpperCase()}
                             </span>
                             <span className="font-semibold text-foreground">
@@ -806,7 +806,7 @@ export function CustomerQuoteRequestDetailView() {
                               className={cn(
                                 isAccepted && "bg-emerald-600 text-white",
                                 isRejected &&
-                                  "bg-muted text-muted-foreground border-border",
+                                  "bg-muted text-muted-foreground border-input",
                                 isChanges &&
                                   "bg-amber-100 text-amber-900 border-amber-300",
                               )}
@@ -919,8 +919,8 @@ export function CustomerQuoteRequestDetailView() {
           ) : null}
 
           {/* SECTION 2: Request & Service Specifications */}
-          <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-            <div className="border-b border-border pb-4">
+          <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+            <div className="border-b border-input pb-4">
               <h2 className="text-base font-semibold text-foreground">
                 Service & request details
               </h2>
@@ -930,7 +930,7 @@ export function CustomerQuoteRequestDetailView() {
             </div>
 
             <dl className="mt-5 grid gap-4 sm:grid-cols-2 text-sm">
-              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+              <div className="flex items-start gap-3 rounded-lg border border-input bg-muted/30 p-3.5">
                 <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
                 <div>
                   <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
@@ -942,7 +942,7 @@ export function CustomerQuoteRequestDetailView() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+              <div className="flex items-start gap-3 rounded-lg border border-input bg-muted/30 p-3.5">
                 <MapPin className="mt-0.5 size-4 shrink-0 text-primary" />
                 <div>
                   <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
@@ -954,7 +954,7 @@ export function CustomerQuoteRequestDetailView() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+              <div className="flex items-start gap-3 rounded-lg border border-input bg-muted/30 p-3.5">
                 <CalendarDays className="mt-0.5 size-4 shrink-0 text-primary" />
                 <div>
                   <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
@@ -966,7 +966,7 @@ export function CustomerQuoteRequestDetailView() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+              <div className="flex items-start gap-3 rounded-lg border border-input bg-muted/30 p-3.5">
                 <Building2 className="mt-0.5 size-4 shrink-0 text-primary" />
                 <div>
                   <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
@@ -988,9 +988,9 @@ export function CustomerQuoteRequestDetailView() {
                 (() => {
                   const parsed = parseQuoteDetails(batch.details);
                   return (
-                    <div className="mt-2.5 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
+                    <div className="mt-2.5 overflow-hidden rounded-lg border border-input bg-card shadow-xs">
                       {parsed.note ? (
-                        <div className="border-b border-border/80 bg-muted/25 px-4 py-3.5">
+                        <div className="border-b border-input bg-muted/25 px-4 py-3.5">
                           <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                             Notes
                           </p>
@@ -1008,7 +1008,7 @@ export function CustomerQuoteRequestDetailView() {
                             {parsed.answers.map((item, index) => (
                               <div
                                 key={`${item.label}-${index}`}
-                                className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5"
+                                className="rounded-md border border-input bg-muted/20 px-3 py-2.5"
                               >
                                 <dt className="text-[11px] font-medium text-muted-foreground">
                                   {item.label}
@@ -1054,7 +1054,7 @@ export function CustomerQuoteRequestDetailView() {
                       key={idx}
                       type="button"
                       onClick={() => setPreviewPhotoIndex(idx)}
-                      className="group relative aspect-4/3 overflow-hidden rounded-lg border border-border bg-muted/40 transition-all hover:border-primary/60 hover:shadow-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
+                      className="group relative aspect-4/3 overflow-hidden rounded-lg border border-input bg-muted/40 transition-all hover:border-primary/60 hover:shadow-sm focus:outline-hidden focus:ring-2 focus:ring-primary"
                       title="View full image"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1080,8 +1080,8 @@ export function CustomerQuoteRequestDetailView() {
           </section>
 
           {/* SECTION 3: Provider Activity & Contact */}
-          <section className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-xs">
-            <div className="border-b border-border pb-4">
+          <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+            <div className="border-b border-input pb-4">
               <h2 className="text-base font-semibold text-foreground">
                 Matched professionals ({batch.professionals.length})
               </h2>
@@ -1094,11 +1094,11 @@ export function CustomerQuoteRequestDetailView() {
               {batch.professionals.map((pro) => (
                 <div
                   key={pro.requestId}
-                  className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/40"
+                  className="rounded-lg border border-input bg-card p-4 transition-colors hover:border-primary/40"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3">
-                      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-sm text-foreground border border-border">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-sm text-foreground border border-input">
                         {pro.providerName.charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -1156,7 +1156,7 @@ export function CustomerQuoteRequestDetailView() {
 
                   {/* Estimates from this provider */}
                   {pro.estimates.length > 0 ? (
-                    <div className="mt-3 border-t border-border pt-3">
+                    <div className="mt-3 border-t border-input pt-3">
                       <p className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
                         Estimates submitted
                       </p>
@@ -1270,7 +1270,7 @@ export function CustomerQuoteRequestDetailView() {
         {/* SIDEBAR: Lifecycle Timeline & Guidance */}
         <aside className="space-y-6">
           {/* Stepped Timeline */}
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs xl:sticky xl:top-20">
+          <div className="rounded-xl border border-input bg-card p-5 shadow-xs xl:sticky xl:top-20">
             <h2 className="text-sm font-semibold text-foreground">
               Request lifecycle
             </h2>
@@ -1290,7 +1290,7 @@ export function CustomerQuoteRequestDetailView() {
                           ? "bg-emerald-600 text-white"
                           : step.current
                             ? "bg-primary text-primary-foreground ring-primary/20 animate-pulse"
-                            : "border border-border bg-muted text-muted-foreground",
+                            : "border border-input bg-muted text-muted-foreground",
                     )}
                   >
                     {step.id === "declined" ? (
@@ -1327,7 +1327,7 @@ export function CustomerQuoteRequestDetailView() {
             </div>
 
             {/* Need Assistance Card */}
-            <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-xs text-foreground">
+            <div className="mt-6 rounded-lg border border-input bg-muted/40 p-4 text-xs text-foreground">
               <div className="flex items-center gap-1.5 font-semibold text-foreground">
                 <HelpCircle className="size-4 shrink-0 text-primary" />
                 <span>How quote requests work</span>

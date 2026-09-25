@@ -217,7 +217,7 @@ export function EstimateShareTab({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-[4px] border border-black/10 bg-card p-4">
+      <div className="rounded-[4px] border border-input bg-card p-4">
         <h2 className="text-sm font-semibold">Send for approval</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Preview the estimate as a two-page document, sign for the company, then send the customer link.

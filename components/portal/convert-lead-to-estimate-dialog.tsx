@@ -149,8 +149,8 @@ export function ConvertLeadToEstimateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex flex-col sm:max-w-2xl lg:max-w-4xl max-h-[90vh] h-[90vh] sm:h-auto sm:max-h-[88vh] p-0 gap-0 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-2xl">
-        <DialogHeader className="shrink-0 px-6 py-3.5 border-b border-slate-200/80 bg-white z-10 pr-12">
+      <DialogContent className="flex flex-col sm:max-w-2xl lg:max-w-4xl max-h-[90vh] h-[90vh] sm:h-auto sm:max-h-[88vh] p-0 gap-0 rounded-2xl overflow-hidden border border-input bg-white shadow-2xl">
+        <DialogHeader className="shrink-0 px-6 py-3.5 border-b border-input bg-white z-10 pr-12">
           <div className="flex items-center gap-3">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#003F7D]/10 text-[#003F7D]">
               <FilePlus2 className="size-4" />
@@ -219,7 +219,7 @@ export function ConvertLeadToEstimateDialog({
               </label>
             </div>
 
-            <div className="space-y-3 pt-2 border-t border-slate-100">
+            <div className="space-y-3 pt-2 border-t border-input">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <span className="text-sm font-semibold text-slate-800">Proposal Line Items</span>
@@ -232,7 +232,7 @@ export function ConvertLeadToEstimateDialog({
                   size="sm"
                   variant="outline"
                   onClick={addItem}
-                  className="h-8 gap-1 text-xs font-medium text-[#003F7D] border-[#003F7D]/20 hover:bg-[#003F7D]/5"
+                  className="h-8 gap-1 text-xs font-medium text-[#003F7D] border-input hover:bg-[#003F7D]/5"
                 >
                   <Plus className="size-3.5" /> Add line item
                 </Button>
@@ -248,7 +248,7 @@ export function ConvertLeadToEstimateDialog({
               />
 
               <div className="flex justify-end pt-3">
-                <div className="w-full sm:w-72 rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-2 text-xs">
+                <div className="w-full sm:w-72 rounded-lg border border-input bg-slate-50/70 p-3.5 space-y-2 text-xs">
                   <div className="flex justify-between text-slate-600">
                     <span>Subtotal:</span>
                     <span className="font-medium text-slate-900 tabular-nums">
@@ -276,7 +276,7 @@ export function ConvertLeadToEstimateDialog({
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-sm font-bold text-slate-900">
+                  <div className="pt-2 border-t border-input flex justify-between items-center text-sm font-bold text-slate-900">
                     <span>Estimate Total:</span>
                     <span className="text-base text-[#003F7D] tabular-nums">
                       {formatMoney(total)}
@@ -287,7 +287,7 @@ export function ConvertLeadToEstimateDialog({
             </div>
           </div>
 
-          <div className="shrink-0 px-6 py-3.5 border-t border-slate-200/80 bg-slate-50 flex flex-row items-center justify-end gap-2.5 z-10">
+          <div className="shrink-0 px-6 py-3.5 border-t border-input bg-slate-50 flex flex-row items-center justify-end gap-2.5 z-10">
             <Button
               type="button"
               variant="outline"

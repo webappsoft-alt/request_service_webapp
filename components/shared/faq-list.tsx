@@ -26,7 +26,7 @@ export function FaqList({
             value={item.id}
             className={cn(
               cards &&
-                "overflow-hidden rounded-xl border border-black/15 not-last:border-b not-last:border-b-black/15 last:border-b last:border-b-black/15 bg-card px-3.5 shadow-[0_1px_2px_rgb(0_63_125/6%),0_6px_14px_-6px_rgb(0_63_125/12%)] transition-shadow duration-200 hover:shadow-[0_1px_3px_rgb(0_63_125/8%),0_10px_20px_-8px_rgb(0_63_125/16%)] data-[state=open]:shadow-[0_1px_3px_rgb(0_63_125/8%),0_10px_20px_-8px_rgb(0_63_125/16%)]",
+                "overflow-hidden rounded-xl border border-input not-last:border-b not-last:border-b-black/15 last:border-b last:border-b-black/15 bg-card px-3.5 shadow-[0_1px_2px_rgb(0_63_125/6%),0_6px_14px_-6px_rgb(0_63_125/12%)] transition-shadow duration-200 hover:shadow-[0_1px_3px_rgb(0_63_125/8%),0_10px_20px_-8px_rgb(0_63_125/16%)] data-[state=open]:shadow-[0_1px_3px_rgb(0_63_125/8%),0_10px_20px_-8px_rgb(0_63_125/16%)]",
             )}
           >
             <AccordionTrigger

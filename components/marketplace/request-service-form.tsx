@@ -306,7 +306,7 @@ function ProviderServiceScroller({
                   "flex w-[min(16.5rem,78vw)] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-all duration-200",
                   selected
                     ? "border-[#003F7D] ring-2 ring-[#003F7D]/25"
-                    : "border-black/10 hover:border-[#003F7D]/30",
+                    : "border-input hover:border-[#003F7D]/30",
                 )}
               >
                 <div
@@ -1183,9 +1183,9 @@ export function RequestServiceForm({
         {showBookingForm ? (
           <form
             onSubmit={onSubmit}
-            className="flex flex-col gap-6 border-t border-black/10 pt-6"
+            className="flex flex-col gap-6 border-t border-input pt-6"
           >
-            <div className="rounded-xl border border-[#003F7D]/15 bg-[#003F7D]/5 p-4">
+            <div className="rounded-xl border border-input bg-[#003F7D]/5 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wide text-[#003F7D]/80">

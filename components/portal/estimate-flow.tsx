@@ -90,7 +90,7 @@ export function EstimatePipeline({
   const skippedVisit = status === "draft" && !hasSiteVisit && current >= 2;
 
   return (
-    <div className="overflow-x-auto rounded-[4px] border border-black/10 bg-card px-3 py-4 sm:px-5">
+    <div className="overflow-x-auto rounded-[4px] border border-input bg-card px-3 py-4 sm:px-5">
       <ol className="flex min-w-[36rem] items-start">
         {STEPS.map((step, index) => {
           const done = index < current;
@@ -119,7 +119,7 @@ export function EstimatePipeline({
                   done && !active && "bg-[#003F7D] text-white",
                   !done &&
                     !active &&
-                    "border border-[#c5ced8] bg-white text-muted-foreground",
+                    "border border-input bg-white text-muted-foreground",
                 )}
               >
                 {done ? (
@@ -248,7 +248,7 @@ export function EstimateStageBanner({
       className={
         showSignature
           ? "rounded-[4px] border border-emerald-200 bg-emerald-50 px-4 py-3"
-          : "rounded-[4px] border border-black/10 bg-[#f8fafc] px-4 py-3"
+          : "rounded-[4px] border border-input bg-[#f8fafc] px-4 py-3"
       }
     >
       <p
@@ -596,7 +596,7 @@ export function EstimateSiteVisitTab({
 
   return (
     <div data-site-visit-form className="space-y-4">
-      <div className="rounded-lg border border-black/10 bg-card p-4">
+      <div className="rounded-lg border border-input bg-card p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="inline-flex items-center gap-2 text-base font-semibold">
             <Camera className="size-4 text-primary" />
@@ -710,7 +710,7 @@ export function EstimateSiteVisitTab({
         </div>
       </div>
 
-      <div className="rounded-[4px] border border-black/10 bg-card p-4">
+      <div className="rounded-[4px] border border-input bg-card p-4">
         <h3 className="text-sm font-semibold">Site photos</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Pictures from the visit. These stay internal until you send the
@@ -722,7 +722,7 @@ export function EstimateSiteVisitTab({
               "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
               over
                 ? "border-primary bg-[#003F7D]/5"
-                : "border-black/20 bg-[#f8fafc]",
+                : "border-input bg-[#f8fafc]",
             )}
             onDragEnter={(event) => {
               event.preventDefault();
@@ -765,7 +765,7 @@ export function EstimateSiteVisitTab({
             {visit.photos.map((file) => (
               <li
                 key={file.id}
-                className="overflow-hidden rounded-[4px] border border-black/10"
+                className="overflow-hidden rounded-[4px] border border-input"
               >
                 <button
                   type="button"

@@ -109,7 +109,7 @@ export function BlogComments({ slug, initialComments = [] }: BlogCommentsProps) 
       {/* Comment Form */}
       <form
         onSubmit={handleSubmit}
-        className="flex flex-col gap-4 rounded-2xl border border-black/10 bg-card p-6 shadow-xs"
+        className="flex flex-col gap-4 rounded-2xl border border-input bg-card p-6 shadow-xs"
       >
         <div>
           <h3 className="text-base font-semibold text-foreground">
@@ -209,7 +209,7 @@ export function BlogComments({ slug, initialComments = [] }: BlogCommentsProps) 
       {/* Existing Comments List */}
       <div className="flex flex-col gap-4">
         {comments.length > 0 ? (
-          <div className="flex flex-col divide-y divide-border rounded-2xl border border-black/10 bg-card shadow-xs">
+          <div className="flex flex-col divide-y divide-border rounded-2xl border border-input bg-card shadow-xs">
             {comments.map((item, index) => (
               <div
                 key={item._id || `${item.authorName}-${index}`}
@@ -240,7 +240,7 @@ export function BlogComments({ slug, initialComments = [] }: BlogCommentsProps) 
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-black/10 bg-card p-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-dashed border-input bg-card p-8 text-center text-sm text-muted-foreground">
             No comments on this article yet. Be the first to share your thoughts!
           </div>
         )}

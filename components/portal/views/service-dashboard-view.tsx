@@ -236,7 +236,7 @@ export function ServiceDashboardView() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -292,7 +292,7 @@ export function ServiceDashboardView() {
           </CardContent>
         </Card>
 
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader className="gap-1">
             <CardTitle className="text-sm font-medium text-muted-foreground">Jobs by status</CardTitle>
             <p className="text-3xl font-semibold tracking-tight tabular-nums">{allJobs.length}</p>
@@ -317,7 +317,7 @@ export function ServiceDashboardView() {
         </Card>
       </div>
 
-      <Card className="border-black/30">
+      <Card className="border-input">
         <CardHeader className="gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>This week</CardTitle>
@@ -336,7 +336,7 @@ export function ServiceDashboardView() {
                 key={day.key}
                 className={cn(
                   "rounded-lg border px-2 py-2 text-center",
-                  day.key === todayKey ? "border-primary bg-secondary" : "border-black/30",
+                  day.key === todayKey ? "border-primary bg-secondary" : "border-input",
                 )}
               >
                 <p className="text-[10px] tracking-wide text-muted-foreground uppercase">{day.label}</p>
@@ -445,7 +445,7 @@ export function ServiceDashboardView() {
           ))}
       </BoardCard>
 
-      <section className="rounded-xl border border-black/30 bg-card px-5 py-5">
+      <section className="rounded-xl border border-input bg-card px-5 py-5">
         <h2 className="text-sm font-semibold">Quick actions</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => setJobOpen(true)}>

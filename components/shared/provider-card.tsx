@@ -130,7 +130,7 @@ export function ProviderCard({
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         className={cn(
-          "h-full flex-col gap-5 border-black/15 p-5 transition-[transform,box-shadow] duration-300 ease-out sm:flex-row sm:items-stretch sm:gap-6",
+          "h-full flex-col gap-5 border-input p-5 transition-[transform,box-shadow] duration-300 ease-out sm:flex-row sm:items-stretch sm:gap-6",
           "hover:-translate-y-1 hover:elevate",
           onClick && "cursor-pointer",
           active && "-translate-y-1 elevate-lg",
@@ -234,7 +234,7 @@ export function ProviderCard({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       className={cn(
-        "h-full border-black/15 transition-[transform,box-shadow] duration-300 ease-out",
+        "h-full border-input transition-[transform,box-shadow] duration-300 ease-out",
         showCover && "gap-0 pt-0",
         "pb-2",
         "hover:-translate-y-1 hover:elevate",

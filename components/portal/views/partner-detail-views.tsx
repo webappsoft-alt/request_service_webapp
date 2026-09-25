@@ -211,13 +211,13 @@ export function VendorDetailView({ id }: { id: string }) {
   if (!vendor) {
     if (detailLoading) {
       return (
-        <div className="border border-black/15 bg-card" aria-busy="true">
+        <div className="border border-input bg-card" aria-busy="true">
           <CenteredSpinner label="Loading vendor" className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-black/15 bg-card p-6">
+      <div className="border border-input bg-card p-6">
         <h1 className="text-lg font-semibold">{detailError || "Vendor not found"}</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/vendors">Back to vendors</Link>
@@ -442,7 +442,7 @@ function VendorSettingsTab({
           )}
         </Button>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
+      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
         <Field label="Vendor name">
           <Input
             value={draft.name}
@@ -594,7 +594,7 @@ function VendorAccountTab({
           )}
         </Button>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-3">
+      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-3">
         <Field label="Account #">
           <Input
             value={draft.accountNumber}
@@ -717,7 +717,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
 
   if (listLoading) {
     return (
-      <div className="border border-black/10" aria-busy="true">
+      <div className="border border-input" aria-busy="true">
         <CenteredSpinner label="Loading inventory" className="min-h-[16rem]" />
       </div>
     );
@@ -740,7 +740,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
           ) : null}
         </div>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="SKU">
           <Input value={sku} placeholder="WH-50G" onChange={(event) => setSku(event.target.value)} />
         </Field>
@@ -805,7 +805,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
         </Button>
       </div>
       {items.length ? (
-        <div className="overflow-x-auto rounded-[4px] border border-black/10">
+        <div className="overflow-x-auto rounded-[4px] border border-input">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-[#eef1f5] text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               <tr>
@@ -819,7 +819,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
                 <th className="px-3 py-2" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/10">
+            <tbody className="divide-y divide-input">
               {items.map((item) => {
                 const low = item.onHandCount <= item.reorderPoint;
                 return (
@@ -964,7 +964,7 @@ function VendorOrdersTab({ vendorId }: { vendorId: string }) {
 
   if (listLoading) {
     return (
-      <div className="border border-black/10" aria-busy="true">
+      <div className="border border-input" aria-busy="true">
         <CenteredSpinner label="Loading orders" className="min-h-[16rem]" />
       </div>
     );
@@ -978,7 +978,7 @@ function VendorOrdersTab({ vendorId }: { vendorId: string }) {
           Materials ordered from this vendor, optionally against a job.
         </p>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
+      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
         <Field label="PO number">
           <Input
             value={number}
@@ -1034,7 +1034,7 @@ function VendorOrdersTab({ vendorId }: { vendorId: string }) {
         </Button>
       </div>
       {orders.length ? (
-        <ul className="divide-y divide-black/10 rounded-[4px] border border-black/10">
+        <ul className="divide-y divide-input rounded-[4px] border border-input">
           {orders.map((order) => {
             const job = jobs.find((item) => item.id === order.jobId);
             return (
@@ -1248,7 +1248,7 @@ function VendorAttachmentsTab({ vendor }: { vendor: PortalVendor }) {
       <label
         className={cn(
           "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
-          over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+          over ? "border-primary bg-[#003F7D]/5" : "border-input bg-[#f8fafc]",
           uploading && "pointer-events-none opacity-60",
         )}
         onDragEnter={(event) => {
@@ -1288,7 +1288,7 @@ function VendorAttachmentsTab({ vendor }: { vendor: PortalVendor }) {
         />
       </label>
       {attachments.length ? (
-        <ul className="mt-4 divide-y divide-black/10 border border-black/10">
+        <ul className="mt-4 divide-y divide-input border border-input">
           {attachments.map((item) => (
             <li key={item.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">

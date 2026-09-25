@@ -59,8 +59,8 @@ export function CustomerLocationMap({
   const line = `${address.street}${address.unit ? `, ${address.unit}` : ""}, ${formatLocation(address.city, address.state, address.zip)}`;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-black/10 bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-      <header className="border-b border-black/10 bg-[#f7f8fa] px-5 py-3">
+    <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
+      <header className="border-b border-input bg-[#f7f8fa] px-5 py-3">
         <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Location</p>
         <h3 className="text-sm font-semibold">{line}</h3>
       </header>

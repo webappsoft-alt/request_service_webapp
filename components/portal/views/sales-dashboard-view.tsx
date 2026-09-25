@@ -154,7 +154,7 @@ export function SalesDashboardView() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -210,7 +210,7 @@ export function SalesDashboardView() {
           </CardContent>
         </Card>
 
-        <Card className="border-black/30">
+        <Card className="border-input">
           <CardHeader className="gap-1">
             <CardTitle className="text-sm font-medium text-muted-foreground">Jobs by service</CardTitle>
             <p className="text-3xl font-semibold tracking-tight tabular-nums">{formatMoney(mixTotal)}</p>
@@ -305,7 +305,7 @@ export function SalesDashboardView() {
         })}
       </BoardCard>
 
-      <section className="rounded-xl border border-black/30 bg-card px-5 py-5">
+      <section className="rounded-xl border border-input bg-card px-5 py-5">
         <h2 className="text-sm font-semibold">Quick actions</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => setLeadOpen(true)}>

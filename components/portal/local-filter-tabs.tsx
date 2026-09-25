@@ -24,7 +24,7 @@ export function LocalFilterTabs({
               "cursor-pointer rounded-md border px-2.5 py-1 text-[13px] font-medium transition-colors",
               active
                 ? "border-primary bg-secondary text-primary font-semibold"
-                : "border-black/10 bg-card text-muted-foreground hover:text-foreground",
+                : "border-input bg-card text-muted-foreground hover:text-foreground",
             )}
           >
             {option.label}

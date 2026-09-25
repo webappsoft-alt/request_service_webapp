@@ -36,8 +36,8 @@ export function CustomerEstimateDetailDashboardView({
           embedded
         />
       ) : (
-        <div className="mx-auto max-w-lg rounded-xl border border-border bg-card p-8 sm:p-10 text-center shadow-xs">
-          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-border bg-muted/60 text-muted-foreground shadow-2xs">
+        <div className="mx-auto max-w-lg rounded-xl border border-input bg-card p-8 sm:p-10 text-center shadow-xs">
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-input bg-muted/60 text-muted-foreground shadow-2xs">
             <FileQuestion className="size-7 text-primary/80" />
           </div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">

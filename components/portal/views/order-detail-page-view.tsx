@@ -178,7 +178,7 @@ function getOrderStageBanner(status: string) {
       };
     default:
       return {
-        tone: "border-black/10 bg-[#e8eef5] text-[#003F7D]",
+        tone: "border-input bg-[#e8eef5] text-[#003F7D]",
         message: "Operational service work order.",
       };
   }
@@ -356,7 +356,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
 
   if (!order) {
     return (
-      <div className="border border-black/15 bg-card p-6">
+      <div className="border border-input bg-card p-6">
         <h1 className="text-lg font-semibold">Order not found</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/orders">Back to fixed service orders</Link>
@@ -588,7 +588,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   {/* 2-Column Grid Layout matching portal standard */}
                   <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
                     {/* Left Column: Service & Operational Facts */}
-                    <div className="grid gap-3 rounded-[4px] border border-black/10 p-4 sm:grid-cols-2">
+                    <div className="grid gap-3 rounded-[4px] border border-input p-4 sm:grid-cols-2">
                       <Fact
                         label="Service"
                         value={order.service?.title || order.service?.servicesName || "—"}
@@ -620,7 +620,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
 
                       {/* Covered items checklist */}
                       {order.service?.covered?.length ? (
-                        <div className="sm:col-span-2 space-y-2 pt-2 border-t border-black/5">
+                        <div className="sm:col-span-2 space-y-2 pt-2 border-t border-input">
                           <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
                             Covered In Scope
                           </p>
@@ -642,7 +642,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     {/* Right Column: Customer & Property Location */}
                     <div className="space-y-4">
                       {/* Customer Card */}
-                      <div className="rounded-[4px] border border-black/10 p-4">
+                      <div className="rounded-[4px] border border-input p-4">
                         <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
                           Customer
                         </p>
@@ -676,7 +676,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                       </div>
 
                       {/* Property Address Card */}
-                      <div className="rounded-[4px] border border-black/10 p-4 space-y-2">
+                      <div className="rounded-[4px] border border-input p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
                             Service Location
@@ -702,7 +702,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         </p>
 
                         {coords ? (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-[#f8fafc] px-2 py-1.5 rounded border border-black/5 mt-2">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-[#f8fafc] px-2 py-1.5 rounded border border-input mt-2">
                             <MapPin className="size-3.5 text-blue-600 shrink-0" />
                             <span>
                               [{coords[0].toFixed(5)}, {coords[1].toFixed(5)}]
@@ -714,7 +714,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         ) : null}
 
                         {order.address?.notes ? (
-                          <div className="pt-2 border-t border-black/5 text-xs text-muted-foreground">
+                          <div className="pt-2 border-t border-input text-xs text-muted-foreground">
                             <span className="font-semibold text-foreground">Access Notes: </span>
                             {order.address.notes}
                           </div>
@@ -731,7 +731,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
             case "service":
               return (
                 <div className="space-y-6">
-                  <div className="rounded-[4px] border border-black/10 p-4 space-y-4">
+                  <div className="rounded-[4px] border border-input p-4 space-y-4">
                     <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                       Service Package Overview
                     </h2>
@@ -760,7 +760,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   </div>
 
                   {/* Covered Scope Checklist */}
-                  <div className="rounded-[4px] border border-black/10 p-4 space-y-3">
+                  <div className="rounded-[4px] border border-input p-4 space-y-3">
                     <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                       Included Work & Coverage
                     </h2>
@@ -785,7 +785,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
 
                   {/* Service Images */}
                   {order.service?.images?.length ? (
-                    <div className="rounded-[4px] border border-black/10 p-4 space-y-3">
+                    <div className="rounded-[4px] border border-input p-4 space-y-3">
                       <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                         Package Photos
                       </h2>
@@ -817,7 +817,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                 <div className="space-y-6">
                   <div className="grid gap-5 md:grid-cols-2">
                     {/* Customer Profile */}
-                    <div className="rounded-[4px] border border-black/10 p-4 space-y-3">
+                    <div className="rounded-[4px] border border-input p-4 space-y-3">
                       <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                         Customer Contact Information
                       </h2>
@@ -860,7 +860,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     </div>
 
                     {/* Property Location */}
-                    <div className="rounded-[4px] border border-black/10 p-4 space-y-3">
+                    <div className="rounded-[4px] border border-input p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                           Property Location
@@ -937,7 +937,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   </div>
 
                   {order.changeOrders?.length ? (
-                    <div className="divide-y rounded-[4px] border border-black/10">
+                    <div className="divide-y rounded-[4px] border border-input">
                       {order.changeOrders.map((co, index) => (
                         <div key={co.id || index} className="p-4 space-y-2">
                           <div className="flex items-center justify-between">
@@ -998,7 +998,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-[4px] border border-black/10 bg-[#f8fafc] p-6 text-center text-xs text-muted-foreground space-y-2">
+                    <div className="rounded-[4px] border border-input bg-[#f8fafc] p-6 text-center text-xs text-muted-foreground space-y-2">
                       <p>No change orders have been proposed for this order.</p>
                       {order.status === "IN_PROGRESS" ? (
                         <p className="text-foreground">
@@ -1025,7 +1025,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
               return (
                 <div className="space-y-6">
                   {order.status === "IN_PROGRESS" ? (
-                    <div className="flex items-center justify-between border-b border-black/10 pb-4">
+                    <div className="flex items-center justify-between border-b border-input pb-4">
                       <div>
                         <h2 className="text-sm font-semibold">Finish Service</h2>
                         <p className="text-xs text-muted-foreground">
@@ -1043,7 +1043,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   ) : null}
 
                   {/* Completion Notes */}
-                  <div className="rounded-[4px] border border-black/10 p-4 space-y-2">
+                  <div className="rounded-[4px] border border-input p-4 space-y-2">
                     <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                       Work Completion Summary
                     </h2>
@@ -1062,7 +1062,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   {/* Proof Photos: Before & After */}
                   <div className="grid gap-5 md:grid-cols-2">
                     {/* Before Photos */}
-                    <div className="rounded-[4px] border border-black/10 p-4 space-y-3">
+                    <div className="rounded-[4px] border border-input p-4 space-y-3">
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Before Work Photos
                       </h3>
@@ -1091,7 +1091,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     </div>
 
                     {/* After Photos */}
-                    <div className="rounded-[4px] border border-black/10 p-4 space-y-3">
+                    <div className="rounded-[4px] border border-input p-4 space-y-3">
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         After Proof-of-Work Photos
                       </h3>
@@ -1121,7 +1121,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   </div>
 
                   {/* Customer Sign-off Status */}
-                  <div className="rounded-[4px] border border-black/10 p-4 space-y-2">
+                  <div className="rounded-[4px] border border-input p-4 space-y-2">
                     <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                       Customer Sign-off & Review
                     </h2>
@@ -1167,7 +1167,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
             case "financials":
               return (
                 <div className="space-y-6 max-w-xl">
-                  <div className="rounded-[4px] border border-black/10 p-4 space-y-4">
+                  <div className="rounded-[4px] border border-input p-4 space-y-4">
                     <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
                       Financial Breakdown & Ledger
                     </h2>
@@ -1213,7 +1213,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         </div>
                       ) : null}
 
-                      <div className="flex justify-between py-3 font-semibold text-sm border-t-2 border-black/10">
+                      <div className="flex justify-between py-3 font-semibold text-sm border-t-2 border-input">
                         <span className="text-foreground">Total Payout</span>
                         <span className="font-mono text-primary">
                           ${order.pricing?.totalAmount?.toFixed(2) || "0.00"}{" "}
@@ -1224,7 +1224,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   </div>
 
                   {/* Payment Hold Status */}
-                  <div className="rounded-[4px] border border-black/10 p-4 space-y-2">
+                  <div className="rounded-[4px] border border-input p-4 space-y-2">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Payment Authorization Details
                     </h3>

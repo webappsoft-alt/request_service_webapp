@@ -28,7 +28,7 @@ export function WorkflowSection() {
             <Button
               size="xl"
               variant="outline"
-              className="border-black/25 hover:border-black/35"
+              className="border-input hover:border-input"
               asChild
             >
               <Link href="/find-a-professional">Find a professional</Link>

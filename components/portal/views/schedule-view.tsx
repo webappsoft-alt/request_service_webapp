@@ -220,7 +220,7 @@ export function ScheduleView() {
       }
     >
       {scheduleLoading && events.length === 0 ? (
-        <div className="border border-black/15 bg-card" aria-busy="true">
+        <div className="border border-input bg-card" aria-busy="true">
           <CenteredSpinner
             className="min-h-[22rem]"
             label={teamLoading ? "Loading team…" : "Loading schedule…"}

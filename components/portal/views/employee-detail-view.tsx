@@ -251,13 +251,13 @@ export function TeamMemberView({ id }: { id: string }) {
   if (!employee) {
     if (detailLoading) {
       return (
-        <div className="border border-black/15 bg-card" aria-busy="true">
+        <div className="border border-input bg-card" aria-busy="true">
           <CenteredSpinner label="Loading employee" className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-black/15 bg-card p-6">
+      <div className="border border-input bg-card p-6">
         <h1 className="text-lg font-semibold">{detailError || "Employee not found"}</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/team">Back to employees</Link>
@@ -496,7 +496,7 @@ function EmployeeSettingsTab({
           )}
         </Button>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-2">
+      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
         <Field label="First name">
           <Input value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} />
         </Field>
@@ -636,7 +636,7 @@ export function EmployeeAvailabilityTab({
           )}
         </Button>
       </div>
-      <div className="overflow-hidden rounded-[4px] border border-black/10">
+      <div className="overflow-hidden rounded-[4px] border border-input">
         <table className="w-full text-sm">
           <thead className="bg-[#e8eef5] text-[11px] tracking-[0.12em] text-[#003F7D] uppercase">
             <tr>
@@ -648,7 +648,7 @@ export function EmployeeAvailabilityTab({
           </thead>
           <tbody>
             {days.map((item) => (
-              <tr key={item.day} className="border-t border-black/10">
+              <tr key={item.day} className="border-t border-input">
                 <td className="px-3 py-2 font-medium">{weekdayLabel(item.day)}</td>
                 <td className="px-3 py-2">
                   <Select
@@ -753,7 +753,7 @@ export function EmployeePayTab({
           )}
         </Button>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-black/10 bg-card p-4 sm:grid-cols-3">
+      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-3">
         <Field label="Hourly rate">
           <Input
             type="number"
@@ -825,7 +825,7 @@ function EmployeeScheduleTab({
 
   if (listLoading) {
     return (
-      <div className="border border-black/10" aria-busy="true">
+      <div className="border border-input" aria-busy="true">
         <CenteredSpinner label="Loading schedule" className="min-h-[16rem]" />
       </div>
     );
@@ -1405,7 +1405,7 @@ export function EmployeeAttachmentsTab({
       <label
         className={cn(
           "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
-          over ? "border-primary bg-[#003F7D]/5" : "border-black/20 bg-[#f8fafc]",
+          over ? "border-primary bg-[#003F7D]/5" : "border-input bg-[#f8fafc]",
           uploading && "pointer-events-none opacity-60",
         )}
         onDragEnter={(event) => {
@@ -1441,7 +1441,7 @@ export function EmployeeAttachmentsTab({
         />
       </label>
       {attachments.length ? (
-        <ul className="mt-4 divide-y divide-black/10 border border-black/10">
+        <ul className="mt-4 divide-y divide-input border border-input">
           {attachments.map((item) => (
             <li key={item.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">
@@ -1501,7 +1501,7 @@ export function EmployeeAttachmentsTab({
 
 function PayStat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-[4px] border border-black/10 bg-[#f8fafc] px-4 py-3">
+    <div className="rounded-[4px] border border-input bg-[#f8fafc] px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
       <p className="text-xs text-muted-foreground">{hint}</p>

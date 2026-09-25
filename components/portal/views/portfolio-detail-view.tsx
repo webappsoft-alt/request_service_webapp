@@ -133,7 +133,7 @@ export function PortfolioDetailView({ id }: { id: string }) {
     >
       <div className="grid items-start gap-6 px-4 pb-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,22rem)]">
         <div className="flex flex-col gap-4">
-          <section className="overflow-hidden rounded-xl border border-black/10 bg-card">
+          <section className="overflow-hidden rounded-xl border border-input bg-card">
             <div className="relative aspect-[16/9] bg-[#003F7D]">
               {cover ? (
                 <Image
@@ -161,7 +161,7 @@ export function PortfolioDetailView({ id }: { id: string }) {
                       "relative size-16 shrink-0 overflow-hidden rounded-lg border transition",
                       index === activePhoto
                         ? "border-[#003F7D] ring-2 ring-[#003F7D]/30"
-                        : "border-black/10 hover:border-[#003F7D]/40",
+                        : "border-input hover:border-[#003F7D]/40",
                     )}
                     aria-label={`Show photo ${index + 1}`}
                     aria-pressed={index === activePhoto}
@@ -203,7 +203,7 @@ export function PortfolioDetailView({ id }: { id: string }) {
             </div>
           </section>
 
-          <section className="rounded-xl border border-black/10 bg-card p-5">
+          <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">Project details</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Fact label="Status" value={statusLabel(detail.status)} />
@@ -216,7 +216,7 @@ export function PortfolioDetailView({ id }: { id: string }) {
         </div>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
-          <section className="rounded-xl border border-black/10 bg-card p-5">
+          <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">Summary</p>
             <div className="mt-3 grid gap-3">
               <Fact

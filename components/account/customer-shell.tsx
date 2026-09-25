@@ -93,7 +93,7 @@ function RecordTab({
         "flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-[4px] border px-2.5 text-xs transition-colors",
         active
           ? "border-[#003F7D]/25 bg-[#e8eef5] font-semibold text-[#003F7D] shadow-[inset_0_-2px_0_#003F7D]"
-          : "border-black/10 bg-[#f7f8fa] text-muted-foreground hover:border-black/20 hover:bg-white hover:text-foreground",
+          : "border-input bg-[#f7f8fa] text-muted-foreground hover:border-input hover:bg-white hover:text-foreground",
       )}
     >
       <span
@@ -712,7 +712,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         )}
       >
         {/* Header matching Provider Portal style */}
-        <header className="sticky top-0 z-20 border-b border-black/10 bg-card">
+        <header className="sticky top-0 z-20 border-b border-input bg-card">
           <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
             <Sheet>
               <SheetTrigger asChild>
@@ -776,7 +776,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search records…"
-                className="h-8 bg-[#f7f8fa] pl-8 text-sm"
+                className="h-8 bg-[#f7f8fa] pl-8 text-sm border-input"
                 aria-label="Search records"
                 value={headerSearch}
                 onChange={(event) => setHeaderSearch(event.target.value)}
@@ -871,7 +871,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               >
                 <Link href={customerPaths.site}>Back to site</Link>
               </Button>
-              <UserAccountMenu user={menuUser} className="size-8 border-black/10" />
+              <UserAccountMenu user={menuUser} className="size-8 border-input" />
             </div>
           </div>
         </header>

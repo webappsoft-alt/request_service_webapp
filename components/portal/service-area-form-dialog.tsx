@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { AddressAutocomplete, type PlaceAddress } from "@/components/shared/address-autocomplete";
+import {
+  GoogleAddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/google-address-autocomplete";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -118,7 +121,7 @@ export function ServiceAreaFormDialog({
   function applyAddress(place: PlaceAddress) {
     setForm((current) => ({
       ...current,
-      address: place.formattedAddress || place.streetAddress,
+      address: place.streetAddress.trim() || place.formattedAddress,
       city: place.city || current.city,
       zip: place.zipCode || current.zip,
       country: place.country || current.country,
@@ -191,7 +194,7 @@ export function ServiceAreaFormDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="sa-location">Location</FieldLabel>
-            <AddressAutocomplete
+            <GoogleAddressAutocomplete
               id="sa-location"
               value={form.address}
               onChange={(value) => setForm((current) => ({ ...current, address: value }))}

@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import { ServiceSuggestionList } from "@/components/shared/service-suggestion-list";
 import {
   resolveSearchIntent,
@@ -236,7 +236,7 @@ export function ServiceSearchForm({
         variant === "hero" ? "sm:w-[14.5rem] sm:shrink-0 sm:flex-none" : "sm:min-w-[15.5rem] sm:flex-[1.15]"
       )}
     >
-      <AddressAutocomplete
+      <GoogleAddressAutocomplete
         id={variant === "hero" ? "hero-location" : "service-location"}
         name="location"
         value={locationInputValue}

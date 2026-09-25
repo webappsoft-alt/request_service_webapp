@@ -28,9 +28,9 @@ import {
   validateAttachmentFile,
 } from "@/components/api/uploadFile";
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type CostingNoun } from "@/components/portal/job-costing";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { JobRichText } from "@/components/portal/job-rich-text";
@@ -87,6 +87,7 @@ import {
 } from "@/store/jobsSlice";
 import { upsertInvoiceItem } from "@/store/invoicesSlice";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { employeeName, JOB_STATUSES, jobStatusLabel, jobStatusTone, minutesForWindow } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney, formatShortDate } from "@/lib/format";
 import type { Estimate, Invoice, Job, JobStatus } from "@/lib/types";
@@ -1068,15 +1069,15 @@ export function JobSettingsTab({
           ) : null}
           <div className="sm:col-span-2">
             <Field label="Address">
-              <AddressAutocomplete
+              <GoogleAddressAutocomplete
                 id="job-settings-address"
                 value={draft.street}
                 onChange={(value) => patch({ street: value })}
                 onSelect={(address: PlaceAddress) =>
                   patch({
-                    street: address.streetAddress || address.formattedAddress,
+                    street: address.streetAddress.trim(),
                     city: address.city || "",
-                    state: address.state || "",
+                    state: normalizeUsStateCode(address.state) || "",
                     zip: address.zipCode || "",
                     latitude: address.latitude ?? null,
                     longitude: address.longitude ?? null,

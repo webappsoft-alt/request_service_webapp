@@ -33,23 +33,76 @@ function parseAddress(
   latitude: number | null,
   longitude: number | null,
 ): PlaceAddress {
-  const streetNumber = componentName(components, "street_number");
-  const route = componentName(components, "route");
-  const streetAddress = [streetNumber, route].filter(Boolean).join(" ").trim();
   const city =
     componentName(components, "locality") ||
     componentName(components, "postal_town") ||
-    componentName(components, "sublocality") ||
     componentName(components, "administrative_area_level_2");
-  const formatted = formattedAddress?.trim() || streetAddress;
+  const stateShort = componentName(components, "administrative_area_level_1", true);
+  const stateLong = componentName(components, "administrative_area_level_1");
+  const state = stateShort || stateLong;
+  const zipCode = componentName(components, "postal_code");
+  const countryShort = componentName(components, "country", true);
+  const countryLong = componentName(components, "country");
+  const formatted = formattedAddress?.trim() || "";
+
+  const dropExact = new Set(
+    [city, stateShort, stateLong, countryShort, countryLong, zipCode]
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const stateTokens = [stateShort, stateLong]
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  const zipLower = zipCode.trim().toLowerCase();
+
+  function shouldDropSegment(segment: string): boolean {
+    const lower = segment.trim().toLowerCase();
+    if (!lower) return true;
+    if (dropExact.has(lower)) return true;
+    const tokens = lower.split(/\s+/).filter(Boolean);
+    const hasZip = Boolean(
+      zipLower &&
+        tokens.some(
+          (token) =>
+            token === zipLower || token.startsWith(`${zipLower}-`),
+        ),
+    );
+    const hasState = stateTokens.some((token) => tokens.includes(token));
+    if (hasZip && (hasState || tokens.length <= 2)) return true;
+    return false;
+  }
+
+  let streetAddress = "";
+  if (formatted) {
+    streetAddress = formatted
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part && !shouldDropSegment(part))
+      .join(", ")
+      .trim();
+  }
+
+  if (!streetAddress) {
+    const streetNumber = componentName(components, "street_number");
+    const route = componentName(components, "route");
+    const fromStreet = [streetNumber, route].filter(Boolean).join(" ").trim();
+    const localName =
+      [
+        componentName(components, "premise"),
+        componentName(components, "neighborhood"),
+        componentName(components, "sublocality_level_1"),
+        componentName(components, "sublocality"),
+      ].find((part) => part && !dropExact.has(part.toLowerCase())) || "";
+    streetAddress = [fromStreet, localName].filter(Boolean).join(", ").trim();
+  }
 
   return {
-    formattedAddress: formatted,
-    streetAddress: streetAddress || formatted,
+    formattedAddress: formatted || streetAddress,
+    streetAddress,
     city,
-    state: componentName(components, "administrative_area_level_1", true),
-    zipCode: componentName(components, "postal_code"),
-    country: componentName(components, "country", true),
+    state,
+    zipCode,
+    country: countryShort,
     latitude,
     longitude,
   };
@@ -91,7 +144,7 @@ export async function GET(request: NextRequest) {
 
       const url = new URL("https://maps.googleapis.com/maps/api/place/autocomplete/json");
       url.searchParams.set("input", query);
-      url.searchParams.set("types", "address");
+      // No `types` filter — matches GOOGLE_AUTOCOMPLETE.md (streets + places, not cities-only).
       url.searchParams.set("language", "en");
       url.searchParams.set("key", key);
 

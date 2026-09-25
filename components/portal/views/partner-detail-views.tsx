@@ -34,9 +34,9 @@ import {
 } from "@/components/portal/create-person-dialogs";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import { UsStateSelect } from "@/components/shared/us-state-select";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { CreateNoteDialogForSubject, NotesPanel } from "@/components/portal/notes-panel";
@@ -385,9 +385,9 @@ function VendorSettingsTab({
   function applyLocation(address: PlaceAddress) {
     setDraft((current) => ({
       ...current,
-      street: address.formattedAddress || address.streetAddress || "",
+      street: address.streetAddress.trim(),
       city: address.city || "",
-      state: normalizeUsStateCode(address.state) || address.state || "",
+      state: normalizeUsStateCode(address.state) || "",
       zip: address.zipCode || current.zip || "",
       latitude: address.latitude,
       longitude: address.longitude,
@@ -502,7 +502,7 @@ function VendorSettingsTab({
           </Field>
         </div>
         <Field label="Location" className="sm:col-span-2">
-          <AddressAutocomplete
+          <GoogleAddressAutocomplete
             id="vendor-settings-location"
             value={draft.street || ""}
             onChange={(street) => setDraft({ ...draft, street })}

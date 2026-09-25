@@ -14,9 +14,9 @@ import {
 } from "@/components/shared/loading-skeletons";
 import { ProviderCard } from "@/components/shared/provider-card";
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import {
   PaginatedCategorySelect,
   type CategoryOption,
@@ -649,7 +649,7 @@ export function CategoryExplorer({
         >
           <div className="relative z-[1300] min-w-0 w-full max-w-56">
             {useLive ? (
-              <AddressAutocomplete
+              <GoogleAddressAutocomplete
                 value={locationInputValue}
                 onChange={(value) => {
                   if (!value.trim()) {

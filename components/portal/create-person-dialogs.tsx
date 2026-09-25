@@ -6,9 +6,9 @@ import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { CityStateZipFields } from "@/components/shared/city-state-zip-fields";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
 import {
-  AddressAutocomplete,
+  GoogleAddressAutocomplete,
   type PlaceAddress,
-} from "@/components/shared/address-autocomplete";
+} from "@/components/shared/google-address-autocomplete";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
@@ -173,9 +173,9 @@ export function CreateCustomerDialog({
   }, [open, customer?.id]);
 
   function applyAddress(address: PlaceAddress) {
-    setStreet(address.streetAddress || address.formattedAddress);
+    setStreet(address.streetAddress.trim());
     setCity(address.city || "");
-    setState(normalizeUsStateCode(address.state) || address.state || "");
+    setState(normalizeUsStateCode(address.state) || "");
     setZip(address.zipCode || "");
     setLat(
       typeof address.latitude === "number" && Number.isFinite(address.latitude)
@@ -457,7 +457,7 @@ export function CreateCustomerDialog({
           ) : null}
           <Field>
             <FieldLabel htmlFor="cust-street">Address</FieldLabel>
-            <AddressAutocomplete
+            <GoogleAddressAutocomplete
               id="cust-street"
               value={street}
               onChange={setStreet}
@@ -747,9 +747,9 @@ export function CreateVendorDialog({
   }, [open, vendor]);
 
   function applyVendorAddress(address: PlaceAddress) {
-    setStreet(address.formattedAddress || address.streetAddress || "");
+    setStreet(address.streetAddress.trim());
     setCity(address.city || "");
-    setState(normalizeUsStateCode(address.state) || address.state || "");
+    setState(normalizeUsStateCode(address.state) || "");
     if (address.zipCode) setZip(address.zipCode);
     setLatitude(address.latitude);
     setLongitude(address.longitude);
@@ -858,7 +858,7 @@ export function CreateVendorDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="ven-location">Location</FieldLabel>
-            <AddressAutocomplete
+            <GoogleAddressAutocomplete
               id="ven-location"
               value={street}
               onChange={setStreet}

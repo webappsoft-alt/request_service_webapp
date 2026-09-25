@@ -40,6 +40,7 @@ function NavLinks({
   function badgeFor(href: string) {
     if (href === "/pro/dashboard/requests") return inbox.newLeads;
     if (href === "/pro/dashboard/messages") return inbox.unreadChats;
+    if (href === "/pro/dashboard/estimates") return inbox.pendingEstimates;
     if (href === "/pro/dashboard/orders") return inbox.pendingOrders;
     return 0;
   }

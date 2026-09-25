@@ -145,6 +145,8 @@ export interface EstimateItem {
   taxRate: number;
   discount: number;
   total: number;
+  /** Optional material photos (URLs). Ignored for labor lines. */
+  images?: string[];
 }
 
 export interface EstimateSitePhoto {
@@ -269,6 +271,8 @@ export interface JobItem {
   total: number;
   /** When known (e.g. from EstimateItem.type). Prefer over description heuristics. */
   kind?: "labor" | "materials";
+  /** Optional material photos (URLs). Ignored for labor lines. */
+  images?: string[];
 }
 
 export interface ChangeOrder {
@@ -327,6 +331,8 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  /** Optional material photos (URLs). Ignored for labor lines. */
+  images?: string[];
 }
 
 export interface Invoice {

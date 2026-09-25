@@ -15,6 +15,8 @@ export type JobCostLine = {
   quantity: number;
   unit: string;
   unitPrice: number;
+  /** Optional material photos (URLs). Cleared when kind is labor. */
+  images?: string[];
 };
 
 type CostingStore = Record<string, JobCostLine[]>;
@@ -89,13 +91,21 @@ export function seedJobLines(job: Job): JobCostLine[] {
 }
 
 function toCostLine(item: JobItem): JobCostLine {
+  const kind = classifyJobLine(item);
+  const images =
+    kind === "materials"
+      ? (Array.isArray(item.images) ? item.images : [])
+          .map((src) => String(src || "").trim())
+          .filter(Boolean)
+      : [];
   return {
     id: item.id,
     description: item.description,
-    kind: classifyJobLine(item),
+    kind,
     quantity: item.quantity,
     unit: item.unit,
     unitPrice: item.unitPrice,
+    ...(kind === "materials" ? { images } : {}),
   };
 }
 
@@ -164,7 +174,23 @@ export function useJobCosting(job: Job, options?: { preferApi?: boolean }) {
   );
   const seeded = seedJobLines(job).map(repairCostLineKind);
   const stored = store[job.id]?.map(repairCostLineKind);
-  const lines = options?.preferApi ? seeded : (stored ?? seeded);
+  // Prefer API/seed data; if local cache exists, still restore material images from seed
+  // when the cache row is missing them (stale localStorage from before image support).
+  const lines = (() => {
+    if (options?.preferApi || !stored?.length) return seeded;
+    return stored.map((line) => {
+      if (line.kind !== "materials" || (line.images && line.images.length)) return line;
+      const match =
+        seeded.find((item) => item.id === line.id) ||
+        seeded.find(
+          (item) =>
+            item.kind === "materials" &&
+            (item.description || "").trim() === (line.description || "").trim(),
+        );
+      if (match?.images?.length) return { ...line, images: match.images };
+      return line;
+    });
+  })();
   const mix = jobCostMix(lines);
 
   const commit = useCallback(

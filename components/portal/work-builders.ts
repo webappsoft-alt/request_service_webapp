@@ -53,6 +53,13 @@ export function linesToEstimateItems(estimateId: string, lines: JobCostLine[]): 
     taxRate: 0.0825,
     discount: 0,
     total: lineTotal(line),
+    ...(line.kind === "materials"
+      ? {
+          images: (line.images ?? []).filter((src) =>
+            Boolean(String(src || "").trim()),
+          ),
+        }
+      : {}),
   }));
 }
 
@@ -67,6 +74,13 @@ export function linesToJobItems(jobId: string, lines: JobCostLine[]): JobItem[] 
     unitPrice: line.unitPrice,
     total: lineTotal(line),
     kind: line.kind,
+    ...(line.kind === "materials"
+      ? {
+          images: (line.images ?? []).filter((src) =>
+            Boolean(String(src || "").trim()),
+          ),
+        }
+      : {}),
   }));
 }
 
@@ -79,6 +93,9 @@ export function linesToInvoiceItems(invoiceId: string, lines: JobCostLine[]): In
     quantity: line.quantity,
     unitPrice: line.unitPrice,
     total: lineTotal(line),
+    ...(line.kind === "materials" && line.images?.length
+      ? { images: line.images.filter((src) => Boolean(String(src || "").trim())) }
+      : {}),
   }));
 }
 
@@ -131,6 +148,9 @@ export function estimateAsJob(estimate: Estimate): Job {
       unitPrice: item.unitPrice,
       total: item.total,
       kind: item.type === "labor" ? ("labor" as const) : ("materials" as const),
+      ...(item.type !== "labor"
+        ? { images: Array.isArray(item.images) ? item.images : [] }
+        : {}),
     })),
     changeOrders: [],
     createdAt: estimate.createdAt,

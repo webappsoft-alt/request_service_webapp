@@ -79,8 +79,10 @@ export function ProviderProfile({
       : getServiceAreaNames(provider.serviceArea);
   const today = getTodayWeekday();
   const socials = getProviderSocials(provider);
-  const contact = getProviderContact(provider);
-  const website = getProviderWebsite(provider);
+  const contact = isLive ? provider.contact : getProviderContact(provider);
+  const website = isLive
+    ? (provider.website?.trim() || "")
+    : getProviderWebsite(provider);
   const fixedServices = live
     ? (live.fixedServices ?? [])
     : getPortalServices(provider).filter((item) => item.active);
@@ -96,6 +98,11 @@ export function ProviderProfile({
     provider.paymentMethods,
   );
   const languageLabel = provider.language?.trim() || "";
+  const ownerName = contact?.name?.trim() || "";
+  const ownerRole = contact?.role?.trim() || "";
+  const addressLine = provider.street?.trim() || "";
+  const locationLine = formatLocation(provider.city, provider.state, provider.zip).trim();
+  const hasAddress = Boolean(addressLine || locationLine);
 
   return (
     <HomeMotion>
@@ -151,8 +158,8 @@ export function ProviderProfile({
               </div>
               {provider.description?.trim() ? (
                 <div className="flex flex-col gap-2">
-                  <h2 className="text-xl font-semibold">About</h2>
-                  <p className="w-full text-sm leading-7 text-muted-foreground">
+                  <h2 className="text-2xl font-semibold">About</h2>
+                  <p className="w-full text-base leading-7 text-foreground/80">
                     {provider.description}
                   </p>
                 </div>
@@ -226,10 +233,14 @@ export function ProviderProfile({
                 <CardTitle>Business information</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 pt-4">
-                <BusinessInfoItem icon={UserRound} label="Owner">
-                  <p>{contact.name}</p>
-                  <p className="mt-0.5 font-normal text-muted-foreground">{contact.role}</p>
-                </BusinessInfoItem>
+                {ownerName ? (
+                  <BusinessInfoItem icon={UserRound} label="Owner">
+                    <p>{ownerName}</p>
+                    {ownerRole ? (
+                      <p className="mt-0.5 font-normal text-muted-foreground">{ownerRole}</p>
+                    ) : null}
+                  </BusinessInfoItem>
+                ) : null}
                 {provider.phone?.trim() ? (
                   <BusinessInfoItem icon={Phone} label="Phone">
                     <a
@@ -249,31 +260,29 @@ export function ProviderProfile({
                       {provider.email}
                     </a>
                   </BusinessInfoItem>
-                ) : isLive ? (
-                  <BusinessInfoItem icon={Mail} label="Email">
-                    <p className="text-muted-foreground">Not listed</p>
+                ) : null}
+                {hasAddress ? (
+                  <BusinessInfoItem icon={MapPin} label="Address">
+                    {addressLine ? <p>{addressLine}</p> : null}
+                    {locationLine ? (
+                      <p className={cn("font-normal text-muted-foreground", addressLine && "mt-0.5")}>
+                        {locationLine}
+                      </p>
+                    ) : null}
                   </BusinessInfoItem>
                 ) : null}
-                <BusinessInfoItem icon={MapPin} label="Address">
-                  {provider.street?.trim() ? <p>{provider.street}</p> : null}
-                  <p className={cn("font-normal text-muted-foreground", provider.street?.trim() && "mt-0.5")}>
-                    {formatLocation(provider.city, provider.state, provider.zip)}
-                  </p>
-                </BusinessInfoItem>
-                <BusinessInfoItem icon={Globe} label="Website">
-                  {website ? (
+                {website ? (
+                  <BusinessInfoItem icon={Globe} label="Website">
                     <a
-                      href={website}
+                      href={website.startsWith("http") ? website : `https://${website}`}
                       target="_blank"
                       rel="noreferrer"
                       className="block truncate hover:text-primary"
                     >
                       {displayWebsite(website)}
                     </a>
-                  ) : (
-                    <p className="text-muted-foreground">Not listed</p>
-                  )}
-                </BusinessInfoItem>
+                  </BusinessInfoItem>
+                ) : null}
                 {provider.foundedYear > 0 ? (
                   <BusinessInfoItem icon={CalendarDays} label="Years in business">
                     <p>Since {provider.foundedYear}</p>
@@ -330,37 +339,39 @@ export function ProviderProfile({
               </CardContent>
             </Card>
 
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle>Visit us</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="flex flex-wrap gap-2">
-                  {socials.map((item) => (
-                    <li key={item.id}>
-                      <a
-                        href={item.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`Open ${item.label}`}
-                        className="flex size-10 items-center justify-center rounded-lg border border-input bg-card transition-colors hover:border-primary/40 hover:bg-muted"
-                      >
-                        <span
-                          className="size-4 bg-foreground"
-                          style={{
-                            maskImage: `url(${item.icon})`,
-                            WebkitMaskImage: `url(${item.icon})`,
-                            maskRepeat: "no-repeat",
-                            maskPosition: "center",
-                            maskSize: "contain",
-                          }}
-                        />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+            {socials.length ? (
+              <Card size="sm">
+                <CardHeader>
+                  <CardTitle>Visit us</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="flex flex-wrap gap-2">
+                    {socials.map((item) => (
+                      <li key={item.id}>
+                        <a
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open ${item.label}`}
+                          className="flex size-10 items-center justify-center rounded-lg border border-input bg-card transition-colors hover:border-primary/40 hover:bg-muted"
+                        >
+                          <span
+                            className="size-4 bg-foreground"
+                            style={{
+                              maskImage: `url(${item.icon})`,
+                              WebkitMaskImage: `url(${item.icon})`,
+                              maskRepeat: "no-repeat",
+                              maskPosition: "center",
+                              maskSize: "contain",
+                            }}
+                          />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ) : null}
 
             {showHours ? (
               <Card size="sm">

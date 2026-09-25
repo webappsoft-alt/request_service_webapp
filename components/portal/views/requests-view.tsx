@@ -28,6 +28,7 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { markUnreadLeadNotificationsRead } from "@/lib/api/notifications-client";
+import { ackInboxBadges } from "@/lib/api/crm-client";
 import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -206,7 +207,7 @@ export function RequestsView() {
     void refreshLeads(true);
   }, [refreshLeads]);
 
-  // Opening Leads only clears the sidebar/bell lead badge — never changes lead status.
+  // Opening Leads ACKs the sidebar badge (persists across refresh) — never changes lead status.
   useEffect(() => {
     if (clearedLeadBadgesRef.current) return;
     clearedLeadBadgesRef.current = true;
@@ -215,6 +216,7 @@ export function RequestsView() {
       new CustomEvent("rs-realtime", { detail: { type: "LEADS_TAB_OPENED" } }),
     );
     void markUnreadLeadNotificationsRead().catch(() => undefined);
+    void ackInboxBadges(["leads"]).catch(() => undefined);
   }, []);
 
   useEffect(() => {

@@ -181,15 +181,20 @@ function mapPublicEstimateToSnapshot(
       const kindRaw = stringValue(item.kind || item.type).toLowerCase();
       const quantity = Math.max(0, numberValue(item.quantity, 1));
       const unitPrice = numberValue(item.unitPrice);
+      const isMaterial = kindRaw === "material" || kindRaw === "materials";
+      const images = (
+        Array.isArray(item.images) ? item.images : []
+      )
+        .map((src) => stringValue(src))
+        .filter(Boolean);
       return {
         description: stringValue(item.description) || "Line item",
-        kind: (kindRaw === "material" || kindRaw === "materials"
-          ? "materials"
-          : "labor") as "labor" | "materials",
+        kind: (isMaterial ? "materials" : "labor") as "labor" | "materials",
         quantity,
         unit: stringValue(item.unit) || (kindRaw === "labor" ? "hr" : "ea"),
         unitPrice,
         total: numberValue(item.total, Math.round(quantity * unitPrice)),
+        ...(isMaterial && images.length ? { images } : {}),
       };
     },
   );

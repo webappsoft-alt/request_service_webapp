@@ -1,27 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  jobCostKindLabel,
+  createEmptyLine,
+  LineItemsActions,
+  LineItemsEditor,
+} from "@/components/portal/line-items-editor";
+import {
   jobCostMix,
-  lineTotal,
   useJobCosting,
   type JobCostKind,
   type JobCostLine,
 } from "@/components/portal/use-job-costing";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
+import { mergeStashedMaterialImages, clearStashedEstimateMaterialImages, readStashedEstimateMaterialImages } from "@/components/portal/line-item-images";
 import { formatMoney } from "@/lib/format";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -29,16 +21,6 @@ import { cn } from "@/lib/utils";
 const LABOR = "#003F7D";
 const MATERIALS = "#5b8fa8";
 const RING = 2 * Math.PI * 54;
-
-const MATERIAL_UNITS = [
-  { value: "ea", label: "Each" },
-  { value: "ft", label: "Feet" },
-  { value: "sq ft", label: "Square feet" },
-] as const;
-
-const LABOR_UNITS = [
-  { value: "hr", label: "Hour" },
-] as const;
 
 export function JobCostChart({ labor, materials }: { labor: number; materials: number }) {
   const total = labor + materials;
@@ -86,16 +68,68 @@ export type CostingNoun = "job" | "estimate" | "invoice";
 function costingHint(noun: CostingNoun, locked: boolean) {
   switch (noun) {
     case "estimate":
-      return locked ? "This quote is converted. Qty and price are locked." : "Add or edit lines until this quote becomes a job.";
+      return locked
+        ? "This quote is converted. Qty and price are locked."
+        : "Line items save automatically after you fill description and quantity, or when you leave this tab.";
     case "invoice":
-      return locked ? "This invoice has left draft. Qty and price are locked." : "Add or edit lines until this invoice is sent.";
+      return locked
+        ? "This invoice has left draft. Qty and price are locked."
+        : "Line items save automatically after you fill description and quantity, or when you leave this tab.";
     case "job":
-      return locked ? "This job is invoiced. Qty and price are locked." : "Add or edit lines until the job is invoiced.";
+      return locked
+        ? "This job is invoiced. Qty and price are locked."
+        : "Line items save automatically after you fill description and quantity, or when you leave this tab.";
     default: {
       const _never: never = noun;
       return _never;
     }
   }
+}
+
+function linesEqual(a: JobCostLine[], b: JobCostLine[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i];
+    const right = b[i];
+    if (!right) return false;
+    if (
+      left.id !== right.id ||
+      (left.description || "").trim() !== (right.description || "").trim() ||
+      left.kind !== right.kind ||
+      left.quantity !== right.quantity ||
+      (left.unit || "") !== (right.unit || "") ||
+      left.unitPrice !== right.unitPrice ||
+      JSON.stringify(left.images ?? []) !== JSON.stringify(right.images ?? [])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Line is ready to save: has description and a positive qty (price may be 0). */
+function isCompleteLine(line: JobCostLine) {
+  return Boolean((line.description || "").trim()) && Number(line.quantity) > 0;
+}
+
+function completeLines(lines: JobCostLine[]) {
+  return lines.filter(isCompleteLine);
+}
+
+function withPreservedImages(nextLines: JobCostLine[], seedLines: JobCostLine[]) {
+  return nextLines.map((line) => {
+    if (line.kind !== "materials") return line;
+    if (line.images?.length) return line;
+    const seed =
+      seedLines.find((item) => item.id === line.id) ||
+      seedLines.find(
+        (item) =>
+          item.kind === "materials" &&
+          (item.description || "").trim() === (line.description || "").trim(),
+      );
+    if (!seed?.images?.length) return line;
+    return { ...line, images: [...seed.images] };
+  });
 }
 
 export function JobCosting({
@@ -105,6 +139,8 @@ export function JobCosting({
   onMutate,
   onSave,
   preferApi = false,
+  /** Wait for full API record before auto-saving (avoids wiping material images). */
+  ready = true,
 }: {
   job: Job;
   locked?: boolean;
@@ -112,40 +148,143 @@ export function JobCosting({
   onMutate?: (title: string, detail: string) => void;
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
   preferApi?: boolean;
+  ready?: boolean;
 }) {
-  const { lines, commit } = useJobCosting(job, { preferApi });
+  const { lines: rawLines, commit } = useJobCosting(job, { preferApi });
+  const lines = useMemo(
+    () => mergeStashedMaterialImages(job.id, rawLines),
+    [job.id, rawLines],
+  );
   const [draft, setDraft] = useState<JobCostLine[] | null>(null);
   const [saving, setSaving] = useState(false);
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const hydratedSaveRef = useRef(false);
 
   const pendingActionRef = useRef<(() => void) | null>(null);
   const bypassingRef = useRef(false);
+  const savingRef = useRef(false);
+  const activeLinesRef = useRef<JobCostLine[]>(lines);
+  const linesRef = useRef(lines);
+  const persistRef = useRef<(next: JobCostLine[], opts?: { silent?: boolean }) => Promise<void>>(
+    async () => undefined,
+  );
 
   const activeLines = draft ?? lines;
   const mix = useMemo(() => jobCostMix(activeLines), [activeLines]);
 
+  // Only treat as dirty when complete (filled) lines differ from saved complete lines.
+  // Empty / incomplete new rows do not trigger an API save.
   const isDirty = useMemo(() => {
     if (!draft) return false;
-    if (draft.length !== lines.length) return true;
-    for (let i = 0; i < draft.length; i++) {
-      const a = draft[i];
-      const b = lines[i];
-      if (!b) return true;
-      if (
-        a.id !== b.id ||
-        (a.description || "").trim() !== (b.description || "").trim() ||
-        a.kind !== b.kind ||
-        a.quantity !== b.quantity ||
-        (a.unit || "") !== (b.unit || "") ||
-        a.unitPrice !== b.unitPrice
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return !linesEqual(completeLines(draft), completeLines(lines));
   }, [draft, lines]);
 
-  // Window beforeunload (tab close / refresh)
+  activeLinesRef.current = activeLines;
+  linesRef.current = lines;
+
+  // When API seed gains material images, merge them into any open draft that is missing them.
+  useEffect(() => {
+    setDraft((current) => {
+      if (!current) return current;
+      let changed = false;
+      const next = current.map((line) => {
+        if (line.kind !== "materials") return line;
+        if (line.images?.length) return line;
+        const seed =
+          lines.find((item) => item.id === line.id) ||
+          lines.find(
+            (item) =>
+              item.kind === "materials" &&
+              (item.description || "").trim() === (line.description || "").trim(),
+          );
+        if (!seed?.images?.length) return line;
+        changed = true;
+        return { ...line, images: [...seed.images] };
+      });
+      return changed ? next : current;
+    });
+  }, [lines]);
+
+  const persist = useCallback(
+    async (nextLines: JobCostLine[], options?: { silent?: boolean }) => {
+      if (savingRef.current || !ready) return;
+
+      const withImages = withPreservedImages(nextLines, linesRef.current);
+      const savable = completeLines(withImages);
+      const saved = completeLines(linesRef.current);
+
+      // Nothing complete to save, and nothing complete to clear → skip API.
+      if (!savable.length && !saved.length) {
+        setDraft(withImages);
+        return;
+      }
+      // Incomplete-only edits (empty new row) → skip API.
+      if (linesEqual(savable, saved)) {
+        setDraft(withImages);
+        return;
+      }
+
+      savingRef.current = true;
+      setSaving(true);
+      try {
+        commit(withImages);
+        if (onSave) {
+          await onSave(withImages);
+        }
+        // Clear draft so seed/API state becomes source of truth — breaks save loops.
+        setDraft(null);
+        clearStashedEstimateMaterialImages(job.id);
+        onMutate?.("Cost lines updated", `${savable.length} items on file`);
+        if (!options?.silent) {
+          toast.success("Line items saved.");
+        }
+      } catch {
+        // Keep draft so the user does not lose edits on failure.
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    },
+    [commit, job.id, onMutate, onSave, ready],
+  );
+
+  persistRef.current = persist;
+
+  // One-time: push stashed convert images to API after hydrate (no loop).
+  useEffect(() => {
+    if (!ready || locked || hydratedSaveRef.current) return;
+    const stashed = readStashedEstimateMaterialImages(job.id);
+    if (!stashed.length) return;
+    const merged = mergeStashedMaterialImages(job.id, rawLines);
+    const needsWrite = merged.some((line) => {
+      if (line.kind !== "materials" || !line.images?.length) return false;
+      if (!isCompleteLine(line)) return false;
+      const raw =
+        rawLines.find((item) => item.id === line.id) ||
+        rawLines.find(
+          (item) =>
+            item.kind === "materials" &&
+            (item.description || "").trim() === (line.description || "").trim(),
+        );
+      return !raw?.images?.length;
+    });
+    hydratedSaveRef.current = true;
+    if (!needsWrite) {
+      clearStashedEstimateMaterialImages(job.id);
+      return;
+    }
+    void persistRef.current(merged, { silent: true });
+  }, [ready, locked, job.id, rawLines]);
+
+  // Debounced auto-save only when complete line items changed
+  useEffect(() => {
+    if (!ready || !isDirty || locked) return;
+    const timer = window.setTimeout(() => {
+      void persistRef.current(activeLinesRef.current, { silent: true });
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [isDirty, locked, ready]);
+
+  // Window beforeunload when dirty
   useEffect(() => {
     if (!isDirty) return;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -157,17 +296,16 @@ export function JobCosting({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
-  // Intercept navigation or tab change when form has unsaved changes
+  // Auto-save when leaving the tab / navigating away
   useEffect(() => {
-    if (!isDirty) return;
+    if (!ready || !isDirty || locked) return;
 
     const handleClickCapture = (event: MouseEvent) => {
-      if (bypassingRef.current) return;
+      if (bypassingRef.current || savingRef.current) return;
 
       const target = event.target as HTMLElement | null;
       if (!target) return;
 
-      // Allow clicks within the job costing form, modals, dropdowns, selects, toasts
       if (
         target.closest("[data-job-costing-form]") ||
         target.closest("[role='dialog']") ||
@@ -182,12 +320,10 @@ export function JobCosting({
       }
 
       const interactiveEl = target.closest(
-        "button, a[href], [role='tab'], [role='button'], [data-tab-id]"
+        "button, a[href], [role='tab'], [role='button'], [data-tab-id]",
       ) as HTMLElement | null;
 
-      if (!interactiveEl) {
-        return;
-      }
+      if (!interactiveEl) return;
 
       event.preventDefault();
       event.stopPropagation();
@@ -197,89 +333,37 @@ export function JobCosting({
         interactiveEl.click();
       };
 
-      setShowUnsavedDialog(true);
+      void (async () => {
+        await persistRef.current(activeLinesRef.current, { silent: true });
+        setDraft(null);
+        const action = pendingActionRef.current;
+        pendingActionRef.current = null;
+        if (action) {
+          bypassingRef.current = true;
+          setTimeout(() => {
+            action();
+            setTimeout(() => {
+              bypassingRef.current = false;
+            }, 150);
+          }, 0);
+        }
+      })();
     };
 
     document.addEventListener("click", handleClickCapture, true);
     return () => {
       document.removeEventListener("click", handleClickCapture, true);
     };
-  }, [isDirty]);
-
-  function executePending() {
-    const action = pendingActionRef.current;
-    pendingActionRef.current = null;
-    setShowUnsavedDialog(false);
-    if (action) {
-      bypassingRef.current = true;
-      setTimeout(() => {
-        action();
-        setTimeout(() => {
-          bypassingRef.current = false;
-        }, 150);
-      }, 0);
-    }
-  }
+  }, [isDirty, locked, ready]);
 
   function add(kind: JobCostKind) {
     if (locked) return;
-    const stamp = Date.now();
-    const newLine: JobCostLine = {
-      id: `extra_${kind}_${stamp}`,
-      description: "",
-      kind,
-      quantity: 1,
-      unit: kind === "labor" ? "hr" : "ea",
-      unitPrice: 0,
-    };
-    setDraft((prev) => [...(prev ?? lines), newLine]);
+    setDraft([...(draft ?? lines), createEmptyLine(kind)]);
   }
 
-  function change(id: string, patch: Partial<JobCostLine>) {
+  function changeLines(next: JobCostLine[]) {
     if (locked) return;
-    setDraft((prev) => (prev ?? lines).map((line) => (line.id === id ? { ...line, ...patch } : line)));
-  }
-
-  function remove(id: string) {
-    if (locked) return;
-    setDraft((prev) => (prev ?? lines).filter((line) => line.id !== id));
-  }
-
-  async function persist(nextLines: JobCostLine[]) {
-    commit(nextLines);
-    setDraft(null);
-    if (onSave) {
-      await onSave(nextLines);
-    }
-    onMutate?.("Cost lines updated", `${nextLines.length} items on file`);
-  }
-
-  async function handleManualSave() {
-    try {
-      setSaving(true);
-      await persist(activeLines);
-      toast.success("Line items saved.");
-    } catch {
-      // error handled by onSave
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSaveAndLeave() {
-    await persist(activeLines);
-    toast.success("Line items saved.");
-    executePending();
-  }
-
-  function handleDiscardAndLeave() {
-    setDraft(null);
-    executePending();
-  }
-
-  function handleCancelDialog() {
-    pendingActionRef.current = null;
-    setShowUnsavedDialog(false);
+    setDraft(next);
   }
 
   return (
@@ -288,188 +372,34 @@ export function JobCosting({
         <div className="min-w-0">
           <h2 className="text-base font-semibold">Labor and materials</h2>
           <p className="mt-1 text-sm text-muted-foreground">{costingHint(noun, locked)}</p>
+          {saving ? (
+            <p className="mt-1 text-xs text-muted-foreground">Saving line items…</p>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 self-end md:self-auto">
-          <Button size="sm" variant="outline" disabled={locked || saving} onClick={() => add("labor")}>
-            <Plus />
-            Add labor
-          </Button>
-          <Button size="sm" variant="outline" disabled={locked || saving} onClick={() => add("materials")}>
-            <Plus />
-            Add material
-          </Button>
-          {locked ? null : (
-            <Button
-              size="sm"
-              disabled={saving}
-              onClick={handleManualSave}
-            >
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {saving ? "Saving…" : "Save line items"}
-            </Button>
-          )}
-        </div>
+        <LineItemsActions
+          locked={locked}
+          saving={saving}
+          onAddLabor={() => add("labor")}
+          onAddMaterial={() => add("materials")}
+          className="shrink-0 self-end md:self-auto"
+        />
       </div>
-      <div className="w-full overflow-x-auto rounded-[4px] border border-black/10">
-        <Table className="min-w-[760px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[220px]">Description</TableHead>
-              <TableHead className="w-32 min-w-[125px]">Type</TableHead>
-              <TableHead className="w-24 min-w-[90px]">Qty</TableHead>
-              <TableHead className="w-36 min-w-[135px]">Unit</TableHead>
-              <TableHead className="w-28 min-w-[110px]">Price</TableHead>
-              <TableHead className="w-24 min-w-[95px] text-right">Total</TableHead>
-              <TableHead className="w-10 min-w-[44px]">
-                <span className="sr-only">Remove</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {activeLines.map((line) => (
-              <CostRow
-                key={line.id}
-                line={line}
-                locked={locked}
-                onChange={change}
-                onRemove={!locked ? () => remove(line.id) : undefined}
-              />
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <LineItemsEditor
+        lines={activeLines}
+        onChange={changeLines}
+        locked={locked}
+      />
       <dl className="mt-4 ml-auto grid max-w-xs grid-cols-2 gap-y-1 text-sm">
         <dt className="text-muted-foreground">Labor</dt>
         <dd className="text-right tabular-nums">{formatMoney(mix.labor)}</dd>
         <dt className="text-muted-foreground">Materials</dt>
         <dd className="text-right tabular-nums">{formatMoney(mix.materials)}</dd>
-        <dt className="font-medium">{noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}</dt>
+        <dt className="font-medium">
+          {noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}
+        </dt>
         <dd className="text-right font-semibold tabular-nums">{formatMoney(mix.total)}</dd>
       </dl>
-
-      <UnsavedChangesDialog
-        open={showUnsavedDialog}
-        onOpenChange={(open) => {
-          if (!open) handleCancelDialog();
-        }}
-        onSave={handleSaveAndLeave}
-        onDiscard={handleDiscardAndLeave}
-        onCancel={handleCancelDialog}
-      />
     </div>
-  );
-}
-
-function CostRow({
-  line,
-  locked,
-  onChange,
-  onRemove,
-}: {
-  line: JobCostLine;
-  locked: boolean;
-  onChange: (id: string, patch: Partial<JobCostLine>) => void;
-  onRemove?: (id: string) => void;
-}) {
-  const currentUnit =
-    line.kind === "labor"
-      ? "hr"
-      : line.unit && ["ea", "ft", "sq ft"].includes(line.unit)
-        ? line.unit
-        : "ea";
-  const unitOptions = line.kind === "labor" ? LABOR_UNITS : MATERIAL_UNITS;
-
-  return (
-    <TableRow>
-      <TableCell className="min-w-[220px]">
-        <Input
-          aria-label="Description"
-          disabled={locked}
-          placeholder={line.kind === "labor" ? "Additional labor" : "Additional material"}
-          value={line.description}
-          onChange={(event) => onChange(line.id, { description: event.target.value })}
-          className="w-full"
-        />
-      </TableCell>
-      <TableCell className="w-32 min-w-[125px]">
-        <Select
-          disabled={locked}
-          value={line.kind}
-          onValueChange={(value) => {
-            const kind = value as JobCostKind;
-            const unit = kind === "labor" ? "hr" : line.unit === "hr" || !line.unit ? "ea" : line.unit;
-            onChange(line.id, { kind, unit });
-          }}
-        >
-          <SelectTrigger aria-label="Type" className="w-full">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent position="popper" align="start" className="z-[100] w-[var(--radix-select-trigger-width)]">
-            <SelectItem value="labor">Labor</SelectItem>
-            <SelectItem value="materials">Materials</SelectItem>
-          </SelectContent>
-        </Select>
-      </TableCell>
-      <TableCell className="w-24 min-w-[90px]">
-        <Input
-          aria-label="Quantity"
-          className="w-full tabular-nums"
-          disabled={locked}
-          inputMode="decimal"
-          min={0}
-          step="any"
-          type="number"
-          value={Number.isFinite(line.quantity) ? line.quantity : 0}
-          onChange={(event) => onChange(line.id, { quantity: Number(event.target.value) || 0 })}
-        />
-      </TableCell>
-      <TableCell className="w-36 min-w-[135px]">
-        <Select
-          disabled={locked}
-          value={currentUnit}
-          onValueChange={(unit) => onChange(line.id, { unit })}
-        >
-          <SelectTrigger aria-label="Unit" className="w-full">
-            <SelectValue placeholder="Unit" />
-          </SelectTrigger>
-          <SelectContent position="popper" align="start" className="z-[100] w-[var(--radix-select-trigger-width)]">
-            {unitOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-      <TableCell className="w-28 min-w-[110px]">
-        <Input
-          aria-label="Unit price"
-          className="w-full tabular-nums"
-          disabled={locked}
-          inputMode="decimal"
-          min={0}
-          placeholder="0"
-          step="0.01"
-          type="number"
-          value={line.unitPrice ? line.unitPrice : ""}
-          onChange={(event) => onChange(line.id, { unitPrice: Number(event.target.value) || 0 })}
-        />
-      </TableCell>
-      <TableCell className="w-24 min-w-[95px] text-right font-medium tabular-nums">{formatMoney(lineTotal(line))}</TableCell>
-      <TableCell className="w-10 min-w-[44px] text-center">
-        {onRemove ? (
-          <Button
-            aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            size="icon-sm"
-            variant="ghost"
-            onClick={() => onRemove(line.id)}
-          >
-            <Trash2 />
-          </Button>
-        ) : null}
-      </TableCell>
-    </TableRow>
   );
 }
 

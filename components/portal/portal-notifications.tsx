@@ -265,7 +265,8 @@ export function PortalNotifications() {
     () => notifications.filter((item) => !item.isRead).length,
     [notifications],
   );
-  const bellCount = Math.max(unreadFromList, unreadNotifications, inbox.total);
+  // Header bell is notification-unread only — never include sidebar CRM/chat/order counts.
+  const bellCount = Math.max(unreadFromList, unreadNotifications);
 
   const historyItems =
     notifications.length > 0
@@ -311,18 +312,20 @@ export function PortalNotifications() {
   }
 
   async function onMarkAllRead() {
+    // Header only — do not clear portal inbox / sidebar badge state.
+    setUnreadNotifications(0);
+    setNotifications((current) =>
+      current.map((row) => ({
+        ...row,
+        isRead: true,
+        readAt: new Date().toISOString(),
+      })),
+    );
     try {
       await markAllNotificationsRead();
       setUnreadNotifications(0);
-      setNotifications((current) =>
-        current.map((row) => ({
-          ...row,
-          isRead: true,
-          readAt: new Date().toISOString(),
-        })),
-      );
     } catch {
-      // ignore
+      void refreshNotifications();
     }
   }
 

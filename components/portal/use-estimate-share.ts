@@ -16,6 +16,8 @@ export type EstimateShareLine = {
   unit: string;
   unitPrice: number;
   total: number;
+  /** Optional material photos shown to the customer. */
+  images?: string[];
 };
 
 export type EstimateSiteVisitPhoto = {
@@ -172,6 +174,7 @@ export function buildEstimateSnapshot(
         quantity: item.quantity,
         unit: item.unit,
         unitPrice: item.unitPrice,
+        ...(item.images?.length ? { images: item.images } : {}),
       }));
   const money = moneyFromLines(lines);
   const companySig = estimate.companySignature;
@@ -215,6 +218,9 @@ export function buildEstimateSnapshot(
       unit: line.unit,
       unitPrice: line.unitPrice,
       total: Math.round(line.quantity * line.unitPrice),
+      ...(line.kind === "materials" && line.images?.length
+        ? { images: line.images }
+        : {}),
     })),
     subtotal: money.subtotal || estimate.subtotal,
     tax: money.tax || estimate.tax,

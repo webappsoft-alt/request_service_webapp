@@ -984,12 +984,28 @@ export function mapPortalVendorPurchaseOrder(
   };
 }
 
+function coerceImageUrl(src: unknown): string {
+  if (typeof src === "string") return src.trim();
+  if (src && typeof src === "object") {
+    const record = src as Record<string, unknown>;
+    return String(
+      record.url || record.attachment || record.src || record.image || record.path || "",
+    ).trim();
+  }
+  return "";
+}
+
+function normalizeMaterialImages(value: unknown): string[] {
+  return asArray(value).map(coerceImageUrl).filter(Boolean);
+}
+
 function mapEstimateItems(estimateId: string, value: unknown): EstimateItem[] {
   return asArray(value)
     .map((entry, index) => {
       const record = asRecord(entry);
       if (!record) return null;
       const type = mapEstimateItemType(record.kind ?? record.type);
+      const images = normalizeMaterialImages(record.images);
       return {
         id: crmIdOf(record) || `${estimateId}_item_${index + 1}`,
         estimateId,
@@ -1001,6 +1017,7 @@ function mapEstimateItems(estimateId: string, value: unknown): EstimateItem[] {
         taxRate: numberValue(record.taxRate, 0),
         discount: numberValue(record.discount, 0),
         total: numberValue(record.total),
+        ...(type !== "labor" ? { images } : {}),
       } satisfies EstimateItem;
     })
     .filter((item): item is EstimateItem => Boolean(item));
@@ -1215,16 +1232,24 @@ function mapJobItems(jobId: string, value: unknown): JobItem[] {
     .map((entry, index) => {
       const record = asRecord(entry);
       if (!record) return null;
-      return {
+      const kind: JobItem["kind"] =
+        mapEstimateItemType(record.kind) === "labor" ? "labor" : "materials";
+      const images = asArray(record.images)
+        .map((src) => trimmed(src))
+        .filter(Boolean);
+      const item: JobItem = {
         id: crmIdOf(record) || `${jobId}_item_${index + 1}`,
         jobId,
         source: mapJobItemSource(record.source),
         description: trimmed(record.description),
         quantity: Math.max(0, numberValue(record.quantity, 1)),
-        unit: trimmed(record.unit) || (mapEstimateItemType(record.kind) === "labor" ? "hr" : "ea"),
+        unit: trimmed(record.unit) || (kind === "labor" ? "hr" : "ea"),
         unitPrice: numberValue(record.unitPrice),
         total: numberValue(record.total),
-      } satisfies JobItem;
+        kind,
+        ...(kind === "materials" && images.length ? { images } : {}),
+      };
+      return item;
     })
     .filter((item): item is JobItem => Boolean(item));
 }
@@ -1376,6 +1401,9 @@ function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
       const record = asRecord(entry);
       if (!record) return null;
       const description = trimmed(record.description);
+      const images = asArray(record.images)
+        .map((src) => trimmed(src))
+        .filter(Boolean);
       return {
         id: crmIdOf(record) || `${invoiceId}_item_${index + 1}`,
         invoiceId,
@@ -1384,6 +1412,7 @@ function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
         quantity: Math.max(0, numberValue(record.quantity, 1)),
         unitPrice: numberValue(record.unitPrice),
         total: numberValue(record.total),
+        ...(images.length ? { images } : {}),
       } satisfies InvoiceItem;
     })
     .filter((item): item is InvoiceItem => Boolean(item));

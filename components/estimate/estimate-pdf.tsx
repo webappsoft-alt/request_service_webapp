@@ -91,19 +91,41 @@ export function EstimatePdfDocument({
             <tbody>
               {snapshot.items.map((row, index) => (
                 <tr key={`${row.description}-${index}`} className="border-b border-black/8">
-                  <td className="px-2 py-2 break-words font-medium">
-                    {row.description || (row.kind === "labor" ? "Labor" : "Material")}
+                  <td className="px-2 py-2 break-words font-medium align-top">
+                    <div className="whitespace-pre-wrap">
+                      {row.description || (row.kind === "labor" ? "Labor" : "Material")}
+                    </div>
+                    {row.kind === "materials" && row.images?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {row.images.map((src, imgIndex) => (
+                          <span
+                            key={`${src}-${imgIndex}`}
+                            className="relative inline-block h-12 w-14 overflow-hidden rounded border border-black/10"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={src}
+                              alt={`Material for ${row.description || "line item"}`}
+                              className="size-full object-cover"
+                            />
+                            <span className="absolute inset-x-0 bottom-0 bg-black/55 px-0.5 py-px text-[8px] font-medium text-white text-center">
+                              Material
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </td>
-                  <td className="px-1.5 py-2 capitalize whitespace-nowrap text-muted-foreground">
-                    {row.kind}
+                  <td className="px-1.5 py-2 capitalize whitespace-nowrap text-muted-foreground align-top">
+                    {row.kind === "materials" ? "Material" : "Labor"}
                   </td>
-                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap text-muted-foreground">
+                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap text-muted-foreground align-top">
                     {row.quantity} {row.unit}
                   </td>
-                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap">
+                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap align-top">
                     {formatMoney(row.unitPrice)}
                   </td>
-                  <td className="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap">
+                  <td className="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap align-top">
                     {formatMoney(row.total)}
                   </td>
                 </tr>
@@ -122,7 +144,7 @@ export function EstimatePdfDocument({
         {snapshot.notes ? (
           <div className="mt-6">
             <p className="text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Notes</p>
-            <p className="mt-1 text-[12px] leading-5">{snapshot.notes}</p>
+            <p className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-5">{snapshot.notes}</p>
           </div>
         ) : null}
       </PdfPage>

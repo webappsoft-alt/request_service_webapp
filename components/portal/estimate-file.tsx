@@ -447,11 +447,23 @@ export function EstimateSettingsTab({
         </Field>
         <label className="grid gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium">Notes</span>
-          <Textarea disabled={isLocked || saving} rows={3} value={draft.notes} onChange={(event) => patch({ notes: event.target.value })} />
+          <Textarea
+            disabled={isLocked || saving}
+            rows={8}
+            value={draft.notes}
+            onChange={(event) => patch({ notes: event.target.value })}
+            className="min-h-[10rem] resize-y leading-6"
+          />
         </label>
         <label className="grid gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium">Terms</span>
-          <Textarea disabled={isLocked || saving} rows={3} value={draft.terms} onChange={(event) => patch({ terms: event.target.value })} />
+          <Textarea
+            disabled={isLocked || saving}
+            rows={5}
+            value={draft.terms}
+            onChange={(event) => patch({ terms: event.target.value })}
+            className="min-h-[7rem] resize-y leading-6"
+          />
         </label>
         {job ? (
           <p className="text-sm text-muted-foreground sm:col-span-2">

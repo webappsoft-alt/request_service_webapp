@@ -92,6 +92,7 @@ export type ConvertToEstimateInput = {
     quantity?: number;
     unitPrice?: number;
     taxRate?: number;
+    images?: string[];
   }>;
 };
 
@@ -242,15 +243,22 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
       const quantity = Math.max(minQuantity, Number(item.quantity) || 1);
       const unitPrice = Math.max(0, Number(item.unitPrice) || 0);
       const taxRate = Math.max(0, Number(item.taxRate) || 0);
+      const isMaterial = item.type === "materials" || item.type === "material";
+      const images = isMaterial
+        ? (Array.isArray(item.images) ? item.images : [])
+            .map((src) => String(src || "").trim())
+            .filter(Boolean)
+        : [];
       return {
         id: item.id,
+        _id: item.id,
         description: String(item.description).trim(),
-        kind: item.type === "materials" ? "material" : "labor",
-        unit: item.unit || (item.type === "labor" ? "hr" : "ea"),
+        kind: isMaterial ? "material" : "labor",
         quantity,
         unitPrice,
         taxRate,
         total: Number(item.total) || quantity * unitPrice,
+        ...(isMaterial ? { images } : {}),
       };
     });
 }
@@ -264,6 +272,10 @@ function jobItemsToApi(items: Job["items"]) {
         (text.includes("labor") ||
           text.includes("labour") ||
           String(item.unit || "").toLowerCase() === "hr"));
+    const images =
+      !isLabor && Array.isArray(item.images)
+        ? item.images.filter((src) => Boolean(String(src || "").trim()))
+        : [];
     return {
       id: item.id,
       description: item.description,
@@ -277,27 +289,34 @@ function jobItemsToApi(items: Job["items"]) {
       unitPrice: item.unitPrice,
       taxRate: 0,
       total: item.total,
+      ...(images.length ? { images } : {}),
     };
   });
 }
 
 function invoiceItemsToApi(items: Invoice["items"]) {
-  return items.map((item) => ({
-    id: item.id,
-    description: item.description,
-    kind:
-      item.source === "change_order"
-        ? "fee"
-        : item.source === "adjustment"
-          ? "discount"
-          : /material/i.test(item.description)
-            ? "material"
-            : "labor",
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    taxRate: 0,
-    total: item.total,
-  }));
+  return items.map((item) => {
+    const images = Array.isArray(item.images)
+      ? item.images.filter((src) => Boolean(String(src || "").trim()))
+      : [];
+    return {
+      id: item.id,
+      description: item.description,
+      kind:
+        item.source === "change_order"
+          ? "fee"
+          : item.source === "adjustment"
+            ? "discount"
+            : /material/i.test(item.description)
+              ? "material"
+              : "labor",
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      taxRate: 0,
+      total: item.total,
+      ...(images.length ? { images } : {}),
+    };
+  });
 }
 
 function resolveAssignedEmployeeIds(job: Job, employees: PortalEmployee[]) {

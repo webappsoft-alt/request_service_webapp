@@ -401,11 +401,33 @@ export function InvoiceSummaryTab({
           <TableBody>
             {invoice.items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell className="font-medium">{item.description}</TableCell>
-                <TableCell>{invoiceItemSourceLabel(item.source)}</TableCell>
-                <TableCell className="text-right tabular-nums">{item.quantity}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatMoney(item.unitPrice)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatMoney(item.total)}</TableCell>
+                <TableCell className="font-medium align-top">
+                  <div className="whitespace-pre-wrap break-words">{item.description}</div>
+                  {item.images?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {item.images.map((src, index) => (
+                        <span
+                          key={`${src}-${index}`}
+                          className="relative inline-block h-12 w-14 overflow-hidden rounded border border-black/10"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={src}
+                            alt={`Material for ${item.description}`}
+                            className="size-full object-cover"
+                          />
+                          <span className="absolute inset-x-0 bottom-0 bg-black/55 px-0.5 py-px text-center text-[8px] font-medium text-white">
+                            Material
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </TableCell>
+                <TableCell className="align-top">{invoiceItemSourceLabel(item.source)}</TableCell>
+                <TableCell className="text-right tabular-nums align-top">{item.quantity}</TableCell>
+                <TableCell className="text-right tabular-nums align-top">{formatMoney(item.unitPrice)}</TableCell>
+                <TableCell className="text-right tabular-nums align-top">{formatMoney(item.total)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

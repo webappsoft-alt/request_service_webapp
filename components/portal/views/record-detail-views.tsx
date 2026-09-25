@@ -798,10 +798,25 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    preferApi={apiReady}
+                    ready={!apiReady || Boolean(fetched)}
                     onSave={async (lines) => {
-                      const filled = filledWorkLines(lines);
+                      const filled = filledWorkLines(lines).map((line) => {
+                        if (line.kind !== "materials") return line;
+                        if (line.images?.length) return line;
+                        const prev =
+                          quote.items.find((item) => item.id === line.id) ||
+                          quote.items.find(
+                            (item) =>
+                              item.type !== "labor" &&
+                              (item.description || "").trim() ===
+                                (line.description || "").trim(),
+                          );
+                        if (!prev?.images?.length) return line;
+                        return { ...line, images: [...prev.images] };
+                      });
                       const items = linesToEstimateItems(quote.id, filled);
-                      writeCostLines(session?.email, quote.id, lines);
+                      writeCostLines(session?.email, quote.id, filled);
                       if (apiReady) {
                         try {
                           const updated = await updateEstimateApi(quote.id, {
@@ -813,6 +828,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                             setFetched(updated);
                           } else {
                             crm.patchEstimate(quote.id, { items });
+                            setFetched({ ...quote, items });
                           }
                           if (crm.ready) {
                             void crm.refresh({ silent: true });

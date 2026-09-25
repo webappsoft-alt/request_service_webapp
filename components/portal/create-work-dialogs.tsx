@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   GoogleAddressAutocomplete,
@@ -16,6 +15,11 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import {
+  createEmptyLine,
+  LineItemsActions,
+  LineItemsEditor,
+} from "@/components/portal/line-items-editor";
 import {
   invalidateEstimatesCache,
   fetchEstimates,
@@ -71,7 +75,6 @@ import {
   type PortalTimeWindow,
 } from "@/lib/data/portal";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
-import { formatMoney } from "@/lib/format";
 import type { Estimate, Job, JobStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -1650,103 +1653,14 @@ function LineEditor({
   lines: JobCostLine[];
   onChange: (lines: JobCostLine[]) => void;
 }) {
-  function patch(id: string, next: Partial<JobCostLine>) {
-    onChange(
-      lines.map((line) => (line.id === id ? { ...line, ...next } : line)),
-    );
-  }
-
   return (
-    <div className="space-y-2">
-      {lines.map((line) => (
-        <div
-          key={line.id}
-          className="grid grid-cols-[1fr_4.5rem_5.5rem_auto_auto] items-center gap-2"
-        >
-          <Input
-            placeholder={
-              line.kind === "labor" ? "Additional labor" : "Additional material"
-            }
-            value={line.description}
-            onChange={(event) =>
-              patch(line.id, { description: event.target.value })
-            }
-          />
-          <Input
-            type="number"
-            min={0}
-            step="0.25"
-            value={line.quantity}
-            onChange={(event) =>
-              patch(line.id, { quantity: Number(event.target.value) || 0 })
-            }
-          />
-          <Input
-            type="number"
-            min={0}
-            placeholder="0"
-            step="1"
-            value={line.unitPrice ? line.unitPrice : ""}
-            onChange={(event) =>
-              patch(line.id, { unitPrice: Number(event.target.value) || 0 })
-            }
-          />
-          <span className="text-sm tabular-nums">
-            {formatMoney(line.quantity * line.unitPrice)}
-          </span>
-          <Button
-            aria-label={`Remove ${line.description || line.kind}`}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            size="icon-sm"
-            variant="ghost"
-            onClick={() =>
-              onChange(lines.filter((item) => item.id !== line.id))
-            }
-          >
-            <Trash2 />
-          </Button>
-        </div>
-      ))}
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            onChange([
-              ...lines,
-              {
-                id: `line_${Date.now()}`,
-                description: "",
-                kind: "labor",
-                quantity: 1,
-                unit: "hr",
-                unitPrice: 0,
-              },
-            ])
-          }
-        >
-          Add labor
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            onChange([
-              ...lines,
-              {
-                id: `line_m_${Date.now()}`,
-                description: "",
-                kind: "materials",
-                quantity: 1,
-                unit: "ea",
-                unitPrice: 0,
-              },
-            ])
-          }
-        >
-          Add material
-        </Button>
-      </div>
+    <div className="space-y-3">
+      <LineItemsActions
+        onAddLabor={() => onChange([...lines, createEmptyLine("labor")])}
+        onAddMaterial={() => onChange([...lines, createEmptyLine("materials")])}
+        className="justify-start"
+      />
+      <LineItemsEditor lines={lines} onChange={onChange} allowMaterialImages />
     </div>
   );
 }

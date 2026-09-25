@@ -516,7 +516,7 @@ export function ServiceFormView({ id }: { id?: string }) {
           price: String(detail.price),
           unit: detail.unit,
           active: detail.isPublic,
-          images: detail.images,
+          images: (detail.images ?? []).slice(0, 1),
           coverage: detail.covered.length ? detail.covered : [""],
           faqs: detail.faqs?.length
             ? detail.faqs.map((item) => ({
@@ -586,29 +586,28 @@ export function ServiceFormView({ id }: { id?: string }) {
 
   async function onUploadPhotos(files: FileList | null) {
     if (!files?.length) return;
+    if (draft.images.length >= 1) {
+      toast.error("A fixed service can have only 1 image. Remove the current photo to replace it.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
-      const uploaded: string[] = [];
-      for (const file of Array.from(files)) {
-        const response = await uploadFile(file);
-        const url = extractUploadedUrl(response.data);
-        if (url) uploaded.push(url);
-      }
-      if (!uploaded.length) {
-        toast.error("Could not upload photos.");
+      const file = Array.from(files)[0];
+      if (!file) return;
+      const response = await uploadFile(file);
+      const url = extractUploadedUrl(response.data);
+      if (!url) {
+        toast.error("Could not upload photo.");
         return;
       }
       setDraft((current) => ({
         ...current,
-        images: [...current.images, ...uploaded],
+        images: [url],
       }));
-      toast.success(
-        uploaded.length === 1
-          ? "Photo uploaded."
-          : `${uploaded.length} photos uploaded.`,
-      );
+      toast.success("Photo uploaded.");
     } catch {
-      toast.error("Could not upload photos.");
+      toast.error("Could not upload photo.");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -642,7 +641,7 @@ export function ServiceFormView({ id }: { id?: string }) {
       unit: unitToApi(draft.unit),
       isPublic: draft.active,
       customerSee: draft.active,
-      images: draft.images,
+      images: draft.images.slice(0, 1),
       covered: draft.coverage.map((item) => item.trim()).filter(Boolean),
       faqs: (Array.isArray(draft.faqs) ? draft.faqs : [])
         .map((item) => ({
@@ -949,21 +948,20 @@ export function ServiceFormView({ id }: { id?: string }) {
           </section>
 
           <section className="rounded-xl border border-input bg-card p-5">
-            <p className="text-sm font-semibold">Service photos</p>
+            <p className="text-sm font-semibold">Service photo</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Pick photos for this job. The first selected photo is the cover.
+              Add one photo for this fixed service. It is used as the cover image.
             </p>
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
-              multiple
               className="hidden"
               onChange={(event) => void onUploadPhotos(event.target.files)}
             />
             <button
               type="button"
-              disabled={uploading}
+              disabled={uploading || draft.images.length >= 1}
               onClick={() => fileRef.current?.click()}
               className={cn(
                 "mt-3 flex w-44 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-input bg-transparent px-3 py-4 text-center transition-colors sm:w-52",
@@ -972,110 +970,61 @@ export function ServiceFormView({ id }: { id?: string }) {
               )}
             >
               {uploading ? (
-                <Spinner size="sm" label="Uploading photos" />
+                <Spinner size="sm" label="Uploading photo" />
               ) : (
                 <span className="flex size-8 items-center justify-center rounded-full border border-input bg-card">
                   <ImagePlus className="size-3.5 text-primary" aria-hidden="true" />
                 </span>
               )}
               <span className="text-sm font-medium text-foreground">
-                {uploading ? "Uploading…" : "Upload photos"}
+                {uploading
+                  ? "Uploading…"
+                  : draft.images.length >= 1
+                    ? "Photo added"
+                    : "Upload photo"}
               </span>
               <span className="text-[11px] leading-snug text-muted-foreground">
-                PNG, JPG, or WEBP
+                PNG, JPG, or WEBP · 1 image max
               </span>
             </button>
             {draft.images.length ? (
               <div className="mt-3">
                 <ul className="mt-1 flex flex-wrap gap-3">
-                  {draft.images.map((src, index) => {
-                    const cover = index === 0;
-                    return (
-                      <li
-                        key={`${src}-${index}`}
-                        className={cn(
-                          "group relative h-28 w-36 overflow-hidden rounded-xl border sm:h-32 sm:w-40",
-                          cover
-                            ? "border-primary ring-2 ring-primary/20"
-                            : "border-input",
-                        )}
-                      >
-                        <Image
-                          src={src}
-                          alt=""
-                          fill
-                          sizes="160px"
-                          className="object-cover"
-                          unoptimized={src.startsWith("http")}
-                        />
-                        <span
-                          className={cn(
-                            "absolute top-1.5 left-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white shadow-sm",
-                            cover ? "bg-primary" : "bg-black/55",
-                          )}
-                        >
-                          {cover ? "Cover" : "Selected"}
-                        </span>
-                        <button
-                          type="button"
-                          className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-600"
-                          aria-label="Remove photo"
-                          onClick={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              images: current.images.filter((_, i) => i !== index),
-                            }))
-                          }
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                        {!cover ? (
-                          <button
-                            type="button"
-                            className="absolute inset-x-1.5 bottom-1.5 rounded-md bg-white/95 px-2 py-1 text-[11px] font-medium text-primary opacity-0 shadow-sm ring-1 ring-black/5 transition group-hover:opacity-100"
-                            onClick={() =>
-                              setDraft((current) => ({
-                                ...current,
-                                images: [
-                                  src,
-                                  ...current.images.filter((item) => item !== src),
-                                ],
-                              }))
-                            }
-                          >
-                            Use as cover
-                          </button>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {draft.images.length > 1 ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {draft.images.slice(1).map((src, index) => (
-                      <Button
-                        key={`${src}-cover-${index}`}
+                  {draft.images.slice(0, 1).map((src, index) => (
+                    <li
+                      key={`${src}-${index}`}
+                      className="group relative h-28 w-36 overflow-hidden rounded-xl border border-primary ring-2 ring-primary/20 sm:h-32 sm:w-40"
+                    >
+                      <Image
+                        src={src}
+                        alt=""
+                        fill
+                        sizes="160px"
+                        className="object-cover"
+                        unoptimized={src.startsWith("http")}
+                      />
+                      <span className="absolute top-1.5 left-1.5 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white shadow-sm">
+                        Cover
+                      </span>
+                      <button
                         type="button"
-                        size="sm"
-                        variant="outline"
+                        className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10 transition hover:bg-red-50 hover:text-red-600"
+                        aria-label="Remove photo"
                         onClick={() =>
                           setDraft((current) => ({
                             ...current,
-                            images: [
-                              src,
-                              ...current.images.filter((item) => item !== src),
-                            ],
+                            images: [],
                           }))
                         }
                       >
-                        Use {index + 2} as cover
-                      </Button>
-                    ))}
-                  </div>
-                ) : null}
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : (
-              <p className="mt-3 text-sm text-muted-foreground">No photos yet.</p>
+              <p className="mt-3 text-sm text-muted-foreground">No photo yet.</p>
             )}
           </section>
 

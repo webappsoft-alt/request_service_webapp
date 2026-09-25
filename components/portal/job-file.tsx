@@ -605,6 +605,7 @@ export function JobMaterialsTab({
   locked: propLocked,
   onSave,
   preferApi = false,
+  ready = true,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -614,6 +615,7 @@ export function JobMaterialsTab({
   locked?: boolean;
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
   preferApi?: boolean;
+  ready?: boolean;
 }) {
   const { addLog, locked: fileLocked } = useJobFile(job, estimate, invoice, technician);
   const isLocked = propLocked ?? fileLocked;
@@ -625,6 +627,7 @@ export function JobMaterialsTab({
       onMutate={preferApi ? undefined : addLog}
       onSave={onSave}
       preferApi={preferApi}
+      ready={ready}
     />
   );
 }

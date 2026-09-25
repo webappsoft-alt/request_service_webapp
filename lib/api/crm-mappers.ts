@@ -1722,11 +1722,24 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     customerPhone: trimmed(record.customerPhone) || trimmed(cust?.phone) || undefined,
     customerAvatar,
     requestId: crmIdOf(record.requestId) || undefined,
+    requestMeta: asRecord(record.requestMeta)
+      ? {
+          id: crmIdOf(asRecord(record.requestMeta)?.id) || undefined,
+          number: trimmed(asRecord(record.requestMeta)?.number) || undefined,
+          serviceName:
+            trimmed(asRecord(record.requestMeta)?.serviceName) || undefined,
+          status: trimmed(asRecord(record.requestMeta)?.status) || undefined,
+          source: trimmed(asRecord(record.requestMeta)?.source) || undefined,
+        }
+      : undefined,
     unreadForProvider: Math.max(0, numberValue(record.unreadForProvider)),
     unreadForCustomer: Math.max(0, numberValue(record.unreadForCustomer)),
     unreadForAdmin: Math.max(0, numberValue(record.unreadForAdmin)),
     isOnline: booleanValue(
-      record.isOnline ?? asRecord(record.presence)?.customer?.isOnline,
+      record.isOnline ??
+        asRecord(record.presence)?.provider?.isOnline ??
+        asRecord(record.presence)?.customer?.isOnline ??
+        record.supportOnline,
       false,
     ),
     presence: asRecord(record.presence)

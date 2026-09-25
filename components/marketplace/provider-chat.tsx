@@ -110,8 +110,8 @@ export function ProviderChat({ provider }: { provider: Provider }) {
       try {
         const next = await listPublicChatThreads(guest.email, { silent: true });
         if (cancelled) return;
-        setThreads(next);
-        setThread(currentThread(next, activeProviderId || provider.id, guest.email));
+        setThreads(next.items);
+        setThread(currentThread(next.items, activeProviderId || provider.id, guest.email));
       } catch {
         if (cancelled) return;
         setThreads([]);

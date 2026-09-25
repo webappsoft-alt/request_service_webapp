@@ -177,9 +177,15 @@ export function MessagesView() {
           isTyping?: boolean;
         };
         if (payload.threadId === selected.id && payload.from !== "provider") {
-          setIsOtherTyping(Boolean(payload.isTyping));
+          const typingOn =
+            payload.isTyping === false ||
+            payload.isTyping === 0 ||
+            payload.isTyping === "false"
+              ? false
+              : Boolean(payload.isTyping ?? true);
+          setIsOtherTyping(typingOn);
           clearTimeout(timer);
-          if (payload.isTyping) {
+          if (typingOn) {
             timer = setTimeout(() => setIsOtherTyping(false), 3500);
           }
         }
@@ -203,11 +209,13 @@ export function MessagesView() {
     : undefined;
   const isParticipantOnline =
     selected?.id === ADMIN_DIRECT_THREAD_ID
-      ? supportOnline || Boolean(selected?.isOnline)
-      : participantPresence?.isOnline ??
-        selected?.presence?.customer?.isOnline ??
-        selected?.isOnline ??
-        false;
+      ? Boolean(supportOnline || selected?.isOnline)
+      : Boolean(
+          participantPresence?.isOnline ??
+            selected?.presence?.customer?.isOnline ??
+            selected?.isOnline ??
+            false,
+        );
 
   const unreadCount = useMemo(
     () => threads.filter((item) => item.unreadForProvider > 0).length,
@@ -341,11 +349,13 @@ export function MessagesView() {
                     : undefined;
                   const isCustomerOnline =
                     thread.id === ADMIN_DIRECT_THREAD_ID
-                      ? supportOnline || Boolean(thread.isOnline)
-                      : customerPresence?.isOnline ??
-                        thread.presence?.customer?.isOnline ??
-                        thread.isOnline ??
-                        false;
+                      ? Boolean(supportOnline || thread.isOnline)
+                      : Boolean(
+                          customerPresence?.isOnline ??
+                            thread.presence?.customer?.isOnline ??
+                            thread.isOnline ??
+                            false,
+                        );
 
                   return (
                     <Link

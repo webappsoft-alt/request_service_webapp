@@ -28,9 +28,9 @@ import { customerPaths } from "@/lib/customer-paths";
 import { getAllProviders } from "@/lib/data/providers";
 import {
   listPublicChatThreads,
+  fetchPublicChatThread,
   markPublicChatRead,
   sendPublicChatMessage,
-  fetchAdminDirectChatForPeer,
   sendAdminDirectChatMessage,
   markAdminDirectChatReadForPeer,
   ADMIN_DIRECT_THREAD_ID,
@@ -102,7 +102,13 @@ async function enrichThreadsWithProviderNames(threads: ChatThread[]): Promise<Ch
   const missingIds = [
     ...new Set(
       threads
-        .filter((thread) => !String(thread.providerName || "").trim() && thread.providerId)
+        .filter(
+          (thread) =>
+            !String(thread.providerName || "").trim() &&
+            thread.providerId &&
+            thread.id !== ADMIN_DIRECT_THREAD_ID &&
+            /^[0-9a-fA-F]{24}$/.test(thread.providerId),
+        )
         .map((thread) => thread.providerId),
     ),
   ];
@@ -225,6 +231,9 @@ export function CustomerMessagesView({
   } = useRealtime();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [listPage, setListPage] = useState(1);
+  const [listHasMore, setListHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -254,28 +263,34 @@ export function CustomerMessagesView({
   }, [auth.hydrated, isAuthenticated, router]);
 
   const loadThreads = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (options?: { silent?: boolean; page?: number; append?: boolean }) => {
       if (!listingEmail) {
         setThreads([]);
         setLoading(false);
         setError(null);
         return;
       }
-      if (!options?.silent) setLoading(true);
+      const page = options?.page ?? 1;
+      if (!options?.silent && !options?.append) setLoading(true);
+      if (options?.append) setLoadingMore(true);
       try {
-        const [next, adminChat] = await Promise.all([
-          listPublicChatThreads(listingEmail, {
-            silent: options?.silent ?? true,
-          }),
-          fetchAdminDirectChatForPeer("customer", {
-            silent: options?.silent ?? true,
-          }).catch(() => null),
-        ]);
-        const enriched = await enrichThreadsWithProviderNames(next);
-        const merged = adminChat
-          ? [adminChat, ...enriched.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID)]
-          : enriched;
-        setThreads(merged);
+        // List API now includes Platform Support on page 1 by default
+        const result = await listPublicChatThreads(listingEmail, {
+          silent: options?.silent ?? true,
+          page,
+          limit: 10,
+        });
+        const enriched = await enrichThreadsWithProviderNames(result.items);
+        setThreads((prev) => {
+          if (options?.append) {
+            const seen = new Set(prev.map((t) => t.id));
+            return [...prev, ...enriched.filter((t) => !seen.has(t.id))];
+          }
+          return enriched;
+        });
+        setListPage(page);
+        const pages = result.pagination?.pages || 1;
+        setListHasMore(page < pages);
         setError(null);
       } catch (err) {
         const message =
@@ -286,6 +301,7 @@ export function CustomerMessagesView({
         }
       } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
     },
     [listingEmail],
@@ -496,6 +512,28 @@ export function CustomerMessagesView({
 
   viewingThreadIdRef.current = selected?.id ?? null;
 
+  // When a specific chat is active (URL), fetch full thread by id only (auth token)
+  useEffect(() => {
+    if (!selectedId || !isAuthenticated) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await fetchPublicChatThread(selectedId, {
+          silent: true,
+          limit: 50,
+        });
+        if (cancelled || !detail) return;
+        const [enriched] = await enrichThreadsWithProviderNames([detail]);
+        setThreads((current) => upsertThread(current, enriched || detail));
+      } catch {
+        // Keep list preview if detail fetch fails
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, isAuthenticated]);
+
   useEffect(() => {
     if (selectedId) {
       setMobileChatOpen(true);
@@ -540,24 +578,37 @@ export function CustomerMessagesView({
     );
   }, [listingEmail, selected?.id, selected?.messages?.length, selected?.unreadForCustomer, markThreadRead]);
 
-  // Query presence only when the set of provider IDs changes — not on every message.
-  // Using a stable string key prevents re-querying on every socket-driven state update.
+  // Query presence by User ids (providerUserId), not Provider document ids
   const presenceIdsKey = useMemo(() => {
     const ids = Array.from(
       new Set(
         threads
-          .map((t) => t.providerId)
+          .map((t) => t.providerUserId)
           .filter((id): id is string => Boolean(id && /^[0-9a-fA-F]{24}$/.test(id))),
       ),
     ).sort();
-    return ids.join(',');
+    return ids.join(",");
   }, [threads]);
 
   useEffect(() => {
     if (!presenceIdsKey) return;
-    queryUserPresence(presenceIdsKey.split(','));
+    queryUserPresence(presenceIdsKey.split(","));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presenceIdsKey]);
+
+  function isCounterpartOnline(thread: ChatThread | null | undefined): boolean {
+    if (!thread) return false;
+    if (thread.id === ADMIN_DIRECT_THREAD_ID) {
+      return Boolean(supportOnline || thread.isOnline);
+    }
+    if (thread.providerUserId) {
+      const live = getPresence(thread.providerUserId)?.isOnline;
+      if (typeof live === "boolean") return live;
+    }
+    return Boolean(
+      thread.presence?.provider?.isOnline ?? thread.isOnline ?? false,
+    );
+  }
 
   // Real-time typing listener for active customer thread
   useEffect(() => {
@@ -573,9 +624,15 @@ export function CustomerMessagesView({
           isTyping?: boolean;
         };
         if (payload.threadId === selected.id && payload.from !== "customer") {
-          setIsOtherTyping(Boolean(payload.isTyping));
+          const typingOn =
+            payload.isTyping === false ||
+            payload.isTyping === 0 ||
+            payload.isTyping === "false"
+              ? false
+              : Boolean(payload.isTyping ?? true);
+          setIsOtherTyping(typingOn);
           clearTimeout(timer);
-          if (payload.isTyping) {
+          if (typingOn) {
             timer = setTimeout(() => setIsOtherTyping(false), 3500);
           }
         }
@@ -774,12 +831,7 @@ export function CustomerMessagesView({
                   const last = thread.messages.at(-1);
                   const lastTime = formatThreadTime(last?.at || thread.updatedAt);
                   const hasUnread = (thread.unreadForCustomer || 0) > 0;
-                  const isProvOnline =
-                    thread.id === ADMIN_DIRECT_THREAD_ID
-                      ? supportOnline || Boolean(thread.isOnline)
-                      : (thread.providerId ? getPresence(thread.providerId)?.isOnline : undefined) ??
-                        thread.isOnline ??
-                        false;
+                  const isProvOnline = isCounterpartOnline(thread);
 
                   return (
                     <Link
@@ -836,12 +888,20 @@ export function CustomerMessagesView({
                           </span>
                         </div>
 
-                        {/* Middle row: Lead chip & unread pill */}
+                        {/* Middle row: lead/quote meta under provider name — never replace the name */}
                         <div className="flex items-center justify-between gap-1">
-                          <div className="flex items-center gap-1.5 truncate">
-                            {thread.requestId ? (
-                              <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.2 text-[10px] font-medium text-[#003F7D] dark:bg-blue-950/60 dark:text-blue-300">
-                                Quote Request
+                          <div className="flex min-w-0 items-center gap-1.5 truncate">
+                            {thread.requestMeta?.number ||
+                            thread.requestMeta?.serviceName ||
+                            thread.requestId ? (
+                              <span className="inline-flex max-w-full items-center truncate rounded bg-blue-50 px-1.5 py-0.2 text-[10px] font-medium text-[#003F7D] dark:bg-blue-950/60 dark:text-blue-300">
+                                {[
+                                  thread.requestMeta?.number,
+                                  thread.requestMeta?.serviceName ||
+                                    (thread.requestId ? "Quote request" : null),
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
                               </span>
                             ) : null}
                           </div>
@@ -906,6 +966,26 @@ export function CustomerMessagesView({
                   ) : null}
                 </div>
               )}
+              {listHasMore && !query ? (
+                <div className="p-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    disabled={loadingMore}
+                    onClick={() =>
+                      void loadThreads({
+                        silent: true,
+                        page: listPage + 1,
+                        append: true,
+                      })
+                    }
+                  >
+                    {loadingMore ? "Loading…" : "Load more chats"}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </aside>
 
@@ -952,26 +1032,12 @@ export function CustomerMessagesView({
                       <span
                         className={cn(
                           "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
-                          (
-                            selected.id === ADMIN_DIRECT_THREAD_ID
-                              ? supportOnline || Boolean(selected.isOnline)
-                              : selected.providerId
-                                ? getPresence(selected.providerId)?.isOnline
-                                : selected.isOnline
-                          )
+                          isCounterpartOnline(selected)
                             ? "bg-emerald-500"
                             : "bg-muted-foreground/30",
                         )}
                         aria-label={
-                          (
-                            selected.id === ADMIN_DIRECT_THREAD_ID
-                              ? supportOnline || Boolean(selected.isOnline)
-                              : selected.providerId
-                                ? getPresence(selected.providerId)?.isOnline
-                                : selected.isOnline
-                          )
-                            ? "Online"
-                            : "Offline"
+                          isCounterpartOnline(selected) ? "Online" : "Offline"
                         }
                       />
                     </div>
@@ -982,13 +1048,7 @@ export function CustomerMessagesView({
                         <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">
                           {selectedProvider.name}
                         </h2>
-                        {(
-                          selected.id === ADMIN_DIRECT_THREAD_ID
-                            ? supportOnline || Boolean(selected.isOnline)
-                            : selected.providerId
-                              ? getPresence(selected.providerId)?.isOnline
-                              : selected.isOnline
-                        ) ? (
+                        {isCounterpartOnline(selected) ? (
                           <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 sm:inline-flex">
                             <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
                             Online
@@ -997,8 +1057,17 @@ export function CustomerMessagesView({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                        {selected.requestId ? (
-                          <span>Quote request</span>
+                        {selected.requestMeta?.number ||
+                        selected.requestMeta?.serviceName ||
+                        selected.requestId ? (
+                          <span className="truncate">
+                            {[
+                              selected.requestMeta?.number,
+                              selected.requestMeta?.serviceName || "Quote request",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
                         ) : (
                           <span>Messages</span>
                         )}

@@ -293,7 +293,11 @@ export function emitChatTyping(
   from?: "customer" | "provider" | "admin",
 ) {
   if (!sharedSocket || !threadId) return;
-  sharedSocket.emit("chat:typing", { threadId, isTyping, ...(from ? { from } : {}) });
+  sharedSocket.emit("chat:typing", {
+    threadId: String(threadId),
+    isTyping: Boolean(isTyping),
+    ...(from ? { from } : {}),
+  });
 }
 
 export function emitChatMarkRead(threadId: string) {

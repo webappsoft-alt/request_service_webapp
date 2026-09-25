@@ -235,6 +235,7 @@ export const publicQuoteApi = {
 
 export const chatApi = {
   publicThreads: "public/chats",
+  publicThread: (id: string) => `public/chats/${id}`,
   publicMessages: (id: string) => `public/chats/${id}/messages`,
   publicRead: (id: string) => `public/chats/${id}/read`,
   providerThreads: providerCrmApi.chats,

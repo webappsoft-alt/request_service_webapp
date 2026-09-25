@@ -37,6 +37,13 @@ export type ChatThread = {
   customerPhone?: string;
   customerAvatar?: string;
   requestId?: string;
+  requestMeta?: {
+    id?: string;
+    number?: string;
+    serviceName?: string;
+    status?: string;
+    source?: string;
+  };
   unreadForProvider: number;
   unreadForCustomer: number;
   unreadForAdmin?: number;

@@ -605,6 +605,10 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     id,
     number: trimmed(record.number) || `REQ-${id.slice(-4).toUpperCase()}`,
     customerId: crmIdOf(record.customerId) || undefined,
+    customerUserId:
+      crmIdOf(record.customerUserId) ||
+      crmIdOf(asRecord(record.customerId)?.userId) ||
+      undefined,
     providerId: crmIdOf(record.providerId) || undefined,
     categoryId: crmIdOf(record.categoryId) || trimmed(record.categoryId),
     channel: trimmed(record.channel) === "marketplace" ? "marketplace" : "direct",
@@ -1737,8 +1741,8 @@ export function mapChatThread(raw: unknown): ChatThread | null {
     unreadForAdmin: Math.max(0, numberValue(record.unreadForAdmin)),
     isOnline: booleanValue(
       record.isOnline ??
-        asRecord(record.presence)?.provider?.isOnline ??
-        asRecord(record.presence)?.customer?.isOnline ??
+        asRecord(asRecord(record.presence)?.provider)?.isOnline ??
+        asRecord(asRecord(record.presence)?.customer)?.isOnline ??
         record.supportOnline,
       false,
     ),

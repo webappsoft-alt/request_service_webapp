@@ -55,6 +55,8 @@ export type PortalRequest = ServiceRequest & {
   unreadMessagesCount?: number;
   hasActiveChat?: boolean;
   photos?: string[];
+  /** Auth user id for the customer (presence / typing), not the CRM customer id. */
+  customerUserId?: string;
 };
 
 export type ServiceAvailabilityMode = "office" | "custom";

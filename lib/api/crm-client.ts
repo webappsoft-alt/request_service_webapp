@@ -243,7 +243,8 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
       const quantity = Math.max(minQuantity, Number(item.quantity) || 1);
       const unitPrice = Math.max(0, Number(item.unitPrice) || 0);
       const taxRate = Math.max(0, Number(item.taxRate) || 0);
-      const isMaterial = item.type === "materials" || item.type === "material";
+      const itemType = String(item.type);
+      const isMaterial = itemType === "materials" || itemType === "material";
       const images = isMaterial
         ? (Array.isArray(item.images) ? item.images : [])
             .map((src) => String(src || "").trim())

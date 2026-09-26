@@ -174,7 +174,7 @@ export function MessagesView() {
         const payload = detail.payload as {
           threadId?: string;
           from?: string;
-          isTyping?: boolean;
+          isTyping?: boolean | number | string;
         };
         if (payload.threadId === selected.id && payload.from !== "provider") {
           const typingOn =

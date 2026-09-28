@@ -10,7 +10,7 @@ export function ModuleSubnav({ items }: { items: { href: string; label: string; 
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-wrap gap-x-5 border-b border-input bg-card px-4">
+    <div className="flex flex-wrap gap-x-6 border-b border-input bg-card px-4">
       {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
@@ -18,8 +18,10 @@ export function ModuleSubnav({ items }: { items: { href: string; label: string; 
             key={item.href}
             href={item.href}
             className={cn(
-              "-mb-px inline-flex items-center gap-1.5 border-b-2 py-2.5 text-sm font-medium",
-              active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+              "-mb-px inline-flex items-center gap-1.5 border-b-2 py-2.5 text-sm transition-colors",
+              active
+                ? "border-primary font-semibold text-primary"
+                : "border-transparent font-medium text-muted-foreground hover:text-foreground",
             )}
           >
             {item.label}

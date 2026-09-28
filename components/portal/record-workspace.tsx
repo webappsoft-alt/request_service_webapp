@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useOpenRecords } from "@/components/portal/use-open-records";
 import { Button } from "@/components/ui/button";
@@ -10,14 +9,21 @@ import { cn } from "@/lib/utils";
 export type RecordTab = {
   id: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: React.ComponentType<{ className?: string }>;
 };
 
+/**
+ * Simpro-style record chrome.
+ * When `subnav` returns content for the active tab, it renders as a full-width
+ * secondary bar flush under the folder tab (no gap, no radius, edge-to-edge).
+ */
 export function RecordWorkspace({
   href,
   label,
   kind,
   tabs,
+  subnavTabs = [],
+  subnav,
   actions,
   badge,
   notice,
@@ -27,6 +33,10 @@ export function RecordWorkspace({
   label: string;
   kind: string;
   tabs: RecordTab[];
+  /** Tab ids that show a nested filter bar under the folder tab. */
+  subnavTabs?: string[];
+  /** Nested filters / actions for tabs in `subnavTabs` (All / Open / Create…). */
+  subnav?: (tab: string) => ReactNode;
   actions?: ReactNode;
   badge?: ReactNode;
   notice?: ReactNode;
@@ -37,6 +47,8 @@ export function RecordWorkspace({
   const searchParams = useSearchParams();
   const { openRecord } = useOpenRecords();
   const tab = searchParams.get("tab") ?? tabs[0]?.id ?? "profile";
+  const hasSubnav = subnavTabs.includes(tab);
+  const subnavNode = hasSubnav && subnav ? subnav(tab) : null;
 
   useEffect(() => {
     openRecord({ href, label, kind });
@@ -51,41 +63,52 @@ export function RecordWorkspace({
   }
 
   return (
-    <div className="border border-input bg-card">
-      <div className="flex flex-col gap-3 border-b border-input px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-lg font-semibold tracking-tight">{label}</h1>
+    <div className="bg-card">
+      <div className="flex flex-col gap-2 border-b border-border-soft px-4 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">{label}</h1>
           {badge}
         </div>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      <div data-record-tabs className="bg-[#eef1f5] px-3 pt-2">
-        <div className="flex flex-wrap gap-1">
-          {tabs.map((item) => {
-            const Icon = item.icon;
-            const active = tab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                data-tab-id={item.id}
-                onClick={() => setTab(item.id)}
-                className={cn(
-                  "cursor-pointer inline-flex items-center gap-1.5 rounded-t-md border px-3 py-2 text-[13px] font-medium",
-                  active
-                    ? "-mb-px border-input border-b-card bg-card text-primary shadow-[0_-1px_0_#003F7D]"
-                    : "border-transparent text-muted-foreground hover:bg-white/70 hover:text-foreground",
-                )}
-              >
-                {Icon ? <Icon className="size-3.5" aria-hidden="true" /> : null}
-                {item.label}
-              </button>
-            );
-          })}
+
+      {/* Folder tabs + optional flush subnav — one attached block */}
+      <div className={cn(hasSubnav && subnavNode ? "bg-secondary" : undefined)}>
+        <div className={cn("px-4 pt-1 pb-0", hasSubnav && subnavNode ? "bg-card" : "bg-card")}>
+          <div className="flex flex-wrap items-end gap-0.5">
+            {tabs.map((item) => {
+              const active = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-tab-id={item.id}
+                  onClick={() => setTab(item.id)}
+                  className={cn(
+                    "cursor-pointer px-3 py-2 text-sm transition-colors",
+                    active
+                      ? hasSubnav && subnavNode
+                        ? "-mb-px rounded-t-md bg-secondary font-bold text-foreground"
+                        : "rounded-md bg-secondary font-bold text-foreground"
+                      : "font-medium text-primary hover:underline",
+                  )}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {subnavNode ? (
+          <div className="flex w-full items-center rounded-none bg-secondary py-2 pl-7 pr-4">
+            {subnavNode}
+          </div>
+        ) : null}
       </div>
-      <div className="border-t border-input bg-card p-4">
-        {notice ? <div className="mb-4">{notice}</div> : null}
+
+      <div className={cn("bg-card px-4", hasSubnav && subnavNode ? "py-3" : "pt-1.5 pb-3")}>
+        {notice ? <div className="mb-2">{notice}</div> : null}
         {children(tab)}
       </div>
     </div>

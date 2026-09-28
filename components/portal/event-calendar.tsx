@@ -411,20 +411,21 @@ export function EventCalendar({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-0">
+      <div className="-mx-4 flex flex-wrap items-center gap-2 border-y border-border-soft bg-secondary px-4 py-2">
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" aria-label="Previous" onClick={() => shiftView(-1)}>
+          <Button variant="outline" size="icon" className="size-8 border-border-soft bg-card" aria-label="Previous" onClick={() => shiftView(-1)}>
             <ChevronLeft />
           </Button>
           <p className="min-w-52 text-center text-sm font-semibold">{heading()}</p>
-          <Button variant="outline" size="icon" aria-label="Next" onClick={() => shiftView(1)}>
+          <Button variant="outline" size="icon" className="size-8 border-border-soft bg-card" aria-label="Next" onClick={() => shiftView(1)}>
             <ChevronRight />
           </Button>
         </div>
         <Button
           variant="ghost"
           size="sm"
+          className="h-8"
           onClick={() => {
             const date = new Date();
             setCursor({ year: date.getFullYear(), month: date.getMonth() });
@@ -433,14 +434,14 @@ export function EventCalendar({
         >
           Today
         </Button>
-        <div className="inline-flex overflow-hidden rounded-md border border-input">
+        <div className="inline-flex h-8 overflow-hidden rounded-md border border-border-soft bg-card">
           {VIEWS.map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => setView(item)}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium capitalize",
+                "px-3 text-xs font-medium capitalize leading-none",
                 view === item ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary",
               )}
             >
@@ -462,7 +463,7 @@ export function EventCalendar({
             );
           }}
         >
-          <SelectTrigger size="sm" className="w-40">
+          <SelectTrigger size="sm" className="h-8 w-40 border-border-soft bg-card">
             <SelectValue placeholder="All work" />
           </SelectTrigger>
           <SelectContent position="popper" align="end">
@@ -479,7 +480,7 @@ export function EventCalendar({
             value={employeeFilter || "__all__"}
             onValueChange={(value) => setEmployeeFilter(value === "__all__" ? "" : value)}
           >
-            <SelectTrigger size="sm" className="w-52">
+            <SelectTrigger size="sm" className="h-8 w-52 border-border-soft bg-card">
               <SelectValue placeholder="Everyone" />
             </SelectTrigger>
             <SelectContent position="popper" align="end">
@@ -495,7 +496,7 @@ export function EventCalendar({
         {toolbar}
       </div>
 
-      <div className="flex flex-wrap gap-2 text-[11px]">
+      <div className="flex flex-wrap gap-2 py-2 text-[11px]">
         {KINDS.map((kind) => {
           const active = kindFilter === kind;
           return (
@@ -546,8 +547,8 @@ export function EventCalendar({
           />
         )}
 
-        <aside className="border border-input bg-card">
-          <div className="border-b border-input px-4 py-3">
+        <aside className="border border-border-soft bg-card">
+          <div className="border-b border-border-soft px-4 py-3">
             <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Day roster</p>
             <h2 className="mt-1 text-sm font-semibold">{formatDate(selectedDay)}</h2>
             <p className="text-xs text-muted-foreground">{dayEvents.length ? `${dayEvents.length} booked` : "Free"}</p>
@@ -589,7 +590,7 @@ export function EventCalendar({
             )}
           </div>
           <div
-            className="border-t border-input px-4 py-3"
+            className="border-t border-border-soft px-4 py-3"
             onDragOver={(drag) => drag.preventDefault()}
             onDrop={(drag) => {
               drag.preventDefault();
@@ -635,8 +636,8 @@ function MonthGrid({
   onOpen?: (event: PortalCalendarEvent) => void;
 }) {
   return (
-    <div className="overflow-hidden border border-input bg-card">
-      <div className="grid grid-cols-7 border-b border-input bg-[#f7f8fa]">
+    <div className="overflow-hidden border border-border-soft bg-card">
+      <div className="grid grid-cols-7 border-b border-border-soft bg-[#f7f8fa]">
         {WEEKDAYS.map((day) => (
           <p key={day} className="px-2 py-2 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
             {day}
@@ -655,7 +656,7 @@ function MonthGrid({
             onDragLeave={() => onOver(null)}
             onDrop={(drag) => onDrop(cell.iso, drag)}
             className={cn(
-              "min-h-28 border-b border-r border-input p-1.5 last:border-r-0",
+              "min-h-28 border-b border-r border-border-soft p-1.5 last:border-r-0",
               !cell.inMonth && "bg-[#f7f8fa] text-muted-foreground",
               selectedDay === cell.iso && "bg-secondary/50",
               overDay === cell.iso && "bg-primary/10",
@@ -739,8 +740,8 @@ function TimeGrid({
   }, [events, days]);
 
   return (
-    <div className="border border-input bg-card">
-      <div className={cn("grid border-b border-input bg-[#f7f8fa]", columns)}>
+    <div className="border border-border-soft bg-card">
+      <div className={cn("grid border-b border-border-soft bg-[#f7f8fa]", columns)}>
         <div />
         {days.map((iso) => (
           <button
@@ -758,14 +759,14 @@ function TimeGrid({
         ))}
       </div>
 
-      <div className={cn("grid border-b border-input", columns)}>
+      <div className={cn("grid border-b border-border-soft", columns)}>
         <p className="flex items-center justify-end px-2 py-1 text-[10px] text-muted-foreground">All day</p>
         {days.map((iso) => {
           const allDay = events.filter((item) => eventCovers(item, iso) && isAllDay(item));
           return (
             <div
               key={iso}
-              className="min-h-10 space-y-1 border-l border-input p-1"
+              className="min-h-10 space-y-1 border-l border-border-soft p-1"
               onDragOver={(drag) => drag.preventDefault()}
               onDrop={(drag) => onDropSlot(iso, DAY_START, drag)}
             >
@@ -779,7 +780,7 @@ function TimeGrid({
 
       <div className="max-h-[42rem] overflow-auto" ref={scrollRef}>
         <div className={cn("grid", columns)}>
-          <div className="relative border-r border-input" style={{ height }}>
+          <div className="relative border-r border-border-soft" style={{ height }}>
             {SLOTS.filter((slot) => slot % 60 === 0).map((slot) => (
               <p
                 key={slot}
@@ -823,7 +824,7 @@ function TimeGrid({
               {days.map((iso) => (
                 <div
                   key={iso}
-                  className="relative border-r border-input last:border-r-0"
+                  className="relative border-r border-border-soft last:border-r-0"
                   style={{ height }}
                 >
                   {SLOTS.map((slot) => (
@@ -842,8 +843,8 @@ function TimeGrid({
                       className={cn(
                         "absolute inset-x-0 border-t",
                         slot % 60 === 0
-                          ? "border-input"
-                          : "border-dashed border-input",
+                          ? "border-border-soft"
+                          : "border-dashed border-border-soft",
                         hover?.iso === iso && hover.slot === slot && "bg-primary/10",
                       )}
                       style={{

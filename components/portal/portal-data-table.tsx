@@ -226,7 +226,7 @@ export function PortalDataTable<T>({
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-h-8 flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-72">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -241,25 +241,28 @@ export function PortalDataTable<T>({
                 setPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="h-8.5 pl-8 text-xs border-input"
+              className="h-8 pl-8 text-xs border-border-soft"
             />
           </div>
-          {countLabel ? (
-            <p className="text-xs text-muted-foreground">{countLabel}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              {totalCount} {totalCount === 1 ? "record" : "records"}
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {totalCount}{" "}
+            {countLabel
+              ? totalCount === 1
+                ? countLabel.replace(/s$/i, "")
+                : countLabel
+              : totalCount === 1
+                ? "record"
+                : "records"}
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex h-8 items-center gap-2">
           {toolbar}
           <Button
             variant="outline"
             size="sm"
             onClick={exportCsv}
-            className="h-8.5 text-xs"
+            className="h-8 text-xs"
           >
             <Download className="size-3.5" />
             Export
@@ -268,7 +271,7 @@ export function PortalDataTable<T>({
       </div>
 
       {letters ? (
-        <div className="flex flex-wrap items-center gap-1 border-y border-input py-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1 border-y border-border-soft py-1.5 text-xs">
           <button
             type="button"
             onClick={() => applyLetter("")}
@@ -299,7 +302,7 @@ export function PortalDataTable<T>({
         </div>
       ) : null}
 
-      <div className="relative overflow-x-auto rounded-lg border border-input bg-card">
+      <div className="relative overflow-x-auto rounded-lg border border-border-soft bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -410,7 +413,7 @@ export function PortalDataTable<T>({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-input px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-t border-border-soft px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
           {totalCount ? `Showing ${from}–${to} of ${totalCount}` : "No results"}
         </p>

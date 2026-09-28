@@ -24,6 +24,7 @@ import {
   detectCurrentLocation,
   hasLocation,
   hydrateLocationIfEmpty,
+  locationCityZipLabel,
   locationDisplayLabel,
   clearLocation,
   setLocationFromPlace,
@@ -34,6 +35,8 @@ export function ServiceSearchForm({
   defaultZip,
   defaultLocation,
   variant = "hero",
+  /** Home hero only: show City + ZIP in the location field. */
+  locationDisplayMode = "default",
   onSearch,
   onLocationResolved,
 }: {
@@ -41,6 +44,7 @@ export function ServiceSearchForm({
   defaultZip?: string;
   defaultLocation?: string;
   variant?: "hero" | "compact";
+  locationDisplayMode?: "default" | "city-zip";
   onSearch?: (intent: SearchIntent) => void | Promise<void>;
   onLocationResolved?: (location: string, zip: string) => void;
 }) {
@@ -54,7 +58,10 @@ export function ServiceSearchForm({
   const [openList, setOpenList] = useState<"service" | null>(null);
   const [activeService, setActiveService] = useState(0);
 
-  const locationLabel = locationDisplayLabel(customerLocation);
+  const locationLabel =
+    locationDisplayMode === "city-zip"
+      ? locationCityZipLabel(customerLocation)
+      : locationDisplayLabel(customerLocation);
   const locationValue = locationLabel || customerLocation.zip || "";
   // Local draft while typing — do not write keystrokes into Redux (avoids Fixed Services refetches).
   const [locationDraft, setLocationDraft] = useState<string | null>(null);
@@ -109,7 +116,11 @@ export function ServiceSearchForm({
       latitude: place.latitude,
       longitude: place.longitude,
     };
-    onLocationResolved?.(locationDisplayLabel(next), next.zip);
+    const label =
+      locationDisplayMode === "city-zip"
+        ? locationCityZipLabel(next)
+        : locationDisplayLabel(next);
+    onLocationResolved?.(label, next.zip);
   }
 
   function chooseService(hit: ServiceMatch) {
@@ -252,6 +263,7 @@ export function ServiceSearchForm({
         placeholder="City / ZIP code"
         autoComplete="off"
         preferCityDisplay
+        preferCityZipDisplay={locationDisplayMode === "city-zip"}
         hideStatus
         aria-invalid={Boolean(error)}
         inputClassName={cn(

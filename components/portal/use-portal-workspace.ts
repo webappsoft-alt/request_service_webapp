@@ -12,7 +12,7 @@ import {
 } from "@/store/authSlice";
 import { fetchServiceAreasPicker } from "@/store/serviceAreasSlice";
 import type { DemoSession } from "@/lib/auth/demo-session";
-import { coverageNeighborhoodLabels } from "@/lib/coverage-areas";
+import { coverageNeighborhoodLabels, formatServiceAreaCoverageLabels } from "@/lib/coverage-areas";
 import type { PortalActivity, PortalRevenuePoint } from "@/lib/data/portal";
 import { getPortalWorkspace } from "@/lib/data/portal";
 import { getActivePlans } from "@/lib/data/plans";
@@ -211,9 +211,9 @@ export function usePortalWorkspace() {
   }, [dispatch, isProvider]);
 
   const areasById = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, string[]>();
     for (const area of [...listItems, ...pickerItems]) {
-      if (area?.id && area.title) map.set(area.id, area.title);
+      if (area?.id) map.set(area.id, formatServiceAreaCoverageLabels(area));
     }
     return map;
   }, [listItems, pickerItems]);

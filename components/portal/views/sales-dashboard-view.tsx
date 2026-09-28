@@ -1,14 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CreateEstimateDialog, CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
-import { BoardCard, DateStamp, StatCell, dashboardGreeting } from "@/components/portal/dashboard-widgets";
+import {
+  BoardCard,
+  DashboardSection,
+  DateStamp,
+  StatCell,
+  dashboardGreeting,
+  initials,
+} from "@/components/portal/dashboard-widgets";
 import { PortalPage } from "@/components/portal/portal-page";
-import { StatusPill, moneyTone } from "@/components/portal/status-pill";
+import { StatusPill, moneyTone, requestTone } from "@/components/portal/status-pill";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
-import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
@@ -24,19 +31,14 @@ import {
   jobServiceLabel,
   jobTotal,
   paymentNumber,
+  requestStatusLabel,
 } from "@/lib/data/portal";
 import { formatMoney } from "@/lib/format";
-import type { Job } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 type SalesScale = "month" | "year";
 
 const DONUT_COLORS = ["#003F7D", "#3d6b9a", "#5b8fa8", "#8aa8bc", "#c5d2dc"];
 const RING = 2 * Math.PI * 54;
-
-function jobIsActive(job: Job) {
-  return job.status !== "completed" && job.status !== "invoiced" && job.status !== "paid" && job.status !== "cancelled";
-}
 
 function monthBuckets(today: Date, count = 12) {
   return Array.from({ length: count }, (_, index) => {
@@ -60,9 +62,9 @@ function bucketKey(value: string, scale: SalesScale) {
 }
 
 export function SalesDashboardView() {
+  const crm = useCrmApiData();
   const { provider, requests, estimates, invoices, payments, jobs } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
-  const { events } = usePortalCrew();
   const records = usePortalRecords();
   const [scale, setScale] = useState<SalesScale>("month");
   const [leadOpen, setLeadOpen] = useState(false);
@@ -72,19 +74,27 @@ export function SalesDashboardView() {
   const month = today.getMonth();
   const firstName = provider.contact?.name?.split(" ")[0] ?? "there";
 
+  useEffect(() => {
+    if (!crm.enabled) return;
+    void crm.ensureLoaded();
+  }, [crm.enabled, crm.ensureLoaded]);
+
   const allRequests = records.listed("request", records.mergeRequests(requests), false);
   const allEstimates = records.listed("estimate", records.mergeEstimates(estimates), false);
   const allInvoices = records.listed("invoice", records.mergeInvoices(invoices), false);
   const allPayments = records.listed("payment", records.mergePayments(payments), false);
   const allJobs = records.listed("job", records.mergeJobs(jobs), false);
 
-  const overdue = allInvoices.filter((item) => item.status === "overdue" || invoiceDaysOverdue(item) > 0);
+  const openLeads = allRequests.filter(
+    (item) =>
+      item.status !== "declined" &&
+      item.status !== "closed" &&
+      item.status !== "converted_to_job",
+  );
+  const overdue = allInvoices.filter(
+    (item) => item.status === "overdue" || invoiceDaysOverdue(item) > 0,
+  );
   const uninvoiced = allJobs.filter((job) => job.status === "completed");
-  const unassigned = allJobs.filter((job) => {
-    if (!jobIsActive(job)) return false;
-    const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
-    return !job.assignedTo && !event?.employeeId;
-  });
   const awaitingSignature = allEstimates.filter((item) => item.status === "sent");
 
   const points = useMemo(() => {
@@ -126,116 +136,69 @@ export function SalesDashboardView() {
       description={`${formatLongDate(today)} · Estimates, invoices, and money in`}
       actions={<DashboardSwitcher />}
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCell
-          label="Overdue invoices"
-          value={String(overdue.length)}
-          note={`${formatMoney(overdue.reduce((sum, item) => sum + item.balanceDue, 0))} past due`}
-          href="/pro/dashboard/invoices?status=overdue"
-        />
-        <StatCell
-          label="Uninvoiced completed jobs"
-          value={String(uninvoiced.length)}
-          note="Finished work still waiting on an invoice"
-          href="/pro/dashboard/jobs?status=completed"
-        />
-        <StatCell
-          label="Jobs with no team member"
-          value={String(unassigned.length)}
-          note="Active jobs still unassigned"
-          href="/pro/dashboard/jobs?status=unscheduled"
-        />
-        <StatCell
-          label="Estimates awaiting signature"
-          value={String(awaitingSignature.length)}
-          note={`${formatMoney(awaitingSignature.reduce((sum, item) => sum + item.total, 0))} out`}
-          href="/pro/dashboard/estimates?status=sent"
-        />
-      </div>
+      <DashboardSection
+        title="Needs attention"
+        description="Sales items that need a follow-up."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <StatCell
+            label="Overdue invoices"
+            value={String(overdue.length)}
+            note={`${formatMoney(overdue.reduce((sum, item) => sum + item.balanceDue, 0))} past due`}
+            href="/pro/dashboard/invoices?status=overdue"
+          />
+          <StatCell
+            label="Uninvoiced completed jobs"
+            value={String(uninvoiced.length)}
+            note="Finished work still waiting on an invoice"
+            href="/pro/dashboard/jobs?status=completed"
+          />
+          <StatCell
+            label="Estimates awaiting signature"
+            value={String(awaitingSignature.length)}
+            note={`${formatMoney(awaitingSignature.reduce((sum, item) => sum + item.total, 0))} out`}
+            href="/pro/dashboard/estimates?status=sent"
+          />
+        </div>
+      </DashboardSection>
 
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-        <Card className="border-input">
-          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {scale === "year" ? "Sales by year" : "Sales by month"}
-              </CardTitle>
-              <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{formatMoney(collectedTotal)}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Collected · billed {formatMoney(billedTotal)}
-              </p>
-            </div>
-            <LocalFilterTabs
-              value={scale}
-              onChange={(next) => setScale(next as SalesScale)}
-              options={[
-                { value: "month", label: "Monthly" },
-                { value: "year", label: "Yearly" },
-              ]}
-            />
-          </CardHeader>
-          <CardContent>
-            <div className="mb-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 rounded-sm bg-primary/20" />
-                Billed
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 rounded-sm bg-primary" />
-                Collected
-              </span>
-            </div>
-            <div
-              className="grid items-end gap-3"
-              style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
-            >
-              {points.map((point) => (
-                <div key={point.key} className="flex flex-col items-center gap-2">
-                  <div className="flex h-36 w-full items-end justify-center gap-1">
-                    <div
-                      className="w-1/2 rounded-sm bg-primary/15"
-                      style={{ height: `${Math.max(4, (point.billed / maxBar) * 144)}px` }}
-                      title={`Billed ${formatMoney(point.billed)}`}
-                    />
-                    <div
-                      className="w-1/2 rounded-sm bg-primary"
-                      style={{ height: `${Math.max(4, (point.collected / maxBar) * 144)}px` }}
-                      title={`Collected ${formatMoney(point.collected)}`}
+      <DashboardSection title="Leads" description="Open requests in the sales pipeline.">
+        <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)]">
+          <StatCell
+            label="Open leads"
+            value={String(openLeads.length)}
+            note="Not declined, closed, or converted"
+            href="/pro/dashboard/requests"
+          />
+          <BoardCard title="Latest leads" href="/pro/dashboard/requests" hrefLabel="All leads">
+            {openLeads.slice(0, 5).map((request) => (
+              <Link
+                key={request.id}
+                href={`/pro/dashboard/requests/${request.id}`}
+                className="flex items-center gap-3.5 px-(--card-spacing) py-3 hover:bg-muted/40"
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold tracking-wide text-primary">
+                  {initials(request.customerName)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="truncate text-sm font-medium">{request.serviceName}</p>
+                    <StatusPill
+                      label={requestStatusLabel(request.status)}
+                      tone={requestTone(request.status)}
                     />
                   </div>
-                  <span className="text-[11px] text-muted-foreground">{point.label}</span>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {request.customerName} · {request.neighborhood}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </Link>
+            ))}
+          </BoardCard>
+        </div>
+      </DashboardSection>
 
-        <Card className="border-input">
-          <CardHeader className="gap-1">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Jobs by service</CardTitle>
-            <p className="text-3xl font-semibold tracking-tight tabular-nums">{formatMoney(mixTotal)}</p>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
-            <ServiceMixChart rows={serviceMix} total={mixTotal} />
-            <ul className="space-y-2 text-sm">
-              {serviceMix.map((item, index) => (
-                <li key={item.label} className="flex items-center justify-between gap-3">
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ background: DONUT_COLORS[index % DONUT_COLORS.length] }}
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </span>
-                  <span className="tabular-nums text-muted-foreground">{formatMoney(item.value)}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
+      <DashboardSection title="Estimates" description="Quotes sent and waiting.">
         <BoardCard title="Latest estimates" href="/pro/dashboard/estimates" hrefLabel="All estimates">
           {allEstimates.slice(0, 5).map((estimate) => (
             <Link
@@ -251,59 +214,177 @@ export function SalesDashboardView() {
                     · {estimateCustomerName(estimate, customers, allRequests)}
                   </span>
                 </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{formatMoney(estimate.total)}</p>
-              </div>
-              <StatusPill label={estimateStatusLabel(estimate.status)} className={estimateStatusTone(estimate.status)} />
-            </Link>
-          ))}
-        </BoardCard>
-
-        <BoardCard title="Latest invoices" href="/pro/dashboard/invoices" hrefLabel="All invoices">
-          {allInvoices.slice(0, 5).map((invoice) => (
-            <Link
-              key={invoice.id}
-              href={`/pro/dashboard/invoices/${invoice.id}`}
-              className="flex items-center justify-between gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {invoice.number}
-                  <span className="font-normal text-muted-foreground">
-                    {" "}
-                    · {getPortalCustomerName(provider, invoice.customerId)}
-                  </span>
-                </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Balance {formatMoney(invoice.balanceDue)}
-                  {invoiceDaysOverdue(invoice) ? ` · ${invoiceDaysOverdue(invoice)} days overdue` : ""}
+                  {formatMoney(estimate.total)}
                 </p>
               </div>
-              <StatusPill label={invoiceStatusLabel(invoice.status)} tone={moneyTone(invoice.status)} />
+              <StatusPill
+                label={estimateStatusLabel(estimate.status)}
+                className={estimateStatusTone(estimate.status)}
+              />
             </Link>
           ))}
         </BoardCard>
-      </div>
+      </DashboardSection>
 
-      <BoardCard title="Recent payments" href="/pro/dashboard/payments" hrefLabel="All payments">
-        {allPayments.slice(0, 5).map((payment) => {
-          const invoice = allInvoices.find((item) => item.id === payment.invoiceId);
-          return (
-            <Link
-              key={payment.id}
-              href={`/pro/dashboard/payments/${payment.id}`}
-              className="flex items-center gap-3.5 px-(--card-spacing) py-3 hover:bg-muted/40"
-            >
-              <DateStamp value={payment.paidAt ?? payment.createdAt} />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{paymentNumber(payment)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {invoice?.number ?? "Invoice"} · {formatMoney(payment.amount)}
+      <DashboardSection
+        title="Invoices & payments"
+        description="Billed vs collected and recent money movement."
+      >
+        <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+          <Card className="border-input">
+            <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {scale === "year" ? "Sales by year" : "Sales by month"}
+                </CardTitle>
+                <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
+                  {formatMoney(collectedTotal)}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Collected · billed {formatMoney(billedTotal)}
                 </p>
               </div>
-            </Link>
-          );
-        })}
-      </BoardCard>
+              <LocalFilterTabs
+                value={scale}
+                onChange={(next) => setScale(next as SalesScale)}
+                options={[
+                  { value: "month", label: "Monthly" },
+                  { value: "year", label: "Yearly" },
+                ]}
+              />
+            </CardHeader>
+            <CardContent>
+              <div className="mb-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-primary/20" />
+                  Billed
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-primary" />
+                  Collected
+                </span>
+              </div>
+              <div
+                className="grid items-end gap-3"
+                style={{
+                  gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))`,
+                }}
+              >
+                {points.map((point) => (
+                  <div key={point.key} className="flex flex-col items-center gap-2">
+                    <div className="flex h-36 w-full items-end justify-center gap-1">
+                      <div
+                        className="w-1/2 rounded-sm bg-primary/15"
+                        style={{
+                          height: `${Math.max(4, (point.billed / maxBar) * 144)}px`,
+                        }}
+                        title={`Billed ${formatMoney(point.billed)}`}
+                      />
+                      <div
+                        className="w-1/2 rounded-sm bg-primary"
+                        style={{
+                          height: `${Math.max(4, (point.collected / maxBar) * 144)}px`,
+                        }}
+                        title={`Collected ${formatMoney(point.collected)}`}
+                      />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">{point.label}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-input">
+            <CardHeader className="gap-1">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Jobs by service
+              </CardTitle>
+              <p className="text-3xl font-semibold tracking-tight tabular-nums">
+                {formatMoney(mixTotal)}
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
+              <ServiceMixChart rows={serviceMix} total={mixTotal} />
+              <ul className="space-y-2 text-sm">
+                {serviceMix.map((item, index) => (
+                  <li
+                    key={item.label}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{
+                          background: DONUT_COLORS[index % DONUT_COLORS.length],
+                        }}
+                      />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatMoney(item.value)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <BoardCard title="Latest invoices" href="/pro/dashboard/invoices" hrefLabel="All invoices">
+            {allInvoices.slice(0, 5).map((invoice) => (
+              <Link
+                key={invoice.id}
+                href={`/pro/dashboard/invoices/${invoice.id}`}
+                className="flex items-center justify-between gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {invoice.number}
+                    <span className="font-normal text-muted-foreground">
+                      {" "}
+                      · {getPortalCustomerName(provider, invoice.customerId)}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Balance {formatMoney(invoice.balanceDue)}
+                    {invoiceDaysOverdue(invoice)
+                      ? ` · ${invoiceDaysOverdue(invoice)} days overdue`
+                      : ""}
+                  </p>
+                </div>
+                <StatusPill
+                  label={invoiceStatusLabel(invoice.status)}
+                  tone={moneyTone(invoice.status)}
+                />
+              </Link>
+            ))}
+          </BoardCard>
+
+          <BoardCard title="Recent payments" href="/pro/dashboard/payments" hrefLabel="All payments">
+            {allPayments.slice(0, 5).map((payment) => {
+              const invoice = allInvoices.find((item) => item.id === payment.invoiceId);
+              return (
+                <Link
+                  key={payment.id}
+                  href={`/pro/dashboard/payments/${payment.id}`}
+                  className="flex items-center gap-3.5 px-(--card-spacing) py-3 hover:bg-muted/40"
+                >
+                  <DateStamp value={payment.paidAt ?? payment.createdAt} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{paymentNumber(payment)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {invoice?.number ?? "Invoice"} · {formatMoney(payment.amount)}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </BoardCard>
+        </div>
+      </DashboardSection>
 
       <section className="rounded-xl border border-input bg-card px-5 py-5">
         <h2 className="text-sm font-semibold">Quick actions</h2>
@@ -362,5 +443,10 @@ function ServiceMixChart({ rows, total }: { rows: { label: string; value: number
 }
 
 function formatLongDate(date: Date) {
-  return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }

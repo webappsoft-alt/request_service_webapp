@@ -1,14 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CreateJobDialog } from "@/components/portal/create-work-dialogs";
 import { CreateTaskDialog } from "@/components/portal/create-person-dialogs";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
-import { BoardCard, DateStamp, StatCell, dashboardGreeting } from "@/components/portal/dashboard-widgets";
+import {
+  BoardCard,
+  DashboardSection,
+  DateStamp,
+  StatCell,
+  dashboardGreeting,
+} from "@/components/portal/dashboard-widgets";
 import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
+import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -129,6 +136,7 @@ function bucketKey(value: string, scale: ServiceScale) {
 }
 
 export function ServiceDashboardView() {
+  const crm = useCrmApiData();
   const { provider, jobs, requests } = usePortalWorkspace();
   const { tasks } = useCrmDirectory();
   const { events, employeeLabel } = usePortalCrew();
@@ -141,6 +149,11 @@ export function ServiceDashboardView() {
   const month = today.getMonth();
   const todayKey = today.toISOString().slice(0, 10);
   const firstName = provider.contact?.name?.split(" ")[0] ?? "there";
+
+  useEffect(() => {
+    if (!crm.enabled) return;
+    void crm.ensureLoaded();
+  }, [crm.enabled, crm.ensureLoaded]);
 
   const allJobs = records.listed("job", records.mergeJobs(jobs), false);
   const allRequests = records.listed("request", records.mergeRequests(requests), false);
@@ -208,189 +221,123 @@ export function ServiceDashboardView() {
       description={`${formatLongDate(today)} · Jobs, schedule, and the work still open`}
       actions={<DashboardSwitcher />}
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCell
-          label="Unscheduled jobs"
-          value={String(unscheduled.length)}
-          note="Need a date on the board"
-          href="/pro/dashboard/jobs?status=unscheduled"
-        />
-        <StatCell
-          label="Jobs with no team member"
-          value={String(unassigned.length)}
-          note="Active jobs still unassigned"
-          href="/pro/dashboard/schedule"
-        />
-        <StatCell
-          label="In the field"
-          value={String(inField.length)}
-          note="Dispatched, en route, or on site"
-          href="/pro/dashboard/jobs?status=in_progress"
-        />
-        <StatCell
-          label="Held up"
-          value={String(heldUp.length)}
-          note={`${overdueTasks.length} overdue task${overdueTasks.length === 1 ? "" : "s"}`}
-          href="/pro/dashboard/jobs?status=on_hold"
-        />
-      </div>
+      <DashboardSection
+        title="Jobs needing action"
+        description="Unscheduled, unassigned, in the field, or held up."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCell
+            label="Unscheduled jobs"
+            value={String(unscheduled.length)}
+            note="Need a date on the board"
+            href="/pro/dashboard/jobs?status=unscheduled"
+          />
+          <StatCell
+            label="Jobs with no team member"
+            value={String(unassigned.length)}
+            note="Active jobs still unassigned"
+            href="/pro/dashboard/schedule"
+          />
+          <StatCell
+            label="In the field"
+            value={String(inField.length)}
+            note="Dispatched, en route, or on site"
+            href="/pro/dashboard/jobs?status=in_progress"
+          />
+          <StatCell
+            label="Held up"
+            value={String(heldUp.length)}
+            note={`${overdueTasks.length} overdue task${overdueTasks.length === 1 ? "" : "s"}`}
+            href="/pro/dashboard/jobs?status=on_hold"
+          />
+        </div>
+      </DashboardSection>
 
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-        <Card className="border-input">
-          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {scale === "year" ? "Jobs by year" : "Jobs by month"}
-              </CardTitle>
-              <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{openedTotal}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Opened · {finishedTotal} finished
-              </p>
-            </div>
-            <LocalFilterTabs
-              value={scale}
-              onChange={(next) => setScale(next as ServiceScale)}
-              options={[
-                { value: "month", label: "Monthly" },
-                { value: "year", label: "Yearly" },
-              ]}
-            />
-          </CardHeader>
-          <CardContent>
-            <div className="mb-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 rounded-sm bg-primary/20" />
-                Opened
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="size-2 rounded-sm bg-primary" />
-                Finished
-              </span>
-            </div>
-            <div
-              className="grid items-end gap-3"
-              style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
-            >
-              {points.map((point) => (
-                <div key={point.key} className="flex flex-col items-center gap-2">
-                  <div className="flex h-36 w-full items-end justify-center gap-1">
-                    <div
-                      className="w-1/2 rounded-sm bg-primary/15"
-                      style={{ height: `${Math.max(4, (point.opened / maxBar) * 144)}px` }}
-                      title={`${point.opened} opened`}
-                    />
-                    <div
-                      className="w-1/2 rounded-sm bg-primary"
-                      style={{ height: `${Math.max(4, (point.finished / maxBar) * 144)}px` }}
-                      title={`${point.finished} finished`}
-                    />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground">{point.label}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-input">
-          <CardHeader className="gap-1">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Jobs by status</CardTitle>
-            <p className="text-3xl font-semibold tracking-tight tabular-nums">{allJobs.length}</p>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
-            <StatusMixChart rows={statusMix} total={allJobs.length} />
-            <ul className="space-y-2 text-sm">
-              {statusMix.map((item, index) => (
-                <li key={item.label} className="flex items-center justify-between gap-3">
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ background: DONUT_COLORS[index % DONUT_COLORS.length] }}
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </span>
-                  <span className="tabular-nums text-muted-foreground">{item.value}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-input">
-        <CardHeader className="gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>This week</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {weekEvents.length} scheduled block{weekEvents.length === 1 ? "" : "s"} · {todayEvents.length} today
-            </p>
-          </div>
-          <Link href="/pro/dashboard/schedule" className="text-sm font-medium text-primary hover:text-primary/80">
-            Open calendar
-          </Link>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-7 gap-2">
-            {weekDays.map((day) => (
+      <DashboardSection
+        title="Jobs overview"
+        description="Opened vs finished and status mix."
+      >
+        <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+          <Card className="border-input">
+            <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {scale === "year" ? "Jobs by year" : "Jobs by month"}
+                </CardTitle>
+                <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{openedTotal}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Opened · {finishedTotal} finished
+                </p>
+              </div>
+              <LocalFilterTabs
+                value={scale}
+                onChange={(next) => setScale(next as ServiceScale)}
+                options={[
+                  { value: "month", label: "Monthly" },
+                  { value: "year", label: "Yearly" },
+                ]}
+              />
+            </CardHeader>
+            <CardContent>
+              <div className="mb-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-primary/20" />
+                  Opened
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-primary" />
+                  Finished
+                </span>
+              </div>
               <div
-                key={day.key}
-                className={cn(
-                  "rounded-lg border px-2 py-2 text-center",
-                  day.key === todayKey ? "border-primary bg-secondary" : "border-input",
-                )}
+                className="grid items-end gap-3"
+                style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
               >
-                <p className="text-[10px] tracking-wide text-muted-foreground uppercase">{day.label}</p>
-                <p className="text-sm font-semibold tabular-nums">{day.day}</p>
-                <p className="text-[11px] text-muted-foreground">{day.count || "—"}</p>
-              </div>
-            ))}
-          </div>
-          {weekEvents.length ? (
-            <ul className="divide-y divide-border">
-              {weekEvents.slice(0, 6).map((item) => (
-                <li key={item.id}>
-                  <Link href={item.href} className="flex items-center gap-3.5 py-3 hover:text-primary">
-                    <DateStamp value={item.date} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{item.title}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {item.startMinutes != null ? formatClock(item.startMinutes) : "All day"}
-                        {" · "}
-                        {item.detail}
-                        {item.employeeId ? ` · ${employeeLabel(item.employeeId)}` : ""}
-                      </p>
+                {points.map((point) => (
+                  <div key={point.key} className="flex flex-col items-center gap-2">
+                    <div className="flex h-36 w-full items-end justify-center gap-1">
+                      <div
+                        className="w-1/2 rounded-sm bg-primary/15"
+                        style={{ height: `${Math.max(4, (point.opened / maxBar) * 144)}px` }}
+                        title={`${point.opened} opened`}
+                      />
+                      <div
+                        className="w-1/2 rounded-sm bg-primary"
+                        style={{ height: `${Math.max(4, (point.finished / maxBar) * 144)}px` }}
+                        title={`${point.finished} finished`}
+                      />
                     </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nothing scheduled this week.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <BoardCard title="My day" href="/pro/dashboard/tasks" hrefLabel="All tasks" empty={myDay.length ? undefined : "No open tasks due soon."}>
-          {myDay.map((task) => (
-            <Link
-              key={task.id}
-              href={`/pro/dashboard/tasks/${task.id}`}
-              className="flex items-start gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
-            >
-              <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", taskIsOverdue(task, todayKey) ? "bg-red-500" : "bg-primary")} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="truncate text-sm font-medium">{task.title}</p>
-                  <p className={cn("shrink-0 text-xs", taskIsOverdue(task, todayKey) ? "font-medium text-red-600" : "text-muted-foreground")}>
-                    {formatDate(task.dueAt)}
-                  </p>
-                </div>
-                <p className="mt-0.5 text-[11px] tracking-wide text-muted-foreground uppercase">{crmTaskPriorityLabel(task.priority)}</p>
+                    <span className="text-[11px] text-muted-foreground">{point.label}</span>
+                  </div>
+                ))}
               </div>
-            </Link>
-          ))}
-        </BoardCard>
+            </CardContent>
+          </Card>
+
+          <Card className="border-input">
+            <CardHeader className="gap-1">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Jobs by status</CardTitle>
+              <p className="text-3xl font-semibold tracking-tight tabular-nums">{allJobs.length}</p>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
+              <StatusMixChart rows={statusMix} total={allJobs.length} />
+              <ul className="space-y-2 text-sm">
+                {statusMix.map((item, index) => (
+                  <li key={item.label} className="flex items-center justify-between gap-3">
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ background: DONUT_COLORS[index % DONUT_COLORS.length] }}
+                      />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">{item.value}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
 
         <BoardCard title="Active jobs" href="/pro/dashboard/jobs" hrefLabel="All jobs">
           {activeJobs.slice(0, 6).map((job) => {
@@ -422,28 +369,111 @@ export function ServiceDashboardView() {
             );
           })}
         </BoardCard>
-      </div>
+      </DashboardSection>
 
-      <BoardCard title="Open leads for the field" href="/pro/dashboard/requests" hrefLabel="All leads">
-        {allRequests
-          .filter((item) => item.status === "new" || item.status === "contacted" || item.status === "accepted")
-          .slice(0, 4)
-          .map((request) => (
+      <DashboardSection
+        title="Schedule"
+        description="This week’s blocks and calendar."
+      >
+        <Card className="border-input">
+          <CardHeader className="gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>This week</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {weekEvents.length} scheduled block{weekEvents.length === 1 ? "" : "s"} · {todayEvents.length} today
+              </p>
+            </div>
+            <Link href="/pro/dashboard/schedule" className="text-sm font-medium text-primary hover:text-primary/80">
+              Open calendar
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-7 gap-2">
+              {weekDays.map((day) => (
+                <div
+                  key={day.key}
+                  className={cn(
+                    "rounded-lg border px-2 py-2 text-center",
+                    day.key === todayKey ? "border-primary bg-secondary" : "border-input",
+                  )}
+                >
+                  <p className="text-[10px] tracking-wide text-muted-foreground uppercase">{day.label}</p>
+                  <p className="text-sm font-semibold tabular-nums">{day.day}</p>
+                  <p className="text-[11px] text-muted-foreground">{day.count || "—"}</p>
+                </div>
+              ))}
+            </div>
+            {weekEvents.length ? (
+              <ul className="divide-y divide-border">
+                {weekEvents.slice(0, 6).map((item) => (
+                  <li key={item.id}>
+                    <Link href={item.href} className="flex items-center gap-3.5 py-3 hover:text-primary">
+                      <DateStamp value={item.date} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{item.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {item.startMinutes != null ? formatClock(item.startMinutes) : "All day"}
+                          {" · "}
+                          {item.detail}
+                          {item.employeeId ? ` · ${employeeLabel(item.employeeId)}` : ""}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Nothing scheduled this week.</p>
+            )}
+          </CardContent>
+        </Card>
+      </DashboardSection>
+
+      <DashboardSection title="Tasks" description="Open work due soon.">
+        <BoardCard title="My day" href="/pro/dashboard/tasks" hrefLabel="All tasks" empty={myDay.length ? undefined : "No open tasks due soon."}>
+          {myDay.map((task) => (
             <Link
-              key={request.id}
-              href={`/pro/dashboard/requests/${request.id}`}
-              className="flex items-center justify-between gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
+              key={task.id}
+              href={`/pro/dashboard/tasks/${task.id}`}
+              className="flex items-start gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{request.serviceName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {request.customerName} · {request.neighborhood}
-                </p>
+              <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", taskIsOverdue(task, todayKey) ? "bg-red-500" : "bg-primary")} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="truncate text-sm font-medium">{task.title}</p>
+                  <p className={cn("shrink-0 text-xs", taskIsOverdue(task, todayKey) ? "font-medium text-red-600" : "text-muted-foreground")}>
+                    {formatDate(task.dueAt)}
+                  </p>
+                </div>
+                <p className="mt-0.5 text-[11px] tracking-wide text-muted-foreground uppercase">{crmTaskPriorityLabel(task.priority)}</p>
               </div>
-              <StatusPill label={requestStatusLabel(request.status)} tone={requestTone(request.status)} />
             </Link>
           ))}
-      </BoardCard>
+        </BoardCard>
+      </DashboardSection>
+
+      <DashboardSection title="Leads" description="Open leads ready for the field.">
+        <BoardCard title="Open leads for the field" href="/pro/dashboard/requests" hrefLabel="All leads">
+          {allRequests
+            .filter((item) => item.status === "new" || item.status === "contacted" || item.status === "accepted")
+            .slice(0, 4)
+            .map((request) => (
+              <Link
+                key={request.id}
+                href={`/pro/dashboard/requests/${request.id}`}
+                className="flex items-center justify-between gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{request.serviceName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {request.customerName} · {request.neighborhood}
+                  </p>
+                </div>
+                <StatusPill label={requestStatusLabel(request.status)} tone={requestTone(request.status)} />
+              </Link>
+            ))}
+        </BoardCard>
+      </DashboardSection>
 
       <section className="rounded-xl border border-input bg-card px-5 py-5">
         <h2 className="text-sm font-semibold">Quick actions</h2>

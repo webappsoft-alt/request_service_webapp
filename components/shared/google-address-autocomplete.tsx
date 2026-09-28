@@ -91,6 +91,8 @@ export type GoogleAddressAutocompleteProps = {
    * not the street line.
    */
   preferCityDisplay?: boolean;
+  /** Home search only: fill with "City, ZIP" instead of "City, ST". */
+  preferCityZipDisplay?: boolean;
   "aria-invalid"?: boolean;
 };
 
@@ -139,6 +141,7 @@ export function GoogleAddressAutocomplete({
   inputClassName,
   hideStatus = false,
   preferCityDisplay = false,
+  preferCityZipDisplay = false,
   "aria-invalid": ariaInvalid,
 }: GoogleAddressAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +152,7 @@ export function GoogleAddressAutocomplete({
     null,
   );
   const preferCityRef = useRef(preferCityDisplay);
+  const preferCityZipRef = useRef(preferCityZipDisplay);
   const onChangeRef = useRef(onChange);
   const onSelectRef = useRef(onSelect);
 
@@ -157,6 +161,7 @@ export function GoogleAddressAutocomplete({
   const [error, setError] = useState<string | null>(null);
 
   preferCityRef.current = preferCityDisplay;
+  preferCityZipRef.current = preferCityZipDisplay;
   onChangeRef.current = onChange;
   onSelectRef.current = onSelect;
 
@@ -320,12 +325,18 @@ export function GoogleAddressAutocomplete({
     logParsedFields(address, source);
 
     const streetLine = streetDisplayFromParsed(address);
-    const display = preferCityDisplay
-      ? placeCityLabel(address) ||
-        [address.city, address.state].filter(Boolean).join(", ") ||
+    const cityZip = [address.city, address.zipCode].filter(Boolean).join(", ");
+    const display = preferCityZipRef.current
+      ? cityZip ||
+        placeCityLabel(address) ||
         streetLine ||
         address.formattedAddress
-      : streetLine;
+      : preferCityRef.current
+        ? placeCityLabel(address) ||
+          [address.city, address.state].filter(Boolean).join(", ") ||
+          streetLine ||
+          address.formattedAddress
+        : streetLine;
 
     if (inputRef.current) inputRef.current.value = display;
     onChange(display);

@@ -155,6 +155,31 @@ export function PeriodBar({
   );
 }
 
+/** Groups related dashboard cards under one titled section. */
+export function DashboardSection({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("flex flex-col gap-3", className)}>
+      <div>
+        <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+        {description ? (
+          <p className="text-sm text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function initials(name: string) {
   return name
     .split(" ")

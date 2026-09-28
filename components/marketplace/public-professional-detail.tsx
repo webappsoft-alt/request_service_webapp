@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getData } from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { Container } from "@/components/layout/container";
-import { ProviderProfile } from "@/components/marketplace/provider-profile";
+import {
+  ProviderProfile,
+  type ProviderCoverageAreaLink,
+} from "@/components/marketplace/provider-profile";
 import { ProfessionalDetailSkeleton } from "@/components/shared/loading-skeletons";
 import { galleryBanner, galleryRest, normalizeBusinessGallery } from "@/lib/business-gallery";
 import { bannerUrlFromRecord } from "@/lib/data/provider-media";
@@ -12,6 +16,7 @@ import type { ExplorePlace } from "@/lib/data/profile-explore";
 import type { PortalFixedService } from "@/lib/data/portal";
 import { getServiceAreaNames } from "@/lib/data/service-areas";
 import { getServiceCategoryById, getServiceCategoryBySlug } from "@/lib/data/services";
+import { servicesHref } from "@/lib/search";
 import type {
   Provider,
   ProviderProject,
@@ -20,6 +25,7 @@ import type {
 } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { trackLeadInteraction } from "@/lib/api/crm-client";
+import { setLocation } from "@/store/locationSlice";
 import {
   normalizePortfolioProject,
   type PortfolioProject,
@@ -300,6 +306,50 @@ function areaLabelsFromProfessional(professional: PublicProfessional): string[] 
   return getServiceAreaNames(professional.location.coveredZipCodes);
 }
 
+function coverageAreasFromProfessional(
+  professional: PublicProfessional,
+): ProviderCoverageAreaLink[] {
+  const fromCities = (professional.coverage?.cities ?? []).flatMap((city) =>
+    city.areas
+      .map((area): ProviderCoverageAreaLink | null => {
+        const name = area.name.trim();
+        if (!name) return null;
+        if (!Number.isFinite(area.lat) || !Number.isFinite(area.lng)) return null;
+        if (area.lat === 0 && area.lng === 0) return null;
+        return {
+          name,
+          lat: area.lat,
+          lng: area.lng,
+          zip: area.zip?.trim() || undefined,
+          city: city.city.trim() || undefined,
+          state: city.state.trim() || undefined,
+        };
+      })
+      .filter((item): item is ProviderCoverageAreaLink => Boolean(item)),
+  );
+  if (fromCities.length) return fromCities;
+
+  return (professional.coverage?.neighborhoods ?? [])
+    .map((item): ProviderCoverageAreaLink | null => {
+      const name = (item.title.trim() || item.city.trim()).trim();
+      if (!name || /^[0-9a-fA-F]{24}$/.test(name)) return null;
+      const coords = Array.isArray(item.coordinates) ? item.coordinates : [];
+      const lng = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      if (lat === 0 && lng === 0) return null;
+      return {
+        name,
+        lat,
+        lng,
+        zip: item.zip?.trim() || undefined,
+        city: item.city?.trim() || undefined,
+        state: item.state?.trim() || undefined,
+      };
+    })
+    .filter((item): item is ProviderCoverageAreaLink => Boolean(item));
+}
+
 function extractPortfolioProjects(response: unknown): PortfolioProject[] {
   const root = asRecord(response) ?? {};
   const nested = asRecord(root.data);
@@ -382,6 +432,7 @@ export function PublicProfessionalDetail({
   fallbackCategories?: ServiceCategory[];
 }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const professionalSlug = String(slug || "").trim();
   const professional = useAppSelector((state) =>
     selectPublicProfessionalBySlug(state, professionalSlug),
@@ -644,6 +695,36 @@ export function PublicProfessionalDetail({
     [professional],
   );
 
+  const coverageAreas = useMemo(
+    () => (professional ? coverageAreasFromProfessional(professional) : []),
+    [professional],
+  );
+
+  function onCoverageAreaSelect(area: ProviderCoverageAreaLink) {
+    const parentCity = area.city?.trim() || professional?.location.city?.trim() || "";
+    const parentState =
+      area.state?.trim() || professional?.location.state?.trim() || "";
+    dispatch(
+      setLocation({
+        address: [area.name, parentCity, parentState].filter(Boolean).join(", "),
+        city: parentCity || area.name,
+        state: parentState,
+        zip: area.zip?.trim() || "",
+        country: "US",
+        latitude: area.lat,
+        longitude: area.lng,
+      }),
+    );
+    const href = servicesHref({
+      confidence: "related",
+      query: "",
+      location: area.name,
+      zip: area.zip?.trim() || undefined,
+    });
+    const sep = href.includes("?") ? "&" : "?";
+    router.push(`${href}${sep}focus=professionals`);
+  }
+
   if (provider) {
     return (
       <ProviderProfile
@@ -658,6 +739,8 @@ export function PublicProfessionalDetail({
                 relatedProviders,
                 fixedServices: liveFixedServices,
                 areaLabels,
+                coverageAreas,
+                onCoverageAreaSelect,
                 portfolioLoading,
                 relatedLoading,
                 onProjectBeforeNavigate: () => {

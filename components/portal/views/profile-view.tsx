@@ -52,8 +52,13 @@ import {
   type AuthProviderRecord,
 } from "@/lib/auth/provider-profile";
 import {
-  coverageNeighborhoodIds,
+  coverageAreaSelectionKey,
+  formatServiceAreaCoverageLabels,
+  parseCoverageAreaSelectionKey,
 } from "@/lib/coverage-areas";
+import {
+  areasForServiceAreaCity,
+} from "@/lib/data/city-service-areas";
 import {
   galleryIsReady,
   normalizeBusinessGallery,
@@ -69,10 +74,67 @@ import {
   type AuthUser,
 } from "@/store/authSlice";
 import {
+  deleteServiceArea,
   fetchServiceAreasPicker,
+  updateServiceArea,
   type ServiceArea,
+  type ServiceAreaNeighborhood,
 } from "@/store/serviceAreasSlice";
 
+/** Catalog + existing neighborhoods for independent coverage chips. */
+function coverageNeighborhoodPool(
+  area: ServiceArea,
+): ServiceAreaNeighborhood[] {
+  const byName = new Map<string, ServiceAreaNeighborhood>();
+  for (const item of areasForServiceAreaCity(
+    area.location?.city,
+    area.location?.state,
+  )) {
+    const name = item.name.trim();
+    if (!name) continue;
+    byName.set(name.toLowerCase(), {
+      name,
+      lat: item.lat,
+      lng: item.lng,
+      ...(item.zip ? { zip: item.zip } : {}),
+    });
+  }
+  for (const item of area.areas || []) {
+    const name = item.name?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (byName.has(key)) continue;
+    byName.set(key, {
+      name,
+      lat: item.lat,
+      lng: item.lng,
+      ...(item.zip ? { zip: item.zip } : {}),
+    });
+  }
+  return Array.from(byName.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+function coverageChipLabel(area: ServiceArea, neighborhoodName: string) {
+  const city = [area.location?.city, area.location?.state]
+    .filter(Boolean)
+    .join(", ");
+  return city ? `${neighborhoodName} · ${city}` : neighborhoodName;
+}
+
+function selectedKeysFromServiceAreas(serviceAreas: ServiceArea[]): string[] {
+  const keys: string[] = [];
+  for (const area of serviceAreas) {
+    for (const item of area.areas || []) {
+      const name = item.name?.trim();
+      if (!name) continue;
+      const key = coverageAreaSelectionKey(area.id, name);
+      if (!keys.includes(key)) keys.push(key);
+    }
+  }
+  return keys;
+}
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
 
 const EMPLOYEE_TO_API: Record<string, string> = {
@@ -202,7 +264,6 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
           (job): job is string => typeof job === "string",
         )
       : [],
-    areaIds: coverageNeighborhoodIds(provider?.coverage?.neighborhoods),
     gallery: normalizeBusinessGallery(provider?.businessGallery),
   };
 }
@@ -250,7 +311,13 @@ export function ProfileView() {
   );
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [jobs, setJobs] = useState<string[]>([]);
-  const [areaIds, setAreaIds] = useState<string[]>([]);
+  /** Per-neighborhood coverage keys: `${serviceAreaId}::${areaName}`. */
+  const [selectedCoverageKeys, setSelectedCoverageKeys] = useState<string[]>(
+    [],
+  );
+  const coverageKeysSeededRef = useRef(false);
+  const seededServiceAreaIdsRef = useRef<Set<string>>(new Set());
+  const [formHydrated, setFormHydrated] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -283,11 +350,23 @@ export function ProfileView() {
   }, [listItems, pickerItems]);
 
   const areasById = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, string[]>();
     for (const area of coverageAreas) {
-      if (area.id && area.title) map.set(area.id, area.title);
+      if (area.id) map.set(area.id, formatServiceAreaCoverageLabels(area));
     }
     return map;
+  }, [coverageAreas]);
+
+  const coverageChips = useMemo(() => {
+    return coverageAreas.flatMap((area) =>
+      coverageNeighborhoodPool(area).map((neighborhood) => ({
+        key: coverageAreaSelectionKey(area.id, neighborhood.name),
+        serviceAreaId: area.id,
+        name: neighborhood.name,
+        label: coverageChipLabel(area, neighborhood.name),
+        neighborhood,
+      })),
+    );
   }, [coverageAreas]);
 
   const selectedCategories = useMemo(
@@ -327,8 +406,41 @@ export function ProfileView() {
   }, [dispatch]);
 
   useEffect(() => {
+    if (!formHydrated || !coverageAreas.length) return;
+
+    const freshAreas = coverageAreas.filter(
+      (area) => !seededServiceAreaIdsRef.current.has(area.id),
+    );
+    if (!freshAreas.length && coverageKeysSeededRef.current) return;
+
+    for (const area of coverageAreas) {
+      seededServiceAreaIdsRef.current.add(area.id);
+    }
+
+    const freshKeys = selectedKeysFromServiceAreas(
+      coverageKeysSeededRef.current ? freshAreas : coverageAreas,
+    );
+
+    if (!coverageKeysSeededRef.current) {
+      setSelectedCoverageKeys(freshKeys);
+      coverageKeysSeededRef.current = true;
+      return;
+    }
+
+    if (!freshKeys.length) return;
+    setSelectedCoverageKeys((current) => {
+      const next = [...current];
+      for (const key of freshKeys) {
+        if (!next.includes(key)) next.push(key);
+      }
+      return next;
+    });
+  }, [coverageAreas, formHydrated]);
+
+  useEffect(() => {
     if (!user && !authProvider) {
       formReadyRef.current = false;
+      setFormHydrated(false);
       return;
     }
 
@@ -362,9 +474,11 @@ export function ProfileView() {
       setPaymentMethods(next.paymentMethods);
       setCategoryIds(next.categoryIds);
       setJobs(next.jobs);
-      setAreaIds(next.areaIds);
       setGallery(next.gallery);
+      coverageKeysSeededRef.current = false;
+      seededServiceAreaIdsRef.current = new Set();
       formReadyRef.current = true;
+      setFormHydrated(true);
       return;
     }
 
@@ -446,6 +560,83 @@ export function ProfileView() {
     }
   }
 
+  async function syncSelectedCoverageAreas(): Promise<string[] | null> {
+    const selectedByCity = new Map<string, string[]>();
+    for (const key of selectedCoverageKeys) {
+      const parsed = parseCoverageAreaSelectionKey(key);
+      if (!parsed) continue;
+      const list = selectedByCity.get(parsed.serviceAreaId) ?? [];
+      if (!list.includes(parsed.areaName)) list.push(parsed.areaName);
+      selectedByCity.set(parsed.serviceAreaId, list);
+    }
+
+    const cityIds: string[] = [];
+
+    for (const area of coverageAreas) {
+      const selectedNames = selectedByCity.get(area.id) ?? [];
+      const pool = coverageNeighborhoodPool(area);
+      const nextAreas = pool.filter((item) =>
+        selectedNames.includes(item.name),
+      );
+      const prevNames = (area.areas || [])
+        .map((item) => item.name.trim())
+        .filter(Boolean)
+        .sort()
+        .join("\0");
+      const nextNames = nextAreas
+        .map((item) => item.name)
+        .sort()
+        .join("\0");
+
+      if (!nextAreas.length) {
+        if ((area.areas || []).length > 0) {
+          const result = await dispatch(deleteServiceArea(area.id));
+          if (deleteServiceArea.rejected.match(result)) {
+            toast.error(
+              typeof result.payload === "string"
+                ? result.payload
+                : "Could not update coverage areas.",
+            );
+            return null;
+          }
+        }
+        continue;
+      }
+
+      if (prevNames !== nextNames) {
+        const primary = nextAreas[0];
+        const result = await dispatch(
+          updateServiceArea({
+            id: area.id,
+            title:
+              [area.location.city, area.location.state]
+                .filter(Boolean)
+                .join(", ") || area.title,
+            areas: nextAreas,
+            location: {
+              ...area.location,
+              coordinates: [primary.lng, primary.lat],
+              zip: primary.zip || area.location.zip || "",
+            },
+          }),
+        );
+        if (updateServiceArea.rejected.match(result)) {
+          toast.error(
+            typeof result.payload === "string"
+              ? result.payload
+              : "Could not update coverage areas.",
+          );
+          return null;
+        }
+      }
+
+      cityIds.push(area.id);
+    }
+
+    void dispatch(fetchServiceAreasPicker());
+    return cityIds;
+  }
+
   async function saveProfile(): Promise<boolean> {
     const nextFirst = firstName.trim();
     const nextLast = lastName.trim();
@@ -456,6 +647,12 @@ export function ProfileView() {
     }
     if (!companyName.trim()) {
       toast.error("Company name is required.");
+      goTo("business");
+      return false;
+    }
+
+    const coverageCityIds = await syncSelectedCoverageAreas();
+    if (coverageCityIds == null) {
       goTo("business");
       return false;
     }
@@ -476,8 +673,8 @@ export function ProfileView() {
       ...(location ? { location } : {}),
       categoryIds,
       offeredJobs: jobs,
-      neighborhoods: areaIds,
-      serviceArea: areaIds,
+      neighborhoods: coverageCityIds,
+      serviceArea: coverageCityIds,
       yearsInBusiness: Number.isFinite(years) ? years : undefined,
       employeeCount:
         EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
@@ -571,7 +768,7 @@ export function ProfileView() {
           paymentMethods,
         },
         coverage: fromApi?.coverage || {
-          neighborhoods: areaIds,
+          neighborhoods: coverageCityIds,
         },
         businessGallery: Array.isArray(fromApi?.businessGallery)
           ? fromApi.businessGallery
@@ -580,7 +777,6 @@ export function ProfileView() {
 
       // Prefer API nested shape when present; otherwise keep what we just saved.
       const savedServices = asAuthProvider(providerRes)?.services;
-      const savedCoverage = asAuthProvider(providerRes)?.coverage;
       if (savedServices) {
         setCategoryIds(
           Array.isArray(savedServices.categoryIds)
@@ -594,9 +790,6 @@ export function ProfileView() {
               )
             : jobs,
         );
-      }
-      if (savedCoverage && Array.isArray(savedCoverage.neighborhoods)) {
-        setAreaIds(coverageNeighborhoodIds(savedCoverage.neighborhoods));
       }
 
       dispatch(
@@ -919,19 +1112,21 @@ export function ProfileView() {
             <section className="rounded-xl border border-input bg-card p-5">
               <p className="text-sm font-semibold">Coverage</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Select from your service areas. Manage zones on the Service Areas
-                page.
+                Select each area separately. You can pick multiple areas in the
+                same city. Manage cities on the Service Areas page.
               </p>
-              {coverageAreas.length ? (
+              {coverageChips.length ? (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {coverageAreas.map((area) => {
-                    const checked = areaIds.includes(area.id);
+                  {coverageChips.map((chip) => {
+                    const checked = selectedCoverageKeys.includes(chip.key);
                     return (
                       <button
-                        key={area.id}
+                        key={chip.key}
                         type="button"
                         onClick={() =>
-                          setAreaIds((current) => toggleValue(current, area.id))
+                          setSelectedCoverageKeys((current) =>
+                            toggleValue(current, chip.key),
+                          )
                         }
                         className={cn(
                           "rounded-lg border px-3 py-1.5 text-sm",
@@ -940,7 +1135,7 @@ export function ProfileView() {
                             : "bg-card hover:border-foreground/20",
                         )}
                       >
-                        {area.title || "Untitled area"}
+                        {chip.label}
                       </button>
                     );
                   })}
@@ -975,8 +1170,11 @@ export function ProfileView() {
                   </Link>
                 </Button>
               </div>
-              {areaIds.length > 0 &&
-              areaIds.some((id) => !areasById.has(id)) ? (
+              {selectedCoverageKeys.length > 0 &&
+              selectedCoverageKeys.some((key) => {
+                const parsed = parseCoverageAreaSelectionKey(key);
+                return parsed ? !areasById.has(parsed.serviceAreaId) : true;
+              }) ? (
                 <p className="mt-2 text-xs text-muted-foreground">
                   Some selected areas are still loading names…
                 </p>

@@ -6,9 +6,9 @@ import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
 import { DashboardActionAlerts } from "@/components/portal/dashboard-action-alerts";
 import {
   activityDot,
-  AlertCell,
   BoardCard,
   BreakdownCard,
+  DashboardSection,
   dashboardGreeting,
   DateStamp,
   inDashboardPeriod,
@@ -194,15 +194,6 @@ export function DashboardView() {
   const jobRows = countBy(allJobs.map((item) => ({ label: jobStatusLabel(item.status) }))).slice(0, 6);
   const invoiceRows = countBy(allInvoices.map((item) => ({ label: agingLabel(item) }))).slice(0, 6);
 
-  const alertItems = [
-    { label: "Leads", value: Math.max(openLeads.filter((item) => item.status === "new").length, inbox.newLeads), href: "/pro/dashboard/requests?status=new" },
-    { label: "Messages", value: inbox.unreadChats, href: "/pro/dashboard/messages" },
-    { label: "Estimates", value: openEstimates.filter((item) => item.status === "sent").length, href: "/pro/dashboard/estimates?status=sent" },
-    { label: "Jobs", value: unassigned.length + uninvoiced.length, href: "/pro/dashboard/jobs" },
-    { label: "Tasks", value: overdueTasks.length, href: "/pro/dashboard/tasks" },
-    { label: "Invoices", value: overdue.length, href: "/pro/dashboard/invoices?status=overdue" },
-  ].filter((item) => item.value > 0);
-
   return (
     <PortalPage
       eyebrow="Overview"
@@ -237,86 +228,260 @@ export function DashboardView() {
           </CardContent>
         </Card>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCell
-          label="Overdue invoices"
-          value={String(overdue.length)}
-          note={`${formatMoney(overdue.reduce((sum, item) => sum + item.balanceDue, 0))} past due`}
-          href="/pro/dashboard/invoices?status=overdue"
-        />
-        <StatCell
-          label="Uninvoiced completed jobs"
-          value={String(uninvoiced.length)}
-          note="Finished work still waiting on an invoice"
-          href="/pro/dashboard/jobs?status=completed"
-        />
-        <StatCell
-          label="Jobs with no team member"
-          value={String(unassigned.length)}
-          note="Active jobs still unassigned"
-          href="/pro/dashboard/jobs?status=unscheduled"
-        />
-        <StatCell
-          label="Overdue tasks"
-          value={String(overdueTasks.length)}
-          note="Open work past its due date"
-          href="/pro/dashboard/tasks"
-        />
-      </div>
+
+      <DashboardSection
+        title="Needs attention"
+        description="Urgent items that should be handled first."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCell
+            label="Overdue invoices"
+            value={String(overdue.length)}
+            note={`${formatMoney(overdue.reduce((sum, item) => sum + item.balanceDue, 0))} past due`}
+            href="/pro/dashboard/invoices?status=overdue"
+          />
+          <StatCell
+            label="Uninvoiced completed jobs"
+            value={String(uninvoiced.length)}
+            note="Finished work still waiting on an invoice"
+            href="/pro/dashboard/jobs?status=completed"
+          />
+          <StatCell
+            label="Jobs with no team member"
+            value={String(unassigned.length)}
+            note="Active jobs still unassigned"
+            href="/pro/dashboard/jobs?status=unscheduled"
+          />
+          <StatCell
+            label="Overdue tasks"
+            value={String(overdueTasks.length)}
+            note="Open work past its due date"
+            href="/pro/dashboard/tasks"
+          />
+        </div>
+      </DashboardSection>
 
       <PeriodBar value={period} onChange={setPeriod} />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <StatCell
-          label="Open leads"
-          value={String(Math.max(openLeads.length, inbox.newLeads))}
-          note={`${inbox.newLeads} new from the website`}
-          href="/pro/dashboard/requests?status=new"
-        />
-        <StatCell
-          label="Unread messages"
-          value={String(inbox.unreadChats)}
-          note="Website chats waiting on a reply"
-          href="/pro/dashboard/messages"
-        />
-        <StatCell
-          label="Open estimates"
-          value={String(openEstimates.length)}
-          note={`${formatMoney(stats.pendingEstimateValue)} in play`}
-          href="/pro/dashboard/estimates"
-        />
-        <StatCell
-          label="Active jobs"
-          value={String(activeJobs.length)}
-          note={`${stats.scheduledThisWeek} scheduled`}
-          href="/pro/dashboard/jobs"
-        />
-        <StatCell
-          label="Unpaid invoices"
-          value={String(unpaid.length)}
-          note={formatMoney(unpaid.reduce((sum, item) => sum + item.balanceDue, 0))}
-          href="/pro/dashboard/invoices?status=unpaid"
-        />
-        <StatCell
-          label="Payments received"
-          value={formatMoney(periodRevenue)}
-          note={`${periodPayments.length} in this range`}
-          href="/pro/dashboard/payments"
-        />
-      </div>
+      <DashboardSection
+        title="Leads"
+        description="Open pipeline from the website and CRM."
+      >
+        <div className="grid gap-3 lg:grid-cols-3">
+          <StatCell
+            label="Open leads"
+            value={String(Math.max(openLeads.length, inbox.newLeads))}
+            note={`${inbox.newLeads} new from the website`}
+            href="/pro/dashboard/requests?status=new"
+          />
+          <BreakdownCard
+            label="Leads by status"
+            value={String(allRequests.length)}
+            href="/pro/dashboard/requests"
+            rows={leadRows}
+          />
+          <BoardCard
+            title="Incoming requests"
+            href="/pro/dashboard/requests"
+            hrefLabel="All leads"
+            empty={allRequests.length ? undefined : "No incoming leads yet."}
+          >
+            {allRequests.slice(0, 4).map((request) => (
+              <Link
+                key={request.id}
+                href={`/pro/dashboard/requests/${request.id}`}
+                className="flex items-center gap-3.5 px-(--card-spacing) py-4 hover:bg-muted/40"
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold tracking-wide text-primary">
+                  {initials(request.customerName)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="truncate text-sm font-medium">{request.serviceName}</p>
+                    <StatusPill label={requestStatusLabel(request.status)} tone={requestTone(request.status)} />
+                  </div>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {request.customerName} · {request.neighborhood}
+                    {request.preferredDate ? ` · ${formatDate(request.preferredDate)}` : ""}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </BoardCard>
+        </div>
+      </DashboardSection>
 
-      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-        <BreakdownCard label="People" value={String(peopleRows.reduce((sum, row) => sum + row.value, 0))} href="/pro/dashboard/customers" rows={peopleRows} />
-        <BreakdownCard label="Leads" value={String(allRequests.length)} href="/pro/dashboard/requests" rows={leadRows} />
-        <BreakdownCard label="Jobs" value={String(allJobs.length)} href="/pro/dashboard/jobs" rows={jobRows} />
-        <BreakdownCard label="Invoices" value={String(allInvoices.length)} href="/pro/dashboard/invoices" rows={invoiceRows} />
-      </div>
+      <DashboardSection
+        title="Messages"
+        description="Website chats waiting on a reply."
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <StatCell
+            label="Unread messages"
+            value={String(inbox.unreadChats)}
+            note="Website chats waiting on a reply"
+            href="/pro/dashboard/messages"
+          />
+          <BoardCard
+            title="Website inbox"
+            href="/pro/dashboard/messages"
+            hrefLabel="Open messages"
+            empty={inbox.items.length ? undefined : "No new website chats or leads."}
+          >
+            {inbox.items.slice(0, 5).map((item) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="flex items-start gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
+              >
+                <span
+                  className={cn(
+                    "mt-1.5 size-2 shrink-0 rounded-full",
+                    item.kind === "chat" ? "bg-[#c2410c]" : "bg-primary",
+                  )}
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{item.title}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
+                </div>
+              </Link>
+            ))}
+          </BoardCard>
+        </div>
+      </DashboardSection>
 
-      <div className="grid gap-8 xl:grid-cols-[1.35fr_0.9fr] xl:items-start">
+      <DashboardSection title="Estimates" description="Quotes still in play.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <StatCell
+            label="Open estimates"
+            value={String(openEstimates.length)}
+            note={`${formatMoney(stats.pendingEstimateValue)} in play`}
+            href="/pro/dashboard/estimates"
+          />
+          <StatCell
+            label="Awaiting signature"
+            value={String(openEstimates.filter((item) => item.status === "sent").length)}
+            note="Sent and waiting on the customer"
+            href="/pro/dashboard/estimates?status=sent"
+          />
+        </div>
+      </DashboardSection>
+
+      <DashboardSection
+        title="Jobs & schedule"
+        description="Active work, crew coverage, and the week ahead."
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <StatCell
+            label="Active jobs"
+            value={String(activeJobs.length)}
+            note={`${stats.scheduledThisWeek} scheduled`}
+            href="/pro/dashboard/jobs"
+          />
+          <BreakdownCard
+            label="Jobs by status"
+            value={String(allJobs.length)}
+            href="/pro/dashboard/jobs"
+            rows={jobRows}
+          />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <BoardCard
+            title="Upcoming jobs"
+            href="/pro/dashboard/jobs"
+            hrefLabel="All jobs"
+            empty={allJobs.length ? undefined : "No jobs yet."}
+          >
+            {allJobs.slice(0, 4).map((job) => {
+              const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
+              const date = event?.date ?? job.scheduledAt;
+              return (
+                <Link
+                  key={job.id}
+                  href={`/pro/dashboard/jobs/${job.id}`}
+                  className="flex items-center gap-3.5 px-(--card-spacing) py-4 hover:bg-muted/40"
+                >
+                  <DateStamp value={date} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="truncate text-sm font-medium">
+                        {job.number}
+                        <span className="font-normal text-muted-foreground">
+                          {" "}
+                          · {getPortalCustomerName(provider, job.customerId)}
+                        </span>
+                      </p>
+                      <StatusPill label={jobStatusLabel(job.status)} className={jobStatusTone(job.status)} />
+                    </div>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {event?.detail ?? job.address.city}
+                      {event?.employeeId
+                        ? ` · ${employeeLabel(event.employeeId)}`
+                        : job.assignedTo
+                          ? ` · ${job.assignedTo}`
+                          : ""}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </BoardCard>
+          <BoardCard
+            title="Upcoming schedule"
+            href="/pro/dashboard/schedule"
+            hrefLabel="Calendar"
+            empty={upcomingEvents.length ? undefined : "No scheduled blocks this week."}
+          >
+            {upcomingEvents.map((item) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="flex items-center gap-3.5 px-(--card-spacing) py-3 hover:bg-muted/40"
+              >
+                <DateStamp value={item.date} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{item.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {item.detail}
+                    {item.employeeId ? ` · ${employeeLabel(item.employeeId)}` : ""}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </BoardCard>
+        </div>
+      </DashboardSection>
+
+      <DashboardSection
+        title="Invoices & payments"
+        description="Money owed, collected, and billed."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCell
+            label="Unpaid invoices"
+            value={String(unpaid.length)}
+            note={formatMoney(unpaid.reduce((sum, item) => sum + item.balanceDue, 0))}
+            href="/pro/dashboard/invoices?status=unpaid"
+          />
+          <StatCell
+            label="Payments received"
+            value={formatMoney(periodRevenue)}
+            note={`${periodPayments.length} in this range`}
+            href="/pro/dashboard/payments"
+          />
+          <BreakdownCard
+            label="Invoices by aging"
+            value={String(allInvoices.length)}
+            href="/pro/dashboard/invoices"
+            rows={invoiceRows}
+          />
+        </div>
         <Card className="border-input">
           <CardHeader className="gap-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Revenue</CardTitle>
-            <p className="text-3xl font-semibold tracking-tight tabular-nums">{formatMoney(stats.revenue)}</p>
+            <p className="text-3xl font-semibold tracking-tight tabular-nums">
+              {formatMoney(stats.revenue)}
+            </p>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-6 items-end gap-3">
@@ -335,22 +500,99 @@ export function DashboardView() {
             </div>
           </CardContent>
         </Card>
+      </DashboardSection>
 
-        <Card className="border-input">
-          <CardHeader className="gap-1">
-            <CardTitle>Reminders</CardTitle>
-            <p className="text-sm text-muted-foreground">Open reminders in the next 14 days and scheduled work this week.</p>
-          </CardHeader>
-          <CardContent className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">Notes</p>
+      <DashboardSection
+        title="Customers & people"
+        description="Directory counts across your CRM."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {peopleRows.map((row) => (
+            <StatCell
+              key={row.label}
+              label={row.label}
+              value={String(row.value)}
+              href={
+                row.label === "Customers"
+                  ? "/pro/dashboard/customers"
+                  : row.label === "Employees"
+                    ? "/pro/dashboard/employees"
+                    : row.label === "Contractors"
+                      ? "/pro/dashboard/contractors"
+                      : "/pro/dashboard/vendors"
+              }
+            />
+          ))}
+        </div>
+      </DashboardSection>
+
+      <DashboardSection
+        title="Tasks & reminders"
+        description="Personal follow-ups and scheduled notes."
+      >
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <BoardCard
+            title="My day"
+            href="/pro/dashboard/tasks"
+            hrefLabel="All tasks"
+            empty={myDay.length ? undefined : "No open tasks due soon."}
+          >
+            {myDay.map((task) => {
+              const subject = taskSubject(task);
+              return (
+                <Link
+                  key={task.id}
+                  href={`/pro/dashboard/tasks/${task.id}`}
+                  className="flex items-start gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
+                >
+                  <span
+                    className={cn(
+                      "mt-1.5 size-2 shrink-0 rounded-full",
+                      taskIsOverdue(task, todayKey) ? "bg-red-500" : "bg-primary",
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="truncate text-sm font-medium">{task.title}</p>
+                      <p
+                        className={cn(
+                          "shrink-0 text-xs",
+                          taskIsOverdue(task, todayKey)
+                            ? "font-medium text-red-600"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {formatDate(task.dueAt)}
+                      </p>
+                    </div>
+                    <p className="mt-0.5 text-[11px] tracking-wide text-muted-foreground uppercase">
+                      {crmTaskPriorityLabel(task.priority)}
+                      {subject.id ? ` · ${reminderSubjectKindLabel(subject.kind)}` : ""}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </BoardCard>
+
+          <Card className="border-input">
+            <CardHeader className="gap-1">
+              <CardTitle>Reminders</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Open reminders in the next 14 days.
+              </p>
+            </CardHeader>
+            <CardContent>
               {dueReminders.length ? (
-                <ul className="mt-2 space-y-2">
+                <ul className="space-y-2">
                   {dueReminders.map((item) => {
                     const subject = reminderSubject(item);
                     return (
                       <li key={item.id}>
-                        <Link href={`/pro/dashboard/reminders/${item.id}`} className="text-sm font-medium hover:text-primary">
+                        <Link
+                          href={`/pro/dashboard/reminders/${item.id}`}
+                          className="text-sm font-medium hover:text-primary"
+                        >
                           {item.title}
                         </Link>
                         <p className="text-xs text-muted-foreground">
@@ -362,210 +604,40 @@ export function DashboardView() {
                   })}
                 </ul>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">No upcoming reminders.</p>
+                <p className="text-sm text-muted-foreground">No upcoming reminders.</p>
               )}
-            </div>
-            <div>
-              <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">Scheduled</p>
-              {upcomingEvents.length ? (
-                <ul className="mt-2 space-y-2">
-                  {upcomingEvents.slice(0, 4).map((item) => (
-                    <li key={item.id}>
-                      <Link href={item.href} className="text-sm font-medium hover:text-primary">
-                        {item.title}
-                      </Link>
-                      <p className="text-xs text-muted-foreground">
-                        {item.date ? formatDate(item.date) : "Unscheduled"}
-                        {item.employeeId ? ` · ${employeeLabel(item.employeeId)}` : ""}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">Nothing scheduled this week.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <BoardCard
-          title="My day"
-          href="/pro/dashboard/tasks"
-          hrefLabel="All tasks"
-          empty={myDay.length ? undefined : "No open tasks due soon."}
-        >
-          {myDay.map((task) => {
-            const subject = taskSubject(task);
-            return (
-              <Link
-                key={task.id}
-                href={`/pro/dashboard/tasks/${task.id}`}
-                className="flex items-start gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
-              >
-                <span
-                  className={cn("mt-1.5 size-2 shrink-0 rounded-full", taskIsOverdue(task, todayKey) ? "bg-red-500" : "bg-primary")}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="truncate text-sm font-medium">{task.title}</p>
-                    <p className={cn("shrink-0 text-xs", taskIsOverdue(task, todayKey) ? "font-medium text-red-600" : "text-muted-foreground")}>
-                      {formatDate(task.dueAt)}
+          <BoardCard title="Recent activity" href="/pro/dashboard/reports" hrefLabel="Reports">
+            <ol className="flex flex-col px-(--card-spacing) py-3">
+              {feed.map((item, index) => (
+                <li key={item.id} className="relative flex gap-3.5">
+                  <span className="flex w-3 shrink-0 flex-col items-center" aria-hidden="true">
+                    <span className={cn("mt-1.5 size-2 rounded-full", activityDot(item.title))} />
+                    {index < feed.length - 1 ? (
+                      <span className="mt-1 w-px flex-1 bg-border" />
+                    ) : null}
+                  </span>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "min-w-0 flex-1 rounded-sm hover:text-primary",
+                      index < feed.length - 1 && "pb-4",
+                    )}
+                  >
+                    <p className="text-sm font-medium">{item.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.detail}
+                      <span className="text-muted-foreground/70"> · {formatDate(item.at)}</span>
                     </p>
-                  </div>
-                  <p className="mt-0.5 text-[11px] tracking-wide text-muted-foreground uppercase">
-                    {crmTaskPriorityLabel(task.priority)}
-                    {subject.id ? ` · ${reminderSubjectKindLabel(subject.kind)}` : ""}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
-        </BoardCard>
-
-        <BoardCard
-          title="Upcoming schedule"
-          href="/pro/dashboard/schedule"
-          hrefLabel="Calendar"
-          empty={upcomingEvents.length ? undefined : "No scheduled blocks this week."}
-        >
-          {upcomingEvents.map((item) => (
-            <Link key={item.id} href={item.href} className="flex items-center gap-3.5 px-(--card-spacing) py-3 hover:bg-muted/40">
-              <DateStamp value={item.date} />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.title}</p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {item.detail}
-                  {item.employeeId ? ` · ${employeeLabel(item.employeeId)}` : ""}
-                </p>
-              </div>
-            </Link>
-          ))}
-        </BoardCard>
-
-        <BoardCard title="Recent activity" href="/pro/dashboard/reports" hrefLabel="Reports">
-          <ol className="flex flex-col px-(--card-spacing) py-3">
-            {feed.map((item, index) => (
-              <li key={item.id} className="relative flex gap-3.5">
-                <span className="flex w-3 shrink-0 flex-col items-center" aria-hidden="true">
-                  <span className={cn("mt-1.5 size-2 rounded-full", activityDot(item.title))} />
-                  {index < feed.length - 1 ? <span className="mt-1 w-px flex-1 bg-border" /> : null}
-                </span>
-                <Link
-                  href={item.href}
-                  className={cn("min-w-0 flex-1 rounded-sm hover:text-primary", index < feed.length - 1 && "pb-4")}
-                >
-                  <p className="text-sm font-medium">{item.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {item.detail}
-                    <span className="text-muted-foreground/70"> · {formatDate(item.at)}</span>
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ol>
-        </BoardCard>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <BoardCard
-          title="Website inbox"
-          href="/pro/dashboard/messages"
-          hrefLabel="Open messages"
-          empty={inbox.items.length ? undefined : "No new website chats or leads."}
-        >
-          {inbox.items.slice(0, 5).map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              className="flex items-start gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
-            >
-              <span
-                className={cn(
-                  "mt-1.5 size-2 shrink-0 rounded-full",
-                  item.kind === "chat" ? "bg-[#c2410c]" : "bg-primary",
-                )}
-              />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.title}</p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
-              </div>
-            </Link>
-          ))}
-        </BoardCard>
-        <BoardCard title="Incoming requests" href="/pro/dashboard/requests" hrefLabel="All leads">
-          {allRequests.slice(0, 4).map((request) => (
-            <Link
-              key={request.id}
-              href={`/pro/dashboard/requests/${request.id}`}
-              className="flex items-center gap-3.5 px-(--card-spacing) py-4 hover:bg-muted/40"
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] font-semibold tracking-wide text-primary">
-                {initials(request.customerName)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="truncate text-sm font-medium">{request.serviceName}</p>
-                  <StatusPill label={requestStatusLabel(request.status)} tone={requestTone(request.status)} />
-                </div>
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {request.customerName} · {request.neighborhood}
-                  {request.preferredDate ? ` · ${formatDate(request.preferredDate)}` : ""}
-                </p>
-              </div>
-            </Link>
-          ))}
-        </BoardCard>
-
-        <BoardCard title="Upcoming jobs" href="/pro/dashboard/jobs" hrefLabel="All jobs">
-          {allJobs.slice(0, 4).map((job) => {
-            const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
-            const date = event?.date ?? job.scheduledAt;
-            return (
-              <Link
-                key={job.id}
-                href={`/pro/dashboard/jobs/${job.id}`}
-                className="flex items-center gap-3.5 px-(--card-spacing) py-4 hover:bg-muted/40"
-              >
-                <DateStamp value={date} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="truncate text-sm font-medium">
-                      {job.number}
-                      <span className="font-normal text-muted-foreground">
-                        {" "}
-                        · {getPortalCustomerName(provider, job.customerId)}
-                      </span>
-                    </p>
-                    <StatusPill label={jobStatusLabel(job.status)} className={jobStatusTone(job.status)} />
-                  </div>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    {event?.detail ?? job.address.city}
-                    {event?.employeeId ? ` · ${employeeLabel(event.employeeId)}` : job.assignedTo ? ` · ${job.assignedTo}` : ""}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
-        </BoardCard>
-      </div>
-
-      {alertItems.length ? (
-        <section className="rounded-xl border border-input bg-card px-5 py-5">
-          <div className="mb-4">
-            <h2 className="text-sm font-semibold">Needs attention</h2>
-            <p className="text-sm text-muted-foreground">
-              {alertItems.reduce((sum, item) => sum + item.value, 0)} items across the board
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {alertItems.map((item) => (
-              <AlertCell key={item.label} {...item} />
-            ))}
-          </div>
-        </section>
-      ) : null}
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </BoardCard>
+        </div>
+      </DashboardSection>
 
       <section className="rounded-xl border border-input bg-card px-5 py-5">
         <h2 className="text-sm font-semibold">Quick actions</h2>

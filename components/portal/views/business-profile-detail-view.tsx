@@ -17,7 +17,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { coverageNeighborhoodLabels } from "@/lib/coverage-areas";
+import {
+  coverageNeighborhoodIds,
+  coverageNeighborhoodLabels,
+  formatServiceAreaCoverageLabels,
+} from "@/lib/coverage-areas";
 import { getServiceCategoryById } from "@/lib/data/services";
 import { formatHoursValue, formatLocation, formatWorkingDay } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -26,7 +30,10 @@ import {
   selectAuthProvider,
   selectAuthUser,
 } from "@/store/authSlice";
-import { fetchServiceAreasPicker } from "@/store/serviceAreasSlice";
+import {
+  fetchServiceAreasPicker,
+  type ServiceArea,
+} from "@/store/serviceAreasSlice";
 import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
 import {
   getProfileSetupItems,
@@ -74,22 +81,20 @@ export function BusinessProfileDetailView() {
   }, [dispatch]);
 
   const areasById = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, string[]>();
     for (const area of [...listItems, ...pickerItems]) {
-      if (area?.id && area.title) map.set(area.id, area.title);
+      if (area?.id) map.set(area.id, formatServiceAreaCoverageLabels(area));
     }
     return map;
   }, [listItems, pickerItems]);
 
-  const firstName = String(user?.firstName || "").trim();
-  const lastName = String(user?.lastName || "").trim();
-  const displayName =
-    [firstName, lastName].filter(Boolean).join(" ").trim() ||
-    String(user?.email || "Provider");
-  const initials =
-    `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() ||
-    displayName.charAt(0).toUpperCase();
-  const avatar = getUserAvatarSrc(user);
+  const serviceAreasById = useMemo(() => {
+    const map = new Map<string, ServiceArea>();
+    for (const area of [...listItems, ...pickerItems]) {
+      if (area?.id) map.set(area.id, area);
+    }
+    return map;
+  }, [listItems, pickerItems]);
 
   const categoryIds = Array.isArray(authProvider?.services?.categoryIds)
     ? authProvider.services.categoryIds
@@ -102,10 +107,55 @@ export function BusinessProfileDetailView() {
   const categories = categoryIds
     .map((id) => getServiceCategoryById(id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  const neighborhoods = coverageNeighborhoodLabels(
-    authProvider?.coverage?.neighborhoods,
+
+  const neighborhoods = useMemo(() => {
+    const selectedIds = coverageNeighborhoodIds(
+      authProvider?.coverage?.neighborhoods,
+    );
+    const fromServiceAreas: string[] = [];
+    for (const id of selectedIds) {
+      const area = serviceAreasById.get(id);
+      if (!area) continue;
+      const city = [area.location?.city, area.location?.state]
+        .filter(Boolean)
+        .join(", ");
+      const names = (area.areas || [])
+        .map((item) => item.name?.trim())
+        .filter((name): name is string => Boolean(name));
+      if (names.length) {
+        for (const name of names) {
+          const label = city ? `${name} · ${city}` : name;
+          if (!fromServiceAreas.includes(label)) fromServiceAreas.push(label);
+        }
+      } else {
+        for (const label of formatServiceAreaCoverageLabels(area)) {
+          if (label && !fromServiceAreas.includes(label)) {
+            fromServiceAreas.push(label);
+          }
+        }
+      }
+    }
+    if (fromServiceAreas.length) return fromServiceAreas;
+    return coverageNeighborhoodLabels(
+      authProvider?.coverage?.neighborhoods,
+      areasById,
+    );
+  }, [
     areasById,
-  );
+    authProvider?.coverage?.neighborhoods,
+    serviceAreasById,
+  ]);
+
+  const firstName = String(user?.firstName || "").trim();
+  const lastName = String(user?.lastName || "").trim();
+  const displayName =
+    [firstName, lastName].filter(Boolean).join(" ").trim() ||
+    String(user?.email || "Provider");
+  const initials =
+    `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() ||
+    displayName.charAt(0).toUpperCase();
+  const avatar = getUserAvatarSrc(user);
+
   const years =
     typeof authProvider?.profile?.yearsInBusiness === "number"
       ? authProvider.profile.yearsInBusiness

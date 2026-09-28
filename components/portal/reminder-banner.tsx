@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -10,12 +10,14 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
+import { queryReminders } from "@/lib/api/crm-client";
 import {
   crmCustomerName,
   openRemindersFor,
   reminderIsOverdue,
   reminderSubjectHref,
   reminderSubjectKindLabel,
+  type PortalReminder,
   type ReminderSubjectKind,
 } from "@/lib/data/crm-people";
 import { employeeName, getPortalCustomerName } from "@/lib/data/portal";
@@ -24,6 +26,30 @@ import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store/hooks";
 import { patchCustomerReminderStatus } from "@/store/customersSlice";
 import { patchReminderStatus } from "@/store/remindersSlice";
+
+/** Build GET /reminders query scoped to one record (subjectKind + subjectId). */
+function subjectReminderQuery(kind: ReminderSubjectKind, id: string) {
+  const base = {
+    status: "open" as const,
+    limit: 100,
+    force: true,
+    silent: true as const,
+  };
+  // Customer filter also covers legacy rows that only set customerId.
+  if (kind === "customer") {
+    return { ...base, customerId: id, subjectKind: kind, subjectId: id };
+  }
+  return { ...base, subjectKind: kind, subjectId: id };
+}
+
+function sortNewestFirst(items: PortalReminder[]) {
+  return [...items].sort((a, b) => {
+    const aAt = a.createdAt || "";
+    const bAt = b.createdAt || "";
+    if (aAt === bAt) return 0;
+    return aAt < bAt ? 1 : -1;
+  });
+}
 
 export function useReminderLookups() {
   const { customers, contractors, vendors } = useCrmDirectory();
@@ -107,9 +133,44 @@ export function useReminderLookups() {
 export function OpenReminderBanner({ kind, id }: { kind: ReminderSubjectKind; id: string }) {
   const dispatch = useAppDispatch();
   const crm = useCrmApiData();
-  const { reminders } = useCrmDirectory();
+  const { reminders: directoryReminders } = useCrmDirectory();
+  const [scoped, setScoped] = useState<PortalReminder[] | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const open = openRemindersFor(reminders, kind, id);
+
+  // Always load open reminders for THIS record from the API (subjectKind + subjectId).
+  // Re-fetch when directory reminders change so newly created ones appear immediately.
+  const directoryKey = directoryReminders
+    .filter((item) => item.status === "open" && !item.isArchived)
+    .map((item) => item.id)
+    .sort()
+    .join("|");
+
+  useEffect(() => {
+    const recordId = String(id || "").trim();
+    if (!recordId) {
+      setScoped([]);
+      return;
+    }
+    let cancelled = false;
+    setScoped(null);
+    void queryReminders(subjectReminderQuery(kind, recordId))
+      .then((result) => {
+        if (cancelled) return;
+        // Client-side guard: only this subject, newest first.
+        setScoped(openRemindersFor(result.items, kind, recordId));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Fallback to directory cache filtered by the same subject.
+        setScoped(openRemindersFor(directoryReminders, kind, recordId));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- directoryReminders used via directoryKey
+  }, [kind, id, directoryKey]);
+
+  const open = sortNewestFirst(scoped ?? openRemindersFor(directoryReminders, kind, id));
   if (!open.length) return null;
   const overdue = open.some((item) => reminderIsOverdue(item));
 
@@ -128,6 +189,9 @@ export function OpenReminderBanner({ kind, id }: { kind: ReminderSubjectKind; id
       } else {
         crm.patchReminder(reminderId, { status: "done" });
       }
+      setScoped((current) =>
+        (current ?? open).filter((item) => item.id !== reminderId),
+      );
       toast.success("Reminder marked done.");
     } catch (error) {
       toast.error(

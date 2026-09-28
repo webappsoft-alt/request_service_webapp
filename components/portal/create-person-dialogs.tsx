@@ -1150,6 +1150,8 @@ export function CreateReminderDialog({
                       item === "employee" ||
                       item === "job" ||
                       item === "estimate" ||
+                      item === "invoice" ||
+                      item === "request" ||
                       item === "contractor" ||
                       item === "vendor",
                   ).map((item) => (

@@ -837,11 +837,11 @@ export function EstimateDetailView({ id }: { id: string }) {
                     <DropdownMenuItem onSelect={() => setNoteOpen(true)}>
                       Add note
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setReminderOpen(true)}>
-                      Set reminder
-                    </DropdownMenuItem>
                   </>
                 ) : null}
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>
+                  Set reminder
+                </DropdownMenuItem>
                 {records.isArchived("estimate", estimate.id) ? (
                   <DropdownMenuItem
                     disabled={restoring}

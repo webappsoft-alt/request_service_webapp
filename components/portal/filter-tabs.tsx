@@ -11,7 +11,7 @@ export function FilterTabs({
   options: { value: string; label: string; href?: string }[];
 }) {
   return (
-    <div className="flex flex-wrap gap-x-5 border-b border-input bg-card px-4">
+    <div className="flex flex-wrap gap-x-6 border-b border-input bg-card px-4">
       {options.map((option) => {
         const href = option.href ?? (option.value ? `${baseHref}?status=${option.value}` : baseHref);
         const active = value === option.value;
@@ -20,8 +20,10 @@ export function FilterTabs({
             key={option.label}
             href={href}
             className={cn(
-              "-mb-px cursor-pointer border-b-2 py-2.5 text-sm font-medium",
-              active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+              "-mb-px cursor-pointer border-b-2 py-2.5 text-sm transition-colors",
+              active
+                ? "border-primary font-semibold text-primary"
+                : "border-transparent font-medium text-muted-foreground hover:text-foreground",
             )}
           >
             {option.label}

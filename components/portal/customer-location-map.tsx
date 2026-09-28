@@ -50,20 +50,67 @@ export function CustomerLocationMap({
   provider,
   address,
   name,
+  simpro = false,
+  plain = false,
 }: {
   provider: Provider;
   address: ServiceAddress;
   name: string;
+  /** Soft section header (legacy). */
+  simpro?: boolean;
+  /** No card border — location label + address, then map below. */
+  plain?: boolean;
 }) {
   const point = getCustomerMapPoint(provider, address);
   const line = `${address.street}${address.unit ? `, ${address.unit}` : ""}, ${formatLocation(address.city, address.state, address.zip)}`;
 
+  if (plain) {
+    return (
+      <section className="space-y-3">
+        <div>
+          <p className="text-[11px] font-medium text-muted-foreground">Location</p>
+          <p className="mt-1 text-sm font-medium text-foreground">{line}</p>
+        </div>
+        <div className="rs-map h-72 overflow-hidden rounded-xl">
+          <MapContainer
+            center={[point.lat, point.lng]}
+            zoom={16}
+            zoomControl={false}
+            scrollWheelZoom={false}
+            className="h-full w-full"
+          >
+            <TileLayer attribution={mapTiles.attribution} url={mapTiles.url} />
+            <ZoomControl position="bottomright" />
+            <Recenter lat={point.lat} lng={point.lng} />
+            <Marker position={[point.lat, point.lng]} icon={addressIcon()}>
+              <Popup>
+                <p className="text-sm font-semibold">{name}</p>
+                <p className="text-xs text-muted-foreground">{line}</p>
+              </Popup>
+            </Marker>
+          </MapContainer>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-      <header className="border-b border-input bg-[#f7f8fa] px-5 py-3">
-        <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Location</p>
-        <h3 className="text-sm font-semibold">{line}</h3>
-      </header>
+    <section className="overflow-hidden rounded-xl border border-[#dce4ee] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+      {simpro ? (
+        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-[#d7e2ee] bg-[#eef4fa] px-4">
+          <h3 className="text-sm font-semibold text-[#003F7D]">Location</h3>
+        </header>
+      ) : (
+        <header className="border-b border-border-soft px-5 py-3">
+          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Location</p>
+          <h3 className="text-sm font-semibold">{line}</h3>
+        </header>
+      )}
+      {simpro ? (
+        <div className="border-b border-[#e8eef5] bg-white px-4 py-2.5">
+          <p className="text-sm font-medium text-foreground">{line}</p>
+        </div>
+      ) : null}
       <div className="rs-map h-72">
         <MapContainer
           center={[point.lat, point.lng]}

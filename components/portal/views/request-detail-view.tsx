@@ -8,32 +8,19 @@ import {
   Archive,
   ArchiveRestore,
   Bell,
-  Briefcase,
-  Building2,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
-  Clock,
   ExternalLink,
   FilePlus2,
-  FileText,
-  ImageIcon,
-  Info,
-  LayoutDashboard,
   ListTodo,
   Loader2,
   Mail,
-  MapPin,
-  MessageCircle,
   MessageSquare,
   NotebookPen,
   Phone,
   PhoneCall,
-  Receipt,
   RotateCcw,
-  Search,
-  UserRound,
-  Wallet,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -110,7 +97,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getAvatarColor, getInitials } from "@/lib/chat-format";
-import { CrmMark } from "@/components/portal/crm-mark";
 import { CustomerLocationMapLazy } from "@/components/portal/customer-location-map-lazy";
 import {
   crmCustomerName,
@@ -148,16 +134,16 @@ import type { Estimate, Job, RequestStatus, ServiceAddress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { id: "summary", label: "Summary", icon: LayoutDashboard },
-  { id: "customer", label: "Customer", icon: UserRound },
-  { id: "estimates", label: "Estimates", icon: FileText },
-  { id: "jobs", label: "Jobs", icon: Briefcase },
-  { id: "schedule", label: "Schedule", icon: CalendarDays },
-  { id: "tasks", label: "Tasks", icon: ListTodo },
-  { id: "reminders", label: "Reminders", icon: Bell },
-  { id: "messages", label: "Messages", icon: MessageCircle },
-  { id: "notes", label: "Notes", icon: NotebookPen },
-  { id: "photos", label: "Photos", icon: ImageIcon },
+  { id: "summary", label: "Summary" },
+  { id: "customer", label: "Customer" },
+  { id: "estimates", label: "Estimates" },
+  { id: "jobs", label: "Jobs" },
+  { id: "schedule", label: "Schedule" },
+  { id: "tasks", label: "Tasks" },
+  { id: "reminders", label: "Reminders" },
+  { id: "messages", label: "Messages" },
+  { id: "notes", label: "Notes" },
+  { id: "photos", label: "Photos" },
 ];
 
 type LeadTab =
@@ -171,14 +157,6 @@ type LeadTab =
   | "messages"
   | "notes"
   | "photos";
-
-const LEAD_STEPS = [
-  { id: "new", label: "New" },
-  { id: "contacted", label: "Contacted" },
-  { id: "estimate", label: "Estimate" },
-  { id: "won", label: "Won" },
-  { id: "job", label: "Job" },
-] as const;
 
 const REMINDER_FILTER_OPTIONS = [
   { value: "", label: "All" },
@@ -195,15 +173,6 @@ const TASK_FILTER_OPTIONS = [
   { value: "done", label: "Done" },
   { value: "overdue", label: "Overdue" },
 ];
-
-function leadFlowIndex(status: RequestStatus, hasEstimate: boolean, hasJob: boolean) {
-  if (hasJob || status === "converted_to_job") return 4;
-  if (status === "accepted") return 3;
-  if (status === "estimate_sent" || hasEstimate) return 2;
-  if (status === "contacted" || status === "viewed" || status === "scheduled") return 1;
-  if (status === "declined" || status === "closed") return 0;
-  return 0;
-}
 
 function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: boolean) {
   if (hasJob || status === "converted_to_job") return "This lead became a job. The signed scope is on the jobs board.";
@@ -222,6 +191,97 @@ function windowFromLabel(value?: string): PortalTimeWindow {
   if (label.includes("morning")) return "morning";
   if (label.includes("afternoon") || label.includes("evening")) return "afternoon";
   return "all_day";
+}
+
+function leadChannelCopy(channel?: string) {
+  if (channel === "direct") {
+    return "Lead source: submitted on your company website";
+  }
+  return "Lead source: came through the marketplace";
+}
+
+function leadStatusAlertClass(status: string) {
+  switch (status) {
+    case "contacted":
+    case "estimate_sent":
+      return "bg-amber-50 text-amber-950";
+    case "accepted":
+    case "converted_to_job":
+      return "bg-emerald-50 text-emerald-950";
+    case "declined":
+    case "closed":
+      return "bg-red-50 text-red-950";
+    case "new":
+    case "viewed":
+    case "scheduled":
+      return "bg-[#eef4fa] text-[#0f2f52]";
+    default:
+      return "bg-slate-50 text-slate-900";
+  }
+}
+
+function LeadCard({
+  title,
+  action,
+  children,
+  className,
+  hideHeader = false,
+  borderless = true,
+}: {
+  title?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  /** Hide title bar when the main tab already names this section. */
+  hideHeader?: boolean;
+  /** No outer border/shadow — flat panel. Default true for lead detail tabs. */
+  borderless?: boolean;
+}) {
+  return (
+    <section
+      className={cn(
+        "overflow-hidden rounded-xl bg-white",
+        !borderless && "border border-[#e8eef5] shadow-[0_1px_2px_rgba(15,23,42,0.03)]",
+        className,
+      )}
+    >
+      {!hideHeader && title ? (
+        <header className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-[#e8eef5] bg-[#f7f9fc] px-4">
+          <h3 className="truncate text-sm font-semibold text-[#003F7D]">{title}</h3>
+          {action ? <div className="flex h-8 shrink-0 items-center gap-2">{action}</div> : null}
+        </header>
+      ) : null}
+      <div className="bg-white">{children}</div>
+    </section>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  warn,
+  className,
+}: {
+  label: string;
+  value: ReactNode;
+  warn?: boolean;
+  className?: string;
+}) {
+  if (value == null || value === "") return null;
+  return (
+    <div className={cn("min-w-0", className)}>
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <div
+        className={
+          warn
+            ? "mt-1 text-sm font-medium text-red-700 whitespace-pre-wrap break-words"
+            : "mt-1 text-sm font-medium text-foreground whitespace-pre-wrap break-words"
+        }
+      >
+        {value}
+      </div>
+    </div>
+  );
 }
 
 export function RequestDetailView({ id }: { id: string }) {
@@ -1005,13 +1065,13 @@ export function RequestDetailView({ id }: { id: string }) {
   if (!request) {
     if (pending) {
       return (
-        <div className="border border-input bg-card" aria-busy="true">
+        <div className="border-border-soft bg-card" aria-busy="true">
           <CenteredSpinner label="Loading lead details" className="min-h-[28rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-input bg-card p-6">
+      <div className="bg-card p-6">
         <h1 className="text-lg font-semibold">Lead not found</h1>
         <Button asChild className="mt-4" size="sm">
           <Link href="/pro/dashboard/requests">Back to leads</Link>
@@ -1210,6 +1270,63 @@ export function RequestDetailView({ id }: { id: string }) {
         label={`${request.number} · ${request.serviceName}`}
         kind="request"
         tabs={TABS}
+        subnavTabs={["tasks", "reminders"]}
+        subnav={(activeTab) => {
+          if (activeTab === "tasks") {
+            return (
+              <LocalFilterTabs
+                flush
+                value={taskStatusFilter}
+                onChange={setTaskStatusFilter}
+                options={TASK_FILTER_OPTIONS}
+                trailing={
+                  <>
+                    <Select
+                      value={taskPriorityFilter || "all"}
+                      onValueChange={(val) => setTaskPriorityFilter(val === "all" ? "" : val)}
+                    >
+                      <SelectTrigger size="sm" className="h-8 w-36 py-0 text-xs leading-none bg-card border-border-soft">
+                        <SelectValue placeholder="All priorities" />
+                      </SelectTrigger>
+                      <SelectContent align="end">
+                        <SelectItem value="all">All priorities</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      className="h-8 shrink-0 text-xs leading-none"
+                      onClick={() => { setEditingTask(null); setTaskOpen(true); }}
+                    >
+                      + Create task
+                    </Button>
+                  </>
+                }
+              />
+            );
+          }
+          if (activeTab === "reminders") {
+            return (
+              <LocalFilterTabs
+                flush
+                value={reminderStatusFilter}
+                onChange={setReminderStatusFilter}
+                options={REMINDER_FILTER_OPTIONS}
+                trailing={
+                  <Button
+                    className="h-8 shrink-0 text-xs leading-none"
+                    onClick={() => { setEditingReminder(null); setReminderOpen(true); }}
+                  >
+                    + Set reminder
+                  </Button>
+                }
+              />
+            );
+          }
+          return null;
+        }}
         badge={
           <>
             <StatusPill label={requestStatusLabel(request.status)} tone={requestTone(request.status)} />
@@ -1329,65 +1446,72 @@ export function RequestDetailView({ id }: { id: string }) {
           switch (leadTab) {
             case "summary":
               return (
-                <div className="space-y-4">
-                  <LeadPipeline status={request.status} hasEstimate={hasEstimate} hasJob={hasJob} />
-                  <div
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-lg border px-4 py-2.5 text-xs font-medium",
-                      lost
-                        ? "border-red-200 bg-red-50 text-red-950"
-                        : "border-input bg-[#e8eef5]/60 text-[#003F7D]",
-                    )}
-                  >
-                    <Info className="size-4 shrink-0 text-[#003F7D]/70" aria-hidden="true" />
-                    <span>{leadStageCopy(request.status, hasEstimate, hasJob)}</span>
-                  </div>
-                  <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-                    <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                      <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
-                        <CrmMark
-                          name={request.serviceName || "Lead"}
-                          kind="person"
-                          photoKey={request.serviceName}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-lg font-semibold capitalize tracking-tight">
-                              {request.serviceName}
-                            </h2>
-                            <StatusPill
-                              label={request.channel === "direct" ? "Direct" : "Marketplace"}
-                              tone="primary"
-                            />
-                            {request.categoryName ? (
-                              <StatusPill label={request.categoryName} tone="neutral" />
-                            ) : null}
-                          </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            #{request.number} · {customerLabel}
-                            {request.customerEmail ? ` · ${request.customerEmail}` : ""}
+                <div className="space-y-5">
+                  <LeadCard hideHeader borderless>
+                    <div className="space-y-6 px-1 py-1 sm:px-2">
+                      <div>
+                        <h2 className="text-base font-semibold capitalize tracking-tight text-foreground">
+                          {request.serviceName}
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          #{request.number}
+                          {request.categoryName ? ` · ${request.categoryName}` : ""}
+                          {" · "}
+                          {request.customerId ? (
+                            <Link
+                              href={`/pro/dashboard/customers/${request.customerId}`}
+                              className="text-primary hover:underline"
+                            >
+                              {customerLabel}
+                            </Link>
+                          ) : (
+                            customerLabel
+                          )}
+                        </p>
+                      </div>
+
+                      <div
+                        className={cn(
+                          "rounded-md px-3 py-2",
+                          leadStatusAlertClass(request.status),
+                        )}
+                      >
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <p className="text-xs font-semibold">
+                            {requestStatusLabel(request.status)}
+                          </p>
+                          <span className="text-xs opacity-40" aria-hidden="true">
+                            ·
+                          </span>
+                          <p className="text-xs leading-snug">
+                            {leadStageCopy(request.status, hasEstimate, hasJob)}
                           </p>
                         </div>
-                      </header>
-                      <div className="grid sm:grid-cols-2">
+                        <p className="mt-1 text-[11px] leading-snug opacity-75">
+                          {leadChannelCopy(request.channel)}
+                        </p>
+                      </div>
+
+                      <div className="grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
                         <InfoRow
-                          icon={Building2}
                           label="Source"
-                          value={request.channel === "direct" ? "Website request" : "Marketplace lead"}
+                          value={
+                            request.channel === "direct"
+                              ? "Company website"
+                              : "Marketplace"
+                          }
                         />
-                        {request.customerEmail?.trim() ? (
-                          <InfoRow
-                            icon={Mail}
-                            label="Email"
-                            value={<span className="text-primary">{request.customerEmail}</span>}
-                          />
-                        ) : null}
-                        {request.customerPhone?.trim() ? (
-                          <InfoRow icon={Phone} label="Phone" value={request.customerPhone} />
-                        ) : null}
                         <InfoRow
-                          icon={MapPin}
-                          label="Street / Area"
+                          label="Email"
+                          value={
+                            request.customerEmail?.trim() ? (
+                              <span className="text-primary">{request.customerEmail}</span>
+                            ) : null
+                          }
+                        />
+                        <InfoRow label="Phone" value={request.customerPhone?.trim() || null} />
+                        <InfoRow
+                          label="Location"
                           value={
                             customer?.addresses?.[0]?.street
                               ? `${customer.addresses[0].street}, ${formatLocation(
@@ -1403,30 +1527,16 @@ export function RequestDetailView({ id }: { id: string }) {
                           }
                         />
                         <InfoRow
-                          icon={CalendarDays}
                           label="Preferred date"
                           value={request.preferredDate ? formatDate(request.preferredDate) : "Flexible"}
                         />
-                        <InfoRow
-                          icon={Clock}
-                          label="Window"
-                          value={request.preferredTimeWindow ?? "Any time"}
-                        />
+                        <InfoRow label="Window" value={request.preferredTimeWindow ?? "Any time"} />
+                        <InfoRow label="Date created" value={formatDate(request.createdAt)} />
                         {request.scheduledDate ? (
-                          <InfoRow
-                            icon={CalendarDays}
-                            label="Scheduled date"
-                            value={formatDate(request.scheduledDate)}
-                          />
+                          <InfoRow label="Scheduled date" value={formatDate(request.scheduledDate)} />
                         ) : null}
-                        <InfoRow
-                          icon={CalendarDays}
-                          label="Date created"
-                          value={formatDate(request.createdAt)}
-                        />
                         {scheduledVisits.length > 0 ? (
                           <InfoRow
-                            icon={CalendarDays}
                             label={scheduledVisits.length > 1 ? "Scheduled visits" : "Scheduled visit"}
                             value={
                               scheduledVisits.length === 1
@@ -1435,298 +1545,245 @@ export function RequestDetailView({ id }: { id: string }) {
                             }
                           />
                         ) : null}
-                        {request.answers?.length ? (
-                          <div className="sm:col-span-2 border-b border-input bg-[#f8fafc] px-5 py-4">
-                            <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase mb-3">
-                              Quote answers
-                            </p>
-                            <dl className="grid gap-2 sm:grid-cols-2">
-                              {request.answers.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="rounded-md border border-input bg-card p-3 shadow-2xs"
-                                >
-                                  <dt className="text-[11px] font-medium text-muted-foreground">{item.label}</dt>
-                                  <dd className="mt-1 text-sm font-semibold text-foreground">{item.value}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                            {request.details?.split("\n\n")[0] && !request.details.startsWith("Answers") ? (
-                              <div className="mt-3">
-                                <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase mb-1">
-                                  Notes
-                                </p>
-                                <p className="text-sm">{request.details.split("\n\n")[0]}</p>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        {request.details?.trim() && (!request.answers?.length || request.details.startsWith("Answers")) ? (
-                          <InfoRow
-                            icon={NotebookPen}
-                            label="What they asked for"
-                            value={request.details}
-                            className="sm:col-span-2"
-                          />
-                        ) : null}
+                        <InfoRow
+                          label="Amount owing"
+                          value={customer?.amountOwing != null ? formatMoney(customer.amountOwing) : "$0.00"}
+                        />
+                        <InfoRow
+                          label="Estimate total"
+                          value={estimate ? formatMoney(estimate.total) : "$0.00"}
+                        />
                       </div>
-                    </section>
 
-                    <div className="grid gap-4 self-start">
-                      <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                        <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
-                          <Wallet className="size-4 text-primary" aria-hidden="true" />
-                          <h3 className="text-sm font-semibold">Account</h3>
-                        </header>
-                        <div className="grid grid-cols-1 gap-px bg-black/5">
-                          <MoneyCell
-                            label="Amount owing"
-                            value={customer?.amountOwing != null ? formatMoney(customer.amountOwing) : "$0.00"}
-                            emphasize={Boolean(customer && customer.amountOwing > 0)}
-                          />
-                        </div>
-                        <div className="grid sm:grid-cols-2">
-                          <InfoRow
-                            icon={FileText}
-                            label="Estimate total"
-                            value={estimate ? formatMoney(estimate.total) : "$0.00"}
-                            className="sm:col-span-2"
-                          />
-                        </div>
-                      </section>
-
-                      <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                        <header className="flex items-center justify-between border-b border-input bg-[#f7f8fa] px-5 py-3">
-                          <div className="flex items-center gap-2">
-                            <UserRound className="size-4 text-primary" aria-hidden="true" />
-                            <h3 className="text-sm font-semibold">Customer</h3>
-                          </div>
-                          {request.customerId ? (
-                            <Link
-                              href={`/pro/dashboard/customers/${request.customerId}`}
-                              className="text-xs font-medium text-primary hover:underline"
-                            >
-                              Open file &rarr;
-                            </Link>
-                          ) : null}
-                        </header>
-                        <div className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <CrmMark
-                              name={customerLabel}
-                              kind="person"
-                              photoKey={customer?.firstName}
-                              size="md"
-                            />
-                            <div className="min-w-0 flex-1">
-                              {request.customerId ? (
-                                <Link
-                                  href={`/pro/dashboard/customers/${request.customerId}`}
-                                  className="font-medium text-primary hover:underline block truncate"
-                                >
-                                  {customerLabel}
-                                </Link>
-                              ) : (
-                                <p className="font-medium text-foreground truncate">{customerLabel}</p>
-                              )}
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                {request.customerPhone} · {request.customerEmail}
-                              </p>
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                {formatLocation(request.city ?? "", request.state ?? "", request.zip)}
+                      {request.answers?.length ? (
+                        <div className="rounded-lg bg-[#f7f9fc] px-4 py-3.5">
+                          <p className="mb-3 text-[11px] font-semibold text-[#003F7D]">Quote answers</p>
+                          <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {request.answers.map((item) => (
+                              <div key={item.id} className="min-w-0">
+                                <dt className="text-[11px] font-medium text-muted-foreground">{item.label}</dt>
+                                <dd className="mt-1 text-sm font-medium text-foreground wrap-break-word">{item.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                          {request.details?.split("\n\n")[0] && !request.details.startsWith("Answers") ? (
+                            <div className="mt-4 pt-3">
+                              <p className="text-[11px] font-medium text-muted-foreground">Notes</p>
+                              <p className="mt-1.5 text-sm leading-relaxed text-foreground">
+                                {request.details.split("\n\n")[0]}
                               </p>
                             </div>
-                          </div>
+                          ) : null}
                         </div>
-                      </section>
+                      ) : null}
+
+                      {request.details?.trim() && (!request.answers?.length || request.details.startsWith("Answers")) ? (
+                        <div className="rounded-lg bg-[#f7f9fc] px-4 py-3.5">
+                          <p className="mb-1.5 text-[11px] font-semibold text-[#003F7D]">What they asked for</p>
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground">
+                            {request.details}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
+                  </LeadCard>
+
                   <CustomerLocationMapLazy
                     provider={provider}
                     address={leadAddress}
                     name={customerLabel}
+                    plain
                   />
                 </div>
               );
             case "customer":
               if (customerLoading && !customer) {
                 return (
-                  <div className="flex min-h-[16rem] items-center justify-center rounded-lg border border-input bg-card p-6">
+                  <div className="flex min-h-[16rem] items-center justify-center rounded-lg bg-card p-6">
                     <CenteredSpinner label="Loading customer details..." />
                   </div>
                 );
               }
               return (
-                <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                  <header className="flex items-center justify-between border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
-                    <div className="flex items-center gap-4">
-                      <CrmMark name={customerLabel} kind="person" photoKey={customer?.firstName} />
+                <LeadCard hideHeader>
+                  <div className="space-y-4 px-1 py-1 sm:px-0">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <h2 className="text-lg font-semibold tracking-tight">{customerLabel}</h2>
-                        <p className="mt-0.5 text-sm text-muted-foreground">
-                          {customer?.phone || request.customerPhone} · {customer?.email || request.customerEmail}
+                        <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {[customer?.phone || request.customerPhone, customer?.email || request.customerEmail]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </div>
+                      {customer ? (
+                        <Button size="sm" asChild className="h-8">
+                          <Link href={`/pro/dashboard/customers/${customer.id}`}>Open customer file</Link>
+                        </Button>
+                      ) : null}
                     </div>
-                    {customer ? (
-                      <Button size="sm" asChild>
-                        <Link href={`/pro/dashboard/customers/${customer.id}`}>Open customer file</Link>
-                      </Button>
-                    ) : null}
-                  </header>
-                  <div className="grid sm:grid-cols-2">
-                    <InfoRow icon={UserRound} label="Customer name" value={customerLabel} />
-                    <InfoRow icon={Phone} label="Phone" value={customer?.phone || request.customerPhone} />
-                    <InfoRow
-                      icon={Mail}
-                      label="Email"
-                      value={<span className="text-primary">{customer?.email || request.customerEmail}</span>}
-                    />
-                    <InfoRow
-                      icon={MapPin}
-                      label="Service area"
-                      value={
-                        customer?.addresses?.[0]
-                          ? `${customer.addresses[0].street ? `${customer.addresses[0].street}, ` : ""}${formatLocation(
-                              customer.addresses[0].city || request.city || "",
-                              customer.addresses[0].state || request.state || "",
-                              customer.addresses[0].zip || request.zip,
-                            )}`
-                          : formatLocation(
-                              request.neighborhood || request.city || "",
-                              request.state || "",
-                              request.zip,
-                            )
-                      }
-                    />
-                    {customer ? (
-                      <>
-                        <InfoRow icon={Building2} label="Source" value={crmSourceLabel(customer.source)} />
-                        <InfoRow icon={CalendarDays} label="Client since" value={formatDate(customer.createdAt)} />
-                      </>
-                    ) : null}
+                    <div className="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">
+                      <InfoRow label="Customer name" value={customerLabel} />
+                      <InfoRow label="Phone" value={customer?.phone || request.customerPhone || null} />
+                      <InfoRow
+                        label="Email"
+                        value={
+                          (customer?.email || request.customerEmail) ? (
+                            <span className="text-primary">{customer?.email || request.customerEmail}</span>
+                          ) : null
+                        }
+                      />
+                      <InfoRow
+                        label="Service area"
+                        value={
+                          customer?.addresses?.[0]
+                            ? `${customer.addresses[0].street ? `${customer.addresses[0].street}, ` : ""}${formatLocation(
+                                customer.addresses[0].city || request.city || "",
+                                customer.addresses[0].state || request.state || "",
+                                customer.addresses[0].zip || request.zip,
+                              )}`
+                            : formatLocation(
+                                request.neighborhood || request.city || "",
+                                request.state || "",
+                                request.zip,
+                              ) || null
+                        }
+                      />
+                      {customer ? (
+                        <>
+                          <InfoRow label="Source" value={crmSourceLabel(customer.source)} />
+                          <InfoRow label="Client since" value={formatDate(customer.createdAt)} />
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                </section>
+                </LeadCard>
               );
             case "estimates":
               return (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      {estimatesLoading && !hasEstimatesCached
-                        ? "Loading estimates..."
-                        : relatedEstimates.length
-                          ? `${relatedEstimates.length} estimate${relatedEstimates.length === 1 ? "" : "s"} from this lead`
-                          : hasEstimate
-                            ? "Estimate proposal created for this lead"
-                            : "No estimate yet"}
-                    </p>
-                    {!hasEstimate ? (
-                      <Button size="sm" onClick={() => setEstimateOpen(true)}>
-                        Create estimate
-                      </Button>
-                    ) : null}
+                <LeadCard hideHeader>
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {estimatesLoading && !hasEstimatesCached
+                          ? "Loading estimates..."
+                          : relatedEstimates.length
+                            ? `${relatedEstimates.length} estimate${relatedEstimates.length === 1 ? "" : "s"} from this lead`
+                            : hasEstimate
+                              ? "Estimate proposal created for this lead"
+                              : "No estimate yet"}
+                      </p>
+                      {!hasEstimate ? (
+                        <Button size="sm" className="h-8" onClick={() => setEstimateOpen(true)}>
+                          Create estimate
+                        </Button>
+                      ) : null}
+                    </div>
+                    {(estimatesLoading && !hasEstimatesCached) || relatedEstimates.length ? (
+                      <PortalDataTable
+                        filename={`${request.number}-estimates`}
+                        countLabel="Estimates"
+                        searchPlaceholder="Search estimates"
+                        loading={estimatesLoading && !hasEstimatesCached}
+                        rows={relatedEstimates}
+                        rowKey={(row) => row.id}
+                        rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+                        columns={[
+                          {
+                            id: "number",
+                            header: "Quote #",
+                            sortValue: (row) => row.number,
+                            searchValue: (row) => row.number,
+                            exportValue: (row) => row.number,
+                            cell: (row) => (
+                              <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
+                                {row.number}
+                              </Link>
+                            ),
+                          },
+                          {
+                            id: "status",
+                            header: "Status",
+                            sortValue: (row) => row.status,
+                            searchValue: (row) => estimateStatusLabel(row.status),
+                            exportValue: (row) => estimateStatusLabel(row.status),
+                            cell: (row) => (
+                              <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />
+                            ),
+                          },
+                        ]}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Write the quote from this lead once you have the scope.</p>
+                    )}
                   </div>
-                  {(estimatesLoading && !hasEstimatesCached) || relatedEstimates.length ? (
-                    <PortalDataTable
-                      filename={`${request.number}-estimates`}
-                      countLabel="Estimates"
-                      searchPlaceholder="Search estimates"
-                      loading={estimatesLoading && !hasEstimatesCached}
-                      rows={relatedEstimates}
-                      rowKey={(row) => row.id}
-                      rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
-                      columns={[
-                        {
-                          id: "number",
-                          header: "Quote #",
-                          sortValue: (row) => row.number,
-                          searchValue: (row) => row.number,
-                          exportValue: (row) => row.number,
-                          cell: (row) => (
-                            <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
-                              {row.number}
-                            </Link>
-                          ),
-                        },
-                        {
-                          id: "status",
-                          header: "Status",
-                          sortValue: (row) => row.status,
-                          searchValue: (row) => estimateStatusLabel(row.status),
-                          exportValue: (row) => estimateStatusLabel(row.status),
-                          cell: (row) => (
-                            <StatusPill label={estimateStatusLabel(row.status)} className={estimateStatusTone(row.status)} />
-                          ),
-                        },
-                      ]}
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Write the quote from this lead once you have the scope.</p>
-                  )}
-                </div>
+                </LeadCard>
               );
             case "jobs":
-              return (jobsLoading && !hasJobsCached) || relatedJobs.length ? (
-                <PortalDataTable
-                  filename={`${request.number}-jobs`}
-                  countLabel="Jobs"
-                  searchPlaceholder="Search jobs"
-                  loading={jobsLoading && !hasJobsCached}
-                  rows={relatedJobs}
-                  rowKey={(row) => row.id}
-                  rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
-                  empty="No job yet. The customer signs the estimate, then this lead becomes a job."
-                  columns={jobBoardColumns({
-                    estimates: baseEstimates,
-                    requests: allRequests,
-                    invoices,
-                    events,
-                    employeeLabel,
-                    customerName: (customerId) => {
-                      const match = (apiCustomer && apiCustomer.id === customerId) ? apiCustomer : customers.find((item) => item.id === customerId);
-                      return match ? crmCustomerName(match) : (customerId === request.customerId && (request.customerName || customerLabel)) ? (request.customerName || customerLabel) : getPortalCustomerName(provider, customerId);
-                    },
-                  })}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No job yet. The customer signs the estimate, then this lead becomes a job.
-                </p>
+              return (
+                <LeadCard hideHeader>
+                  <div>
+                    {(jobsLoading && !hasJobsCached) || relatedJobs.length ? (
+                      <PortalDataTable
+                        filename={`${request.number}-jobs`}
+                        countLabel="Jobs"
+                        searchPlaceholder="Search jobs"
+                        loading={jobsLoading && !hasJobsCached}
+                        rows={relatedJobs}
+                        rowKey={(row) => row.id}
+                        rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
+                        empty="No job yet. The customer signs the estimate, then this lead becomes a job."
+                        columns={jobBoardColumns({
+                          estimates: baseEstimates,
+                          requests: allRequests,
+                          invoices,
+                          events,
+                          employeeLabel,
+                          customerName: (customerId) => {
+                            const match = (apiCustomer && apiCustomer.id === customerId) ? apiCustomer : customers.find((item) => item.id === customerId);
+                            return match ? crmCustomerName(match) : (customerId === request.customerId && (request.customerName || customerLabel)) ? (request.customerName || customerLabel) : getPortalCustomerName(provider, customerId);
+                          },
+                        })}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No job yet. The customer signs the estimate, then this lead becomes a job.
+                      </p>
+                    )}
+                  </div>
+                </LeadCard>
               );
             case "schedule": {
               const visitsCount = scheduledVisits.length;
               return (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base font-semibold">Scheduled visits</h2>
-                        {visitsCount > 0 ? (
-                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-[#003F7D] border border-blue-200">
-                            {visitsCount} {visitsCount === 1 ? "visit" : "visits"}
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Site inspection, estimate walkthrough, or intake call on the calendar.
-                      </p>
+                <div className="space-y-0">
+                  {/* Toolbar — attached secondary bar (no floating title + gap) */}
+                  <div className="-mx-4 -mt-1.5 mb-0 flex flex-wrap items-center justify-between gap-3 bg-secondary px-4 py-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-bold text-foreground">Scheduled visits</h2>
+                      {visitsCount > 0 ? (
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {visitsCount} {visitsCount === 1 ? "visit" : "visits"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Site inspection, estimate walkthrough, or intake call
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSelectedScheduleForEdit(null);
-                          setAssignOpen(true);
-                        }}
-                      >
-                        + Schedule visit
-                      </Button>
-                    </div>
+                    <Button
+                      className="h-8 shrink-0 text-xs leading-none"
+                      onClick={() => {
+                        setSelectedScheduleForEdit(null);
+                        setAssignOpen(true);
+                      }}
+                    >
+                      + Schedule visit
+                    </Button>
                   </div>
 
                   {scheduledVisits.length > 0 ? (
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-0 border-b border-border-soft">
                       {scheduledVisits.map((v, index) => {
                         const isUnlinkingThis = unlinkingScheduleId === v.id;
                         const effectiveEnd =
@@ -1734,78 +1791,75 @@ export function RequestDetailView({ id }: { id: string }) {
                         return (
                           <div
                             key={v.id || index}
-                            className="rounded-[4px] border border-input bg-card p-4 shadow-2xs hover:border-input transition-colors flex flex-col justify-between"
+                            className="border-b border-border-soft bg-card px-0 py-3 last:border-b-0 sm:px-0"
                           >
-                            <div>
-                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input pb-2.5 mb-3">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <CalendarDays className="size-4 text-[#003F7D] shrink-0" />
-                                  <span className="font-semibold text-foreground text-sm truncate">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0 space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <CalendarDays className="size-4 shrink-0 text-primary" />
+                                  <span className="text-sm font-semibold text-foreground">
+                                    {visitsCount > 1 ? `Visit ${index + 1} · ` : ""}
                                     {v.date ? formatDate(v.date) : "Date pending"}
                                     {effectiveEnd ? ` – ${formatDate(effectiveEnd)}` : ""}
                                   </span>
-                                  {visitsCount > 1 ? (
-                                    <span className="text-[10px] uppercase font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                      Visit {index + 1}
+                                  {v.status ? (
+                                    <span className="rounded-md bg-secondary px-2 py-0.5 text-[11px] font-semibold capitalize text-primary">
+                                      {v.status.replace(/_/g, " ")}
                                     </span>
                                   ) : null}
                                 </div>
-                                {v.status ? (
-                                  <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-[#003F7D] border border-blue-200 capitalize">
-                                    {v.status.replace(/_/g, " ")}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              <div className="grid gap-2 text-xs mb-3">
-                                <div>
-                                  <p className="text-muted-foreground font-medium">Time slot</p>
-                                  <p className="mt-0.5 font-semibold text-foreground">
-                                    {timeWindowLabel(v.timeWindow)}
-                                    {v.startMinutes != null
-                                      ? ` · ${formatClock(v.startMinutes)}${v.endMinutes != null ? `–${formatClock(v.endMinutes)}` : ""}`
-                                      : ""}
+                                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                                  <p>
+                                    <span className="text-muted-foreground">Time · </span>
+                                    <span className="font-medium text-foreground">
+                                      {timeWindowLabel(v.timeWindow)}
+                                      {v.startMinutes != null
+                                        ? ` · ${formatClock(v.startMinutes)}${v.endMinutes != null ? `–${formatClock(v.endMinutes)}` : ""}`
+                                        : ""}
+                                    </span>
                                   </p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground font-medium">
-                                    Assigned staff / team member
-                                  </p>
-                                  <p className="mt-0.5 font-semibold text-foreground">
-                                    {v.employeeId ? employeeLabel(v.employeeId) : "Unassigned"}
+                                  <p>
+                                    <span className="text-muted-foreground">Assigned · </span>
+                                    <span className="font-medium text-foreground">
+                                      {v.employeeId ? employeeLabel(v.employeeId) : "Unassigned"}
+                                    </span>
                                   </p>
                                 </div>
                               </div>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-input mt-auto">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                                disabled={isUnlinkingThis}
-                                onClick={() => handleDeleteSchedule(v)}
-                              >
-                                {isUnlinkingThis ? "Unlinking..." : "Unlink visit"}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs"
-                                onClick={() => {
-                                  setSelectedScheduleForEdit(v);
-                                  setAssignOpen(true);
-                                }}
-                              >
-                                Reschedule
-                              </Button>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 border-border-soft"
+                                  disabled={isUnlinkingThis}
+                                  onClick={() => handleDeleteSchedule(v)}
+                                >
+                                  {isUnlinkingThis ? "Unlinking..." : "Unlink"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs border-border-soft"
+                                  onClick={() => {
+                                    setSelectedScheduleForEdit(v);
+                                    setAssignOpen(true);
+                                  }}
+                                >
+                                  Reschedule
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                  ) : null}
+                  ) : (
+                    <p className="border-b border-border-soft py-3 text-sm text-muted-foreground">
+                      No visits yet. Schedule a site inspection or walkthrough from this lead.
+                    </p>
+                  )}
 
+                  {/* Calendar — toolbar is the bar; no nested card title */}
                   <EventCalendar
                     events={calendarEvents}
                     employees={employees}
@@ -1820,36 +1874,7 @@ export function RequestDetailView({ id }: { id: string }) {
               );
             }
             case "tasks":
-              return (
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <LocalFilterTabs
-                      value={taskStatusFilter}
-                      onChange={setTaskStatusFilter}
-                      options={TASK_FILTER_OPTIONS}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select
-                        value={taskPriorityFilter || "all"}
-                        onValueChange={(val) => setTaskPriorityFilter(val === "all" ? "" : val)}
-                      >
-                        <SelectTrigger className="h-8 w-32 text-xs bg-card">
-                          <SelectValue placeholder="All priorities" />
-                        </SelectTrigger>
-                        <SelectContent align="end">
-                          <SelectItem value="all">All priorities</SelectItem>
-                          <SelectItem value="urgent">Urgent</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="normal">Normal</SelectItem>
-                          <SelectItem value="low">Low</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button size="sm" onClick={() => { setEditingTask(null); setTaskOpen(true); }}>
-                        + Create task
-                      </Button>
-                    </div>
-                  </div>
-                  {(tasksLoading && !hasTasksCached) || displayedTasks.length ? (
+              return (tasksLoading && !hasTasksCached) || displayedTasks.length ? (
                     <PortalDataTable
                       filename={`${request.number}-tasks`}
                       countLabel="Tasks"
@@ -2032,33 +2057,19 @@ export function RequestDetailView({ id }: { id: string }) {
                       ]}
                     />
                   ) : (
-                    <div className="rounded-lg border border-dashed border-input bg-card p-8 text-center">
+                    <div className="p-8 text-center">
                       <ListTodo className="mx-auto size-8 text-muted-foreground/60" />
                       <h4 className="mt-2 text-sm font-semibold">No tasks yet</h4>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Create a task against this lead — call back, confirm scope, or pull a permit.
                       </p>
-                      <Button size="sm" className="mt-4" onClick={() => { setEditingTask(null); setTaskOpen(true); }}>
+                      <Button size="sm" className="mt-4 h-8" onClick={() => { setEditingTask(null); setTaskOpen(true); }}>
                         + Create task
                       </Button>
                     </div>
-                  )}
-                </div>
-              );
+                  );
             case "reminders":
-              return (
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <LocalFilterTabs
-                      value={reminderStatusFilter}
-                      onChange={setReminderStatusFilter}
-                      options={REMINDER_FILTER_OPTIONS}
-                    />
-                    <Button size="sm" onClick={() => { setEditingReminder(null); setReminderOpen(true); }}>
-                      + Set reminder
-                    </Button>
-                  </div>
-                  {(remindersLoading && !hasRemindersCached) || displayedReminders.length ? (
+              return (remindersLoading && !hasRemindersCached) || displayedReminders.length ? (
                     <PortalDataTable
                       filename={`${request.number}-reminders`}
                       countLabel="Reminders"
@@ -2167,19 +2178,17 @@ export function RequestDetailView({ id }: { id: string }) {
                       ]}
                     />
                   ) : (
-                    <div className="rounded-lg border border-dashed border-input bg-card p-8 text-center">
+                    <div className="p-8 text-center">
                       <Bell className="mx-auto size-8 text-muted-foreground/60" />
                       <h4 className="mt-2 text-sm font-semibold">No reminders yet</h4>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Set a reminder to follow up on this lead.
                       </p>
-                      <Button size="sm" className="mt-4" onClick={() => { setEditingReminder(null); setReminderOpen(true); }}>
+                      <Button size="sm" className="mt-4 h-8" onClick={() => { setEditingReminder(null); setReminderOpen(true); }}>
                         + Set reminder
                       </Button>
                     </div>
-                  )}
-                </div>
-              );
+                  );
             case "messages": {
               const customerName = thread?.customerName || customerLabel || request.customerName;
               const customerEmail = thread?.customerEmail || customer?.email || request.customerEmail;
@@ -2195,13 +2204,13 @@ export function RequestDetailView({ id }: { id: string }) {
               const isCustomerOnline = custPresence?.isOnline ?? thread?.presence?.customer?.isOnline ?? thread?.isOnline ?? false;
 
               return (
-                <div className="flex h-[calc(100vh-270px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
+                <div className="flex h-[calc(100vh-270px)] min-h-[520px] flex-col overflow-hidden rounded-xl bg-card">
                   {/* Chat Top Header */}
-                  <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6 shadow-2xs">
+                  <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-soft bg-white px-4 sm:px-6">
                     <div className="flex min-w-0 items-center gap-3">
                       {/* Customer Avatar */}
                       <div className="relative shrink-0">
-                        <Avatar className="size-10 shadow-2xs ring-1 ring-border">
+                        <Avatar className="size-9 shadow-2xs ring-1 ring-border-soft">
                           {customerAvatar ? (
                             <AvatarImage
                               src={customerAvatar}
@@ -2345,40 +2354,50 @@ export function RequestDetailView({ id }: { id: string }) {
               );
             }
             case "notes":
-              return <NotesPanel kind="request" id={request.id} empty="Add the first note on this lead." />;
+              return (
+                <LeadCard hideHeader>
+                  <NotesPanel kind="request" id={request.id} empty="Add the first note on this lead." />
+                </LeadCard>
+              );
             case "photos":
-              return request.photoUrls.length ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    {request.photoUrls.length} photo
-                    {request.photoUrls.length === 1 ? "" : "s"} from the customer
-                    request.
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {request.photoUrls.map((src) => (
-                      <a
-                        key={src}
-                        href={src}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="relative block h-56 overflow-hidden rounded-[4px] border border-input transition hover:border-primary/40"
-                      >
-                        <Image
-                          src={src}
-                          alt={request.serviceName}
-                          fill
-                          className="object-cover"
-                          sizes="(min-width: 640px) 50vw, 100vw"
-                          unoptimized={src.startsWith("http")}
-                        />
-                      </a>
-                    ))}
+              return (
+                <LeadCard hideHeader>
+                  <div>
+                    {request.photoUrls.length ? (
+                      <div className="space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          {request.photoUrls.length} photo
+                          {request.photoUrls.length === 1 ? "" : "s"} from the customer
+                          request.
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {request.photoUrls.map((src) => (
+                            <a
+                              key={src}
+                              href={src}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="relative block h-56 overflow-hidden rounded-lg bg-muted/30 transition hover:opacity-90"
+                            >
+                              <Image
+                                src={src}
+                                alt={request.serviceName}
+                                fill
+                                className="object-cover"
+                                sizes="(min-width: 640px) 50vw, 100vw"
+                                unoptimized={src.startsWith("http")}
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No photos came in with this request.
+                      </p>
+                    )}
                   </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No photos came in with this request.
-                </p>
+                </LeadCard>
               );
             default: {
               const _never: never = leadTab;
@@ -2587,111 +2606,5 @@ export function RequestDetailView({ id }: { id: string }) {
         onConfirm={confirmDeleteReminder}
       />
     </>
-  );
-}
-
-function LeadPipeline({
-  status,
-  hasEstimate,
-  hasJob,
-}: {
-  status: RequestStatus;
-  hasEstimate: boolean;
-  hasJob: boolean;
-}) {
-  const current = leadFlowIndex(status, hasEstimate, hasJob);
-  const lost = status === "declined" || status === "closed";
-  return (
-    <ol className="grid grid-cols-2 gap-2 rounded-lg border border-input bg-card p-2 shadow-[0_4px_16px_rgba(4,26,54,0.04)] sm:grid-cols-5">
-      {LEAD_STEPS.map((step, index) => {
-        const done = !lost && index < current;
-        const active = !lost && index === current;
-        return (
-          <li
-            key={step.id}
-            className={cn(
-              "flex items-center gap-2.5 rounded-md px-3 py-2 transition-all",
-              active && "bg-[#003F7D] text-white shadow-xs font-semibold",
-              done && !active && "bg-[#e8eef5] text-[#003F7D] font-medium",
-              !done && !active && "bg-[#f8fafc] text-muted-foreground",
-              lost && "bg-red-50 text-red-800",
-            )}
-          >
-            <span
-              className={cn(
-                "flex size-5 shrink-0 items-center justify-center rounded-sm text-[10px] font-semibold",
-                active && "bg-white/20 text-white",
-                done && !active && "bg-white text-[#003F7D] shadow-2xs",
-                !done && !active && "bg-white text-muted-foreground",
-                lost && "bg-white text-red-800",
-              )}
-            >
-              {String(index + 1).padStart(2, "0")}
-            </span>
-            <span className="text-xs">{step.label}</span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-  warn,
-  className,
-}: {
-  icon: typeof Building2;
-  label: string;
-  value: ReactNode;
-  warn?: boolean;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex items-start gap-3 border-b border-input px-5 py-3 last:border-b-0", className)}>
-      <Icon className="mt-0.5 size-3.5 shrink-0 text-primary/70" aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-        <p
-          className={
-            warn
-              ? "text-sm font-medium text-red-700 whitespace-pre-wrap break-words"
-              : "text-sm whitespace-pre-wrap break-words"
-          }
-        >
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function MoneyCell({
-  label,
-  value,
-  emphasize,
-}: {
-  label: string;
-  value: string;
-  emphasize?: boolean;
-}) {
-  return (
-    <div className="bg-card px-5 py-4">
-      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-      <p className={emphasize ? "mt-1 text-xl font-semibold tabular-nums text-primary" : "mt-1 text-xl font-semibold tabular-nums"}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value}</p>
-    </div>
   );
 }

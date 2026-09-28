@@ -43,6 +43,7 @@ import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { StatusPill } from "@/components/portal/status-pill";
+import { FileNotices } from "@/components/portal/task-banner";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { EmployeeAvailabilityTab } from "@/components/portal/views/employee-detail-view";
@@ -259,12 +260,15 @@ export function ContractorDetailView({ id }: { id: string }) {
           </>
         }
         notice={
-          expired ? (
-            <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-              Insurance expired on {formatDate(contractor.insuranceExpires.slice(0, 10))}. New
-              dispatches are locked.
-            </div>
-          ) : null
+          <div className="space-y-2">
+            <FileNotices kind="contractor" id={contractor.id} />
+            {expired ? (
+              <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+                Insurance expired on {formatDate(contractor.insuranceExpires.slice(0, 10))}. New
+                dispatches are locked.
+              </div>
+            ) : null}
+          </div>
         }
         actions={
           <>

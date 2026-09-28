@@ -2053,6 +2053,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [resolvingStale, setResolvingStale] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
   function handlePaymentApplied(result: {
     invoice: Invoice | null;
@@ -2191,6 +2192,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
   }
 
   return (
+    <>
     <RecordWorkspace
       href={`/pro/dashboard/invoices/${invoice.id}`}
       label={invoice.number}
@@ -2222,6 +2224,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
           )}
         </>
       }
+      notice={<FileNotices kind="invoice" id={invoice.id} />}
       actions={
         <>
           <Button
@@ -2266,6 +2269,13 @@ export function InvoiceDetailView({ id }: { id: string }) {
               </Link>
             </Button>
           ) : null}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setReminderOpen(true)}
+          >
+            Set reminder
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -2423,6 +2433,13 @@ export function InvoiceDetailView({ id }: { id: string }) {
         );
       }}
     </RecordWorkspace>
+    <CreateReminderDialog
+      open={reminderOpen}
+      onOpenChange={setReminderOpen}
+      subjectKind="invoice"
+      subjectId={invoice.id}
+    />
+    </>
   );
 }
 

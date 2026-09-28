@@ -2538,8 +2538,8 @@ export function RequestDetailView({ id }: { id: string }) {
           setReminderOpen(next);
           if (!next) setEditingReminder(null);
         }}
-        subjectKind={request.customerId ? "customer" : undefined}
-        subjectId={request.customerId || undefined}
+        subjectKind="request"
+        subjectId={request.id}
         onCreated={(saved) => {
           if (saved) {
             dispatch(upsertLeadReminder({ key: tabKey, reminder: saved }));

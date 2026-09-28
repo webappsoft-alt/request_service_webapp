@@ -482,14 +482,29 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       }
 
       if (detail?.type === "CHAT_READ_RECEIPT" && detail.payload?.readBy === "provider") {
+        const cleared = Math.max(
+          0,
+          Number(
+            (detail.payload as { clearedUnread?: number })?.clearedUnread,
+          ) || 0,
+        );
         setState((current) => ({
           ...current,
           inboxSummary: {
             ...current.inboxSummary,
-            unreadChats: Math.max(0, (current.inboxSummary?.unreadChats || 1) - 1),
-            total: Math.max(0, (current.inboxSummary?.total || 1) - 1),
+            unreadChats: Math.max(
+              0,
+              (current.inboxSummary?.unreadChats || 0) - (cleared || 1),
+            ),
+            total: Math.max(
+              0,
+              (current.inboxSummary?.total || 0) - (cleared || 1),
+            ),
           },
         }));
+        void refreshInboxSummaryFromApi()
+          .then(applyInboxSummary)
+          .catch(() => undefined);
         return;
       }
 

@@ -76,6 +76,16 @@ export function locationDisplayLabel(location: CustomerLocation): string {
   return "";
 }
 
+/** Home search only: show City + ZIP (not street / not City, ST). */
+export function locationCityZipLabel(location: CustomerLocation): string {
+  const city = location.city.split(",")[0]?.trim() ?? "";
+  const zip = location.zip.trim();
+  if (city && !/^\d{5}$/.test(city) && zip) return `${city}, ${zip}`;
+  if (city && !/^\d{5}$/.test(city)) return city;
+  if (zip) return zip;
+  return locationDisplayLabel(location);
+}
+
 /** City/ZIP label from a resolved place (main search / geo detect). */
 export function placeCityLabel(place: PlaceAddress): string {
   const city = place.city.trim();

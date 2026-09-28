@@ -468,6 +468,7 @@ export function ServicesDirectory({
   initialLocation = "",
   initialProviderId = "",
   initialProviderName = "",
+  initialFocus = "",
 }: {
   initialQuery?: string;
   initialCategory?: string;
@@ -476,6 +477,8 @@ export function ServicesDirectory({
   initialLocation?: string;
   initialProviderId?: string;
   initialProviderName?: string;
+  /** When `professionals`, scroll to Matching professionals on land. */
+  initialFocus?: string;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -524,6 +527,7 @@ export function ServicesDirectory({
   const resultsRef = useRef<HTMLDivElement>(null);
   const professionalsRef = useRef<HTMLDivElement>(null);
   const skipUrlRef = useRef(true);
+  const focusScrolledRef = useRef(false);
 
   const activeCategory = categories.length === 1 ? categories[0] : "";
   const selectedParent = useMemo(
@@ -889,12 +893,24 @@ export function ServicesDirectory({
       void dispatch(
         fetchPublicProfessionals({
           query: {
-            zipCode: usable ? customerLocation.zip || undefined : undefined,
+            // Prefer lat/lng when present (resolvePublicProfessionalsQuery also enforces this).
+            zipCode:
+              usable &&
+              !(
+                customerLocation.latitude != null &&
+                customerLocation.longitude != null
+              )
+                ? customerLocation.zip || undefined
+                : undefined,
             lat: usable ? customerLocation.latitude ?? undefined : undefined,
             lng: usable ? customerLocation.longitude ?? undefined : undefined,
+            workingArea: answers["area"]
+              ? filterLabel("area", answers["area"])
+              : undefined,
             locationToken: usable
               ? [
                   customerLocation.zip || "",
+                  customerLocation.city || "",
                   String(customerLocation.latitude ?? ""),
                   String(customerLocation.longitude ?? ""),
                 ].join("|")
@@ -905,13 +921,28 @@ export function ServicesDirectory({
     }, 220);
     return () => window.clearTimeout(timer);
   }, [
+    answers,
     apiQueryKey,
+    customerLocation.city,
     customerLocation.detecting,
     customerLocation.latitude,
     customerLocation.longitude,
     customerLocation.zip,
     dispatch,
   ]);
+
+  // Landed from a service-area pill: scroll to Matching professionals once.
+  useEffect(() => {
+    if (initialFocus !== "professionals" || focusScrolledRef.current) return;
+    focusScrolledRef.current = true;
+    const timer = window.setTimeout(() => {
+      professionalsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [initialFocus]);
 
   useEffect(() => {
     if (!fixedServicesLoading) setPendingRefresh(false);
@@ -1615,7 +1646,11 @@ export function ServicesDirectory({
                   ) : null}
 
                   {pageItems.length ? (
-                    <div className="flex flex-col gap-3" ref={professionalsRef}>
+                    <div
+                      id="matching-professionals"
+                      className="flex flex-col gap-3"
+                      ref={professionalsRef}
+                    >
                       <h2 className="text-lg font-semibold tracking-tight text-foreground">
                         Matching professionals
                       </h2>

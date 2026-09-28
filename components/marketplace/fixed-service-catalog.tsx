@@ -65,7 +65,7 @@ export function FixedServiceCatalog({
 
   const isLive = servicesProp !== undefined;
 
-  if (!services.length && !isLive) return null;
+  if (!services.length) return null;
 
   return (
     <section className="flex flex-col gap-4">
@@ -78,115 +78,109 @@ export function FixedServiceCatalog({
             : `These jobs already have a price and scope. Booking one opens work immediately - no estimate, no back-and-forth. Pick a time and ${provider.companyName} starts the job.`}
         </p>
       </div>
-      {services.length ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          {services.map((service) => {
-            const liveService = service as LivePortalFixedService;
-            const photo = service.images[0];
-            const bullets = service.coverage;
-            const detailHref = isLive
-              ? liveServiceDetailHref(provider, liveService)
-              : null;
-            const publicService = isLive
-              ? toPublicFixedService(provider, liveService)
-              : null;
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {services.map((service) => {
+          const liveService = service as LivePortalFixedService;
+          const photo = service.images[0];
+          const bullets = service.coverage;
+          const detailHref = isLive
+            ? liveServiceDetailHref(provider, liveService)
+            : null;
+          const publicService = isLive
+            ? toPublicFixedService(provider, liveService)
+            : null;
 
-            return (
-              <article
-                key={service.id}
-                className={cn(
-                  "relative flex flex-col overflow-hidden rounded-xl border border-input bg-card",
-                  detailHref &&
-                    "transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-input hover:elevate",
-                )}
-              >
-                {detailHref ? (
-                  <Link
-                    href={detailHref}
-                    aria-label={`View ${service.name} details`}
-                    className="absolute inset-0 z-0"
-                    onClick={() => {
-                      if (publicService) {
-                        dispatch(setPublicFixedServiceDetail(publicService));
-                      }
-                    }}
+          return (
+            <article
+              key={service.id}
+              className={cn(
+                "relative flex flex-col overflow-hidden rounded-xl border border-input bg-card",
+                detailHref &&
+                  "transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-input hover:elevate",
+              )}
+            >
+              {detailHref ? (
+                <Link
+                  href={detailHref}
+                  aria-label={`View ${service.name} details`}
+                  className="absolute inset-0 z-0"
+                  onClick={() => {
+                    if (publicService) {
+                      dispatch(setPublicFixedServiceDetail(publicService));
+                    }
+                  }}
+                />
+              ) : null}
+              <div className="relative aspect-[2/1] bg-[#003F7D]">
+                {photo ? (
+                  <Image
+                    src={photo}
+                    alt={service.name}
+                    fill
+                    sizes="(min-width: 1024px) 18vw, 45vw"
+                    className="object-cover"
                   />
                 ) : null}
-                <div className="relative aspect-[2/1] bg-[#003F7D]">
-                  {photo ? (
-                    <Image
-                      src={photo}
-                      alt={service.name}
-                      fill
-                      sizes="(min-width: 1024px) 18vw, 45vw"
-                      className="object-cover"
-                    />
-                  ) : null}
-                  {service.categoryName ? (
-                    <Badge className="absolute top-2 left-2 border-0 bg-white/95 text-[#003F7D]">
-                      {service.categoryName}
-                    </Badge>
-                  ) : null}
-                </div>
-                <div className="relative z-10 flex flex-1 flex-col gap-2 p-3 pointer-events-none">
-                  <div>
-                    <h3 className="line-clamp-2 text-sm font-semibold tracking-tight">
-                      {service.name}
-                    </h3>
-                    <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                      {service.description || `${provider.companyName} offers this as a priced public service.`}
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold text-[#003F7D]">
-                    {formatStartingPrice(service.price)}{" "}
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {serviceUnitLabel(service.unit)}
-                    </span>
+                {service.categoryName ? (
+                  <Badge className="absolute top-2 left-2 border-0 bg-white/95 text-[#003F7D]">
+                    {service.categoryName}
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="relative z-10 flex flex-1 flex-col gap-2 p-3 pointer-events-none">
+                <div>
+                  <h3 className="line-clamp-2 text-sm font-semibold tracking-tight">
+                    {service.name}
+                  </h3>
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                    {service.description || `${provider.companyName} offers this as a priced public service.`}
                   </p>
-                  {bullets.length ? (
-                    <ul className="flex flex-col gap-1">
-                      {bullets.slice(0, 2).map((item) => (
-                        <li key={item} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                          <Check className="mt-0.5 size-3 shrink-0 text-[#003F7D]" aria-hidden="true" />
-                          <span className="line-clamp-1">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {isLive ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="pointer-events-auto mt-auto w-full"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (publicService) setBookingService(publicService);
-                      }}
-                    >
-                      Book this service
-                    </Button>
-                  ) : (
-                    <div className="pointer-events-auto mt-auto">
-                      <BookServiceButton
-                        serviceId={service.id}
-                        label="Book this service"
-                        size="sm"
-                        className="w-full"
-                      />
-                    </div>
-                  )}
                 </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="rounded-xl border border-dashed border-input bg-card px-4 py-8 text-sm text-muted-foreground">
-          Fixed services will appear here when this company publishes priced jobs.
-        </p>
-      )}
+                <p className="text-sm font-semibold text-[#003F7D]">
+                  {formatStartingPrice(service.price)}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {serviceUnitLabel(service.unit)}
+                  </span>
+                </p>
+                {bullets.length ? (
+                  <ul className="flex flex-col gap-1">
+                    {bullets.slice(0, 2).map((item) => (
+                      <li key={item} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <Check className="mt-0.5 size-3 shrink-0 text-[#003F7D]" aria-hidden="true" />
+                        <span className="line-clamp-1">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {isLive ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="pointer-events-auto mt-auto w-full"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (publicService) setBookingService(publicService);
+                    }}
+                  >
+                    Book this service
+                  </Button>
+                ) : (
+                  <div className="pointer-events-auto mt-auto">
+                    <BookServiceButton
+                      serviceId={service.id}
+                      label="Book this service"
+                      size="sm"
+                      className="w-full"
+                    />
+                  </div>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
 
       {bookingService ? (
         <FixedServiceOrderDialog

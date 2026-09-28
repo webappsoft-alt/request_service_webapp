@@ -42,12 +42,24 @@ import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider, ProviderProject, ServiceCategory } from "@/lib/types";
 
+export type ProviderCoverageAreaLink = {
+  name: string;
+  lat: number;
+  lng: number;
+  zip?: string;
+  city?: string;
+  state?: string;
+};
+
 export type ProviderProfileLiveData = {
   photos?: { src: string; alt: string }[];
   projects?: ProviderProject[];
   relatedProviders?: Provider[];
   fixedServices?: PortalFixedService[];
   areaLabels?: string[];
+  /** Rich coverage areas for click → Services directory filtering. */
+  coverageAreas?: ProviderCoverageAreaLink[];
+  onCoverageAreaSelect?: (area: ProviderCoverageAreaLink) => void;
   portfolioLoading?: boolean;
   relatedLoading?: boolean;
   onRelatedBeforeNavigate?: (provider: Provider) => void;
@@ -74,9 +86,14 @@ export function ProviderProfile({
     : getRelatedProviders(provider);
   const explore = getProfileExplore(provider, categories, place);
   const areas =
-    live?.areaLabels?.length
-      ? live.areaLabels
-      : getServiceAreaNames(provider.serviceArea);
+    live?.coverageAreas?.length
+      ? live.coverageAreas.map((area) => area.name)
+      : live?.areaLabels?.length
+        ? live.areaLabels
+        : getServiceAreaNames(provider.serviceArea);
+  const coverageByName = new Map(
+    (live?.coverageAreas ?? []).map((area) => [area.name, area]),
+  );
   const today = getTodayWeekday();
   const socials = getProviderSocials(provider);
   const contact = isLive ? provider.contact : getProviderContact(provider);
@@ -189,11 +206,34 @@ export function ProviderProfile({
               <ServiceAreaMapLazy provider={provider} />
               <div className="flex flex-wrap gap-2">
                 {areas.length ? (
-                  areas.map((area) => (
-                    <Badge key={area} variant="outline">
-                      {area}
-                    </Badge>
-                  ))
+                  areas.map((area) => {
+                    const coverage = coverageByName.get(area);
+                    const clickable = Boolean(
+                      coverage && live?.onCoverageAreaSelect,
+                    );
+                    if (!clickable) {
+                      return (
+                        <Badge key={area} variant="outline">
+                          {area}
+                        </Badge>
+                      );
+                    }
+                    return (
+                      <button
+                        key={area}
+                        type="button"
+                        className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => live?.onCoverageAreaSelect?.(coverage!)}
+                      >
+                        <Badge
+                          variant="outline"
+                          className="cursor-pointer transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
+                        >
+                          {area}
+                        </Badge>
+                      </button>
+                    );
+                  })
                 ) : isLive ? (
                   <p className="text-sm text-muted-foreground">
                     Service area details will appear when coverage is published.

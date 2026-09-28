@@ -264,6 +264,13 @@ export function usePortalInbox() {
         type === "CHAT_READ_RECEIPT" ||
         type === "SOCKET_RECONNECTED"
       ) {
+        if (type === "CHAT_READ_RECEIPT") {
+          const payload = asRecord(detail?.payload) ?? {};
+          const cleared = Math.max(0, Number(payload.clearedUnread) || 0);
+          if (String(payload.readBy || "") === "provider" && cleared > 0) {
+            setUnreadChatNotifs((count) => Math.max(0, count - cleared));
+          }
+        }
         void refreshNotifBadges();
         if (type === "INBOX_SUMMARY_INVALIDATE" || type === "SOCKET_RECONNECTED") {
           void refreshPendingOrders();
@@ -305,14 +312,13 @@ export function usePortalInbox() {
     ? Math.max(unreadLeadNotifs, liveLeadBump)
     : Math.max(summaryLeads, unreadLeadNotifs, liveLeadBump);
 
-  const unreadChats = Math.max(
+  const unreadChats =
     chat.threads.length > 0
       ? chat.unread
-      : crm.enabled
-        ? crm.inboxSummary.unreadChats || 0
-        : chat.unread,
-    unreadChatNotifs,
-  );
+      : Math.max(
+          crm.enabled ? crm.inboxSummary.unreadChats || 0 : chat.unread,
+          unreadChatNotifs,
+        );
 
   const pendingOrdersRaw = Math.max(
     crm.enabled ? crm.inboxSummary.pendingOrders || 0 : pendingFromApi,

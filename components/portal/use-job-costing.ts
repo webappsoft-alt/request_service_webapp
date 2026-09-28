@@ -140,9 +140,9 @@ export function jobMoneySheet(
 export function jobCostKindLabel(kind: JobCostKind) {
   switch (kind) {
     case "labor":
-      return "Labor";
+      return "Labour";
     case "materials":
-      return "Materials";
+      return "Material";
     default: {
       const _never: never = kind;
       return _never;

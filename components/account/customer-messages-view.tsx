@@ -45,7 +45,9 @@ import {
   formatThreadTime,
   getAvatarColor,
   getInitials,
+  sortChatThreadsByUnreadThenRecent,
 } from "@/lib/chat-format";
+import { markUnreadChatNotificationsReadForThread } from "@/lib/api/notifications-client";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -173,8 +175,9 @@ function resolveThreadProvider(thread: ChatThread) {
 
 function upsertThread(threads: ChatThread[], updated: ChatThread) {
   const existing = threads.find((t) => t.id === updated.id);
+  const unreadOf = (thread: ChatThread) => thread.unreadForCustomer || 0;
   if (!existing) {
-    return [...threads, updated].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return sortChatThreadsByUnreadThenRecent([...threads, updated], unreadOf);
   }
   const existingMsgIds = new Set(
     existing.messages.map((m) => m.id || (m as any)._id).filter(Boolean),
@@ -191,8 +194,9 @@ function upsertThread(threads: ChatThread[], updated: ChatThread) {
     providerSlug: updated.providerSlug || existing.providerSlug,
     messages: [...existing.messages, ...newFromServer],
   };
-  return [...threads.filter((item) => item.id !== updated.id), merged].sort(
-    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+  return sortChatThreadsByUnreadThenRecent(
+    [...threads.filter((item) => item.id !== updated.id), merged],
+    unreadOf,
   );
 }
 
@@ -284,9 +288,15 @@ export function CustomerMessagesView({
         setThreads((prev) => {
           if (options?.append) {
             const seen = new Set(prev.map((t) => t.id));
-            return [...prev, ...enriched.filter((t) => !seen.has(t.id))];
+            return sortChatThreadsByUnreadThenRecent(
+              [...prev, ...enriched.filter((t) => !seen.has(t.id))],
+              (thread) => thread.unreadForCustomer || 0,
+            );
           }
-          return enriched;
+          return sortChatThreadsByUnreadThenRecent(
+            enriched,
+            (thread) => thread.unreadForCustomer || 0,
+          );
         });
         setListPage(page);
         const pages = result.pagination?.pages || 1;
@@ -480,34 +490,37 @@ export function CustomerMessagesView({
     }
 
     const needle = query.trim().toLowerCase();
-    if (!needle) return result;
+    if (needle) {
+      result = result.filter((thread) => {
+        const provider = resolveThreadProvider(thread);
+        const last = thread.messages.at(-1);
+        const haystack = [
+          provider.name,
+          thread.providerId,
+          thread.requestId,
+          last?.text,
+          ...thread.messages.map((message) => message.text),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(needle);
+      });
+    }
 
-    return result.filter((thread) => {
-      const provider = resolveThreadProvider(thread);
-      const last = thread.messages.at(-1);
-      const haystack = [
-        provider.name,
-        thread.providerId,
-        thread.requestId,
-        last?.text,
-        ...thread.messages.map((message) => message.text),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(needle);
-    });
+    return sortChatThreadsByUnreadThenRecent(
+      result,
+      (thread) => thread.unreadForCustomer || 0,
+    );
   }, [filterTab, query, threads]);
 
   const selected = useMemo(() => {
-    if (selectedId) {
-      return (
-        filteredThreads.find((item) => item.id === selectedId) ??
-        threads.find((item) => item.id === selectedId) ??
-        null
-      );
-    }
-    return filteredThreads[0] ?? threads[0] ?? null;
+    if (!selectedId) return null;
+    return (
+      filteredThreads.find((item) => item.id === selectedId) ??
+      threads.find((item) => item.id === selectedId) ??
+      null
+    );
   }, [filteredThreads, selectedId, threads]);
 
   viewingThreadIdRef.current = selected?.id ?? null;
@@ -542,41 +555,71 @@ export function CustomerMessagesView({
 
   // Track which thread we've already marked as read
   const lastMarkedReadRef = useRef<string | null>(null);
+  const openedThreadIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!selected?.id || !listingEmail) return;
-    const lastMsg = selected.messages.at(-1);
-    const hasUnread =
-      selected.id === ADMIN_DIRECT_THREAD_ID
-        ? (selected.unreadForCustomer ?? 0) > 0
-        : (selected.unreadForCustomer ?? 0) > 0;
-    const isNewIncoming =
-      lastMsg &&
-      lastMsg.from !== "customer" &&
-      !lastMsg.isRead;
 
-    // Only mark when there is something unread — never on mere first-select
-    if (!(hasUnread || isNewIncoming)) return;
-    if (lastMarkedReadRef.current === `${selected.id}:${selected.messages.length}`) {
-      return;
-    }
-    lastMarkedReadRef.current = `${selected.id}:${selected.messages.length}`;
+    const unread = selected.unreadForCustomer ?? 0;
+    const hasUnreadMessages = selected.messages.some(
+      (m) => m.from !== "customer" && !m.isRead,
+    );
+    const firstOpen = !openedThreadIdsRef.current.has(selected.id);
+    const unreadKey = `${selected.id}:${unread}:${selected.messages.length}`;
 
-    if (selected.id === ADMIN_DIRECT_THREAD_ID) {
-      void markAdminDirectChatReadForPeer("customer").catch(() => undefined);
+    const clearLocal = () => {
       setThreads((current) =>
         current.map((t) =>
-          t.id === ADMIN_DIRECT_THREAD_ID ? { ...t, unreadForCustomer: 0 } : t,
+          t.id === selected.id
+            ? {
+                ...t,
+                unreadForCustomer: 0,
+                messages: t.messages.map((m) =>
+                  m.from !== "customer"
+                    ? { ...m, isRead: true, status: "read" as const }
+                    : m,
+                ),
+              }
+            : t,
         ),
       );
+    };
+
+    const markOpened = () => {
+      if (selected.id === ADMIN_DIRECT_THREAD_ID) {
+        void markAdminDirectChatReadForPeer("customer").catch(() => undefined);
+        clearLocal();
+        return;
+      }
+      markThreadRead(selected.id);
+      void markPublicChatRead(selected.id, listingEmail).catch(() => undefined);
+      void markUnreadChatNotificationsReadForThread(selected.id).catch(
+        () => undefined,
+      );
+      clearLocal();
+    };
+
+    if (firstOpen) {
+      openedThreadIdsRef.current.add(selected.id);
+      lastMarkedReadRef.current = unreadKey;
+      markOpened();
       return;
     }
-    markThreadRead(selected.id);
-    void markPublicChatRead(selected.id, listingEmail).catch(() => undefined);
-    setThreads((current) =>
-      current.map((t) => (t.id === selected.id ? { ...t, unreadForCustomer: 0 } : t)),
-    );
-  }, [listingEmail, selected?.id, selected?.messages?.length, selected?.unreadForCustomer, markThreadRead]);
+
+    if (
+      (unread > 0 || hasUnreadMessages) &&
+      lastMarkedReadRef.current !== unreadKey
+    ) {
+      lastMarkedReadRef.current = unreadKey;
+      markOpened();
+    }
+  }, [
+    listingEmail,
+    selected?.id,
+    selected?.messages?.length,
+    selected?.unreadForCustomer,
+    markThreadRead,
+  ]);
 
   // Query presence by User ids (providerUserId), not Provider document ids
   const presenceIdsKey = useMemo(() => {
@@ -883,9 +926,19 @@ export function CustomerMessagesView({
                           >
                             {prov.name}
                           </span>
-                          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
-                            {lastTime}
-                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {hasUnread ? (
+                              <span
+                                className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#003F7D] px-1.5 text-[10px] font-bold text-white shadow-xs"
+                                aria-label={`${thread.unreadForCustomer} unread`}
+                              >
+                                {thread.unreadForCustomer}
+                              </span>
+                            ) : null}
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                              {lastTime}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Middle row: lead/quote meta under provider name — never replace the name */}
@@ -905,11 +958,6 @@ export function CustomerMessagesView({
                               </span>
                             ) : null}
                           </div>
-                          {hasUnread ? (
-                            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#003F7D] text-[10px] font-bold text-white shadow-xs">
-                              {thread.unreadForCustomer}
-                            </span>
-                          ) : null}
                         </div>
 
                         {/* Last Message Snippet */}

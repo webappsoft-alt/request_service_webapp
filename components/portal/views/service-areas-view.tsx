@@ -208,18 +208,25 @@ export function ServiceAreasView() {
               cell: (row) => {
                 const names =
                   row.areas?.length > 0
-                    ? row.areas.map((a) => a.name).join(", ")
-                    : row.title;
+                    ? row.areas.map((a) => a.name).filter(Boolean)
+                    : [row.title].filter(Boolean);
                 return (
                   <div>
                     <button
                       type="button"
-                      className="text-left font-medium text-primary hover:underline"
+                      className="flex flex-wrap gap-1.5 text-left"
                       onClick={() => openEdit(row)}
                     >
-                      {names}
+                      {names.map((name) => (
+                        <span
+                          key={name}
+                          className="rounded-md border border-input bg-card px-2 py-0.5 text-xs font-medium text-primary hover:underline"
+                        >
+                          {name}
+                        </span>
+                      ))}
                     </button>
-                    <p className="max-w-md truncate text-xs text-muted-foreground">
+                    <p className="mt-1 max-w-md truncate text-xs text-muted-foreground">
                       {row.location.address ||
                         [row.location.city, row.location.state]
                           .filter(Boolean)

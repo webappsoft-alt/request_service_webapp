@@ -103,3 +103,30 @@ export function getAvatarColor(name?: string): string {
   const index = Math.abs(hash) % AVATAR_COLORS.length;
   return AVATAR_COLORS[index];
 }
+
+/** Unread conversations first, then most recently updated. Stable for equal keys. */
+export function compareChatThreadsByUnreadThenRecent(
+  a: { updatedAt?: string; unreadForProvider?: number; unreadForCustomer?: number },
+  b: { updatedAt?: string; unreadForProvider?: number; unreadForCustomer?: number },
+  unreadOf: (thread: {
+    unreadForProvider?: number;
+    unreadForCustomer?: number;
+  }) => number,
+): number {
+  const aUnread = unreadOf(a) > 0 ? 1 : 0;
+  const bUnread = unreadOf(b) > 0 ? 1 : 0;
+  if (bUnread !== aUnread) return bUnread - aUnread;
+  return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+}
+
+export function sortChatThreadsByUnreadThenRecent<
+  T extends {
+    updatedAt?: string;
+    unreadForProvider?: number;
+    unreadForCustomer?: number;
+  },
+>(threads: T[], unreadOf: (thread: T) => number): T[] {
+  return [...threads].sort((a, b) =>
+    compareChatThreadsByUnreadThenRecent(a, b, unreadOf),
+  );
+}

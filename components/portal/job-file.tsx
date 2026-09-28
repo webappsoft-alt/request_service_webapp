@@ -476,8 +476,8 @@ export function JobSummaryTab({
       </Panel>
       <Panel title={noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}>
         <div className="space-y-4 text-sm">
-          <LineGroup title="Labor" lines={laborLines} />
-          <LineGroup title="Materials" lines={materialLines} />
+          <LineGroup title="Labour" lines={laborLines} />
+          <LineGroup title="Material" lines={materialLines} />
           <dl className="space-y-2 border-t border-input pt-3">
             <MoneyRow label="Subtotal" value={sheet.subtotal} />
             <MoneyRow label="Tax (8.25%)" value={sheet.tax} />

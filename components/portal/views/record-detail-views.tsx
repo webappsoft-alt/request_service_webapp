@@ -561,7 +561,7 @@ export function EstimateDetailView({ id }: { id: string }) {
         tabs={[
           { id: "summary", label: "Summary", icon: LayoutDashboard },
           { id: "visit", label: "Site visit", icon: Camera },
-          { id: "materials", label: "Line items", icon: FileText },
+          { id: "materials", label: "Labour and Material", icon: FileText },
           { id: "share", label: "Share", icon: Share2 },
           { id: "logs", label: "Logs", icon: ScrollText },
           { id: "notes", label: "Notes", icon: NotebookPen },
@@ -1527,7 +1527,7 @@ export function JobDetailView({ id }: { id: string }) {
         kind="job"
         tabs={[
           { id: "summary", label: "Summary", icon: LayoutDashboard },
-          { id: "materials", label: "Materials", icon: FileText },
+          { id: "materials", label: "Labour and Material", icon: FileText },
           { id: "logs", label: "Logs", icon: ScrollText },
           { id: "notes", label: "Notes", icon: NotebookPen },
           { id: "attachments", label: "Attachments", icon: Paperclip },
@@ -2023,7 +2023,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
       kind="invoice"
       tabs={[
         { id: "summary", label: "Summary", icon: LayoutDashboard },
-        { id: "materials", label: "Line items", icon: FileText },
+        { id: "materials", label: "Labour and Material", icon: FileText },
         { id: "payments", label: "Payments", icon: CreditCard },
         { id: "attachments", label: "Attachments", icon: Paperclip },
         { id: "logs", label: "Logs", icon: ScrollText },

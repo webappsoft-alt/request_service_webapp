@@ -48,7 +48,7 @@ export function HomeSearchDock() {
     <div className={cn(dockPinned ? "sticky top-17 z-40" : "relative z-20")}>
       <Container className="enter-visual relative -mt-14 lg:-mt-16">
         <div className="relative z-40 mx-auto w-full max-w-3xl overflow-visible rounded-xl border border-foreground/30 bg-card p-1.5 shadow-2xl md:p-2">
-          <ServiceSearchForm />
+          <ServiceSearchForm locationDisplayMode="city-zip" />
           <div className="relative z-0">
             <HeroServiceScroller />
           </div>

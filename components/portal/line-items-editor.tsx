@@ -8,6 +8,7 @@ import {
   extractUploadedUrl,
   uploadFile,
 } from "@/components/api/uploadFile";
+import { PhotoLightbox } from "@/components/marketplace/portfolio-lightbox";
 import {
   jobCostKindLabel,
   lineTotal,
@@ -35,7 +36,8 @@ const MATERIAL_UNITS = [
 
 const LABOR_UNITS = [{ value: "hr", label: "Hour" }] as const;
 
-const MAX_MATERIAL_IMAGES = 6;
+/** Material line items allow exactly one image. */
+const MAX_MATERIAL_IMAGES = 1;
 
 export function createEmptyLine(kind: JobCostKind): JobCostLine {
   const stamp = Date.now();
@@ -135,7 +137,7 @@ export function LineItemsEditor({
           ) : (
             <TableRow>
               <TableCell colSpan={colSpan} className="py-8 text-center text-sm text-muted-foreground">
-                No line items yet. Add labor or material above.
+                No line items yet. Add labour or material above.
               </TableCell>
             </TableRow>
           )}
@@ -166,6 +168,7 @@ function LineItemRow({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const currentUnit =
     line.kind === "labor"
       ? "hr"
@@ -173,7 +176,8 @@ function LineItemRow({
         ? line.unit
         : "ea";
   const unitOptions = line.kind === "labor" ? LABOR_UNITS : MATERIAL_UNITS;
-  const images = line.kind === "materials" ? line.images ?? [] : [];
+  const images = line.kind === "materials" ? (line.images ?? []).slice(0, MAX_MATERIAL_IMAGES) : [];
+  const materialImage = images[0];
   const showImages = allowMaterialImages && line.kind === "materials";
   const descriptionCellClass = wideDescription
     ? "min-w-[320px] align-top py-2"
@@ -181,25 +185,18 @@ function LineItemRow({
 
   async function onUpload(files: FileList | null) {
     if (!files?.length || locked) return;
-    const remaining = MAX_MATERIAL_IMAGES - images.length;
-    if (remaining <= 0) {
-      toast.error(`You can upload up to ${MAX_MATERIAL_IMAGES} material images.`);
-      return;
-    }
+    const file = files[0];
+    if (!file) return;
     setUploading(true);
     try {
-      const uploaded: string[] = [];
-      for (const file of Array.from(files).slice(0, remaining)) {
-        const response = await uploadFile(file);
-        const url = extractUploadedUrl(response.data);
-        if (url) uploaded.push(url);
-      }
-      if (!uploaded.length) {
+      const response = await uploadFile(file);
+      const url = extractUploadedUrl(response.data);
+      if (!url) {
         toast.error("Could not upload material image.");
         return;
       }
-      onChange(line.id, { images: [...images, ...uploaded] });
-      toast.success(uploaded.length === 1 ? "Material image uploaded." : `${uploaded.length} images uploaded.`);
+      onChange(line.id, { images: [url] });
+      toast.success("Material image uploaded.");
     } catch {
       toast.error("Could not upload material image.");
     } finally {
@@ -209,196 +206,213 @@ function LineItemRow({
   }
 
   return (
-    <>
-      <TableRow>
-        <TableCell className={descriptionCellClass}>
-          <Input
-            aria-label="Description"
-            disabled={locked}
-            placeholder={
-              line.kind === "labor" ? "Labor description" : "Material description"
-            }
-            value={line.description}
-            onChange={(event) => onChange(line.id, { description: event.target.value })}
-            className={cn("w-full", wideDescription && "min-w-[280px]")}
-          />
-        </TableCell>
-        <TableCell className="w-32 min-w-[125px] align-top py-2">
+    <TableRow>
+      <TableCell className={descriptionCellClass}>
+        <div className={cn("flex w-full flex-col gap-2", wideDescription && "min-w-[280px]")}>
+          <div className="relative w-full min-w-0">
+            <Input
+              aria-label="Description"
+              disabled={locked}
+              placeholder={
+                line.kind === "labor" ? "Labour description" : "Material description"
+              }
+              value={line.description}
+              onChange={(event) => onChange(line.id, { description: event.target.value })}
+              className={cn(
+                "w-full",
+                showImages && materialImage ? "pr-14" : undefined,
+              )}
+            />
+            {showImages && materialImage ? (
+              <div className="absolute right-1.5 bottom-1.5 z-10">
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    className="relative block h-7 w-9 overflow-hidden rounded-md border border-input bg-white text-left shadow-xs"
+                    title="View full image"
+                    onClick={() => setLightboxOpen(true)}
+                  >
+                    <Image
+                      src={materialImage}
+                      alt="Material photo"
+                      fill
+                      sizes="36px"
+                      className="object-cover"
+                      unoptimized={materialImage.startsWith("http")}
+                    />
+                    <span className="absolute inset-x-0 bottom-0 bg-black/55 px-0.5 py-px text-[8px] leading-none font-medium text-white">
+                      Material
+                    </span>
+                  </button>
+                  {!locked ? (
+                    <button
+                      type="button"
+                      aria-label="Remove material image"
+                      className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10"
+                      onClick={() => onChange(line.id, { images: [] })}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          {showImages ? (
+            <>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => void onUpload(event.target.files)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={locked || uploading}
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {uploading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <ImagePlus className="size-3.5" />
+                  )}
+                  {uploading
+                    ? "Uploading…"
+                    : materialImage
+                      ? "Replace image"
+                      : "Add image"}
+                </Button>
+                {!materialImage ? (
+                  <span className="text-[10px] text-muted-foreground">
+                    Optional · 1 max
+                  </span>
+                ) : null}
+              </div>
+              <PhotoLightbox
+                photos={
+                  materialImage
+                    ? [{ src: materialImage, alt: "Material photo" }]
+                    : []
+                }
+                title="Material image"
+                open={lightboxOpen && Boolean(materialImage)}
+                onOpenChange={setLightboxOpen}
+                index={0}
+                onIndexChange={() => undefined}
+              />
+            </>
+          ) : null}
+        </div>
+      </TableCell>
+      <TableCell className="w-32 min-w-[125px] align-top py-2">
+        <Select
+          disabled={locked}
+          value={line.kind}
+          onValueChange={(value) => {
+            const kind = value as JobCostKind;
+            const unit = kind === "labor" ? "hr" : line.unit === "hr" || !line.unit ? "ea" : line.unit;
+            onChange(line.id, {
+              kind,
+              unit,
+              ...(kind === "labor"
+                ? { images: undefined }
+                : { images: (line.images ?? []).slice(0, MAX_MATERIAL_IMAGES) }),
+            });
+          }}
+        >
+          <SelectTrigger aria-label="Type" className="w-full">
+            <SelectValue placeholder="Type">
+              {jobCostKindLabel(line.kind)}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent
+            position="popper"
+            align="start"
+            className="z-[100] w-[var(--radix-select-trigger-width)]"
+          >
+            <SelectItem value="labor">Labour</SelectItem>
+            <SelectItem value="materials">Material</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell className="w-24 min-w-[90px] align-top py-2">
+        <Input
+          aria-label="Quantity"
+          className="w-full tabular-nums"
+          disabled={locked}
+          inputMode="decimal"
+          min={0}
+          step="any"
+          type="number"
+          value={Number.isFinite(line.quantity) ? line.quantity : 0}
+          onChange={(event) =>
+            onChange(line.id, { quantity: Number(event.target.value) || 0 })
+          }
+        />
+      </TableCell>
+      {showUnit ? (
+        <TableCell className="w-36 min-w-[135px] align-top py-2">
           <Select
             disabled={locked}
-            value={line.kind}
-            onValueChange={(value) => {
-              const kind = value as JobCostKind;
-              const unit = kind === "labor" ? "hr" : line.unit === "hr" || !line.unit ? "ea" : line.unit;
-              onChange(line.id, {
-                kind,
-                unit,
-                ...(kind === "labor" ? { images: undefined } : { images: line.images ?? [] }),
-              });
-            }}
+            value={currentUnit}
+            onValueChange={(unit) => onChange(line.id, { unit })}
           >
-            <SelectTrigger aria-label="Type" className="w-full">
-              <SelectValue placeholder="Type" />
+            <SelectTrigger aria-label="Unit" className="w-full">
+              <SelectValue placeholder="Unit" />
             </SelectTrigger>
             <SelectContent
               position="popper"
               align="start"
               className="z-[100] w-[var(--radix-select-trigger-width)]"
             >
-              <SelectItem value="labor">Labor</SelectItem>
-              <SelectItem value="materials">Material</SelectItem>
+              {unitOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </TableCell>
-        <TableCell className="w-24 min-w-[90px] align-top py-2">
-          <Input
-            aria-label="Quantity"
-            className="w-full tabular-nums"
-            disabled={locked}
-            inputMode="decimal"
-            min={0}
-            step="any"
-            type="number"
-            value={Number.isFinite(line.quantity) ? line.quantity : 0}
-            onChange={(event) =>
-              onChange(line.id, { quantity: Number(event.target.value) || 0 })
-            }
-          />
-        </TableCell>
-        {showUnit ? (
-          <TableCell className="w-36 min-w-[135px] align-top py-2">
-            <Select
-              disabled={locked}
-              value={currentUnit}
-              onValueChange={(unit) => onChange(line.id, { unit })}
-            >
-              <SelectTrigger aria-label="Unit" className="w-full">
-                <SelectValue placeholder="Unit" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                align="start"
-                className="z-[100] w-[var(--radix-select-trigger-width)]"
-              >
-                {unitOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </TableCell>
-        ) : null}
-        <TableCell className="w-28 min-w-[110px] align-top py-2">
-          <Input
-            aria-label="Unit price"
-            className="w-full tabular-nums"
-            disabled={locked}
-            inputMode="decimal"
-            min={0}
-            placeholder="0"
-            step="0.01"
-            type="number"
-            value={line.unitPrice ? line.unitPrice : ""}
-            onChange={(event) =>
-              onChange(line.id, { unitPrice: Number(event.target.value) || 0 })
-            }
-          />
-        </TableCell>
-        <TableCell className="w-24 min-w-[95px] align-top py-2 text-right font-medium tabular-nums">
-          {formatMoney(lineTotal(line))}
-        </TableCell>
-        <TableCell className="w-10 min-w-[44px] align-top py-2 text-center">
-          {canRemove ? (
-            <Button
-              aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              size="icon-sm"
-              variant="ghost"
-              type="button"
-              onClick={onRemove}
-            >
-              <Trash2 />
-            </Button>
-          ) : null}
-        </TableCell>
-      </TableRow>
-      {showImages ? (
-        <TableRow className="border-b border-input bg-[#fafbfc] hover:bg-[#fafbfc]">
-          <TableCell colSpan={showUnit ? 7 : 6} className="py-2.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Material images
-              </span>
-              <span className="text-xs text-muted-foreground">(optional)</span>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => void onUpload(event.target.files)}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={locked || uploading || images.length >= MAX_MATERIAL_IMAGES}
-                className="h-7 gap-1 text-xs"
-                onClick={() => fileRef.current?.click()}
-              >
-                {uploading ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <ImagePlus className="size-3.5" />
-                )}
-                {uploading ? "Uploading…" : "Add image"}
-              </Button>
-            </div>
-            {images.length ? (
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {images.map((src, index) => (
-                  <li
-                    key={`${src}-${index}`}
-                    className="group relative h-16 w-20 overflow-hidden rounded-md border border-input bg-white"
-                  >
-                    <Image
-                      src={src}
-                      alt={`Material photo ${index + 1}`}
-                      fill
-                      sizes="80px"
-                      className="object-cover"
-                      unoptimized={src.startsWith("http")}
-                    />
-                    <span className="absolute bottom-0 inset-x-0 bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white">
-                      Material
-                    </span>
-                    {!locked ? (
-                      <button
-                        type="button"
-                        aria-label="Remove material image"
-                        className="absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-white/95 text-foreground shadow-sm ring-1 ring-black/10 opacity-0 transition group-hover:opacity-100"
-                        onClick={() =>
-                          onChange(line.id, {
-                            images: images.filter((_, i) => i !== index),
-                          })
-                        }
-                      >
-                        <X className="size-3" />
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                No material images attached.
-              </p>
-            )}
-          </TableCell>
-        </TableRow>
       ) : null}
-    </>
+      <TableCell className="w-28 min-w-[110px] align-top py-2">
+        <Input
+          aria-label="Unit price"
+          className="w-full tabular-nums"
+          disabled={locked}
+          inputMode="decimal"
+          min={0}
+          placeholder="0"
+          step="0.01"
+          type="number"
+          value={line.unitPrice ? line.unitPrice : ""}
+          onChange={(event) =>
+            onChange(line.id, { unitPrice: Number(event.target.value) || 0 })
+          }
+        />
+      </TableCell>
+      <TableCell className="w-24 min-w-[95px] align-top py-2 text-right font-medium tabular-nums">
+        {formatMoney(lineTotal(line))}
+      </TableCell>
+      <TableCell className="w-10 min-w-[44px] align-top py-2 text-center">
+        {canRemove ? (
+          <Button
+            aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            size="icon-sm"
+            variant="ghost"
+            type="button"
+            onClick={onRemove}
+          >
+            <Trash2 />
+          </Button>
+        ) : null}
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -419,7 +433,7 @@ export function LineItemsActions({
     <div className={cn("flex flex-wrap items-center justify-end gap-2", className)}>
       <Button size="sm" variant="outline" type="button" disabled={locked || saving} onClick={onAddLabor}>
         <Plus />
-        Add labor
+        Add labour
       </Button>
       <Button
         size="sm"

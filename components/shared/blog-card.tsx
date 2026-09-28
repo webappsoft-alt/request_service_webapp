@@ -26,21 +26,20 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
   const imageAlt =
     "imageAlt" in post && post.imageAlt ? post.imageAlt : post.title;
 
-  const commentCount =
-    "commentCount" in post && typeof post.commentCount === "number"
+  const commentCount = Number(
+    "commentCount" in post && post.commentCount != null
       ? post.commentCount
       : "comments" in post && Array.isArray(post.comments)
         ? post.comments.length
-        : 0;
+        : 0,
+  ) || 0;
 
-  const viewCount =
-    "viewCount" in post && typeof post.viewCount === "number"
-      ? post.viewCount
-      : 0;
-  const likeCount =
-    "likeCount" in post && typeof post.likeCount === "number"
-      ? post.likeCount
-      : 0;
+  const viewCount = Number(
+    "viewCount" in post && post.viewCount != null ? post.viewCount : 0,
+  ) || 0;
+  const likeCount = Number(
+    "likeCount" in post && post.likeCount != null ? post.likeCount : 0,
+  ) || 0;
 
   const isExternalImage = Boolean(imageSrc?.startsWith("http"));
 
@@ -79,17 +78,29 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
               {categoryName}
             </p>
             <div className="flex items-center gap-2.5 font-medium text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Eye className="size-3.5" aria-hidden="true" />
-                {viewCount}
+              <span
+                className="inline-flex items-center gap-1"
+                title={`${viewCount} views`}
+                aria-label={`${viewCount} views`}
+              >
+                <Eye className="size-3.5 shrink-0" aria-hidden="true" />
+                {viewCount.toLocaleString()}
               </span>
-              <span className="inline-flex items-center gap-1">
-                <Heart className="size-3.5" aria-hidden="true" />
-                {likeCount}
+              <span
+                className="inline-flex items-center gap-1"
+                title={`${likeCount} likes`}
+                aria-label={`${likeCount} likes`}
+              >
+                <Heart className="size-3.5 shrink-0" aria-hidden="true" />
+                {likeCount.toLocaleString()}
               </span>
-              <span className="inline-flex items-center gap-1">
-                <MessageSquare className="size-3.5" aria-hidden="true" />
-                {commentCount}
+              <span
+                className="inline-flex items-center gap-1"
+                title={`${commentCount} comments`}
+                aria-label={`${commentCount} comments`}
+              >
+                <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
+                {commentCount.toLocaleString()}
               </span>
             </div>
           </div>

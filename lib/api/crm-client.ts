@@ -312,6 +312,7 @@ function invoiceItemsToApi(items: Invoice["items"]) {
               ? "material"
               : "labor",
       quantity: item.quantity,
+      unit: item.unit || "ea",
       unitPrice: item.unitPrice,
       taxRate: 0,
       total: item.total,
@@ -1455,10 +1456,11 @@ export type EstimateSettingsPayload = {
 export async function updateEstimateSettings(id: string, settings: EstimateSettingsPayload) {
   const payload: Record<string, unknown> = {};
   if (settings.title !== undefined) payload.title = settings.title.trim();
-  if (settings.status !== undefined) payload.status = settings.status;
-  if (settings.customerId !== undefined) payload.customerId = settings.customerId;
+  // Status / customerId / notes / terms are not updated via this settings form.
   if (settings.issuedAt !== undefined) payload.issuedAt = settings.issuedAt;
-  if (settings.expiresAt !== undefined) payload.expiresAt = settings.expiresAt || null;
+  if (settings.expiresAt !== undefined && settings.expiresAt !== null && settings.expiresAt !== "") {
+    payload.expiresAt = settings.expiresAt;
+  }
   if (settings.propertyAddress !== undefined) {
     const line = String(
       settings.propertyAddress.address ||
@@ -1484,8 +1486,6 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
       longitude: Number.isFinite(lng) ? lng : 0,
     };
   }
-  if (settings.notes !== undefined) payload.notes = settings.notes;
-  if (settings.terms !== undefined) payload.terms = settings.terms;
 
   const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);

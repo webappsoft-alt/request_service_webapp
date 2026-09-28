@@ -40,6 +40,7 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { useEstimateActivities } from "@/components/portal/use-estimate-activities";
 import { useJobActivities } from "@/components/portal/use-job-activities";
+import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { patchJobLocally } from "@/store/jobsSlice";
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
 import {
@@ -78,6 +79,7 @@ import {
   updateSchedule,
   resolveCrmObjectId,
 } from "@/lib/api/crm-client";
+import { estimateStatusLabel } from "@/lib/data/portal";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { useAppDispatch } from "@/store/hooks";
 import {
@@ -240,6 +242,7 @@ export function JobSummaryTab({
   noun = "job",
   locked = false,
   onActivitiesChange,
+  onEditEstimate,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -248,6 +251,7 @@ export function JobSummaryTab({
   noun?: CostingNoun;
   locked?: boolean;
   onActivitiesChange?: (next: Estimate["activities"]) => void;
+  onEditEstimate?: () => void;
 }) {
   const dispatch = useAppDispatch();
   const { lines, mix } = useJobCosting(job, {
@@ -255,6 +259,7 @@ export function JobSummaryTab({
     // kinds stay aligned with API (and labour spelling repairs), not stale localStorage.
     preferApi: noun === "job" || Boolean(estimate),
   });
+  const { requests } = usePortalWorkspace();
   const [taxRatePercent, setTaxRatePercent] = useState(0);
   const addressState =
     estimate?.propertyAddress?.state ||
@@ -304,6 +309,16 @@ export function JobSummaryTab({
   const laborLines = lines.filter((line) => line.kind === "labor");
   const materialLines = lines.filter((line) => line.kind === "materials");
 
+  const linkedRequest = useMemo(() => {
+    const requestId = estimate?.requestId?.trim();
+    if (!requestId) return null;
+    return requests.find((item) => item.id === requestId) ?? null;
+  }, [estimate?.requestId, requests]);
+
+  const quoteAnswers = linkedRequest?.answers?.filter(
+    (item) => item.label?.trim() && item.value?.trim(),
+  ) ?? [];
+
   const apiActivities = isEstimate
     ? estimateActivities
     : isJobRecord
@@ -335,120 +350,65 @@ export function JobSummaryTab({
       ? `/pro/dashboard/invoices/${resolveCrmObjectId(job.invoiceId) || job.invoiceId}`
       : null;
 
-  const estimateAddress = estimate?.propertyAddress;
-  const estimateAddressLine = estimateAddress
-    ? [
-        estimateAddress.address || estimateAddress.street,
-        formatLocation(
-          estimateAddress.city,
-          estimateAddress.state,
-          estimateAddress.zip,
-        ),
-      ]
-        .filter(Boolean)
-        .join(", ")
-    : "";
-
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       {isEstimate && estimate ? (
         <div className="lg:col-span-3">
-          <Panel title="Estimate details">
-          <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                Customer
-              </p>
-              <p className="mt-1 font-medium">
-                {estimate.customerId ? (
-                  <Link
-                    href={`/pro/dashboard/customers/${estimate.customerId}`}
-                    className="font-semibold text-primary hover:underline"
-                  >
-                    {estimate.customerName?.trim() || "Customer"}
-                  </Link>
-                ) : (
-                  estimate.customerName?.trim() || "—"
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                Status
-              </p>
-              <p className="mt-1 font-medium capitalize">
-                {String(estimate.status || "").replace(/_/g, " ") || "—"}
-              </p>
-            </div>
-            {estimate.title?.trim() ? (
+          <Panel
+            title="Summary"
+            action={
+              onEditEstimate && !locked ? (
+                <Button size="sm" variant="outline" onClick={onEditEstimate}>
+                  <Pencil className="size-3.5" />
+                  Edit
+                </Button>
+              ) : null
+            }
+          >
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              {estimate.title?.trim() ? (
+                <div>
+                  <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                    Title
+                  </p>
+                  <p className="mt-1 font-medium">{estimate.title}</p>
+                </div>
+              ) : null}
               <div>
                 <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Title
+                  Status
                 </p>
-                <p className="mt-1 font-medium">{estimate.title}</p>
+                <p className="mt-1 font-medium">
+                  {estimateStatusLabel(estimate.status)}
+                </p>
               </div>
-            ) : null}
-            {estimateAddressLine ? (
               <div className="sm:col-span-2">
-                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Address
+                <p className="text-sm text-muted-foreground">
+                  {locked
+                    ? "Estimate details are locked."
+                    : "Edit to update title, address, and dates."}
                 </p>
-                <p className="mt-1 font-medium">{estimateAddressLine}</p>
               </div>
-            ) : null}
-            <div>
-              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                Issued
-              </p>
-              <p className="mt-1 font-medium">
-                {estimate.issuedAt ? formatDate(estimate.issuedAt) : "—"}
-              </p>
             </div>
-            <div>
-              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                Expires
-              </p>
-              <p className="mt-1 font-medium">
-                {estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"}
-              </p>
-            </div>
-            {estimate.customerPhone?.trim() ? (
-              <div>
-                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Phone
-                </p>
-                <p className="mt-1 font-medium">{estimate.customerPhone}</p>
-              </div>
-            ) : null}
-            {estimate.customerEmail?.trim() ? (
-              <div>
-                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Email
-                </p>
-                <p className="mt-1 font-medium break-all">{estimate.customerEmail}</p>
-              </div>
-            ) : null}
-            {estimate.notes?.trim() ? (
-              <div className="sm:col-span-2 xl:col-span-4">
-                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Notes
-                </p>
-                <p className="mt-1 whitespace-pre-wrap font-medium text-muted-foreground">
-                  {estimate.notes}
-                </p>
-              </div>
-            ) : null}
-            {estimate.terms?.trim() ? (
-              <div className="sm:col-span-2 xl:col-span-4">
-                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Terms
-                </p>
-                <p className="mt-1 whitespace-pre-wrap font-medium text-muted-foreground">
-                  {estimate.terms}
-                </p>
-              </div>
-            ) : null}
-          </div>
+          </Panel>
+        </div>
+      ) : null}
+      {isEstimate && quoteAnswers.length ? (
+        <div className="lg:col-span-3">
+          <Panel title="Answers">
+            <dl className="flex flex-wrap gap-2">
+              {quoteAnswers.map((item) => (
+                <div
+                  key={item.id}
+                  className="inline-flex max-w-full items-baseline gap-1.5 rounded-md border border-input bg-[#f8fafc] px-2.5 py-1.5 text-sm"
+                >
+                  <dt className="shrink-0 text-xs text-muted-foreground">
+                    {item.label}:
+                  </dt>
+                  <dd className="min-w-0 truncate font-medium">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
           </Panel>
         </div>
       ) : null}

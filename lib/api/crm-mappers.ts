@@ -1414,6 +1414,9 @@ function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
         source: mapInvoiceItemSource(record.kind ?? record.source, description),
         description,
         quantity: Math.max(0, numberValue(record.quantity, 1)),
+        unit:
+          trimmed(record.unit) ||
+          (mapEstimateItemType(record.kind) === "labor" ? "hr" : "ea"),
         unitPrice: numberValue(record.unitPrice),
         total: numberValue(record.total),
         ...(images.length ? { images } : {}),

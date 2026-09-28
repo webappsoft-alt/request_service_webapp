@@ -97,6 +97,7 @@ export function linesToInvoiceItems(invoiceId: string, lines: JobCostLine[]): In
     source: "estimate",
     description: line.description,
     quantity: line.quantity,
+    unit: line.unit || (line.kind === "labor" ? "hr" : "ea"),
     unitPrice: line.unitPrice,
     total: lineTotal(line),
     ...(line.kind === "materials" && line.images?.length
@@ -124,7 +125,7 @@ export function invoiceAsJob(invoice: Invoice, job?: Job): Job {
       source: item.source === "change_order" ? "change_order" : "estimate",
       description: item.description,
       quantity: item.quantity,
-      unit: "ea",
+      unit: item.unit || "ea",
       unitPrice: item.unitPrice,
       total: item.total,
     })),

@@ -394,17 +394,18 @@ export function InvoiceSummaryTab({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Description</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              <TableHead className="min-w-[220px] w-[50%]">Description</TableHead>
+              <TableHead className="w-20 whitespace-nowrap">Source</TableHead>
+              <TableHead className="w-14 whitespace-nowrap text-right">Qty</TableHead>
+              <TableHead className="w-16 whitespace-nowrap">Unit</TableHead>
+              <TableHead className="w-24 whitespace-nowrap text-right">Price</TableHead>
+              <TableHead className="w-24 whitespace-nowrap text-right">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {invoice.items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell className="font-medium align-top">
+                <TableCell className="min-w-0 font-medium align-top">
                   <div className="whitespace-pre-wrap break-words">{item.description}</div>
                   {item.images?.length ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -427,10 +428,21 @@ export function InvoiceSummaryTab({
                     </div>
                   ) : null}
                 </TableCell>
-                <TableCell className="align-top">{invoiceItemSourceLabel(item.source)}</TableCell>
-                <TableCell className="text-right tabular-nums align-top">{item.quantity}</TableCell>
-                <TableCell className="text-right tabular-nums align-top">{formatMoney(item.unitPrice)}</TableCell>
-                <TableCell className="text-right tabular-nums align-top">{formatMoney(item.total)}</TableCell>
+                <TableCell className="w-20 whitespace-nowrap align-top text-sm text-muted-foreground">
+                  {invoiceItemSourceLabel(item.source)}
+                </TableCell>
+                <TableCell className="w-14 whitespace-nowrap text-right tabular-nums align-top">
+                  {item.quantity}
+                </TableCell>
+                <TableCell className="w-16 whitespace-nowrap align-top text-sm capitalize">
+                  {item.unit || "ea"}
+                </TableCell>
+                <TableCell className="w-24 whitespace-nowrap text-right tabular-nums align-top">
+                  {formatMoney(item.unitPrice)}
+                </TableCell>
+                <TableCell className="w-24 whitespace-nowrap text-right tabular-nums align-top">
+                  {formatMoney(item.total)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

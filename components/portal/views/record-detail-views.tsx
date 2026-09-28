@@ -13,7 +13,6 @@ import {
   NotebookPen,
   Paperclip,
   ScrollText,
-  Settings,
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,10 +29,9 @@ import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import {
   EstimateFileChrome,
-  EstimateSettingsTab,
+  EstimateSettingsDialog,
 } from "@/components/portal/estimate-file";
 import {
-  EstimatePipeline,
   EstimateSiteVisitTab,
   EstimateStageBanner,
 } from "@/components/portal/estimate-flow";
@@ -203,6 +201,7 @@ export function EstimateDetailView({ id }: { id: string }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [fetched, setFetched] = useState<Estimate | null>(null);
   const [fetching, setFetching] = useState(false);
   const [statusOverride, setStatusOverride] = useState<
@@ -566,7 +565,6 @@ export function EstimateDetailView({ id }: { id: string }) {
           { id: "logs", label: "Logs", icon: ScrollText },
           { id: "notes", label: "Notes", icon: NotebookPen },
           { id: "attachments", label: "Attachments", icon: Paperclip },
-          { id: "settings", label: "Estimate settings", icon: Settings },
         ]}
         badge={
           <>
@@ -724,6 +722,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    onEditEstimate={() => setSettingsOpen(true)}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -910,18 +909,6 @@ export function EstimateDetailView({ id }: { id: string }) {
                     }}
                   />
                 );
-              case "settings":
-                return (
-                  <EstimateSettingsTab
-                    estimate={estimate}
-                    job={job}
-                    service={service}
-                    locked={signed}
-                    onSave={(updated) => {
-                      setFetched(updated);
-                    }}
-                  />
-                );
               default:
                 return (
                   <JobSummaryTab
@@ -930,6 +917,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    onEditEstimate={() => setSettingsOpen(true)}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -947,18 +935,14 @@ export function EstimateDetailView({ id }: { id: string }) {
           })();
           return (
             <div className="space-y-4">
-              <EstimatePipeline
-                status={estimate.status}
-                signed={signed}
-                hasJob={Boolean(job)}
-                hasSiteVisit={Boolean(siteVisit)}
-              />
-              <EstimateStageBanner
-                status={estimate.status}
-                signed={signed}
-                hasJob={Boolean(job)}
-                signature={customerSignature}
-              />
+              {signed || estimate.status === "accepted" || canConvert || job ? (
+                <EstimateStageBanner
+                  status={estimate.status}
+                  signed={signed}
+                  hasJob={Boolean(job)}
+                  signature={customerSignature}
+                />
+              ) : null}
               {job ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
                   <p className="text-sm font-semibold text-emerald-900">
@@ -1015,6 +999,17 @@ export function EstimateDetailView({ id }: { id: string }) {
           );
         }}
       </RecordWorkspace>
+      <EstimateSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        estimate={estimate}
+        job={job}
+        service={service}
+        locked={signed}
+        onSave={(updated) => {
+          setFetched(updated);
+        }}
+      />
       <AssignEventDialog
         open={assignOpen}
         onOpenChange={setAssignOpen}

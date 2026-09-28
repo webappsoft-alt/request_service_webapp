@@ -329,6 +329,7 @@ export interface InvoiceItem {
   source: "estimate" | "change_order" | "adjustment";
   description: string;
   quantity: number;
+  unit: string;
   unitPrice: number;
   total: number;
   /** Optional material photos (URLs). Ignored for labor lines. */

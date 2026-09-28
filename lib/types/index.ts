@@ -566,7 +566,7 @@ export interface BlogPost {
   authorId: string;
   publishedAt: string;
   updatedAt: string;
-  readTimeMinutes: number;
+  readTimeMinutes?: number;
   imageAlt: string;
   image?: string;
   featured?: boolean;
@@ -574,11 +574,25 @@ export interface BlogPost {
 
 export interface PublicBlogComment {
   _id?: string;
+  id?: string;
+  parentId?: string | null;
+  rootId?: string | null;
   authorName: string;
   authorEmail?: string;
-  comment: string;
+  userId?: string | null;
+  comment?: string;
+  body?: string;
+  isAdminReply?: boolean;
+  isPinned?: boolean;
+  isFlagged?: boolean;
   isDisabled?: boolean;
+  isDeleted?: boolean;
+  isFlaggedUser?: boolean;
+  flaggedUserReason?: string;
+  depth?: number;
   createdAt?: string;
+  updatedAt?: string;
+  replies?: PublicBlogComment[];
 }
 
 export interface PublicBlogItem {
@@ -599,6 +613,9 @@ export interface PublicBlogItem {
   status?: string;
   publishedAt?: string;
   isPin?: boolean;
+  commentsEnabled?: boolean;
+  viewCount?: number;
+  likeCount?: number;
   createdAt?: string;
   updatedAt?: string;
   commentCount?: number;

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, MessageSquare } from "lucide-react";
+import { ArrowRight, Eye, Heart, MessageSquare } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { extractFirstImageUrl } from "@/lib/data/public-blogs";
 import { formatDate } from "@/lib/format";
@@ -11,11 +11,6 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
     "category" in post && typeof post.category === "string" && post.category
       ? post.category
       : "Journal";
-
-  const authorName =
-    "authorName" in post && post.authorName
-      ? post.authorName
-      : "Request Service Editorial";
 
   const extractedFromContent =
     "content" in post && typeof post.content === "string"
@@ -31,25 +26,20 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
   const imageAlt =
     "imageAlt" in post && post.imageAlt ? post.imageAlt : post.title;
 
-  const readTime =
-    post.readTimeMinutes ||
-    (post.content
-      ? Math.max(
-          3,
-          Math.ceil(
-            (typeof post.content === "string"
-              ? post.content.split(/\s+/).length
-              : post.content.join(" ").split(/\s+/).length) / 200,
-          ),
-        )
-      : 5);
-
-  const commentCount =
-    "commentCount" in post && typeof post.commentCount === "number"
+  const commentCount = Number(
+    "commentCount" in post && post.commentCount != null
       ? post.commentCount
       : "comments" in post && Array.isArray(post.comments)
         ? post.comments.length
-        : 0;
+        : 0,
+  ) || 0;
+
+  const viewCount = Number(
+    "viewCount" in post && post.viewCount != null ? post.viewCount : 0,
+  ) || 0;
+  const likeCount = Number(
+    "likeCount" in post && post.likeCount != null ? post.likeCount : 0,
+  ) || 0;
 
   const isExternalImage = Boolean(imageSrc?.startsWith("http"));
 
@@ -87,12 +77,32 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
             <p className="eyebrow text-primary">
               {categoryName}
             </p>
-            {commentCount > 0 && (
-              <span className="inline-flex items-center gap-1 font-medium text-muted-foreground">
-                <MessageSquare className="size-3.5" aria-hidden="true" />
-                {commentCount}
+            <div className="flex items-center gap-2.5 font-medium text-muted-foreground">
+              <span
+                className="inline-flex items-center gap-1"
+                title={`${viewCount} views`}
+                aria-label={`${viewCount} views`}
+              >
+                <Eye className="size-3.5 shrink-0" aria-hidden="true" />
+                {viewCount.toLocaleString()}
               </span>
-            )}
+              <span
+                className="inline-flex items-center gap-1"
+                title={`${likeCount} likes`}
+                aria-label={`${likeCount} likes`}
+              >
+                <Heart className="size-3.5 shrink-0" aria-hidden="true" />
+                {likeCount.toLocaleString()}
+              </span>
+              <span
+                className="inline-flex items-center gap-1"
+                title={`${commentCount} comments`}
+                aria-label={`${commentCount} comments`}
+              >
+                <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
+                {commentCount.toLocaleString()}
+              </span>
+            </div>
           </div>
 
           <h3 className="text-lg font-semibold tracking-tight text-balance">
@@ -117,4 +127,3 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
     </Card>
   );
 }
-

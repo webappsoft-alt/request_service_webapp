@@ -171,6 +171,7 @@ export async function fetchPublicBlogs(
 
 /**
  * Fetch a single public blog by slug including approved comments.
+ * Uses no-store so comment threads are not stuck on a stale ISR cache.
  */
 export async function fetchPublicBlogBySlug(
   slug: string,
@@ -184,7 +185,7 @@ export async function fetchPublicBlogBySlug(
     const response = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
-      next: { revalidate: 30 },
+      cache: "no-store",
     });
 
     if (!response.ok) return null;
@@ -192,9 +193,23 @@ export async function fetchPublicBlogBySlug(
     const data = await response.json();
     if (!data || typeof data !== "object") return null;
 
-    // Response might be wrapped in `{ data: ... }` or directly the blog object
-    const blog: PublicBlogItem = "data" in data && data.data ? data.data : data;
+    // Prefer nested `.data` only when it looks like the blog document itself
+    const wrapped =
+      "data" in data &&
+      data.data &&
+      typeof data.data === "object" &&
+      !Array.isArray(data.data) &&
+      ("slug" in data.data || "title" in data.data || "_id" in data.data)
+        ? (data.data as PublicBlogItem)
+        : null;
+
+    const blog: PublicBlogItem = wrapped || (data as PublicBlogItem);
     if (!blog._id && !blog.slug && !blog.title) return null;
+
+    // Normalize comments to always be an array
+    if (!Array.isArray(blog.comments)) {
+      blog.comments = [];
+    }
 
     if (!blog.image && blog.content) {
       blog.image = extractFirstImageUrl(blog.content);
@@ -208,9 +223,10 @@ export async function fetchPublicBlogBySlug(
 }
 
 export type SubmitCommentPayload = {
-  authorName: string;
-  authorEmail: string;
+  authorName?: string;
+  authorEmail?: string;
   comment: string;
+  parentId?: string;
 };
 
 export type SubmitCommentResponse = {
@@ -221,6 +237,7 @@ export type SubmitCommentResponse = {
 
 /**
  * Submit a comment to a public blog by slug.
+ * Sends Bearer token when the visitor is logged in so the API can skip name/email fields.
  */
 export async function submitBlogComment(
   slug: string,
@@ -233,36 +250,50 @@ export async function submitBlogComment(
     return { success: false, message: "Invalid blog identifier." };
   }
 
-  if (!payload.authorName?.trim()) {
-    return { success: false, message: "Please enter your name." };
-  }
-  if (!payload.authorEmail?.trim()) {
-    return { success: false, message: "Please enter your email address." };
-  }
   if (!payload.comment?.trim()) {
     return { success: false, message: "Please enter your comment." };
   }
 
   try {
     const url = `${base}/${publicApi.blogComments(trimmedSlug)}`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+
+    if (typeof window !== "undefined") {
+      try {
+        const { getAuthToken } = await import("@/components/api/apiFuntions");
+        const token = getAuthToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        // guest submit still works
+      }
+    }
+
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers,
       body: JSON.stringify({
-        authorName: payload.authorName.trim(),
-        authorEmail: payload.authorEmail.trim(),
+        authorName: payload.authorName?.trim() || "",
+        authorEmail: payload.authorEmail?.trim() || "",
         comment: payload.comment.trim(),
+        parentId: payload.parentId || undefined,
       }),
     });
 
     const data = await response.json();
     if (!response.ok) {
+      const message =
+        data?.message || "Failed to submit comment. Please try again.";
+      const isFlaggedUser =
+        response.status === 403 && /flagged/i.test(String(message));
       return {
         success: false,
-        message: data?.message || "Failed to submit comment. Please try again.",
+        message,
+        isFlaggedUser,
+        supportMessage: isFlaggedUser ? message : "",
+        flaggedUserReason: isFlaggedUser ? message : "",
       };
     }
 
@@ -277,5 +308,182 @@ export async function submitBlogComment(
       success: false,
       message: "Network error while submitting comment.",
     };
+  }
+}
+
+export type SupportTicketPayload = {
+  category: string;
+  subject: string;
+  message: string;
+  priority?: string;
+  authorName?: string;
+  authorEmail?: string;
+  entityType?: string;
+  entityId?: string;
+  sourceCommentId?: string;
+};
+
+export async function submitSupportTicket(
+  payload: SupportTicketPayload,
+): Promise<{ success: boolean; message: string; ticket?: unknown }> {
+  const base = getBaseUrl();
+  if (!base) return { success: false, message: "API unavailable." };
+
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (typeof window !== "undefined") {
+      try {
+        const { getAuthToken } = await import("@/components/api/apiFuntions");
+        const token = getAuthToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        // ignore
+      }
+    }
+
+    const response = await fetch(`${base}/public/support-tickets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data?.message || "Failed to create support ticket.",
+      };
+    }
+    return {
+      success: true,
+      message: data?.message || "Support ticket submitted.",
+      ticket: data?.ticket,
+    };
+  } catch (err) {
+    console.error("submitSupportTicket error:", err);
+    return { success: false, message: "Network error while creating ticket." };
+  }
+}
+
+export type EmailModerationStatus = {
+  success: boolean;
+  isFlagged: boolean;
+  reason?: string;
+  supportMessage?: string;
+  accountStatus?: string | null;
+};
+
+export async function checkEmailModerationStatus(
+  email: string,
+): Promise<EmailModerationStatus> {
+  const base = getBaseUrl();
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!base || !normalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    return { success: false, isFlagged: false };
+  }
+
+  try {
+    const response = await fetch(`${base}/public/moderation/check-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ email: normalized }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return { success: false, isFlagged: false };
+    }
+    return {
+      success: true,
+      isFlagged: Boolean(data?.isFlagged),
+      reason: data?.reason || "",
+      supportMessage: data?.supportMessage || "",
+      accountStatus: data?.accountStatus || null,
+    };
+  } catch {
+    return { success: false, isFlagged: false };
+  }
+}
+
+export async function recordBlogView(
+  slug: string,
+): Promise<{ success: boolean; viewCount?: number; likeCount?: number }> {
+  const base = getBaseUrl();
+  const trimmed = String(slug || "").trim();
+  if (!base || !trimmed) return { success: false };
+  try {
+    const response = await fetch(`${base}/public/blogs/${trimmed}/view`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    });
+    const data = await response.json();
+    if (!response.ok) return { success: false };
+    return {
+      success: true,
+      viewCount: data?.viewCount,
+      likeCount: data?.likeCount,
+    };
+  } catch {
+    return { success: false };
+  }
+}
+
+export async function likeBlogPost(
+  slug: string,
+  payload: { authorName?: string; authorEmail?: string } = {},
+): Promise<{
+  success: boolean;
+  message?: string;
+  likeCount?: number;
+  liked?: boolean;
+  alreadyLiked?: boolean;
+}> {
+  const base = getBaseUrl();
+  const trimmed = String(slug || "").trim();
+  if (!base || !trimmed) return { success: false, message: "Invalid blog." };
+
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (typeof window !== "undefined") {
+      try {
+        const { getAuthToken } = await import("@/components/api/apiFuntions");
+        const token = getAuthToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        // ignore
+      }
+    }
+
+    const response = await fetch(`${base}/public/blogs/${trimmed}/like`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        authorName: payload.authorName?.trim() || "",
+        authorEmail: payload.authorEmail?.trim() || "",
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data?.message || "Failed to like article.",
+      };
+    }
+    return {
+      success: true,
+      message: data?.message,
+      likeCount: data?.likeCount,
+      liked: data?.liked,
+      alreadyLiked: data?.alreadyLiked,
+    };
+  } catch {
+    return { success: false, message: "Network error while liking." };
   }
 }

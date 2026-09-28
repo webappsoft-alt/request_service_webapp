@@ -2517,6 +2517,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [resolvingStale, setResolvingStale] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
   const [materialsActions, setMaterialsActions] =
     useState<JobCostingActions | null>(null);
   const onMaterialsActionsChange = useCallback(

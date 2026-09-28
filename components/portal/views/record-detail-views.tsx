@@ -13,6 +13,7 @@ import {
   NotebookPen,
   Paperclip,
   ScrollText,
+  Settings,
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -186,7 +187,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
   const crm = useCrmApiData();
-  const { session, estimates, provider, jobs } = usePortalWorkspace();
+  const { session, estimates, provider, jobs, invoices } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { events, employees, assign } = usePortalCrew();
   const records = usePortalRecords();
@@ -553,6 +554,155 @@ export function EstimateDetailView({ id }: { id: string }) {
     }
   }
 
+  /** Reuse existing Estimate→Job + Job→Invoice APIs (no separate conversion flow). */
+  async function convertToInvoice() {
+    if (converting) return;
+
+    const existingInvoiceId = resolveCrmObjectId(job?.invoiceId);
+    if (existingInvoiceId) {
+      router.push(`/pro/dashboard/invoices/${existingInvoiceId}`);
+      return;
+    }
+    if (job && (job.status === "invoiced" || job.status === "paid")) {
+      toast.error("This estimate’s job is already invoiced.");
+      return;
+    }
+
+    setConverting(true);
+    try {
+      let liveJob = job ?? null;
+
+      if (!liveJob) {
+        if (!canConvert) {
+          toast.error("This estimate cannot be converted right now.");
+          return;
+        }
+        const lines = filledWorkLines(readCostLines(session?.email, asJob));
+        const taxRatePercent = await (
+          await import("@/lib/tax/state-tax")
+        ).fetchTaxRatePercent(quote.propertyAddress?.state);
+        const items = lines.length
+          ? linesToEstimateItems(quote.id, lines, taxRatePercent)
+          : quote.items;
+        const siteVisitRecord = siteVisit
+          ? siteVisitToRecord(siteVisit)
+          : quote.siteVisit;
+        const title = quote.title || service;
+
+        if (apiReady) {
+          const created = await convertEstimateToJobApi(quote.id, {
+            title,
+            items,
+            siteVisit: siteVisitRecord,
+          });
+          if (!created?.id) {
+            throw new Error("The CRM did not return the new job.");
+          }
+          copyCostLines(session?.email, quote.id, created.id);
+          if (siteVisit?.photos.length) {
+            appendJobAttachments(session?.email, created.id, siteVisit.photos);
+          }
+          records.cacheJob(created);
+          records.linkRecords("estimate", quote.id, created.id);
+          setStatusOverride("converted_to_job");
+          crm.patchEstimate(quote.id, {
+            status: "converted_to_job",
+            jobId: created.id,
+          });
+          liveJob = created;
+        } else {
+          const created = buildJob({
+            number: nextRecordNumber(
+              "JOB",
+              allJobs.map((item) => item.number),
+            ),
+            title,
+            providerId: provider.id,
+            customerId: quote.customerId,
+            estimateId: quote.id,
+            address: quote.propertyAddress,
+            assignedTo: siteVisit?.technician,
+            scheduledAt: todayISO(),
+            notes: [
+              quote.title ? `Estimate: ${quote.title}` : "",
+              `Converted from ${quote.number}`,
+              quote.notes,
+            ]
+              .filter(Boolean)
+              .join("\n\n"),
+            status: "unscheduled",
+            lines,
+          });
+          records.cacheJob(created);
+          records.linkRecords("estimate", quote.id, created.id);
+          records.setStatus("estimate", quote.id, "converted_to_job");
+          writeCostLines(session?.email, created.id, lines);
+          setStatusOverride("converted_to_job");
+          liveJob = created;
+        }
+      }
+
+      if (!liveJob?.id) {
+        throw new Error("Could not resolve a job for this estimate.");
+      }
+
+      const jobIsLive = Boolean(resolveCrmObjectId(liveJob.id));
+      if (apiReady || jobIsLive) {
+        const { invoice: created } = await dispatch(
+          convertJobToInvoiceRecord(liveJob.id),
+        ).unwrap();
+        const dest = resolveCrmObjectId(created.id) || created.id;
+        toast.success(
+          `${created.number || "Invoice"} drafted from ${quote.number}.`,
+        );
+        if (!resolveCrmObjectId(dest)) {
+          toast.error("Invoice created — open it from the Invoices list.");
+          router.push("/pro/dashboard/invoices");
+          return;
+        }
+        router.push(`/pro/dashboard/invoices/${dest}`);
+        return;
+      }
+
+      const costLines = readCostLines(session?.email, liveJob);
+      const draft = buildInvoice({
+        number: nextRecordNumber(
+          "INV",
+          invoices.map((item) => item.number),
+        ),
+        providerId: provider.id,
+        customerId: liveJob.customerId,
+        jobId: liveJob.id,
+        lines: costLines.length
+          ? costLines
+          : liveJob.items.map((item) => ({
+              id: item.id,
+              description: item.description,
+              kind: (item.kind === "labor" ? "labor" : "materials") as
+                | "labor"
+                | "materials",
+              quantity: item.quantity,
+              unit: item.unit,
+              unitPrice: item.unitPrice,
+            })),
+      });
+      await records.addInvoice(draft);
+      records.linkRecords("job", liveJob.id, draft.id);
+      toast.success(`${draft.number} drafted from ${quote.number}.`);
+      router.push(`/pro/dashboard/invoices/${draft.id}`);
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not convert this estimate to an invoice.",
+      );
+    } finally {
+      setConverting(false);
+    }
+  }
+
   return (
     <>
       <RecordWorkspace
@@ -596,20 +746,47 @@ export function EstimateDetailView({ id }: { id: string }) {
         actions={
           <>
             {job ? (
-              <Button size="sm" asChild>
-                <Link href={`/pro/dashboard/jobs/${job.id}`}>
-                  Open {job.number}
-                </Link>
-              </Button>
+              <>
+                {!(
+                  job.invoiceId ||
+                  job.status === "invoiced" ||
+                  job.status === "paid"
+                ) ? (
+                  <Button
+                    size="sm"
+                    data-action="convert-to-invoice"
+                    disabled={converting}
+                    onClick={() => void convertToInvoice()}
+                  >
+                    {converting ? "Converting…" : "Convert to invoice"}
+                  </Button>
+                ) : null}
+                <Button size="sm" asChild>
+                  <Link href={`/pro/dashboard/jobs/${job.id}`}>
+                    Open {job.number}
+                  </Link>
+                </Button>
+              </>
             ) : signed ? (
-              <Button
-                size="sm"
-                data-action="convert-to-job"
-                disabled={converting}
-                onClick={convertToJob}
-              >
-                {converting ? "Converting…" : "Convert to job"}
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  data-action="convert-to-job"
+                  disabled={converting}
+                  onClick={convertToJob}
+                >
+                  {converting ? "Converting…" : "Convert to job"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-action="convert-to-invoice"
+                  disabled={converting || !canConvert}
+                  onClick={() => void convertToInvoice()}
+                >
+                  {converting ? "Converting…" : "Convert to invoice"}
+                </Button>
+              </>
             ) : (
               <>
                 {canShare ? (

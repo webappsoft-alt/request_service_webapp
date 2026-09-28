@@ -659,7 +659,7 @@ export function CreateEstimateDialog({
                   ]
                 : [
                     { id: "customer", label: "Customer" },
-                    { id: "scope", label: "Line items" },
+                    { id: "scope", label: "Labour and Material" },
                     { id: "review", label: "Review" },
                   ]
             }

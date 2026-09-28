@@ -70,15 +70,15 @@ function costingHint(noun: CostingNoun, locked: boolean) {
     case "estimate":
       return locked
         ? "This quote is converted. Qty and price are locked."
-        : "Line items save automatically after you fill description and quantity, or when you leave this tab.";
+        : "Line items stay in this form until you leave this tab or page — then they save automatically.";
     case "invoice":
       return locked
         ? "This invoice has left draft. Qty and price are locked."
-        : "Line items save automatically after you fill description and quantity, or when you leave this tab.";
+        : "Line items stay in this form until you leave this tab or page — then they save automatically.";
     case "job":
       return locked
         ? "This job is invoiced. Qty and price are locked."
-        : "Line items save automatically after you fill description and quantity, or when you leave this tab.";
+        : "Line items stay in this form until you leave this tab or page — then they save automatically.";
     default: {
       const _never: never = noun;
       return _never;
@@ -275,14 +275,9 @@ export function JobCosting({
     void persistRef.current(merged, { silent: true });
   }, [ready, locked, job.id, rawLines]);
 
-  // Debounced auto-save only when complete line items changed
-  useEffect(() => {
-    if (!ready || !isDirty || locked) return;
-    const timer = window.setTimeout(() => {
-      void persistRef.current(activeLinesRef.current, { silent: true });
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [isDirty, locked, ready]);
+  // Do NOT debounce-save while typing. Persist only when leaving this form/tab/page.
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
 
   // Window beforeunload when dirty
   useEffect(() => {
@@ -295,6 +290,15 @@ export function JobCosting({
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
+
+  // Flush once on unmount if there are unsaved complete lines.
+  useEffect(() => {
+    return () => {
+      if (!ready || locked || !isDirtyRef.current || savingRef.current) return;
+      void persistRef.current(activeLinesRef.current, { silent: true });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount-only flush
+  }, [ready, locked]);
 
   // Auto-save when leaving the tab / navigating away
   useEffect(() => {
@@ -334,6 +338,7 @@ export function JobCosting({
       };
 
       void (async () => {
+        if (savingRef.current) return;
         await persistRef.current(activeLinesRef.current, { silent: true });
         setDraft(null);
         const action = pendingActionRef.current;
@@ -370,7 +375,7 @@ export function JobCosting({
     <div data-job-costing-form>
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold">Labor and materials</h2>
+          <h2 className="text-base font-semibold">Labour and Material</h2>
           <p className="mt-1 text-sm text-muted-foreground">{costingHint(noun, locked)}</p>
           {saving ? (
             <p className="mt-1 text-xs text-muted-foreground">Saving line items…</p>
@@ -390,9 +395,9 @@ export function JobCosting({
         locked={locked}
       />
       <dl className="mt-4 ml-auto grid max-w-xs grid-cols-2 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">Labor</dt>
+        <dt className="text-muted-foreground">Labour</dt>
         <dd className="text-right tabular-nums">{formatMoney(mix.labor)}</dd>
-        <dt className="text-muted-foreground">Materials</dt>
+        <dt className="text-muted-foreground">Material</dt>
         <dd className="text-right tabular-nums">{formatMoney(mix.materials)}</dd>
         <dt className="font-medium">
           {noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}
@@ -411,8 +416,8 @@ export function EstimateCostChart({ labor, materials }: { labor: number; materia
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <EstimateMixTile label="Labor" amount={labor} percent={laborPct} color={LABOR} />
-        <EstimateMixTile label="Materials" amount={materials} percent={materialPct} color={MATERIALS} />
+        <EstimateMixTile label="Labour" amount={labor} percent={laborPct} color={LABOR} />
+        <EstimateMixTile label="Material" amount={materials} percent={materialPct} color={MATERIALS} />
       </div>
       <div className="flex h-2 overflow-hidden rounded-full bg-[#e6ebf0]" aria-hidden="true">
         <div className="h-full bg-[#003F7D]" style={{ width: `${laborPct}%` }} />
@@ -459,10 +464,10 @@ export function JobCostLegend({
   const total = labor + materials;
   return (
     <ul className="w-full space-y-3 text-sm">
-      <MixLegend color={LABOR} label="Labor" amount={labor} share={total ? Math.round((labor / total) * 100) : 0} />
+      <MixLegend color={LABOR} label="Labour" amount={labor} share={total ? Math.round((labor / total) * 100) : 0} />
       <MixLegend
         color={MATERIALS}
-        label="Materials"
+        label="Material"
         amount={materials}
         share={total ? Math.round((materials / total) * 100) : 0}
       />

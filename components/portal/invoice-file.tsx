@@ -389,7 +389,7 @@ export function InvoiceSummaryTab({
 
       <section className="rounded-[4px] border border-input bg-card">
         <div className="border-b border-input px-4 py-3">
-          <h2 className="text-sm font-semibold">Line items</h2>
+          <h2 className="text-sm font-semibold">Labour and Material</h2>
         </div>
         <Table>
           <TableHeader>

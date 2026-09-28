@@ -353,7 +353,16 @@ export function PortalDataTable<T>({
                     className={cn(href && "cursor-pointer")}
                     onClick={
                       href
-                        ? () => {
+                        ? (event) => {
+                            const target = event.target as HTMLElement | null;
+                            // Nested links/buttons (Chat, customer name, menus) keep their own navigation.
+                            if (
+                              target?.closest(
+                                "a, button, input, textarea, select, label, [role='menuitem'], [role='checkbox'], [data-row-nav-ignore]",
+                              )
+                            ) {
+                              return;
+                            }
                             router.push(href);
                           }
                         : undefined

@@ -433,25 +433,29 @@ export function useChatThreads(options?: { enabled?: boolean }) {
       if (isLive) {
         const emitCleared = (clearedUnread: number) => {
           if (typeof window === "undefined") return;
-          window.dispatchEvent(
-            new CustomEvent("rs-realtime", {
-              detail: {
-                type: "CHAT_READ_RECEIPT",
-                payload: {
-                  threadId,
-                  readBy: "provider",
-                  unreadForProvider: 0,
-                  clearedUnread,
+          // Defer so NavLinks / inbox listeners are not updated during MessagesView render.
+          queueMicrotask(() => {
+            window.dispatchEvent(
+              new CustomEvent("rs-realtime", {
+                detail: {
+                  type: "CHAT_READ_RECEIPT",
+                  payload: {
+                    threadId,
+                    readBy: "provider",
+                    unreadForProvider: 0,
+                    clearedUnread,
+                  },
                 },
-              },
-            }),
-          );
+              }),
+            );
+          });
         };
 
         if (threadId === ADMIN_DIRECT_THREAD_ID) {
+          let clearedUnread = 0;
           setApiThreads((prev) => {
             const current = prev.find((t) => t.id === threadId);
-            emitCleared(current?.unreadForProvider || 0);
+            clearedUnread = current?.unreadForProvider || 0;
             return prev.map((t) =>
               t.id === threadId
                 ? {
@@ -466,22 +470,26 @@ export function useChatThreads(options?: { enabled?: boolean }) {
                 : t,
             );
           });
+          emitCleared(clearedUnread);
           void markAdminDirectChatReadForPeer("provider").catch(() => undefined);
           void markUnreadChatNotificationsReadForThread(threadId).then(() => {
             if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("rs-realtime", {
-                  detail: { type: "INBOX_SUMMARY_INVALIDATE" },
-                }),
-              );
+              queueMicrotask(() => {
+                window.dispatchEvent(
+                  new CustomEvent("rs-realtime", {
+                    detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+                  }),
+                );
+              });
             }
           });
           return;
         }
 
+        let clearedUnread = 0;
         setApiThreads((prev) => {
           const current = prev.find((t) => t.id === threadId);
-          emitCleared(current?.unreadForProvider || 0);
+          clearedUnread = current?.unreadForProvider || 0;
           return prev.map((t) =>
             t.id === threadId
               ? {
@@ -496,16 +504,19 @@ export function useChatThreads(options?: { enabled?: boolean }) {
               : t,
           );
         });
+        emitCleared(clearedUnread);
         void markProviderChatRead(threadId)
           .then(() => undefined)
           .catch(() => undefined);
         void markUnreadChatNotificationsReadForThread(threadId).then(() => {
           if (typeof window !== "undefined") {
-            window.dispatchEvent(
-              new CustomEvent("rs-realtime", {
-                detail: { type: "INBOX_SUMMARY_INVALIDATE" },
-              }),
-            );
+            queueMicrotask(() => {
+              window.dispatchEvent(
+                new CustomEvent("rs-realtime", {
+                  detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+                }),
+              );
+            });
           }
         });
         return;

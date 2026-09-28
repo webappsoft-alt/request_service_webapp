@@ -419,7 +419,11 @@ export function RequestsView() {
               return (
                 <div className="flex items-center gap-2">
                   {row.customerId ? (
-                    <Link href={`/pro/dashboard/customers/${row.customerId}`} className="text-primary hover:underline">
+                    <Link
+                      href={`/pro/dashboard/customers/${row.customerId}`}
+                      onClick={(event) => event.stopPropagation()}
+                      className="text-primary hover:underline"
+                    >
                       {row.customerName}
                     </Link>
                   ) : (
@@ -428,6 +432,7 @@ export function RequestsView() {
                   {typeof row.unreadMessagesCount === "number" && row.unreadMessagesCount > 0 ? (
                     <Link
                       href={chatHref}
+                      onClick={(event) => event.stopPropagation()}
                       className="inline-flex items-center gap-1 rounded-full bg-[#003F7D] px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-[#003264]"
                       title="New unread messages"
                     >
@@ -437,6 +442,7 @@ export function RequestsView() {
                   ) : row.hasActiveChat || row.chatThreadId ? (
                     <Link
                       href={chatHref}
+                      onClick={(event) => event.stopPropagation()}
                       title="Open chat conversation"
                       className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-[#003F7D] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300"
                     >

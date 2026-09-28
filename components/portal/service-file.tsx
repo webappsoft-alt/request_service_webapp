@@ -39,6 +39,7 @@ import {
   type PortalFixedService,
   type ServiceAvailabilityMode,
 } from "@/lib/data/portal";
+import { getServiceCategoryById } from "@/lib/data/services";
 import {
   formatStartingPrice,
   formatHoursValue,
@@ -47,6 +48,7 @@ import {
 } from "@/lib/format";
 import type { WorkingHours } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { type PublicCategory } from "@/store/categoriesSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   clearFixedServiceDetail,
@@ -74,6 +76,38 @@ function parseAvailability(value: string): ServiceAvailabilityMode {
 function parseUnit(value: string): FixedServiceUnit {
   if (value === "job" || value === "visit" || value === "hour") return value;
   return "job";
+}
+
+/** Match profile catalog ids (`cat_plumbing`, etc.) to API parent categories. */
+function parentMatchesSignupId(
+  parent: PublicCategory,
+  signupId: string,
+): boolean {
+  const needle = signupId.trim().toLowerCase();
+  if (!needle) return false;
+
+  const parentId = parent.id?.trim().toLowerCase() ?? "";
+  const parentSlug = parent.slug?.trim().toLowerCase() ?? "";
+  const parentName = parent.name?.trim().toLowerCase() ?? "";
+
+  if (parentId === needle || parentSlug === needle || parentName === needle) {
+    return true;
+  }
+
+  const catalog = getServiceCategoryById(signupId);
+  if (!catalog) return false;
+
+  const catalogId = catalog.id.trim().toLowerCase();
+  const catalogSlug = catalog.slug.trim().toLowerCase();
+  const catalogName = catalog.name.trim().toLowerCase();
+
+  return (
+    parentId === catalogId ||
+    parentSlug === catalogSlug ||
+    parentName === catalogName ||
+    parentSlug === catalogId.replace(/^cat_/, "") ||
+    parentId === catalogSlug
+  );
 }
 
 type DraftState = {
@@ -413,7 +447,19 @@ export function ServiceFormView({ id }: { id?: string }) {
     (detail && detail.id === id ? detail.subcategoryId : "") ||
     "";
 
-  const parentPaging = usePaginatedCategoryOptions("parents", true);
+  const signupCategoryIds = useMemo(
+    () =>
+      (Array.isArray(provider.categoryIds) ? provider.categoryIds : []).filter(
+        (cid): cid is string => Boolean(cid?.trim()),
+      ),
+    [provider.categoryIds],
+  );
+  const noSignupCategories = !signupCategoryIds.length;
+
+  const parentPaging = usePaginatedCategoryOptions(
+    "parents",
+    !noSignupCategories,
+  );
   const subPaging = usePaginatedCategoryOptions(
     selectedCategoryId ? "subs" : null,
     Boolean(selectedCategoryId),
@@ -428,7 +474,16 @@ export function ServiceFormView({ id }: { id?: string }) {
   const subcategoryHasMore = subPaging.hasMore;
 
   const categoryOptions = useMemo(() => {
-    const list = [...parentPaging.options];
+    if (!signupCategoryIds.length) return [];
+
+    const matched = parentPaging.categories.filter((parent) =>
+      signupCategoryIds.some((signupId) =>
+        parentMatchesSignupId(parent, signupId),
+      ),
+    );
+
+    const list = matched.map((item) => ({ id: item.id, name: item.name }));
+
     const ensure = (cid: string, cname: string) => {
       if (!cid) return;
       if (list.some((item) => item.id === cid)) return;
@@ -440,7 +495,8 @@ export function ServiceFormView({ id }: { id?: string }) {
     }
     return list;
   }, [
-    parentPaging.options,
+    parentPaging.categories,
+    signupCategoryIds,
     draft.categoryId,
     draft.categoryName,
     detail,
@@ -465,6 +521,32 @@ export function ServiceFormView({ id }: { id?: string }) {
     draft.subcategoryName,
     detail,
     id,
+  ]);
+
+  // Keep loading parents until all profile categories are matched (or exhausted).
+  useEffect(() => {
+    if (!signupCategoryIds.length || loadingParents || loadingMoreParents) {
+      return;
+    }
+    if (!categoryHasMore) return;
+    if (parentPaging.search.trim()) return;
+
+    const matchedCount = parentPaging.categories.filter((parent) =>
+      signupCategoryIds.some((signupId) =>
+        parentMatchesSignupId(parent, signupId),
+      ),
+    ).length;
+    if (matchedCount >= signupCategoryIds.length) return;
+
+    parentPaging.loadMore();
+  }, [
+    signupCategoryIds,
+    parentPaging.categories,
+    parentPaging.search,
+    categoryHasMore,
+    loadingParents,
+    loadingMoreParents,
+    parentPaging.loadMore,
   ]);
 
   const selectedCategory = useMemo(
@@ -766,12 +848,19 @@ export function ServiceFormView({ id }: { id?: string }) {
                     className="w-full"
                     value={selectedCategoryId}
                     options={categoryOptions}
-                    disabled={loadingParents && !categoryOptions.length}
+                    disabled={
+                      noSignupCategories ||
+                      (loadingParents && !categoryOptions.length)
+                    }
                     loading={loadingParents}
                     loadingMore={loadingMoreParents}
-                    hasMore={categoryHasMore}
-                    placeholder="Select category"
-                    searchable
+                    hasMore={categoryHasMore && !noSignupCategories}
+                    placeholder={
+                      noSignupCategories
+                        ? "No categories selected"
+                        : "Select category"
+                    }
+                    searchable={!noSignupCategories}
                     searchValue={parentPaging.search}
                     onSearchChange={parentPaging.setSearch}
                     searchPlaceholder="Search categories…"
@@ -787,9 +876,15 @@ export function ServiceFormView({ id }: { id?: string }) {
                       }));
                     }}
                     onLoadMore={() => {
+                      if (noSignupCategories) return;
                       parentPaging.loadMore();
                     }}
                   />
+                  {noSignupCategories ? (
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      No categories on your profile yet. Add services first.
+                    </p>
+                  ) : null}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="svc-subcategory">Sub-Category</FieldLabel>

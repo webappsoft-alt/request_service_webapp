@@ -93,7 +93,7 @@ export function EstimatePdfDocument({
                 <tr key={`${row.description}-${index}`} className="border-b border-input">
                   <td className="px-2 py-2 break-words font-medium align-top">
                     <div className="whitespace-pre-wrap">
-                      {row.description || (row.kind === "labor" ? "Labor" : "Material")}
+                      {row.description || (row.kind === "labor" ? "Labour" : "Material")}
                     </div>
                     {row.kind === "materials" && row.images?.length ? (
                       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -117,7 +117,7 @@ export function EstimatePdfDocument({
                     ) : null}
                   </td>
                   <td className="px-1.5 py-2 capitalize whitespace-nowrap text-muted-foreground align-top">
-                    {row.kind === "materials" ? "Material" : "Labor"}
+                    {row.kind === "materials" ? "Material" : "Labour"}
                   </td>
                   <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap text-muted-foreground align-top">
                     {row.quantity} {row.unit}

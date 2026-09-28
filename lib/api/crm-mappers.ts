@@ -1520,10 +1520,20 @@ export function mapPayment(raw: unknown): Payment | null {
 
 function extractPersonName(raw: unknown): string {
   if (!raw) return "";
-  if (typeof raw === "string") return raw.trim();
+  // Unpopulated ObjectId strings are not display names.
+  if (typeof raw === "string") {
+    const value = raw.trim();
+    if (!value) return "";
+    if (/^[0-9a-fA-F]{24}$/.test(value)) return "";
+    return value;
+  }
   const rec = asRecord(raw);
   if (!rec) return "";
-  const name = trimmed(rec.name) || trimmed(rec.displayName) || trimmed(rec.fullName) || trimmed(rec.companyName);
+  const name =
+    trimmed(rec.name) ||
+    trimmed(rec.displayName) ||
+    trimmed(rec.fullName) ||
+    trimmed(rec.companyName);
   if (name) return name;
   const firstName = trimmed(rec.firstName);
   const lastName = trimmed(rec.lastName);
@@ -1617,6 +1627,7 @@ export function mapPortalReminder(raw: unknown): PortalReminder | null {
     customerName: customerName || undefined,
     subjectKind: trimmed(record.subjectKind) as PortalReminder["subjectKind"],
     subjectId: crmIdOf(record.subjectId) || undefined,
+    subjectLabel: trimmed(record.subjectLabel) || undefined,
     title: trimmed(record.title) || "Reminder",
     note: trimmed(record.note),
     dueAt: toIsoString(record.dueAt) || toIsoString(record.createdAt),

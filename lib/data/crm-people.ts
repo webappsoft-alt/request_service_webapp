@@ -188,6 +188,8 @@ export type PortalReminder = {
   customerName?: string;
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
+  /** Resolved display label for the linked record (e.g. JOB-662, EST-941, REQ-209). */
+  subjectLabel?: string;
   title: string;
   note: string;
   dueAt: string;

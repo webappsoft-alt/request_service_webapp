@@ -86,8 +86,15 @@ export const fetchReminders = createAsyncThunk<
       force: true,
       silent: true,
     });
+    // Newest first — match GET /reminders sort({ createdAt: -1 }).
+    const items = [...result.items].sort((a, b) => {
+      const aAt = a.createdAt || a.dueAt || "";
+      const bAt = b.createdAt || b.dueAt || "";
+      if (aAt === bAt) return 0;
+      return aAt < bAt ? 1 : -1;
+    });
     return {
-      items: result.items,
+      items,
       page: result.page,
       total: result.total,
       totalPages: result.totalPages,
@@ -108,7 +115,17 @@ export const createReminderRecord = createAsyncThunk<
   try {
     const created = await createReminder(payload);
     if (!created) return rejectWithValue("Reminder was created but could not be read.");
-    return created;
+    // Keep client-resolved labels when API omits them (unpopulated create response).
+    return {
+      ...created,
+      subjectLabel: created.subjectLabel || payload.subjectLabel,
+      assignedEmployeeName:
+        created.assignedEmployeeName || payload.assignedEmployeeName,
+      assignedContractorName:
+        created.assignedContractorName || payload.assignedContractorName,
+      assignedVendorName: created.assignedVendorName || payload.assignedVendorName,
+      customerName: created.customerName || payload.customerName,
+    };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }
@@ -122,7 +139,16 @@ export const updateReminderRecord = createAsyncThunk<
   try {
     const updated = await updateReminder(id, reminder);
     if (!updated) return rejectWithValue("Reminder was updated but could not be read.");
-    return updated;
+    return {
+      ...updated,
+      subjectLabel: updated.subjectLabel || reminder.subjectLabel,
+      assignedEmployeeName:
+        updated.assignedEmployeeName || reminder.assignedEmployeeName,
+      assignedContractorName:
+        updated.assignedContractorName || reminder.assignedContractorName,
+      assignedVendorName: updated.assignedVendorName || reminder.assignedVendorName,
+      customerName: updated.customerName || reminder.customerName,
+    };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }

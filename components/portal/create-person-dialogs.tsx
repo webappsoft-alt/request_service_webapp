@@ -1069,19 +1069,33 @@ export function CreateReminderDialog({
       return;
     }
 
+    const assigneeLabel =
+      assigneeOptions.find((item) => item.id === (assignedEmployeeId || ""))?.label ||
+      (linkedKind === "employee"
+        ? recordOptions.find((item) => item.id === linkedId)?.label
+        : "");
+    const subjectLabel =
+      recordOptions.find((item) => item.id === linkedId)?.label || undefined;
+
     const payload: PortalReminder = {
       id: reminder?.id ?? `rem_${provider.id}_new_${Date.now()}`,
       subjectKind: linkedKind,
       subjectId: linkedId,
+      subjectLabel,
       customerId: linkedKind === "customer" ? linkedId : undefined,
+      customerName: linkedKind === "customer" ? subjectLabel : undefined,
       title: title.trim(),
       note: note.trim(),
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
       assignedEmployeeId:
         assignedEmployeeId ||
         (linkedKind === "employee" ? linkedId : undefined),
+      assignedEmployeeName: assigneeLabel || undefined,
       assignedContractorId: linkedKind === "contractor" ? linkedId : undefined,
+      assignedContractorName:
+        linkedKind === "contractor" ? subjectLabel : undefined,
       assignedVendorId: linkedKind === "vendor" ? linkedId : undefined,
+      assignedVendorName: linkedKind === "vendor" ? subjectLabel : undefined,
       status,
       createdAt: reminder?.createdAt ?? new Date().toISOString().slice(0, 10),
     };

@@ -4,15 +4,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Ban,
-  Bell,
-  Briefcase,
   Building2,
   CalendarDays,
   ChevronDown,
-  FileText,
   Globe,
-  History,
-  ListTodo,
   Loader2,
   Mail,
   MapPin,
@@ -20,22 +15,17 @@ import {
   Phone,
   Receipt,
   Shield,
-  UserRound,
-  Wallet,
   ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
-import { archiveRowAction, ConfirmArchiveDialog, matchesArchiveFilter } from "@/components/portal/archive-control";
+import { archiveRowAction, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import {
   CreateReminderDialog,
   CreateTaskDialog,
-  SetTaskButton,
 } from "@/components/portal/create-person-dialogs";
-import {
-  CreateCustomerNoteDialog,
-  UniversalNotesPanel,
-} from "@/components/portal/universal-notes-panel";
+import { CreateCustomerNoteDialog } from "@/components/portal/universal-notes-panel";
+import { NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/create-work-dialogs";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
@@ -106,7 +96,6 @@ import {
   estimateStatusTone,
   getPortalCustomerName,
   INVOICE_BOARD_FILTERS,
-  invoiceMatchesBoardFilter,
   invoiceStatusLabel,
   JOB_STATUS_FILTERS,
   JOB_STATUSES,
@@ -152,15 +141,15 @@ import {
 import { useRouter } from "next/navigation";
 
 const TABS = [
-  { id: "profile", label: "Profile", icon: UserRound },
-  { id: "estimates", label: "Estimates", icon: FileText },
-  { id: "jobs", label: "Jobs", icon: Briefcase },
-  { id: "schedule", label: "Schedules", icon: CalendarDays },
-  { id: "invoices", label: "Invoices", icon: Receipt },
-  { id: "history", label: "History", icon: History },
-  { id: "notes", label: "Notes", icon: NotebookPen },
-  { id: "tasks", label: "Tasks", icon: ListTodo },
-  { id: "reminders", label: "Reminders", icon: Bell },
+  { id: "profile", label: "Profile" },
+  { id: "estimates", label: "Estimates" },
+  { id: "jobs", label: "Jobs" },
+  { id: "schedule", label: "Schedules" },
+  { id: "invoices", label: "Invoices" },
+  { id: "history", label: "History" },
+  { id: "notes", label: "Notes" },
+  { id: "tasks", label: "Tasks" },
+  { id: "reminders", label: "Reminders" },
 ];
 
 export function CustomerDetailView({ id }: { id: string }) {
@@ -202,15 +191,15 @@ export function CustomerDetailView({ id }: { id: string }) {
   if (!customer) {
     if (detailLoading || pending) {
       return (
-        <div className="border border-input bg-card" aria-busy="true">
+        <div className="rounded-md border border-border-soft bg-card" aria-busy="true">
           <CenteredSpinner label="Loading customer" className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-input bg-card p-6">
+      <div className="rounded-md border border-border-soft bg-card p-6">
         <h1 className="text-lg font-semibold">{detailError || "Customer not found"}</h1>
-        <Button asChild className="mt-4" size="sm">
+        <Button asChild className="mt-4 h-8" size="sm">
           <Link href="/pro/dashboard/customers">Back to customers</Link>
         </Button>
       </div>
@@ -289,6 +278,197 @@ export function CustomerDetailView({ id }: { id: string }) {
         label={`${customer.entityKind === "company" ? "Customer" : "Customer"} #${customer.customerNumber}`}
         kind="customer"
         tabs={TABS}
+        subnavTabs={["estimates", "jobs", "invoices", "notes", "tasks", "reminders"]}
+        subnav={(activeTab) => {
+          if (activeTab === "estimates") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Estimates</p>
+                  <p className="text-xs text-muted-foreground">
+                    Quotes linked to this customer.
+                  </p>
+                </div>
+                <div className="flex h-8 items-center gap-2">
+                  <Field className="w-40 gap-0 sm:w-44">
+                    <FieldLabel htmlFor="estimate-status-filter" className="sr-only">
+                      Status
+                    </FieldLabel>
+                    <Select
+                      value={estimateFilter || "__all__"}
+                      onValueChange={(value) =>
+                        setEstimateFilter(value === "__all__" ? "" : value)
+                      }
+                    >
+                      <SelectTrigger
+                        id="estimate-status-filter"
+                        className="h-8 w-full text-xs border-border-soft bg-card"
+                      >
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" align="end">
+                        {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
+                          <SelectItem
+                            key={option.label}
+                            value={option.value || "__all__"}
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Button size="sm" className="h-8 shrink-0" onClick={() => setCreateEstimateOpen(true)}>
+                    + Create estimate
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+          if (activeTab === "jobs") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Jobs</p>
+                  <p className="text-xs text-muted-foreground">
+                    Work orders for this customer.
+                  </p>
+                </div>
+                <div className="flex h-8 items-center gap-2">
+                  <Field className="w-40 gap-0 sm:w-44">
+                    <FieldLabel htmlFor="job-status-filter" className="sr-only">
+                      Status
+                    </FieldLabel>
+                    <Select
+                      value={jobFilter || "__all__"}
+                      onValueChange={(value) =>
+                        setJobFilter(value === "__all__" ? "" : value)
+                      }
+                    >
+                      <SelectTrigger
+                        id="job-status-filter"
+                        className="h-8 w-full text-xs border-border-soft bg-card"
+                      >
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" align="end">
+                        {withArchiveFilter(JOB_STATUS_FILTERS).map((option) => (
+                          <SelectItem
+                            key={option.label}
+                            value={option.value || "__all__"}
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Button size="sm" className="h-8 shrink-0" onClick={() => setCreateJobOpen(true)}>
+                    + Create job
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+          if (activeTab === "invoices") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Invoices</p>
+                  <p className="text-xs text-muted-foreground">
+                    Billing history for this customer.
+                  </p>
+                </div>
+                <Field className="w-40 gap-0 sm:w-44">
+                  <FieldLabel htmlFor="invoice-status-filter" className="sr-only">
+                    Status
+                  </FieldLabel>
+                  <Select
+                    value={invoiceFilter || "__all__"}
+                    onValueChange={(value) =>
+                      setInvoiceFilter(value === "__all__" ? "" : value)
+                    }
+                  >
+                    <SelectTrigger
+                      id="invoice-status-filter"
+                      className="h-8 w-full text-xs border-border-soft bg-card"
+                    >
+                      <SelectValue placeholder="All statuses" />
+                    </SelectTrigger>
+                    <SelectContent position="popper" align="end">
+                      {withArchiveFilter(INVOICE_BOARD_FILTERS).map((option) => (
+                        <SelectItem
+                          key={option.label}
+                          value={option.value || "__all__"}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            );
+          }
+          if (activeTab === "notes") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Notes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Desk notes stay with this customer.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setNoteOpen(true)}
+                >
+                  + Add note
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "tasks") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Tasks</p>
+                  <p className="text-xs text-muted-foreground">
+                    Follow-ups and to-dos for this customer.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setTaskOpen(true)}
+                >
+                  + Create task
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "reminders") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Reminders</p>
+                  <p className="text-xs text-muted-foreground">
+                    Timed nudges tied to this customer.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setReminderOpen(true)}
+                >
+                  + Set reminder
+                </Button>
+              </div>
+            );
+          }
+          return null;
+        }}
         badge={
           amountOwing > 0 ? (
             <span className="rounded-sm bg-[#f4e4c4] px-2 py-1 text-[11px] font-semibold tracking-wide text-[#7a4a00] uppercase">
@@ -300,15 +480,15 @@ export function CustomerDetailView({ id }: { id: string }) {
         }
         actions={
           <>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className="h-8">
               <Link href="/pro/dashboard/customers">Close</Link>
             </Button>
-            <Button size="sm" onClick={saveCustomer}>
+            <Button size="sm" className="h-8" onClick={saveCustomer}>
               Save
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="h-8">
                   More actions
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
@@ -337,132 +517,163 @@ export function CustomerDetailView({ id }: { id: string }) {
             case "profile":
               return (
                 <div className="space-y-4">
-                <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-                  <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                    <header className="flex items-center gap-4 border-b border-input bg-[linear-gradient(180deg,#f8fafc_0%,#fff_100%)] px-5 py-4">
-                      <CrmMark
-                        name={name}
-                        kind={customer.entityKind === "company" ? "company" : "person"}
-                        photoUrl={customer.avatarUrl}
-                      />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-lg font-semibold capitalize tracking-tight">{name}</h2>
-                          <StatusPill
-                            label={customer.entityKind === "company" ? "Company" : "Individual"}
-                            tone="primary"
-                          />
-                          <StatusPill label={crmTypeLabel(customer.customerType)} tone="neutral" />
+                  <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                        Customer profile
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <CrmMark
+                          name={name}
+                          kind={customer.entityKind === "company" ? "company" : "person"}
+                          photoUrl={customer.avatarUrl}
+                        />
+                        <div className="min-w-0">
+                          <h2 className="text-xl font-semibold capitalize tracking-tight text-foreground">
+                            {name}
+                          </h2>
+                          <p className="mt-0.5 text-sm text-muted-foreground">
+                            #{customer.customerNumber}
+                            {customer.entityKind === "company"
+                              ? ` · ${customer.firstName} ${customer.lastName}`
+                              : customer.email
+                                ? ` · ${customer.email}`
+                                : ""}
+                            {" · "}
+                            {customer.entityKind === "company" ? "Company" : "Individual"}
+                            {" · "}
+                            {crmTypeLabel(customer.customerType)}
+                          </p>
                         </div>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          #{customer.customerNumber}
-                          {customer.entityKind === "company"
-                            ? ` · ${customer.firstName} ${customer.lastName}`
-                            : ` · ${customer.email}`}
-                        </p>
                       </div>
-                    </header>
-                    <div className="grid sm:grid-cols-2">
-                      <InfoRow icon={Building2} label="Source" value={crmSourceLabel(customer.source)} />
-                      {customer.entityKind === "company" && customer.ein?.trim() ? (
-                        <InfoRow icon={Shield} label="EIN" value={customer.ein} />
-                      ) : null}
-                      {customer.entityKind === "company" && customer.website?.trim() ? (
-                        <InfoRow
-                          icon={Globe}
-                          label="Website"
-                          value={
-                            <a href={customer.website} className="text-primary hover:underline">
-                              {customer.website.replace(/^https?:\/\//, "")}
-                            </a>
-                          }
-                        />
-                      ) : null}
-                      {customer.email?.trim() ? (
-                        <InfoRow
-                          icon={Mail}
-                          label="Email"
-                          value={<span className="text-primary">{customer.email}</span>}
-                        />
-                      ) : null}
-                      {customer.phone?.trim() ? (
-                        <InfoRow icon={Phone} label="Phone" value={customer.phone} />
-                      ) : null}
-                      {customer.doNotCall ? (
-                        <InfoRow icon={Ban} label="Do not call" value="Yes" warn />
-                      ) : null}
-                      {address?.street?.trim() ? (
-                        <InfoRow
-                          icon={MapPin}
-                          label="Street"
-                          value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
-                        />
-                      ) : null}
-                      <InfoRow icon={CalendarDays} label="Date created" value={formatDate(customer.createdAt)} />
-                      {customer.notes?.trim() ? (
-                        <InfoRow
-                          icon={NotebookPen}
-                          label="Notes"
-                          value={customer.notes}
-                          className="sm:col-span-2"
-                        />
-                      ) : null}
                     </div>
-                  </section>
+                    <div className="rounded-md bg-secondary px-3 py-2 text-right">
+                      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                        Amount owing
+                      </p>
+                      <p
+                        className={
+                          amountOwing > 0
+                            ? "text-lg font-semibold tabular-nums text-primary"
+                            : "text-lg font-semibold tabular-nums text-foreground"
+                        }
+                      >
+                        {formatMoney(amountOwing)}
+                      </p>
+                    </div>
+                  </div>
 
-                  <div className="grid gap-4">
-                    <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                      <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
-                        <Wallet className="size-4 text-primary" aria-hidden="true" />
-                        <h3 className="text-sm font-semibold">Account</h3>
-                      </header>
-                      <div className="grid grid-cols-1 gap-px bg-black/5">
-                        <MoneyCell
-                          label="Amount owing"
-                          value={formatMoney(amountOwing)}
-                          emphasize={amountOwing > 0}
-                        />
+                  <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
+                    <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+                      <div className="border-b border-border-soft px-4 py-3">
+                        <h3 className="text-sm font-semibold">Contact & details</h3>
                       </div>
                       <div className="grid sm:grid-cols-2">
-                        {customer.taxCode?.trim() ? (
-                          <InfoRow icon={Receipt} label="Tax code" value={customer.taxCode} />
+                        <InfoRow icon={Building2} label="Source" value={crmSourceLabel(customer.source)} />
+                        {customer.entityKind === "company" && customer.ein?.trim() ? (
+                          <InfoRow icon={Shield} label="EIN" value={customer.ein} />
                         ) : null}
-                        {customer.laborTaxCode?.trim() ? (
-                          <InfoRow icon={Receipt} label="Labor tax" value={customer.laborTaxCode} />
+                        {customer.entityKind === "company" && customer.website?.trim() ? (
+                          <InfoRow
+                            icon={Globe}
+                            label="Website"
+                            value={
+                              <a href={customer.website} className="text-primary hover:underline">
+                                {customer.website.replace(/^https?:\/\//, "")}
+                              </a>
+                            }
+                          />
                         ) : null}
-                        {customer.onStop ? (
-                          <InfoRow icon={Ban} label="On stop" value="Yes" warn />
+                        {customer.email?.trim() ? (
+                          <InfoRow
+                            icon={Mail}
+                            label="Email"
+                            value={<span className="text-primary">{customer.email}</span>}
+                          />
+                        ) : null}
+                        {customer.phone?.trim() ? (
+                          <InfoRow icon={Phone} label="Phone" value={customer.phone} />
+                        ) : null}
+                        {customer.doNotCall ? (
+                          <InfoRow icon={Ban} label="Do not call" value="Yes" warn />
+                        ) : null}
+                        {address?.street?.trim() ? (
+                          <InfoRow
+                            icon={MapPin}
+                            label="Street"
+                            value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
+                          />
+                        ) : null}
+                        <InfoRow icon={CalendarDays} label="Date created" value={formatDate(customer.createdAt)} />
+                        {customer.notes?.trim() ? (
+                          <InfoRow
+                            icon={NotebookPen}
+                            label="Notes"
+                            value={customer.notes}
+                            className="sm:col-span-2"
+                          />
                         ) : null}
                       </div>
                     </section>
 
-                    {assigned ? (
-                      <section className="overflow-hidden rounded-lg border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-                        <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-5 py-3">
-                          <UserRound className="size-4 text-primary" aria-hidden="true" />
-                          <h3 className="text-sm font-semibold">Preferred team member</h3>
-                        </header>
-                        <div className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <CrmMark name={`${assigned.firstName} ${assigned.lastName}`} kind="person" photoKey={assigned.firstName} size="md" />
-                            <div>
-                              <Link
-                                href={`/pro/dashboard/team/${assigned.id}`}
-                                className="font-medium text-primary hover:underline"
-                              >
-                                {assigned.firstName} {assigned.lastName}
-                              </Link>
-                              <p className="text-sm text-muted-foreground">
-                                {assigned.trade} · {assigned.phone}
-                              </p>
-                            </div>
-                          </div>
+                    <div className="grid gap-4">
+                      <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+                        <div className="border-b border-border-soft px-4 py-3">
+                          <h3 className="text-sm font-semibold">Account</h3>
+                        </div>
+                        <div className="px-4 py-4">
+                          <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                            Amount owing
+                          </p>
+                          <p
+                            className={
+                              amountOwing > 0
+                                ? "mt-1 text-xl font-semibold tabular-nums text-primary"
+                                : "mt-1 text-xl font-semibold tabular-nums"
+                            }
+                          >
+                            {formatMoney(amountOwing)}
+                          </p>
+                        </div>
+                        <div className="grid sm:grid-cols-2">
+                          {customer.taxCode?.trim() ? (
+                            <InfoRow icon={Receipt} label="Tax code" value={customer.taxCode} />
+                          ) : null}
+                          {customer.laborTaxCode?.trim() ? (
+                            <InfoRow icon={Receipt} label="Labor tax" value={customer.laborTaxCode} />
+                          ) : null}
+                          {customer.onStop ? (
+                            <InfoRow icon={Ban} label="On stop" value="Yes" warn />
+                          ) : null}
                         </div>
                       </section>
-                    ) : null}
+
+                      {assigned ? (
+                        <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+                          <div className="border-b border-border-soft px-4 py-3">
+                            <h3 className="text-sm font-semibold">Preferred team member</h3>
+                          </div>
+                          <div className="px-4 py-4">
+                            <div className="flex items-center gap-3">
+                              <CrmMark name={`${assigned.firstName} ${assigned.lastName}`} kind="person" photoKey={assigned.firstName} size="md" />
+                              <div>
+                                <Link
+                                  href={`/pro/dashboard/team/${assigned.id}`}
+                                  className="font-medium text-primary hover:underline"
+                                >
+                                  {assigned.firstName} {assigned.lastName}
+                                </Link>
+                                <p className="text-sm text-muted-foreground">
+                                  {assigned.trade} · {assigned.phone}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                {address ? <CustomerLocationMapLazy provider={provider} address={address} name={name} /> : null}
+                  {address ? <CustomerLocationMapLazy provider={provider} address={address} name={name} /> : null}
                 </div>
               );
             case "estimates":
@@ -546,9 +757,10 @@ export function CustomerDetailView({ id }: { id: string }) {
               );
             case "notes":
               return (
-                <UniversalNotesPanel
-                  subjectKind="customer"
-                  entityId={customer.id}
+                <NotesPanel
+                  kind="customer"
+                  id={customer.id}
+                  showAddInToolbar={false}
                   empty="Add the first note on this customer."
                 />
               );
@@ -632,10 +844,10 @@ export function CustomerDetailView({ id }: { id: string }) {
 function CustomerEstimatesPanel({
   customerId,
   customerNumber,
-  relatedEstimates,
+  relatedEstimates: _relatedEstimates,
   filter,
-  onFilterChange,
-  onCreate,
+  onFilterChange: _onFilterChange,
+  onCreate: _onCreate,
 }: {
   customerId: string;
   customerNumber: string;
@@ -680,11 +892,6 @@ function CustomerEstimatesPanel({
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
-        <Button size="sm" onClick={onCreate}>
-          Create estimate
-        </Button>
-      </div>
       <PortalDataTable
         filename={`${customerNumber}-estimates`}
         countLabel="Estimates"
@@ -697,38 +904,6 @@ function CustomerEstimatesPanel({
             : filter
               ? "No estimates match this status."
               : "No estimates yet."
-        }
-        toolbar={
-          <div className="flex items-center gap-2">
-            <Field className="w-40 gap-0 sm:w-44">
-              <FieldLabel htmlFor="estimate-status-filter" className="sr-only">
-                Status
-              </FieldLabel>
-              <Select
-                value={filter || "__all__"}
-                onValueChange={(value) =>
-                  onFilterChange(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="estimate-status-filter"
-                  className="h-8.5 w-full text-xs"
-                >
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent position="popper" align="end">
-                  {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
-                    <SelectItem
-                      key={option.label}
-                      value={option.value || "__all__"}
-                    >
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -954,8 +1129,8 @@ function CustomerJobsPanel({
   provider,
   employeeLabel,
   filter,
-  onFilterChange,
-  onCreate,
+  onFilterChange: _onFilterChange,
+  onCreate: _onCreate,
 }: {
   customerId: string;
   customerNumber: string;
@@ -1165,11 +1340,6 @@ function CustomerJobsPanel({
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
-        <Button size="sm" onClick={onCreate}>
-          Create job
-        </Button>
-      </div>
       <PortalDataTable
         filename={`${customerNumber}-jobs`}
         countLabel="Jobs"
@@ -1182,38 +1352,6 @@ function CustomerJobsPanel({
             : filter
               ? "No jobs match this status."
               : "No jobs yet."
-        }
-        toolbar={
-          <div className="flex items-center gap-2">
-            <Field className="w-40 gap-0 sm:w-44">
-              <FieldLabel htmlFor="job-status-filter" className="sr-only">
-                Status
-              </FieldLabel>
-              <Select
-                value={filter || "__all__"}
-                onValueChange={(value) =>
-                  onFilterChange(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="job-status-filter"
-                  className="h-8.5 w-full text-xs"
-                >
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent position="popper" align="end">
-                  {withArchiveFilter(JOB_STATUS_FILTERS).map((option) => (
-                    <SelectItem
-                      key={option.label}
-                      value={option.value || "__all__"}
-                    >
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -1529,7 +1667,7 @@ function CustomerInvoicesPanel({
   customers,
   provider,
   filter,
-  onFilterChange,
+  onFilterChange: _onFilterChange,
   paying,
   onPayingChange,
   onPaymentClosed,
@@ -1593,38 +1731,6 @@ function CustomerInvoicesPanel({
             : filter
               ? "No invoices match this status."
               : "No invoices yet."
-        }
-        toolbar={
-          <div className="flex items-center gap-2">
-            <Field className="w-40 gap-0 sm:w-44">
-              <FieldLabel htmlFor="invoice-status-filter" className="sr-only">
-                Status
-              </FieldLabel>
-              <Select
-                value={filter || "__all__"}
-                onValueChange={(value) =>
-                  onFilterChange(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="invoice-status-filter"
-                  className="h-8.5 w-full text-xs"
-                >
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent position="popper" align="end">
-                  {withArchiveFilter(INVOICE_BOARD_FILTERS).map((option) => (
-                    <SelectItem
-                      key={option.label}
-                      value={option.value || "__all__"}
-                    >
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -1835,8 +1941,8 @@ function CustomerHistoryPanel({
         <Stat label="Invoices" value={String(invoiceCount)} />
         <Stat label="Paid" value={formatMoney(paid)} />
       </div>
-      <div className="border border-input bg-card">
-        <div className="border-b border-input px-4 py-3">
+      <div className="rounded-md border border-border-soft bg-card">
+        <div className="border-b border-border-soft px-4 py-3">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Activity</p>
           <p className="text-sm text-muted-foreground">
             {total} events since {formatDate(customer.createdAt)} · {crmSourceLabel(customer.source)}
@@ -1847,7 +1953,7 @@ function CustomerHistoryPanel({
         ) : events.length === 0 ? (
           <Empty title="No history yet">Activity for this customer will show up here.</Empty>
         ) : (
-          <ol className="divide-y divide-input">
+          <ol className="divide-y divide-border-soft">
             {events.map((item) => {
               if ("kind" in item) {
                 return (
@@ -1889,10 +1995,11 @@ function CustomerHistoryPanel({
           </ol>
         )}
         {hasMore ? (
-          <div className="flex justify-center border-t border-input px-3 py-3">
+          <div className="flex justify-center border-t border-border-soft px-3 py-3">
             <Button
               variant="outline"
               size="sm"
+              className="h-8"
               disabled={loadingMore}
               onClick={loadMore}
             >
@@ -1959,25 +2066,11 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {listLoading || !rows.length ? "\u00a0" : `${rows.length} tasks on this customer`}
-        </p>
-        <SetTaskButton
-          subjectKind="customer"
-          subjectId={customerId}
-          onCreated={(item) => {
-            dispatch(upsertCustomerTask({ customerId, item }));
-            void dispatch(fetchCustomerTasks({ customerId, force: true }));
-            void dispatch(fetchCustomerTimeline({ customerId, force: true }));
-          }}
-        />
-      </div>
       {listLoading ? (
         <CenteredSpinner label="Loading tasks" className="min-h-[12rem]" />
       ) : rows.length ? (
         rows.map((item) => (
-          <div key={item.id} className="flex items-center justify-between gap-3 border border-input px-3 py-2.5">
+          <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-border-soft px-3 py-2.5">
             <div className="flex min-w-0 items-start gap-3">
               {busyTaskId === item.id ? (
                 <Loader2 className="mt-1 size-4 animate-spin text-primary" />
@@ -2002,7 +2095,7 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
               <StatusPill label={crmTaskStatusLabel(item.status)} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline">
+                  <Button size="sm" variant="outline" className="h-8">
                     Actions
                     <ChevronDown className="size-3.5" aria-hidden="true" />
                   </Button>
@@ -2064,7 +2157,7 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
 function CustomerRemindersPanel({
   customerId,
   relatedReminders,
-  onSetReminder,
+  onSetReminder: _onSetReminder,
 }: {
   customerId: string;
   relatedReminders: PortalReminder[];
@@ -2138,11 +2231,6 @@ function CustomerRemindersPanel({
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
-        toolbar={
-          <Button size="sm" onClick={onSetReminder}>
-            Set reminder
-          </Button>
-        }
         columns={[
           {
             id: "reminder",
@@ -2299,7 +2387,7 @@ function InfoRow({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start gap-3 border-b border-input px-5 py-3 last:border-b-0", className)}>
+    <div className={cn("flex items-start gap-3 border-b border-border-soft px-4 py-3 last:border-b-0", className)}>
       <Icon className="mt-0.5 size-3.5 shrink-0 text-primary/70" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
@@ -2317,28 +2405,9 @@ function InfoRow({
   );
 }
 
-function MoneyCell({
-  label,
-  value,
-  emphasize,
-}: {
-  label: string;
-  value: string;
-  emphasize?: boolean;
-}) {
-  return (
-    <div className="bg-card px-5 py-4">
-      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-      <p className={emphasize ? "mt-1 text-xl font-semibold tabular-nums text-primary" : "mt-1 text-xl font-semibold tabular-nums"}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-input px-3 py-2">
+    <div className="rounded-md border border-border-soft px-3 py-2">
       <p className="text-[11px] text-muted-foreground uppercase">{label}</p>
       <p className="text-lg font-semibold tabular-nums">{value}</p>
     </div>

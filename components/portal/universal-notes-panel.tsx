@@ -196,11 +196,13 @@ export function UniversalNotesPanel({
   entityId,
   empty,
   locked = false,
+  showAddInToolbar = true,
 }: {
   subjectKind: ReminderSubjectKind;
   entityId: string;
   empty?: string;
   locked?: boolean;
+  showAddInToolbar?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const module = getNotesModuleForSubject(subjectKind);
@@ -360,8 +362,8 @@ export function UniversalNotesPanel({
         loading={tableLoading}
         pageSize={limit}
         toolbar={
-          locked ? null : (
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
+          locked || !showAddInToolbar ? null : (
+            <Button size="sm" className="h-8" onClick={() => setCreateOpen(true)}>
               Add note
             </Button>
           )

@@ -66,34 +66,117 @@ export function InvoiceFileChrome({
   job?: Job;
   estimate?: Estimate;
 }) {
+  const jobAddr = job?.address;
+  const estimateAddr = estimate?.propertyAddress;
+  const addressLine = [
+    jobAddr?.street || estimateAddr?.address || estimateAddr?.street,
+    formatLocation(
+      jobAddr?.city || estimateAddr?.city || "",
+      jobAddr?.state || estimateAddr?.state || "",
+      jobAddr?.zip || estimateAddr?.zip || "",
+    ),
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   return (
-    <nav aria-label="Invoice breadcrumb" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-      <Link href="/pro/dashboard/invoices" className="font-semibold text-primary hover:underline">
-        Invoices
-      </Link>
-      <span className="text-muted-foreground">/</span>
-      <span className="font-medium text-foreground">
-        {customerLabel} – {service}
-      </span>
-      {estimate ? (
-        <>
-          <span className="text-muted-foreground">/</span>
-          <Link href={`/pro/dashboard/estimates/${estimate.id}`} className="font-semibold text-primary hover:underline">
-            {estimate.number}
-          </Link>
-        </>
-      ) : null}
-      {job ? (
-        <>
-          <span className="text-muted-foreground">/</span>
-          <Link href={`/pro/dashboard/jobs/${job.id}`} className="font-semibold text-primary hover:underline">
-            {job.number}
-          </Link>
-        </>
-      ) : null}
-      <span className="text-muted-foreground">/</span>
-      <span className="font-semibold text-primary">{invoice.number}</span>
-    </nav>
+    <div className="space-y-0">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
+              "Customer details for this invoice"}
+          </p>
+        </div>
+        {invoice.customerId ? (
+          <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
+            <Link href={`/pro/dashboard/customers/${invoice.customerId}`}>
+              Open customer file
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      <div className="grid gap-x-8 gap-y-3.5 px-1 py-1 sm:grid-cols-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Customer
+          </p>
+          <div className="mt-1 text-sm font-medium">
+            {invoice.customerId ? (
+              <Link
+                href={`/pro/dashboard/customers/${invoice.customerId}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {customerLabel}
+              </Link>
+            ) : (
+              customerLabel
+            )}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Phone
+          </p>
+          <p className="mt-1 text-sm font-medium">{customer?.phone || "—"}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Email
+          </p>
+          <p className="mt-1 text-sm font-medium">
+            {customer?.email ? (
+              <span className="text-primary">{customer.email}</span>
+            ) : (
+              "—"
+            )}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Service
+          </p>
+          <p className="mt-1 text-sm font-medium">{service || "—"}</p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Address
+          </p>
+          <p className="mt-1 text-sm font-medium">{addressLine || "—"}</p>
+        </div>
+        {job ? (
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+              Job
+            </p>
+            <p className="mt-1 text-sm font-medium">
+              <Link
+                href={`/pro/dashboard/jobs/${job.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {job.number}
+              </Link>
+            </p>
+          </div>
+        ) : null}
+        {estimate ? (
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+              Estimate
+            </p>
+            <p className="mt-1 text-sm font-medium">
+              <Link
+                href={`/pro/dashboard/estimates/${estimate.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {estimate.number}
+              </Link>
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -277,7 +360,7 @@ export function ApplyPaymentButton({
   if (invoice.balanceDue <= 0) return null;
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button size="sm" className="h-8" onClick={() => setOpen(true)}>
         Apply payment
       </Button>
       <ApplyPaymentDialog
@@ -292,8 +375,8 @@ export function ApplyPaymentButton({
 
 export function InvoiceSummaryTab({
   invoice,
-  customer,
-  customerLabel,
+  customer: _customer,
+  customerLabel: _customerLabel,
   service,
   job,
   estimate,
@@ -309,13 +392,35 @@ export function InvoiceSummaryTab({
   payments: Payment[];
   onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
 }) {
-  const contact = customer ? `${customer.firstName} ${customer.lastName}`.trim() : "";
   const address = job?.address;
   const overdueDays = invoiceDaysOverdue(invoice);
   const kind = invoiceKindLabel(invoiceKind(invoice));
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Invoice summary
+          </p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+            {invoice.number}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {invoiceStatusLabel(invoice.status)} · {kind}
+            {overdueDays ? ` · ${overdueDays} days overdue` : ""}
+          </p>
+        </div>
+        <div className="rounded-md bg-secondary px-3 py-2 text-right">
+          <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+            Balance due
+          </p>
+          <p className="text-lg font-semibold tabular-nums text-primary">
+            {formatMoney(invoice.balanceDue)}
+          </p>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MoneyStat label="Price" value={formatMoney(invoice.total)} />
         <MoneyStat label="Paid" value={formatMoney(invoice.amountPaid)} />
@@ -328,20 +433,9 @@ export function InvoiceSummaryTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-[4px] border border-input bg-card p-4">
-          <h2 className="text-sm font-semibold">Bill to</h2>
+        <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
+          <h2 className="text-sm font-semibold">Invoice</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Detail
-              label="Customer"
-              value={
-                <Link href={`/pro/dashboard/customers/${invoice.customerId}`} className="font-semibold text-primary hover:underline">
-                  {customerLabel}
-                </Link>
-              }
-            />
-            {customer && customer.entityKind === "company" && contact ? <Detail label="Contact" value={contact} /> : null}
-            {customer?.phone ? <Detail label="Phone" value={customer.phone} /> : null}
-            {customer?.email ? <Detail label="Email" value={customer.email} /> : null}
             <Detail label="Invoice type" value={kind} />
             <Detail
               label="Status"
@@ -351,7 +445,7 @@ export function InvoiceSummaryTab({
             <Detail label="Due date" value={invoice.dueAt ? formatDate(invoice.dueAt) : "—"} />
           </dl>
         </section>
-        <section className="rounded-[4px] border border-input bg-card p-4">
+        <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
           <h2 className="text-sm font-semibold">Job / site</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
@@ -387,8 +481,8 @@ export function InvoiceSummaryTab({
         </section>
       </div>
 
-      <section className="rounded-[4px] border border-input bg-card">
-        <div className="border-b border-input px-4 py-3">
+      <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+        <div className="border-b border-border-soft px-4 py-3">
           <h2 className="text-sm font-semibold">Labour and Material</h2>
         </div>
         <Table>
@@ -447,7 +541,7 @@ export function InvoiceSummaryTab({
             ))}
           </TableBody>
         </Table>
-        <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-input px-4 py-3 text-sm">
+        <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-border-soft px-4 py-3 text-sm">
           <dt className="text-muted-foreground">Subtotal</dt>
           <dd className="text-right tabular-nums">{formatMoney(invoice.subtotal)}</dd>
           {invoice.discount ? (
@@ -467,7 +561,7 @@ export function InvoiceSummaryTab({
         </dl>
       </section>
 
-      <section className="rounded-[4px] border border-input bg-card p-4">
+      <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">Payments</h2>
@@ -550,11 +644,12 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
 
   return (
     <>
-    <div className="rounded-[4px] border border-input bg-card p-4">
+    <div className="rounded-md border border-border-soft bg-card p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Invoice settings</h2>
         <Button
           size="sm"
+          className="h-8"
           onClick={() => {
             file.saveInvoiceSettings(draft);
             records.setStatus("invoice", invoice.id, draft.status);
@@ -657,7 +752,7 @@ export function InvoicePaymentsTab({
   onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
 }) {
   return (
-    <div className="rounded-[4px] border border-input bg-card p-4">
+    <div className="rounded-md border border-border-soft bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Payments</h2>
@@ -668,7 +763,7 @@ export function InvoicePaymentsTab({
         <ApplyPaymentButton invoice={invoice} onPaid={onPaid} />
       </div>
       {payments.length ? (
-        <ul className="mt-4 divide-y divide-input border border-input">
+        <ul className="mt-4 divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft">
           {payments.map((payment) => (
             <li key={payment.id} className="flex items-center justify-between gap-3 px-3 py-3 text-sm">
               <div>
@@ -703,14 +798,14 @@ function MoneyStat({
   warn?: boolean;
 }) {
   return (
-    <div className="rounded-[4px] border border-input bg-card px-4 py-3">
+    <div className="rounded-md border border-border-soft bg-card px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p
         className={
           warn
             ? "mt-1 text-xl font-semibold tabular-nums text-red-600"
             : emphasize
-              ? "mt-1 text-xl font-semibold tabular-nums text-[#003F7D]"
+              ? "mt-1 text-xl font-semibold tabular-nums text-primary"
               : "mt-1 text-xl font-semibold tabular-nums"
         }
       >

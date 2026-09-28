@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { StatusDot, moneyTone } from "@/components/portal/status-pill";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PortalCustomerCrm } from "@/lib/data/crm-people";
 import {
@@ -10,7 +11,6 @@ import {
   paymentKind,
   paymentKindLabel,
   paymentMethodLabel,
-  paymentNumber,
   paymentStatusLabel,
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
@@ -19,44 +19,101 @@ import type { Invoice, Job, Payment } from "@/lib/types";
 export function PaymentFileChrome({
   payment,
   invoice,
+  customer,
   customerLabel,
   service,
   job,
 }: {
   payment: Payment;
   invoice?: Invoice;
+  customer?: PortalCustomerCrm;
   customerLabel: string;
   service: string;
   job?: Job;
 }) {
+  const address = job?.address;
+  const addressLine = address
+    ? [address.street, formatLocation(address.city, address.state, address.zip)]
+        .filter(Boolean)
+        .join(", ")
+    : "";
+  const customerId = invoice?.customerId || payment.customerId;
+
   return (
-    <nav aria-label="Payment breadcrumb" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-      <Link href="/pro/dashboard/payments" className="font-semibold text-primary hover:underline">
-        Payments
-      </Link>
-      <span className="text-muted-foreground">/</span>
-      <span className="font-medium text-foreground">
-        {customerLabel} – {service}
-      </span>
-      {invoice ? (
-        <>
-          <span className="text-muted-foreground">/</span>
-          <Link href={`/pro/dashboard/invoices/${invoice.id}`} className="font-semibold text-primary hover:underline">
-            {invoice.number}
-          </Link>
-        </>
-      ) : null}
-      {job ? (
-        <>
-          <span className="text-muted-foreground">/</span>
-          <Link href={`/pro/dashboard/jobs/${job.id}`} className="font-semibold text-primary hover:underline">
-            {job.number}
-          </Link>
-        </>
-      ) : null}
-      <span className="text-muted-foreground">/</span>
-      <span className="font-semibold text-primary">{paymentNumber(payment)}</span>
-    </nav>
+    <div className="space-y-0">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
+              "Customer details for this payment"}
+          </p>
+        </div>
+        {customerId ? (
+          <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
+            <Link href={`/pro/dashboard/customers/${customerId}`}>
+              Open customer file
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      <div className="grid gap-x-8 gap-y-3.5 px-1 py-1 sm:grid-cols-2">
+        <Detail
+          label="Customer"
+          value={
+            customerId ? (
+              <Link
+                href={`/pro/dashboard/customers/${customerId}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {customerLabel}
+              </Link>
+            ) : (
+              customerLabel
+            )
+          }
+        />
+        <Detail label="Phone" value={customer?.phone || "—"} />
+        <Detail
+          label="Email"
+          value={
+            customer?.email ? (
+              <span className="text-primary">{customer.email}</span>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <Detail label="Service" value={service || "—"} />
+        <Detail label="Address" value={addressLine || "—"} />
+        {invoice ? (
+          <Detail
+            label="Invoice"
+            value={
+              <Link
+                href={`/pro/dashboard/invoices/${invoice.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {invoice.number}
+              </Link>
+            }
+          />
+        ) : null}
+        {job ? (
+          <Detail
+            label="Job"
+            value={
+              <Link
+                href={`/pro/dashboard/jobs/${job.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {job.number}
+              </Link>
+            }
+          />
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -75,12 +132,35 @@ export function PaymentSummaryTab({
   service: string;
   job?: Job;
 }) {
-  const contact = customer ? `${customer.firstName} ${customer.lastName}`.trim() : "";
-  const address = job?.address;
   const kind = paymentKindLabel(paymentKind(payment));
+  const address = job?.address;
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Payment summary
+          </p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+            {paymentMethodLabel(payment.method)} · {kind}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {paymentStatusLabel(payment.status)}
+            {" · "}
+            {formatDate(payment.paidAt ?? payment.createdAt)}
+          </p>
+        </div>
+        <div className="rounded-md bg-secondary px-3 py-2 text-right">
+          <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+            Amount
+          </p>
+          <p className="text-lg font-semibold tabular-nums text-primary">
+            {formatMoney(payment.amount)}
+          </p>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MoneyStat label="Amount" value={formatMoney(payment.amount)} emphasize />
         <MoneyStat label="Method" value={paymentMethodLabel(payment.method)} />
@@ -89,13 +169,13 @@ export function PaymentSummaryTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-[4px] border border-input bg-card p-4">
+        <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
           <h2 className="text-sm font-semibold">Received from</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
               label="Customer"
               value={
-                invoice ? (
+                invoice?.customerId ? (
                   <Link
                     href={`/pro/dashboard/customers/${invoice.customerId}`}
                     className="font-semibold text-primary hover:underline"
@@ -107,24 +187,31 @@ export function PaymentSummaryTab({
                 )
               }
             />
-            {customer && customer.entityKind === "company" && contact ? <Detail label="Contact" value={contact} /> : null}
             {customer?.phone ? <Detail label="Phone" value={customer.phone} /> : null}
             {customer?.email ? <Detail label="Email" value={customer.email} /> : null}
             <Detail label="Payment type" value={kind} />
             <Detail
               label="Status"
-              value={<StatusDot label={paymentStatusLabel(payment.status)} tone={moneyTone(payment.status)} />}
+              value={
+                <StatusDot
+                  label={paymentStatusLabel(payment.status)}
+                  tone={moneyTone(payment.status)}
+                />
+              }
             />
           </dl>
         </section>
-        <section className="rounded-[4px] border border-input bg-card p-4">
+        <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
           <h2 className="text-sm font-semibold">Applied to</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
               label="Invoice no."
               value={
                 invoice ? (
-                  <Link href={`/pro/dashboard/invoices/${invoice.id}`} className="font-semibold text-primary hover:underline">
+                  <Link
+                    href={`/pro/dashboard/invoices/${invoice.id}`}
+                    className="font-semibold text-primary hover:underline"
+                  >
                     {invoice.number}
                   </Link>
                 ) : (
@@ -136,7 +223,10 @@ export function PaymentSummaryTab({
               label="Job no."
               value={
                 job ? (
-                  <Link href={`/pro/dashboard/jobs/${job.id}`} className="font-semibold text-primary hover:underline">
+                  <Link
+                    href={`/pro/dashboard/jobs/${job.id}`}
+                    className="font-semibold text-primary hover:underline"
+                  >
                     {job.number}
                   </Link>
                 ) : (
@@ -147,13 +237,22 @@ export function PaymentSummaryTab({
             <Detail label="Job name" value={service} />
             <Detail
               label="Site"
-              value={address ? `${address.street}, ${formatLocation(address.city, address.state, address.zip)}` : "—"}
+              value={
+                address
+                  ? `${address.street}, ${formatLocation(address.city, address.state, address.zip)}`
+                  : "—"
+              }
             />
             {invoice ? (
               <>
                 <Detail
                   label="Invoice status"
-                  value={<StatusDot label={invoiceStatusLabel(invoice.status)} tone={moneyTone(invoice.status)} />}
+                  value={
+                    <StatusDot
+                      label={invoiceStatusLabel(invoice.status)}
+                      tone={moneyTone(invoice.status)}
+                    />
+                  }
                 />
                 <Detail label="Invoice balance" value={formatMoney(invoice.balanceDue)} />
               </>
@@ -162,8 +261,8 @@ export function PaymentSummaryTab({
         </section>
       </div>
 
-      <section className="rounded-[4px] border border-input bg-card">
-        <div className="border-b border-input px-4 py-3">
+      <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+        <div className="border-b border-border-soft px-4 py-3">
           <h2 className="text-sm font-semibold">Allocation</h2>
         </div>
         <Table>
@@ -179,7 +278,10 @@ export function PaymentSummaryTab({
             <TableRow>
               <TableCell className="font-medium">
                 {invoice ? (
-                  <Link href={`/pro/dashboard/invoices/${invoice.id}`} className="text-primary hover:underline">
+                  <Link
+                    href={`/pro/dashboard/invoices/${invoice.id}`}
+                    className="text-primary hover:underline"
+                  >
                     {invoice.number}
                   </Link>
                 ) : (
@@ -188,7 +290,10 @@ export function PaymentSummaryTab({
               </TableCell>
               <TableCell>
                 {job ? (
-                  <Link href={`/pro/dashboard/jobs/${job.id}`} className="text-primary hover:underline">
+                  <Link
+                    href={`/pro/dashboard/jobs/${job.id}`}
+                    className="text-primary hover:underline"
+                  >
                     {job.number}
                   </Link>
                 ) : (
@@ -196,7 +301,9 @@ export function PaymentSummaryTab({
                 )}
               </TableCell>
               <TableCell>{service}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatMoney(payment.amount)}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatMoney(payment.amount)}
+              </TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -215,9 +322,17 @@ function MoneyStat({
   emphasize?: boolean;
 }) {
   return (
-    <div className="rounded-[4px] border border-input bg-card px-4 py-3">
-      <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-      <p className={emphasize ? "mt-1 text-xl font-semibold tabular-nums text-[#003F7D]" : "mt-1 text-xl font-semibold tabular-nums"}>
+    <div className="rounded-md border border-border-soft bg-card px-4 py-3">
+      <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p
+        className={
+          emphasize
+            ? "mt-1 text-xl font-semibold tabular-nums text-primary"
+            : "mt-1 text-xl font-semibold tabular-nums"
+        }
+      >
         {value}
       </p>
     </div>
@@ -227,7 +342,9 @@ function MoneyStat({
 function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
+      <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+        {label}
+      </p>
       <div className="mt-1 font-medium text-foreground">{value}</div>
     </div>
   );

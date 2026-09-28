@@ -42,7 +42,7 @@ import {
 
 function SectionEdit({ href }: { href: string }) {
   return (
-    <Button asChild size="sm" variant="outline">
+    <Button asChild size="sm" variant="outline" className="h-8 border-border-soft">
       <Link href={href}>Edit</Link>
     </Button>
   );
@@ -56,7 +56,7 @@ function DetailRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-1 border-b border-border/70 py-3 last:border-b-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
+    <div className="grid gap-1 border-b border-border-soft py-3 last:border-b-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
       <p className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
         {label}
       </p>
@@ -64,6 +64,8 @@ function DetailRow({
     </div>
   );
 }
+
+const softCardClass = "rounded-md border-border-soft";
 
 export function BusinessProfileDetailView() {
   const dispatch = useAppDispatch();
@@ -179,7 +181,7 @@ export function BusinessProfileDetailView() {
       title="Business Profile"
       description="Review your public company details. Edit any section to finish what’s left."
       actions={
-        <Button asChild>
+        <Button asChild size="sm" className="h-8">
           <Link href={setup.next?.href || "/pro/dashboard/profile"}>
             {setup.percent < 100 ? "Continue setup" : "Edit profile"}
           </Link>
@@ -187,7 +189,7 @@ export function BusinessProfileDetailView() {
       }
     >
       {setup.percent < 100 ? (
-        <Card className="border-input bg-primary/[0.03]">
+        <Card className={`${softCardClass} bg-primary/[0.03]`}>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">Set up your business profile</CardTitle>
@@ -209,24 +211,28 @@ export function BusinessProfileDetailView() {
       ) : null}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader className="border-b">
+          <Card className={softCardClass}>
+            <CardHeader className="border-b border-border-soft">
               <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex flex-wrap items-center gap-4">
-                <Avatar className="size-16 border border-border">
+                <Avatar className="size-16 border border-border-soft">
                   {avatar ? <AvatarImage src={avatar} alt={displayName} /> : null}
-                  <AvatarFallback className="bg-primary/10 text-lg font-semibold text-primary">
+                  <AvatarFallback className="bg-secondary text-lg font-semibold text-foreground">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <CardTitle className="text-xl">
+                  <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                    Business profile
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
                     {provider.companyName || "Your company"}
-                  </CardTitle>
-                  {tagline ? (
-                    <p className="mt-1 text-sm text-muted-foreground">{tagline}</p>
-                  ) : null}
-                  <p className="mt-1 text-sm text-muted-foreground">{displayName}</p>
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {displayName}
+                    {tagline ? ` · ${tagline}` : ""}
+                    {role ? ` · ${role}` : ""}
+                  </p>
                 </div>
               </div>
               <SectionEdit href="/pro/dashboard/profile?step=account" />
@@ -280,8 +286,8 @@ export function BusinessProfileDetailView() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+          <Card className={softCardClass}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>About the company</CardTitle>
               <SectionEdit href="/pro/dashboard/profile?step=profile" />
             </CardHeader>
@@ -322,8 +328,8 @@ export function BusinessProfileDetailView() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+          <Card className={softCardClass}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Coverage areas</CardTitle>
               <SectionEdit href="/pro/dashboard/profile?step=business" />
             </CardHeader>
@@ -331,9 +337,12 @@ export function BusinessProfileDetailView() {
               {neighborhoods.length ? (
                 <div className="flex flex-wrap gap-2">
                   {neighborhoods.map((area) => (
-                    <Badge key={area} variant="outline">
+                    <span
+                      key={area}
+                      className="rounded-md bg-secondary px-2.5 py-1 text-xs font-medium"
+                    >
                       {area}
-                    </Badge>
+                    </span>
                   ))}
                 </div>
               ) : (
@@ -346,8 +355,8 @@ export function BusinessProfileDetailView() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+          <Card className={softCardClass}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Services</CardTitle>
               <SectionEdit href="/pro/dashboard/profile?step=categories" />
             </CardHeader>
@@ -368,8 +377,8 @@ export function BusinessProfileDetailView() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+          <Card className={softCardClass}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Jobs you offer</CardTitle>
               <SectionEdit href="/pro/dashboard/profile?step=subservices" />
             </CardHeader>
@@ -391,8 +400,8 @@ export function BusinessProfileDetailView() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+          <Card className={softCardClass}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Working hours</CardTitle>
               <SectionEdit href="/pro/dashboard/profile?step=hours" />
             </CardHeader>
@@ -416,15 +425,15 @@ export function BusinessProfileDetailView() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b">
+          <Card className={softCardClass}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Main business gallery</CardTitle>
               <SectionEdit href="/pro/dashboard/profile?step=gallery" />
             </CardHeader>
             <CardContent className="pt-4">
               {banner ? (
                 <div className="flex flex-col gap-3">
-                  <div className="relative aspect-[16/8] overflow-hidden rounded-lg border">
+                  <div className="relative aspect-[16/8] overflow-hidden rounded-md border border-border-soft">
                     <Image
                       src={banner.url}
                       alt="Main banner"
@@ -437,7 +446,7 @@ export function BusinessProfileDetailView() {
                   {otherPhotos.length ? (
                     <div className="grid grid-cols-3 gap-2">
                       {otherPhotos.map((photo) => (
-                        <div key={photo.url} className="relative aspect-square overflow-hidden rounded-md border">
+                        <div key={photo.url} className="relative aspect-square overflow-hidden rounded-md border border-border-soft">
                           <Image src={photo.url} alt="" fill unoptimized className="object-cover" sizes="120px" />
                         </div>
                       ))}

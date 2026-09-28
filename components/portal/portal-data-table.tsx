@@ -423,6 +423,7 @@ export function PortalDataTable<T>({
             size="sm"
             disabled={currentPage <= 1}
             onClick={() => goToPage(currentPage - 1)}
+            className="h-8"
           >
             Previous
           </Button>
@@ -434,6 +435,7 @@ export function PortalDataTable<T>({
             size="sm"
             disabled={currentPage >= pageCount}
             onClick={() => goToPage(currentPage + 1)}
+            className="h-8"
           >
             Next
           </Button>

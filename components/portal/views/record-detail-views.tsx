@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Camera,
   ChevronDown,
-  CreditCard,
-  FileText,
-  LayoutDashboard,
   Loader2,
-  NotebookPen,
-  Paperclip,
-  ScrollText,
-  Settings,
+  Pencil,
   Share2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -75,6 +68,11 @@ import {
   JobSettingsTab,
   JobSummaryTab,
 } from "@/components/portal/job-file";
+import {
+  costingHint,
+  type JobCostingActions,
+} from "@/components/portal/job-costing";
+import { LineItemsActions } from "@/components/portal/line-items-editor";
 import {
   copyCostLines,
   readCostLines,
@@ -207,6 +205,91 @@ export function EstimateDetailView({ id }: { id: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fetched, setFetched] = useState<Estimate | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [materialsActions, setMaterialsActions] =
+    useState<JobCostingActions | null>(null);
+  const onMaterialsActionsChange = useCallback(
+    (next: JobCostingActions | null) => {
+      setMaterialsActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.locked === next.locked &&
+          prev.saving === next.saving &&
+          prev.addLabor === next.addLabor &&
+          prev.addMaterial === next.addMaterial
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  const [attachmentsActions, setAttachmentsActions] = useState<{
+    locked: boolean;
+    saving: boolean;
+    uploading: boolean;
+    dirty: boolean;
+    save: () => void;
+  } | null>(null);
+  const onAttachmentsActionsChange = useCallback(
+    (
+      next: {
+        locked: boolean;
+        saving: boolean;
+        uploading: boolean;
+        dirty: boolean;
+        save: () => void;
+      } | null,
+    ) => {
+      setAttachmentsActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.locked === next.locked &&
+          prev.saving === next.saving &&
+          prev.uploading === next.uploading &&
+          prev.dirty === next.dirty &&
+          prev.save === next.save
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  const [visitActions, setVisitActions] = useState<{
+    locked: boolean;
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const onVisitActionsChange = useCallback(
+    (
+      next: {
+        locked: boolean;
+        saving: boolean;
+        save: () => void;
+      } | null,
+    ) => {
+      setVisitActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.locked === next.locked &&
+          prev.saving === next.saving &&
+          prev.save === next.save
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
   const [statusOverride, setStatusOverride] = useState<
     Estimate["status"] | null
   >(null);
@@ -710,14 +793,143 @@ export function EstimateDetailView({ id }: { id: string }) {
         label={estimate.number}
         kind="estimate"
         tabs={[
-          { id: "summary", label: "Summary", icon: LayoutDashboard },
-          { id: "visit", label: "Site visit", icon: Camera },
-          { id: "materials", label: "Labour and Material", icon: FileText },
-          { id: "share", label: "Share", icon: Share2 },
-          { id: "logs", label: "Logs", icon: ScrollText },
-          { id: "notes", label: "Notes", icon: NotebookPen },
-          { id: "attachments", label: "Attachments", icon: Paperclip },
+          { id: "summary", label: "Summary" },
+          { id: "customer", label: "Customer" },
+          { id: "visit", label: "Site visit" },
+          { id: "materials", label: "Labour and Material" },
+          { id: "share", label: "Share" },
+          { id: "logs", label: "Logs" },
+          { id: "notes", label: "Notes" },
+          { id: "attachments", label: "Attachments" },
         ]}
+        subnavTabs={["summary", "visit", "materials", "notes", "attachments"]}
+        subnav={(activeTab) => {
+          if (activeTab === "summary") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Summary</p>
+                  <p className="text-xs text-muted-foreground">
+                    Quote total, line mix, and activity for this estimate.
+                  </p>
+                </div>
+                {signed ? null : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 shrink-0 gap-1.5 border-border-soft"
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    <Pencil className="size-3.5" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+            );
+          }
+          if (activeTab === "visit") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Site visit</p>
+                  <p className="text-xs text-muted-foreground">
+                    Findings, private notes, and photos for this estimate.
+                  </p>
+                </div>
+                {signed ? null : (
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5"
+                    disabled={visitActions?.saving ?? false}
+                    onClick={() => visitActions?.save()}
+                  >
+                    {visitActions?.saving ? (
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                    ) : null}
+                    {visitActions?.saving ? "Saving…" : "Save notes"}
+                  </Button>
+                )}
+              </div>
+            );
+          }
+          if (activeTab === "materials") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">
+                    Labour and Material
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {costingHint("estimate", Boolean(signed))}
+                  </p>
+                </div>
+                <LineItemsActions
+                  locked={materialsActions?.locked ?? signed}
+                  saving={materialsActions?.saving}
+                  onAddLabor={() => materialsActions?.addLabor()}
+                  onAddMaterial={() => materialsActions?.addMaterial()}
+                  className="shrink-0"
+                />
+              </div>
+            );
+          }
+          if (activeTab === "notes") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Notes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Desk notes stay with this estimate.
+                  </p>
+                </div>
+                {signed ? null : (
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0"
+                    onClick={() => setNoteOpen(true)}
+                  >
+                    + Add note
+                  </Button>
+                )}
+              </div>
+            );
+          }
+          if (activeTab === "attachments") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Attachments</p>
+                  <p className="text-xs text-muted-foreground">
+                    Photos, PDFs, and other quote files.
+                  </p>
+                </div>
+                {signed ? null : (
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0"
+                    disabled={
+                      !attachmentsActions ||
+                      attachmentsActions.saving ||
+                      attachmentsActions.uploading ||
+                      !attachmentsActions.dirty
+                    }
+                    onClick={() => attachmentsActions?.save()}
+                  >
+                    {attachmentsActions?.saving ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      "Save attachments"
+                    )}
+                  </Button>
+                )}
+              </div>
+            );
+          }
+          return null;
+        }}
         badge={
           <>
             <StatusPill
@@ -754,6 +966,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                 ) ? (
                   <Button
                     size="sm"
+                    className="h-8"
                     data-action="convert-to-invoice"
                     disabled={converting}
                     onClick={() => void convertToInvoice()}
@@ -761,7 +974,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     {converting ? "Converting…" : "Convert to invoice"}
                   </Button>
                 ) : null}
-                <Button size="sm" asChild>
+                <Button size="sm" className="h-8" asChild>
                   <Link href={`/pro/dashboard/jobs/${job.id}`}>
                     Open {job.number}
                   </Link>
@@ -771,6 +984,7 @@ export function EstimateDetailView({ id }: { id: string }) {
               <>
                 <Button
                   size="sm"
+                  className="h-8"
                   data-action="convert-to-job"
                   disabled={converting}
                   onClick={convertToJob}
@@ -780,6 +994,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-8"
                   data-action="convert-to-invoice"
                   disabled={converting || !canConvert}
                   onClick={() => void convertToInvoice()}
@@ -790,20 +1005,21 @@ export function EstimateDetailView({ id }: { id: string }) {
             ) : (
               <>
                 {canShare ? (
-                  <Button size="sm" variant="default" onClick={openApproval}>
+                  <Button size="sm" className="h-8" variant="default" onClick={openApproval}>
                     <Share2 className="size-3.5" />
                     Send for approval
                   </Button>
                 ) : canFinalize ? (
                   <Button
                     size="sm"
+                    className="h-8"
                     disabled={finalizing}
                     onClick={() => void finalizeEstimate()}
                   >
                     {finalizing ? "Finalizing…" : "Finalize estimate"}
                   </Button>
                 ) : estimate.status === "site_visit" ? (
-                  <Button size="sm" variant="outline" asChild>
+                  <Button size="sm" variant="outline" className="h-8" asChild>
                     <Link href={`/pro/dashboard/estimates/${estimate.id}?tab=visit`}>
                       Complete site visit
                     </Link>
@@ -812,6 +1028,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-8"
                   onClick={() => setAssignOpen(true)}
                 >
                   Assign team member
@@ -820,7 +1037,7 @@ export function EstimateDetailView({ id }: { id: string }) {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="h-8">
                   More actions
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
@@ -901,7 +1118,6 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
-                    onEditEstimate={() => setSettingsOpen(true)}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -913,6 +1129,82 @@ export function EstimateDetailView({ id }: { id: string }) {
                         }),
                       );
                     }}
+                    notice={
+                      signed ||
+                      estimate.status === "accepted" ||
+                      canConvert ||
+                      job ? (
+                        <>
+                          {signed ||
+                          estimate.status === "accepted" ||
+                          canConvert ||
+                          job ? (
+                            <EstimateStageBanner
+                              status={estimate.status}
+                              signed={signed}
+                              hasJob={Boolean(job)}
+                              signature={customerSignature}
+                            />
+                          ) : null}
+                          {job ? (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                              <p className="text-sm font-semibold text-emerald-900">
+                                Converted to job {job.number}
+                              </p>
+                              <p className="mt-1 text-sm text-emerald-950">
+                                This estimate is locked to{" "}
+                                <Link
+                                  href={`/pro/dashboard/jobs/${job.id}`}
+                                  className="font-semibold underline"
+                                >
+                                  {job.number}
+                                </Link>
+                                . Delete that job if you need to convert it
+                                again.
+                              </p>
+                              <div className="mt-3 flex justify-end">
+                                <Button size="sm" className="h-8" asChild>
+                                  <Link href={`/pro/dashboard/jobs/${job.id}`}>
+                                    Open {job.number}
+                                  </Link>
+                                </Button>
+                              </div>
+                            </div>
+                          ) : canConvert ? (
+                            <div className="rounded-lg border border-input bg-[#f4f7fb] px-4 py-3">
+                              <p className="text-sm font-semibold text-[#003F7D]">
+                                Convert to job
+                              </p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                Create a job with this customer, address, line
+                                items, notes, and site photos. The job will keep
+                                a reference back to {estimate.number}.
+                              </p>
+                              <div className="mt-3 flex justify-end">
+                                <Button
+                                  size="sm"
+                                  className="h-8"
+                                  disabled={converting}
+                                  onClick={convertToJob}
+                                >
+                                  {converting ? "Converting…" : "Convert to job"}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : undefined
+                    }
+                  />
+                );
+              case "customer":
+                return (
+                  <EstimateFileChrome
+                    estimate={estimate}
+                    customer={customer}
+                    customerLabel={customerLabel}
+                    service={service}
+                    job={job}
                   />
                 );
               case "visit":
@@ -921,6 +1213,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     estimate={estimate}
                     asJob={asJob}
                     locked={signed || visitLocked}
+                    onActionsChange={onVisitActionsChange}
                     onSave={async (visit) => {
                       const nextStatus =
                         estimate.status === "draft" ||
@@ -991,6 +1284,8 @@ export function EstimateDetailView({ id }: { id: string }) {
                     locked={signed}
                     preferApi={apiReady}
                     ready={!apiReady || Boolean(fetched)}
+                    hideHeader
+                    onActionsChange={onMaterialsActionsChange}
                     onSave={async (lines) => {
                       const filled = filledWorkLines(lines).map((line) => {
                         if (line.kind !== "materials") return line;
@@ -1072,6 +1367,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     kind="estimate"
                     id={estimate.id}
                     locked={signed}
+                    showAddInToolbar={false}
                     empty="Add the first note on this estimate."
                   />
                 );
@@ -1083,6 +1379,8 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    hideHeader
+                    onActionsChange={onAttachmentsActionsChange}
                     onSave={(updated) => {
                       setFetched(updated);
                     }}
@@ -1096,7 +1394,6 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
-                    onEditEstimate={() => setSettingsOpen(true)}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -1112,70 +1409,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                 );
             }
           })();
-          return (
-            <div className="space-y-4">
-              {signed || estimate.status === "accepted" || canConvert || job ? (
-                <EstimateStageBanner
-                  status={estimate.status}
-                  signed={signed}
-                  hasJob={Boolean(job)}
-                  signature={customerSignature}
-                />
-              ) : null}
-              {job ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
-                  <p className="text-sm font-semibold text-emerald-900">
-                    Converted to job {job.number}
-                  </p>
-                  <p className="mt-1 text-sm text-emerald-950">
-                    This estimate is locked to{" "}
-                    <Link
-                      href={`/pro/dashboard/jobs/${job.id}`}
-                      className="font-semibold underline"
-                    >
-                      {job.number}
-                    </Link>
-                    . Delete that job if you need to convert it again.
-                  </p>
-                  <div className="mt-3 flex justify-end">
-                    <Button size="sm" asChild>
-                      <Link href={`/pro/dashboard/jobs/${job.id}`}>
-                        Open {job.number}
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              ) : canConvert ? (
-                <div className="rounded-lg border border-input bg-[#f4f7fb] px-4 py-3">
-                  <p className="text-sm font-semibold text-[#003F7D]">
-                    Convert to job
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Create a job with this customer, address, line items, notes,
-                    and site photos. The job will keep a reference back to{" "}
-                    {estimate.number}.
-                  </p>
-                  <div className="mt-3 flex justify-end">
-                    <Button
-                      size="sm"
-                      disabled={converting}
-                      onClick={convertToJob}
-                    >
-                      {converting ? "Converting…" : "Convert to job"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-              <EstimateFileChrome
-                estimate={estimate}
-                customer={customer}
-                customerLabel={customerLabel}
-                service={service}
-                job={job}
-              />
-              {body}
-            </div>
-          );
+          return body;
         }}
       </RecordWorkspace>
       <EstimateSettingsDialog
@@ -1361,7 +1595,7 @@ export function JobDetailView({ id }: { id: string }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const crm = useCrmApiData();
-  const { session, jobs, estimates, invoices, requests, provider } =
+  const { session, jobs, estimates, invoices, payments, requests, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { events, employees, assign, employeeLabel } = usePortalCrew();
@@ -1375,6 +1609,83 @@ export function JobDetailView({ id }: { id: string }) {
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [resolvedInvoice, setResolvedInvoice] = useState<Invoice | null>(null);
+  const [materialsActions, setMaterialsActions] =
+    useState<JobCostingActions | null>(null);
+  const onMaterialsActionsChange = useCallback(
+    (next: JobCostingActions | null) => {
+      setMaterialsActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.locked === next.locked &&
+          prev.saving === next.saving &&
+          prev.addLabor === next.addLabor &&
+          prev.addMaterial === next.addMaterial
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  const [attachmentsActions, setAttachmentsActions] = useState<{
+    locked: boolean;
+    saving: boolean;
+    uploading: boolean;
+    dirty: boolean;
+    save: () => void;
+  } | null>(null);
+  const onAttachmentsActionsChange = useCallback(
+    (
+      next: {
+        locked: boolean;
+        saving: boolean;
+        uploading: boolean;
+        dirty: boolean;
+        save: () => void;
+      } | null,
+    ) => {
+      setAttachmentsActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.locked === next.locked &&
+          prev.saving === next.saving &&
+          prev.uploading === next.uploading &&
+          prev.dirty === next.dirty &&
+          prev.save === next.save
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  const [settingsActions, setSettingsActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const onSettingsActionsChange = useCallback(
+    (next: { saving: boolean; save: () => void } | null) => {
+      setSettingsActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.saving === next.saving &&
+          prev.save === next.save
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   // ── Redux cache ──────────────────────────────────────────────────────────
   const cachedJob = useAppSelector((s) => s.jobs.detailsCache[id]);
@@ -1690,8 +2001,26 @@ export function JobDetailView({ id }: { id: string }) {
       currentJob.status === "invoiced" ||
       currentJob.status === "paid",
   );
+  const relatedPayments = invoice
+    ? records
+        .mergePayments(payments)
+        .filter((item) => item.invoiceId === invoice.id)
+    : [];
   const jobArchived =
     Boolean(currentJob.isArchived) || records.isArchived("job", currentJob.id);
+
+  const jobTabs = [
+    { id: "summary", label: "Summary" },
+    { id: "customer", label: "Customer" },
+    { id: "materials", label: "Labour and Material" },
+    ...(alreadyInvoiced
+      ? [{ id: "invoice", label: invoice?.number || "Invoice" }]
+      : []),
+    { id: "logs", label: "Logs" },
+    { id: "notes", label: "Notes" },
+    { id: "attachments", label: "Attachments" },
+    { id: "settings", label: "Job settings" },
+  ];
 
   return (
     <>
@@ -1699,14 +2028,127 @@ export function JobDetailView({ id }: { id: string }) {
         href={`/pro/dashboard/jobs/${job.id}`}
         label={job.number}
         kind="job"
-        tabs={[
-          { id: "summary", label: "Summary", icon: LayoutDashboard },
-          { id: "materials", label: "Labour and Material", icon: FileText },
-          { id: "logs", label: "Logs", icon: ScrollText },
-          { id: "notes", label: "Notes", icon: NotebookPen },
-          { id: "attachments", label: "Attachments", icon: Paperclip },
-          { id: "settings", label: "Job settings", icon: Settings },
-        ]}
+        tabs={jobTabs}
+        subnavTabs={["materials", "notes", "attachments", "settings", "invoice"]}
+        subnav={(activeTab) => {
+          if (activeTab === "materials") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">
+                    Labour and Material
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {costingHint("job", materialsActions?.locked ?? false)}
+                  </p>
+                </div>
+                <LineItemsActions
+                  locked={materialsActions?.locked}
+                  saving={materialsActions?.saving}
+                  onAddLabor={() => materialsActions?.addLabor()}
+                  onAddMaterial={() => materialsActions?.addMaterial()}
+                  className="shrink-0"
+                />
+              </div>
+            );
+          }
+          if (activeTab === "notes") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Notes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Desk notes stay with this job.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setNoteOpen(true)}
+                >
+                  + Add note
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "attachments") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Attachments</p>
+                  <p className="text-xs text-muted-foreground">
+                    Photos, PDFs, and other job files.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={
+                    !attachmentsActions ||
+                    attachmentsActions.saving ||
+                    attachmentsActions.uploading ||
+                    !attachmentsActions.dirty
+                  }
+                  onClick={() => attachmentsActions?.save()}
+                >
+                  {attachmentsActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save attachments"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "settings") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Job settings</p>
+                  <p className="text-xs text-muted-foreground">
+                    Name, customer, schedule, and site address.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!settingsActions || settingsActions.saving}
+                  onClick={() => settingsActions?.save()}
+                >
+                  {settingsActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save settings"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "invoice" && invoice) {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Invoice</p>
+                  <p className="text-xs text-muted-foreground">
+                    Billing details for {invoice.number}.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" className="h-8 shrink-0" asChild>
+                  <Link href={`/pro/dashboard/invoices/${invoice.id}`}>
+                    Open {invoice.number}
+                  </Link>
+                </Button>
+              </div>
+            );
+          }
+          return null;
+        }}
         badge={
           <>
             <StatusPill
@@ -1723,7 +2165,7 @@ export function JobDetailView({ id }: { id: string }) {
         actions={
           <>
             {alreadyInvoiced ? (
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" variant="outline" className="h-8" asChild>
                 <Link
                   href={`/pro/dashboard/invoices/${invoice?.id || currentJob.invoiceId || ""}`}
                 >
@@ -1735,6 +2177,7 @@ export function JobDetailView({ id }: { id: string }) {
             ) : (
               <Button
                 size="sm"
+                className="h-8"
                 data-action="convert-to-invoice"
                 disabled={converting}
                 onClick={() => void convertToInvoice()}
@@ -1745,13 +2188,14 @@ export function JobDetailView({ id }: { id: string }) {
             <Button
               size="sm"
               variant="outline"
+              className="h-8"
               onClick={() => setAssignOpen(true)}
             >
               Assign team member
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="h-8">
                   More actions
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
@@ -1797,151 +2241,171 @@ export function JobDetailView({ id }: { id: string }) {
         notice={<FileNotices kind="job" id={job.id} />}
       >
         {(tab) => {
-          const body = (() => {
-            switch (tab) {
-              case "summary":
-                return (
+          switch (tab) {
+            case "summary":
+              return (
+                <div className="space-y-4">
+                  {estimate ? (
+                    <div className="rounded-md bg-secondary px-4 py-3">
+                      <p className="text-sm font-semibold text-foreground">
+                        Estimate converted to {job.number}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Created from{" "}
+                        <Link
+                          href={`/pro/dashboard/estimates/${estimate.id}`}
+                          className="font-semibold text-primary underline"
+                        >
+                          {estimate.number}
+                        </Link>
+                        {estimate.title ? ` · ${estimate.title}` : ""}.
+                      </p>
+                    </div>
+                  ) : job.estimateId ? (
+                    <div className="rounded-md bg-secondary px-4 py-3">
+                      <p className="text-sm font-semibold text-foreground">
+                        Estimate converted to {job.number}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        This job keeps a reference to its source estimate.
+                      </p>
+                    </div>
+                  ) : null}
                   <JobSummaryTab
                     job={job}
                     estimate={estimate}
                     invoice={invoice}
                     technician={technician}
                   />
-                );
-              case "materials":
-                return (
-                  <JobMaterialsTab
-                    job={job}
-                    estimate={estimate}
-                    invoice={invoice}
-                    technician={technician}
-                    preferApi={apiReady}
-                    onSave={
-                      apiReady
-                        ? async (lines) => {
-                            const filled = filledWorkLines(lines);
-                            const items = linesToJobItems(job.id, filled);
-                            try {
-                              await dispatch(
-                                updateJobRecord({
-                                  id: job.id,
-                                  employees,
-                                  job: { ...job, items },
-                                }),
-                              ).unwrap();
-                              void dispatch(fetchJobDetail(job.id));
-                              if (crm.ready) void crm.refresh({ silent: true });
-                            } catch (error) {
-                              toast.error(
-                                error instanceof Error
-                                  ? error.message
-                                  : typeof error === "string"
-                                    ? error
-                                    : "Could not save line items to server.",
-                              );
-                              throw error;
-                            }
-                          }
-                        : async (lines) => {
-                            writeCostLines(session?.email, job.id, lines);
-                          }
-                    }
-                  />
-                );
-              case "logs":
-                return (
-                  <JobLogsTab
-                    job={job}
-                    estimate={estimate}
-                    invoice={invoice}
-                    technician={technician}
-                  />
-                );
-              case "notes":
-                return (
-                  <NotesPanel
-                    kind="job"
-                    id={job.id}
-                    empty="Add the first note on this job."
-                  />
-                );
-              case "attachments":
-                return (
-                  <JobAttachmentsTab
-                    job={job}
-                    estimate={estimate}
-                    invoice={invoice}
-                    technician={technician}
-                  />
-                );
-              case "settings":
-                return (
-                  <JobSettingsTab
-                    job={job}
-                    estimate={estimate}
-                    invoice={invoice}
-                    technician={technician}
-                    service={service}
-                    customerLabel={customerLabel}
-                    start={start}
-                    due={due}
-                    employeeId={resolvedEmployeeId || event?.employeeId}
-                  />
-                );
-              default:
-                return (
-                  <JobSummaryTab
-                    job={job}
-                    estimate={estimate}
-                    invoice={invoice}
-                    technician={technician}
-                  />
-                );
-            }
-          })();
-          return (
-            <div className="space-y-4">
-              {estimate ? (
-                <div className="rounded-[4px] border border-input bg-[#f4f7fb] px-4 py-3">
-                  <p className="text-sm font-semibold text-[#003F7D]">
-                    Estimate converted to {job.number}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    This job ({job.number}) was created from estimate{" "}
-                    <Link
-                      href={`/pro/dashboard/estimates/${estimate.id}`}
-                      className="font-semibold text-primary underline"
-                    >
-                      {estimate.number}
-                    </Link>
-                    {estimate.title ? ` · ${estimate.title}` : ""}. Open the
-                    estimate to see the original quote.
-                  </p>
                 </div>
-              ) : job.estimateId ? (
-                <div className="rounded-[4px] border border-input bg-[#f4f7fb] px-4 py-3">
-                  <p className="text-sm font-semibold text-[#003F7D]">
-                    Estimate converted to {job.number}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Job {job.number} keeps a reference to its source estimate.
-                  </p>
-                </div>
-              ) : null}
-              <JobFileChrome
-                job={job}
-                customer={customer}
-                customerLabel={customerLabel}
-                service={service}
-                estimate={estimate}
-                invoice={invoice}
-                start={start}
-                due={due}
-                technician={technician}
-              />
-              {body}
-            </div>
-          );
+              );
+            case "customer":
+              return (
+                <JobFileChrome
+                  job={job}
+                  customer={customer}
+                  customerLabel={customerLabel}
+                  service={service}
+                  estimate={estimate}
+                  invoice={invoice}
+                  start={start}
+                  due={due}
+                  technician={technician}
+                />
+              );
+            case "materials":
+              return (
+                <JobMaterialsTab
+                  job={job}
+                  estimate={estimate}
+                  invoice={invoice}
+                  technician={technician}
+                  preferApi={apiReady}
+                  hideHeader
+                  onActionsChange={onMaterialsActionsChange}
+                  onSave={
+                    apiReady
+                      ? async (lines) => {
+                          const filled = filledWorkLines(lines);
+                          const items = linesToJobItems(job.id, filled);
+                          try {
+                            await dispatch(
+                              updateJobRecord({
+                                id: job.id,
+                                employees,
+                                job: { ...job, items },
+                              }),
+                            ).unwrap();
+                            void dispatch(fetchJobDetail(job.id));
+                            if (crm.ready) void crm.refresh({ silent: true });
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : typeof error === "string"
+                                  ? error
+                                  : "Could not save line items to server.",
+                            );
+                            throw error;
+                          }
+                        }
+                      : async (lines) => {
+                          writeCostLines(session?.email, job.id, lines);
+                        }
+                  }
+                />
+              );
+            case "logs":
+              return (
+                <JobLogsTab
+                  job={job}
+                  estimate={estimate}
+                  invoice={invoice}
+                  technician={technician}
+                />
+              );
+            case "notes":
+              return (
+                <NotesPanel
+                  kind="job"
+                  id={job.id}
+                  showAddInToolbar={false}
+                  empty="Add the first note on this job."
+                />
+              );
+            case "attachments":
+              return (
+                <JobAttachmentsTab
+                  job={job}
+                  estimate={estimate}
+                  invoice={invoice}
+                  technician={technician}
+                  hideHeader
+                  onActionsChange={onAttachmentsActionsChange}
+                />
+              );
+            case "invoice":
+              return invoice ? (
+                <InvoiceSummaryTab
+                  invoice={invoice}
+                  customer={customer}
+                  customerLabel={customerLabel}
+                  service={service}
+                  job={job}
+                  estimate={estimate}
+                  payments={relatedPayments}
+                />
+              ) : (
+                <p className="px-1 text-sm text-muted-foreground">
+                  No invoice is linked to this job yet.
+                </p>
+              );
+            case "settings":
+              return (
+                <JobSettingsTab
+                  job={job}
+                  estimate={estimate}
+                  invoice={invoice}
+                  technician={technician}
+                  service={service}
+                  customerLabel={customerLabel}
+                  start={start}
+                  due={due}
+                  employeeId={resolvedEmployeeId || event?.employeeId}
+                  hideHeader
+                  onActionsChange={onSettingsActionsChange}
+                />
+              );
+            default:
+              return (
+                <JobSummaryTab
+                  job={job}
+                  estimate={estimate}
+                  invoice={invoice}
+                  technician={technician}
+                />
+              );
+          }
         }}
       </RecordWorkspace>
       <AssignEventDialog
@@ -2053,6 +2517,62 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [resolvingStale, setResolvingStale] = useState(false);
+  const [materialsActions, setMaterialsActions] =
+    useState<JobCostingActions | null>(null);
+  const onMaterialsActionsChange = useCallback(
+    (next: JobCostingActions | null) => {
+      setMaterialsActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.locked === next.locked &&
+          prev.saving === next.saving &&
+          prev.addLabor === next.addLabor &&
+          prev.addMaterial === next.addMaterial
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  const [attachmentsActions, setAttachmentsActions] = useState<{
+    locked: boolean;
+    saving: boolean;
+    uploading: boolean;
+    dirty: boolean;
+    save: () => void;
+  } | null>(null);
+  const onAttachmentsActionsChange = useCallback(
+    (
+      next: {
+        locked: boolean;
+        saving: boolean;
+        uploading: boolean;
+        dirty: boolean;
+        save: () => void;
+      } | null,
+    ) => {
+      setAttachmentsActions((prev) => {
+        if (!prev && !next) return prev;
+        if (!next) return null;
+        if (
+          prev &&
+          prev.locked === next.locked &&
+          prev.saving === next.saving &&
+          prev.uploading === next.uploading &&
+          prev.dirty === next.dirty &&
+          prev.save === next.save
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   function handlePaymentApplied(result: {
     invoice: Invoice | null;
@@ -2196,12 +2716,70 @@ export function InvoiceDetailView({ id }: { id: string }) {
       label={invoice.number}
       kind="invoice"
       tabs={[
-        { id: "summary", label: "Summary", icon: LayoutDashboard },
-        { id: "materials", label: "Labour and Material", icon: FileText },
-        { id: "payments", label: "Payments", icon: CreditCard },
-        { id: "attachments", label: "Attachments", icon: Paperclip },
-        { id: "logs", label: "Logs", icon: ScrollText },
+        { id: "summary", label: "Summary" },
+        { id: "customer", label: "Customer" },
+        { id: "materials", label: "Labour and Material" },
+        { id: "payments", label: "Payments" },
+        { id: "attachments", label: "Attachments" },
+        { id: "logs", label: "Logs" },
       ]}
+      subnavTabs={["materials", "attachments"]}
+      subnav={(activeTab) => {
+        if (activeTab === "materials") {
+          return (
+            <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground">
+                  Labour and Material
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {costingHint("invoice", materialsActions?.locked ?? false)}
+                </p>
+              </div>
+              <LineItemsActions
+                locked={materialsActions?.locked}
+                saving={materialsActions?.saving}
+                onAddLabor={() => materialsActions?.addLabor()}
+                onAddMaterial={() => materialsActions?.addMaterial()}
+                className="shrink-0"
+              />
+            </div>
+          );
+        }
+        if (activeTab === "attachments") {
+          return (
+            <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground">Attachments</p>
+                <p className="text-xs text-muted-foreground">
+                  Photos, PDFs, and other invoice files.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="h-8 shrink-0"
+                disabled={
+                  !attachmentsActions ||
+                  attachmentsActions.saving ||
+                  attachmentsActions.uploading ||
+                  !attachmentsActions.dirty
+                }
+                onClick={() => attachmentsActions?.save()}
+              >
+                {attachmentsActions?.saving ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  "Save attachments"
+                )}
+              </Button>
+            </div>
+          );
+        }
+        return null;
+      }}
       badge={
         <>
           <StatusPill
@@ -2227,6 +2805,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
           <Button
             size="sm"
             variant="outline"
+            className="h-8"
             disabled={sending || invoice.status === "paid" || archived}
             onClick={() => {
               void (async () => {
@@ -2260,7 +2839,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
             onPaid={handlePaymentApplied}
           />
           {job ? (
-            <Button size="sm" variant="outline" asChild>
+            <Button size="sm" variant="outline" className="h-8" asChild>
               <Link href={`/pro/dashboard/jobs/${job.id}`}>
                 Open {job.number}
               </Link>
@@ -2269,6 +2848,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
           <Button
             size="sm"
             variant="outline"
+            className="h-8"
             disabled={archiving}
             onClick={() => void toggleArchive()}
           >
@@ -2284,143 +2864,143 @@ export function InvoiceDetailView({ id }: { id: string }) {
       }
     >
       {(tab) => {
-        const body = (() => {
-          switch (tab) {
-            case "summary":
-              return (
-                <InvoiceSummaryTab
-                  invoice={invoice}
-                  customer={customer}
-                  customerLabel={customerLabel}
-                  service={service}
-                  job={job}
-                  estimate={estimate}
-                  payments={relatedPayments}
-                  onPaid={handlePaymentApplied}
-                />
-              );
-            case "materials":
-              return (
-                <JobMaterialsTab
-                  job={asJob}
-                  estimate={estimate}
-                  invoice={invoice}
-                  technician=""
-                  noun="invoice"
-                  preferApi={useApi}
-                  ready={!useApi || Boolean(detailInvoice)}
-                  onSave={
-                    useApi
-                      ? async (lines) => {
-                          const filled = filledWorkLines(lines).map((line) => {
-                            if (line.kind !== "materials") return line;
-                            if (line.images?.length) return line;
-                            const prev =
-                              invoice.items.find((item) => item.id === line.id) ||
-                              invoice.items.find(
-                                (item) =>
-                                  item.kind !== "labor" &&
-                                  (item.description || "").trim() ===
-                                    (line.description || "").trim(),
-                              );
-                            if (!prev?.images?.length) return line;
-                            return { ...line, images: [...prev.images] };
-                          });
-                          const items = linesToInvoiceItems(invoice.id, filled).map(
-                            (item) => {
-                              const prev = invoice.items.find(
-                                (existing) => existing.id === item.id,
-                              );
-                              return prev
-                                ? { ...item, source: prev.source }
-                                : item;
-                            },
-                          );
-                          writeCostLines(session?.email, invoice.id, filled);
-                          try {
-                            await dispatch(
-                              updateInvoiceRecord({
-                                id: invoice.id,
-                                invoice: { ...invoice, items },
-                              }),
-                            ).unwrap();
-                            void dispatch(fetchInvoiceDetail(invoice.id));
-                          } catch (error) {
-                            toast.error(
-                              error instanceof Error
-                                ? error.message
-                                : typeof error === "string"
-                                  ? error
-                                  : "Could not save line items to server.",
+        switch (tab) {
+          case "summary":
+            return (
+              <InvoiceSummaryTab
+                invoice={invoice}
+                customer={customer}
+                customerLabel={customerLabel}
+                service={service}
+                job={job}
+                estimate={estimate}
+                payments={relatedPayments}
+                onPaid={handlePaymentApplied}
+              />
+            );
+          case "customer":
+            return (
+              <InvoiceFileChrome
+                invoice={invoice}
+                customer={customer}
+                customerLabel={customerLabel}
+                service={service}
+                job={job}
+                estimate={estimate}
+              />
+            );
+          case "materials":
+            return (
+              <JobMaterialsTab
+                job={asJob}
+                estimate={estimate}
+                invoice={invoice}
+                technician=""
+                noun="invoice"
+                preferApi={useApi}
+                ready={!useApi || Boolean(detailInvoice)}
+                hideHeader
+                onActionsChange={onMaterialsActionsChange}
+                onSave={
+                  useApi
+                    ? async (lines) => {
+                        const filled = filledWorkLines(lines).map((line) => {
+                          if (line.kind !== "materials") return line;
+                          if (line.images?.length) return line;
+                          const prev =
+                            invoice.items.find((item) => item.id === line.id) ||
+                            invoice.items.find(
+                              (item) =>
+                                item.kind !== "labor" &&
+                                (item.description || "").trim() ===
+                                  (line.description || "").trim(),
                             );
-                            throw error;
-                          }
+                          if (!prev?.images?.length) return line;
+                          return { ...line, images: [...prev.images] };
+                        });
+                        const items = linesToInvoiceItems(invoice.id, filled).map(
+                          (item) => {
+                            const prev = invoice.items.find(
+                              (existing) => existing.id === item.id,
+                            );
+                            return prev
+                              ? { ...item, source: prev.source }
+                              : item;
+                          },
+                        );
+                        writeCostLines(session?.email, invoice.id, filled);
+                        try {
+                          await dispatch(
+                            updateInvoiceRecord({
+                              id: invoice.id,
+                              invoice: { ...invoice, items },
+                            }),
+                          ).unwrap();
+                          void dispatch(fetchInvoiceDetail(invoice.id));
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : typeof error === "string"
+                                ? error
+                                : "Could not save line items to server.",
+                          );
+                          throw error;
                         }
-                      : async (lines) => {
-                          const filled = filledWorkLines(lines);
-                          const items = linesToInvoiceItems(invoice.id, filled);
-                          writeCostLines(session?.email, invoice.id, filled);
-                          await records.patchInvoice(invoice.id, { items });
-                        }
-                  }
-                />
-              );
-            case "payments":
-              return (
-                <InvoicePaymentsTab
-                  invoice={invoice}
-                  payments={relatedPayments}
-                  onPaid={handlePaymentApplied}
-                />
-              );
-            case "attachments":
-              return (
-                <JobAttachmentsTab
-                  job={asJob}
-                  estimate={estimate}
-                  invoice={invoice}
-                  technician=""
-                  noun="invoice"
-                />
-              );
-            case "logs":
-              return (
-                <JobLogsTab
-                  job={asJob}
-                  estimate={estimate}
-                  invoice={invoice}
-                  technician=""
-                  noun="invoice"
-                />
-              );
-            default:
-              return (
-                <InvoiceSummaryTab
-                  invoice={invoice}
-                  customer={customer}
-                  customerLabel={customerLabel}
-                  service={service}
-                  job={job}
-                  estimate={estimate}
-                  payments={relatedPayments}
-                  onPaid={handlePaymentApplied}
-                />
-              );
-          }
-        })();
-        return (
-          <div className="space-y-4">
-            <InvoiceFileChrome
-              invoice={invoice}
-              customer={customer}
-              customerLabel={customerLabel}
-              service={service}
-              job={job}
-              estimate={estimate}
-            />
-            {body}
-          </div>
-        );
+                      }
+                    : async (lines) => {
+                        const filled = filledWorkLines(lines);
+                        const items = linesToInvoiceItems(invoice.id, filled);
+                        writeCostLines(session?.email, invoice.id, filled);
+                        await records.patchInvoice(invoice.id, { items });
+                      }
+                }
+              />
+            );
+          case "payments":
+            return (
+              <InvoicePaymentsTab
+                invoice={invoice}
+                payments={relatedPayments}
+                onPaid={handlePaymentApplied}
+              />
+            );
+          case "attachments":
+            return (
+              <JobAttachmentsTab
+                job={asJob}
+                estimate={estimate}
+                invoice={invoice}
+                technician=""
+                noun="invoice"
+                hideHeader
+                onActionsChange={onAttachmentsActionsChange}
+              />
+            );
+          case "logs":
+            return (
+              <JobLogsTab
+                job={asJob}
+                estimate={estimate}
+                invoice={invoice}
+                technician=""
+                noun="invoice"
+              />
+            );
+          default:
+            return (
+              <InvoiceSummaryTab
+                invoice={invoice}
+                customer={customer}
+                customerLabel={customerLabel}
+                service={service}
+                job={job}
+                estimate={estimate}
+                payments={relatedPayments}
+                onPaid={handlePaymentApplied}
+              />
+            );
+        }
       }}
     </RecordWorkspace>
   );
@@ -2547,7 +3127,10 @@ export function PaymentDetailView({ id }: { id: string }) {
       href={`/pro/dashboard/payments/${payment.id}`}
       label={paymentNumber(payment)}
       kind="payment"
-      tabs={[{ id: "summary", label: "Summary", icon: LayoutDashboard }]}
+      tabs={[
+        { id: "summary", label: "Summary" },
+        { id: "customer", label: "Customer" },
+      ]}
       badge={
         <>
           <StatusPill
@@ -2565,14 +3148,14 @@ export function PaymentDetailView({ id }: { id: string }) {
       actions={
         <>
           {payment.invoiceId ? (
-            <Button size="sm" variant="outline" asChild>
+            <Button size="sm" variant="outline" className="h-8" asChild>
               <Link href={`/pro/dashboard/invoices/${payment.invoiceId}`}>
                 Open {invoice?.number || payment.invoiceNumber || "invoice"}
               </Link>
             </Button>
           ) : null}
           {job ? (
-            <Button size="sm" variant="outline" asChild>
+            <Button size="sm" variant="outline" className="h-8" asChild>
               <Link href={`/pro/dashboard/jobs/${job.id}`}>
                 Open {job.number}
               </Link>
@@ -2581,6 +3164,7 @@ export function PaymentDetailView({ id }: { id: string }) {
           <Button
             size="sm"
             variant="outline"
+            className="h-8"
             disabled={archiving}
             onClick={() => void toggleArchive()}
           >
@@ -2595,25 +3179,33 @@ export function PaymentDetailView({ id }: { id: string }) {
         </>
       }
     >
-      {() => (
-        <div className="space-y-4">
-          <PaymentFileChrome
-            payment={payment}
-            invoice={invoice}
-            customerLabel={customerLabel}
-            service={service}
-            job={job}
-          />
-          <PaymentSummaryTab
-            payment={payment}
-            invoice={invoice}
-            customer={customer}
-            customerLabel={customerLabel}
-            service={service}
-            job={job}
-          />
-        </div>
-      )}
+      {(tab) => {
+        switch (tab) {
+          case "customer":
+            return (
+              <PaymentFileChrome
+                payment={payment}
+                invoice={invoice}
+                customer={customer}
+                customerLabel={customerLabel}
+                service={service}
+                job={job}
+              />
+            );
+          case "summary":
+          default:
+            return (
+              <PaymentSummaryTab
+                payment={payment}
+                invoice={invoice}
+                customer={customer}
+                customerLabel={customerLabel}
+                service={service}
+                job={job}
+              />
+            );
+        }
+      }}
     </RecordWorkspace>
   );
 }

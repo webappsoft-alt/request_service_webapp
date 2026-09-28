@@ -3,33 +3,20 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowLeft,
-  Calendar,
-  Camera,
   CheckCircle2,
   Clock,
-  CreditCard,
   ExternalLink,
-  FileCheck2,
   FileEdit,
-  FileText,
   Info,
-  LayoutDashboard,
   Mail,
   MapPin,
   Navigation,
   Phone,
   Play,
   RefreshCw,
-  ShieldAlert,
-  ShieldCheck,
-  User,
-  UserRound,
-  Wrench,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -46,7 +33,6 @@ import {
 import {
   formatOrderStatus,
   formatPaymentStatus,
-  getOrderStatusTone,
   OrderStatusPill,
 } from "@/components/portal/orders/order-status-pill";
 import { RecordWorkspace, type RecordTab } from "@/components/portal/record-workspace";
@@ -68,7 +54,6 @@ import {
   startWorkProviderOrder,
   transitProviderOrder,
 } from "@/store/providerOrdersSlice";
-import type { ProviderOrder } from "@/lib/types/provider-order";
 
 function Fact({
   label,
@@ -86,6 +71,35 @@ function Fact({
       </p>
       <div className="mt-0.5 text-sm font-medium text-foreground">{value}</div>
     </div>
+  );
+}
+
+function SoftPanel({
+  children,
+  className,
+  title,
+  action,
+}: {
+  children: ReactNode;
+  className?: string;
+  title?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <section
+      className={cn(
+        "overflow-hidden rounded-md border border-border-soft bg-card",
+        className,
+      )}
+    >
+      {title ? (
+        <div className="flex min-h-10 items-center justify-between gap-2 border-b border-border-soft px-4 py-2.5">
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          {action}
+        </div>
+      ) : null}
+      <div className="p-4">{children}</div>
+    </section>
   );
 }
 
@@ -178,14 +192,13 @@ function getOrderStageBanner(status: string) {
       };
     default:
       return {
-        tone: "border-input bg-[#e8eef5] text-[#003F7D]",
+        tone: "border-border-soft bg-secondary text-foreground",
         message: "Operational service work order.",
       };
   }
 }
 
 export function OrderDetailPageView({ id }: { id: string }) {
-  const router = useRouter();
   const dispatch = useAppDispatch();
   const {
     selectedOrder: order,
@@ -356,9 +369,9 @@ export function OrderDetailPageView({ id }: { id: string }) {
 
   if (!order) {
     return (
-      <div className="border border-input bg-card p-6">
+      <div className="rounded-md border border-border-soft bg-card p-6">
         <h1 className="text-lg font-semibold">Order not found</h1>
-        <Button asChild className="mt-4" size="sm">
+        <Button asChild className="mt-4 h-8" size="sm">
           <Link href="/pro/dashboard/orders">Back to fixed service orders</Link>
         </Button>
       </div>
@@ -373,18 +386,30 @@ export function OrderDetailPageView({ id }: { id: string }) {
       )}`;
 
   const isActionLoading = Boolean(actionLoading[order.id]);
+  const serviceTitle =
+    order.service?.title || order.service?.servicesName || "Service Order";
+  const orderLabel =
+    order.orderNumber || order.id.slice(-8).toUpperCase();
+  const payoutTotal = `$${order.pricing?.totalAmount?.toFixed(2) || "0.00"}`;
+  const payoutCurrency = order.pricing?.currency || "USD";
+  const slotLabel = order.booking?.startTime
+    ? formatSlotWindow(
+        order.booking.startTime,
+        order.booking.endTime,
+        order.booking.durationMinutes,
+      )
+    : null;
 
   const tabs: RecordTab[] = [
-    { id: "summary", label: "Summary", icon: LayoutDashboard },
-    { id: "service", label: "Service Scope", icon: Wrench },
-    { id: "customer", label: "Customer & Site", icon: UserRound },
+    { id: "summary", label: "Summary" },
+    { id: "service", label: "Service Scope" },
+    { id: "customer", label: "Customer" },
     {
       id: "change_orders",
       label: `Change Orders (${order.changeOrders?.length || 0})`,
-      icon: FileEdit,
     },
-    { id: "completion", label: "Completion & Proof", icon: FileCheck2 },
-    { id: "financials", label: "Financials", icon: CreditCard },
+    { id: "completion", label: "Completion & Proof" },
+    { id: "financials", label: "Financials" },
   ];
 
   const banner = getOrderStageBanner(order.status);
@@ -393,19 +418,71 @@ export function OrderDetailPageView({ id }: { id: string }) {
     <>
       <RecordWorkspace
         href={`/pro/dashboard/orders/${order.id}`}
-        label={`${order.orderNumber || order.id.slice(-8).toUpperCase()} · ${order.service?.title || order.service?.servicesName || "Service Order"}`}
+        label={`${orderLabel} · ${serviceTitle}`}
         kind="order"
         tabs={tabs}
-        badge={
-          <OrderStatusPill status={order.status} full />
-        }
+        subnavTabs={["change_orders", "completion"]}
+        subnav={(activeTab) => {
+          if (activeTab === "change_orders") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">
+                    Change Orders
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    In-field scope modifications and additional parts.
+                  </p>
+                </div>
+                {order.status === "IN_PROGRESS" ? (
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5"
+                    onClick={() => setActiveModal("changeOrder")}
+                    disabled={isActionLoading}
+                  >
+                    <FileEdit className="size-3.5" />
+                    + Propose Change Order
+                  </Button>
+                ) : null}
+              </div>
+            );
+          }
+          if (activeTab === "completion") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">
+                    Completion & Proof
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Completion notes, proof photos, and customer sign-off.
+                  </p>
+                </div>
+                {order.status === "IN_PROGRESS" ? (
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => setActiveModal("complete")}
+                    disabled={isActionLoading}
+                  >
+                    <CheckCircle2 className="size-3.5" />
+                    Submit Work Completion
+                  </Button>
+                ) : null}
+              </div>
+            );
+          }
+          return null;
+        }}
+        badge={<OrderStatusPill status={order.status} full />}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               asChild
-              className="gap-1.5 h-8 text-xs"
+              className="h-8 gap-1.5 border-border-soft text-xs"
             >
               <Link href="/pro/dashboard/orders">
                 <ArrowLeft className="size-3.5" /> Back to fixed service orders
@@ -417,20 +494,19 @@ export function OrderDetailPageView({ id }: { id: string }) {
               size="sm"
               onClick={handleRefresh}
               disabled={loading}
-              className="gap-1.5 h-8 text-xs"
+              className="h-8 gap-1.5 border-border-soft text-xs"
             >
               <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
 
-            {/* Contextual Action Buttons in Header */}
             {order.status === "BOOKING_REQUESTED" && (
               <>
                 <Button
                   size="sm"
                   onClick={() => setActiveModal("accept")}
                   disabled={isActionLoading}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-8 text-xs font-medium"
+                  className="h-8 gap-1.5 bg-emerald-600 text-xs font-medium text-white hover:bg-emerald-700"
                 >
                   <CheckCircle2 className="size-3.5" /> Accept Booking
                 </Button>
@@ -439,7 +515,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   variant="destructive"
                   onClick={() => setActiveModal("reject")}
                   disabled={isActionLoading}
-                  className="gap-1.5 h-8 text-xs font-medium"
+                  className="h-8 gap-1.5 text-xs font-medium"
                 >
                   <XCircle className="size-3.5" /> Decline
                 </Button>
@@ -452,7 +528,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   size="sm"
                   onClick={() => setActiveModal("transit")}
                   disabled={isActionLoading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8 text-xs font-medium"
+                  className="h-8 gap-1.5 bg-blue-600 text-xs font-medium text-white hover:bg-blue-700"
                 >
                   <Navigation className="size-3.5" /> Depart
                 </Button>
@@ -461,7 +537,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   variant="outline"
                   onClick={() => setActiveModal("cancel")}
                   disabled={isActionLoading}
-                  className="text-red-600 border-red-200 hover:bg-red-50 gap-1.5 h-8 text-xs"
+                  className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50"
                 >
                   <AlertCircle className="size-3.5" /> Cancel
                 </Button>
@@ -474,7 +550,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   size="sm"
                   onClick={() => setActiveModal("arrive")}
                   disabled={isActionLoading}
-                  className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5 h-8 text-xs font-medium"
+                  className="h-8 gap-1.5 bg-amber-600 text-xs font-medium text-white hover:bg-amber-700"
                 >
                   <MapPin className="size-3.5" /> Arrive On-Site
                 </Button>
@@ -483,7 +559,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   variant="outline"
                   onClick={() => setActiveModal("cancel")}
                   disabled={isActionLoading}
-                  className="text-red-600 border-red-200 hover:bg-red-50 gap-1.5 h-8 text-xs"
+                  className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50"
                 >
                   <AlertCircle className="size-3.5" /> Cancel
                 </Button>
@@ -495,7 +571,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                 size="sm"
                 onClick={() => setActiveModal("startWork")}
                 disabled={isActionLoading}
-                className="bg-purple-600 hover:bg-purple-700 text-white gap-1.5 h-8 text-xs font-medium"
+                className="h-8 gap-1.5 bg-purple-600 text-xs font-medium text-white hover:bg-purple-700"
               >
                 <Play className="size-3.5" /> Start Work
               </Button>
@@ -507,7 +583,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   size="sm"
                   onClick={() => setActiveModal("complete")}
                   disabled={isActionLoading}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-8 text-xs font-medium"
+                  className="h-8 gap-1.5 bg-emerald-600 text-xs font-medium text-white hover:bg-emerald-700"
                 >
                   <CheckCircle2 className="size-3.5" /> Complete Work
                 </Button>
@@ -516,7 +592,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                   variant="outline"
                   onClick={() => setActiveModal("changeOrder")}
                   disabled={isActionLoading}
-                  className="gap-1.5 h-8 text-xs"
+                  className="h-8 gap-1.5 border-border-soft text-xs"
                 >
                   <FileEdit className="size-3.5" /> + Change Order
                 </Button>
@@ -527,219 +603,153 @@ export function OrderDetailPageView({ id }: { id: string }) {
       >
         {(currentTab) => {
           switch (currentTab) {
-            // ==========================================
-            // TAB 1: SUMMARY
-            // ==========================================
             case "summary":
               return (
                 <div className="space-y-4">
-                  {/* Breadcrumb */}
-                  <nav
-                    aria-label="Order breadcrumb"
-                    className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground"
-                  >
-                    <Link
-                      href="/pro/dashboard/orders"
-                      className="font-semibold text-primary hover:underline"
-                    >
-                      Fixed service orders
-                    </Link>
-                    <span>/</span>
-                    <span className="font-medium text-foreground">
-                      {order.orderNumber || order.id.slice(-8).toUpperCase()} –{" "}
-                      {order.service?.title || order.service?.servicesName || "Service"}
-                    </span>
-                  </nav>
-
-                  {/* Operational Stage Banner */}
-                  <div
-                    className={cn(
-                      "rounded-[4px] border px-4 py-3 text-sm flex items-center justify-between gap-4",
-                      banner.tone,
-                    )}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <Info className="size-4 shrink-0 mt-0.5" />
-                      <span>{banner.message}</span>
+                  <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                        Order summary
+                      </p>
+                      <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+                        {serviceTitle}
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {orderLabel}
+                        {order.service?.category
+                          ? ` · ${order.service.category}${
+                              order.service.subcategory
+                                ? ` / ${order.service.subcategory}`
+                                : ""
+                            }`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="rounded-md bg-secondary px-3 py-2 text-right">
+                      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                        Payout total
+                      </p>
+                      <p className="text-lg font-semibold tabular-nums text-primary">
+                        {payoutTotal}{" "}
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {payoutCurrency}
+                        </span>
+                      </p>
                     </div>
                   </div>
 
-                  {/* Scheduled Appointment Slot Card */}
-                  {order.booking?.startTime &&
-                  formatSlotWindow(
-                    order.booking.startTime,
-                    order.booking.endTime,
-                    order.booking.durationMinutes,
-                  ) ? (
-                    <div className="rounded-[4px] border border-blue-200 bg-blue-50/50 p-3.5 text-xs">
-                      <div className="flex items-center gap-1.5 font-semibold text-blue-900">
-                        <Clock className="size-4 text-blue-600" /> Scheduled Appointment Window
-                      </div>
-                      <p className="text-blue-950 font-medium text-sm mt-1">
-                        {formatSlotWindow(
-                          order.booking.startTime,
-                          order.booking.endTime,
-                          order.booking.durationMinutes,
-                        )}
+                  <div
+                    className={cn(
+                      "flex items-start gap-2.5 rounded-md border px-4 py-3 text-sm",
+                      banner.tone,
+                    )}
+                  >
+                    <Info className="mt-0.5 size-4 shrink-0" />
+                    <span>{banner.message}</span>
+                  </div>
+
+                  {slotLabel ? (
+                    <div className="rounded-md bg-sky-50 px-4 py-2.5 text-sm">
+                      <p className="text-[10px] font-semibold tracking-[0.12em] text-sky-800 uppercase">
+                        Scheduled appointment
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-1.5 font-semibold text-sky-950">
+                        <Clock className="size-3.5 shrink-0" />
+                        {slotLabel}
                       </p>
                     </div>
                   ) : null}
 
-                  {/* 2-Column Grid Layout matching portal standard */}
-                  <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-                    {/* Left Column: Service & Operational Facts */}
-                    <div className="grid gap-3 rounded-[4px] border border-input p-4 sm:grid-cols-2">
-                      <Fact
-                        label="Service"
-                        value={order.service?.title || order.service?.servicesName || "—"}
-                      />
-                      <Fact
-                        label="Category"
-                        value={
-                          order.service?.category
-                            ? `${order.service.category}${order.service.subcategory ? ` · ${order.service.subcategory}` : ""}`
-                            : "—"
-                        }
-                      />
-                      <Fact
-                        label="Total Payout"
-                        value={`$${order.pricing?.totalAmount?.toFixed(2) || "0.00"} ${order.pricing?.currency || "USD"}`}
-                      />
-                      <Fact
-                        label="Payment Status"
-                        value={formatPaymentStatus(order.payment?.status)}
-                      />
-                      <Fact
-                        label="Order Number"
-                        value={order.orderNumber || order.id.slice(-8).toUpperCase()}
-                      />
-                      <Fact
-                        label="Created At"
-                        value={formatDate(order.createdAt)}
-                      />
-
-                      {/* Covered items checklist */}
+                  <div className="grid gap-4 lg:grid-cols-5">
+                    <SoftPanel
+                      title="Service & payout"
+                      className="lg:col-span-3"
+                    >
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Fact label="Service" value={serviceTitle} />
+                        <Fact
+                          label="Category"
+                          value={
+                            order.service?.category
+                              ? `${order.service.category}${
+                                  order.service.subcategory
+                                    ? ` · ${order.service.subcategory}`
+                                    : ""
+                                }`
+                              : "—"
+                          }
+                        />
+                        <Fact
+                          label="Total Payout"
+                          value={`${payoutTotal} ${payoutCurrency}`}
+                        />
+                        <Fact
+                          label="Payment Status"
+                          value={formatPaymentStatus(order.payment?.status)}
+                        />
+                        <Fact label="Order Number" value={orderLabel} />
+                        <Fact
+                          label="Created At"
+                          value={formatDate(order.createdAt)}
+                        />
+                      </div>
                       {order.service?.covered?.length ? (
-                        <div className="sm:col-span-2 space-y-2 pt-2 border-t border-input">
+                        <div className="mt-4 space-y-2 border-t border-border-soft pt-3">
                           <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
                             Covered In Scope
                           </p>
-                          <ul className="grid gap-1.5 sm:grid-cols-2 text-xs">
+                          <ul className="grid gap-1.5 text-xs sm:grid-cols-2">
                             {order.service.covered.map((item, i) => (
                               <li
                                 key={i}
                                 className="flex items-center gap-1.5 text-foreground"
                               >
-                                <CheckCircle2 className="size-3 text-emerald-600 shrink-0" />
+                                <CheckCircle2 className="size-3 shrink-0 text-emerald-600" />
                                 <span>{item}</span>
                               </li>
                             ))}
                           </ul>
                         </div>
                       ) : null}
-                    </div>
+                    </SoftPanel>
 
-                    {/* Right Column: Customer & Property Location */}
-                    <div className="space-y-4">
-                      {/* Customer Card */}
-                      <div className="rounded-[4px] border border-input p-4">
-                        <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                          Customer
-                        </p>
-                        <p className="mt-1 font-semibold text-foreground">
-                          {order.customer?.name || "Property Owner"}
-                        </p>
-                        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                          {order.customer?.phone ? (
-                            <div className="flex items-center gap-1.5">
-                              <Phone className="size-3 text-primary" />
-                              <a
-                                href={`tel:${order.customer.phone}`}
-                                className="text-primary hover:underline"
-                              >
-                                {order.customer.phone}
-                              </a>
-                            </div>
-                          ) : null}
-                          {order.customer?.email ? (
-                            <div className="flex items-center gap-1.5">
-                              <Mail className="size-3 text-primary" />
-                              <a
-                                href={`mailto:${order.customer.email}`}
-                                className="text-primary hover:underline"
-                              >
-                                {order.customer.email}
-                              </a>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {/* Property Address Card */}
-                      <div className="rounded-[4px] border border-input p-4 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                            Service Location
+                    <SoftPanel title="At a glance" className="lg:col-span-2">
+                      <div className="space-y-3">
+                        <div className="rounded-md bg-secondary/70 px-3 py-3">
+                          <p className="text-xs text-muted-foreground">Customer</p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            {order.customer?.name || "Property Owner"}
                           </p>
-                          <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
-                          >
-                            <span>Google Maps</span>
-                            <ExternalLink className="size-3" />
-                          </a>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Full contact and site details are on the Customer tab.
+                          </p>
                         </div>
-                        <p className="text-sm font-medium text-foreground">
-                          {order.address?.street}
-                          {order.address?.unit ? ` (Unit ${order.address.unit})` : ""}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {order.address?.city}
-                          {order.address?.state ? `, ${order.address.state}` : ""}
-                          {order.address?.zip ? ` ${order.address.zip}` : ""}
-                        </p>
-
-                        {coords ? (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono bg-[#f8fafc] px-2 py-1.5 rounded border border-input mt-2">
-                            <MapPin className="size-3.5 text-blue-600 shrink-0" />
-                            <span>
-                              [{coords[0].toFixed(5)}, {coords[1].toFixed(5)}]
-                            </span>
-                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded ml-auto">
-                              200m Geofence
-                            </span>
-                          </div>
-                        ) : null}
-
-                        {order.address?.notes ? (
-                          <div className="pt-2 border-t border-input text-xs text-muted-foreground">
-                            <span className="font-semibold text-foreground">Access Notes: </span>
-                            {order.address.notes}
-                          </div>
-                        ) : null}
+                        <div className="rounded-md bg-secondary/70 px-3 py-3">
+                          <p className="text-xs text-muted-foreground">Location</p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            {order.address?.city || "—"}
+                            {order.address?.state
+                              ? `, ${order.address.state}`
+                              : ""}
+                          </p>
+                          {order.address?.street ? (
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                              {order.address.street}
+                            </p>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
+                    </SoftPanel>
                   </div>
                 </div>
               );
 
-            // ==========================================
-            // TAB 2: SERVICE SCOPE
-            // ==========================================
             case "service":
               return (
-                <div className="space-y-6">
-                  <div className="rounded-[4px] border border-input p-4 space-y-4">
-                    <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                      Service Package Overview
-                    </h2>
+                <div className="space-y-4">
+                  <SoftPanel title="Service Package Overview">
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      <Fact
-                        label="Service Title"
-                        value={order.service?.title || order.service?.servicesName || "—"}
-                      />
+                      <Fact label="Service Title" value={serviceTitle} />
                       <Fact
                         label="Category"
                         value={order.service?.category || "—"}
@@ -757,22 +767,20 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         value={order.service?.unit || "per visit"}
                       />
                     </div>
-                  </div>
+                  </SoftPanel>
 
-                  {/* Covered Scope Checklist */}
-                  <div className="rounded-[4px] border border-input p-4 space-y-3">
-                    <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                      Included Work & Coverage
-                    </h2>
+                  <SoftPanel title="Included Work & Coverage">
                     {order.service?.covered?.length ? (
                       <div className="grid gap-2 sm:grid-cols-2">
                         {order.service.covered.map((item, index) => (
                           <div
                             key={index}
-                            className="flex items-center gap-2 rounded-[4px] bg-[#f8fafc] px-3 py-2 text-xs"
+                            className="flex items-center gap-2 rounded-md bg-secondary/70 px-3 py-2 text-xs"
                           >
-                            <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-                            <span className="font-medium text-foreground">{item}</span>
+                            <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+                            <span className="font-medium text-foreground">
+                              {item}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -781,19 +789,15 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         Standard operational service scope applies.
                       </p>
                     )}
-                  </div>
+                  </SoftPanel>
 
-                  {/* Service Images */}
                   {order.service?.images?.length ? (
-                    <div className="rounded-[4px] border border-input p-4 space-y-3">
-                      <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                        Package Photos
-                      </h2>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <SoftPanel title="Package Photos">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         {order.service.images.map((src, i) => (
                           <div
                             key={i}
-                            className="relative aspect-video rounded border overflow-hidden bg-muted"
+                            className="relative aspect-video overflow-hidden rounded-md border border-border-soft bg-muted"
                           >
                             <Image
                               src={src}
@@ -804,24 +808,17 @@ export function OrderDetailPageView({ id }: { id: string }) {
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </SoftPanel>
                   ) : null}
                 </div>
               );
 
-            // ==========================================
-            // TAB 3: CUSTOMER & SITE
-            // ==========================================
             case "customer":
               return (
-                <div className="space-y-6">
-                  <div className="grid gap-5 md:grid-cols-2">
-                    {/* Customer Profile */}
-                    <div className="rounded-[4px] border border-input p-4 space-y-3">
-                      <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                        Customer Contact Information
-                      </h2>
-                      <div className="space-y-2 pt-1">
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SoftPanel title="Customer Contact">
+                      <div className="space-y-3">
                         <Fact
                           label="Full Name"
                           value={order.customer?.name || "Customer"}
@@ -832,9 +829,10 @@ export function OrderDetailPageView({ id }: { id: string }) {
                             order.customer?.phone ? (
                               <a
                                 href={`tel:${order.customer.phone}`}
-                                className="text-primary hover:underline inline-flex items-center gap-1"
+                                className="inline-flex items-center gap-1 text-primary hover:underline"
                               >
-                                <Phone className="size-3.5" /> {order.customer.phone}
+                                <Phone className="size-3.5" />{" "}
+                                {order.customer.phone}
                               </a>
                             ) : (
                               "—"
@@ -847,9 +845,10 @@ export function OrderDetailPageView({ id }: { id: string }) {
                             order.customer?.email ? (
                               <a
                                 href={`mailto:${order.customer.email}`}
-                                className="text-primary hover:underline inline-flex items-center gap-1"
+                                className="inline-flex items-center gap-1 text-primary hover:underline"
                               >
-                                <Mail className="size-3.5" /> {order.customer.email}
+                                <Mail className="size-3.5" />{" "}
+                                {order.customer.email}
                               </a>
                             ) : (
                               "—"
@@ -857,31 +856,32 @@ export function OrderDetailPageView({ id }: { id: string }) {
                           }
                         />
                       </div>
-                    </div>
+                    </SoftPanel>
 
-                    {/* Property Location */}
-                    <div className="rounded-[4px] border border-input p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                          Property Location
-                        </h2>
+                    <SoftPanel
+                      title="Property Location"
+                      action={
                         <a
                           href={mapsUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                         >
-                          <span>Open in Google Maps</span>
+                          <span>Google Maps</span>
                           <ExternalLink className="size-3" />
                         </a>
-                      </div>
-
-                      <div className="space-y-2 pt-1">
+                      }
+                    >
+                      <div className="space-y-3">
                         <Fact
                           label="Street Address"
                           value={
                             order.address?.street
-                              ? `${order.address.street}${order.address.unit ? ` (Unit ${order.address.unit})` : ""}`
+                              ? `${order.address.street}${
+                                  order.address.unit
+                                    ? ` (Unit ${order.address.unit})`
+                                    : ""
+                                }`
                               : "—"
                           }
                         />
@@ -897,6 +897,17 @@ export function OrderDetailPageView({ id }: { id: string }) {
                               : "Not recorded"
                           }
                         />
+                        {coords ? (
+                          <div className="flex items-center gap-2 rounded-md bg-secondary/70 px-2.5 py-2 font-mono text-xs text-muted-foreground">
+                            <MapPin className="size-3.5 shrink-0 text-blue-600" />
+                            <span>
+                              [{coords[0].toFixed(5)}, {coords[1].toFixed(5)}]
+                            </span>
+                            <span className="ml-auto rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                              200m Geofence
+                            </span>
+                          </div>
+                        ) : null}
                         {order.address?.notes ? (
                           <Fact
                             label="Site Access Notes"
@@ -904,54 +915,32 @@ export function OrderDetailPageView({ id }: { id: string }) {
                           />
                         ) : null}
                       </div>
-                    </div>
+                    </SoftPanel>
                   </div>
                 </div>
               );
 
-            // ==========================================
-            // TAB 4: CHANGE ORDERS
-            // ==========================================
             case "change_orders":
               return (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-semibold tracking-tight">
-                        Proposed Change Orders
-                      </h2>
-                      <p className="text-xs text-muted-foreground">
-                        In-field scope modifications and additional parts approved by the customer.
-                      </p>
-                    </div>
-
-                    {order.status === "IN_PROGRESS" ? (
-                      <Button
-                        size="sm"
-                        onClick={() => setActiveModal("changeOrder")}
-                        className="gap-1.5 text-xs"
-                      >
-                        <FileEdit className="size-3.5" /> + Propose Change Order
-                      </Button>
-                    ) : null}
-                  </div>
-
                   {order.changeOrders?.length ? (
-                    <div className="divide-y rounded-[4px] border border-input">
+                    <div className="divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft bg-card">
                       {order.changeOrders.map((co, index) => (
-                        <div key={co.id || index} className="p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-sm text-foreground">
+                        <div key={co.id || index} className="space-y-2 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-foreground">
                               {co.description || `Change Order #${index + 1}`}
                             </span>
-                            <span className="font-mono font-semibold text-sm text-foreground">
+                            <span className="font-mono text-sm font-semibold text-foreground">
                               +${co.additionalAmount?.toFixed(2) || "0.00"}
                             </span>
                           </div>
 
                           {co.reason ? (
                             <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Reason:</span>{" "}
+                              <span className="font-medium text-foreground">
+                                Reason:
+                              </span>{" "}
                               {co.reason}
                             </p>
                           ) : null}
@@ -975,14 +964,14 @@ export function OrderDetailPageView({ id }: { id: string }) {
                           </div>
 
                           {co.evidencePhotos?.length ? (
-                            <div className="pt-2 flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 pt-2">
                               {co.evidencePhotos.map((photo, pIdx) => (
                                 <a
                                   key={pIdx}
                                   href={photo}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="relative size-16 rounded border overflow-hidden bg-muted block hover:opacity-85"
+                                  className="relative block size-16 overflow-hidden rounded-md border border-border-soft bg-muted hover:opacity-85"
                                 >
                                   <Image
                                     src={photo}
@@ -998,19 +987,19 @@ export function OrderDetailPageView({ id }: { id: string }) {
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-[4px] border border-input bg-[#f8fafc] p-6 text-center text-xs text-muted-foreground space-y-2">
+                    <div className="space-y-2 rounded-md border border-border-soft bg-secondary/40 p-6 text-center text-xs text-muted-foreground">
                       <p>No change orders have been proposed for this order.</p>
                       {order.status === "IN_PROGRESS" ? (
                         <p className="text-foreground">
-                          Discover extra work on site? Click{" "}
+                          Discover extra work on site? Use{" "}
                           <button
                             type="button"
                             onClick={() => setActiveModal("changeOrder")}
-                            className="text-primary font-medium underline"
+                            className="font-medium text-primary underline"
                           >
                             Propose Change Order
                           </button>{" "}
-                          to submit a request to the customer.
+                          above to submit a request to the customer.
                         </p>
                       ) : null}
                     </div>
@@ -1018,114 +1007,85 @@ export function OrderDetailPageView({ id }: { id: string }) {
                 </div>
               );
 
-            // ==========================================
-            // TAB 5: COMPLETION & PROOF
-            // ==========================================
             case "completion":
               return (
-                <div className="space-y-6">
-                  {order.status === "IN_PROGRESS" ? (
-                    <div className="flex items-center justify-between border-b border-input pb-4">
-                      <div>
-                        <h2 className="text-sm font-semibold">Finish Service</h2>
-                        <p className="text-xs text-muted-foreground">
-                          Submit completion notes and photos to trigger customer sign-off.
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => setActiveModal("complete")}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-medium"
-                      >
-                        <CheckCircle2 className="size-3.5" /> Submit Work Completion
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  {/* Completion Notes */}
-                  <div className="rounded-[4px] border border-input p-4 space-y-2">
-                    <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                      Work Completion Summary
-                    </h2>
+                <div className="space-y-4">
+                  <SoftPanel title="Work Completion Summary">
                     <p className="text-sm text-foreground">
                       {order.completionDetails?.completionNotes ||
                         order.completionDetails?.notes ||
                         "No completion notes recorded yet."}
                     </p>
                     {order.completionDetails?.completedAt ? (
-                      <p className="text-xs text-muted-foreground pt-1">
-                        Completed at: {formatDate(order.completionDetails.completedAt)}
+                      <p className="pt-2 text-xs text-muted-foreground">
+                        Completed at:{" "}
+                        {formatDate(order.completionDetails.completedAt)}
                       </p>
                     ) : null}
-                  </div>
+                  </SoftPanel>
 
-                  {/* Proof Photos: Before & After */}
-                  <div className="grid gap-5 md:grid-cols-2">
-                    {/* Before Photos */}
-                    <div className="rounded-[4px] border border-input p-4 space-y-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Before Work Photos
-                      </h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SoftPanel title="Before Work Photos">
                       {order.completionDetails?.beforePhotos?.length ? (
                         <div className="grid grid-cols-2 gap-2.5">
-                          {order.completionDetails.beforePhotos.map((img, i) => (
-                            <a
-                              key={i}
-                              href={img}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="relative aspect-video rounded border overflow-hidden bg-muted block hover:opacity-85"
-                            >
-                              <Image
-                                src={img}
-                                alt={`Before photo ${i + 1}`}
-                                fill
-                                className="object-cover"
-                              />
-                            </a>
-                          ))}
+                          {order.completionDetails.beforePhotos.map(
+                            (img, i) => (
+                              <a
+                                key={i}
+                                href={img}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="relative block aspect-video overflow-hidden rounded-md border border-border-soft bg-muted hover:opacity-85"
+                              >
+                                <Image
+                                  src={img}
+                                  alt={`Before photo ${i + 1}`}
+                                  fill
+                                  className="object-cover"
+                                />
+                              </a>
+                            ),
+                          )}
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground">No before photos.</p>
+                        <p className="text-xs text-muted-foreground">
+                          No before photos.
+                        </p>
                       )}
-                    </div>
+                    </SoftPanel>
 
-                    {/* After Photos */}
-                    <div className="rounded-[4px] border border-input p-4 space-y-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        After Proof-of-Work Photos
-                      </h3>
+                    <SoftPanel title="After Proof-of-Work Photos">
                       {order.completionDetails?.afterPhotos?.length ? (
                         <div className="grid grid-cols-2 gap-2.5">
-                          {order.completionDetails.afterPhotos.map((img, i) => (
-                            <a
-                              key={i}
-                              href={img}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="relative aspect-video rounded border overflow-hidden bg-muted block hover:opacity-85"
-                            >
-                              <Image
-                                src={img}
-                                alt={`After photo ${i + 1}`}
-                                fill
-                                className="object-cover"
-                              />
-                            </a>
-                          ))}
+                          {order.completionDetails.afterPhotos.map(
+                            (img, i) => (
+                              <a
+                                key={i}
+                                href={img}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="relative block aspect-video overflow-hidden rounded-md border border-border-soft bg-muted hover:opacity-85"
+                              >
+                                <Image
+                                  src={img}
+                                  alt={`After photo ${i + 1}`}
+                                  fill
+                                  className="object-cover"
+                                />
+                              </a>
+                            ),
+                          )}
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground">No after photos recorded.</p>
+                        <p className="text-xs text-muted-foreground">
+                          No after photos recorded.
+                        </p>
                       )}
-                    </div>
+                    </SoftPanel>
                   </div>
 
-                  {/* Customer Sign-off Status */}
-                  <div className="rounded-[4px] border border-input p-4 space-y-2">
-                    <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                      Customer Sign-off & Review
-                    </h2>
-                    <div className="grid gap-3 sm:grid-cols-3 pt-1">
+                  <SoftPanel title="Customer Sign-off & Review">
+                    <div className="grid gap-3 sm:grid-cols-3">
                       <Fact
                         label="Customer Sign-off"
                         value={
@@ -1152,38 +1112,39 @@ export function OrderDetailPageView({ id }: { id: string }) {
                       />
                     </div>
                     {order.completionDetails?.customerSignOff?.review ? (
-                      <div className="pt-2 text-xs text-muted-foreground">
-                        <span className="font-semibold text-foreground">Review: </span>
+                      <div className="border-t border-border-soft pt-3 text-xs text-muted-foreground">
+                        <span className="font-semibold text-foreground">
+                          Review:{" "}
+                        </span>
                         {order.completionDetails.customerSignOff.review}
                       </div>
                     ) : null}
-                  </div>
+                  </SoftPanel>
                 </div>
               );
 
-            // ==========================================
-            // TAB 6: FINANCIALS
-            // ==========================================
             case "financials":
               return (
-                <div className="space-y-6 max-w-xl">
-                  <div className="rounded-[4px] border border-input p-4 space-y-4">
-                    <h2 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground">
-                      Financial Breakdown & Ledger
-                    </h2>
-
-                    <div className="divide-y text-xs">
+                <div className="max-w-xl space-y-4">
+                  <SoftPanel title="Financial Breakdown">
+                    <div className="divide-y divide-border-soft text-xs">
                       <div className="flex justify-between py-2">
-                        <span className="text-muted-foreground">Base Service Price</span>
+                        <span className="text-muted-foreground">
+                          Base Service Price
+                        </span>
                         <span className="font-mono font-medium">
                           ${order.pricing?.basePrice?.toFixed(2) || "0.00"}
                         </span>
                       </div>
 
                       <div className="flex justify-between py-2">
-                        <span className="text-muted-foreground">Change Orders Approved</span>
+                        <span className="text-muted-foreground">
+                          Change Orders Approved
+                        </span>
                         <span className="font-mono font-medium">
-                          +${order.pricing?.changeOrdersTotal?.toFixed(2) || "0.00"}
+                          +$
+                          {order.pricing?.changeOrdersTotal?.toFixed(2) ||
+                            "0.00"}
                         </span>
                       </div>
 
@@ -1197,7 +1158,9 @@ export function OrderDetailPageView({ id }: { id: string }) {
                       <div className="flex justify-between py-2">
                         <span className="text-muted-foreground">
                           Estimated Tax{" "}
-                          {order.pricing?.taxRate ? `(${order.pricing.taxRate}%)` : ""}
+                          {order.pricing?.taxRate
+                            ? `(${order.pricing.taxRate}%)`
+                            : ""}
                         </span>
                         <span className="font-mono font-medium">
                           ${order.pricing?.taxAmount?.toFixed(2) || "0.00"}
@@ -1206,29 +1169,28 @@ export function OrderDetailPageView({ id }: { id: string }) {
 
                       {order.pricing?.platformFee ? (
                         <div className="flex justify-between py-2">
-                          <span className="text-muted-foreground">Platform Fee</span>
+                          <span className="text-muted-foreground">
+                            Platform Fee
+                          </span>
                           <span className="font-mono font-medium">
                             -${order.pricing.platformFee.toFixed(2)}
                           </span>
                         </div>
                       ) : null}
 
-                      <div className="flex justify-between py-3 font-semibold text-sm border-t-2 border-input">
-                        <span className="text-foreground">Total Payout</span>
-                        <span className="font-mono text-primary">
-                          ${order.pricing?.totalAmount?.toFixed(2) || "0.00"}{" "}
-                          {order.pricing?.currency || "USD"}
+                      <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5">
+                        <span className="font-semibold text-foreground">
+                          Total Payout
+                        </span>
+                        <span className="font-mono text-sm font-semibold tabular-nums text-primary">
+                          {payoutTotal} {payoutCurrency}
                         </span>
                       </div>
                     </div>
-                  </div>
+                  </SoftPanel>
 
-                  {/* Payment Hold Status */}
-                  <div className="rounded-[4px] border border-input p-4 space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Payment Authorization Details
-                    </h3>
-                    <div className="grid gap-3 sm:grid-cols-2 pt-1 text-xs">
+                  <SoftPanel title="Payment Authorization">
+                    <div className="grid gap-3 sm:grid-cols-2 text-xs">
                       <Fact
                         label="Payment Status"
                         value={formatPaymentStatus(order.payment?.status)}
@@ -1237,12 +1199,13 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         label="Hold Identifier"
                         value={
                           <span className="font-mono text-xs">
-                            {order.payment?.authorizationHoldId || "ch_hold_authorized"}
+                            {order.payment?.authorizationHoldId ||
+                              "ch_hold_authorized"}
                           </span>
                         }
                       />
                     </div>
-                  </div>
+                  </SoftPanel>
                 </div>
               );
 
@@ -1252,7 +1215,6 @@ export function OrderDetailPageView({ id }: { id: string }) {
         }}
       </RecordWorkspace>
 
-      {/* Action Modals */}
       <AcceptOrderModal
         order={order}
         isOpen={activeModal === "accept"}

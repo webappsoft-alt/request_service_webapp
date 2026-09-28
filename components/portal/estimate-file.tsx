@@ -55,63 +55,82 @@ export function EstimateFileChrome({
     .join(", ");
 
   return (
-    <div className="space-y-3">
-      <nav aria-label="Estimate breadcrumb" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-        <Link href="/pro/dashboard/estimates" className="font-semibold text-primary hover:underline">
-          Estimates
-        </Link>
-        <span className="text-muted-foreground">/</span>
-        <span className="font-medium text-foreground">
-          {customerLabel} – {service}
-        </span>
-        <span className="text-muted-foreground">/</span>
-        <span className="font-semibold text-primary">{estimate.number}</span>
-        {job ? (
-          <>
-            <span className="text-muted-foreground">/</span>
-            <Link href={`/pro/dashboard/jobs/${job.id}`} className="font-semibold text-primary hover:underline">
-              {job.number}
-            </Link>
-          </>
-        ) : null}
-      </nav>
-
-      <div className="overflow-hidden rounded-lg border border-input bg-card">
-        <div className="grid gap-3 px-4 py-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <Detail
-            label="Customer"
-            value={
-              estimate.customerId ? (
-                <Link
-                  href={`/pro/dashboard/customers/${estimate.customerId}`}
-                  className="font-semibold text-primary hover:underline"
-                >
-                  {customerLabel}
-                </Link>
-              ) : (
-                customerLabel
-              )
-            }
-          />
-          {customer && customer.entityKind === "company" && contact ? (
-            <Detail label="Contact" value={contact} />
-          ) : null}
-          <Detail label="Service" value={service || "—"} />
-          <Detail label="Address" value={addressLine || "—"} />
-          <Detail label="Issued" value={formatDate(estimate.issuedAt)} />
-          <Detail
-            label="Expires"
-            value={estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"}
-          />
-          <Detail
-            label="Status"
-            value={
-              <span className="capitalize">
-                {estimateStatusLabel(estimate.status)}
-              </span>
-            }
-          />
+    <div className="space-y-0">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
+              "Customer details for this estimate"}
+          </p>
         </div>
+        {estimate.customerId ? (
+          <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
+            <Link href={`/pro/dashboard/customers/${estimate.customerId}`}>
+              Open customer file
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="grid gap-x-8 gap-y-3.5 px-1 py-1 sm:grid-cols-2">
+        <Detail
+          label="Customer"
+          value={
+            estimate.customerId ? (
+              <Link
+                href={`/pro/dashboard/customers/${estimate.customerId}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {customerLabel}
+              </Link>
+            ) : (
+              customerLabel
+            )
+          }
+        />
+        {customer && customer.entityKind === "company" && contact ? (
+          <Detail label="Contact" value={contact} />
+        ) : null}
+        <Detail label="Phone" value={customer?.phone || "—"} />
+        <Detail
+          label="Email"
+          value={
+            customer?.email ? (
+              <span className="text-primary">{customer.email}</span>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <Detail label="Service" value={service || "—"} />
+        <Detail label="Address" value={addressLine || "—"} />
+        <Detail label="Issued" value={formatDate(estimate.issuedAt)} />
+        <Detail
+          label="Expires"
+          value={estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"}
+        />
+        <Detail
+          label="Status"
+          value={
+            <span className="capitalize">
+              {estimateStatusLabel(estimate.status)}
+            </span>
+          }
+        />
+        {job ? (
+          <Detail
+            label="Linked job"
+            value={
+              <Link
+                href={`/pro/dashboard/jobs/${job.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {job.number}
+              </Link>
+            }
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -376,7 +395,7 @@ export function EstimateSettingsTab({
     <div
       data-estimate-settings-form
       className={cn(
-        compact ? "space-y-4" : "rounded-[4px] border border-input bg-card p-4",
+        compact ? "space-y-4" : "border border-border-soft bg-card p-4",
       )}
     >
       <div className="mb-4 flex items-center justify-between gap-2">

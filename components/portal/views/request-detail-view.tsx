@@ -240,18 +240,18 @@ function LeadCard({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-xl bg-white",
-        !borderless && "border border-[#e8eef5] shadow-[0_1px_2px_rgba(15,23,42,0.03)]",
+        "overflow-hidden rounded-md bg-card",
+        !borderless && "border border-border-soft",
         className,
       )}
     >
       {!hideHeader && title ? (
-        <header className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-[#e8eef5] bg-[#f7f9fc] px-4">
-          <h3 className="truncate text-sm font-semibold text-[#003F7D]">{title}</h3>
+        <header className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border-soft bg-secondary/40 px-4">
+          <h3 className="truncate text-sm font-semibold text-foreground">{title}</h3>
           {action ? <div className="flex h-8 shrink-0 items-center gap-2">{action}</div> : null}
         </header>
       ) : null}
-      <div className="bg-white">{children}</div>
+      <div className="bg-card">{children}</div>
     </section>
   );
 }
@@ -1270,7 +1270,7 @@ export function RequestDetailView({ id }: { id: string }) {
         label={`${request.number} · ${request.serviceName}`}
         kind="request"
         tabs={TABS}
-        subnavTabs={["tasks", "reminders"]}
+        subnavTabs={["tasks", "reminders", "notes"]}
         subnav={(activeTab) => {
           if (activeTab === "tasks") {
             return (
@@ -1323,6 +1323,25 @@ export function RequestDetailView({ id }: { id: string }) {
                   </Button>
                 }
               />
+            );
+          }
+          if (activeTab === "notes") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Notes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Desk notes stay with this lead.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setNoteOpen(true)}
+                >
+                  + Add note
+                </Button>
+              </div>
             );
           }
           return null;
@@ -2356,7 +2375,12 @@ export function RequestDetailView({ id }: { id: string }) {
             case "notes":
               return (
                 <LeadCard hideHeader>
-                  <NotesPanel kind="request" id={request.id} empty="Add the first note on this lead." />
+                  <NotesPanel
+                    kind="request"
+                    id={request.id}
+                    showAddInToolbar={false}
+                    empty="Add the first note on this lead."
+                  />
                 </LeadCard>
               );
             case "photos":

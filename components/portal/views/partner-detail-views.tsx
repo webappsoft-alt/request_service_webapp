@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
-  Boxes,
-  Briefcase,
   ChevronDown,
   Eye,
   FileText,
@@ -12,13 +10,8 @@ import {
   ImageIcon,
   Loader2,
   Music,
-  NotebookPen,
-  Package,
-  Paperclip,
-  Settings,
   Trash2,
   Upload,
-  Wallet,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -165,6 +158,27 @@ export function VendorDetailView({ id }: { id: string }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [settingsActions, setSettingsActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const [accountActions, setAccountActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+
+  const onSettingsActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setSettingsActions(actions);
+    },
+    [],
+  );
+  const onAccountActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setAccountActions(actions);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!crm.enabled) return;
@@ -211,15 +225,15 @@ export function VendorDetailView({ id }: { id: string }) {
   if (!vendor) {
     if (detailLoading) {
       return (
-        <div className="border border-input bg-card" aria-busy="true">
+        <div className="rounded-md border border-border-soft bg-card" aria-busy="true">
           <CenteredSpinner label="Loading vendor" className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-input bg-card p-6">
+      <div className="rounded-md border border-border-soft bg-card p-6">
         <h1 className="text-lg font-semibold">{detailError || "Vendor not found"}</h1>
-        <Button asChild className="mt-4" size="sm">
+        <Button asChild className="mt-4 h-8" size="sm">
           <Link href="/pro/dashboard/vendors">Back to vendors</Link>
         </Button>
       </div>
@@ -235,14 +249,99 @@ export function VendorDetailView({ id }: { id: string }) {
         label={`${vendor.name} · ${vendor.number}`}
         kind="vendor"
         tabs={[
-          { id: "settings", label: "Settings", icon: Settings },
-          { id: "account", label: "Account", icon: Wallet },
-          { id: "inventory", label: "Inventory", icon: Boxes },
-          { id: "orders", label: "Orders", icon: Package },
-          { id: "jobs", label: "Jobs", icon: Briefcase },
-          { id: "notes", label: "Notes", icon: NotebookPen },
-          { id: "attachments", label: "Attachments", icon: Paperclip },
+          { id: "settings", label: "Settings" },
+          { id: "account", label: "Account" },
+          { id: "inventory", label: "Inventory" },
+          { id: "orders", label: "Orders" },
+          { id: "jobs", label: "Jobs" },
+          { id: "notes", label: "Notes" },
+          { id: "attachments", label: "Attachments" },
         ]}
+        subnavTabs={["settings", "account", "notes", "attachments"]}
+        subnav={(activeTab) => {
+          if (activeTab === "settings") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Vendor settings</p>
+                  <p className="text-xs text-muted-foreground">
+                    Supply house contact and category used when buying materials.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!settingsActions || settingsActions.saving}
+                  onClick={() => settingsActions?.save()}
+                >
+                  {settingsActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save settings"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "account") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Account</p>
+                  <p className="text-xs text-muted-foreground">
+                    House account, payment terms, and current balance.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!accountActions || accountActions.saving}
+                  onClick={() => accountActions?.save()}
+                >
+                  {accountActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save account"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "notes") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Notes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Desk notes stay with this vendor.
+                  </p>
+                </div>
+                <Button size="sm" className="h-8 shrink-0" onClick={() => setNoteOpen(true)}>
+                  + Add note
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "attachments") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Attachments</p>
+                  <p className="text-xs text-muted-foreground">
+                    Invoices, catalogs, and vendor documents.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        }}
         badge={
           <>
             <StatusPill label={vendor.category || "Vendor"} />
@@ -261,7 +360,7 @@ export function VendorDetailView({ id }: { id: string }) {
         actions={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="h-8">
                 More actions
                 <ChevronDown className="size-3.5" aria-hidden="true" />
               </Button>
@@ -278,9 +377,23 @@ export function VendorDetailView({ id }: { id: string }) {
         {(tab) => {
           switch (tab) {
             case "settings":
-              return <VendorSettingsTab vendor={vendor} onSave={saveVendor} />;
+              return (
+                <VendorSettingsTab
+                  vendor={vendor}
+                  onSave={saveVendor}
+                  hideHeader
+                  onActionsChange={onSettingsActionsChange}
+                />
+              );
             case "account":
-              return <VendorAccountTab vendor={vendor} onSave={saveVendor} />;
+              return (
+                <VendorAccountTab
+                  vendor={vendor}
+                  onSave={saveVendor}
+                  hideHeader
+                  onActionsChange={onAccountActionsChange}
+                />
+              );
             case "inventory":
               return <VendorInventoryTab vendor={vendor} />;
             case "orders":
@@ -303,11 +416,25 @@ export function VendorDetailView({ id }: { id: string }) {
                 />
               );
             case "notes":
-              return <NotesPanel kind="vendor" id={vendor.id} />;
+              return (
+                <NotesPanel
+                  kind="vendor"
+                  id={vendor.id}
+                  showAddInToolbar={false}
+                  empty="Add the first note on this vendor."
+                />
+              );
             case "attachments":
-              return <VendorAttachmentsTab vendor={vendor} />;
+              return <VendorAttachmentsTab vendor={vendor} hideHeader />;
             default:
-              return <VendorSettingsTab vendor={vendor} onSave={saveVendor} />;
+              return (
+                <VendorSettingsTab
+                  vendor={vendor}
+                  onSave={saveVendor}
+                  hideHeader
+                  onActionsChange={onSettingsActionsChange}
+                />
+              );
           }
         }}
       </RecordWorkspace>
@@ -371,9 +498,13 @@ export function VendorDetailView({ id }: { id: string }) {
 function VendorSettingsTab({
   vendor,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   vendor: PortalVendor;
   onSave: (patch: Partial<PortalVendor>) => void | Promise<unknown>;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [draft, setDraft] = useState(vendor);
   const [saving, setSaving] = useState(false);
@@ -422,27 +553,49 @@ function VendorSettingsTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Vendor settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Supply house contact and category used when buying materials.
-          </p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Vendor settings</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Supply house contact and category used when buying materials.
+            </p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save settings"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save settings"
-          )}
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
+      )}
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:p-5 sm:grid-cols-2">
         <Field label="Vendor name">
           <Input
             value={draft.name}
@@ -542,9 +695,13 @@ function VendorSettingsTab({
 function VendorAccountTab({
   vendor,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   vendor: PortalVendor;
   onSave: (patch: Partial<PortalVendor>) => void | Promise<unknown>;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [draft, setDraft] = useState({
     accountNumber: vendor.accountNumber,
@@ -574,27 +731,49 @@ function VendorAccountTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Account</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            House account, payment terms, and current balance.
-          </p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Account</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              House account, payment terms, and current balance.
+            </p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save account"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save account"
-          )}
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-3">
+      )}
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:p-5 sm:grid-cols-3">
         <Field label="Account #">
           <Input
             value={draft.accountNumber}
@@ -717,7 +896,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
 
   if (listLoading) {
     return (
-      <div className="border border-input" aria-busy="true">
+      <div className="rounded-md border border-border-soft" aria-busy="true">
         <CenteredSpinner label="Loading inventory" className="min-h-[16rem]" />
       </div>
     );
@@ -740,7 +919,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
           ) : null}
         </div>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:p-5 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="SKU">
           <Input value={sku} placeholder="WH-50G" onChange={(event) => setSku(event.target.value)} />
         </Field>
@@ -805,7 +984,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
         </Button>
       </div>
       {items.length ? (
-        <div className="overflow-x-auto rounded-[4px] border border-input">
+        <div className="overflow-x-auto rounded-md border border-border-soft">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-[#eef1f5] text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
               <tr>
@@ -964,7 +1143,7 @@ function VendorOrdersTab({ vendorId }: { vendorId: string }) {
 
   if (listLoading) {
     return (
-      <div className="border border-input" aria-busy="true">
+      <div className="rounded-md border border-border-soft" aria-busy="true">
         <CenteredSpinner label="Loading orders" className="min-h-[16rem]" />
       </div>
     );
@@ -978,7 +1157,7 @@ function VendorOrdersTab({ vendorId }: { vendorId: string }) {
           Materials ordered from this vendor, optionally against a job.
         </p>
       </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:p-5 sm:grid-cols-2">
         <Field label="PO number">
           <Input
             value={number}
@@ -1034,7 +1213,7 @@ function VendorOrdersTab({ vendorId }: { vendorId: string }) {
         </Button>
       </div>
       {orders.length ? (
-        <ul className="divide-y divide-input rounded-[4px] border border-input">
+        <ul className="divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft">
           {orders.map((order) => {
             const job = jobs.find((item) => item.id === order.jobId);
             return (
@@ -1154,7 +1333,13 @@ function fileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function VendorAttachmentsTab({ vendor }: { vendor: PortalVendor }) {
+function VendorAttachmentsTab({
+  vendor,
+  hideHeader = false,
+}: {
+  vendor: PortalVendor;
+  hideHeader?: boolean;
+}) {
   const dispatch = useAppDispatch();
   const detail = useAppSelector((state) => state.vendors?.detail ?? null);
   const [over, setOver] = useState(false);
@@ -1241,15 +1426,20 @@ function VendorAttachmentsTab({ vendor }: { vendor: PortalVendor }) {
 
   return (
     <div>
-      <h2 className="text-base font-semibold">Attachments</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Catalogs, W-9, agreements, and supplier invoices for this vendor.
-      </p>
+      {hideHeader ? null : (
+        <>
+          <h2 className="text-sm font-semibold">Attachments</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Catalogs, W-9, agreements, and supplier invoices for this vendor.
+          </p>
+        </>
+      )}
       <label
         className={cn(
-          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
-          over ? "border-primary bg-[#003F7D]/5" : "border-input bg-[#f8fafc]",
+          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center",
+          over ? "border-primary bg-secondary" : "border-border-soft bg-secondary/40",
           uploading && "pointer-events-none opacity-60",
+          hideHeader && "mt-0",
         )}
         onDragEnter={(event) => {
           event.preventDefault();
@@ -1288,10 +1478,10 @@ function VendorAttachmentsTab({ vendor }: { vendor: PortalVendor }) {
         />
       </label>
       {attachments.length ? (
-        <ul className="mt-4 divide-y divide-input border border-input">
+        <ul className="mt-4 divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft">
           {attachments.map((item) => (
             <li key={item.id} className="flex items-center gap-3 px-3 py-3">
-              <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">
+              <span className="flex size-9 items-center justify-center rounded-md bg-secondary text-primary">
                 {item.type.startsWith("image/") ? (
                   <ImageIcon className="size-4" />
                 ) : item.type.startsWith("video/") ? (
@@ -1315,7 +1505,7 @@ function VendorAttachmentsTab({ vendor }: { vendor: PortalVendor }) {
                   {item.addedAt ? stamp(item.addedAt) : fileSize(item.size)}
                 </p>
               </div>
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
                 <a href={item.dataUrl} target="_blank" rel="noopener noreferrer">
                   <Eye className="size-3.5" />
                   Preview

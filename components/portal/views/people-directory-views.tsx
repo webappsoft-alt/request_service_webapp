@@ -720,7 +720,7 @@ export function RemindersView() {
         }
         toolbar={
           <Select value={filterSelectValue} onValueChange={onStatusFilterChange}>
-            <SelectTrigger className="h-8.5 w-[9.5rem] text-xs">
+            <SelectTrigger className="h-8 w-[9.5rem] text-xs border-border-soft" size="sm">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent position="popper" className="z-[100]">
@@ -924,7 +924,7 @@ export function ReminderDetailView({ id }: { id: string }) {
   if (!reminder) {
     if (pending || (useApi && remindersLoading)) {
       return (
-        <div className="border border-input bg-card p-6">
+        <div className="rounded-md border border-border-soft bg-card p-6">
           <h1 className="text-lg font-semibold">Loading reminder…</h1>
         </div>
       );
@@ -991,6 +991,43 @@ export function ReminderDetailView({ id }: { id: string }) {
           { id: "profile", label: "Details" },
           { id: "linked", label: "Linked record" },
         ]}
+        subnavTabs={["profile", "linked"]}
+        subnav={(activeTab) => {
+          if (activeTab === "profile") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Details</p>
+                  <p className="text-xs text-muted-foreground">
+                    Due date, assignee, status, and note for this reminder.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 shrink-0 gap-1.5 border-border-soft"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Pencil className="size-3.5" />
+                  Edit
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "linked") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Linked record</p>
+                  <p className="text-xs text-muted-foreground">
+                    This reminder also appears as a warning banner on that file.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        }}
         badge={
           <StatusPill
             label={
@@ -1013,19 +1050,15 @@ export function ReminderDetailView({ id }: { id: string }) {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)} className="gap-1.5">
-              <Pencil className="size-3.5" />
-              Edit
-            </Button>
             <Button
               size="sm"
               onClick={() => void toggleStatus()}
               disabled={statusUpdating || Boolean(reminder.isArchived)}
-              className="gap-1.5"
+              className="h-8 gap-1.5"
             >
               {statusUpdating ? (
                 <>
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  <Loader2 className="size-3.5 animate-spin" />
                   Updating…
                 </>
               ) : reminder.status === "open" ? (
@@ -1045,7 +1078,7 @@ export function ReminderDetailView({ id }: { id: string }) {
               variant="outline"
               onClick={() => void toggleArchive()}
               disabled={archiveUpdating}
-              className="gap-1.5"
+              className="h-8 gap-1.5 border-border-soft"
             >
               {archiveUpdating ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -1056,7 +1089,12 @@ export function ReminderDetailView({ id }: { id: string }) {
               )}
               {reminder.isArchived ? "Restore" : "Archive"}
             </Button>
-            <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)} className="gap-1.5">
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setDeleteOpen(true)}
+              className="h-8 gap-1.5"
+            >
               <Trash2 className="size-3.5" />
               Delete
             </Button>
@@ -1066,21 +1104,18 @@ export function ReminderDetailView({ id }: { id: string }) {
         {(tab) => {
           if (tab === "linked") {
             return (
-              <div className="text-sm">
+              <div className="rounded-md bg-secondary/40 p-4 text-sm sm:p-5">
                 <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
                   {reminderSubjectKindLabel(subject.kind)}
                 </p>
                 <div className="mt-1">
                   <ReminderSubjectLink kind={subject.kind} id={subject.id} name={linkedName} />
                 </div>
-                <p className="mt-2 text-muted-foreground">
-                  This reminder also appears as a warning banner on that file.
-                </p>
               </div>
             );
           }
           return (
-            <div className="grid gap-3 text-sm sm:grid-cols-2">
+            <div className="grid gap-3 rounded-md bg-secondary/40 p-4 text-sm sm:grid-cols-2 sm:p-5">
               <Fact label="Due" value={formatDate(reminder.dueAt)} />
               <Fact label="Status" value={overdue ? "Overdue" : crmReminderStatusLabel(reminder.status)} />
               <Fact
@@ -1326,9 +1361,9 @@ function Missing({ href, label }: { href: string; label: string }) {
         ? label.toLowerCase()
         : `${label.toLowerCase()}s`;
   return (
-    <div className="border border-input bg-card p-6">
+    <div className="rounded-md border border-border-soft bg-card p-6">
       <h1 className="text-lg font-semibold">{label} not found</h1>
-      <Button asChild className="mt-4" size="sm">
+      <Button asChild className="mt-4 h-8" size="sm">
         <Link href={href}>Back to {plural}</Link>
       </Button>
     </div>

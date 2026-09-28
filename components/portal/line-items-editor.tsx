@@ -104,17 +104,17 @@ export function LineItemsEditor({
     : "min-w-[220px]";
 
   return (
-    <div className={cn("w-full overflow-x-auto rounded-[4px] border border-input", className)}>
+    <div className={cn("w-full overflow-x-auto rounded-lg border border-border-soft bg-card", className)}>
       <Table className={cn(wideDescription ? "min-w-[820px]" : "min-w-[760px]", !showUnit && "min-w-[640px]")}>
         <TableHeader>
-          <TableRow>
-            <TableHead className={descriptionHeadClass}>Description</TableHead>
-            <TableHead className="w-32 min-w-[125px]">Type</TableHead>
-            <TableHead className="w-24 min-w-[90px]">Qty</TableHead>
-            {showUnit ? <TableHead className="w-36 min-w-[135px]">Unit</TableHead> : null}
-            <TableHead className="w-28 min-w-[110px]">Price</TableHead>
-            <TableHead className="w-24 min-w-[95px] text-right">Total</TableHead>
-            <TableHead className="w-10 min-w-[44px]">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className={cn(descriptionHeadClass, "h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase")}>Description</TableHead>
+            <TableHead className="h-8 w-32 min-w-[125px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Type</TableHead>
+            <TableHead className="h-8 w-24 min-w-[90px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Qty</TableHead>
+            {showUnit ? <TableHead className="h-8 w-36 min-w-[135px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Unit</TableHead> : null}
+            <TableHead className="h-8 w-28 min-w-[110px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Price</TableHead>
+            <TableHead className="h-8 w-24 min-w-[95px] bg-[#f7f8fa] px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Total</TableHead>
+            <TableHead className="h-8 w-10 min-w-[44px] bg-[#f7f8fa]">
               <span className="sr-only">Remove</span>
             </TableHead>
           </TableRow>
@@ -205,10 +205,13 @@ function LineItemRow({
     }
   }
 
+  const softField =
+    "h-8 border-border-soft bg-[#fafbfc] shadow-none focus-visible:bg-card";
+
   return (
-    <TableRow>
+    <TableRow className="hover:bg-transparent">
       <TableCell className={descriptionCellClass}>
-        <div className={cn("flex w-full flex-col gap-2", wideDescription && "min-w-[280px]")}>
+        <div className={cn("flex w-full flex-col gap-1.5", wideDescription && "min-w-[280px]")}>
           <div className="relative w-full min-w-0">
             <Input
               aria-label="Description"
@@ -219,16 +222,17 @@ function LineItemRow({
               value={line.description}
               onChange={(event) => onChange(line.id, { description: event.target.value })}
               className={cn(
-                "w-full",
+                softField,
+                "w-full text-sm",
                 showImages && materialImage ? "pr-14" : undefined,
               )}
             />
             {showImages && materialImage ? (
-              <div className="absolute right-1.5 bottom-1.5 z-10">
+              <div className="absolute right-1.5 bottom-1 z-10">
                 <div className="relative shrink-0">
                   <button
                     type="button"
-                    className="relative block h-7 w-9 overflow-hidden rounded-md border border-input bg-white text-left shadow-xs"
+                    className="relative block h-6 w-8 overflow-hidden rounded border border-border-soft bg-white text-left"
                     title="View full image"
                     onClick={() => setLightboxOpen(true)}
                   >
@@ -236,22 +240,19 @@ function LineItemRow({
                       src={materialImage}
                       alt="Material photo"
                       fill
-                      sizes="36px"
+                      sizes="32px"
                       className="object-cover"
                       unoptimized={materialImage.startsWith("http")}
                     />
-                    <span className="absolute inset-x-0 bottom-0 bg-black/55 px-0.5 py-px text-[8px] leading-none font-medium text-white">
-                      Material
-                    </span>
                   </button>
                   {!locked ? (
                     <button
                       type="button"
                       aria-label="Remove material image"
-                      className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-white text-foreground shadow-sm ring-1 ring-black/10"
+                      className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-white text-foreground ring-1 ring-border-soft"
                       onClick={() => onChange(line.id, { images: [] })}
                     >
-                      <X className="size-3" />
+                      <X className="size-2.5" />
                     </button>
                   ) : null}
                 </div>
@@ -271,9 +272,9 @@ function LineItemRow({
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
                   disabled={locked || uploading}
-                  className="h-7 gap-1 text-xs"
+                  className="h-7 gap-1 px-2 text-xs text-primary hover:bg-secondary"
                   onClick={() => fileRef.current?.click()}
                 >
                   {uploading ? (
@@ -287,11 +288,6 @@ function LineItemRow({
                       ? "Replace image"
                       : "Add image"}
                 </Button>
-                {!materialImage ? (
-                  <span className="text-[10px] text-muted-foreground">
-                    Optional · 1 max
-                  </span>
-                ) : null}
               </div>
               <PhotoLightbox
                 photos={
@@ -325,7 +321,7 @@ function LineItemRow({
             });
           }}
         >
-          <SelectTrigger aria-label="Type" className="w-full">
+          <SelectTrigger aria-label="Type" size="sm" className={cn(softField, "w-full")}>
             <SelectValue placeholder="Type">
               {jobCostKindLabel(line.kind)}
             </SelectValue>
@@ -343,7 +339,7 @@ function LineItemRow({
       <TableCell className="w-24 min-w-[90px] align-top py-2">
         <Input
           aria-label="Quantity"
-          className="w-full tabular-nums"
+          className={cn(softField, "w-full tabular-nums")}
           disabled={locked}
           inputMode="decimal"
           min={0}
@@ -362,7 +358,7 @@ function LineItemRow({
             value={currentUnit}
             onValueChange={(unit) => onChange(line.id, { unit })}
           >
-            <SelectTrigger aria-label="Unit" className="w-full">
+            <SelectTrigger aria-label="Unit" size="sm" className={cn(softField, "w-full")}>
               <SelectValue placeholder="Unit" />
             </SelectTrigger>
             <SelectContent
@@ -382,7 +378,7 @@ function LineItemRow({
       <TableCell className="w-28 min-w-[110px] align-top py-2">
         <Input
           aria-label="Unit price"
-          className="w-full tabular-nums"
+          className={cn(softField, "w-full tabular-nums")}
           disabled={locked}
           inputMode="decimal"
           min={0}
@@ -395,7 +391,7 @@ function LineItemRow({
           }
         />
       </TableCell>
-      <TableCell className="w-24 min-w-[95px] align-top py-2 text-right font-medium tabular-nums">
+      <TableCell className="w-24 min-w-[95px] align-top py-2 text-right text-sm font-medium tabular-nums">
         {formatMoney(lineTotal(line))}
       </TableCell>
       <TableCell className="w-10 min-w-[44px] align-top py-2 text-center">
@@ -431,7 +427,14 @@ export function LineItemsActions({
 }) {
   return (
     <div className={cn("flex flex-wrap items-center justify-end gap-2", className)}>
-      <Button size="sm" variant="outline" type="button" disabled={locked || saving} onClick={onAddLabor}>
+      <Button
+        size="sm"
+        variant="outline"
+        type="button"
+        disabled={locked || saving}
+        onClick={onAddLabor}
+        className="h-8 border-border-soft"
+      >
         <Plus />
         Add labour
       </Button>
@@ -441,6 +444,7 @@ export function LineItemsActions({
         type="button"
         disabled={locked || saving}
         onClick={onAddMaterial}
+        className="h-8 border-border-soft"
       >
         <Plus />
         Add material

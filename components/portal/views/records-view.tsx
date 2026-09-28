@@ -302,16 +302,21 @@ export function EstimatesView() {
 
   return (
     <PortalPage
-      eyebrow="Estimates"
+      eyebrow="Work / Estimates"
       title={`Estimates (${useApi ? total : rows.length})`}
       description="Site visit or write in the office, finalize, send for signature, then start the job."
       actions={
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          Create estimate
+          + Create estimate
         </Button>
       }
     >
       <CreateEstimateDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <FilterTabs
+        baseHref="/pro/dashboard/estimates"
+        value={statusParam}
+        options={withArchiveFilter(ESTIMATE_STATUS_FILTERS)}
+      />
       <PortalDataTable
         filename="estimates"
         countLabel="Estimates"
@@ -329,44 +334,6 @@ export function EstimatesView() {
                 onSearchChange: handleSearchChange,
               }
             : undefined
-        }
-        toolbar={
-          <div className="h-8.5 w-40 sm:w-44">
-            <Select
-              disabled={tableLoading}
-              value={statusParam || "__all__"}
-              onValueChange={(value) => {
-                const next = value === "__all__" ? "" : value;
-                router.replace(
-                  next
-                    ? `/pro/dashboard/estimates?status=${next}`
-                    : "/pro/dashboard/estimates",
-                );
-              }}
-            >
-              <SelectTrigger
-                id="estimates-status-filter"
-                aria-label="Filter by status"
-                className="h-full w-full text-xs"
-              >
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                align="end"
-                className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[160px]"
-              >
-                {withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((option) => (
-                  <SelectItem
-                    key={option.label}
-                    value={option.value || "__all__"}
-                  >
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         }
         rows={rows}
         rowKey={(row) => row.id}
@@ -1020,7 +987,7 @@ export function JobsView() {
           onSearchChange: handleSearch,
         }}
         toolbar={
-          <div className="h-8.5 w-40 sm:w-52">
+          <div className="h-8 w-40 sm:w-52">
             <Select
               disabled={tableLoading}
               value={statusParam || "__all__"}
@@ -1036,7 +1003,8 @@ export function JobsView() {
               <SelectTrigger
                 id="jobs-status-filter"
                 aria-label="Filter by status"
-                className="h-full w-full text-xs"
+                size="sm"
+                className="h-8 w-full text-xs border-border-soft"
               >
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
@@ -1432,7 +1400,7 @@ export function InvoicesView() {
             : undefined
         }
         toolbar={
-          <div className="h-8.5 w-40 sm:w-44">
+          <div className="h-8 w-40 sm:w-44">
             <Select
               disabled={tableLoading}
               value={statusParam || "__all__"}
@@ -1452,7 +1420,8 @@ export function InvoicesView() {
               <SelectTrigger
                 id="invoices-status-filter"
                 aria-label="Filter by status"
-                className="h-full w-full text-xs"
+                size="sm"
+                className="h-8 w-full text-xs border-border-soft"
               >
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>

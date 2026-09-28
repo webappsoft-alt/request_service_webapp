@@ -217,45 +217,76 @@ export function EstimateShareTab({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-[4px] border border-input bg-card p-4">
-        <h2 className="text-sm font-semibold">Send for approval</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Preview the estimate as a two-page document, sign for the company, then send the customer link.
-        </p>
-        {ready ? null : (
-          <div className="mt-3 flex flex-col gap-2 rounded-[4px] border border-amber-200 bg-amber-50/60 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-amber-900">
-              {estimate.status === "site_visit"
-                ? "Site visit is still pending. Assign a team member, complete the visit, and save field notes before this estimate can be finalized or sent."
-                : estimate.status === "inspected"
-                  ? "Site visit notes are in. Add pricing on Line items, then Finalize before sending to the customer."
-                  : estimate.status === "draft"
-                    ? "Office draft. Finish pricing, then Finalize before sending the customer link."
-                    : "Finalize the estimate first so you can send the customer approval link."}
-            </p>
-            {(estimate.status === "draft" ||
-              estimate.status === "inspected" ||
-              estimate.status === "changes_requested") &&
-            onFinalize ? (
-              <Button size="sm" disabled={finalizing} onClick={onFinalize} className="shrink-0">
-                {finalizing ? "Finalizing…" : "Finalize estimate"}
-              </Button>
-            ) : null}
-          </div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-soft pb-4">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">Share with customer</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Preview, send for approval, or copy the customer link for {customerLabel}.
+          </p>
+        </div>
+        {approval ? (
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+            <CheckCircle2 className="size-3.5" />
+            Signed
+          </span>
+        ) : waitingOnCustomer ? (
+          <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+            Waiting on customer
+          </span>
+        ) : ready ? (
+          <span className="inline-flex items-center rounded-md bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
+            Ready to send
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-md bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            Not ready
+          </span>
         )}
-        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <Input
-              readOnly
-              value={displayUrl}
-              placeholder="Create the link, then copy it"
-              className="h-9 w-full font-mono text-xs"
-            />
+      </div>
+
+      {ready ? null : (
+        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-amber-950">
+            {estimate.status === "site_visit"
+              ? "Complete the site visit and save field notes before this estimate can be finalized or sent."
+              : estimate.status === "inspected"
+                ? "Add pricing on Labour and Material, then Finalize before sending."
+                : estimate.status === "draft"
+                  ? "Finish pricing, then Finalize before sending the customer link."
+                  : "Finalize the estimate first so you can send the customer approval link."}
+          </p>
+          {(estimate.status === "draft" ||
+            estimate.status === "inspected" ||
+            estimate.status === "changes_requested") &&
+          onFinalize ? (
+            <Button size="sm" className="h-8 shrink-0" disabled={finalizing} onClick={onFinalize}>
+              {finalizing ? "Finalizing…" : "Finalize estimate"}
+            </Button>
+          ) : null}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-5">
+        <div className="space-y-3 rounded-lg border border-border-soft bg-card p-4 lg:col-span-3">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              Customer link
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Copy the link or open the customer view after the estimate is ready.
+            </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+          <Input
+            readOnly
+            value={displayUrl}
+            placeholder="Create the link, then copy it"
+            className="h-9 border-border-soft bg-[#fafbfc] font-mono text-xs"
+          />
+          <div className="flex flex-wrap items-center gap-2">
             {locked || Boolean(approval) ? null : (
               <Button
-                className="h-9 px-3.5"
+                size="sm"
+                className="h-8"
                 onClick={() => setPreviewOpen(true)}
                 disabled={!ready}
               >
@@ -263,66 +294,71 @@ export function EstimateShareTab({
               </Button>
             )}
             <Button
-              className="h-9 px-3.5"
+              size="sm"
               variant="outline"
+              className="h-8 border-border-soft"
               onClick={() => void copy()}
               disabled={!ready}
             >
               {copied ? (
                 <>
-                  <Check className="size-4 text-emerald-600" />
-                  <span>Copied</span>
+                  <Check className="size-3.5 text-emerald-600" />
+                  Copied
                 </>
               ) : (
                 <>
-                  <Copy className="size-4" />
-                  <span>Copy link</span>
+                  <Copy className="size-3.5" />
+                  Copy link
                 </>
               )}
             </Button>
-            {ready ? (
-              <Button
-                className="h-9 px-3.5"
-                variant="outline"
-                onClick={() => void openCustomerView()}
-              >
-                <ExternalLink className="size-4" />
-                Open customer view
-              </Button>
-            ) : (
-              <Button
-                className="h-9 px-3.5"
-                variant="outline"
-                disabled
-              >
-                <ExternalLink className="size-4" />
-                Open customer view
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-border-soft"
+              onClick={() => void openCustomerView()}
+              disabled={!ready}
+            >
+              <ExternalLink className="size-3.5" />
+              Open customer view
+            </Button>
           </div>
         </div>
-      </div>
-      {approval ? (
-        <div className="rounded-[4px] border border-emerald-200 bg-emerald-50 p-4">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-900">
-            <CheckCircle2 className="size-4" />
-            Signed by {approval.signedBy}
+
+        <div className="rounded-lg border border-border-soft bg-card p-4 lg:col-span-2">
+          <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+            Status
           </p>
-          <p className="mt-1 text-sm text-emerald-950">
-            Approved {formatDate(approval.signedAt.slice(0, 10))}. Convert this quote to a job to schedule the work.
-          </p>
-          {approval.signatureDataUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt={`Signature of ${approval.signedBy}`}
-              src={approval.signatureDataUrl}
-              className="mt-3 h-16 w-48 object-contain"
-            />
-          ) : null}
+          {approval ? (
+            <div className="mt-3 space-y-2">
+              <p className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-900">
+                <CheckCircle2 className="size-4" />
+                Signed by {approval.signedBy}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Approved {formatDate(approval.signedAt.slice(0, 10))}. Convert this quote to a job to schedule the work.
+              </p>
+              {approval.signatureDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={`Signature of ${approval.signedBy}`}
+                  src={approval.signatureDataUrl}
+                  className="mt-2 h-14 w-40 object-contain"
+                />
+              ) : null}
+            </div>
+          ) : waitingOnCustomer ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Waiting on the customer to sign {estimate.number}.
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              No customer signature yet. Send for approval when the quote is ready.
+            </p>
+          )}
         </div>
-      ) : waitingOnCustomer ? (
-        <p className="text-sm text-muted-foreground">Waiting on the customer to sign {estimate.number}.</p>
-      ) : null}
+      </div>
+
       {snapshot ? <EstimatePdfDocument snapshot={snapshot} approval={approval} /> : null}
       <SendApprovalDialog
         open={previewOpen}

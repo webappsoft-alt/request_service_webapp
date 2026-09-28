@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
-  ChevronDown,
   Eye,
   FileText,
   Film,
@@ -14,7 +13,6 @@ import {
   Music,
   Pencil,
   Plus,
-  Receipt,
   Trash2,
   Upload,
   UserRound,
@@ -31,9 +29,8 @@ import {
   GoogleAddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/google-address-autocomplete";
-import { EstimateCostChart, JobCostChart, JobCostLegend, JobCosting, type CostingNoun } from "@/components/portal/job-costing";
+import { JobCosting, type CostingNoun, type JobCostingActions } from "@/components/portal/job-costing";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
-import { JobRichText } from "@/components/portal/job-rich-text";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -118,82 +115,103 @@ export function JobFileChrome({
   due?: string;
   technician: string;
 }) {
-  const [open, setOpen] = useState(false);
   const contact = customer ? `${customer.firstName} ${customer.lastName}`.trim() : "";
   const address = job.address;
+  const addressLine = [
+    address.street,
+    formatLocation(address.city, address.state, address.zip),
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
-    <div>
-      <nav aria-label="Job breadcrumb" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-        <Link href="/pro/dashboard/jobs" className="font-semibold text-primary hover:underline">
-          Jobs
-        </Link>
-        <span className="text-muted-foreground">/</span>
-        <span className="font-medium text-foreground">
-          {customerLabel} – {service}
-        </span>
-        <span className="text-muted-foreground">/</span>
-        <span className="font-semibold text-primary">{job.number}</span>
-        {estimate ? (
-          <>
-            <span className="text-muted-foreground">/</span>
-            <Link href={`/pro/dashboard/estimates/${estimate.id}`} className="font-semibold text-primary hover:underline">
-              {estimate.number}
+    <div className="space-y-0">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
+              "Customer details for this job"}
+          </p>
+        </div>
+        {job.customerId ? (
+          <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
+            <Link href={`/pro/dashboard/customers/${job.customerId}`}>
+              Open customer file
             </Link>
-          </>
+          </Button>
         ) : null}
-        {invoice ? (
-          <>
-            <span className="text-muted-foreground">/</span>
-            <Link href={`/pro/dashboard/invoices/${invoice.id}`} className="font-semibold text-primary hover:underline">
-              {invoice.number}
-            </Link>
-          </>
-        ) : null}
-      </nav>
-      <button
-        type="button"
-        aria-expanded={open}
-        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary"
-        onClick={() => setOpen((value) => !value)}
-      >
-        {open ? "Hide job details" : "Show job details"}
-        <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
-      </button>
-      {open ? (
-        <div className="mt-3 grid gap-3 border border-input bg-[#f8fafc] p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-          <Detail
-            label="Customer"
-            value={
-              <Link href={`/pro/dashboard/customers/${job.customerId}`} className="font-semibold text-primary hover:underline">
+      </div>
+
+      <div className="grid gap-x-8 gap-y-3.5 px-1 py-1 sm:grid-cols-2">
+        <Detail
+          label="Customer"
+          value={
+            job.customerId ? (
+              <Link
+                href={`/pro/dashboard/customers/${job.customerId}`}
+                className="font-semibold text-primary hover:underline"
+              >
                 {customerLabel}
+              </Link>
+            ) : (
+              customerLabel
+            )
+          }
+        />
+        {customer && customer.entityKind === "company" && contact ? (
+          <Detail label="Contact" value={contact} />
+        ) : null}
+        <Detail label="Phone" value={customer?.phone || "—"} />
+        <Detail
+          label="Email"
+          value={
+            customer?.email ? (
+              <span className="text-primary">{customer.email}</span>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <Detail label="Service" value={service || "—"} />
+        <Detail label="Address" value={addressLine || "—"} />
+        <Detail label="Team member" value={technician || "Unassigned"} />
+        <Detail label="Start" value={start ? formatDate(start) : "Not scheduled"} />
+        <Detail label="Due" value={due ? formatDate(due) : "—"} />
+        <Detail
+          label="Status"
+          value={
+            <span className="capitalize">{jobStatusLabel(job.status)}</span>
+          }
+        />
+        {estimate ? (
+          <Detail
+            label="Source estimate"
+            value={
+              <Link
+                href={`/pro/dashboard/estimates/${estimate.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {estimate.number}
+                {estimate.title ? ` · ${estimate.title}` : ""}
               </Link>
             }
           />
-          {customer && customer.entityKind === "company" && contact ? <Detail label="Contact" value={contact} /> : null}
-          <Detail label="Service" value={service} />
-          {estimate ? (
-            <Detail
-              label="Converted from estimate"
-              value={
-                <Link href={`/pro/dashboard/estimates/${estimate.id}`} className="font-semibold text-primary hover:underline">
-                  {estimate.number}
-                  {estimate.title ? ` · ${estimate.title}` : ""}
-                </Link>
-              }
-            />
-          ) : null}
-          <Detail label="Team member" value={technician || "Unassigned"} />
+        ) : null}
+        {invoice ? (
           <Detail
-            label="Address"
-            value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
+            label="Invoice"
+            value={
+              <Link
+                href={`/pro/dashboard/invoices/${invoice.id}`}
+                className="font-semibold text-primary hover:underline"
+              >
+                {invoice.number}
+              </Link>
+            }
           />
-          <Detail label="Start" value={start ? formatDate(start) : "Not scheduled"} />
-          <Detail label="Due" value={due ? formatDate(due) : "—"} />
-          {customer?.phone ? <Detail label="Phone" value={customer.phone} /> : null}
-          {customer?.email ? <Detail label="Email" value={customer.email} /> : null}
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -243,6 +261,7 @@ export function JobSummaryTab({
   locked = false,
   onActivitiesChange,
   onEditEstimate,
+  notice,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -252,6 +271,7 @@ export function JobSummaryTab({
   locked?: boolean;
   onActivitiesChange?: (next: Estimate["activities"]) => void;
   onEditEstimate?: () => void;
+  notice?: ReactNode;
 }) {
   const dispatch = useAppDispatch();
   const { lines, mix } = useJobCosting(job, {
@@ -351,172 +371,204 @@ export function JobSummaryTab({
       : null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="space-y-4">
       {isEstimate && estimate ? (
-        <div className="lg:col-span-3">
-          <Panel
-            title="Summary"
-            action={
-              onEditEstimate && !locked ? (
-                <Button size="sm" variant="outline" onClick={onEditEstimate}>
-                  <Pencil className="size-3.5" />
-                  Edit
-                </Button>
-              ) : null
-            }
-          >
-            <div className="grid gap-3 text-sm sm:grid-cols-2">
-              {estimate.title?.trim() ? (
-                <div>
-                  <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                    Title
-                  </p>
-                  <p className="mt-1 font-medium">{estimate.title}</p>
-                </div>
-              ) : null}
-              <div>
-                <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                  Status
-                </p>
-                <p className="mt-1 font-medium">
-                  {estimateStatusLabel(estimate.status)}
-                </p>
-              </div>
-              <div className="sm:col-span-2">
-                <p className="text-sm text-muted-foreground">
-                  {locked
-                    ? "Estimate details are locked."
-                    : "Edit to update title, address, and dates."}
-                </p>
-              </div>
-            </div>
-          </Panel>
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+              Estimate summary
+            </p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+              {estimate.title?.trim() || "Untitled estimate"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {estimateStatusLabel(estimate.status)}
+              {locked ? " · Locked" : " · Title, address, and dates"}
+            </p>
+          </div>
+          <div className="rounded-md bg-secondary px-3 py-2 text-right">
+            <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              Quote total
+            </p>
+            <p className="text-lg font-semibold tabular-nums text-primary">
+              {formatMoney(sheet.total)}
+            </p>
+          </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+              Job summary
+            </p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+              {job.title?.trim() || job.number}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {jobStatusLabel(job.status)}
+              {technician ? ` · ${technician}` : " · Unassigned"}
+            </p>
+          </div>
+          <div className="rounded-md bg-secondary px-3 py-2 text-right">
+            <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              Job total
+            </p>
+            <p className="text-lg font-semibold tabular-nums text-primary">
+              {formatMoney(sheet.total)}
+            </p>
+          </div>
+        </div>
+      )}
+      {notice ? <div className="space-y-3">{notice}</div> : null}
       {isEstimate && quoteAnswers.length ? (
-        <div className="lg:col-span-3">
-          <Panel title="Answers">
-            <dl className="flex flex-wrap gap-2">
-              {quoteAnswers.map((item) => (
-                <div
-                  key={item.id}
-                  className="inline-flex max-w-full items-baseline gap-1.5 rounded-md border border-input bg-[#f8fafc] px-2.5 py-1.5 text-sm"
-                >
-                  <dt className="shrink-0 text-xs text-muted-foreground">
-                    {item.label}:
-                  </dt>
-                  <dd className="min-w-0 truncate font-medium">{item.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </Panel>
+        <div>
+          <p className="mb-2 text-sm font-semibold text-foreground">Answers</p>
+          <dl className="flex flex-wrap gap-2">
+            {quoteAnswers.map((item) => (
+              <div
+                key={item.id}
+                className="inline-flex max-w-full items-baseline gap-1.5 rounded-md bg-secondary px-2.5 py-1.5 text-sm"
+              >
+                <dt className="shrink-0 text-xs text-muted-foreground">
+                  {item.label}:
+                </dt>
+                <dd className="min-w-0 truncate font-medium">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       ) : null}
       {isEstimate && estimate?.scheduledDate ? (
-        <div className="lg:col-span-3 rounded-lg border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm">
+        <div className="rounded-md bg-sky-50 px-4 py-2.5 text-sm">
           <p className="text-[10px] font-semibold tracking-[0.12em] text-sky-800 uppercase">
             Scheduled date
           </p>
-          <p className="mt-1 font-semibold text-sky-950">
+          <p className="mt-0.5 font-semibold text-sky-950">
             {formatDate(estimate.scheduledDate)}
           </p>
         </div>
       ) : null}
-      <Panel title={noun === "estimate" ? "Quote mix" : "Cost mix"}>
-        {noun === "estimate" ? (
-          <EstimateCostChart labor={mix.labor} materials={mix.materials} />
-        ) : (
-          <>
-            <JobCostChart labor={mix.labor} materials={mix.materials} />
-            <div className="mt-4">
-              <JobCostLegend labor={mix.labor} materials={mix.materials} />
+      <div className="grid gap-4 lg:grid-cols-5">
+          <div className="space-y-4 lg:col-span-3">
+            <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+              <div className="flex items-center justify-between gap-3 border-b border-border-soft px-4 py-3">
+                <h3 className="text-sm font-semibold">
+                  {isEstimate ? "Quote mix" : "Cost mix"}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Labour {formatMoney(mix.labor)} · Material {formatMoney(mix.materials)}
+                </p>
+              </div>
+              <div className="space-y-4 p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-md bg-secondary/70 px-3 py-3">
+                    <p className="text-xs text-muted-foreground">Labour</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-primary">{formatMoney(mix.labor)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {sheet.total ? Math.round((mix.labor / Math.max(sheet.total, 0.01)) * 100) : 0}% of {isEstimate ? "quote" : "job"}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-secondary/70 px-3 py-3">
+                    <p className="text-xs text-muted-foreground">Material</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-primary">{formatMoney(mix.materials)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {sheet.total ? Math.round((mix.materials / Math.max(sheet.total, 0.01)) * 100) : 0}% of {isEstimate ? "quote" : "job"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-[#e8eef5]" aria-hidden>
+                  <div
+                    className="h-full bg-[#003F7D]"
+                    style={{ width: `${sheet.total ? Math.round((mix.labor / Math.max(sheet.total, 0.01)) * 100) : 0}%` }}
+                  />
+                  <div
+                    className="h-full bg-[#5b8fa8]"
+                    style={{ width: `${sheet.total ? Math.round((mix.materials / Math.max(sheet.total, 0.01)) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
+            </section>
+            <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+              <div className="border-b border-border-soft px-4 py-3">
+                <h3 className="text-sm font-semibold">Line items</h3>
+              </div>
+              <div className="space-y-4 p-4 text-sm">
+                <LineGroup title="Labour" lines={laborLines} />
+                <LineGroup title="Material" lines={materialLines} />
+                <dl className="space-y-2 border-t border-border-soft pt-3">
+                  <MoneyRow label="Subtotal" value={sheet.subtotal} />
+                  <MoneyRow label="Tax (8.25%)" value={sheet.tax} />
+                  <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5">
+                    <dt className="font-semibold">Total</dt>
+                    <dd className="text-base font-semibold tabular-nums text-primary">{formatMoney(sheet.total)}</dd>
+                  </div>
+                </dl>
+                <p className="text-xs text-muted-foreground">
+                  {invoice
+                    ? `${invoice.number} is on file. Materials lock after the invoice leaves draft.`
+                    : hasInvoice
+                      ? "Materials lock after the invoice leaves draft."
+                      : "No invoice yet. Costs can still move."}
+                </p>
+              </div>
+            </section>
+          </div>
+          <section className="overflow-hidden rounded-md border border-border-soft bg-card lg:col-span-2">
+            <div className="flex min-h-10 items-center justify-between gap-2 border-b border-border-soft px-4 py-2.5">
+              <h3 className="text-sm font-semibold">Activity</h3>
+              {locked ? null : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                  onClick={() => {
+                    setEditing(null);
+                    setOpen(true);
+                  }}
+                >
+                  <Plus className="size-3.5 text-primary" />
+                  Create note
+                </Button>
+              )}
             </div>
-          </>
-        )}
-      </Panel>
-      <Panel title={noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}>
-        <div className="space-y-4 text-sm">
-          <LineGroup title="Labour" lines={laborLines} />
-          <LineGroup title="Material" lines={materialLines} />
-          <dl className="space-y-2 border-t border-input pt-3">
-            <MoneyRow label="Subtotal" value={sheet.subtotal} />
-            <MoneyRow label="Tax (8.25%)" value={sheet.tax} />
-            <MoneyRow label="Total" value={sheet.total} strong />
-          </dl>
+            <div className="p-4">
+              {activities.length ? (
+                <ul className="relative space-y-0">
+                  {activities.map((item, index) => (
+                    <ActivityCard
+                      key={item.id}
+                      item={item}
+                      last={index === activities.length - 1}
+                      locked={locked}
+                      deleting={
+                        (isEstimate && estimateActivities.deletingId === item.id) ||
+                        (isJobRecord && jobActivities.deletingId === item.id)
+                      }
+                      onEdit={() => {
+                        setEditing({ id: item.id, title: item.title, html: item.html });
+                        setOpen(true);
+                      }}
+                      onDelete={async () => {
+                        if (isEstimate) {
+                          await estimateActivities.deleteActivity(item.id);
+                        } else if (isJobRecord) {
+                          await jobActivities.deleteActivity(item.id);
+                        } else {
+                          file.removeActivity(item.id);
+                          toast.success("Activity deleted.");
+                        }
+                      }}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nothing posted yet. Add a field note, call, or follow-up.
+                </p>
+              )}
+            </div>
+          </section>
         </div>
-        {noun === "invoice" && invoice ? (
-          <p className="mt-4 text-xs text-muted-foreground">
-            Paid {formatMoney(invoice.amountPaid)} · balance due {formatMoney(invoice.balanceDue)}.
-          </p>
-        ) : invoice ? (
-          <p className="mt-4 text-xs text-muted-foreground">
-            {invoice.number} is on file. Materials lock after the invoice leaves draft.
-          </p>
-        ) : hasInvoice ? (
-          <p className="mt-4 text-xs text-muted-foreground">
-            {invoiceHref ? (
-              <>
-                <Link href={invoiceHref} className="font-semibold text-primary hover:underline">
-                  Open invoice
-                </Link>
-                {" · "}
-              </>
-            ) : null}
-            Materials lock after the invoice leaves draft.
-          </p>
-        ) : (
-          <p className="mt-4 text-xs text-muted-foreground">No invoice yet. Costs can still move.</p>
-        )}
-      </Panel>
-      <Panel
-        title="Activity"
-        action={
-          locked ? null : (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditing(null);
-                setOpen(true);
-              }}
-            >
-              <Plus />
-              Add activity
-            </Button>
-          )
-        }
-      >
-        {activities.length ? (
-          <ul className="space-y-3">
-            {activities.map((item) => (
-              <ActivityCard
-                key={item.id}
-                item={item}
-                locked={locked}
-                deleting={
-                  (isEstimate && estimateActivities.deletingId === item.id) ||
-                  (isJobRecord && jobActivities.deletingId === item.id)
-                }
-                onEdit={() => {
-                  setEditing({ id: item.id, title: item.title, html: item.html });
-                  setOpen(true);
-                }}
-                onDelete={async () => {
-                  if (isEstimate) {
-                    await estimateActivities.deleteActivity(item.id);
-                  } else if (isJobRecord) {
-                    await jobActivities.deleteActivity(item.id);
-                  } else {
-                    file.removeActivity(item.id);
-                    toast.success("Activity deleted.");
-                  }
-                }}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">Nothing posted yet. Add a field note, call, or follow-up.</p>
-        )}
-      </Panel>
       <ActivityDialog
         open={open}
         activity={editing}
@@ -583,6 +635,8 @@ export function JobMaterialsTab({
   onSave,
   preferApi = false,
   ready = true,
+  hideHeader = false,
+  onActionsChange,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -593,6 +647,8 @@ export function JobMaterialsTab({
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
   preferApi?: boolean;
   ready?: boolean;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: JobCostingActions | null) => void;
 }) {
   const { addLog, locked: fileLocked } = useJobFile(job, estimate, invoice, technician);
   const isLocked = propLocked ?? fileLocked;
@@ -605,6 +661,8 @@ export function JobMaterialsTab({
       onSave={onSave}
       preferApi={preferApi}
       ready={ready}
+      hideHeader={hideHeader}
+      onActionsChange={onActionsChange}
     />
   );
 }
@@ -619,6 +677,8 @@ export function JobSettingsTab({
   start,
   due,
   employeeId,
+  hideHeader = false,
+  onActionsChange,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -629,6 +689,10 @@ export function JobSettingsTab({
   start?: string;
   due?: string;
   employeeId?: string;
+  hideHeader?: boolean;
+  onActionsChange?: (
+    actions: { saving: boolean; save: () => void } | null,
+  ) => void;
 }) {
   const dispatch = useAppDispatch();
   const { customers, contractors } = useCrmDirectory();
@@ -939,28 +1003,50 @@ export function JobSettingsTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <>
-    <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
-      <div data-job-settings-form className="rounded-[4px] border border-input bg-card p-4">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Job settings</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Name, customer, schedule, and site address for this job.
-            </p>
+    <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
+      <div data-job-settings-form className="space-y-4 rounded-md bg-secondary/40 p-4 sm:p-5">
+        {hideHeader ? null : (
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Job settings</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Name, customer, schedule, and site address for this job.
+              </p>
+            </div>
+            <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+              {saving ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                "Save settings"
+              )}
+            </Button>
           </div>
-          <Button size="sm" disabled={saving} onClick={() => void save()}>
-            {saving ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" />
-                Saving…
-              </>
-            ) : (
-              "Save settings"
-            )}
-          </Button>
-        </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Job name">
             <Input value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
@@ -1110,18 +1196,15 @@ export function JobSettingsTab({
       </div>
 
       <div className="grid gap-4 content-start">
-        <section className="overflow-hidden rounded-[4px] border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-          <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-4 py-3">
-            <FileText className="size-4 text-primary" aria-hidden="true" />
-            <h3 className="text-sm font-semibold">Job snapshot</h3>
-          </header>
-          <div className="space-y-3 px-4 py-4 text-sm">
+        <section className="rounded-md bg-secondary/40 px-4 py-4">
+          <h3 className="text-sm font-semibold">Job snapshot</h3>
+          <div className="mt-3 space-y-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-semibold tracking-tight">{job.number}</p>
               <StatusPill label={jobStatusLabel(draft.status)} className={jobStatusTone(draft.status)} />
             </div>
             <p className="text-muted-foreground">{draft.name || service || "Untitled job"}</p>
-            <dl className="space-y-2.5 border-t border-input pt-3">
+            <dl className="space-y-2.5 border-t border-border-soft pt-3">
               <div className="flex items-start gap-2">
                 <UserRound className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
@@ -1180,19 +1263,16 @@ export function JobSettingsTab({
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-[4px] border border-input bg-card shadow-[0_10px_28px_rgba(4,26,54,0.07)]">
-          <header className="flex items-center gap-2 border-b border-input bg-[#f7f8fa] px-4 py-3">
-            <Receipt className="size-4 text-primary" aria-hidden="true" />
-            <h3 className="text-sm font-semibold">Billing</h3>
-          </header>
-          <div className="space-y-3 px-4 py-4 text-sm">
+        <section className="rounded-md bg-secondary/40 px-4 py-4">
+          <h3 className="text-sm font-semibold">Billing</h3>
+          <div className="mt-3 space-y-3 text-sm">
             {hasInvoice ? (
               <>
                 <p className="font-medium">
                   {invoice?.number ? `${invoice.number} is on file` : "This job has been invoiced"}
                 </p>
                 {invoiceHref ? (
-                  <Button size="sm" variant="outline" asChild>
+                  <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
                     <Link href={invoiceHref}>Open invoice</Link>
                   </Button>
                 ) : null}
@@ -1203,7 +1283,7 @@ export function JobSettingsTab({
               </p>
             )}
             {estimate ? (
-              <p className="text-xs text-muted-foreground border-t border-input pt-3">
+              <p className="border-t border-border-soft pt-3 text-xs text-muted-foreground">
                 Source estimate{" "}
                 <Link
                   href={`/pro/dashboard/estimates/${estimate.id}`}
@@ -1263,16 +1343,24 @@ export function JobLogsTab({
   const displayLogs = noun === "estimate" && apiLogs.length > 0 ? apiLogs : logs;
 
   return (
-    <div>
-      <h2 className="text-base font-semibold">{noun === "estimate" ? "Estimate log" : noun === "invoice" ? "Invoice log" : "Job log"}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {noun === "estimate"
-          ? "Every change on this quote is recorded here."
-          : noun === "invoice"
-            ? "Every change on this invoice is recorded here."
-            : "Every change on this job is recorded here."}
-      </p>
-      <ol className="mt-4 space-y-0">
+    <div className="space-y-0">
+      <div className="mb-3 px-1">
+        <p className="text-sm font-bold text-foreground">
+          {noun === "estimate"
+            ? "Estimate log"
+            : noun === "invoice"
+              ? "Invoice log"
+              : "Job log"}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {noun === "estimate"
+            ? "Every change on this quote is recorded here."
+            : noun === "invoice"
+              ? "Every change on this invoice is recorded here."
+              : "Every change on this job is recorded here."}
+        </p>
+      </div>
+      <ol className="space-y-0">
         {displayLogs.map((item, index) => (
           <LogRow key={item.id} item={item} last={index === displayLogs.length - 1} />
         ))}
@@ -1289,6 +1377,8 @@ export function JobAttachmentsTab({
   noun = "job",
   locked = false,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   job: Job;
   estimate?: Estimate;
@@ -1297,6 +1387,16 @@ export function JobAttachmentsTab({
   noun?: CostingNoun;
   locked?: boolean;
   onSave?: (updated: Estimate) => void;
+  hideHeader?: boolean;
+  onActionsChange?: (
+    actions: {
+      locked: boolean;
+      saving: boolean;
+      uploading: boolean;
+      dirty: boolean;
+      save: () => void;
+    } | null,
+  ) => void;
 }) {
   const dispatch = useAppDispatch();
   const file = useJobFile(job, estimate, invoice, technician);
@@ -1621,38 +1721,70 @@ export function JobAttachmentsTab({
       ? `No attachments on this ${noun}.`
       : `No files on this ${noun} yet.`;
 
+  const saveRef = useRef(() => {
+    void handleSave();
+  });
+  saveRef.current = () => {
+    void handleSave();
+  };
+
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({
+      locked,
+      saving,
+      uploading,
+      dirty: isDirty,
+      save: saveStable,
+    });
+  }, [onActionsChange, locked, saving, uploading, isDirty, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div data-job-attachments-tab>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold">Attachments</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Photos, PDFs, videos, and other {noun === "estimate" ? "quote" : noun === "invoice" ? "invoice" : "job"} files. Preview or remove anytime.
-          </p>
+      {hideHeader ? null : (
+        <div className="-mx-4 -mt-1.5 mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-border-soft bg-secondary px-4 py-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-foreground">Attachments</h2>
+            <p className="text-xs text-muted-foreground">
+              Photos, PDFs, videos, and other{" "}
+              {noun === "estimate" ? "quote" : noun === "invoice" ? "invoice" : "job"}{" "}
+              files. Preview or remove anytime.
+            </p>
+          </div>
+          {!locked ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 shrink-0"
+              onClick={() => void handleSave()}
+              disabled={saving || uploading || !isDirty}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save attachments"
+              )}
+            </Button>
+          ) : null}
         </div>
-        {!locked ? (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void handleSave()}
-            disabled={saving || uploading || !isDirty}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save attachments"
-            )}
-          </Button>
-        ) : null}
-      </div>
+      )}
       {!locked ? (
         <label
           className={cn(
-            "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors",
-            over ? "border-primary bg-[#003F7D]/5" : "border-input bg-[#f8fafc]",
+            "flex cursor-pointer flex-col items-center justify-center gap-2 border border-dashed px-6 py-10 text-center transition-colors",
+            over ? "border-primary bg-secondary" : "border-border-soft bg-secondary/40",
             uploading && "pointer-events-none opacity-60",
           )}
           onDragEnter={(event) => {
@@ -1689,7 +1821,7 @@ export function JobAttachmentsTab({
         </label>
       ) : null}
       {activeAttachments.length ? (
-        <ul className="mt-4 divide-y divide-input border border-input">
+        <ul className="mt-4 divide-y divide-input border border-border-soft">
           {activeAttachments.map((fileItem) => (
             <li key={fileItem.id} className="flex items-center gap-3 px-3 py-3">
               <span className="flex size-9 items-center justify-center rounded-md bg-[#eef1f5] text-primary">
@@ -1792,18 +1924,6 @@ function LineGroup({ title, lines }: { title: string; lines: JobCostLine[] }) {
   );
 }
 
-function Panel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="rounded-[4px] border border-input bg-card p-4">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function MoneyRow({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -1815,6 +1935,7 @@ function MoneyRow({ label, value, strong }: { label: string; value: number; stro
 
 function ActivityCard({
   item,
+  last = false,
   deleting = false,
   locked = false,
   onEdit,
@@ -1829,6 +1950,7 @@ function ActivityCard({
     html?: string;
     description?: string;
   };
+  last?: boolean;
   deleting?: boolean;
   locked?: boolean;
   onEdit: () => void;
@@ -1837,35 +1959,53 @@ function ActivityCard({
   const timestamp = item.at || item.createdAt || "";
   const content = item.html ?? item.description ?? "";
   return (
-    <li className="rounded-[4px] border border-input p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{item.title}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {item.actor || "Desk"} · {timestamp ? stamp(timestamp) : "Just now"}
-          </p>
-        </div>
-        {!locked ? (
-          <div className="flex shrink-0 gap-1">
-            <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" disabled={deleting} onClick={onEdit}>
-              <Pencil />
-            </Button>
-            <Button
-              aria-label={`Delete ${item.title}`}
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              size="icon-sm"
-              variant="ghost"
-              disabled={deleting}
-              onClick={onDelete}
-            >
-              {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 />}
-            </Button>
+    <li className="flex gap-3">
+      <div className="flex w-5 flex-col items-center">
+        <span className="mt-1.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-card">
+          <span className="size-1.5 rounded-full bg-primary" />
+        </span>
+        {last ? null : <span className="my-1 w-px flex-1 border-l border-dashed border-primary/40" />}
+      </div>
+      <div className={cn("min-w-0 flex-1 rounded-md bg-secondary/70 px-3 py-2.5", last ? "mb-0" : "mb-3")}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-primary">
+              {item.actor || "Desk"}
+              {timestamp ? (
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  ({stamp(timestamp)})
+                </span>
+              ) : null}
+            </p>
+            <p className="mt-0.5 text-sm font-semibold text-foreground">{item.title}</p>
           </div>
+          {!locked ? (
+            <div className="flex shrink-0 gap-0.5">
+              <Button aria-label={`Edit ${item.title}`} size="icon-sm" variant="ghost" disabled={deleting} onClick={onEdit}>
+                <Pencil />
+              </Button>
+              <Button
+                aria-label={`Delete ${item.title}`}
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                size="icon-sm"
+                variant="ghost"
+                disabled={deleting}
+                onClick={onDelete}
+              >
+                {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 />}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        {content ? (
+          content.includes("<") ? (
+            <div className="job-activity-html mt-1.5 text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: safeHtml(content) }} />
+          ) : (
+            <p className="mt-1.5 whitespace-pre-wrap text-sm text-muted-foreground">{content}</p>
+          )
         ) : null}
       </div>
-      {content ? (
-        <div className="job-activity-html mt-2 text-sm" dangerouslySetInnerHTML={{ __html: safeHtml(content) }} />
-      ) : null}
     </li>
   );
 }
@@ -1954,8 +2094,15 @@ function ActivityDialog({
             />
           </label>
           <div className="grid gap-1.5 text-sm">
-            <span>Description</span>
-            {open ? <JobRichText key={activity?.id ?? "new"} value={html} onChange={setHtml} /> : null}
+            <span className="font-medium">Description</span>
+            <Textarea
+              rows={5}
+              disabled={isBusy}
+              className="min-h-[120px] resize-y border-border-soft text-sm"
+              placeholder={"Description:\nTicket #:\nTicket Information:\nPOC:"}
+              value={html.replace(/<[^>]+>/g, "")}
+              onChange={(event) => setHtml(event.target.value)}
+            />
           </div>
         </div>
         <DialogFooter>

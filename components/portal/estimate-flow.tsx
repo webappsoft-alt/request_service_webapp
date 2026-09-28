@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -303,11 +304,19 @@ export function EstimateSiteVisitTab({
   asJob,
   locked,
   onSave,
+  onActionsChange,
 }: {
   estimate: Estimate;
   asJob: Job;
   locked: boolean;
   onSave: (visit: EstimateSiteVisit) => void | Promise<void>;
+  onActionsChange?: (
+    actions: {
+      locked: boolean;
+      saving: boolean;
+      save: () => void;
+    } | null,
+  ) => void;
 }) {
   const dispatch = useAppDispatch();
   const reduxEmployees = useAppSelector((state) => state.team?.items ?? []);
@@ -520,6 +529,39 @@ export function EstimateSiteVisitTab({
     await onSave(next);
   }
 
+  async function saveNotes() {
+    try {
+      setSavingNotes(true);
+      await persist(visitRef.current);
+      toast.success("Site visit saved.");
+    } catch {
+      // toast shown by onSave handler
+    } finally {
+      setSavingNotes(false);
+    }
+  }
+
+  const saveNotesRef = useRef(saveNotes);
+  saveNotesRef.current = saveNotes;
+
+  const saveStable = useCallback(() => {
+    void saveNotesRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({
+      locked,
+      saving: savingNotes,
+      save: saveStable,
+    });
+  }, [onActionsChange, locked, savingNotes, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   async function handleSaveAndLeave() {
     await persist(visit);
     toast.success("Site visit saved.");
@@ -594,68 +636,108 @@ export function EstimateSiteVisitTab({
   }
 
   return (
-    <div data-site-visit-form className="space-y-4">
-      <div className="rounded-lg border border-input bg-card p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">Site visit</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Notes from the visit. Photos stay with this estimate until you
-              send the finalized quote.
-            </p>
-          </div>
-          {locked ? null : (
-            <Button
-              size="sm"
-              className="shrink-0"
-              disabled={savingNotes}
-              onClick={async () => {
-                try {
-                  setSavingNotes(true);
-                  await persist(visit);
-                  toast.success("Site visit saved.");
-                } catch {
-                  // toast shown by onSave handler
-                } finally {
-                  setSavingNotes(false);
-                }
-              }}
-            >
-              {savingNotes ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : null}
-              {savingNotes ? "Saving…" : "Save notes"}
-            </Button>
-          )}
-        </div>
-        <div className="mt-4">
-          <Field label="Notes">
-            <Textarea
-              rows={6}
-              disabled={locked}
-              placeholder="What you inspected, access notes, findings, and anything else from the visit"
-              value={visit.findings}
-              onChange={(event) => {
-                patch({ findings: event.target.value });
-              }}
-            />
-          </Field>
-        </div>
+    <div data-site-visit-form className="space-y-4 py-1">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Technician">
+          <PaginatedEntitySelect
+            value={visit.employeeId || ""}
+            onChange={(id, option) => {
+              const label = (option?.label || "")
+                .replace(/^Unassigned$/, "")
+                .trim();
+              patch({
+                employeeId: id,
+                technician: label,
+              });
+            }}
+            options={technicianSelectOptions}
+            disabled={locked}
+            loading={loading}
+            placeholder="Assign technician"
+            searchable={useApi}
+            searchValue={useApi ? assigneePaging.search : undefined}
+            onSearchChange={useApi ? assigneePaging.setSearch : undefined}
+            searchPlaceholder="Search technicians…"
+            emptyLabel="No technicians found"
+            onLoadMore={useApi ? () => void assigneePaging.loadMore() : () => undefined}
+            hasMore={useApi ? assigneePaging.hasMore : false}
+            loadingMore={useApi ? assigneePaging.loadingMore : false}
+          />
+        </Field>
+        <Field label="Visit date">
+          <Input
+            type="date"
+            disabled={locked}
+            value={(visit.visitedAt || "").slice(0, 10)}
+            onChange={(event) => patch({ visitedAt: event.target.value })}
+          />
+        </Field>
       </div>
 
-      <div className="rounded-[4px] border border-input bg-card p-4">
-        <h3 className="text-sm font-semibold">Site photos</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pictures from the visit. These stay internal until you send the
-          finalized quote.
-        </p>
+      <div className="grid items-stretch gap-3 sm:grid-cols-2">
+        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
+          <span className="h-5 text-sm font-medium leading-5 text-foreground">Description</span>
+          <Textarea
+            rows={3}
+            disabled={locked}
+            className="h-24 min-h-24 flex-1 resize-none text-sm shadow-none"
+            placeholder="Description, ticket #, ticket information, POC…"
+            value={visit.findings}
+            onChange={(event) => patch({ findings: event.target.value })}
+          />
+        </label>
+        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
+          <span className="flex h-5 items-baseline gap-1.5 text-sm font-medium leading-5 text-foreground">
+            Private notes
+            <span className="text-[11px] font-normal text-muted-foreground">
+              · not visible to customer
+            </span>
+          </span>
+          <Textarea
+            rows={3}
+            disabled={locked}
+            className="h-24 min-h-24 flex-1 resize-none text-sm shadow-none"
+            placeholder="Access notes, gate codes…"
+            value={visit.accessNotes}
+            onChange={(event) => patch({ accessNotes: event.target.value })}
+          />
+        </label>
+        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
+          <span className="h-5 text-sm font-medium leading-5 text-foreground">Recommendations</span>
+          <Textarea
+            rows={2}
+            disabled={locked}
+            className="h-20 min-h-20 flex-1 resize-none text-sm shadow-none"
+            placeholder="Recommended next steps"
+            value={visit.recommendations}
+            onChange={(event) => patch({ recommendations: event.target.value })}
+          />
+        </label>
+        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
+          <span className="h-5 text-sm font-medium leading-5 text-foreground">Measurements</span>
+          <Textarea
+            rows={2}
+            disabled={locked}
+            className="h-20 min-h-20 flex-1 resize-none text-sm shadow-none"
+            placeholder="Lengths, quantities, room sizes…"
+            value={visit.measurements}
+            onChange={(event) => patch({ measurements: event.target.value })}
+          />
+        </label>
+      </div>
+
+      <div className="space-y-2">
+        <div>
+          <h3 className="text-sm font-medium text-foreground">Site photos</h3>
+          <p className="text-[11px] text-muted-foreground">Images and PDFs up to 15 MB</p>
+        </div>
         {locked ? null : (
           <label
             className={cn(
-              "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
+              "flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-3 transition-colors",
               over
-                ? "border-primary bg-[#003F7D]/5"
-                : "border-input bg-[#f8fafc]",
+                ? "border-primary bg-secondary"
+                : "border-input bg-transparent",
             )}
             onDragEnter={(event) => {
               event.preventDefault();
@@ -669,16 +751,16 @@ export function EstimateSiteVisitTab({
             onDrop={onDrop}
           >
             {uploading ? (
-              <Loader2 className="size-6 animate-spin text-primary" />
+              <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
             ) : (
-              <Upload className="size-6 text-primary" />
+              <Upload className="size-4 shrink-0 text-primary" />
             )}
-            <p className="text-sm font-medium">
-              {uploading ? "Uploading photos…" : "Drop photos here or browse"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Images and PDFs up to 15 MB
-            </p>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {uploading ? "Uploading…" : "Drop photos here or browse"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">PNG, JPG, or PDF</p>
+            </div>
             <input
               className="sr-only"
               type="file"
@@ -694,11 +776,11 @@ export function EstimateSiteVisitTab({
           </label>
         )}
         {visit.photos.length ? (
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {visit.photos.map((file) => (
               <li
                 key={file.id}
-                className="overflow-hidden rounded-[4px] border border-input"
+                className="overflow-hidden rounded-md border border-border-soft bg-card"
               >
                 <button
                   type="button"
@@ -710,16 +792,16 @@ export function EstimateSiteVisitTab({
                     <img
                       alt={file.name}
                       src={file.dataUrl}
-                      className="h-36 w-full object-cover"
+                      className="h-20 w-full object-cover"
                     />
                   ) : (
-                    <span className="flex h-36 items-center justify-center bg-[#eef1f5] text-primary">
-                      <ImageIcon className="size-6" />
+                    <span className="flex h-20 items-center justify-center bg-secondary text-primary">
+                      <ImageIcon className="size-5" />
                     </span>
                   )}
                 </button>
-                <div className="flex items-center justify-between gap-2 px-3 py-2">
-                  <p className="truncate text-xs font-medium">{file.name}</p>
+                <div className="flex items-center justify-between gap-1 px-2 py-1.5">
+                  <p className="truncate text-[11px] font-medium">{file.name}</p>
                   {locked ? null : (
                     <button
                       type="button"
@@ -732,11 +814,11 @@ export function EstimateSiteVisitTab({
                           ),
                         });
                         toast.success(
-                          'Photo removed. Click "Save site" to save.',
+                          'Photo removed. Click "Save notes" to keep changes.',
                         );
                       }}
                     >
-                      <Trash2 className="size-4" />
+                      <Trash2 className="size-3.5" />
                     </button>
                   )}
                 </div>
@@ -744,7 +826,7 @@ export function EstimateSiteVisitTab({
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">No photos yet.</p>
+          <p className="text-xs text-muted-foreground">No photos yet.</p>
         )}
       </div>
 

@@ -1,25 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
-  Banknote,
-  Bell,
-  Briefcase,
-  CalendarDays,
   ChevronDown,
-  Clock,
   Eye,
   FileText,
   Film,
   ImageIcon,
-  ListTodo,
   Loader2,
   Music,
-  NotebookPen,
-  Paperclip,
-  Settings,
-  Shield,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -146,6 +136,47 @@ export function ContractorDetailView({ id }: { id: string }) {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [settingsActions, setSettingsActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const [complianceActions, setComplianceActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const [payActions, setPayActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const [availabilityActions, setAvailabilityActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+
+  const onSettingsActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setSettingsActions(actions);
+    },
+    [],
+  );
+  const onComplianceActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setComplianceActions(actions);
+    },
+    [],
+  );
+  const onPayActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setPayActions(actions);
+    },
+    [],
+  );
+  const onAvailabilityActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setAvailabilityActions(actions);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!crm.enabled) return;
@@ -192,15 +223,15 @@ export function ContractorDetailView({ id }: { id: string }) {
   if (!contractor) {
     if (detailLoading) {
       return (
-        <div className="border border-input bg-card" aria-busy="true">
+        <div className="rounded-md border border-border-soft bg-card" aria-busy="true">
           <CenteredSpinner label="Loading contractor" className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-input bg-card p-6">
+      <div className="rounded-md border border-border-soft bg-card p-6">
         <h1 className="text-lg font-semibold">{detailError || "Contractor not found"}</h1>
-        <Button asChild className="mt-4" size="sm">
+        <Button asChild className="mt-4 h-8" size="sm">
           <Link href="/pro/dashboard/contractors">Back to contractors</Link>
         </Button>
       </div>
@@ -232,18 +263,188 @@ export function ContractorDetailView({ id }: { id: string }) {
         label={`${contractor.companyName} · ${contractor.number}`}
         kind="contractor"
         tabs={[
-          { id: "settings", label: "Settings", icon: Settings },
-          { id: "compliance", label: "Compliance", icon: Shield },
-          { id: "pay", label: "Pay rate", icon: Banknote },
-          { id: "availability", label: "Availability", icon: Clock },
-          { id: "schedule", label: "Schedule", icon: CalendarDays },
-          { id: "jobs", label: "Jobs", icon: Briefcase },
-          { id: "estimates", label: "Estimates", icon: FileText },
-          { id: "tasks", label: "Tasks", icon: ListTodo },
-          { id: "reminders", label: "Reminders", icon: Bell },
-          { id: "notes", label: "Notes", icon: NotebookPen },
-          { id: "attachments", label: "Attachments", icon: Paperclip },
+          { id: "settings", label: "Settings" },
+          { id: "compliance", label: "Compliance" },
+          { id: "pay", label: "Pay rate" },
+          { id: "availability", label: "Availability" },
+          { id: "schedule", label: "Schedule" },
+          { id: "jobs", label: "Jobs" },
+          { id: "estimates", label: "Estimates" },
+          { id: "tasks", label: "Tasks" },
+          { id: "reminders", label: "Reminders" },
+          { id: "notes", label: "Notes" },
+          { id: "attachments", label: "Attachments" },
         ]}
+        subnavTabs={[
+          "settings",
+          "compliance",
+          "pay",
+          "availability",
+          "reminders",
+          "notes",
+          "attachments",
+        ]}
+        subnav={(activeTab) => {
+          if (activeTab === "settings") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Contractor settings</p>
+                  <p className="text-xs text-muted-foreground">
+                    Outside crew you send to a job. Contact and company live here.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!settingsActions || settingsActions.saving}
+                  onClick={() => settingsActions?.save()}
+                >
+                  {settingsActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save settings"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "compliance") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Compliance</p>
+                  <p className="text-xs text-muted-foreground">
+                    License and insurance required before they go on a customer site.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!complianceActions || complianceActions.saving}
+                  onClick={() => complianceActions?.save()}
+                >
+                  {complianceActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save compliance"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "pay") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Per hour price</p>
+                  <p className="text-xs text-muted-foreground">
+                    Quoted hourly rate for this contractor on jobs and estimates.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!payActions || payActions.saving}
+                  onClick={() => payActions?.save()}
+                >
+                  {payActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save rates"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "availability") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Availability</p>
+                  <p className="text-xs text-muted-foreground">
+                    Working hours used when assigning this contractor on the calendar.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!availabilityActions || availabilityActions.saving}
+                  onClick={() => availabilityActions?.save()}
+                >
+                  {availabilityActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save hours"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "reminders") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Reminders</p>
+                  <p className="text-xs text-muted-foreground">
+                    Follow-ups linked to this contractor.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setReminderOpen(true)}
+                >
+                  + Set reminder
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "notes") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Notes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Desk notes stay with this contractor.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setNoteOpen(true)}
+                >
+                  + Add note
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "attachments") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Attachments</p>
+                  <p className="text-xs text-muted-foreground">
+                    W-9, COI, licenses, and trade documents for this contractor.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        }}
         badge={
           <>
             <StatusPill label={contractor.trade} />
@@ -260,7 +461,7 @@ export function ContractorDetailView({ id }: { id: string }) {
         }
         notice={
           expired ? (
-            <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
               Insurance expired on {formatDate(contractor.insuranceExpires.slice(0, 10))}. New
               dispatches are locked.
             </div>
@@ -270,6 +471,7 @@ export function ContractorDetailView({ id }: { id: string }) {
           <>
             <Button
               size="sm"
+              className="h-8"
               disabled={expired}
               title={expired ? "Cannot assign contractor with expired insurance" : undefined}
               onClick={() => setAssignOpen(true)}
@@ -278,7 +480,7 @@ export function ContractorDetailView({ id }: { id: string }) {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="h-8">
                   More actions
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
@@ -296,16 +498,39 @@ export function ContractorDetailView({ id }: { id: string }) {
         {(tab) => {
           switch (tab) {
             case "settings":
-              return <ContractorSettingsTab contractor={contractor} onSave={saveContractor} />;
+              return (
+                <ContractorSettingsTab
+                  contractor={contractor}
+                  onSave={saveContractor}
+                  hideHeader
+                  onActionsChange={onSettingsActionsChange}
+                />
+              );
             case "compliance":
-              return <ContractorComplianceTab contractor={contractor} onSave={saveContractor} />;
+              return (
+                <ContractorComplianceTab
+                  contractor={contractor}
+                  onSave={saveContractor}
+                  hideHeader
+                  onActionsChange={onComplianceActionsChange}
+                />
+              );
             case "pay":
-              return <ContractorPayTab contractor={contractor} onSave={saveContractor} />;
+              return (
+                <ContractorPayTab
+                  contractor={contractor}
+                  onSave={saveContractor}
+                  hideHeader
+                  onActionsChange={onPayActionsChange}
+                />
+              );
             case "availability":
               return (
                 <EmployeeAvailabilityTab
                   employee={asEmployee}
                   description="Working hours used when assigning this contractor on the calendar."
+                  hideHeader
+                  onActionsChange={onAvailabilityActionsChange}
                   onSave={async (patch) => {
                     if (!patch.workingHours) return;
                     await saveContractor({ workingHours: patch.workingHours });
@@ -330,18 +555,27 @@ export function ContractorDetailView({ id }: { id: string }) {
             case "tasks":
               return <ContractorTasksTab contractorId={contractor.id} />;
             case "reminders":
+              return <ContractorRemindersTab contractorId={contractor.id} />;
+            case "notes":
               return (
-                <ContractorRemindersTab
-                  contractorId={contractor.id}
-                  onSetReminder={() => setReminderOpen(true)}
+                <NotesPanel
+                  kind="contractor"
+                  id={contractor.id}
+                  showAddInToolbar={false}
+                  empty="Add the first note on this contractor."
                 />
               );
-            case "notes":
-              return <NotesPanel kind="contractor" id={contractor.id} />;
             case "attachments":
-              return <ContractorAttachmentsTab contractor={contractor} />;
+              return <ContractorAttachmentsTab contractor={contractor} hideHeader />;
             default:
-              return <ContractorSettingsTab contractor={contractor} onSave={saveContractor} />;
+              return (
+                <ContractorSettingsTab
+                  contractor={contractor}
+                  onSave={saveContractor}
+                  hideHeader
+                  onActionsChange={onSettingsActionsChange}
+                />
+              );
           }
         }}
       </RecordWorkspace>
@@ -421,9 +655,13 @@ export function ContractorDetailView({ id }: { id: string }) {
 function ContractorSettingsTab({
   contractor,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   contractor: PortalContractor;
   onSave: (patch: Partial<PortalContractor>) => void | Promise<unknown>;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [draft, setDraft] = useState(contractor);
   const [saving, setSaving] = useState(false);
@@ -457,27 +695,49 @@ function ContractorSettingsTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Contractor settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Outside crew you send to a job. Contact and company live here.
-          </p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Contractor settings</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Outside crew you send to a job. Contact and company live here.
+            </p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save settings"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save settings"
-          )}
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
+      )}
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:p-5 sm:grid-cols-2">
         <Field label="Company">
           <Input
             value={draft.companyName}
@@ -540,9 +800,13 @@ function ContractorSettingsTab({
 function ContractorComplianceTab({
   contractor,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   contractor: PortalContractor;
   onSave: (patch: Partial<PortalContractor>) => void | Promise<unknown>;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [draft, setDraft] = useState({
     license: contractor.license,
@@ -582,33 +846,55 @@ function ContractorComplianceTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Compliance</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            License and insurance required before they go on a customer site.
-          </p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Compliance</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              License and insurance required before they go on a customer site.
+            </p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save compliance"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save compliance"
-          )}
-        </Button>
-      </div>
+      )}
       {expired ? (
-        <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
           Insurance expired on {formatDate(contractor.insuranceExpires.slice(0, 10))}. New dispatches
           are locked.
         </div>
       ) : null}
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:p-5 sm:grid-cols-2">
         <Field label="License">
           <Input
             value={draft.license}
@@ -630,9 +916,13 @@ function ContractorComplianceTab({
 function ContractorPayTab({
   contractor,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   contractor: PortalContractor;
   onSave: (patch: Partial<PortalContractor>) => void | Promise<unknown>;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [pay, setPay] = useState({
     hourlyRate: contractor.hourlyRate ?? 0,
@@ -670,27 +960,49 @@ function ContractorPayTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Per hour price</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Quoted hourly rate for this contractor on jobs and estimates.
-          </p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Per hour price</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Quoted hourly rate for this contractor on jobs and estimates.
+            </p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save rates"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save rates"
-          )}
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-3">
+      )}
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:p-5 sm:grid-cols-3">
         <Field label="Hourly rate">
           <Input
             type="number"
@@ -766,7 +1078,7 @@ function ContractorScheduleTab({
 
   if (listLoading) {
     return (
-      <div className="border border-input" aria-busy="true">
+      <div className="rounded-md border border-border-soft" aria-busy="true">
         <CenteredSpinner label="Loading schedule" className="min-h-[16rem]" />
       </div>
     );
@@ -1031,10 +1343,8 @@ function ContractorTasksTab({ contractorId }: { contractorId: string }) {
 
 function ContractorRemindersTab({
   contractorId,
-  onSetReminder,
 }: {
   contractorId: string;
-  onSetReminder: () => void;
 }) {
   const dispatch = useAppDispatch();
   const crm = useCrmApiData();
@@ -1107,11 +1417,6 @@ function ContractorRemindersTab({
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
-        toolbar={
-          <Button size="sm" onClick={onSetReminder}>
-            Set reminder
-          </Button>
-        }
         columns={[
           {
             id: "reminder",
@@ -1214,7 +1519,13 @@ function fileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function ContractorAttachmentsTab({ contractor }: { contractor: PortalContractor }) {
+function ContractorAttachmentsTab({
+  contractor,
+  hideHeader = false,
+}: {
+  contractor: PortalContractor;
+  hideHeader?: boolean;
+}) {
   const dispatch = useAppDispatch();
   const detail = useAppSelector((state) => state.contractors?.detail ?? null);
   const [over, setOver] = useState(false);
@@ -1313,15 +1624,20 @@ function ContractorAttachmentsTab({ contractor }: { contractor: PortalContractor
 
   return (
     <div>
-      <h2 className="text-base font-semibold">Attachments</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        W-9, COI, licenses, and trade documents for this contractor.
-      </p>
+      {hideHeader ? null : (
+        <>
+          <h2 className="text-sm font-semibold">Attachments</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            W-9, COI, licenses, and trade documents for this contractor.
+          </p>
+        </>
+      )}
       <label
         className={cn(
-          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
-          over ? "border-primary bg-[#003F7D]/5" : "border-input bg-[#f8fafc]",
+          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center",
+          over ? "border-primary bg-secondary" : "border-border-soft bg-secondary/40",
           uploading && "pointer-events-none opacity-60",
+          hideHeader && "mt-0",
         )}
         onDragEnter={(event) => {
           event.preventDefault();
@@ -1356,10 +1672,10 @@ function ContractorAttachmentsTab({ contractor }: { contractor: PortalContractor
         />
       </label>
       {attachments.length ? (
-        <ul className="mt-4 divide-y divide-input border border-input">
+        <ul className="mt-4 divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft">
           {attachments.map((item) => (
             <li key={item.id} className="flex items-center gap-3 px-3 py-3">
-              <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">
+              <span className="flex size-9 items-center justify-center rounded-md bg-secondary text-primary">
                 {item.type.startsWith("image/") ? (
                   <ImageIcon className="size-4" />
                 ) : item.type.startsWith("video/") ? (
@@ -1383,7 +1699,7 @@ function ContractorAttachmentsTab({ contractor }: { contractor: PortalContractor
                   {item.addedAt ? stamp(item.addedAt) : fileSize(item.size)}
                 </p>
               </div>
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
                 <a
                   href={item.dataUrl}
                   target="_blank"
@@ -1416,7 +1732,7 @@ function ContractorAttachmentsTab({ contractor }: { contractor: PortalContractor
 
 function PayStat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-[4px] border border-input bg-[#f8fafc] px-4 py-3">
+    <div className="rounded-md border border-border-soft bg-secondary/40 px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
         {label}
       </p>

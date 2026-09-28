@@ -10,7 +10,6 @@ import {
 import {
   jobCostMix,
   useJobCosting,
-  type JobCostKind,
   type JobCostLine,
 } from "@/components/portal/use-job-costing";
 import { mergeStashedMaterialImages, clearStashedEstimateMaterialImages, readStashedEstimateMaterialImages } from "@/components/portal/line-item-images";
@@ -65,7 +64,7 @@ export function JobCostChart({ labor, materials }: { labor: number; materials: n
 
 export type CostingNoun = "job" | "estimate" | "invoice";
 
-function costingHint(noun: CostingNoun, locked: boolean) {
+export function costingHint(noun: CostingNoun, locked: boolean) {
   switch (noun) {
     case "estimate":
       return locked
@@ -85,6 +84,13 @@ function costingHint(noun: CostingNoun, locked: boolean) {
     }
   }
 }
+
+export type JobCostingActions = {
+  locked: boolean;
+  saving: boolean;
+  addLabor: () => void;
+  addMaterial: () => void;
+};
 
 function linesEqual(a: JobCostLine[], b: JobCostLine[]) {
   if (a.length !== b.length) return false;
@@ -141,6 +147,9 @@ export function JobCosting({
   preferApi = false,
   /** Wait for full API record before auto-saving (avoids wiping material images). */
   ready = true,
+  /** When true, omit the flush title/actions bar (parent renders it via RecordWorkspace subnav). */
+  hideHeader = false,
+  onActionsChange,
 }: {
   job: Job;
   locked?: boolean;
@@ -149,6 +158,8 @@ export function JobCosting({
   onSave?: (lines: JobCostLine[]) => void | Promise<void>;
   preferApi?: boolean;
   ready?: boolean;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: JobCostingActions | null) => void;
 }) {
   const { lines: rawLines, commit } = useJobCosting(job, { preferApi });
   const lines = useMemo(
@@ -361,48 +372,80 @@ export function JobCosting({
     };
   }, [isDirty, locked, ready]);
 
-  function add(kind: JobCostKind) {
-    if (locked) return;
-    setDraft([...(draft ?? lines), createEmptyLine(kind)]);
-  }
-
   function changeLines(next: JobCostLine[]) {
     if (locked) return;
     setDraft(next);
   }
 
+  const lockedRef = useRef(locked);
+  linesRef.current = lines;
+  lockedRef.current = locked;
+
+  const addLabor = useCallback(() => {
+    if (lockedRef.current) return;
+    setDraft((prev) => [...(prev ?? linesRef.current), createEmptyLine("labor")]);
+  }, []);
+
+  const addMaterial = useCallback(() => {
+    if (lockedRef.current) return;
+    setDraft((prev) => [...(prev ?? linesRef.current), createEmptyLine("materials")]);
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({
+      locked,
+      saving,
+      addLabor,
+      addMaterial,
+    });
+  }, [onActionsChange, locked, saving, addLabor, addMaterial]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
-    <div data-job-costing-form>
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold">Labour and Material</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{costingHint(noun, locked)}</p>
-          {saving ? (
-            <p className="mt-1 text-xs text-muted-foreground">Saving line items…</p>
-          ) : null}
+    <div data-job-costing-form className="space-y-0">
+      {hideHeader ? null : (
+        <div className="-mx-4 -mt-1.5 mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-border-soft bg-secondary px-4 py-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-foreground">Labour and Material</h2>
+            <p className="text-xs text-muted-foreground">{costingHint(noun, locked)}</p>
+            {saving ? (
+              <p className="text-xs text-muted-foreground">Saving line items…</p>
+            ) : null}
+          </div>
+          <LineItemsActions
+            locked={locked}
+            saving={saving}
+            onAddLabor={addLabor}
+            onAddMaterial={addMaterial}
+            className="shrink-0"
+          />
         </div>
-        <LineItemsActions
-          locked={locked}
-          saving={saving}
-          onAddLabor={() => add("labor")}
-          onAddMaterial={() => add("materials")}
-          className="shrink-0 self-end md:self-auto"
-        />
-      </div>
+      )}
       <LineItemsEditor
         lines={activeLines}
         onChange={changeLines}
         locked={locked}
       />
-      <dl className="mt-4 ml-auto grid max-w-xs grid-cols-2 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">Labour</dt>
-        <dd className="text-right tabular-nums">{formatMoney(mix.labor)}</dd>
-        <dt className="text-muted-foreground">Material</dt>
-        <dd className="text-right tabular-nums">{formatMoney(mix.materials)}</dd>
-        <dt className="font-medium">
-          {noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}
-        </dt>
-        <dd className="text-right font-semibold tabular-nums">{formatMoney(mix.total)}</dd>
+      <dl className="mt-4 ml-auto w-full max-w-sm overflow-hidden rounded-lg border border-border-soft bg-card text-sm">
+        <div className="grid grid-cols-2 gap-x-4 px-3 py-2">
+          <dt className="text-muted-foreground">Labour</dt>
+          <dd className="text-right tabular-nums">{formatMoney(mix.labor)}</dd>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
+          <dt className="text-muted-foreground">Material</dt>
+          <dd className="text-right tabular-nums">{formatMoney(mix.materials)}</dd>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft bg-[#f7f8fa] px-3 py-2.5">
+          <dt className="font-semibold">
+            {noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}
+          </dt>
+          <dd className="text-right font-semibold tabular-nums text-primary">{formatMoney(mix.total)}</dd>
+        </div>
       </dl>
     </div>
   );
@@ -423,7 +466,7 @@ export function EstimateCostChart({ labor, materials }: { labor: number; materia
         <div className="h-full bg-[#003F7D]" style={{ width: `${laborPct}%` }} />
         <div className="h-full bg-[#5b8fa8]" style={{ width: `${materialPct}%` }} />
       </div>
-      <div className="flex items-baseline justify-between border-t border-input pt-3">
+      <div className="flex items-baseline justify-between border-t border-border-soft pt-3">
         <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Quote</p>
         <p className="text-xl font-semibold tabular-nums text-[#003F7D]">{formatMoney(total)}</p>
       </div>
@@ -443,7 +486,7 @@ function EstimateMixTile({
   color: string;
 }) {
   return (
-    <div className="rounded-[4px] border border-input bg-[#f7f9fb] px-3 py-3">
+    <div className="bg-secondary/60 px-3 py-3">
       <div className="flex items-center gap-2">
         <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
         <p className="text-xs font-medium text-muted-foreground">{label}</p>

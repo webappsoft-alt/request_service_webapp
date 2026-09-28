@@ -126,7 +126,7 @@ export function ServiceDetailView({ id }: { id: string }) {
         description="This catalog item is no longer on this account."
       >
         <div className="px-4">
-          <Button asChild>
+          <Button asChild size="sm" className="h-8">
             <Link href="/pro/dashboard/services">Back to fixed services</Link>
           </Button>
         </div>
@@ -138,6 +138,7 @@ export function ServiceDetailView({ id }: { id: string }) {
   const cover =
     photos[Math.min(activePhoto, Math.max(photos.length - 1, 0))] || undefined;
   const title = toTitleCase(service.name) || "Untitled service";
+  const companyName = toTitleCase(provider.companyName);
 
   return (
     <PortalPage
@@ -152,13 +153,13 @@ export function ServiceDetailView({ id }: { id: string }) {
       }
       actions={
         <div className="flex gap-2">
-          <Button asChild>
+          <Button asChild size="sm" className="h-8">
             <Link href={`/pro/dashboard/services/${id}`}>
-              <Pencil className="size-4" />
+              <Pencil className="size-3.5" />
               Edit
             </Link>
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild size="sm" className="h-8 border-border-soft">
             <Link href="/pro/dashboard/services">Back</Link>
           </Button>
         </div>
@@ -166,7 +167,7 @@ export function ServiceDetailView({ id }: { id: string }) {
     >
       <div className="grid items-start gap-6 px-4 pb-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,22rem)]">
         <div className="flex flex-col gap-4">
-          <section className="overflow-hidden rounded-xl border border-input bg-card">
+          <section className="overflow-hidden rounded-md border border-border-soft bg-card">
             <div className="relative aspect-[16/9] bg-[#003F7D]">
               {cover ? (
                 <Image
@@ -184,17 +185,17 @@ export function ServiceDetailView({ id }: { id: string }) {
               )}
             </div>
             {photos.length > 1 ? (
-              <div className="flex gap-2 overflow-x-auto p-3">
+              <div className="flex gap-2 overflow-x-auto border-b border-border-soft p-3">
                 {photos.map((src, index) => (
                   <button
                     key={`${src}-${index}`}
                     type="button"
                     onClick={() => setActivePhoto(index)}
                     className={cn(
-                      "relative size-16 shrink-0 overflow-hidden rounded-lg border transition",
+                      "relative size-16 shrink-0 overflow-hidden rounded-md border transition",
                       index === activePhoto
                         ? "border-[#003F7D] ring-2 ring-[#003F7D]/30"
-                        : "border-input hover:border-[#003F7D]/40",
+                        : "border-border-soft hover:border-[#003F7D]/40",
                     )}
                     aria-label={`Show photo ${index + 1}`}
                     aria-pressed={index === activePhoto}
@@ -212,16 +213,28 @@ export function ServiceDetailView({ id }: { id: string }) {
               </div>
             ) : null}
             <div className="flex flex-col gap-4 p-5">
-              <div>
-                <p className="text-[11px] font-semibold tracking-[0.08em] text-[#003F7D]">
-                  {toTitleCase(provider.companyName)}
+              <div className="border-b border-border-soft pb-4">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                  Service summary
                 </p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-tight">{title}</h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {service.description || "No customer-facing description yet."}
+                <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+                  {title}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {companyName ? `${companyName} · ` : ""}
+                  {service.active ? "Public catalog" : "Hidden from catalog"}
                 </p>
+                {service.description ? (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {service.description}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    No customer-facing description yet.
+                  </p>
+                )}
               </div>
-              <div className="grid gap-4 rounded-xl bg-[#eef1f5] p-4 sm:grid-cols-3">
+              <div className="grid gap-4 rounded-md bg-secondary/40 p-4 sm:grid-cols-3">
                 <Fact label="Price" value={formatStartingPrice(service.price)} />
                 <Fact label="Unit" value={toTitleCase(serviceUnitLabel(service.unit))} />
                 <Fact
@@ -232,7 +245,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             </div>
           </section>
 
-          <section className="rounded-xl border border-input bg-card p-5">
+          <section className="rounded-md border border-border-soft bg-card p-5">
             <p className="text-sm font-semibold">Service details</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Fact
@@ -258,7 +271,7 @@ export function ServiceDetailView({ id }: { id: string }) {
                   {detail.commonServices.map((item) => (
                     <li
                       key={item}
-                      className="rounded-full bg-[#eef1f5] px-2.5 py-1 text-xs font-medium"
+                      className="rounded-md bg-secondary px-2.5 py-1 text-xs font-medium"
                     >
                       {toTitleCase(item)}
                     </li>
@@ -275,7 +288,7 @@ export function ServiceDetailView({ id }: { id: string }) {
                   {detail.workingArea.map((item) => (
                     <li
                       key={item}
-                      className="rounded-full bg-[#eef1f5] px-2.5 py-1 text-xs font-medium"
+                      className="rounded-md bg-secondary px-2.5 py-1 text-xs font-medium"
                     >
                       {toTitleCase(item)}
                     </li>
@@ -285,7 +298,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             ) : null}
           </section>
 
-          <section className="rounded-xl border border-input bg-card p-5">
+          <section className="rounded-md border border-border-soft bg-card p-5">
             <p className="text-sm font-semibold">What’s covered</p>
             {service.coverage.filter((item) => item.trim()).length ? (
               <ul className="mt-3 flex flex-col gap-2">
@@ -311,7 +324,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             )}
           </section>
 
-          <section className="rounded-xl border border-input bg-card p-5">
+          <section className="rounded-md border border-border-soft bg-card p-5">
             <p className="text-sm font-semibold">FAQ</p>
             {(service.faqs ?? []).filter(
               (item) => item.question.trim() && item.answer.trim(),
@@ -339,7 +352,7 @@ export function ServiceDetailView({ id }: { id: string }) {
         </div>
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
-          <section className="rounded-xl border border-input bg-card p-5">
+          <section className="rounded-md border border-border-soft bg-card p-5">
             <p className="flex items-center gap-1.5 text-sm font-semibold">
               <MapPin className="size-3.5" aria-hidden="true" />
               Service areas
@@ -349,7 +362,7 @@ export function ServiceDetailView({ id }: { id: string }) {
                 {areaLabels.map((area) => (
                   <li
                     key={area}
-                    className="rounded-full bg-[#eef1f5] px-2.5 py-1 text-xs"
+                    className="rounded-md bg-secondary px-2.5 py-1 text-xs"
                   >
                     {area}
                   </li>
@@ -362,7 +375,7 @@ export function ServiceDetailView({ id }: { id: string }) {
             )}
           </section>
 
-          <section className="rounded-xl border border-input bg-card p-5">
+          <section className="rounded-md border border-border-soft bg-card p-5">
             <p className="flex items-center gap-1.5 text-sm font-semibold">
               <Clock3 className="size-3.5" aria-hidden="true" />
               Availability

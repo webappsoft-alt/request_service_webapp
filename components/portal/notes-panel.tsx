@@ -15,11 +15,14 @@ export function NotesPanel({
   id,
   empty,
   locked = false,
+  showAddInToolbar = true,
 }: {
   kind: ReminderSubjectKind;
   id: string;
   empty?: string;
   locked?: boolean;
+  /** When false, Add note lives in the parent RecordWorkspace subnav. */
+  showAddInToolbar?: boolean;
 }) {
   return (
     <UniversalNotesPanel
@@ -27,6 +30,7 @@ export function NotesPanel({
       entityId={id}
       empty={empty}
       locked={locked}
+      showAddInToolbar={showAddInToolbar}
     />
   );
 }

@@ -1,23 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
-  Bell,
-  Briefcase,
-  Banknote,
-  CalendarDays,
-  Clock,
+  ChevronDown,
   Eye,
   FileText,
   Film,
   ImageIcon,
-  ListTodo,
   Loader2,
   Music,
-  NotebookPen,
-  Paperclip,
-  Settings,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -31,13 +23,11 @@ import {
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import {
-  AddNoteButton,
   CreateReminderDialog,
-  SetReminderButton,
-  SetTaskButton,
+  CreateTaskDialog,
 } from "@/components/portal/create-person-dialogs";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
-import { NotesPanel } from "@/components/portal/notes-panel";
+import { CreateNoteDialogForSubject, NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
 import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
@@ -46,7 +36,7 @@ import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
-import { useEmployeeFile, weekdayLabel, type EmployeeDayHours, defaultAvailability } from "@/components/portal/use-employee-file";
+import { weekdayLabel, type EmployeeDayHours, defaultAvailability } from "@/components/portal/use-employee-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
@@ -58,6 +48,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -199,6 +195,39 @@ export function TeamMemberView({ id }: { id: string }) {
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [settingsActions, setSettingsActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const [availabilityActions, setAvailabilityActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+  const [payActions, setPayActions] = useState<{
+    saving: boolean;
+    save: () => void;
+  } | null>(null);
+
+  const onSettingsActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setSettingsActions(actions);
+    },
+    [],
+  );
+  const onAvailabilityActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setAvailabilityActions(actions);
+    },
+    [],
+  );
+  const onPayActionsChange = useCallback(
+    (actions: { saving: boolean; save: () => void } | null) => {
+      setPayActions(actions);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!crm.enabled) return;
@@ -251,15 +280,15 @@ export function TeamMemberView({ id }: { id: string }) {
   if (!employee) {
     if (detailLoading) {
       return (
-        <div className="border border-input bg-card" aria-busy="true">
+        <div className="rounded-md border border-border-soft bg-card" aria-busy="true">
           <CenteredSpinner label="Loading employee" className="min-h-[22rem]" />
         </div>
       );
     }
     return (
-      <div className="border border-input bg-card p-6">
+      <div className="rounded-md border border-border-soft bg-card p-6">
         <h1 className="text-lg font-semibold">{detailError || "Employee not found"}</h1>
-        <Button asChild className="mt-4" size="sm">
+        <Button asChild className="mt-4 h-8" size="sm">
           <Link href="/pro/dashboard/team">Back to employees</Link>
         </Button>
       </div>
@@ -290,17 +319,152 @@ export function TeamMemberView({ id }: { id: string }) {
         label={name}
         kind="employee"
         tabs={[
-          { id: "settings", label: "Settings", icon: Settings },
-          { id: "availability", label: "Availability", icon: Clock },
-          { id: "pay", label: "Pay rate", icon: Banknote },
-          { id: "schedule", label: "Schedule", icon: CalendarDays },
-          { id: "jobs", label: "Jobs", icon: Briefcase },
-          { id: "estimates", label: "Estimates", icon: FileText },
-          { id: "tasks", label: "Tasks", icon: ListTodo },
-          { id: "reminders", label: "Reminders", icon: Bell },
-          { id: "notes", label: "Notes", icon: NotebookPen },
-          { id: "attachments", label: "Attachments", icon: Paperclip },
+          { id: "settings", label: "Settings" },
+          { id: "availability", label: "Availability" },
+          { id: "pay", label: "Pay rate" },
+          { id: "schedule", label: "Schedule" },
+          { id: "jobs", label: "Jobs" },
+          { id: "estimates", label: "Estimates" },
+          { id: "tasks", label: "Tasks" },
+          { id: "reminders", label: "Reminders" },
+          { id: "notes", label: "Notes" },
+          { id: "attachments", label: "Attachments" },
         ]}
+        subnavTabs={["settings", "availability", "pay", "reminders", "notes", "attachments"]}
+        subnav={(activeTab) => {
+          if (activeTab === "settings") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Employee settings</p>
+                  <p className="text-xs text-muted-foreground">
+                    Name, role, trade, and contact. Changes apply across jobs and the calendar.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!settingsActions || settingsActions.saving}
+                  onClick={() => settingsActions?.save()}
+                >
+                  {settingsActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save settings"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "availability") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Availability</p>
+                  <p className="text-xs text-muted-foreground">
+                    Working hours used when assigning this employee on the calendar.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!availabilityActions || availabilityActions.saving}
+                  onClick={() => availabilityActions?.save()}
+                >
+                  {availabilityActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save hours"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "pay") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Per hour price</p>
+                  <p className="text-xs text-muted-foreground">
+                    Labor rate for this employee on jobs, estimates, and overtime.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  disabled={!payActions || payActions.saving}
+                  onClick={() => payActions?.save()}
+                >
+                  {payActions?.saving ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save rates"
+                  )}
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "reminders") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Reminders</p>
+                  <p className="text-xs text-muted-foreground">
+                    Follow-ups linked to this employee.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setReminderOpen(true)}
+                >
+                  + Set reminder
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "notes") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Notes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Desk notes stay with this employee.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => setNoteOpen(true)}
+                >
+                  + Add note
+                </Button>
+              </div>
+            );
+          }
+          if (activeTab === "attachments") {
+            return (
+              <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">Attachments</p>
+                  <p className="text-xs text-muted-foreground">
+                    License, W-4, certifications, and other employee files.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        }}
         badge={
           <>
             <StatusPill label={employeeRoleLabel(employee.role)} tone="primary" />
@@ -310,43 +474,57 @@ export function TeamMemberView({ id }: { id: string }) {
         notice={<FileNotices kind="employee" id={employee.id} />}
         actions={
           <>
-            <SetTaskButton
-              subjectKind="employee"
-              subjectId={employee.id}
-              onCreated={(item) => {
-                dispatch(upsertEmployeeTask({ employeeId: employee.id, item }));
-                void dispatch(fetchEmployeeTasks({ employeeId: employee.id, force: true }));
-              }}
-            />
-            <SetReminderButton
-              subjectKind="employee"
-              subjectId={employee.id}
-              onCreated={(item) => {
-                dispatch(upsertEmployeeReminder({ employeeId: employee.id, item }));
-                void dispatch(fetchEmployeeReminders({ employeeId: employee.id, force: true }));
-                if (crm.enabled) crm.addReminder(item);
-              }}
-            />
-            <AddNoteButton subjectKind="employee" subjectId={employee.id} />
-            <Button size="sm" asChild>
+            <Button size="sm" className="h-8" asChild>
               <Link href={`/pro/dashboard/schedule?employeeId=${employee.id}`}>Open calendar</Link>
             </Button>
-            {employee.role === "owner" ? null : (
-              <Button size="sm" variant="outline" onClick={() => setRemoveOpen(true)}>
-                Remove
-              </Button>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8">
+                  More actions
+                  <ChevronDown className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem onSelect={() => setTaskOpen(true)}>Create task</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setNoteOpen(true)}>Add note</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>Set reminder</DropdownMenuItem>
+                {employee.role === "owner" ? null : (
+                  <DropdownMenuItem onSelect={() => setRemoveOpen(true)}>Remove</DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       >
         {(tab) => {
           switch (tab) {
             case "settings":
-              return <EmployeeSettingsTab employee={employee} onSave={saveEmployee} />;
+              return (
+                <EmployeeSettingsTab
+                  employee={employee}
+                  onSave={saveEmployee}
+                  hideHeader
+                  onActionsChange={onSettingsActionsChange}
+                />
+              );
             case "availability":
-              return <EmployeeAvailabilityTab employee={employee} onSave={saveEmployee} />;
+              return (
+                <EmployeeAvailabilityTab
+                  employee={employee}
+                  onSave={saveEmployee}
+                  hideHeader
+                  onActionsChange={onAvailabilityActionsChange}
+                />
+              );
             case "pay":
-              return <EmployeePayTab employee={employee} onSave={saveEmployee} />;
+              return (
+                <EmployeePayTab
+                  employee={employee}
+                  onSave={saveEmployee}
+                  hideHeader
+                  onActionsChange={onPayActionsChange}
+                />
+              );
             case "schedule":
               return (
                 <EmployeeScheduleTab
@@ -369,18 +547,27 @@ export function TeamMemberView({ id }: { id: string }) {
             case "tasks":
               return <EmployeeTasksTab employeeId={employee.id} />;
             case "reminders":
+              return <EmployeeRemindersTab employeeId={employee.id} />;
+            case "notes":
               return (
-                <EmployeeRemindersTab
-                  employeeId={employee.id}
-                  onSetReminder={() => setReminderOpen(true)}
+                <NotesPanel
+                  kind="employee"
+                  id={employee.id}
+                  showAddInToolbar={false}
+                  empty="Add the first note on this employee."
                 />
               );
-            case "notes":
-              return <NotesPanel kind="employee" id={employee.id} />;
             case "attachments":
-              return <EmployeeAttachmentsTab employee={employee} />;
+              return <EmployeeAttachmentsTab employee={employee} hideHeader />;
             default:
-              return <EmployeeSettingsTab employee={employee} onSave={saveEmployee} />;
+              return (
+                <EmployeeSettingsTab
+                  employee={employee}
+                  onSave={saveEmployee}
+                  hideHeader
+                  onActionsChange={onSettingsActionsChange}
+                />
+              );
           }
         }}
       </RecordWorkspace>
@@ -394,6 +581,22 @@ export function TeamMemberView({ id }: { id: string }) {
           void dispatch(fetchEmployeeReminders({ employeeId: employee.id, force: true }));
           if (crm.enabled) crm.addReminder(item);
         }}
+      />
+      <CreateTaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        subjectKind="employee"
+        subjectId={employee.id}
+        onCreated={(item) => {
+          dispatch(upsertEmployeeTask({ employeeId: employee.id, item }));
+          void dispatch(fetchEmployeeTasks({ employeeId: employee.id, force: true }));
+        }}
+      />
+      <CreateNoteDialogForSubject
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        subjectKind="employee"
+        subjectId={employee.id}
       />
       <AssignEventDialog
         open={Boolean(editing)}
@@ -441,9 +644,13 @@ export function TeamMemberView({ id }: { id: string }) {
 function EmployeeSettingsTab({
   employee,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   employee: PortalEmployee;
   onSave: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [draft, setDraft] = useState(employee);
   const [saving, setSaving] = useState(false);
@@ -478,25 +685,47 @@ function EmployeeSettingsTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Employee settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Name, role, trade, and contact. Changes apply across jobs and the calendar.</p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Employee settings</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Name, role, trade, and contact. Changes apply across jobs and the calendar.</p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save settings"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save settings"
-          )}
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-2">
+      )}
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:grid-cols-2 sm:p-5">
         <Field label="First name">
           <Input value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} />
         </Field>
@@ -577,10 +806,14 @@ export function EmployeeAvailabilityTab({
   employee,
   onSave,
   description = "Working hours used when assigning this employee on the calendar.",
+  hideHeader = false,
+  onActionsChange,
 }: {
   employee: PortalEmployee;
   onSave?: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
   description?: string;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const hoursKey = JSON.stringify(employee.workingHours ?? null);
   const [days, setDays] = useState<EmployeeDayHours[]>(() =>
@@ -618,27 +851,49 @@ export function EmployeeAvailabilityTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Availability</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Availability</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving || !onSave} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save hours"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving || !onSave} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save hours"
-          )}
-        </Button>
-      </div>
-      <div className="overflow-hidden rounded-[4px] border border-input">
+      )}
+      <div className="overflow-hidden rounded-md border border-border-soft">
         <table className="w-full text-sm">
-          <thead className="bg-[#e8eef5] text-[11px] tracking-[0.12em] text-[#003F7D] uppercase">
+          <thead className="bg-secondary text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Day</th>
               <th className="px-3 py-2 text-left font-semibold">Working</th>
@@ -648,7 +903,7 @@ export function EmployeeAvailabilityTab({
           </thead>
           <tbody>
             {days.map((item) => (
-              <tr key={item.day} className="border-t border-input">
+              <tr key={item.day} className="border-t border-border-soft">
                 <td className="px-3 py-2 font-medium">{weekdayLabel(item.day)}</td>
                 <td className="px-3 py-2">
                   <Select
@@ -694,9 +949,13 @@ export function EmployeeAvailabilityTab({
 export function EmployeePayTab({
   employee,
   onSave,
+  hideHeader = false,
+  onActionsChange,
 }: {
   employee: PortalEmployee;
   onSave: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
+  hideHeader?: boolean;
+  onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [pay, setPay] = useState({
     hourlyRate: employee.hourlyRate ?? 0,
@@ -735,25 +994,47 @@ export function EmployeePayTab({
     }
   }
 
+  const saveRef = useRef(() => {
+    void save();
+  });
+  saveRef.current = () => {
+    void save();
+  };
+  const saveStable = useCallback(() => {
+    saveRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    onActionsChange({ saving, save: saveStable });
+  }, [onActionsChange, saving, saveStable]);
+
+  useEffect(() => {
+    if (!onActionsChange) return;
+    return () => onActionsChange(null);
+  }, [onActionsChange]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Per hour price</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Labor rate for this employee on jobs, estimates, and overtime.</p>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Per hour price</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Labor rate for this employee on jobs, estimates, and overtime.</p>
+          </div>
+          <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save rates"
+            )}
+          </Button>
         </div>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save rates"
-          )}
-        </Button>
-      </div>
-      <div className="grid gap-3 rounded-[4px] border border-input bg-card p-4 sm:grid-cols-3">
+      )}
+      <div className="grid gap-3 rounded-md bg-secondary/40 p-4 sm:grid-cols-3 sm:p-5">
         <Field label="Hourly rate">
           <Input
             type="number"
@@ -825,7 +1106,7 @@ function EmployeeScheduleTab({
 
   if (listLoading) {
     return (
-      <div className="border border-input" aria-busy="true">
+      <div className="rounded-md border border-border-soft" aria-busy="true">
         <CenteredSpinner label="Loading schedule" className="min-h-[16rem]" />
       </div>
     );
@@ -1099,10 +1380,8 @@ function EmployeeTasksTab({ employeeId }: { employeeId: string }) {
 
 function EmployeeRemindersTab({
   employeeId,
-  onSetReminder,
 }: {
   employeeId: string;
-  onSetReminder: () => void;
 }) {
   const dispatch = useAppDispatch();
   const crm = useCrmApiData();
@@ -1175,11 +1454,6 @@ function EmployeeRemindersTab({
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
-        toolbar={
-          <Button size="sm" onClick={onSetReminder}>
-            Set reminder
-          </Button>
-        }
         columns={[
           {
             id: "reminder",
@@ -1288,10 +1562,12 @@ function fileSize(bytes: number) {
 export function EmployeeAttachmentsTab({
   employee,
   useApi = true,
+  hideHeader = false,
 }: {
   employee: PortalEmployee;
   /** When false (e.g. vendor reuse), attachments API is not available. */
   useApi?: boolean;
+  hideHeader?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const detail = useAppSelector((state) => state.team?.detail ?? null);
@@ -1312,10 +1588,19 @@ export function EmployeeAttachmentsTab({
   if (!useApi) {
     return (
       <div>
-        <h2 className="text-base font-semibold">Attachments</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Document uploads for this record are not available yet.
-        </p>
+        {hideHeader ? null : (
+          <>
+            <h2 className="text-sm font-semibold">Attachments</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Document uploads for this record are not available yet.
+            </p>
+          </>
+        )}
+        {hideHeader ? (
+          <p className="text-sm text-muted-foreground">
+            Document uploads for this record are not available yet.
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -1400,13 +1685,18 @@ export function EmployeeAttachmentsTab({
 
   return (
     <div>
-      <h2 className="text-base font-semibold">Attachments</h2>
-      <p className="mt-1 text-sm text-muted-foreground">License, W-4, certifications, and other employee files.</p>
+      {hideHeader ? null : (
+        <>
+          <h2 className="text-sm font-semibold">Attachments</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">License, W-4, certifications, and other employee files.</p>
+        </>
+      )}
       <label
         className={cn(
-          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[4px] border border-dashed px-6 py-10 text-center",
-          over ? "border-primary bg-[#003F7D]/5" : "border-input bg-[#f8fafc]",
+          "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center",
+          over ? "border-primary bg-secondary" : "border-border-soft bg-secondary/40",
           uploading && "pointer-events-none opacity-60",
+          hideHeader && "mt-0",
         )}
         onDragEnter={(event) => {
           event.preventDefault();
@@ -1441,10 +1731,10 @@ export function EmployeeAttachmentsTab({
         />
       </label>
       {attachments.length ? (
-        <ul className="mt-4 divide-y divide-input border border-input">
+        <ul className="mt-4 divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft">
           {attachments.map((item) => (
             <li key={item.id} className="flex items-center gap-3 px-3 py-3">
-              <span className="flex size-9 items-center justify-center rounded-[4px] bg-[#eef1f5] text-primary">
+              <span className="flex size-9 items-center justify-center rounded-md bg-secondary text-primary">
                 {item.type.startsWith("image/") ? (
                   <ImageIcon className="size-4" />
                 ) : item.type.startsWith("video/") ? (
@@ -1468,7 +1758,7 @@ export function EmployeeAttachmentsTab({
                   {item.addedAt ? stamp(item.addedAt) : fileSize(item.size)}
                 </p>
               </div>
-              <Button size="sm" variant="outline" asChild>
+              <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
                 <a
                   href={item.dataUrl}
                   target="_blank"
@@ -1501,7 +1791,7 @@ export function EmployeeAttachmentsTab({
 
 function PayStat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-[4px] border border-input bg-[#f8fafc] px-4 py-3">
+    <div className="rounded-md border border-border-soft bg-secondary/40 px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
       <p className="text-xs text-muted-foreground">{hint}</p>

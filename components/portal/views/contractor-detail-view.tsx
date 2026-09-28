@@ -33,6 +33,7 @@ import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { StatusPill } from "@/components/portal/status-pill";
+import { FileNotices } from "@/components/portal/task-banner";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { EmployeeAvailabilityTab } from "@/components/portal/views/employee-detail-view";

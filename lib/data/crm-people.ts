@@ -188,6 +188,8 @@ export type PortalReminder = {
   customerName?: string;
   subjectKind?: ReminderSubjectKind;
   subjectId?: string;
+  /** Resolved display label for the linked record (e.g. JOB-662, EST-941, REQ-209). */
+  subjectLabel?: string;
   title: string;
   note: string;
   dueAt: string;
@@ -502,18 +504,22 @@ export function reminderSubject(reminder: PortalReminder): { kind: ReminderSubje
 export function reminderMatches(reminder: PortalReminder, kind: ReminderSubjectKind, id: string) {
   if (!id) return false;
   const subject = reminderSubject(reminder);
+  // Exact subject match only — do not leak reminders across jobs/estimates/invoices/etc.
   if (subject.kind === kind && subject.id === id) return true;
-  // Employee / contractor profile banners: also match reminders assigned to this person.
-  if (kind === "employee" && reminder.assignedEmployeeId === id) return true;
-  if (kind === "contractor" && reminder.assignedContractorId === id) return true;
-  if (kind === "vendor" && reminder.assignedVendorId === id) return true;
   return false;
 }
 
 export function openRemindersFor(reminders: PortalReminder[], kind: ReminderSubjectKind, id: string) {
-  return reminders.filter(
-    (item) => item.status === "open" && !item.isArchived && reminderMatches(item, kind, id),
-  );
+  return reminders
+    .filter(
+      (item) => item.status === "open" && !item.isArchived && reminderMatches(item, kind, id),
+    )
+    .sort((a, b) => {
+      const aAt = a.createdAt || "";
+      const bAt = b.createdAt || "";
+      if (aAt === bAt) return 0;
+      return aAt < bAt ? 1 : -1;
+    });
 }
 
 export function reminderIsOverdue(reminder: PortalReminder, today = new Date().toISOString().slice(0, 10)) {

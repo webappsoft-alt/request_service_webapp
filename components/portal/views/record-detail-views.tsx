@@ -1054,11 +1054,11 @@ export function EstimateDetailView({ id }: { id: string }) {
                     <DropdownMenuItem onSelect={() => setNoteOpen(true)}>
                       Add note
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setReminderOpen(true)}>
-                      Set reminder
-                    </DropdownMenuItem>
                   </>
                 ) : null}
+                <DropdownMenuItem onSelect={() => setReminderOpen(true)}>
+                  Set reminder
+                </DropdownMenuItem>
                 {records.isArchived("estimate", estimate.id) ? (
                   <DropdownMenuItem
                     disabled={restoring}
@@ -2711,6 +2711,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
   }
 
   return (
+    <>
     <RecordWorkspace
       href={`/pro/dashboard/invoices/${invoice.id}`}
       label={invoice.number}
@@ -2800,6 +2801,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
           )}
         </>
       }
+      notice={<FileNotices kind="invoice" id={invoice.id} />}
       actions={
         <>
           <Button
@@ -2849,6 +2851,13 @@ export function InvoiceDetailView({ id }: { id: string }) {
             size="sm"
             variant="outline"
             className="h-8"
+            onClick={() => setReminderOpen(true)}
+          >
+            Set reminder
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             disabled={archiving}
             onClick={() => void toggleArchive()}
           >
@@ -3003,6 +3012,13 @@ export function InvoiceDetailView({ id }: { id: string }) {
         }
       }}
     </RecordWorkspace>
+    <CreateReminderDialog
+      open={reminderOpen}
+      onOpenChange={setReminderOpen}
+      subjectKind="invoice"
+      subjectId={invoice.id}
+    />
+    </>
   );
 }
 

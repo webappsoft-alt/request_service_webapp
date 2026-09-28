@@ -36,6 +36,7 @@ import { CreateNoteDialogForSubject, NotesPanel } from "@/components/portal/note
 import { jobBoardColumns } from "@/components/portal/job-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
+import { FileNotices } from "@/components/portal/task-banner";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -357,6 +358,7 @@ export function VendorDetailView({ id }: { id: string }) {
             ) : null}
           </>
         }
+        notice={<FileNotices kind="vendor" id={vendor.id} />}
         actions={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

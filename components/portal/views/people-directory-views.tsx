@@ -612,6 +612,16 @@ export function RemindersView() {
       }
     }
   }
+  // Always show newest created reminders first (GET list + local).
+  rows = [...rows].sort((a, b) => {
+    const aAt = a.createdAt || "";
+    const bAt = b.createdAt || "";
+    if (aAt !== bAt) return aAt < bAt ? 1 : -1;
+    const aDue = a.dueAt || "";
+    const bDue = b.dueAt || "";
+    if (aDue !== bDue) return aDue < bDue ? 1 : -1;
+    return 0;
+  });
 
   const tableLoading = actionLoading || (useApi ? loading && items.length === 0 : false);
 
@@ -766,23 +776,35 @@ export function RemindersView() {
             header: "Linked to",
             sortValue: (row) => {
               const subject = reminderSubject(row);
-              return `${reminderSubjectKindLabel(subject.kind)} ${lookups.label(subject.kind, subject.id)}`;
+              const name =
+                (row.subjectLabel || "").trim() ||
+                lookups.label(subject.kind, subject.id);
+              return `${reminderSubjectKindLabel(subject.kind)} ${name}`;
             },
             searchValue: (row) => {
               const subject = reminderSubject(row);
-              return `${reminderSubjectKindLabel(subject.kind)} ${lookups.label(subject.kind, subject.id)}`;
+              const name =
+                (row.subjectLabel || "").trim() ||
+                lookups.label(subject.kind, subject.id);
+              return `${reminderSubjectKindLabel(subject.kind)} ${name}`;
             },
             exportValue: (row) => {
               const subject = reminderSubject(row);
-              return `${reminderSubjectKindLabel(subject.kind)} · ${lookups.label(subject.kind, subject.id)}`;
+              const name =
+                (row.subjectLabel || "").trim() ||
+                lookups.label(subject.kind, subject.id);
+              return `${reminderSubjectKindLabel(subject.kind)} · ${name}`;
             },
             cell: (row) => {
               const subject = reminderSubject(row);
+              const name =
+                (row.subjectLabel || "").trim() ||
+                lookups.label(subject.kind, subject.id);
               return (
                 <ReminderSubjectLink
                   kind={subject.kind}
                   id={subject.id}
-                  name={lookups.label(subject.kind, subject.id)}
+                  name={name}
                 />
               );
             },
@@ -790,7 +812,7 @@ export function RemindersView() {
           {
             id: "due",
             header: "Due",
-            sortValue: (row) => row.dueAt,
+            // Do not enable column sort here — list order is newest-created first from the API.
             searchValue: (row) => formatDate(row.dueAt),
             exportValue: (row) => formatDate(row.dueAt),
             cell: (row) => formatDate(row.dueAt),
@@ -814,13 +836,20 @@ export function RemindersView() {
               return employee ? `${employee.firstName} ${employee.lastName}` : row.assignedContractorName || row.assignedVendorName || "";
             },
             cell: (row) => {
-              if (row.assignedEmployeeName) return row.assignedEmployeeName;
-              if (row.assignedEmployeeId) {
+              const employeeNameFromList = (() => {
+                if (!row.assignedEmployeeId) return "";
                 const employee = employees.find((item) => item.id === row.assignedEmployeeId);
-                if (employee) return `${employee.firstName} ${employee.lastName}`.trim();
-              }
-              if (row.assignedContractorName) return row.assignedContractorName;
-              if (row.assignedVendorName) return row.assignedVendorName;
+                return employee
+                  ? `${employee.firstName} ${employee.lastName}`.trim()
+                  : "";
+              })();
+              const name =
+                (row.assignedEmployeeName || "").trim() ||
+                employeeNameFromList ||
+                (row.assignedContractorName || "").trim() ||
+                (row.assignedVendorName || "").trim();
+              // Never show raw ObjectIds in the Assigned column.
+              if (name && !/^[0-9a-fA-F]{24}$/.test(name)) return name;
               return "Unassigned";
             },
           },
@@ -933,8 +962,21 @@ export function ReminderDetailView({ id }: { id: string }) {
   }
   const employee = employees.find((item) => item.id === reminder.assignedEmployeeId);
   const subject = reminderSubject(reminder);
-  const linkedName = lookups.label(subject.kind, subject.id);
+  const linkedName =
+    (reminder.subjectLabel || "").trim() || lookups.label(subject.kind, subject.id);
   const overdue = reminderIsOverdue(reminder);
+  const assignedLabel = (() => {
+    const fromApi = (reminder.assignedEmployeeName || "").trim();
+    const fromEmployee = employee
+      ? `${employee.firstName} ${employee.lastName}`.trim()
+      : "";
+    const fromOther =
+      (reminder.assignedContractorName || "").trim() ||
+      (reminder.assignedVendorName || "").trim();
+    const name = fromApi || fromEmployee || fromOther;
+    if (name && !/^[0-9a-fA-F]{24}$/.test(name)) return name;
+    return "—";
+  })();
 
   async function toggleStatus() {
     if (statusUpdating || reminder!.isArchived) return;
@@ -1118,16 +1160,7 @@ export function ReminderDetailView({ id }: { id: string }) {
             <div className="grid gap-3 rounded-md bg-secondary/40 p-4 text-sm sm:grid-cols-2 sm:p-5">
               <Fact label="Due" value={formatDate(reminder.dueAt)} />
               <Fact label="Status" value={overdue ? "Overdue" : crmReminderStatusLabel(reminder.status)} />
-              <Fact
-                label="Assigned"
-                value={
-                  reminder.assignedEmployeeName ||
-                  (employee ? `${employee.firstName} ${employee.lastName}`.trim() : "") ||
-                  reminder.assignedContractorName ||
-                  reminder.assignedVendorName ||
-                  "—"
-                }
-              />
+              <Fact label="Assigned" value={assignedLabel} />
               <Fact label="Created" value={formatDate(reminder.createdAt)} />
               <div className="sm:col-span-2">
                 <Fact label="Note" value={reminder.note || "—"} />

@@ -1,12 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  GoogleAddressAutocomplete,
-  type PlaceAddress,
-} from "@/components/shared/google-address-autocomplete";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,80 +13,48 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import {
+  SearchableMultiSelect,
+  SearchableSelect,
+} from "@/components/ui/searchable-select";
+import {
+  CITY_SERVICE_AREAS,
+  cityServiceAreaKey,
+  findServiceAreaCity,
+  type CityServiceAreaNeighborhood,
+} from "@/lib/data/city-service-areas";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  createServiceArea,
+  createServiceAreas,
   updateServiceArea,
   type ServiceArea,
-  type ServiceAreaInput,
+  type CityServiceAreasPayload,
 } from "@/store/serviceAreasSlice";
 
-type FormState = {
-  title: string;
-  address: string;
-  city: string;
-  country: string;
-  zip: string;
-  longitude: string;
-  latitude: string;
-};
+/** Merge selected neighborhoods under one city object. */
+function buildCityAreasPayload(
+  city: string,
+  state: string,
+  areas: CityServiceAreaNeighborhood[],
+): CityServiceAreasPayload {
+  const seen = new Set<string>();
+  const merged: CityServiceAreasPayload["areas"] = [];
 
-const emptyForm = (): FormState => ({
-  title: "",
-  address: "",
-  city: "",
-  country: "",
-  zip: "",
-  longitude: "",
-  latitude: "",
-});
-
-function fromArea(area: ServiceArea): FormState {
-  return {
-    title: area.title,
-    address: area.location.address,
-    city: area.location.city,
-    country: area.location.country || "",
-    zip: area.location.zip,
-    longitude: String(area.location.coordinates[0] ?? ""),
-    latitude: String(area.location.coordinates[1] ?? ""),
-  };
-}
-
-function buildPayload(form: FormState): ServiceAreaInput | null {
-  const title = form.title.trim();
-  const address = form.address.trim();
-  const city = form.city.trim();
-  const country = form.country.trim();
-  const zip = form.zip.trim();
-  const longitude = Number(form.longitude);
-  const latitude = Number(form.latitude);
-
-  if (!title) {
-    toast.error("Title is required.");
-    return null;
-  }
-  if (!address) {
-    toast.error("Location is required.");
-    return null;
-  }
-  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-    toast.error("Select a location from the Google suggestions to set coordinates.");
-    return null;
+  for (const area of areas) {
+    const name = area.name.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({
+      name,
+      lat: area.lat,
+      lng: area.lng,
+      ...(area.zip ? { zip: area.zip } : {}),
+    });
   }
 
-  return {
-    title,
-    location: {
-      type: "Point",
-      coordinates: [longitude, latitude],
-      city,
-      country,
-      address,
-      zip,
-    },
-  };
+  return { city, state, areas: merged };
 }
 
 export function ServiceAreaFormDialog({
@@ -106,36 +70,115 @@ export function ServiceAreaFormDialog({
 }) {
   const dispatch = useAppDispatch();
   const mutating = useAppSelector((state) => state.serviceAreas.mutating);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const provider = useAppSelector((state) => state.auth.provider);
   const isEdit = Boolean(area);
+
+  const [cityKey, setCityKey] = useState("");
+  const [selectedAreaNames, setSelectedAreaNames] = useState<string[]>([]);
+
+  const cityOptions = useMemo(
+    () =>
+      CITY_SERVICE_AREAS.map((entry) => ({
+        value: cityServiceAreaKey(entry.city, entry.state),
+        label: `${entry.city}, ${entry.state}`,
+      })),
+    [],
+  );
+
+  const selectedCity = useMemo(
+    () =>
+      CITY_SERVICE_AREAS.find(
+        (entry) => cityServiceAreaKey(entry.city, entry.state) === cityKey,
+      ),
+    [cityKey],
+  );
+
+  const cityAreas = selectedCity?.areas ?? [];
+
+  const areaOptions = useMemo(
+    () =>
+      cityAreas.map((entry) => ({
+        value: entry.name,
+        label: entry.name,
+      })),
+    [cityAreas],
+  );
 
   useEffect(() => {
     if (!open) return;
-    setForm(area ? fromArea(area) : emptyForm());
-  }, [area, open]);
+
+    if (area) {
+      const matched = findServiceAreaCity(
+        area.location.city,
+        area.location.state,
+      );
+      const key = matched
+        ? cityServiceAreaKey(matched.city, matched.state)
+        : "";
+      setCityKey(key);
+      const names =
+        area.areas?.length > 0
+          ? area.areas.map((item) => item.name)
+          : area.title
+            ? [area.title]
+            : [];
+      setSelectedAreaNames(names);
+      return;
+    }
+
+    const profileCity = provider?.location?.city;
+    const profileState =
+      typeof provider?.location?.state === "string"
+        ? provider.location.state
+        : undefined;
+    const matched = findServiceAreaCity(profileCity, profileState);
+    setCityKey(matched ? cityServiceAreaKey(matched.city, matched.state) : "");
+    setSelectedAreaNames([]);
+  }, [area, open, provider?.location?.city, provider?.location?.state]);
 
   function reset() {
-    setForm(emptyForm());
-  }
-
-  function applyAddress(place: PlaceAddress) {
-    setForm((current) => ({
-      ...current,
-      address: place.streetAddress.trim() || place.formattedAddress,
-      city: place.city || current.city,
-      zip: place.zipCode || current.zip,
-      country: place.country || current.country,
-      latitude: place.latitude != null ? String(place.latitude) : current.latitude,
-      longitude: place.longitude != null ? String(place.longitude) : current.longitude,
-    }));
+    setCityKey("");
+    setSelectedAreaNames([]);
   }
 
   async function save() {
-    const payload = buildPayload(form);
-    if (!payload) return;
+    if (!selectedCity) {
+      toast.error("Select a city.");
+      return;
+    }
+
+    const chosen = cityAreas.filter((item) =>
+      selectedAreaNames.includes(item.name),
+    );
+    if (!chosen.length) {
+      toast.error("Select at least one area.");
+      return;
+    }
+
+    const payload = buildCityAreasPayload(
+      selectedCity.city,
+      selectedCity.state,
+      chosen,
+    );
 
     if (isEdit && area) {
-      const result = await dispatch(updateServiceArea({ id: area.id, ...payload }));
+      const primary = payload.areas[0];
+      const result = await dispatch(
+        updateServiceArea({
+          id: area.id,
+          title: `${selectedCity.city}, ${selectedCity.state}`,
+          areas: payload.areas,
+          location: {
+            type: "Point",
+            coordinates: [primary.lng, primary.lat],
+            city: selectedCity.city,
+            state: selectedCity.state,
+            country: "US",
+            address: `${selectedCity.city}, ${selectedCity.state}`,
+            zip: primary.zip || "",
+          },
+        }),
+      );
       if (updateServiceArea.fulfilled.match(result)) {
         toast.success("Service area updated.");
         onOpenChange(false);
@@ -151,19 +194,24 @@ export function ServiceAreaFormDialog({
       return;
     }
 
-    const result = await dispatch(createServiceArea(payload));
-    if (createServiceArea.fulfilled.match(result)) {
-      toast.success("Service area added.");
+    const result = await dispatch(createServiceAreas(payload));
+    if (createServiceAreas.fulfilled.match(result)) {
+      toast.success(
+        `${selectedCity.city} added with ${payload.areas.length} area${
+          payload.areas.length === 1 ? "" : "s"
+        }.`,
+      );
       onOpenChange(false);
       reset();
       onSaved();
-    } else {
-      toast.error(
-        typeof result.payload === "string"
-          ? result.payload
-          : "Could not create service area.",
-      );
+      return;
     }
+
+    toast.error(
+      typeof result.payload === "string"
+        ? result.payload
+        : "Could not create service areas.",
+    );
   }
 
   return (
@@ -174,54 +222,49 @@ export function ServiceAreaFormDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" data-lenis-prevent>
+      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit service area" : "Add service area"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Edit service area" : "Add service area"}
+          </DialogTitle>
           <DialogDescription>
-            Define a geographic zone with address details for this account.
+            {isEdit
+              ? "Update the city and neighborhoods for this service area."
+              : "Choose a city, then select one or more areas to cover."}
           </DialogDescription>
         </DialogHeader>
 
         <FieldGroup className="gap-4">
           <Field>
-            <FieldLabel htmlFor="sa-title">Title</FieldLabel>
-            <Input
-              id="sa-title"
-              value={form.title}
-              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              placeholder="Austin Downtown & Central"
+            <FieldLabel htmlFor="sa-city">City</FieldLabel>
+            <SearchableSelect
+              id="sa-city"
+              options={cityOptions}
+              value={cityKey || null}
+              onChange={(value) => {
+                setCityKey(value || "");
+                setSelectedAreaNames([]);
+              }}
+              placeholder="Search or select a city…"
+              disabled={isEdit}
             />
           </Field>
+
           <Field>
-            <FieldLabel htmlFor="sa-location">Location</FieldLabel>
-            <GoogleAddressAutocomplete
-              id="sa-location"
-              value={form.address}
-              onChange={(value) => setForm((current) => ({ ...current, address: value }))}
-              onSelect={applyAddress}
-              placeholder="Start typing a street address…"
+            <FieldLabel htmlFor="sa-areas">Areas</FieldLabel>
+            <SearchableMultiSelect
+              id="sa-areas"
+              options={areaOptions}
+              value={selectedAreaNames}
+              onChange={setSelectedAreaNames}
+              disabled={!selectedCity}
+              placeholder={
+                selectedCity
+                  ? "Search or select areas…"
+                  : "Select a city first"
+              }
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="sa-zip">ZIP Code</FieldLabel>
-              <Input
-                id="sa-zip"
-                value={form.zip}
-                onChange={(event) => setForm((current) => ({ ...current, zip: event.target.value }))}
-                placeholder="78701"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="sa-country">Country</FieldLabel>
-              <Input
-                id="sa-country"
-                value={form.country}
-                onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))}
-                placeholder="US"
-              />
-            </Field>
-          </div>
         </FieldGroup>
 
         <DialogFooter>
@@ -235,7 +278,11 @@ export function ServiceAreaFormDialog({
           </Button>
           <Button type="button" onClick={() => void save()} disabled={mutating}>
             {mutating ? <Loader2 className="size-4 animate-spin" /> : null}
-            {isEdit ? "Save changes" : "Add area"}
+            {isEdit
+              ? "Save changes"
+              : selectedAreaNames.length > 1
+                ? `Add ${selectedAreaNames.length} areas`
+                : "Add area"}
           </Button>
         </DialogFooter>
       </DialogContent>

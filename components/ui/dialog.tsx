@@ -74,7 +74,7 @@ function DialogContent({
       node instanceof Element &&
       Boolean(
         node.closest(
-          "[data-paginated-entity-menu], .rs-phone-dropdown, .rs-phone-input .country-list, .rs-phone-input .flag-dropdown",
+          "[data-paginated-entity-menu], [data-searchable-select-menu], .rs-phone-dropdown, .rs-phone-input .country-list, .rs-phone-input .flag-dropdown",
         ),
       )
     if (path.some(matchesPortaledUi)) {
@@ -120,9 +120,9 @@ function DialogContent({
       >
         <div
           data-slot="dialog-scroll"
-          className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          className="no-scrollbar min-h-0 overflow-y-auto overscroll-contain"
         >
-          <div className="flex min-h-full flex-col gap-4 px-4 pt-4 pb-0">
+          <div className="flex flex-col gap-4 px-4 pt-4 pb-0">
             {children}
           </div>
         </div>
@@ -168,7 +168,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "sticky bottom-0 z-10 -mx-4 mt-auto flex shrink-0 flex-col-reverse gap-2 border-t bg-muted p-4 sm:flex-row sm:justify-end",
+        "sticky bottom-0 z-10 -mx-4 flex shrink-0 flex-col-reverse gap-2 border-t bg-muted p-4 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}

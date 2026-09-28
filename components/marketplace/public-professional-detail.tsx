@@ -281,15 +281,21 @@ function mergeProviders(primary: Provider[], extra: Provider[]): Provider[] {
 }
 
 function areaLabelsFromProfessional(professional: PublicProfessional): string[] {
+  const fromCities = (professional.coverage?.cities ?? []).flatMap((city) =>
+    city.areas.map((area) => area.name.trim()).filter(Boolean),
+  );
+  if (fromCities.length) return [...new Set(fromCities)];
+
   const fromCoverage = (professional.coverage?.neighborhoods ?? [])
     .map((item) => item.title.trim() || item.city.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((label) => !/^[0-9a-fA-F]{24}$/.test(label));
   if (fromCoverage.length) return [...new Set(fromCoverage)];
 
-  const fromCities = professional.location.operatingCities
+  const fromOperating = professional.location.operatingCities
     .map((item) => item.trim())
     .filter(Boolean);
-  if (fromCities.length) return [...new Set(fromCities)];
+  if (fromOperating.length) return [...new Set(fromOperating)];
 
   return getServiceAreaNames(professional.location.coveredZipCodes);
 }

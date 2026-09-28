@@ -35,6 +35,7 @@ import {
   showApiErrorToast,
 } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
+import { areasForServiceAreaCity } from "@/lib/data/city-service-areas";
 import { Spinner } from "@/components/ui/spinner";
 import {
   PROVIDER_CONTACT_ROLES,
@@ -70,18 +71,10 @@ const SKIP_TO_NEXT_STEPS: Step[] = ["services", "profile"];
 
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
 
-const SERVICE_AREAS = [
-  "Downtown",
-  "East Austin",
-  "Clarksville",
-  "Zilker",
-  "West Campus",
-  "Northwest Hills",
-  "South Austin",
-  "West Lake Hills",
-  "Crestview",
-  "Arboretum",
-] as const;
+/** Austin neighborhoods from the shared city-service-areas dataset (no frontend IDs). */
+const SERVICE_AREAS = areasForServiceAreaCity("Austin", "TX").map(
+  (area) => area.name,
+);
 
 type Draft = {
   firstName: string;

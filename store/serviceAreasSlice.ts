@@ -11,14 +11,24 @@ export type ServiceAreaLocation = {
   type: "Point";
   coordinates: [number, number];
   city: string;
+  state?: string;
   country: string;
   address: string;
   zip: string;
 };
 
+export type ServiceAreaNeighborhood = {
+  name: string;
+  lat: number;
+  lng: number;
+  zip?: string;
+};
+
 export type ServiceArea = {
   id: string;
   title: string;
+  /** Neighborhoods under this city (one API row per city). */
+  areas: ServiceAreaNeighborhood[];
   location: ServiceAreaLocation;
   isActive: boolean;
   createdAt?: string;
@@ -28,6 +38,19 @@ export type ServiceArea = {
 export type ServiceAreaInput = {
   title: string;
   location: ServiceAreaLocation;
+  areas?: ServiceAreaNeighborhood[];
+};
+
+/** One city with all selected neighborhoods (merged — city appears once). */
+export type CityServiceAreasPayload = {
+  city: string;
+  state: string;
+  areas: Array<{
+    name: string;
+    lat: number;
+    lng: number;
+    zip?: string;
+  }>;
 };
 
 export type ServiceAreasListParams = {
@@ -112,10 +135,31 @@ function normalizeLocation(raw: unknown): ServiceAreaLocation {
     type: "Point",
     coordinates: [lng, lat],
     city: typeof record.city === "string" ? record.city : "",
+    state: typeof record.state === "string" ? record.state : "",
     country: typeof record.country === "string" ? record.country : "US",
     address: typeof record.address === "string" ? record.address : "",
     zip: typeof record.zip === "string" ? record.zip : "",
   };
+}
+
+function normalizeNeighborhoods(raw: unknown): ServiceAreaNeighborhood[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ServiceAreaNeighborhood[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const lat = toNumber(record.lat, 0);
+    const lng = toNumber(record.lng, 0);
+    const zip = typeof record.zip === "string" ? record.zip : undefined;
+    out.push({ name, lat, lng, ...(zip ? { zip } : {}) });
+  }
+  return out;
 }
 
 export function normalizeServiceArea(raw: unknown): ServiceArea | null {
@@ -128,10 +172,26 @@ export function normalizeServiceArea(raw: unknown): ServiceArea | null {
     "";
   if (!id) return null;
 
+  const location = normalizeLocation(record.location);
+  let areas = normalizeNeighborhoods(record.areas);
+
+  // Legacy flat row: single title neighborhood
+  if (!areas.length && record.title && typeof record.title === "string") {
+    areas = [
+      {
+        name: record.title,
+        lat: location.coordinates[1],
+        lng: location.coordinates[0],
+        ...(location.zip ? { zip: location.zip } : {}),
+      },
+    ];
+  }
+
   return {
     id,
     title: typeof record.title === "string" ? record.title : "",
-    location: normalizeLocation(record.location),
+    areas,
+    location,
     isActive: Boolean(record.isActive ?? true),
     createdAt: typeof record.createdAt === "string" ? record.createdAt : undefined,
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : undefined,
@@ -266,6 +326,28 @@ export const createServiceArea = createAsyncThunk<
   }
 });
 
+/** Create areas for one city: `{ city, state, areas: [{ name, lat, lng, zip? }] }`. */
+export const createServiceAreas = createAsyncThunk<
+  ServiceArea[],
+  CityServiceAreasPayload | { cities: CityServiceAreasPayload[] },
+  { rejectValue: string }
+>("serviceAreas/createMany", async (payload, { rejectWithValue }) => {
+  try {
+    const response = await postData(providerApi.serviceAreas, payload, {
+      silent: true,
+    });
+    const parsed = extractListPayload(response);
+    if (parsed.items.length) return parsed.items;
+
+    const single = extractEntity(response);
+    if (single) return [single];
+
+    return rejectWithValue("Service areas were created but could not be read.");
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
 export const updateServiceArea = createAsyncThunk<
   ServiceArea,
   { id: string } & ServiceAreaInput,
@@ -277,7 +359,9 @@ export const updateServiceArea = createAsyncThunk<
     });
     const updated = extractEntity(response) ?? {
       id,
-      ...payload,
+      title: payload.title,
+      areas: payload.areas ?? [],
+      location: payload.location,
       isActive: true,
     };
     return updated;
@@ -413,6 +497,21 @@ const serviceAreasSlice = createSlice({
         state.mutating = false;
         state.error =
           action.payload || action.error.message || "Failed to create service area.";
+      })
+      .addCase(createServiceAreas.pending, (state) => {
+        state.mutating = true;
+        state.error = null;
+      })
+      .addCase(createServiceAreas.fulfilled, (state) => {
+        state.mutating = false;
+        state.pagesCache = {};
+      })
+      .addCase(createServiceAreas.rejected, (state, action) => {
+        state.mutating = false;
+        state.error =
+          action.payload ||
+          action.error.message ||
+          "Failed to create service areas.";
       })
       .addCase(updateServiceArea.pending, (state) => {
         state.mutating = true;

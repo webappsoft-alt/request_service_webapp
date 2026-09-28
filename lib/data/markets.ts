@@ -4,7 +4,10 @@ export type MarketCity = {
   zip: string;
 };
 
-/** Primary Colorado markets used for local service × city keywords. */
+/**
+ * Market city list used across explore/SEO (Colorado featured cities, zip helpers).
+ * Pro Service Areas coverage lives only in `city-service-areas.ts`.
+ */
 export const COLORADO_CITIES: MarketCity[] = [
   { city: "Denver", state: "CO", zip: "80202" },
   { city: "Colorado Springs", state: "CO", zip: "80903" },

@@ -121,7 +121,9 @@ export function ServiceAreasView() {
     const result = await dispatch(deleteServiceArea(area.id));
     if (deleteServiceArea.fulfilled.match(result)) {
       setDeleteTarget(null);
-      toast.success(`${area.title} removed.`);
+      toast.success(
+        `${area.location.city || area.title} removed.`,
+      );
       void dispatch(fetchServiceAreas());
       return;
     }
@@ -191,41 +193,92 @@ export function ServiceAreasView() {
           }}
           columns={[
             {
-              id: "title",
-              header: "Area",
-              sortValue: (row) => row.title,
-              searchValue: (row) => row.title,
-              exportValue: (row) => row.title,
-              cell: (row) => (
-                <div>
-                  <button
-                    type="button"
-                    className="font-medium text-primary hover:underline"
-                    onClick={() => openEdit(row)}
-                  >
-                    {row.title}
-                  </button>
-                  <p className="max-w-md truncate text-xs text-muted-foreground">
-                    {row.location.address || "No street address"}
-                  </p>
-                </div>
-              ),
+              id: "areas",
+              header: "Areas",
+              sortValue: (row) =>
+                row.areas?.map((a) => a.name).join(", ") || row.title,
+              searchValue: (row) =>
+                [
+                  row.title,
+                  row.location.city,
+                  ...(row.areas?.map((a) => a.name) ?? []),
+                ].join(" "),
+              exportValue: (row) =>
+                row.areas?.map((a) => a.name).join(", ") || row.title,
+              cell: (row) => {
+                const names =
+                  row.areas?.length > 0
+                    ? row.areas.map((a) => a.name).join(", ")
+                    : row.title;
+                return (
+                  <div>
+                    <button
+                      type="button"
+                      className="text-left font-medium text-primary hover:underline"
+                      onClick={() => openEdit(row)}
+                    >
+                      {names}
+                    </button>
+                    <p className="max-w-md truncate text-xs text-muted-foreground">
+                      {row.location.address ||
+                        [row.location.city, row.location.state]
+                          .filter(Boolean)
+                          .join(", ") ||
+                        "No address"}
+                    </p>
+                  </div>
+                );
+              },
             },
             {
               id: "city",
               header: "City",
               sortValue: (row) => row.location.city,
-              searchValue: (row) => row.location.city,
-              exportValue: (row) => row.location.city,
-              cell: (row) => row.location.city || "—",
+              searchValue: (row) =>
+                [row.location.city, row.location.state].filter(Boolean).join(" "),
+              exportValue: (row) =>
+                [row.location.city, row.location.state]
+                  .filter(Boolean)
+                  .join(", ") || row.location.city,
+              cell: (row) =>
+                [row.location.city, row.location.state]
+                  .filter(Boolean)
+                  .join(", ") ||
+                row.location.city ||
+                "—",
             },
             {
               id: "zip",
               header: "ZIP",
-              sortValue: (row) => row.location.zip,
-              searchValue: (row) => row.location.zip,
-              exportValue: (row) => row.location.zip,
-              cell: (row) => row.location.zip || "—",
+              sortValue: (row) =>
+                row.areas?.map((a) => a.zip).filter(Boolean).join(",") ||
+                row.location.zip,
+              searchValue: (row) =>
+                row.areas?.map((a) => a.zip).filter(Boolean).join(" ") ||
+                row.location.zip,
+              exportValue: (row) => {
+                const zips = [
+                  ...new Set(
+                    (row.areas || [])
+                      .map((a) => a.zip)
+                      .filter((z): z is string => Boolean(z)),
+                  ),
+                ];
+                return zips.length
+                  ? zips.join(", ")
+                  : row.location.zip || "";
+              },
+              cell: (row) => {
+                const zips = [
+                  ...new Set(
+                    (row.areas || [])
+                      .map((a) => a.zip)
+                      .filter((z): z is string => Boolean(z)),
+                  ),
+                ];
+                if (zips.length) return zips.join(", ");
+                return row.location.zip || "—";
+              },
             },
             {
               id: "coords",
@@ -282,15 +335,17 @@ export function ServiceAreasView() {
         }}
       >
         <DialogContent showCloseButton={!mutating} className="sm:max-w-md">
-          <DialogHeader>
+          <DialogHeader className="border-b-0">
             <DialogTitle>Delete service area?</DialogTitle>
             <DialogDescription>
               {deleteTarget
-                ? `This will permanently remove “${deleteTarget.title}” from your service areas.`
+                ? `This will permanently remove “${
+                    deleteTarget.location.city || deleteTarget.title
+                  }” and all its areas from your service areas.`
                 : "This will permanently remove this service area."}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="border-t-0 bg-transparent">
             <Button
               type="button"
               variant="outline"

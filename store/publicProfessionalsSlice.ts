@@ -38,9 +38,22 @@ export type PublicProfessionalCoverageNeighborhood = {
   id: string;
   title: string;
   city: string;
+  state?: string;
   zip: string;
   address: string;
   coordinates: number[];
+};
+
+export type PublicProfessionalCoverageCity = {
+  id: string;
+  city: string;
+  state: string;
+  areas: Array<{
+    name: string;
+    lat: number;
+    lng: number;
+    zip?: string;
+  }>;
 };
 
 export type PublicProfessionalActiveService = {
@@ -113,6 +126,7 @@ export type PublicProfessional = {
     paymentMethods?: string[];
   };
   coverage?: {
+    cities?: PublicProfessionalCoverageCity[];
     neighborhoods: PublicProfessionalCoverageNeighborhood[];
   };
   workingHours?: WorkingHours[];
@@ -334,7 +348,42 @@ function normalizeCoverage(
       ? raw
       : [];
 
-  const neighborhoods = neighborhoodsRaw
+  const citiesRaw = Array.isArray(record?.cities) ? record.cities : [];
+
+  const cities = citiesRaw
+    .map((item): PublicProfessionalCoverageCity | null => {
+      const row = asRecord(item);
+      if (!row) return null;
+      const id =
+        (typeof row.id === "string" && row.id) ||
+        (typeof row._id === "string" && row._id) ||
+        "";
+      const city = typeof row.city === "string" ? row.city : "";
+      const state = typeof row.state === "string" ? row.state : "";
+      const areasRaw = Array.isArray(row.areas) ? row.areas : [];
+      const areas = areasRaw
+        .map((area) => {
+          const a = asRecord(area);
+          if (!a) return null;
+          const name = typeof a.name === "string" ? a.name.trim() : "";
+          const lat = toNumber(a.lat, NaN);
+          const lng = toNumber(a.lng, NaN);
+          if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          const zip = typeof a.zip === "string" ? a.zip : undefined;
+          return { name, lat, lng, ...(zip ? { zip } : {}) };
+        })
+        .filter(
+          (
+            area,
+          ): area is { name: string; lat: number; lng: number; zip?: string } =>
+            Boolean(area),
+        );
+      if (!city && !areas.length) return null;
+      return { id, city, state, areas };
+    })
+    .filter((item): item is PublicProfessionalCoverageCity => Boolean(item));
+
+  let neighborhoods = neighborhoodsRaw
     .map((item): PublicProfessionalCoverageNeighborhood | null => {
       const row = asRecord(item);
       if (!row) return null;
@@ -342,21 +391,46 @@ function normalizeCoverage(
         (typeof row.id === "string" && row.id) ||
         (typeof row._id === "string" && row._id) ||
         "";
+      const title = typeof row.title === "string" ? row.title : "";
+      // Skip stale ObjectId-only placeholders
+      if (/^[0-9a-fA-F]{24}$/.test(title) && !row.city) return null;
       const coordinates = Array.isArray(row.coordinates)
-        ? row.coordinates.filter((value): value is number => typeof value === "number")
+        ? row.coordinates.filter(
+            (value): value is number => typeof value === "number",
+          )
         : [];
       return {
         id,
-        title: typeof row.title === "string" ? row.title : "",
+        title,
         city: typeof row.city === "string" ? row.city : "",
+        state: typeof row.state === "string" ? row.state : "",
         zip: typeof row.zip === "string" ? row.zip : "",
         address: typeof row.address === "string" ? row.address : "",
         coordinates,
       };
     })
-    .filter((item): item is PublicProfessionalCoverageNeighborhood => Boolean(item));
+    .filter((item): item is PublicProfessionalCoverageNeighborhood =>
+      Boolean(item),
+    );
 
-  return { neighborhoods };
+  // Derive flat neighborhoods from cities when API only returns cities
+  if (!neighborhoods.length && cities.length) {
+    neighborhoods = cities.flatMap((cityEntry) =>
+      cityEntry.areas.map((area) => ({
+        id: cityEntry.id,
+        title: area.name,
+        city: cityEntry.city,
+        state: cityEntry.state,
+        zip: area.zip || "",
+        address: [area.name, cityEntry.city, cityEntry.state]
+          .filter(Boolean)
+          .join(", "),
+        coordinates: [area.lng, area.lat],
+      })),
+    );
+  }
+
+  return { cities, neighborhoods };
 }
 
 function normalizeActiveService(

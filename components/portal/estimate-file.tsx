@@ -2,30 +2,34 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  GoogleAddressAutocomplete,
+  type PlaceAddress,
+} from "@/components/shared/google-address-autocomplete";
+import { UsStateSelect } from "@/components/shared/us-state-select";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useJobFile, type EstimateSettingsDraft } from "@/components/portal/use-job-file";
-import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { estimateAsJob } from "@/components/portal/work-builders";
 import { JobSummaryTab } from "@/components/portal/job-file";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
-import { updateEstimate as updateEstimateApi, updateEstimateSettings as updateEstimateSettingsApi } from "@/lib/api/crm-client";
+import { updateEstimateSettings as updateEstimateSettingsApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
-import { ESTIMATE_STATUSES, estimateStatusLabel } from "@/lib/data/portal";
+import { estimateStatusLabel } from "@/lib/data/portal";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { formatDate, formatLocation } from "@/lib/format";
-import type { Estimate, EstimateStatus, Job } from "@/lib/types";
+import type { Estimate, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function EstimateFileChrome({
@@ -41,12 +45,17 @@ export function EstimateFileChrome({
   service: string;
   job?: Job;
 }) {
-  const [open, setOpen] = useState(false);
   const contact = customer ? `${customer.firstName} ${customer.lastName}`.trim() : "";
   const address = estimate.propertyAddress;
+  const addressLine = [
+    address.address || address.street,
+    formatLocation(address.city, address.state, address.zip),
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
-    <div>
+    <div className="space-y-3">
       <nav aria-label="Estimate breadcrumb" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
         <Link href="/pro/dashboard/estimates" className="font-semibold text-primary hover:underline">
           Estimates
@@ -67,70 +76,43 @@ export function EstimateFileChrome({
         ) : null}
       </nav>
 
-      <button
-        type="button"
-        aria-expanded={open}
-        className={cn(
-          "mt-3 inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-          open
-            ? "border-primary/25 bg-primary/5 text-primary"
-            : "border-input bg-card text-foreground hover:border-primary/30 hover:bg-muted/40",
-        )}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span>{open ? "Hide estimate details" : "Show estimate details"}</span>
-        <span
-          className={cn(
-            "inline-flex size-5 items-center justify-center rounded-full border border-current/15 bg-background/80",
-          )}
-        >
-          <ChevronDown
-            className={cn(
-              "size-3.5 transition-transform duration-200",
-              open && "rotate-180",
-            )}
-            aria-hidden="true"
-          />
-        </span>
-      </button>
-
-      {open ? (
-        <div className="mt-3 overflow-hidden rounded-lg border border-input bg-card shadow-sm">
-          <div className="border-b border-input bg-[#f8fafc] px-4 py-2.5">
-            <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-              Estimate overview
-            </p>
-          </div>
-          <div className="grid divide-y divide-input sm:grid-cols-2 sm:divide-x xl:grid-cols-4">
-            <Detail
-              label="Customer"
-              value={
+      <div className="overflow-hidden rounded-lg border border-input bg-card">
+        <div className="grid gap-3 px-4 py-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <Detail
+            label="Customer"
+            value={
+              estimate.customerId ? (
                 <Link
                   href={`/pro/dashboard/customers/${estimate.customerId}`}
                   className="font-semibold text-primary hover:underline"
                 >
                   {customerLabel}
                 </Link>
-              }
-            />
-            {customer && customer.entityKind === "company" && contact ? (
-              <Detail label="Contact" value={contact} />
-            ) : null}
-            <Detail label="Service" value={service} />
-            <Detail
-              label="Address"
-              value={`${address.street}, ${formatLocation(address.city, address.state, address.zip)}`}
-            />
-            <Detail label="Issued" value={formatDate(estimate.issuedAt)} />
-            <Detail
-              label="Expires"
-              value={estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"}
-            />
-            {customer?.phone ? <Detail label="Phone" value={customer.phone} /> : null}
-            {customer?.email ? <Detail label="Email" value={customer.email} /> : null}
-          </div>
+              ) : (
+                customerLabel
+              )
+            }
+          />
+          {customer && customer.entityKind === "company" && contact ? (
+            <Detail label="Contact" value={contact} />
+          ) : null}
+          <Detail label="Service" value={service || "—"} />
+          <Detail label="Address" value={addressLine || "—"} />
+          <Detail label="Issued" value={formatDate(estimate.issuedAt)} />
+          <Detail
+            label="Expires"
+            value={estimate.expiresAt ? formatDate(estimate.expiresAt) : "—"}
+          />
+          <Detail
+            label="Status"
+            value={
+              <span className="capitalize">
+                {estimateStatusLabel(estimate.status)}
+              </span>
+            }
+          />
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -140,28 +122,27 @@ export function EstimateSettingsTab({
   job,
   service,
   locked = false,
+  compact = false,
   onSave,
 }: {
   estimate: Estimate;
   job?: Job;
   service: string;
   locked?: boolean;
+  compact?: boolean;
   onSave?: (updated: Estimate) => void;
 }) {
-  const { customers, loading: customersLoading } = useCrmDirectory();
+  const { customers } = useCrmDirectory();
   const crm = useCrmApiData();
-  const loading = customersLoading && customers.length === 0;
-  const records = usePortalRecords();
   const asJob = estimateAsJob(estimate);
   const file = useJobFile(asJob, estimate, undefined, "");
-  const apiReady = crm.enabled;
 
   const fallback = useMemo<EstimateSettingsDraft>(() => ({
     name: service,
     customerId: estimate.customerId,
     street: estimate.propertyAddress.address || estimate.propertyAddress.street,
     city: estimate.propertyAddress.city,
-    state: estimate.propertyAddress.state,
+    state: normalizeUsStateCode(estimate.propertyAddress.state) || estimate.propertyAddress.state,
     zip: estimate.propertyAddress.zip,
     issuedAt: estimate.issuedAt.slice(0, 10),
     expiresAt: estimate.expiresAt?.slice(0, 10) ?? "",
@@ -172,7 +153,6 @@ export function EstimateSettingsTab({
 
   const [draft, setDraft] = useState<EstimateSettingsDraft>(fallback);
   const selected = customers.find((item) => item.id === draft.customerId) ?? customers.find((item) => item.id === estimate.customerId);
-  const isKnownCustomer = customers.some((item) => item.id === draft.customerId);
   const [saving, setSaving] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
@@ -193,9 +173,7 @@ export function EstimateSettingsTab({
       (draft.city || "").trim() !== (fallback.city || "").trim() ||
       (draft.state || "").trim() !== (fallback.state || "").trim() ||
       (draft.zip || "").trim() !== (fallback.zip || "").trim() ||
-      (draft.expiresAt || "") !== (fallback.expiresAt || "") ||
-      (draft.notes || "").trim() !== (fallback.notes || "").trim() ||
-      (draft.terms || "").trim() !== (fallback.terms || "").trim()
+      (draft.expiresAt || "") !== (fallback.expiresAt || "")
     );
   }, [draft, fallback, isLocked]);
 
@@ -226,6 +204,8 @@ export function EstimateSettingsTab({
         target.closest("[data-estimate-settings-form]") ||
         target.closest("[role='dialog']") ||
         target.closest("[role='listbox']") ||
+        target.closest("[data-us-state-select-menu]") ||
+        target.closest("[data-searchable-select-menu]") ||
         target.closest("[data-radix-popper-content-wrapper]") ||
         target.closest("[data-radix-focus-guard]") ||
         target.closest("[data-radix-portal]") ||
@@ -280,55 +260,65 @@ export function EstimateSettingsTab({
   }
 
   async function persist(settingsDraft: EstimateSettingsDraft) {
-    file.saveEstimateSettings(settingsDraft);
+    if (!estimate?.id) {
+      throw new Error("Estimate not found.");
+    }
+
     const chosenCustomer = customers.find((item) => item.id === settingsDraft.customerId);
     const customerName = chosenCustomer ? crmCustomerName(chosenCustomer) : estimate.customerName;
+    const existingAddress = estimate.propertyAddress || {};
+    const latRaw = existingAddress.lat ?? existingAddress.latitude;
+    const lngRaw = existingAddress.lng ?? existingAddress.longitude;
+    const lat = typeof latRaw === "number" && Number.isFinite(latRaw) ? latRaw : null;
+    const lng = typeof lngRaw === "number" && Number.isFinite(lngRaw) ? lngRaw : null;
 
-    const patchedEstimate: Estimate = {
-      ...estimate,
+    const stateCode = normalizeUsStateCode(settingsDraft.state) || "";
+
+    // Do not send notes/terms/status/customerId — settings-only fields that can break PUT.
+    const updated = await updateEstimateSettingsApi(estimate.id, {
       title: settingsDraft.name.trim() || estimate.title,
-      customerId: settingsDraft.customerId,
-      customerName,
       propertyAddress: {
-        ...estimate.propertyAddress,
         address: settingsDraft.street,
         street: settingsDraft.street,
         city: settingsDraft.city,
-        state: settingsDraft.state,
+        state: stateCode,
         zip: settingsDraft.zip,
+        lat,
+        lng,
+        latitude: lat,
+        longitude: lng,
       },
       issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
-      expiresAt: settingsDraft.expiresAt || undefined,
-      status: settingsDraft.status,
-      notes: settingsDraft.notes || undefined,
-      terms: settingsDraft.terms || undefined,
-    };
-    crm.patchEstimate(estimate.id, patchedEstimate);
-    records.setStatus("estimate", estimate.id, settingsDraft.status);
-    onSave?.(patchedEstimate);
+      ...(settingsDraft.expiresAt?.trim()
+        ? { expiresAt: settingsDraft.expiresAt.trim() }
+        : {}),
+    });
 
-    if (estimate?.id) {
-      const updated = await updateEstimateSettingsApi(estimate.id, {
-        title: settingsDraft.name.trim() || estimate.title,
-        customerId: settingsDraft.customerId,
-        propertyAddress: {
-          address: settingsDraft.street,
-          street: settingsDraft.street,
-          city: settingsDraft.city,
-          state: settingsDraft.state,
-          zip: settingsDraft.zip,
-        },
-        issuedAt: settingsDraft.issuedAt || estimate.issuedAt,
-        expiresAt: settingsDraft.expiresAt || null,
-        status: settingsDraft.status,
-        notes: settingsDraft.notes || "",
-        terms: settingsDraft.terms || "",
-      });
-      if (updated) {
-        crm.patchEstimate(estimate.id, updated);
-        onSave?.(updated);
-      }
+    if (!updated) {
+      throw new Error("Could not save this estimate.");
     }
+
+    // Apply local UI only after the API succeeds so failures keep previous data.
+    const savedDraft: EstimateSettingsDraft = {
+      ...settingsDraft,
+      notes: estimate.notes ?? "",
+      terms: estimate.terms ?? "",
+      status: updated.status || settingsDraft.status,
+    };
+    file.saveEstimateSettings(savedDraft);
+    crm.patchEstimate(estimate.id, {
+      ...updated,
+      notes: updated.notes ?? estimate.notes,
+      terms: updated.terms ?? estimate.terms,
+      customerName: updated.customerName || customerName,
+    });
+    onSave?.({
+      ...updated,
+      notes: updated.notes ?? estimate.notes,
+      terms: updated.terms ?? estimate.terms,
+      customerName: updated.customerName || customerName,
+    });
+    return updated;
   }
 
   async function handleManualSave() {
@@ -338,6 +328,7 @@ export function EstimateSettingsTab({
       await persist(draft);
       toast.success("Estimate settings saved.");
     } catch (error) {
+      setDraft(fallback);
       toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
     } finally {
       setSaving(false);
@@ -351,6 +342,7 @@ export function EstimateSettingsTab({
       toast.success("Estimate settings saved.");
       executePending();
     } catch (error) {
+      setDraft(fallback);
       toast.error(error instanceof Error ? error.message : "Could not save this estimate.");
     } finally {
       setSaving(false);
@@ -367,19 +359,43 @@ export function EstimateSettingsTab({
     setShowUnsavedDialog(false);
   }
 
+  function applyAddress(address: PlaceAddress) {
+    patch({
+      street: address.streetAddress.trim(),
+      city: address.city || "",
+      state: normalizeUsStateCode(address.state) || "",
+      ...(address.zipCode ? { zip: address.zipCode } : {}),
+    });
+  }
+
   const customerName = selected ? crmCustomerName(selected) : estimate.customerName || "Customer";
   const customerPhone = selected?.phone || estimate.customerPhone || "";
   const customerEmail = selected?.email || estimate.customerEmail || "";
 
   return (
-    <div data-estimate-settings-form className="rounded-[4px] border border-input bg-card p-4">
+    <div
+      data-estimate-settings-form
+      className={cn(
+        compact ? "space-y-4" : "rounded-[4px] border border-input bg-card p-4",
+      )}
+    >
       <div className="mb-4 flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold">Estimate settings</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {isLocked ? "This estimate is signed/locked. Settings cannot be edited." : "Manage editable quote settings."}
+        {compact ? (
+          <p className="text-xs text-muted-foreground">
+            {isLocked
+              ? "This estimate is signed/locked. Settings cannot be edited."
+              : "Update quote details, then save."}
           </p>
-        </div>
+        ) : (
+          <div>
+            <h2 className="text-sm font-semibold">Estimate settings</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {isLocked
+                ? "This estimate is signed/locked. Settings cannot be edited."
+                : "Manage editable quote settings."}
+            </p>
+          </div>
+        )}
         <Button
           size="sm"
           disabled={isLocked || saving || !isDirty}
@@ -394,25 +410,11 @@ export function EstimateSettingsTab({
           <Input disabled={isLocked || saving} value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
         </Field>
         <Field label="Status">
-          <Select
+          <Input
             disabled
-            value={draft.status}
-          >
-            <SelectTrigger className="w-full bg-muted/50 cursor-not-allowed">
-              <SelectValue placeholder={estimateStatusLabel(draft.status)} />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
-            >
-              {ESTIMATE_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {estimateStatusLabel(status)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="bg-muted/50 cursor-not-allowed"
+            value={estimateStatusLabel(draft.status)}
+          />
         </Field>
         <Field label="Customer">
           <Input disabled className="bg-muted/50 cursor-not-allowed" value={customerName} />
@@ -433,38 +435,44 @@ export function EstimateSettingsTab({
             <Input disabled className="bg-muted/50 cursor-not-allowed" value={customerEmail} />
           </Field>
         ) : null}
-        <Field label="Address">
-          <Input disabled={isLocked || saving} value={draft.street} onChange={(event) => patch({ street: event.target.value })} />
-        </Field>
-        <Field label="City">
-          <Input disabled={isLocked || saving} value={draft.city} onChange={(event) => patch({ city: event.target.value })} />
-        </Field>
-        <Field label="State">
-          <Input disabled={isLocked || saving} value={draft.state} onChange={(event) => patch({ state: event.target.value })} />
-        </Field>
-        <Field label="ZIP">
-          <Input disabled={isLocked || saving} value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />
-        </Field>
-        <label className="grid gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium">Notes</span>
-          <Textarea
+        <Field label="Address" className="sm:col-span-2">
+          <GoogleAddressAutocomplete
+            id="estimate-settings-address"
+            value={draft.street}
+            onChange={(street) => patch({ street })}
+            onSelect={applyAddress}
+            placeholder="Start typing your address…"
+            autoComplete="off"
             disabled={isLocked || saving}
-            rows={8}
-            value={draft.notes}
-            onChange={(event) => patch({ notes: event.target.value })}
-            className="min-h-[10rem] resize-y leading-6"
           />
-        </label>
-        <label className="grid gap-1.5 text-sm sm:col-span-2">
-          <span className="font-medium">Terms</span>
-          <Textarea
-            disabled={isLocked || saving}
-            rows={5}
-            value={draft.terms}
-            onChange={(event) => patch({ terms: event.target.value })}
-            className="min-h-[7rem] resize-y leading-6"
-          />
-        </label>
+        </Field>
+        <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-3">
+          <Field label="City">
+            <Input
+              disabled={isLocked || saving}
+              value={draft.city}
+              placeholder="City"
+              onChange={(event) => patch({ city: event.target.value })}
+            />
+          </Field>
+          <Field label="State">
+            <UsStateSelect
+              value={normalizeUsStateCode(draft.state)}
+              onChange={(code) => patch({ state: code })}
+              placeholder="State"
+              disabled={isLocked || saving}
+            />
+          </Field>
+          <Field label="ZIP">
+            <Input
+              disabled={isLocked || saving}
+              value={draft.zip}
+              placeholder="ZIP"
+              onChange={(event) => patch({ zip: event.target.value })}
+              inputMode="numeric"
+            />
+          </Field>
+        </div>
         {job ? (
           <p className="text-sm text-muted-foreground sm:col-span-2">
             Converted to{" "}
@@ -492,23 +500,73 @@ export function EstimateSettingsTab({
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="px-4 py-3.5">
+    <div className="min-w-0">
       <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </p>
-      <div className="mt-1.5 text-sm font-medium leading-snug text-foreground break-words">
+      <div className="mt-1 text-sm font-medium leading-snug text-foreground break-words">
         {value}
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <label className="grid gap-1.5 text-sm">
+    <label className={cn("grid gap-1.5 text-sm", className)}>
       <span className="font-medium">{label}</span>
       {children}
     </label>
+  );
+}
+
+export function EstimateSettingsDialog({
+  open,
+  onOpenChange,
+  estimate,
+  job,
+  service,
+  locked = false,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  estimate: Estimate;
+  job?: Job;
+  service: string;
+  locked?: boolean;
+  onSave?: (updated: Estimate) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Edit estimate</DialogTitle>
+          <DialogDescription>
+            Update estimate details and address.
+          </DialogDescription>
+        </DialogHeader>
+        <EstimateSettingsTab
+          estimate={estimate}
+          job={job}
+          service={service}
+          locked={locked}
+          compact
+          onSave={(updated) => {
+            onSave?.(updated);
+            onOpenChange(false);
+          }}
+        />
+      </DialogContent>
+    </Dialog>
   );
 }
 

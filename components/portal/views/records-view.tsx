@@ -84,6 +84,7 @@ import {
   upsertPaymentItem,
 } from "@/store/paymentsSlice";
 import {
+  convertEstimateToJob,
   deleteEstimate,
   queryEstimates,
   queryInvoices,
@@ -134,6 +135,7 @@ export function EstimatesView() {
   const share = useEstimateShare();
   const [createOpen, setCreateOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<EstimateRow | null>(null);
   const [archiving, setArchiving] = useState(false);
   // Controlled search input — updated immediately on keypress
@@ -221,6 +223,66 @@ export function EstimatesView() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
+
+  /** Reuse Estimate→Job + Job→Invoice APIs (same as estimate detail). */
+  async function handleConvertEstimateToInvoice(row: EstimateRow) {
+    if (convertingId) return;
+    setConvertingId(row.id);
+    try {
+      let jobId = resolveCrmObjectId(row.jobId) || row.jobId?.trim() || "";
+
+      if (!jobId) {
+        if (!useApi) {
+          toast.error("Sign in as a Pro to convert estimates.");
+          return;
+        }
+        const created = await convertEstimateToJob(row.id, {
+          title: row.title,
+          items: row.items,
+          siteVisit: row.siteVisit,
+        });
+        if (!created?.id) {
+          throw new Error("The CRM did not return the new job.");
+        }
+        jobId = created.id;
+        dispatch(
+          patchEstimateLocally({
+            id: row.id,
+            patch: {
+              status: "converted_to_job",
+              jobId: created.id,
+            },
+          }),
+        );
+        records.linkRecords("estimate", row.id, created.id);
+        records.cacheJob(created);
+      }
+
+      const { invoice } = await dispatch(
+        convertJobToInvoiceRecord(jobId),
+      ).unwrap();
+      toast.success(
+        `${invoice.number || "Invoice"} drafted from ${row.number}.`,
+      );
+      const dest = resolveCrmObjectId(invoice.id) || invoice.id;
+      if (!resolveCrmObjectId(dest)) {
+        toast.error("Invoice created — open it from the Invoices list.");
+        router.push("/pro/dashboard/invoices");
+        return;
+      }
+      router.push(`/pro/dashboard/invoices/${dest}`);
+    } catch (err) {
+      toast.error(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+            ? err.message
+            : "Could not convert this estimate to an invoice.",
+      );
+    } finally {
+      setConvertingId(null);
+    }
+  }
 
   useEffect(() => {
     if (!useApi || !error || loading) return;
@@ -646,6 +708,24 @@ export function EstimatesView() {
                   {
                     label: "Convert to job",
                     href: `/pro/dashboard/estimates/${row.id}`,
+                  },
+                  {
+                    label:
+                      convertingId === row.id
+                        ? "Converting…"
+                        : "Convert to invoice",
+                    onSelect: () => void handleConvertEstimateToInvoice(row),
+                  },
+                ]
+              : []),
+            ...(row.status === "converted_to_job"
+              ? [
+                  {
+                    label:
+                      convertingId === row.id
+                        ? "Converting…"
+                        : "Convert to invoice",
+                    onSelect: () => void handleConvertEstimateToInvoice(row),
                   },
                 ]
               : []),

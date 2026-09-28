@@ -1408,15 +1408,20 @@ function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
       const images = asArray(record.images)
         .map((src) => trimmed(src))
         .filter(Boolean);
+      const mappedType = mapEstimateItemType(record.kind);
+      const kind: InvoiceItem["kind"] =
+        mappedType === "labor" ? "labor" : "materials";
       return {
         id: crmIdOf(record) || `${invoiceId}_item_${index + 1}`,
         invoiceId,
         source: mapInvoiceItemSource(record.kind ?? record.source, description),
         description,
         quantity: Math.max(0, numberValue(record.quantity, 1)),
+        unit: trimmed(record.unit) || (kind === "labor" ? "hr" : "ea"),
         unitPrice: numberValue(record.unitPrice),
         total: numberValue(record.total),
-        ...(images.length ? { images } : {}),
+        kind,
+        ...(kind === "materials" && images.length ? { images } : {}),
       } satisfies InvoiceItem;
     })
     .filter((item): item is InvoiceItem => Boolean(item));

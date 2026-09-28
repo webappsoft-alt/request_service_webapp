@@ -30,10 +30,9 @@ import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import {
   EstimateFileChrome,
-  EstimateSettingsTab,
+  EstimateSettingsDialog,
 } from "@/components/portal/estimate-file";
 import {
-  EstimatePipeline,
   EstimateSiteVisitTab,
   EstimateStageBanner,
 } from "@/components/portal/estimate-flow";
@@ -55,6 +54,7 @@ import {
   fetchInvoiceDetail,
   patchInvoiceArchive,
   sendInvoiceRecord,
+  updateInvoiceRecord,
 } from "@/store/invoicesSlice";
 import {
   fetchPaymentDetail,
@@ -117,6 +117,7 @@ import {
   buildInvoice,
   buildJob,
   linesToEstimateItems,
+  linesToInvoiceItems,
   linesToJobItems,
   nextRecordNumber,
   todayISO,
@@ -186,7 +187,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
   const crm = useCrmApiData();
-  const { session, estimates, provider, jobs } = usePortalWorkspace();
+  const { session, estimates, provider, jobs, invoices } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const { events, employees, assign } = usePortalCrew();
   const records = usePortalRecords();
@@ -203,6 +204,7 @@ export function EstimateDetailView({ id }: { id: string }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [fetched, setFetched] = useState<Estimate | null>(null);
   const [fetching, setFetching] = useState(false);
   const [statusOverride, setStatusOverride] = useState<
@@ -552,6 +554,155 @@ export function EstimateDetailView({ id }: { id: string }) {
     }
   }
 
+  /** Reuse existing Estimate→Job + Job→Invoice APIs (no separate conversion flow). */
+  async function convertToInvoice() {
+    if (converting) return;
+
+    const existingInvoiceId = resolveCrmObjectId(job?.invoiceId);
+    if (existingInvoiceId) {
+      router.push(`/pro/dashboard/invoices/${existingInvoiceId}`);
+      return;
+    }
+    if (job && (job.status === "invoiced" || job.status === "paid")) {
+      toast.error("This estimate’s job is already invoiced.");
+      return;
+    }
+
+    setConverting(true);
+    try {
+      let liveJob = job ?? null;
+
+      if (!liveJob) {
+        if (!canConvert) {
+          toast.error("This estimate cannot be converted right now.");
+          return;
+        }
+        const lines = filledWorkLines(readCostLines(session?.email, asJob));
+        const taxRatePercent = await (
+          await import("@/lib/tax/state-tax")
+        ).fetchTaxRatePercent(quote.propertyAddress?.state);
+        const items = lines.length
+          ? linesToEstimateItems(quote.id, lines, taxRatePercent)
+          : quote.items;
+        const siteVisitRecord = siteVisit
+          ? siteVisitToRecord(siteVisit)
+          : quote.siteVisit;
+        const title = quote.title || service;
+
+        if (apiReady) {
+          const created = await convertEstimateToJobApi(quote.id, {
+            title,
+            items,
+            siteVisit: siteVisitRecord,
+          });
+          if (!created?.id) {
+            throw new Error("The CRM did not return the new job.");
+          }
+          copyCostLines(session?.email, quote.id, created.id);
+          if (siteVisit?.photos.length) {
+            appendJobAttachments(session?.email, created.id, siteVisit.photos);
+          }
+          records.cacheJob(created);
+          records.linkRecords("estimate", quote.id, created.id);
+          setStatusOverride("converted_to_job");
+          crm.patchEstimate(quote.id, {
+            status: "converted_to_job",
+            jobId: created.id,
+          });
+          liveJob = created;
+        } else {
+          const created = buildJob({
+            number: nextRecordNumber(
+              "JOB",
+              allJobs.map((item) => item.number),
+            ),
+            title,
+            providerId: provider.id,
+            customerId: quote.customerId,
+            estimateId: quote.id,
+            address: quote.propertyAddress,
+            assignedTo: siteVisit?.technician,
+            scheduledAt: todayISO(),
+            notes: [
+              quote.title ? `Estimate: ${quote.title}` : "",
+              `Converted from ${quote.number}`,
+              quote.notes,
+            ]
+              .filter(Boolean)
+              .join("\n\n"),
+            status: "unscheduled",
+            lines,
+          });
+          records.cacheJob(created);
+          records.linkRecords("estimate", quote.id, created.id);
+          records.setStatus("estimate", quote.id, "converted_to_job");
+          writeCostLines(session?.email, created.id, lines);
+          setStatusOverride("converted_to_job");
+          liveJob = created;
+        }
+      }
+
+      if (!liveJob?.id) {
+        throw new Error("Could not resolve a job for this estimate.");
+      }
+
+      const jobIsLive = Boolean(resolveCrmObjectId(liveJob.id));
+      if (apiReady || jobIsLive) {
+        const { invoice: created } = await dispatch(
+          convertJobToInvoiceRecord(liveJob.id),
+        ).unwrap();
+        const dest = resolveCrmObjectId(created.id) || created.id;
+        toast.success(
+          `${created.number || "Invoice"} drafted from ${quote.number}.`,
+        );
+        if (!resolveCrmObjectId(dest)) {
+          toast.error("Invoice created — open it from the Invoices list.");
+          router.push("/pro/dashboard/invoices");
+          return;
+        }
+        router.push(`/pro/dashboard/invoices/${dest}`);
+        return;
+      }
+
+      const costLines = readCostLines(session?.email, liveJob);
+      const draft = buildInvoice({
+        number: nextRecordNumber(
+          "INV",
+          invoices.map((item) => item.number),
+        ),
+        providerId: provider.id,
+        customerId: liveJob.customerId,
+        jobId: liveJob.id,
+        lines: costLines.length
+          ? costLines
+          : liveJob.items.map((item) => ({
+              id: item.id,
+              description: item.description,
+              kind: (item.kind === "labor" ? "labor" : "materials") as
+                | "labor"
+                | "materials",
+              quantity: item.quantity,
+              unit: item.unit,
+              unitPrice: item.unitPrice,
+            })),
+      });
+      await records.addInvoice(draft);
+      records.linkRecords("job", liveJob.id, draft.id);
+      toast.success(`${draft.number} drafted from ${quote.number}.`);
+      router.push(`/pro/dashboard/invoices/${draft.id}`);
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not convert this estimate to an invoice.",
+      );
+    } finally {
+      setConverting(false);
+    }
+  }
+
   return (
     <>
       <RecordWorkspace
@@ -566,7 +717,6 @@ export function EstimateDetailView({ id }: { id: string }) {
           { id: "logs", label: "Logs", icon: ScrollText },
           { id: "notes", label: "Notes", icon: NotebookPen },
           { id: "attachments", label: "Attachments", icon: Paperclip },
-          { id: "settings", label: "Estimate settings", icon: Settings },
         ]}
         badge={
           <>
@@ -596,20 +746,47 @@ export function EstimateDetailView({ id }: { id: string }) {
         actions={
           <>
             {job ? (
-              <Button size="sm" asChild>
-                <Link href={`/pro/dashboard/jobs/${job.id}`}>
-                  Open {job.number}
-                </Link>
-              </Button>
+              <>
+                {!(
+                  job.invoiceId ||
+                  job.status === "invoiced" ||
+                  job.status === "paid"
+                ) ? (
+                  <Button
+                    size="sm"
+                    data-action="convert-to-invoice"
+                    disabled={converting}
+                    onClick={() => void convertToInvoice()}
+                  >
+                    {converting ? "Converting…" : "Convert to invoice"}
+                  </Button>
+                ) : null}
+                <Button size="sm" asChild>
+                  <Link href={`/pro/dashboard/jobs/${job.id}`}>
+                    Open {job.number}
+                  </Link>
+                </Button>
+              </>
             ) : signed ? (
-              <Button
-                size="sm"
-                data-action="convert-to-job"
-                disabled={converting}
-                onClick={convertToJob}
-              >
-                {converting ? "Converting…" : "Convert to job"}
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  data-action="convert-to-job"
+                  disabled={converting}
+                  onClick={convertToJob}
+                >
+                  {converting ? "Converting…" : "Convert to job"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-action="convert-to-invoice"
+                  disabled={converting || !canConvert}
+                  onClick={() => void convertToInvoice()}
+                >
+                  {converting ? "Converting…" : "Convert to invoice"}
+                </Button>
+              </>
             ) : (
               <>
                 {canShare ? (
@@ -724,6 +901,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    onEditEstimate={() => setSettingsOpen(true)}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -910,18 +1088,6 @@ export function EstimateDetailView({ id }: { id: string }) {
                     }}
                   />
                 );
-              case "settings":
-                return (
-                  <EstimateSettingsTab
-                    estimate={estimate}
-                    job={job}
-                    service={service}
-                    locked={signed}
-                    onSave={(updated) => {
-                      setFetched(updated);
-                    }}
-                  />
-                );
               default:
                 return (
                   <JobSummaryTab
@@ -930,6 +1096,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    onEditEstimate={() => setSettingsOpen(true)}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -947,18 +1114,14 @@ export function EstimateDetailView({ id }: { id: string }) {
           })();
           return (
             <div className="space-y-4">
-              <EstimatePipeline
-                status={estimate.status}
-                signed={signed}
-                hasJob={Boolean(job)}
-                hasSiteVisit={Boolean(siteVisit)}
-              />
-              <EstimateStageBanner
-                status={estimate.status}
-                signed={signed}
-                hasJob={Boolean(job)}
-                signature={customerSignature}
-              />
+              {signed || estimate.status === "accepted" || canConvert || job ? (
+                <EstimateStageBanner
+                  status={estimate.status}
+                  signed={signed}
+                  hasJob={Boolean(job)}
+                  signature={customerSignature}
+                />
+              ) : null}
               {job ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
                   <p className="text-sm font-semibold text-emerald-900">
@@ -1015,6 +1178,17 @@ export function EstimateDetailView({ id }: { id: string }) {
           );
         }}
       </RecordWorkspace>
+      <EstimateSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        estimate={estimate}
+        job={job}
+        service={service}
+        locked={signed}
+        onSave={(updated) => {
+          setFetched(updated);
+        }}
+      />
       <AssignEventDialog
         open={assignOpen}
         onOpenChange={setAssignOpen}
@@ -1838,7 +2012,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
     (state) => state.invoices?.detailError ?? null,
   );
 
-  const { invoices, jobs, estimates, requests, payments, provider } =
+  const { session, invoices, jobs, estimates, requests, payments, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
@@ -2133,6 +2307,62 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   invoice={invoice}
                   technician=""
                   noun="invoice"
+                  preferApi={useApi}
+                  ready={!useApi || Boolean(detailInvoice)}
+                  onSave={
+                    useApi
+                      ? async (lines) => {
+                          const filled = filledWorkLines(lines).map((line) => {
+                            if (line.kind !== "materials") return line;
+                            if (line.images?.length) return line;
+                            const prev =
+                              invoice.items.find((item) => item.id === line.id) ||
+                              invoice.items.find(
+                                (item) =>
+                                  item.kind !== "labor" &&
+                                  (item.description || "").trim() ===
+                                    (line.description || "").trim(),
+                              );
+                            if (!prev?.images?.length) return line;
+                            return { ...line, images: [...prev.images] };
+                          });
+                          const items = linesToInvoiceItems(invoice.id, filled).map(
+                            (item) => {
+                              const prev = invoice.items.find(
+                                (existing) => existing.id === item.id,
+                              );
+                              return prev
+                                ? { ...item, source: prev.source }
+                                : item;
+                            },
+                          );
+                          writeCostLines(session?.email, invoice.id, filled);
+                          try {
+                            await dispatch(
+                              updateInvoiceRecord({
+                                id: invoice.id,
+                                invoice: { ...invoice, items },
+                              }),
+                            ).unwrap();
+                            void dispatch(fetchInvoiceDetail(invoice.id));
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : typeof error === "string"
+                                  ? error
+                                  : "Could not save line items to server.",
+                            );
+                            throw error;
+                          }
+                        }
+                      : async (lines) => {
+                          const filled = filledWorkLines(lines);
+                          const items = linesToInvoiceItems(invoice.id, filled);
+                          writeCostLines(session?.email, invoice.id, filled);
+                          await records.patchInvoice(invoice.id, { items });
+                        }
+                  }
                 />
               );
             case "payments":

@@ -300,22 +300,34 @@ function invoiceItemsToApi(items: Invoice["items"]) {
     const images = Array.isArray(item.images)
       ? item.images.filter((src) => Boolean(String(src || "").trim()))
       : [];
+    const explicitKind =
+      item.kind === "labor"
+        ? "labor"
+        : item.kind === "materials"
+          ? "material"
+          : null;
+    const kind =
+      item.source === "change_order"
+        ? "fee"
+        : item.source === "adjustment"
+          ? "discount"
+          : explicitKind
+            ? explicitKind
+            : /material/i.test(item.description)
+              ? "material"
+              : String(item.unit || "").trim().toLowerCase() === "hr"
+                ? "labor"
+                : "labor";
     return {
       id: item.id,
       description: item.description,
-      kind:
-        item.source === "change_order"
-          ? "fee"
-          : item.source === "adjustment"
-            ? "discount"
-            : /material/i.test(item.description)
-              ? "material"
-              : "labor",
+      kind,
       quantity: item.quantity,
+      unit: item.unit || (kind === "labor" ? "hr" : "ea"),
       unitPrice: item.unitPrice,
       taxRate: 0,
       total: item.total,
-      ...(images.length ? { images } : {}),
+      ...(images.length && kind === "material" ? { images } : {}),
     };
   });
 }
@@ -1455,10 +1467,11 @@ export type EstimateSettingsPayload = {
 export async function updateEstimateSettings(id: string, settings: EstimateSettingsPayload) {
   const payload: Record<string, unknown> = {};
   if (settings.title !== undefined) payload.title = settings.title.trim();
-  if (settings.status !== undefined) payload.status = settings.status;
-  if (settings.customerId !== undefined) payload.customerId = settings.customerId;
+  // Status / customerId / notes / terms are not updated via this settings form.
   if (settings.issuedAt !== undefined) payload.issuedAt = settings.issuedAt;
-  if (settings.expiresAt !== undefined) payload.expiresAt = settings.expiresAt || null;
+  if (settings.expiresAt !== undefined && settings.expiresAt !== null && settings.expiresAt !== "") {
+    payload.expiresAt = settings.expiresAt;
+  }
   if (settings.propertyAddress !== undefined) {
     const line = String(
       settings.propertyAddress.address ||
@@ -1484,8 +1497,6 @@ export async function updateEstimateSettings(id: string, settings: EstimateSetti
       longitude: Number.isFinite(lng) ? lng : 0,
     };
   }
-  if (settings.notes !== undefined) payload.notes = settings.notes;
-  if (settings.terms !== undefined) payload.terms = settings.terms;
 
   const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);

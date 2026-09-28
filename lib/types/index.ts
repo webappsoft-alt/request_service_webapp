@@ -329,8 +329,11 @@ export interface InvoiceItem {
   source: "estimate" | "change_order" | "adjustment";
   description: string;
   quantity: number;
+  unit: string;
   unitPrice: number;
   total: number;
+  /** When known from API `kind` / editor. Prefer over description heuristics. */
+  kind?: "labor" | "materials";
   /** Optional material photos (URLs). Ignored for labor lines. */
   images?: string[];
 }

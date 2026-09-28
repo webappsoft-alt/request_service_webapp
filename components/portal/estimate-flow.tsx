@@ -10,7 +10,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  Camera,
   Check,
   ImageIcon,
   Loader2,
@@ -598,10 +597,13 @@ export function EstimateSiteVisitTab({
     <div data-site-visit-form className="space-y-4">
       <div className="rounded-lg border border-input bg-card p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="inline-flex items-center gap-2 text-base font-semibold">
-            <Camera className="size-4 text-primary" />
-            Site inspection
-          </h2>
+          <div>
+            <h2 className="text-base font-semibold">Site visit</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Notes from the visit. Photos stay with this estimate until you
+              send the finalized quote.
+            </p>
+          </div>
           {locked ? null : (
             <Button
               size="sm"
@@ -622,89 +624,20 @@ export function EstimateSiteVisitTab({
               {savingNotes ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : null}
-              {savingNotes ? "Saving…" : "Save Site Inspection"}
+              {savingNotes ? "Saving…" : "Save notes"}
             </Button>
           )}
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          What the team member saw on site. Photos and notes stay with this
-          estimate until the office finalizes the quote.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Team member">
-            <PaginatedEntitySelect
-              id="estimate-site-technician"
-              value={visit.employeeId}
-              options={technicianSelectOptions}
-              selectedLabel={visit.technician || undefined}
-              placeholder={loading ? "Loading team members…" : "Unassigned"}
-              emptyLabel="No team members found."
-              disabled={locked || loading}
-              loading={loading}
-              loadingMore={useApi ? assigneePaging.loadingMore : false}
-              hasMore={useApi ? assigneePaging.hasMore : false}
-              onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
-              searchable={useApi}
-              searchValue={useApi ? assigneePaging.search : ""}
-              onSearchChange={useApi ? assigneePaging.setSearch : undefined}
-              searchPlaceholder="Search team members…"
-              onChange={(id, option) => {
-                const employee = technicians.find((item) => item.id === id);
-                patch({
-                  employeeId: id,
-                  technician: employee
-                    ? employeeName(employee)
-                    : id && option?.label
-                      ? option.label.split(" · ")[0]
-                      : "",
-                });
-              }}
-            />
-          </Field>
-          <Field label="Visit date">
-            <Input
-              type="date"
-              disabled={locked}
-              value={visit.visitedAt}
-              onChange={(event) => patch({ visitedAt: event.target.value })}
-            />
-          </Field>
-          <Field label="Access / site notes" className="sm:col-span-2">
+        <div className="mt-4">
+          <Field label="Notes">
             <Textarea
-              rows={2}
+              rows={6}
               disabled={locked}
-              placeholder="Gate code, pets, parking, who met you on site"
-              value={visit.accessNotes}
-              onChange={(event) => patch({ accessNotes: event.target.value })}
-            />
-          </Field>
-          <Field label="Findings" className="sm:col-span-2">
-            <Textarea
-              rows={4}
-              disabled={locked}
-              placeholder="What you inspected and what you found"
+              placeholder="What you inspected, access notes, findings, and anything else from the visit"
               value={visit.findings}
-              onChange={(event) => patch({ findings: event.target.value })}
-            />
-          </Field>
-          <Field label="Recommended work">
-            <Textarea
-              rows={3}
-              disabled={locked}
-              placeholder="Work you would price in the office"
-              value={visit.recommendations}
-              onChange={(event) =>
-                patch({ recommendations: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Measurements / other detail">
-            <Textarea
-              rows={3}
-              disabled={locked}
-              placeholder="Sq ft, fixture counts, serial numbers, anything else"
-              value={visit.measurements}
-              onChange={(event) => patch({ measurements: event.target.value })}
+              onChange={(event) => {
+                patch({ findings: event.target.value });
+              }}
             />
           </Field>
         </div>

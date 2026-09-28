@@ -86,7 +86,7 @@ import {
   setLocationFromPlace,
 } from "@/store/locationSlice";
 
-type EstimateTab = "customer" | "scope" | "visit" | "review";
+type EstimateTab = "customer" | "scope" | "visit";
 type EstimatePath = "site_visit" | "office";
 type JobTab = "customer" | "schedule" | "review";
 
@@ -224,11 +224,12 @@ export function CreateEstimateDialog({
   const nextTab = (current: EstimateTab): EstimateTab => {
     if (current === "customer")
       return path === "site_visit" ? "visit" : "scope";
-    if (current === "visit" || current === "scope") return "review";
-    return "review";
+    if (current === "visit") return "scope";
+    return "scope";
   };
   const prevTab = (current: EstimateTab): EstimateTab => {
-    if (current === "review") return path === "site_visit" ? "visit" : "scope";
+    if (current === "scope") return path === "site_visit" ? "visit" : "customer";
+    if (current === "visit") return "customer";
     return "customer";
   };
 
@@ -636,7 +637,7 @@ export function CreateEstimateDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {isEdit ? "Edit estimate" : "Create estimate"}
@@ -655,12 +656,11 @@ export function CreateEstimateDialog({
                 ? [
                     { id: "customer", label: "Customer" },
                     { id: "visit", label: "Site visit" },
-                    { id: "review", label: "Review" },
+                    { id: "scope", label: "Labour and Material" },
                   ]
                 : [
                     { id: "customer", label: "Customer" },
                     { id: "scope", label: "Labour and Material" },
-                    { id: "review", label: "Review" },
                   ]
             }
           />
@@ -777,29 +777,29 @@ export function CreateEstimateDialog({
                   autoComplete="off"
                 />
               </Field>
-              <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(6.5rem,0.7fr)_minmax(5rem,0.55fr)]">
-              <Field label="City">
-                <Input
-                  value={city}
-                  placeholder="City"
-                  onChange={(event) => setCity(event.target.value)}
-                />
-              </Field>
-              <Field label="State">
-                <UsStateSelect
-                  value={normalizeUsStateCode(state)}
-                  onChange={setState}
-                  placeholder="State"
-                />
-              </Field>
-              <Field label="ZIP">
-                <Input
-                  value={zip}
-                  placeholder="ZIP"
-                  onChange={(event) => setZip(event.target.value)}
-                  inputMode="numeric"
-                />
-              </Field>
+              <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-3">
+                <Field label="City">
+                  <Input
+                    value={city}
+                    placeholder="City"
+                    onChange={(event) => setCity(event.target.value)}
+                  />
+                </Field>
+                <Field label="State">
+                  <UsStateSelect
+                    value={normalizeUsStateCode(state)}
+                    onChange={setState}
+                    placeholder="State"
+                  />
+                </Field>
+                <Field label="ZIP">
+                  <Input
+                    value={zip}
+                    placeholder="ZIP"
+                    onChange={(event) => setZip(event.target.value)}
+                    inputMode="numeric"
+                  />
+                </Field>
               </div>
             </div>
           ) : null}
@@ -853,32 +853,6 @@ export function CreateEstimateDialog({
           {tab === "scope" ? (
             <LineEditor lines={lines} onChange={setLines} />
           ) : null}
-          {tab === "review" ? (
-            <div className="grid gap-3">
-              <p className="text-sm text-muted-foreground">
-                {name} for{" "}
-                {customerLabel ||
-                  (customer ? crmCustomerName(customer) : "customer")}{" "}
-                · {street || "No street"}
-              </p>
-              <Field label="Notes">
-                <Textarea
-                  rows={3}
-                  placeholder="Optional notes for this estimate"
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                />
-              </Field>
-              <Field label="Terms">
-                <Textarea
-                  rows={3}
-                  placeholder="Payment and validity terms"
-                  value={terms}
-                  onChange={(event) => setTerms(event.target.value)}
-                />
-              </Field>
-            </div>
-          ) : null}
           <DialogFooter>
             {tab !== "customer" ? (
               <Button variant="outline" onClick={() => setTab(prevTab(tab))}>
@@ -889,7 +863,7 @@ export function CreateEstimateDialog({
                 Cancel
               </Button>
             )}
-            {tab === "review" ? (
+            {tab === "scope" ? (
               <Button
                 data-action="submit-estimate"
                 disabled={!hasEstimateName || saving}
@@ -1543,7 +1517,7 @@ export function CreateJobDialog({
                 autoComplete="off"
               />
             </Field>
-            <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(6.5rem,0.7fr)_minmax(5rem,0.55fr)]">
+            <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-3">
             <Field label="City">
               <Input
                 value={city}

@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { ChatPanel } from "@/components/shared/chat-panel";
-import { useChatThreads } from "@/components/portal/use-chat-threads";
+import { useChatThreads, providerActiveThreadIdRef } from "@/components/portal/use-chat-threads";
 import { subscribeRealtime, useRealtime } from "@/components/realtime/realtime-provider";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   formatThreadTime,
   getAvatarColor,
   getInitials,
+  sortChatThreadsByUnreadThenRecent,
 } from "@/lib/chat-format";
 import { cn } from "@/lib/utils";
 import { ADMIN_DIRECT_THREAD_ID } from "@/lib/api/crm-mappers";
@@ -71,7 +72,7 @@ export function MessagesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter threads by search query and active tab
+  // Filter threads by search query and active tab; unread + recent first
   const filtered = useMemo(() => {
     let result = threads;
 
@@ -82,36 +83,40 @@ export function MessagesView() {
     }
 
     const needle = query.trim().toLowerCase();
-    if (!needle) return result;
+    if (needle) {
+      result = result.filter((thread) => {
+        const lastMessage = thread.messages.at(-1);
+        const haystack = [
+          thread.customerName,
+          thread.customerEmail,
+          thread.customerPhone,
+          thread.requestId,
+          lastMessage?.text,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(needle);
+      });
+    }
 
-    return result.filter((thread) => {
-      const lastMessage = thread.messages.at(-1);
-      const haystack = [
-        thread.customerName,
-        thread.customerEmail,
-        thread.customerPhone,
-        thread.requestId,
-        lastMessage?.text,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(needle);
-    });
+    return sortChatThreadsByUnreadThenRecent(
+      result,
+      (thread) => thread.unreadForProvider || 0,
+    );
   }, [filterTab, query, threads]);
 
   const selected = useMemo(() => {
-    if (selectedId) {
-      return (
-        filtered.find((item) => item.id === selectedId) ??
-        threads.find((item) => item.id === selectedId) ??
-        null
-      );
-    }
-    return filtered[0] ?? threads[0] ?? null;
+    if (!selectedId) return null;
+    return (
+      filtered.find((item) => item.id === selectedId) ??
+      threads.find((item) => item.id === selectedId) ??
+      null
+    );
   }, [filtered, selectedId, threads]);
 
   viewingThreadIdRef.current = selected?.id ?? null;
+  providerActiveThreadIdRef.current = selected?.id ?? null;
 
   // Open mobile chat when a thread is selected
   useEffect(() => {
@@ -120,30 +125,44 @@ export function MessagesView() {
     }
   }, [selectedId]);
 
-  // Mark thread read only ONCE when the selected thread changes.
-  // Using a ref guard prevents re-firing when unreadForProvider changes
-  // as new socket messages arrive (which would cause a mark-read API call
-  // for every incoming message and trigger cascading thread updates).
+  // Mark thread read when opened (and again if unread arrives while viewing).
   const markReadCallbackRef = useRef(markRead);
   markReadCallbackRef.current = markRead;
   const markThreadReadCallbackRef = useRef(markThreadRead);
   markThreadReadCallbackRef.current = markThreadRead;
+  const openedThreadIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!selected?.id) return;
-    const hasUnread =
-      (selected.unreadForProvider ?? 0) > 0 ||
-      selected.messages.some((m) => m.from !== "provider" && !m.isRead);
 
-    // Only mark when there is unread content — not on bare first-select
-    if (!hasUnread) return;
-    if (lastMarkedThreadIdRef.current === `${selected.id}:${selected.messages.length}`) {
+    const unread = selected.unreadForProvider ?? 0;
+    const hasUnreadMessages = selected.messages.some(
+      (m) => m.from !== "provider" && !m.isRead,
+    );
+    const firstOpen = !openedThreadIdsRef.current.has(selected.id);
+    const unreadKey = `${selected.id}:${unread}:${selected.messages.length}`;
+
+    if (firstOpen) {
+      openedThreadIdsRef.current.add(selected.id);
+      lastMarkedThreadIdRef.current = unreadKey;
+      markThreadReadCallbackRef.current(selected.id);
+      markReadCallbackRef.current(selected.id);
       return;
     }
-    lastMarkedThreadIdRef.current = `${selected.id}:${selected.messages.length}`;
-    markThreadReadCallbackRef.current(selected.id);
-    markReadCallbackRef.current(selected.id);
-  }, [selected?.id, selected?.messages?.length, selected?.unreadForProvider]);
+
+    if (
+      (unread > 0 || hasUnreadMessages) &&
+      lastMarkedThreadIdRef.current !== unreadKey
+    ) {
+      lastMarkedThreadIdRef.current = unreadKey;
+      markThreadReadCallbackRef.current(selected.id);
+      markReadCallbackRef.current(selected.id);
+    }
+  }, [
+    selected?.id,
+    selected?.messages?.length,
+    selected?.unreadForProvider,
+  ]);
 
   // Query live presence only when the set of customer IDs changes, not on every message
   const presenceIdsKey = useMemo(() => {
@@ -410,12 +429,22 @@ export function MessagesView() {
                           >
                             {thread.customerName}
                           </span>
-                          <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
-                            {lastTime}
-                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {hasUnread ? (
+                              <span
+                                className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#003F7D] px-1.5 text-[10px] font-bold text-white shadow-xs"
+                                aria-label={`${thread.unreadForProvider} unread`}
+                              >
+                                {thread.unreadForProvider}
+                              </span>
+                            ) : null}
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                              {lastTime}
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Middle row: Lead badge & unread pill */}
+                        {/* Middle row: Lead badge */}
                         <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1.5 truncate">
                             {thread.requestId ? (
@@ -424,11 +453,6 @@ export function MessagesView() {
                               </span>
                             ) : null}
                           </div>
-                          {hasUnread ? (
-                            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#003F7D] text-[10px] font-bold text-white shadow-xs">
-                              {thread.unreadForProvider}
-                            </span>
-                          ) : null}
                         </div>
 
                         {/* Last Message Snippet */}

@@ -25,9 +25,16 @@ import {
   type ChatRole,
   type ChatThread,
 } from "@/lib/booking/chat-store";
+import { compareChatThreadsByUnreadThenRecent } from "@/lib/chat-format";
+import { markUnreadChatNotificationsReadForThread } from "@/lib/api/notifications-client";
 
 const EMPTY: ChatThread[] = [];
 const snapshots = new Map<string, { raw: string; value: ChatThread[] }>();
+
+/** Thread the provider currently has open in Messages (skip unread bump while viewing). */
+export const providerActiveThreadIdRef: { current: string | null } = {
+  current: null,
+};
 
 function snapshotFor(email: string) {
   if (typeof window === "undefined") return EMPTY;
@@ -74,7 +81,13 @@ function mergeThreads(existing: ChatThread[], incoming: ChatThread[]): ChatThrea
     result.push(remaining);
   }
 
-  return result.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  return result.sort((a, b) =>
+    compareChatThreadsByUnreadThenRecent(
+      a,
+      b,
+      (thread) => thread.unreadForProvider || 0,
+    ),
+  );
 }
 
 export function useChatThreads(options?: { enabled?: boolean }) {
@@ -167,14 +180,18 @@ export function useChatThreads(options?: { enabled?: boolean }) {
               id: msgId || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
               at: message.at || message.createdAt || new Date().toISOString(),
             };
+            const isViewing =
+              providerActiveThreadIdRef.current === threadId;
             const updated: ChatThread = {
               ...current,
               messages: [...current.messages, normalizedMessage],
               updatedAt: normalizedMessage.at,
               unreadForProvider:
-                message.from === "customer"
+                message.from === "customer" && !isViewing
                   ? (current.unreadForProvider || 0) + 1
-                  : current.unreadForProvider,
+                  : isViewing
+                    ? 0
+                    : current.unreadForProvider,
             };
             const next = [...prev];
             next.splice(index, 1);
@@ -414,9 +431,28 @@ export function useChatThreads(options?: { enabled?: boolean }) {
   const markRead = useCallback(
     (threadId: string) => {
       if (isLive) {
+        const emitCleared = (clearedUnread: number) => {
+          if (typeof window === "undefined") return;
+          window.dispatchEvent(
+            new CustomEvent("rs-realtime", {
+              detail: {
+                type: "CHAT_READ_RECEIPT",
+                payload: {
+                  threadId,
+                  readBy: "provider",
+                  unreadForProvider: 0,
+                  clearedUnread,
+                },
+              },
+            }),
+          );
+        };
+
         if (threadId === ADMIN_DIRECT_THREAD_ID) {
-          setApiThreads((prev) =>
-            prev.map((t) =>
+          setApiThreads((prev) => {
+            const current = prev.find((t) => t.id === threadId);
+            emitCleared(current?.unreadForProvider || 0);
+            return prev.map((t) =>
               t.id === threadId
                 ? {
                     ...t,
@@ -428,36 +464,10 @@ export function useChatThreads(options?: { enabled?: boolean }) {
                     ),
                   }
                 : t,
-            ),
-          );
+            );
+          });
           void markAdminDirectChatReadForPeer("provider").catch(() => undefined);
-          return;
-        }
-        setApiThreads((prev) =>
-          prev.map((t) =>
-            t.id === threadId
-              ? {
-                  ...t,
-                  unreadForProvider: 0,
-                  messages: t.messages.map((m) =>
-                    m.from !== "provider" ? { ...m, isRead: true, status: "read" as const } : m,
-                  ),
-                }
-              : t,
-          ),
-        );
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("rs-realtime", {
-              detail: {
-                type: "CHAT_READ_RECEIPT",
-                payload: { threadId, readBy: "provider", unreadForProvider: 0 },
-              },
-            }),
-          );
-        }
-        void markProviderChatRead(threadId)
-          .then(() => {
+          void markUnreadChatNotificationsReadForThread(threadId).then(() => {
             if (typeof window !== "undefined") {
               window.dispatchEvent(
                 new CustomEvent("rs-realtime", {
@@ -465,8 +475,39 @@ export function useChatThreads(options?: { enabled?: boolean }) {
                 }),
               );
             }
-          })
+          });
+          return;
+        }
+
+        setApiThreads((prev) => {
+          const current = prev.find((t) => t.id === threadId);
+          emitCleared(current?.unreadForProvider || 0);
+          return prev.map((t) =>
+            t.id === threadId
+              ? {
+                  ...t,
+                  unreadForProvider: 0,
+                  messages: t.messages.map((m) =>
+                    m.from !== "provider"
+                      ? { ...m, isRead: true, status: "read" as const }
+                      : m,
+                  ),
+                }
+              : t,
+          );
+        });
+        void markProviderChatRead(threadId)
+          .then(() => undefined)
           .catch(() => undefined);
+        void markUnreadChatNotificationsReadForThread(threadId).then(() => {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("rs-realtime", {
+                detail: { type: "INBOX_SUMMARY_INVALIDATE" },
+              }),
+            );
+          }
+        });
         return;
       }
       markChatRead(email, threadId, "provider");

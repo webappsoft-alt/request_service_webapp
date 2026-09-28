@@ -131,6 +131,42 @@ export async function markAllNotificationsRead() {
   };
 }
 
+/** Mark unread NEW_CHAT_MESSAGE notifications for a thread (opening that conversation). */
+export async function markUnreadChatNotificationsReadForThread(
+  threadId: string,
+) {
+  const id = String(threadId || "").trim();
+  if (!id) return { updatedCount: 0, unreadCount: 0 };
+
+  const unread = await fetchNotifications({
+    page: 1,
+    limit: 50,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  const matched = unread.items.filter((item) => {
+    if (item.type !== "NEW_CHAT_MESSAGE") return false;
+    const data = item.data || {};
+    const notifThread = String(data.threadId || "").trim();
+    if (notifThread && notifThread === id) return true;
+    const href = String(data.href || item.href || "");
+    return href.includes(`thread=${id}`) || href.includes(`thread%3D${id}`);
+  });
+  if (!matched.length) {
+    return { updatedCount: 0, unreadCount: unread.unreadCount };
+  }
+  await Promise.allSettled(matched.map((item) => markNotificationRead(item.id)));
+  const refreshed = await fetchNotifications({
+    page: 1,
+    limit: 1,
+    status: "unread",
+    silent: true,
+    force: true,
+  });
+  return { updatedCount: matched.length, unreadCount: refreshed.unreadCount };
+}
+
 /** Mark unread NEW_LEAD notifications as read (e.g. when opening Leads tab). */
 export async function markUnreadLeadNotificationsRead() {
   const unread = await fetchNotifications({

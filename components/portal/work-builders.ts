@@ -91,19 +91,24 @@ export function linesToJobItems(jobId: string, lines: JobCostLine[]): JobItem[] 
 }
 
 export function linesToInvoiceItems(invoiceId: string, lines: JobCostLine[]): InvoiceItem[] {
-  return lines.map((line) => ({
-    id: line.id,
-    invoiceId,
-    source: "estimate",
-    description: line.description,
-    quantity: line.quantity,
-    unit: line.unit || (line.kind === "labor" ? "hr" : "ea"),
-    unitPrice: line.unitPrice,
-    total: lineTotal(line),
-    ...(line.kind === "materials" && line.images?.length
-      ? { images: line.images.filter((src) => Boolean(String(src || "").trim())) }
-      : {}),
-  }));
+  return lines.map((line) => {
+    const kind: InvoiceItem["kind"] =
+      line.kind === "labor" ? "labor" : "materials";
+    return {
+      id: line.id,
+      invoiceId,
+      source: "estimate",
+      description: line.description,
+      quantity: line.quantity,
+      unit: line.unit || (kind === "labor" ? "hr" : "ea"),
+      unitPrice: line.unitPrice,
+      total: lineTotal(line),
+      kind,
+      ...(kind === "materials" && line.images?.length
+        ? { images: line.images.filter((src) => Boolean(String(src || "").trim())) }
+        : {}),
+    };
+  });
 }
 
 export function moneyFromLines(lines: JobCostLine[], taxRatePercent = 0) {
@@ -119,16 +124,30 @@ export function invoiceAsJob(invoice: Invoice, job?: Job): Job {
     estimateId: job?.estimateId ?? "",
     address: job?.address ?? { id: `addr_${invoice.id}`, street: "", city: "", state: "", zip: "", country: "US" },
     status: invoice.status === "paid" ? "paid" : invoice.status === "cancelled" ? "cancelled" : "invoiced",
-    items: invoice.items.map((item) => ({
-      id: item.id,
-      jobId: invoice.id,
-      source: item.source === "change_order" ? "change_order" : "estimate",
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit || "ea",
-      unitPrice: item.unitPrice,
-      total: item.total,
-    })),
+    items: invoice.items.map((item) => {
+      const kind: JobItem["kind"] =
+        item.kind === "labor" || item.kind === "materials"
+          ? item.kind
+          : String(item.unit || "").trim().toLowerCase() === "hr"
+            ? "labor"
+            : item.source === "change_order"
+              ? "materials"
+              : undefined;
+      return {
+        id: item.id,
+        jobId: invoice.id,
+        source: item.source === "change_order" ? "change_order" : "estimate",
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit || (kind === "labor" ? "hr" : "ea"),
+        unitPrice: item.unitPrice,
+        total: item.total,
+        ...(kind ? { kind } : {}),
+        ...(kind !== "labor" && item.images?.length
+          ? { images: [...item.images] }
+          : {}),
+      };
+    }),
     changeOrders: [],
     invoiceId: invoice.id,
     createdAt: invoice.createdAt,

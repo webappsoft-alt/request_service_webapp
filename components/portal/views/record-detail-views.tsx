@@ -53,6 +53,7 @@ import {
   fetchInvoiceDetail,
   patchInvoiceArchive,
   sendInvoiceRecord,
+  updateInvoiceRecord,
 } from "@/store/invoicesSlice";
 import {
   fetchPaymentDetail,
@@ -115,6 +116,7 @@ import {
   buildInvoice,
   buildJob,
   linesToEstimateItems,
+  linesToInvoiceItems,
   linesToJobItems,
   nextRecordNumber,
   todayISO,
@@ -1833,7 +1835,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
     (state) => state.invoices?.detailError ?? null,
   );
 
-  const { invoices, jobs, estimates, requests, payments, provider } =
+  const { session, invoices, jobs, estimates, requests, payments, provider } =
     usePortalWorkspace();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
@@ -2128,6 +2130,62 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   invoice={invoice}
                   technician=""
                   noun="invoice"
+                  preferApi={useApi}
+                  ready={!useApi || Boolean(detailInvoice)}
+                  onSave={
+                    useApi
+                      ? async (lines) => {
+                          const filled = filledWorkLines(lines).map((line) => {
+                            if (line.kind !== "materials") return line;
+                            if (line.images?.length) return line;
+                            const prev =
+                              invoice.items.find((item) => item.id === line.id) ||
+                              invoice.items.find(
+                                (item) =>
+                                  item.kind !== "labor" &&
+                                  (item.description || "").trim() ===
+                                    (line.description || "").trim(),
+                              );
+                            if (!prev?.images?.length) return line;
+                            return { ...line, images: [...prev.images] };
+                          });
+                          const items = linesToInvoiceItems(invoice.id, filled).map(
+                            (item) => {
+                              const prev = invoice.items.find(
+                                (existing) => existing.id === item.id,
+                              );
+                              return prev
+                                ? { ...item, source: prev.source }
+                                : item;
+                            },
+                          );
+                          writeCostLines(session?.email, invoice.id, filled);
+                          try {
+                            await dispatch(
+                              updateInvoiceRecord({
+                                id: invoice.id,
+                                invoice: { ...invoice, items },
+                              }),
+                            ).unwrap();
+                            void dispatch(fetchInvoiceDetail(invoice.id));
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : typeof error === "string"
+                                  ? error
+                                  : "Could not save line items to server.",
+                            );
+                            throw error;
+                          }
+                        }
+                      : async (lines) => {
+                          const filled = filledWorkLines(lines);
+                          const items = linesToInvoiceItems(invoice.id, filled);
+                          writeCostLines(session?.email, invoice.id, filled);
+                          await records.patchInvoice(invoice.id, { items });
+                        }
+                  }
                 />
               );
             case "payments":

@@ -300,23 +300,34 @@ function invoiceItemsToApi(items: Invoice["items"]) {
     const images = Array.isArray(item.images)
       ? item.images.filter((src) => Boolean(String(src || "").trim()))
       : [];
+    const explicitKind =
+      item.kind === "labor"
+        ? "labor"
+        : item.kind === "materials"
+          ? "material"
+          : null;
+    const kind =
+      item.source === "change_order"
+        ? "fee"
+        : item.source === "adjustment"
+          ? "discount"
+          : explicitKind
+            ? explicitKind
+            : /material/i.test(item.description)
+              ? "material"
+              : String(item.unit || "").trim().toLowerCase() === "hr"
+                ? "labor"
+                : "labor";
     return {
       id: item.id,
       description: item.description,
-      kind:
-        item.source === "change_order"
-          ? "fee"
-          : item.source === "adjustment"
-            ? "discount"
-            : /material/i.test(item.description)
-              ? "material"
-              : "labor",
+      kind,
       quantity: item.quantity,
-      unit: item.unit || "ea",
+      unit: item.unit || (kind === "labor" ? "hr" : "ea"),
       unitPrice: item.unitPrice,
       taxRate: 0,
       total: item.total,
-      ...(images.length ? { images } : {}),
+      ...(images.length && kind === "material" ? { images } : {}),
     };
   });
 }

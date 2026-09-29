@@ -23,6 +23,7 @@ import {
   type RealtimeEvents,
 } from "@/components/socket";
 import { normalizeSocketNotification, notificationHref } from "@/lib/api/notifications-client";
+import { applyPortalInboxCounts } from "@/components/portal/portal-inbox-counts-store";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
@@ -142,7 +143,8 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       // Re-sync sidebar / badge counts after connect or reconnect (shared socket only).
       broadcastRealtime({ type: "SOCKET_RECONNECTED" });
       // Provider counts arrive via provider:inbox-counts — no REST inbox-summary.
-      if (authRole === "provider") {
+      // Request even when authRole is still hydrating; backend ignores non-providers.
+      if (!authRole || authRole === "provider" || authRole === "pro") {
         requestProviderInboxCounts();
       }
       broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload: { reason: "socket_connect" } });
@@ -201,7 +203,14 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
     };
 
     socket.on("connect", onConnect);
-    if (socket.connected) onConnect();
+
+    const onSocketReady = (payload: { role?: string | null }) => {
+      const role = String(payload?.role || authRole || "").toLowerCase();
+      if (role === "provider" || role === "pro" || !role) {
+        requestProviderInboxCounts();
+      }
+    };
+    socket.on("socket:ready", onSocketReady);
 
     const handlePresence = (payload: {
       userId?: string | null;
@@ -379,9 +388,6 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("presence:snapshot", handlePresenceSnapshot),
       onSocketEvent("LEAD_CREATED", (payload) => {
         broadcastRealtime({ type: "LEAD_CREATED", payload });
-        window.dispatchEvent(
-          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
-        );
         showNotificationToast(
           "New lead",
           payload.number
@@ -439,13 +445,19 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload });
       }),
       onSocketEvent("provider:inbox-counts", (payload) => {
+        const next = {
+          newLeads: Number(payload?.newLeads) || 0,
+          unreadChats: Number(payload?.unreadChats) || 0,
+          pendingOrders: Number(payload?.pendingOrders) || 0,
+          pendingEstimates: Number(payload?.pendingEstimates) || 0,
+          total: Number(payload?.total) || 0,
+        };
+        // Write sidebar store immediately (before any window hop / remount).
+        applyPortalInboxCounts(next);
         broadcastRealtime({
           type: "INBOX_SUMMARY_APPLY",
           payload: {
-            newLeads: Number(payload?.newLeads) || 0,
-            unreadChats: Number(payload?.unreadChats) || 0,
-            pendingOrders: Number(payload?.pendingOrders) || 0,
-            total: Number(payload?.total) || 0,
+            ...next,
             reason: payload?.reason,
             kinds: payload?.kinds,
           },
@@ -569,9 +581,13 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       }),
     ];
 
+    // Request counts only after listeners are attached (avoids dropped first payload).
+    if (socket.connected) onConnect();
+
     return () => {
       unsubscribers.forEach((off) => off());
       socket.off("connect", onConnect);
+      socket.off("socket:ready", onSocketReady);
       socket.off("NEW_NOTIFICATION", onNewNotification);
       socket.removeAllListeners("NEW_NOTIFICATION");
     };

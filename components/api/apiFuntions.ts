@@ -44,7 +44,7 @@ export type LogoutOptions = {
   skipRedirect?: boolean;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = String(process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";

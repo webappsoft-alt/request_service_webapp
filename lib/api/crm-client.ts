@@ -348,6 +348,11 @@ function resolveAssignedEmployeeIds(job: Job, employees: PortalEmployee[]) {
 }
 
 function customerPayload(customer: PortalCustomerCrm) {
+  const userId = String(customer.userId || "").trim();
+  const primary = (customer.addresses || [])[0] || null;
+  const serviceAddresses = (customer.addresses || [])
+    .map((address) => mapAddressForApi(address))
+    .filter(Boolean);
   return {
     entityKind: customer.entityKind,
     customerType: customer.customerType,
@@ -363,8 +368,9 @@ function customerPayload(customer: PortalCustomerCrm) {
     membership: customer.membership,
     taxCode: customer.taxCode,
     notes: customer.notes,
-    linkedUserId: customer.userId.startsWith("user_") ? null : customer.userId,
-    serviceAddresses: customer.addresses.map((address) => mapAddressForApi(address)).filter(Boolean),
+    linkedUserId: !userId || userId.startsWith("user_") ? null : userId,
+    serviceAddresses,
+    location: mapJobLocationForApi(primary),
   };
 }
 
@@ -842,9 +848,11 @@ export async function updateCustomer(id: string, customer: PortalCustomerCrm | P
   if (full.taxCode !== undefined) payload.taxCode = full.taxCode;
   if (full.notes !== undefined) payload.notes = full.notes;
   if (hasAddresses) {
-    payload.serviceAddresses = full.addresses
+    const serviceAddresses = full.addresses
       .map((address) => mapAddressForApi(address))
       .filter(Boolean);
+    payload.serviceAddresses = serviceAddresses;
+    payload.location = mapJobLocationForApi(full.addresses[0] || null);
   }
   const response = await putData(providerCrmApi.customer(id), payload);
   return mapCrmEntity(response, mapPortalCustomerCrm);
@@ -2313,6 +2321,7 @@ export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmI
       newLeads: 0,
       unreadChats: 0,
       pendingOrders: 0,
+      pendingEstimates: 0,
       total: 0,
     };
   }
@@ -2327,14 +2336,19 @@ export async function getInboxSummary(options?: CrmRequestOptions): Promise<CrmI
     fromRequests?.pendingOrders || 0,
     fromChats?.pendingOrders || 0,
   );
+  const pendingEstimates = Math.max(
+    fromRequests?.pendingEstimates || 0,
+    fromChats?.pendingEstimates || 0,
+  );
 
   return {
     newLeads,
     unreadChats,
     pendingOrders,
+    pendingEstimates,
     activeLeads: fromRequests?.activeLeads ?? fromChats?.activeLeads,
     convertedLeads: fromRequests?.convertedLeads ?? fromChats?.convertedLeads,
-    total: newLeads + unreadChats + pendingOrders,
+    total: newLeads + unreadChats + pendingOrders + pendingEstimates,
   };
 }
 
@@ -2935,7 +2949,6 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
     payments,
     schedule,
     chats,
-    inboxSummary,
   ] = await Promise.all([
     listCustomers({ silent: true }),
     listEmployees({ silent: true }),
@@ -2950,7 +2963,6 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
     listPayments({ silent: true }),
     listSchedule({ silent: true }),
     listChats({ silent: true }),
-    getInboxSummary({ silent: true }),
   ]);
 
   return {
@@ -2967,7 +2979,14 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
     payments,
     schedule,
     chats,
-    inboxSummary,
+    // Sidebar badges stay socket-driven — do not REST-fetch summary / inbox-summary here.
+    inboxSummary: {
+      newLeads: 0,
+      unreadChats: 0,
+      pendingOrders: 0,
+      pendingEstimates: 0,
+      total: 0,
+    },
   };
 }
 

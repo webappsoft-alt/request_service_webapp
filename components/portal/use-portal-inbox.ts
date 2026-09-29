@@ -2,15 +2,27 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  applyPortalInboxCounts,
+  bumpPortalInboxCount,
+  clearPortalInboxCount,
+  getPortalInboxCounts,
+  subscribePortalInboxCounts,
+  type PortalInboxCounts,
+} from "@/components/portal/portal-inbox-counts-store";
+import {
   getPortalInboxClearState,
   reopenPortalInboxBadge,
   setPortalInboxCleared,
   subscribePortalInboxClears,
 } from "@/components/portal/portal-inbox-clears";
-import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
+import {
+  ackProviderInboxBadges,
+  onSocketEvent,
+  requestProviderInboxCounts,
+} from "@/components/socket";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -18,22 +30,28 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function countsFromPayload(payload: unknown): Partial<PortalInboxCounts> | null {
+  const row = asRecord(payload);
+  if (!row) return null;
+  return {
+    newLeads: Number(row.newLeads) || 0,
+    unreadChats: Number(row.unreadChats) || 0,
+    pendingOrders: Number(row.pendingOrders) || 0,
+    pendingEstimates: Number(row.pendingEstimates) || 0,
+  };
+}
+
 /**
  * Sidebar / subnav badge counts.
- * Counts come from CrmDataProvider.inboxSummary (loaded once + Socket updates).
- * Does NOT fetch chats, notifications, or orders lists on mount — those belong
- * to their own pages.
+ * Source of truth: module store fed by `provider:inbox-counts` (socket only).
+ * Live bumps cover the gap until the next socket apply.
  */
 export function usePortalInbox() {
   const { requests, estimates } = usePortalWorkspace();
   const records = usePortalRecords();
-  const crm = useCrmApiData();
-  const [liveLeadBump, setLiveLeadBump] = useState(0);
-  const [liveOrderBump, setLiveOrderBump] = useState(0);
-  const [liveEstimateBump, setLiveEstimateBump] = useState(0);
-  const [liveChatBump, setLiveChatBump] = useState(0);
-  /** Shared across remounts — visiting a tab clears badge + dashboard alert. */
-  const [clears, setClears] = useState(getPortalInboxClearState);
+  const [counts, setCounts] = useState(getPortalInboxCounts);
+  /** Shared across remounts — visiting a tab dismisses dashboard alerts only. */
+  const [, setClears] = useState(getPortalInboxClearState);
 
   const leads = records.listed("request", records.mergeRequests(requests), false);
   const newLeads = useMemo(
@@ -47,9 +65,19 @@ export function usePortalInbox() {
     false,
   );
   const estimateAttention = useMemo(
-    () => listedEstimates.filter((item) => item.status === "changes_requested"),
+    () =>
+      listedEstimates.filter(
+        (item) =>
+          item.status === "changes_requested" || item.status === "draft",
+      ),
     [listedEstimates],
   );
+
+  useEffect(() => {
+    return subscribePortalInboxCounts(() => {
+      setCounts(getPortalInboxCounts());
+    });
+  }, []);
 
   useEffect(() => {
     return subscribePortalInboxClears(() => {
@@ -57,27 +85,46 @@ export function usePortalInbox() {
     });
   }, []);
 
+  // Direct socket subscription — do not depend on CrmDataProvider context.
+  useEffect(() => {
+    requestProviderInboxCounts();
+    const off = onSocketEvent("provider:inbox-counts", (payload) => {
+      const next = countsFromPayload(payload);
+      if (next) applyPortalInboxCounts(next);
+    });
+    const t1 = window.setTimeout(() => requestProviderInboxCounts(), 300);
+    const t2 = window.setTimeout(() => requestProviderInboxCounts(), 1200);
+    return () => {
+      off();
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, []);
+
   useEffect(() => {
     return subscribeRealtime((detail) => {
       const type = String(detail?.type || "");
       if (type === "LEAD_CREATED") {
         reopenPortalInboxBadge("leads");
-        setLiveLeadBump((count) => count + 1);
+        bumpPortalInboxCount("newLeads", 1);
         return;
       }
       if (type === "LEADS_TAB_OPENED") {
         setPortalInboxCleared("leads", true);
-        setLiveLeadBump(0);
+        clearPortalInboxCount("newLeads");
+        ackProviderInboxBadges(["leads"]);
         return;
       }
       if (type === "ORDERS_TAB_OPENED") {
         setPortalInboxCleared("orders", true);
-        setLiveOrderBump(0);
+        clearPortalInboxCount("pendingOrders");
+        ackProviderInboxBadges(["orders"]);
         return;
       }
       if (type === "ESTIMATES_TAB_OPENED") {
         setPortalInboxCleared("estimates", true);
-        setLiveEstimateBump(0);
+        clearPortalInboxCount("pendingEstimates");
+        ackProviderInboxBadges(["estimates"]);
         return;
       }
       if (
@@ -89,7 +136,7 @@ export function usePortalInbox() {
         const status = String(estimatePayload.status || "").toLowerCase();
         if (status === "changes_requested" || status === "draft") {
           reopenPortalInboxBadge("estimates");
-          setLiveEstimateBump((count) => count + 1);
+          bumpPortalInboxCount("pendingEstimates", 1);
         }
         return;
       }
@@ -102,7 +149,7 @@ export function usePortalInbox() {
           action !== "auto_confirm"
         ) {
           reopenPortalInboxBadge("orders");
-          setLiveOrderBump((count) => count + 1);
+          bumpPortalInboxCount("pendingOrders", 1);
         } else if (
           status === "CONFIRMED" ||
           status === "CANCELLED" ||
@@ -110,7 +157,7 @@ export function usePortalInbox() {
           action === "reject" ||
           action === "auto_confirm"
         ) {
-          setLiveOrderBump(0);
+          bumpPortalInboxCount("pendingOrders", -1);
         }
         return;
       }
@@ -121,51 +168,50 @@ export function usePortalInbox() {
         const notifType = String(payload?.type || "");
         if (notifType === "NEW_BOOKING_REQUEST") {
           reopenPortalInboxBadge("orders");
-          setLiveOrderBump((count) => count + 1);
+          bumpPortalInboxCount("pendingOrders", 1);
         } else if (notifType === "NEW_LEAD") {
           reopenPortalInboxBadge("leads");
-          setLiveLeadBump((count) => count + 1);
+          bumpPortalInboxCount("newLeads", 1);
         } else if (notifType === "NEW_CHAT_MESSAGE") {
-          setLiveChatBump((count) => count + 1);
+          bumpPortalInboxCount("unreadChats", 1);
         }
         return;
       }
       if (type === "CHAT_MESSAGE" || type === "CHAT_THREAD_UPDATED") {
-        setLiveChatBump((count) => count + 1);
+        bumpPortalInboxCount("unreadChats", 1);
         return;
       }
       if (type === "CHAT_READ_RECEIPT") {
         const payload = asRecord(detail?.payload) ?? {};
         const cleared = Math.max(0, Number(payload.clearedUnread) || 0);
         if (String(payload.readBy || "") === "provider" && cleared > 0) {
-          setLiveChatBump((count) => Math.max(0, count - cleared));
+          bumpPortalInboxCount("unreadChats", -cleared);
         }
         return;
       }
-      if (type === "INBOX_SUMMARY_APPLY" || type === "INBOX_SUMMARY_INVALIDATE") {
-        // Counts refreshed in CrmDataProvider — reset live bumps so summary wins.
+      // Apply counts from the broadcast payload (do not wipe to zero).
+      if (type === "INBOX_SUMMARY_APPLY") {
+        const next = countsFromPayload(detail?.payload);
+        if (next) applyPortalInboxCounts(next);
+        return;
+      }
+      if (type === "INBOX_SUMMARY_INVALIDATE") {
         if (String(detail?.payload?.reason || "") === "INBOX_ACK") {
           const kinds = Array.isArray(detail?.payload?.kinds)
             ? detail.payload.kinds.map((k: unknown) => String(k || "").toLowerCase())
             : [];
-          if (kinds.includes("leads")) setLiveLeadBump(0);
-          if (kinds.includes("orders")) setLiveOrderBump(0);
-          if (kinds.includes("estimates")) setLiveEstimateBump(0);
+          if (kinds.includes("leads")) clearPortalInboxCount("newLeads");
+          if (kinds.includes("orders")) clearPortalInboxCount("pendingOrders");
+          if (kinds.includes("estimates")) clearPortalInboxCount("pendingEstimates");
         } else {
-          setLiveLeadBump(0);
-          setLiveOrderBump(0);
-          setLiveEstimateBump(0);
-          setLiveChatBump(0);
+          requestProviderInboxCounts();
         }
+      }
+      if (type === "SOCKET_RECONNECTED") {
+        requestProviderInboxCounts();
       }
     });
   }, []);
-
-  useEffect(() => {
-    if ((crm.inboxSummary?.pendingOrders || 0) > 0) {
-      setLiveOrderBump(0);
-    }
-  }, [crm.inboxSummary?.pendingOrders]);
 
   const items = useMemo(() => {
     return newLeads.slice(0, 8).map((item) => ({
@@ -177,29 +223,13 @@ export function usePortalInbox() {
     }));
   }, [newLeads]);
 
-  const summaryLeads = crm.enabled ? crm.inboxSummary.newLeads || 0 : 0;
-  const newLeadCount = clears.leads
-    ? liveLeadBump
-    : Math.max(summaryLeads, liveLeadBump);
-
-  const unreadChats = Math.max(
-    crm.enabled ? crm.inboxSummary.unreadChats || 0 : 0,
-    liveChatBump,
-  );
-
-  const pendingOrdersRaw = Math.max(
-    crm.enabled ? crm.inboxSummary.pendingOrders || 0 : 0,
-    liveOrderBump,
-  );
-  const pendingOrders = clears.orders ? liveOrderBump : pendingOrdersRaw;
-
-  const pendingEstimatesRaw = Math.max(
+  const newLeadCount = counts.newLeads || 0;
+  const unreadChats = counts.unreadChats || 0;
+  const pendingOrders = counts.pendingOrders || 0;
+  const pendingEstimates = Math.max(
+    counts.pendingEstimates || 0,
     estimateAttention.length,
-    liveEstimateBump,
   );
-  const pendingEstimates = clears.estimates
-    ? liveEstimateBump
-    : pendingEstimatesRaw;
 
   return {
     newLeads: newLeadCount,

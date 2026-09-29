@@ -1,9 +1,17 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { footerNav } from "@/lib/data/navigation";
 import { serviceCategories } from "@/lib/data/services";
 import { siteConfig } from "@/lib/site";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchSiteBranding,
+  selectSiteBranding,
+} from "@/store/siteBrandingSlice";
 
 const socials = [
   {
@@ -24,6 +32,22 @@ const socials = [
 ] as const;
 
 export function SiteFooter() {
+  const dispatch = useAppDispatch();
+  const branding = useAppSelector(selectSiteBranding);
+
+  useEffect(() => {
+    void dispatch(fetchSiteBranding());
+  }, [dispatch]);
+
+  const addressLines = [branding.address, branding.address2].filter(Boolean);
+  const phones = [
+    { label: branding.phone, href: branding.phoneHref },
+    branding.phone2
+      ? { label: branding.phone2, href: branding.phone2Href }
+      : null,
+  ].filter(Boolean) as Array<{ label: string; href: string }>;
+  const emails = [branding.email, branding.email2].filter(Boolean);
+
   return (
     <footer className="bg-primary text-white">
       <div className="container-site grid gap-10 py-14 md:grid-cols-2 lg:grid-cols-5">
@@ -34,40 +58,50 @@ export function SiteFooter() {
           </p>
 
           <ul className="flex flex-col gap-2.5 text-sm text-white">
-            <li className="flex items-start gap-2.5">
-              <MapPin
-                className="mt-0.5 size-4 shrink-0 text-white"
-                aria-hidden="true"
-              />
-              <span>
-                {siteConfig.address.street}, {siteConfig.address.city},{" "}
-                {siteConfig.address.state} {siteConfig.address.postalCode}
-              </span>
-            </li>
-            <li>
-              <a
-                className="inline-flex items-center gap-2.5 text-white transition-opacity hover:opacity-80"
-                href={siteConfig.phoneHref}
-              >
-                <Phone
-                  className="size-4 shrink-0 text-white"
+            {addressLines.length ? (
+              <li className="flex items-start gap-2.5">
+                <MapPin
+                  className="mt-0.5 size-4 shrink-0 text-white"
                   aria-hidden="true"
                 />
-                {siteConfig.phone}
-              </a>
-            </li>
-            <li>
-              <a
-                className="inline-flex items-center gap-2.5 text-white transition-opacity hover:opacity-80"
-                href={`mailto:${siteConfig.email}`}
-              >
-                <Mail
-                  className="size-4 shrink-0 text-white"
-                  aria-hidden="true"
-                />
-                {siteConfig.email}
-              </a>
-            </li>
+                <span>
+                  {addressLines.map((line, index) => (
+                    <span key={`${line}-${index}`}>
+                      {index > 0 ? <br /> : null}
+                      {line}
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ) : null}
+            {phones.map((item) => (
+              <li key={item.label}>
+                <a
+                  className="inline-flex items-center gap-2.5 text-white transition-opacity hover:opacity-80"
+                  href={item.href || undefined}
+                >
+                  <Phone
+                    className="size-4 shrink-0 text-white"
+                    aria-hidden="true"
+                  />
+                  {item.label}
+                </a>
+              </li>
+            ))}
+            {emails.map((email) => (
+              <li key={email}>
+                <a
+                  className="inline-flex items-center gap-2.5 text-white transition-opacity hover:opacity-80"
+                  href={`mailto:${email}`}
+                >
+                  <Mail
+                    className="size-4 shrink-0 text-white"
+                    aria-hidden="true"
+                  />
+                  {email}
+                </a>
+              </li>
+            ))}
           </ul>
 
           <ul className="flex items-center gap-2 pt-1">

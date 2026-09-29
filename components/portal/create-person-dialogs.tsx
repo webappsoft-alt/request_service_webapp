@@ -260,6 +260,11 @@ export function CreateCustomerDialog({
 
     const id = `cust_${provider.id}_new_${Date.now()}`;
     const createdAt = new Date().toISOString().slice(0, 10);
+    const hasAddressInput =
+      Boolean(street.trim()) ||
+      Boolean(city.trim()) ||
+      Boolean(state.trim()) ||
+      Boolean(zip.trim());
     const nextCustomer: PortalCustomerCrm = {
       id,
       userId: `user_${id}`,
@@ -267,24 +272,23 @@ export function CreateCustomerDialog({
       lastName: lastName.trim() || "Customer",
       email: email.trim() || `${id}@office.local`,
       phone: phone.trim() || undefined,
-      addresses:
-        street.trim() && city.trim() && state.trim() && zip.trim()
-          ? [
-              {
-                id: `addr_${id}`,
-                address: street.trim(),
-                street: street.trim(),
-                city: city.trim(),
-                state: state.trim(),
-                zip: zip.trim(),
-                country: "US",
-                latitude: lat,
-                longitude: lng,
-                lat,
-                lng,
-              },
-            ]
-          : [],
+      addresses: hasAddressInput
+        ? [
+            {
+              id: `addr_${id}`,
+              address: street.trim() || "Address pending",
+              street: street.trim() || "Address pending",
+              city: city.trim() || provider.city || "Unknown",
+              state: state.trim() || provider.state || "NA",
+              zip: zip.trim() || provider.serviceArea[0] || "00000",
+              country: "US",
+              latitude: lat,
+              longitude: lng,
+              lat,
+              lng,
+            },
+          ]
+        : [],
       createdAt,
       updatedAt: createdAt,
       customerNumber: String(1000001 + customers.length).padStart(7, "0"),

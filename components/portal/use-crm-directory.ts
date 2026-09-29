@@ -260,9 +260,8 @@ export function useCrmDirectory() {
 
   const addCustomer = useCallback(
     (customer: PortalCustomerCrm) => {
-      // Use live API whenever the provider is authenticated — do not wait for
-      // the full CRM snapshot (Customers list no longer bootstraps it).
-      if (crm.enabled) {
+      // Authenticated provider — always POST; never fake-create in localStorage.
+      if (crm.enabled || Boolean(session)) {
         return (async () => {
           const created = await createCustomerApi(customer);
           void dispatch(fetchCustomers({ force: true, limit: 100 }));
@@ -276,17 +275,23 @@ export function useCrmDirectory() {
       writeStore(key, { ...current, customers: [...current.customers, customer] });
       return customer;
     },
-    [crm, key],
+    [crm, dispatch, key, session],
   );
 
   const updateCustomer = useCallback(
     (id: string, patch: Partial<PortalCustomerCrm>) => {
-      if (apiReady) {
+      // Authenticated provider — always PUT; do not wait for full CRM snapshot.
+      if (crm.enabled || Boolean(session)) {
         return (async () => {
-          const currentCustomer = customers.find((item) => item.id === id);
+          const currentCustomer =
+            customers.find((item) => item.id === id) ||
+            reduxCustomers.find((item) => item.id === id);
           if (!currentCustomer) throw new Error("Customer not found");
           const updated = await updateCustomerApi(id, { ...currentCustomer, ...patch });
-          await crm.refresh();
+          void dispatch(fetchCustomers({ force: true, limit: 100 }));
+          if (crm.ready) {
+            await crm.refresh({ silent: true });
+          }
           return updated;
         })();
       }
@@ -299,7 +304,7 @@ export function useCrmDirectory() {
           : current.customers,
       });
     },
-    [apiReady, crm, customers, key],
+    [crm, customers, dispatch, key, reduxCustomers, session],
   );
 
   const addContractor = useCallback(

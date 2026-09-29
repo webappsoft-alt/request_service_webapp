@@ -9,10 +9,7 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import {
-  loadCrmSnapshot,
-  type CrmSnapshot,
-} from "@/lib/api/crm-client";
+import { loadCrmSnapshot, type CrmSnapshot } from "@/lib/api/crm-client";
 import type { CrmInboxSummary } from "@/lib/api/crm-mappers";
 import type {
   PortalContractor,
@@ -27,7 +24,12 @@ import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { getAuthToken, getAuthUser } from "@/components/api/apiFuntions";
-import { requestProviderInboxCounts } from "@/components/socket";
+import { applyPortalInboxCounts } from "@/components/portal/portal-inbox-counts-store";
+import {
+  ackProviderInboxBadges,
+  onSocketEvent,
+  requestProviderInboxCounts,
+} from "@/components/socket";
 
 const EVENT_NAME = "rs-crm-api";
 
@@ -35,6 +37,7 @@ const EMPTY_INBOX_SUMMARY: CrmInboxSummary = {
   newLeads: 0,
   unreadChats: 0,
   pendingOrders: 0,
+  pendingEstimates: 0,
   total: 0,
 };
 
@@ -134,6 +137,28 @@ type CrmDataState = Omit<
   | "patchRequest"
 >;
 
+/** Data-only empty state — never include `enabled` (it would overwrite the live flag). */
+const EMPTY_STATE: CrmDataState = {
+  ready: false,
+  loading: false,
+  refreshing: false,
+  error: null,
+  customers: [],
+  employees: [],
+  contractors: [],
+  vendors: [],
+  requests: [],
+  estimates: [],
+  jobs: [],
+  tasks: [],
+  reminders: [],
+  invoices: [],
+  payments: [],
+  schedule: [],
+  chats: [],
+  inboxSummary: EMPTY_INBOX_SUMMARY,
+};
+
 const CrmApiDataContext = createContext<CrmApiContextValue>(EMPTY_VALUE);
 
 function toState(snapshot: CrmSnapshot): CrmDataState {
@@ -157,7 +182,8 @@ function toState(snapshot: CrmSnapshot): CrmDataState {
       (item): item is PortalCalendarEvent => Boolean(item),
     ),
     chats: snapshot.chats,
-    inboxSummary: snapshot.inboxSummary,
+    // Keep socket-driven badges; snapshot no longer fetches summary APIs.
+    inboxSummary: EMPTY_INBOX_SUMMARY,
   };
 }
 
@@ -169,7 +195,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
   const queuedSilentRef = useRef(false);
   const waitersRef = useRef<Array<() => void>>([]);
   const readyRef = useRef(false);
-  const [state, setState] = useState<CrmDataState>(EMPTY_VALUE);
+  const [state, setState] = useState<CrmDataState>(EMPTY_STATE);
 
   const flushWaiters = useCallback(() => {
     const waiters = waitersRef.current;
@@ -210,7 +236,11 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
         const snapshot = await loadCrmSnapshot();
         if (!mountedRef.current) return;
         readyRef.current = true;
-        setState(toState(snapshot));
+        setState((current) => ({
+          ...toState(snapshot),
+          // Never overwrite socket badge counts with empty snapshot defaults.
+          inboxSummary: current.inboxSummary,
+        }));
       } catch (error) {
         if (!mountedRef.current) return;
         const message =
@@ -345,7 +375,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!enabled) {
-      setState(EMPTY_VALUE);
+      setState(EMPTY_STATE);
       readyRef.current = false;
       inFlightRef.current = false;
       queuedSilentRef.current = false;
@@ -353,9 +383,15 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    // Sidebar badge counts come from the shared socket (provider:inbox-counts).
-    // Do NOT GET inbox-summary / requests/summary on mount or nav.
+    // Sidebar badge counts: socket only (provider:inbox-counts). No REST summary APIs.
     requestProviderInboxCounts();
+    // Retry — CrmDataProvider often mounts before the shared socket connects.
+    const t1 = window.setTimeout(() => requestProviderInboxCounts(), 400);
+    const t2 = window.setTimeout(() => requestProviderInboxCounts(), 1500);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
   }, [enabled, flushWaiters]);
 
   // No setInterval polling — full snapshot must not auto-fire on a timer.
@@ -364,9 +400,21 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     if (!enabled) return;
     let debounceId = 0;
     const applyInboxSummary = (inboxSummary: CrmInboxSummary) => {
+      // Always update the sidebar store even during Strict Mode remount gaps.
+      applyPortalInboxCounts(inboxSummary);
       if (!mountedRef.current) return;
       setState((current) => ({ ...current, inboxSummary }));
     };
+    // Direct socket path — do not rely only on RealtimeProvider → window hop.
+    const offCounts = onSocketEvent("provider:inbox-counts", (payload) => {
+      applyInboxSummary({
+        newLeads: Number(payload?.newLeads) || 0,
+        unreadChats: Number(payload?.unreadChats) || 0,
+        pendingOrders: Number(payload?.pendingOrders) || 0,
+        pendingEstimates: Number(payload?.pendingEstimates) || 0,
+        total: Number(payload?.total) || 0,
+      });
+    });
     const requestCountsSoon = () => {
       window.clearTimeout(debounceId);
       debounceId = window.setTimeout(() => {
@@ -450,6 +498,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             newLeads: Number(summary.newLeads) || 0,
             unreadChats: Number(summary.unreadChats) || 0,
             pendingOrders: Number(summary.pendingOrders) || 0,
+            pendingEstimates: Number(summary.pendingEstimates) || 0,
             total: Number(summary.total) || 0,
           });
         }
@@ -467,10 +516,12 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             const next = { ...current.inboxSummary };
             if (kinds.includes("leads")) next.newLeads = 0;
             if (kinds.includes("orders")) next.pendingOrders = 0;
+            if (kinds.includes("estimates")) next.pendingEstimates = 0;
             next.total =
               (next.newLeads || 0) +
               (next.unreadChats || 0) +
-              (next.pendingOrders || 0);
+              (next.pendingOrders || 0) +
+              (next.pendingEstimates || 0);
             return { ...current, inboxSummary: next };
           });
           return;
@@ -512,9 +563,11 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             newLeads: 0,
             total:
               (current.inboxSummary?.unreadChats || 0) +
-              (current.inboxSummary?.pendingOrders || 0),
+              (current.inboxSummary?.pendingOrders || 0) +
+              (current.inboxSummary?.pendingEstimates || 0),
           },
         }));
+        ackProviderInboxBadges(["leads"]);
         return;
       }
 
@@ -526,13 +579,27 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             pendingOrders: 0,
             total:
               (current.inboxSummary?.newLeads || 0) +
-              (current.inboxSummary?.unreadChats || 0),
+              (current.inboxSummary?.unreadChats || 0) +
+              (current.inboxSummary?.pendingEstimates || 0),
           },
         }));
+        ackProviderInboxBadges(["orders"]);
         return;
       }
 
       if (detail?.type === "ESTIMATES_TAB_OPENED") {
+        setState((current) => ({
+          ...current,
+          inboxSummary: {
+            ...current.inboxSummary,
+            pendingEstimates: 0,
+            total:
+              (current.inboxSummary?.newLeads || 0) +
+              (current.inboxSummary?.unreadChats || 0) +
+              (current.inboxSummary?.pendingOrders || 0),
+          },
+        }));
+        ackProviderInboxBadges(["estimates"]);
         return;
       }
 
@@ -568,6 +635,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
     window.addEventListener("rs-realtime", onRealtimeMessage);
     window.addEventListener("rs-lead-status", onLeadStatus);
     return () => {
+      offCounts();
       window.clearTimeout(debounceId);
       window.removeEventListener(EVENT_NAME, requestCountsSoon);
       window.removeEventListener("rs-realtime", onRealtimeMessage);
@@ -578,8 +646,9 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<CrmApiContextValue>(
     () => ({
-      enabled,
       ...state,
+      // `enabled` must come after `...state` so a stale state.enabled never wins.
+      enabled,
       refresh,
       ensureLoaded,
       addTask,

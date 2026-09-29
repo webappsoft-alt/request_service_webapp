@@ -57,6 +57,7 @@ export type CrmInboxSummary = {
   newLeads: number;
   unreadChats: number;
   pendingOrders: number;
+  pendingEstimates?: number;
   total: number;
   activeLeads?: number;
   convertedLeads?: number;
@@ -1950,17 +1951,19 @@ export function mapInboxSummary(raw: unknown): CrmInboxSummary {
     numberValue(data.unreadMessagesCount ?? data.unreadChats, 0),
   );
   const pendingOrders = Math.max(0, numberValue(data.pendingOrders, 0));
+  const pendingEstimates = Math.max(0, numberValue(data.pendingEstimates, 0));
   return {
     newLeads,
     activeLeads,
     convertedLeads,
     unreadChats,
     pendingOrders,
+    pendingEstimates,
     total: Math.max(
       0,
       numberValue(
         data.totalActiveLeads ?? data.total,
-        newLeads + activeLeads + unreadChats + pendingOrders,
+        newLeads + activeLeads + unreadChats + pendingOrders + pendingEstimates,
       ),
     ),
   };

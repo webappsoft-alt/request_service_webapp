@@ -7,6 +7,13 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
   MapPaneSkeleton,
@@ -39,8 +46,6 @@ import {
 } from "@/store/categoriesSlice";
 import {
   clearLocation,
-  detectCurrentLocation,
-  hasLocation,
   hydrateLocationIfEmpty,
   isCommittedLocation,
   locationDisplayLabel,
@@ -164,7 +169,7 @@ export function CategoryExplorer({
   const [subService, setSubService] = useState(initialJob);
   const [minRating, setMinRating] = useState(0);
   const [licensedOnly, setLicensedOnly] = useState(false);
-  const [sort, setSort] = useState<SortKey>("newest");
+  const [sort, setSort] = useState<SortKey | "">("");
   const [selectedId, setSelectedId] = useState<string | null>(
     providers[0]?.id ?? null,
   );
@@ -269,9 +274,6 @@ export function CategoryExplorer({
   const liveQuery = useMemo((): PublicProfessionalsQuery => {
     const committed = isCommittedLocation(customerLocation);
     const next: PublicProfessionalsQuery = {
-      sortBy: sortByFromUi(sort),
-      sortOrder: "desc",
-      radius: 50,
       locationToken: committed
         ? [
             customerLocation.zip,
@@ -283,6 +285,10 @@ export function CategoryExplorer({
           ].join("|")
         : "all",
     };
+    if (sort) {
+      next.sortBy = sortByFromUi(sort);
+      next.sortOrder = "desc";
+    }
     if (minRating > 0) next.minRating = minRating;
     if (licensedOnly) next.isIdentityVerified = true;
     if (categoryId) next.category = categoryId;
@@ -300,7 +306,9 @@ export function CategoryExplorer({
       next.subCategory = subService.trim();
     }
 
-    // ZIP-only when no coords — city/place picks use radius instead.
+    // Only apply geo filters when the user has committed a location.
+    if (!committed) return next;
+
     const hasCoords =
       customerLocation.latitude != null &&
       Number.isFinite(customerLocation.latitude) &&
@@ -313,6 +321,7 @@ export function CategoryExplorer({
     if (hasCoords) {
       next.lat = customerLocation.latitude!;
       next.lng = customerLocation.longitude!;
+      next.radius = 50;
     }
 
     return next;
@@ -344,15 +353,14 @@ export function CategoryExplorer({
   const showInitialSpinner =
     useLive &&
     !results.length &&
-    (customerLocation.detecting ||
-      liveLoading ||
+    (liveLoading ||
       pendingRefresh ||
       (!liveLoaded && !liveError));
 
   useEffect(() => {
     if (!useLive) return;
     const zipFromAddress = extractZip(initialAddress);
-    if (initialAddress || customerLocation.zip || zipFromAddress) {
+    if (initialAddress.trim() || zipFromAddress) {
       dispatch(
         hydrateLocationIfEmpty({
           address: initialAddress,
@@ -360,25 +368,13 @@ export function CategoryExplorer({
           zip: zipFromAddress || undefined,
         }),
       );
+      return;
     }
-  }, [customerLocation.zip, dispatch, initialAddress, useLive]);
+    // Empty location box → full unfiltered catalog (ignore leftover Redux geo).
+    dispatch(clearLocation());
+  }, [dispatch, initialAddress, useLive]);
 
-  useEffect(() => {
-    if (!useLive) return;
-    if (customerLocation.detectAttempted || customerLocation.detecting) return;
-    if (hasLocation(customerLocation)) return;
-    void dispatch(detectCurrentLocation());
-  }, [
-    customerLocation.address,
-    customerLocation.city,
-    customerLocation.detectAttempted,
-    customerLocation.detecting,
-    customerLocation.latitude,
-    customerLocation.longitude,
-    customerLocation.zip,
-    dispatch,
-    useLive,
-  ]);
+  // Do not auto-detect browser location — empty location must return the full catalog.
 
   useEffect(() => {
     if (!useLive) return;
@@ -610,21 +606,25 @@ export function CategoryExplorer({
         : searchedPlace.city
       : searchedPlace.state
         ? stateLabel(searchedPlace.state)
-        : results[0]
-          ? `${results[0].city}${results[0].state ? `, ${results[0].state}` : ""}`
-          : address.trim() ||
-            (useLive && isCommittedLocation(customerLocation)
-              ? locationLabel
-              : "") ||
-            selectedParent?.name ||
-            activeCategory?.name ||
-            "your area";
+        : useLive && !isCommittedLocation(customerLocation)
+          ? "all areas"
+          : results[0]
+            ? `${results[0].city}${results[0].state ? `, ${results[0].state}` : ""}`
+            : address.trim() ||
+              (useLive && isCommittedLocation(customerLocation)
+                ? locationLabel
+                : "") ||
+              selectedParent?.name ||
+              activeCategory?.name ||
+              "your area";
   const heading = useLive
     ? selectedLiveSub
       ? `${selectedLiveSub.name} in ${cityLabel}`
       : selectedParent
         ? `${selectedParent.name} in ${cityLabel}`
-        : `Professionals in ${cityLabel}`
+        : cityLabel === "all areas"
+          ? "All professionals"
+          : `Professionals in ${cityLabel}`
     : selectedSub
       ? `${selectedSub.label} in ${cityLabel}`
       : activeCategory
@@ -773,36 +773,47 @@ export function CategoryExplorer({
               />
             ) : null}
 
-            <NativeSelect
-              value={minRating > 0 ? String(minRating) : ""}
-              onChange={(event) => {
-                const next = Number(event.target.value);
+            <Select
+              value={minRating > 0 ? String(minRating) : undefined}
+              onValueChange={(value) => {
+                const next = Number(value);
                 setMinRating(Number.isFinite(next) && next > 0 ? next : 0);
-                setFitToken((value) => value + 1);
+                setFitToken((token) => token + 1);
               }}
-              className="relative z-[1300] w-full min-w-0 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:bg-card sm:[&>select]:min-w-28"
-              aria-label="Rating"
             >
-              <NativeSelectOption value="">Rating</NativeSelectOption>
-              <NativeSelectOption value="1">1+</NativeSelectOption>
-              <NativeSelectOption value="2">2+</NativeSelectOption>
-              <NativeSelectOption value="3">3+</NativeSelectOption>
-              <NativeSelectOption value="4">4+</NativeSelectOption>
-              <NativeSelectOption value="5">5</NativeSelectOption>
-            </NativeSelect>
+              <SelectTrigger
+                className="h-10 w-full min-w-0 bg-card sm:w-fit sm:min-w-28"
+                aria-label="Rating"
+              >
+                <SelectValue placeholder="Rating" />
+              </SelectTrigger>
+              <SelectContent position="popper" className="z-[1300]">
+                <SelectItem value="1">1+</SelectItem>
+                <SelectItem value="2">2+</SelectItem>
+                <SelectItem value="3">3+</SelectItem>
+                <SelectItem value="4">4+</SelectItem>
+                <SelectItem value="5">5</SelectItem>
+              </SelectContent>
+            </Select>
 
-            <NativeSelect
+            <Select
               value={licensedOnly ? "licensed" : "any"}
-              onChange={(event) => {
-                setLicensedOnly(event.target.value === "licensed");
-                setFitToken((value) => value + 1);
+              onValueChange={(value) => {
+                setLicensedOnly(value === "licensed");
+                setFitToken((token) => token + 1);
               }}
-              className="col-span-2 w-full min-w-0 sm:col-span-1 sm:w-fit [&>select]:h-10 [&>select]:w-full [&>select]:bg-card sm:[&>select]:min-w-32"
-              aria-label="License"
             >
-              <NativeSelectOption value="any">All pros</NativeSelectOption>
-              <NativeSelectOption value="licensed">Licensed</NativeSelectOption>
-            </NativeSelect>
+              <SelectTrigger
+                className="col-span-2 h-10 w-full min-w-0 bg-card sm:col-span-1 sm:w-fit sm:min-w-32"
+                aria-label="License"
+              >
+                <SelectValue placeholder="All pros" />
+              </SelectTrigger>
+              <SelectContent position="popper" className="z-[1300]">
+                <SelectItem value="any">All pros</SelectItem>
+                <SelectItem value="licensed">Licensed</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </form>
         {match ? (
@@ -890,17 +901,23 @@ export function CategoryExplorer({
                   : `${results.length} ${results.length === 1 ? "result" : "results"}`}
               </p>
             </div>
-            <NativeSelect
-              value={sort}
-              onChange={(event) => setSort(event.target.value as SortKey)}
-              className="w-full min-w-0 shrink-0 sm:w-auto [&>select]:w-full [&>select]:bg-card sm:[&>select]:w-auto"
-              aria-label="Sort"
+            <Select
+              value={sort || undefined}
+              onValueChange={(value) => setSort(value as SortKey)}
             >
-              <NativeSelectOption value="newest">Sort: Newest</NativeSelectOption>
-              <NativeSelectOption value="rating">Sort: Highest rated</NativeSelectOption>
-              <NativeSelectOption value="reviews">Sort: Most reviews</NativeSelectOption>
-              <NativeSelectOption value="years">Sort: Most experienced</NativeSelectOption>
-            </NativeSelect>
+              <SelectTrigger
+                className="h-10 w-full min-w-0 shrink-0 bg-card sm:w-auto"
+                aria-label="Sort"
+              >
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent position="popper" align="end" className="z-[1300]">
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="rating">Highest rated</SelectItem>
+                <SelectItem value="reviews">Most reviews</SelectItem>
+                <SelectItem value="years">Most experienced</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {showInitialSpinner ? (
@@ -988,6 +1005,9 @@ export function CategoryExplorer({
                   setSubService("");
                   setMinRating(0);
                   setLicensedOnly(false);
+                  setSort("");
+                  setLocationDraft(null);
+                  if (useLive) dispatch(clearLocation());
                   if (marketplace) syncMarketplaceUrl(serviceSlug);
                 }}
               >

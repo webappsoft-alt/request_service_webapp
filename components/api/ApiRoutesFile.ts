@@ -230,6 +230,8 @@ export const publicApi = {
   blogComments: (slug: string) => `public/blogs/${slug}/comments`,
   /** GET active FAQs — query: audience (`customer` | `provider`), optional domain */
   faqs: "public/faqs",
+  /** GET public CMS section — e.g. `general` for contact / hours */
+  cmsSection: (section: string) => `public/cms/${section}`,
   /** GET sales tax percent for a U.S. state — query: `state` */
   taxRate: "public/tax-rate",
 } as const;

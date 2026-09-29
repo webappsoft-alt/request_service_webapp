@@ -323,7 +323,14 @@ export function emitChatMarkRead(threadId: string) {
 /** Request provider sidebar badge counts over the shared socket (no REST). */
 export function requestProviderInboxCounts() {
   if (!sharedSocket) return;
-  sharedSocket.emit("provider:inbox-counts:get");
+  if (sharedSocket.connected) {
+    sharedSocket.emit("provider:inbox-counts:get");
+    return;
+  }
+  // Queue until the shared socket connects (crm mounts often before connect).
+  sharedSocket.once("connect", () => {
+    sharedSocket?.emit("provider:inbox-counts:get");
+  });
 }
 
 /** Persist badge ACK when opening Leads / Orders / Estimates (socket, not REST). */

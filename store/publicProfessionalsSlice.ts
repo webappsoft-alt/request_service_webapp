@@ -203,9 +203,7 @@ type PublicProfessionalsState = {
 
 export const PUBLIC_PROFESSIONALS_LIMIT = 10;
 
-const initialQuery: PublicProfessionalsQuery = {
-  sortBy: "newest",
-};
+const initialQuery: PublicProfessionalsQuery = {};
 
 const initialState: PublicProfessionalsState = {
   items: [],
@@ -1013,29 +1011,47 @@ export function resolvePublicProfessionalsQuery(
     location.longitude != null &&
     Number.isFinite(location.longitude);
 
+  // UI signals an unfiltered catalog with locationToken "all" (no committed place).
+  const wantsAllLocations =
+    !incoming?.locationToken || incoming.locationToken === "all";
+
   const query: PublicProfessionalsQuery = {
-    sortBy: "newest",
     ...incoming,
-    // City/place picks include a center ZIP — don't AND it with radius or results empty.
-    zipCode: hasZip && !hasCoords ? location.zip.trim() : undefined,
-    lat: hasCoords ? location.latitude : undefined,
-    lng: hasCoords ? location.longitude : undefined,
-    locationToken: hasZip || hasCoords || Boolean(location.city.trim())
-      ? [
-          location.zip,
-          location.city,
-          location.state,
-          location.country,
-          location.latitude ?? "",
-          location.longitude ?? "",
-        ].join("|")
-      : "all",
   };
 
-  if (!(hasZip && !hasCoords)) delete query.zipCode;
+  if (wantsAllLocations) {
+    delete query.zipCode;
+    delete query.lat;
+    delete query.lng;
+    delete query.radius;
+    query.locationToken = "all";
+  } else {
+    // City/place picks include a center ZIP — don't AND it with radius or results empty.
+    query.zipCode = hasZip && !hasCoords ? location.zip.trim() : undefined;
+    query.lat = hasCoords ? location.latitude : undefined;
+    query.lng = hasCoords ? location.longitude : undefined;
+    query.locationToken = [
+      location.zip,
+      location.city,
+      location.state,
+      location.country,
+      location.latitude ?? "",
+      location.longitude ?? "",
+    ].join("|");
+    if (hasCoords && (query.radius == null || !Number.isFinite(query.radius))) {
+      query.radius = 50;
+    }
+  }
+
+  if (!(hasZip && !hasCoords) || wantsAllLocations) delete query.zipCode;
   if (query.lat == null || !Number.isFinite(query.lat)) delete query.lat;
   if (query.lng == null || !Number.isFinite(query.lng)) delete query.lng;
   if (query.minRating == null || query.minRating <= 0) delete query.minRating;
+  if (!query.sortBy) {
+    delete query.sortBy;
+    delete query.sortOrder;
+  }
+  if (query.lat == null || query.lng == null) delete query.radius;
 
   // Location is optional — empty means unfiltered catalog (pagination still applies).
   return { query, committed: true };
@@ -1046,21 +1062,27 @@ function toRequestParams(
   page: number,
   limit: number,
 ): Record<string, string | number | boolean | null | undefined> {
+  const hasCoords =
+    query.lat != null &&
+    Number.isFinite(query.lat) &&
+    query.lng != null &&
+    Number.isFinite(query.lng);
+
   return {
     page,
     limit,
     search: query.search?.trim() || undefined,
     q: undefined,
     zipCode: query.zipCode?.trim() || undefined,
-    lat:
-      query.lat != null && Number.isFinite(query.lat) ? query.lat : undefined,
-    lng:
-      query.lng != null && Number.isFinite(query.lng) ? query.lng : undefined,
-    // Backend Joi default is 25; customer marketplace uses 50 miles.
+    lat: hasCoords ? query.lat : undefined,
+    lng: hasCoords ? query.lng : undefined,
+    // Radius only applies with coordinates — omit so backend returns the full catalog.
     radius:
-      query.radius != null && Number.isFinite(query.radius)
-        ? query.radius
-        : 50,
+      hasCoords
+        ? query.radius != null && Number.isFinite(query.radius)
+          ? query.radius
+          : 50
+        : undefined,
     category: query.category?.trim() || undefined,
     subCategory: query.subCategory?.trim() || undefined,
     commonServices: query.commonServices?.trim() || undefined,
@@ -1072,8 +1094,8 @@ function toRequestParams(
     isIdentityVerified:
       query.isIdentityVerified === true ? true : undefined,
     availability: query.availability?.trim() || undefined,
-    sortBy: query.sortBy || "newest",
-    sortOrder: query.sortOrder || "desc",
+    sortBy: query.sortBy || undefined,
+    sortOrder: query.sortBy ? query.sortOrder || "desc" : undefined,
   };
 }
 

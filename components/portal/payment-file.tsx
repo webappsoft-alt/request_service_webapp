@@ -21,6 +21,8 @@ export function PaymentFileChrome({
   invoice,
   customer,
   customerLabel,
+  customerPhone,
+  customerEmail,
   service,
   job,
 }: {
@@ -28,6 +30,8 @@ export function PaymentFileChrome({
   invoice?: Invoice;
   customer?: PortalCustomerCrm;
   customerLabel: string;
+  customerPhone?: string;
+  customerEmail?: string;
   service: string;
   job?: Job;
 }) {
@@ -38,6 +42,18 @@ export function PaymentFileChrome({
         .join(", ")
     : "";
   const customerId = invoice?.customerId || payment.customerId;
+  const phone =
+    customerPhone?.trim() ||
+    customer?.phone?.trim() ||
+    payment.customerPhone?.trim() ||
+    invoice?.customerPhone?.trim() ||
+    "";
+  const email =
+    customerEmail?.trim() ||
+    customer?.email?.trim() ||
+    payment.customerEmail?.trim() ||
+    invoice?.customerEmail?.trim() ||
+    "";
 
   return (
     <div className="space-y-0">
@@ -45,7 +61,7 @@ export function PaymentFileChrome({
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
+            {[phone, email].filter(Boolean).join(" · ") ||
               "Customer details for this payment"}
           </p>
         </div>
@@ -73,16 +89,10 @@ export function PaymentFileChrome({
             )
           }
         />
-        <Detail label="Phone" value={customer?.phone || "—"} />
+        <Detail label="Phone" value={phone || "—"} />
         <Detail
           label="Email"
-          value={
-            customer?.email ? (
-              <span className="text-primary">{customer.email}</span>
-            ) : (
-              "—"
-            )
-          }
+          value={email ? <span className="text-primary">{email}</span> : "—"}
         />
         <Detail label="Service" value={service || "—"} />
         <Detail label="Address" value={addressLine || "—"} />
@@ -134,6 +144,16 @@ export function PaymentSummaryTab({
 }) {
   const kind = paymentKindLabel(paymentKind(payment));
   const address = job?.address;
+  const phone =
+    customer?.phone?.trim() ||
+    payment.customerPhone?.trim() ||
+    invoice?.customerPhone?.trim() ||
+    "";
+  const email =
+    customer?.email?.trim() ||
+    payment.customerEmail?.trim() ||
+    invoice?.customerEmail?.trim() ||
+    "";
 
   return (
     <div className="space-y-4">
@@ -187,8 +207,8 @@ export function PaymentSummaryTab({
                 )
               }
             />
-            {customer?.phone ? <Detail label="Phone" value={customer.phone} /> : null}
-            {customer?.email ? <Detail label="Email" value={customer.email} /> : null}
+            {phone ? <Detail label="Phone" value={phone} /> : null}
+            {email ? <Detail label="Email" value={email} /> : null}
             <Detail label="Payment type" value={kind} />
             <Detail
               label="Status"

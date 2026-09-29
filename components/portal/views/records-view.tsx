@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -38,6 +38,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   clearEstimatesError,
+  estimatesPageCacheKey,
   fetchEstimates,
   invalidateEstimatesCache,
   patchEstimateLocally,
@@ -53,6 +54,7 @@ import {
   fetchJobs,
   invalidateJobsCache,
   JOBS_DEFAULT_LIMIT,
+  jobsCacheKey,
   patchJobArchive,
   patchJobStatus,
   setJobsListFilter,
@@ -64,6 +66,7 @@ import {
   deleteInvoiceRecord,
   fetchInvoices,
   INVOICES_DEFAULT_LIMIT,
+  invoicesCacheKey,
   patchInvoiceArchive,
   patchInvoiceStatus,
   sendInvoiceRecord,
@@ -76,6 +79,7 @@ import {
   fetchPayments,
   invalidatePaymentsCache,
   PAYMENTS_DEFAULT_LIMIT,
+  paymentsCacheKey,
   patchPaymentArchive,
   setPaymentsListFilter,
   setPaymentsPage,
@@ -141,6 +145,8 @@ export function EstimatesView() {
   const [searchInput, setSearchInput] = useState("");
   // Debounce timer ref
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstMountRef = useRef(true);
+  const prevQueryRef = useRef({ page: 1, search: "", status: "", limit: 10 });
 
   // Opening Estimates clears the sidebar badge locally — no ack API.
   useEffect(() => {
@@ -169,6 +175,15 @@ export function EstimatesView() {
       loading: true,
       error: null,
     };
+  const customerId = slice?.customerId;
+  const pagesCache = slice?.pagesCache ?? {};
+  const cacheKey = estimatesPageCacheKey(
+    search,
+    statusParam,
+    customerId,
+    page,
+    limit,
+  );
 
   const allRequests = useMemo(
     () => records.mergeRequests(requests),
@@ -180,38 +195,95 @@ export function EstimatesView() {
     setSearchInput(search);
   }, [search]);
 
-  // Load on mount, status change, page change, or search change
+  // Keep slice status aligned with the URL filter (same as Leads status sync).
   useEffect(() => {
     if (!useApi) return;
-    let cancelled = false;
-    setActionLoading(true);
-    void dispatch(
-      fetchEstimates({
-        search,
-        status: statusParam,
-        force: true,
-      }),
-    ).finally(() => {
-      if (!cancelled) setActionLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [dispatch, useApi, statusParam, page, search]);
+    if ((slice?.status ?? "") !== statusParam) {
+      dispatch(setEstimatesStatus(statusParam));
+    }
+  }, [dispatch, useApi, statusParam, slice?.status]);
+
+  const refreshEstimates = useCallback(
+    async (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading ?? true;
+      if (showLoading) setActionLoading(true);
+      try {
+        await dispatch(
+          fetchEstimates({
+            search,
+            status: statusParam,
+            force: true,
+          }),
+        ).unwrap();
+      } catch (err) {
+        toast.error(
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+              ? err.message
+              : "Could not load estimates.",
+        );
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [dispatch, search, statusParam],
+  );
+
+  // Cache-aware refresh: silent when returning with data; loading on first visit /
+  // empty cache / search-filter-page changes (Leads pattern).
+  useEffect(() => {
+    if (!useApi) return;
+    const prev = prevQueryRef.current;
+    const queryChanged =
+      !isFirstMountRef.current &&
+      (prev.page !== page ||
+        prev.search !== search ||
+        prev.status !== statusParam ||
+        prev.limit !== limit);
+    prevQueryRef.current = { page, search, status: statusParam, limit };
+
+    const cached = pagesCache[cacheKey];
+    const hasData =
+      (Array.isArray(cached) && cached.length > 0) || items.length > 0;
+    const showLoading = queryChanged || !hasData;
+
+    if (isFirstMountRef.current) isFirstMountRef.current = false;
+
+    void refreshEstimates({ showLoading });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
+  }, [page, limit, statusParam, search, cacheKey, refreshEstimates, useApi]);
 
   // Debounced search: dispatches to slice (thunk checks pagesCache — no redundant API hits)
   function handleSearchChange(value: string) {
     setSearchInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setActionLoading(true);
-      dispatch(setEstimatesSearch(value.trim()));
+      const next = value.trim();
+      const nextKey = estimatesPageCacheKey(
+        next,
+        statusParam,
+        customerId,
+        1,
+        limit,
+      );
+      const hasCache = Boolean(pagesCache[nextKey]?.length);
+      if (!hasCache) setActionLoading(true);
+      dispatch(setEstimatesSearch(next));
     }, 400);
   }
 
   function handlePageChange(nextPage: number) {
     if (nextPage === page) return;
-    setActionLoading(true);
+    const nextKey = estimatesPageCacheKey(
+      search,
+      statusParam,
+      customerId,
+      nextPage,
+      limit,
+    );
+    const hasCache = Boolean(pagesCache[nextKey]?.length);
+    if (!hasCache) setActionLoading(true);
     dispatch(setEstimatesPage(nextPage));
   }
 
@@ -296,7 +368,8 @@ export function EstimatesView() {
   }, [allRequests, customers, items]);
 
   const tableLoading =
-    actionLoading || (useApi ? loading && items.length === 0 : false);
+    (actionLoading && items.length === 0) ||
+    (useApi ? loading && items.length === 0 : false);
 
   return (
     <PortalPage
@@ -753,6 +826,13 @@ export function JobsView() {
   const [archiving, setArchiving] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const isFirstMountRef = useRef(true);
+  const prevQueryRef = useRef({
+    page: 1,
+    search: "",
+    status: "",
+    isArchived: false,
+  });
 
   const slice = useAppSelector((s) => s.jobs);
   const {
@@ -761,6 +841,7 @@ export function JobsView() {
     total,
     totalPages,
     page,
+    limit,
     search: reduxSearch,
     error,
   } = slice ?? {
@@ -769,9 +850,18 @@ export function JobsView() {
     total: 0,
     totalPages: 1,
     page: 1,
+    limit: JOBS_DEFAULT_LIMIT,
     search: "",
     error: null,
   };
+  const pagesCache = slice?.pagesCache ?? {};
+  const cacheKey = jobsCacheKey(
+    reduxSearch,
+    slice?.status ?? "",
+    Boolean(slice?.isArchived),
+    page,
+    limit ?? JOBS_DEFAULT_LIMIT,
+  );
 
   const [searchInput, setSearchInput] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -784,16 +874,62 @@ export function JobsView() {
     dispatch(setJobsListFilter(listFilter));
   }, [dispatch, listFilter]);
 
+  const refreshJobs = useCallback(
+    async (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading ?? true;
+      if (showLoading) setActionLoading(true);
+      try {
+        await dispatch(fetchJobs({ force: true })).unwrap();
+      } catch (err) {
+        toast.error(
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+              ? err.message
+              : "Could not load jobs.",
+        );
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [dispatch],
+  );
+
+  // Cache-aware refresh (Leads / Estimates pattern).
   useEffect(() => {
-    let cancelled = false;
-    setActionLoading(true);
-    void dispatch(fetchJobs()).finally(() => {
-      if (!cancelled) setActionLoading(false);
-    });
-    return () => {
-      cancelled = true;
+    const prev = prevQueryRef.current;
+    const queryChanged =
+      !isFirstMountRef.current &&
+      (prev.page !== page ||
+        prev.search !== reduxSearch ||
+        prev.status !== (slice?.status ?? "") ||
+        prev.isArchived !== Boolean(slice?.isArchived));
+    prevQueryRef.current = {
+      page,
+      search: reduxSearch,
+      status: slice?.status ?? "",
+      isArchived: Boolean(slice?.isArchived),
     };
-  }, [dispatch, page, reduxSearch, slice?.status, slice?.isArchived]);
+
+    const cached = pagesCache[cacheKey];
+    const hasData =
+      reduxItems.length > 0 ||
+      (Array.isArray(cached) && cached.length > 0) ||
+      (total > 0 && !queryChanged);
+    const showLoading = queryChanged || !hasData;
+
+    if (isFirstMountRef.current) isFirstMountRef.current = false;
+
+    void refreshJobs({ showLoading });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
+  }, [
+    page,
+    reduxSearch,
+    slice?.status,
+    slice?.isArchived,
+    cacheKey,
+    refreshJobs,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -811,14 +947,31 @@ export function JobsView() {
     setSearchInput(value);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      setActionLoading(true);
-      dispatch(setJobsSearch(value.trim()));
+      const next = value.trim();
+      const nextKey = jobsCacheKey(
+        next,
+        slice?.status ?? "",
+        Boolean(slice?.isArchived),
+        1,
+        limit ?? JOBS_DEFAULT_LIMIT,
+      );
+      const hasCache = Boolean(pagesCache[nextKey]?.length);
+      if (!hasCache) setActionLoading(true);
+      dispatch(setJobsSearch(next));
     }, 350);
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage === page) return;
-    setActionLoading(true);
+    const nextKey = jobsCacheKey(
+      reduxSearch,
+      slice?.status ?? "",
+      Boolean(slice?.isArchived),
+      newPage,
+      limit ?? JOBS_DEFAULT_LIMIT,
+    );
+    const hasCache = Boolean(pagesCache[nextKey]?.length);
+    if (!hasCache) setActionLoading(true);
     dispatch(setJobsPage(newPage));
   };
 
@@ -937,7 +1090,8 @@ export function JobsView() {
   );
 
   const rows = reduxItems;
-  const tableLoading = actionLoading || (loading && rows.length === 0);
+  // Never flash a spinner over rows that are already on screen.
+  const tableLoading = rows.length === 0 && (actionLoading || loading);
 
   return (
     <PortalPage
@@ -1216,6 +1370,14 @@ export function InvoicesView() {
   const [busyIds, setBusyIds] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstMountRef = useRef(true);
+  const prevQueryRef = useRef({
+    page: 1,
+    search: "",
+    status: "",
+    archived: false,
+    limit: INVOICES_DEFAULT_LIMIT,
+  });
 
   const slice = useAppSelector((state) => state.invoices);
   const {
@@ -1227,6 +1389,7 @@ export function InvoicesView() {
     search,
     loading,
     error,
+    pagesCache = {},
   } = slice ?? {
     items: [],
     page: 1,
@@ -1236,8 +1399,19 @@ export function InvoicesView() {
     search: "",
     loading: true,
     error: null,
+    pagesCache: {},
   };
   const [searchInput, setSearchInput] = useState(search);
+
+  const isArchived = Boolean(slice?.isArchived);
+  const sliceStatus = slice?.status ?? "";
+  const cacheKey = invoicesCacheKey(
+    search,
+    sliceStatus,
+    isArchived,
+    page,
+    limit,
+  );
 
   const allJobs = useMemo(() => records.mergeJobs(jobs), [records, jobs]);
   const allEstimates = useMemo(
@@ -1249,22 +1423,86 @@ export function InvoicesView() {
     setSearchInput(search);
   }, [search]);
 
+  // Keep slice status aligned with the URL filter (same as Leads / Estimates).
   useEffect(() => {
     if (!useApi) return;
-    dispatch(setInvoicesListFilter(listFilter));
-  }, [dispatch, useApi, listFilter]);
+    const nextArchived = listFilter === "archived";
+    const nextStatus = nextArchived ? "" : listFilter;
+    if (isArchived !== nextArchived || sliceStatus !== nextStatus) {
+      dispatch(setInvoicesListFilter(listFilter));
+    }
+  }, [dispatch, useApi, listFilter, isArchived, sliceStatus]);
 
+  const refreshInvoices = useCallback(
+    async (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading ?? true;
+      if (showLoading) setActionLoading(true);
+      try {
+        await dispatch(
+          fetchInvoices({
+            page,
+            limit,
+            search,
+            status: sliceStatus,
+            isArchived,
+            force: true,
+            silent: true,
+          }),
+        ).unwrap();
+      } catch (err) {
+        toast.error(
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+              ? err.message
+              : "Could not load invoices.",
+        );
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [dispatch, page, limit, search, sliceStatus, isArchived],
+  );
+
+  // Cache-aware refresh: silent when returning with data; loading on first visit /
+  // empty cache / search-filter-page changes (Leads pattern).
   useEffect(() => {
     if (!useApi) return;
-    let cancelled = false;
-    setActionLoading(true);
-    void dispatch(fetchInvoices()).finally(() => {
-      if (!cancelled) setActionLoading(false);
-    });
-    return () => {
-      cancelled = true;
+    const prev = prevQueryRef.current;
+    const queryChanged =
+      !isFirstMountRef.current &&
+      (prev.page !== page ||
+        prev.search !== search ||
+        prev.status !== sliceStatus ||
+        prev.archived !== isArchived ||
+        prev.limit !== limit);
+    prevQueryRef.current = {
+      page,
+      search,
+      status: sliceStatus,
+      archived: isArchived,
+      limit,
     };
-  }, [dispatch, useApi, page, search, slice?.status, slice?.isArchived, limit]);
+
+    const cached = pagesCache[cacheKey];
+    const hasData =
+      (Array.isArray(cached) && cached.length > 0) || items.length > 0;
+    const showLoading = queryChanged || !hasData;
+
+    if (isFirstMountRef.current) isFirstMountRef.current = false;
+
+    void refreshInvoices({ showLoading });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
+  }, [
+    page,
+    limit,
+    search,
+    sliceStatus,
+    isArchived,
+    cacheKey,
+    refreshInvoices,
+    useApi,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1293,23 +1531,42 @@ export function InvoicesView() {
   );
 
   const rows = useApi ? items : localRows;
+  const hasCache =
+    Array.isArray(pagesCache[cacheKey]) && pagesCache[cacheKey]!.length > 0;
   const tableLoading =
-    (actionLoading && items.length === 0) || (useApi && loading && items.length === 0);
+    (actionLoading && rows.length === 0) ||
+    (useApi && loading && !hasCache && rows.length === 0);
 
   function onSearchChange(value: string) {
     setSearchInput(value);
     if (!useApi) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      dispatch(setInvoicesSearch(value.trim()));
+      const next = value.trim();
+      const nextKey = invoicesCacheKey(
+        next,
+        sliceStatus,
+        isArchived,
+        1,
+        limit,
+      );
+      const nextHasCache = Boolean(pagesCache[nextKey]?.length);
+      if (!nextHasCache) setActionLoading(true);
+      dispatch(setInvoicesSearch(next));
     }, 350);
   }
 
   function onPageChange(nextPage: number) {
     if (!useApi || nextPage === page) return;
-    const cacheKey = `${slice?.isArchived ? "archived" : "active"}|${slice?.status || ""}|${search}|${nextPage}|${limit}`;
-    const hasCache = Boolean(slice?.pagesCache?.[cacheKey]?.length);
-    if (!hasCache) setActionLoading(true);
+    const nextKey = invoicesCacheKey(
+      search,
+      sliceStatus,
+      isArchived,
+      nextPage,
+      limit,
+    );
+    const nextHasCache = Boolean(pagesCache[nextKey]?.length);
+    if (!nextHasCache) setActionLoading(true);
     dispatch(setInvoicesPage(nextPage));
   }
 
@@ -1631,6 +1888,14 @@ export function PaymentsView() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstMountRef = useRef(true);
+  const prevQueryRef = useRef({
+    page: 1,
+    search: "",
+    status: "",
+    archived: false,
+    limit: PAYMENTS_DEFAULT_LIMIT,
+  });
 
   const slice = useAppSelector((state) => state.payments);
   const {
@@ -1642,6 +1907,7 @@ export function PaymentsView() {
     search,
     loading,
     error,
+    pagesCache = {},
   } = slice ?? {
     items: [],
     page: 1,
@@ -1651,8 +1917,19 @@ export function PaymentsView() {
     search: "",
     loading: true,
     error: null,
+    pagesCache: {},
   };
   const [searchInput, setSearchInput] = useState(search);
+
+  const isArchived = Boolean(slice?.isArchived);
+  const sliceStatus = slice?.status ?? "";
+  const cacheKey = paymentsCacheKey(
+    search,
+    sliceStatus,
+    isArchived,
+    page,
+    limit,
+  );
 
   const allInvoices = useMemo(
     () => records.mergeInvoices(invoices),
@@ -1668,22 +1945,86 @@ export function PaymentsView() {
     setSearchInput(search);
   }, [search]);
 
+  // Keep slice status aligned with the URL filter (same as Leads / Invoices).
   useEffect(() => {
     if (!useApi) return;
-    dispatch(setPaymentsListFilter(status));
-  }, [dispatch, useApi, status]);
+    const nextArchived = status === "archived";
+    const nextStatus = nextArchived ? "" : status;
+    if (isArchived !== nextArchived || sliceStatus !== nextStatus) {
+      dispatch(setPaymentsListFilter(status));
+    }
+  }, [dispatch, useApi, status, isArchived, sliceStatus]);
 
+  const refreshPayments = useCallback(
+    async (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading ?? true;
+      if (showLoading) setActionLoading(true);
+      try {
+        await dispatch(
+          fetchPayments({
+            page,
+            limit,
+            search,
+            status: sliceStatus,
+            isArchived,
+            force: true,
+            silent: true,
+          }),
+        ).unwrap();
+      } catch (err) {
+        toast.error(
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+              ? err.message
+              : "Could not load payments.",
+        );
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [dispatch, page, limit, search, sliceStatus, isArchived],
+  );
+
+  // Cache-aware refresh: silent when returning with data; loading on first visit /
+  // empty cache / search-filter-page changes (Leads pattern).
   useEffect(() => {
     if (!useApi) return;
-    let cancelled = false;
-    setActionLoading(true);
-    void dispatch(fetchPayments()).finally(() => {
-      if (!cancelled) setActionLoading(false);
-    });
-    return () => {
-      cancelled = true;
+    const prev = prevQueryRef.current;
+    const queryChanged =
+      !isFirstMountRef.current &&
+      (prev.page !== page ||
+        prev.search !== search ||
+        prev.status !== sliceStatus ||
+        prev.archived !== isArchived ||
+        prev.limit !== limit);
+    prevQueryRef.current = {
+      page,
+      search,
+      status: sliceStatus,
+      archived: isArchived,
+      limit,
     };
-  }, [dispatch, useApi, page, search, slice?.status, slice?.isArchived, limit]);
+
+    const cached = pagesCache[cacheKey];
+    const hasData =
+      (Array.isArray(cached) && cached.length > 0) || items.length > 0;
+    const showLoading = queryChanged || !hasData;
+
+    if (isFirstMountRef.current) isFirstMountRef.current = false;
+
+    void refreshPayments({ showLoading });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
+  }, [
+    page,
+    limit,
+    search,
+    sliceStatus,
+    isArchived,
+    cacheKey,
+    refreshPayments,
+    useApi,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1720,24 +2061,42 @@ export function PaymentsView() {
     });
   }, [archivedOnly, items, localRows, status, useApi]);
 
+  const hasCache =
+    Array.isArray(pagesCache[cacheKey]) && pagesCache[cacheKey]!.length > 0;
   const tableLoading =
     (actionLoading && rows.length === 0) ||
-    (useApi && loading && rows.length === 0);
+    (useApi && loading && !hasCache && rows.length === 0);
 
   function onSearchChange(value: string) {
     setSearchInput(value);
     if (!useApi) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      dispatch(setPaymentsSearch(value.trim()));
+      const next = value.trim();
+      const nextKey = paymentsCacheKey(
+        next,
+        sliceStatus,
+        isArchived,
+        1,
+        limit,
+      );
+      const nextHasCache = Boolean(pagesCache[nextKey]?.length);
+      if (!nextHasCache) setActionLoading(true);
+      dispatch(setPaymentsSearch(next));
     }, 350);
   }
 
   function onPageChange(nextPage: number) {
     if (!useApi || nextPage === page) return;
-    const cacheKey = `${slice?.isArchived ? "archived" : "active"}|${slice?.status || ""}|${search}|${nextPage}|${limit}`;
-    const hasCache = Boolean(slice?.pagesCache?.[cacheKey]?.length);
-    if (!hasCache) setActionLoading(true);
+    const nextKey = paymentsCacheKey(
+      search,
+      sliceStatus,
+      isArchived,
+      nextPage,
+      limit,
+    );
+    const nextHasCache = Boolean(pagesCache[nextKey]?.length);
+    if (!nextHasCache) setActionLoading(true);
     dispatch(setPaymentsPage(nextPage));
   }
 

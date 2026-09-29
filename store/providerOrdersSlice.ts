@@ -24,6 +24,8 @@ export type ProviderOrdersState = {
   items: ProviderOrder[];
   /** Cached list rows keyed by `status|search|page|limit` for soft page switches. */
   pagesCache: Record<string, ProviderOrder[]>;
+  /** Cached order details by id for soft detail revisits / inner tabs. */
+  detailsCache: Record<string, ProviderOrder>;
   page: number;
   limit: number;
   total: number;
@@ -58,6 +60,7 @@ const emptyPagination = (): ProviderOrdersPagination => ({
 const initialState: ProviderOrdersState = {
   items: [],
   pagesCache: {},
+  detailsCache: {},
   page: 1,
   limit: 10,
   total: 0,
@@ -91,6 +94,32 @@ function pickId(record: Record<string, unknown>): string {
   );
 }
 
+function resolveOrderPayload(response: unknown): Record<string, unknown> {
+  const root = asRecord(response) ?? {};
+  const data = asRecord(root.data) ?? root;
+  const nested = asRecord(data.order);
+  // Prefer nested full order when present, but keep sibling fields (e.g. changeOrders
+  // living on the outer envelope in some payloads).
+  if (
+    nested &&
+    (typeof nested.orderNumber === "string" ||
+      typeof nested.status === "string" ||
+      Array.isArray(nested.changeOrders) ||
+      asRecord(nested.pricing) != null)
+  ) {
+    const outerCos = Array.isArray(data.changeOrders) ? data.changeOrders : null;
+    const nestedCos = Array.isArray(nested.changeOrders)
+      ? nested.changeOrders
+      : null;
+    return {
+      ...data,
+      ...nested,
+      changeOrders: nestedCos ?? outerCos ?? [],
+    };
+  }
+  return data;
+}
+
 function normalizeOrder(raw: unknown): ProviderOrder {
   const record = asRecord(raw) ?? {};
   const pricing = asRecord(record.pricing) ?? {};
@@ -108,7 +137,9 @@ function normalizeOrder(raw: unknown): ProviderOrder {
 
   const rawChangeOrders = Array.isArray(record.changeOrders)
     ? record.changeOrders
-    : [];
+    : Array.isArray(record.change_orders)
+      ? record.change_orders
+      : [];
 
   const customerName =
     (typeof customer?.name === "string" && customer.name) ||
@@ -129,6 +160,11 @@ function normalizeOrder(raw: unknown): ProviderOrder {
         durationMinutes: toNumber(bookingRec.durationMinutes, 60),
       }
     : undefined;
+
+  const street =
+    (typeof address.street === "string" && address.street.trim()) ||
+    (typeof address.address === "string" && address.address.trim()) ||
+    "";
 
   return {
     id: pickId(record),
@@ -175,7 +211,7 @@ function normalizeOrder(raw: unknown): ProviderOrder {
         undefined,
     },
     address: {
-      street: typeof address.street === "string" ? address.street : "",
+      street,
       unit: typeof address.unit === "string" ? address.unit : undefined,
       city: typeof address.city === "string" ? address.city : "",
       state: typeof address.state === "string" ? address.state : "",
@@ -255,24 +291,35 @@ function normalizeOrder(raw: unknown): ProviderOrder {
       : undefined,
     changeOrders: rawChangeOrders.map((co) => {
       const coRec = asRecord(co) ?? {};
+      const rawCreated = coRec.createdAt ?? coRec.requestedAt;
+      const createdAt =
+        typeof rawCreated === "string"
+          ? rawCreated
+          : rawCreated != null
+            ? String(rawCreated)
+            : undefined;
+      const evidencePhotos = Array.isArray(coRec.evidencePhotos)
+        ? coRec.evidencePhotos.filter(
+            (p): p is string => typeof p === "string",
+          )
+        : Array.isArray(coRec.evidenceImages)
+          ? coRec.evidenceImages.filter(
+              (p): p is string => typeof p === "string",
+            )
+          : undefined;
       return {
         id: pickId(coRec),
         description:
           typeof coRec.description === "string" ? coRec.description : "",
         reason: typeof coRec.reason === "string" ? coRec.reason : undefined,
         additionalAmount: toNumber(coRec.additionalAmount, 0),
-        evidencePhotos: Array.isArray(coRec.evidencePhotos)
-          ? coRec.evidencePhotos.filter(
-              (p): p is string => typeof p === "string",
-            )
-          : Array.isArray(coRec.evidenceImages)
-            ? coRec.evidenceImages.filter(
-                (p): p is string => typeof p === "string",
-              )
-            : undefined,
+        evidencePhotos,
         status: typeof coRec.status === "string" ? coRec.status : "PENDING",
-        createdAt:
-          typeof coRec.createdAt === "string" ? coRec.createdAt : undefined,
+        createdAt,
+        respondedAt:
+          typeof coRec.respondedAt === "string"
+            ? coRec.respondedAt
+            : undefined,
       };
     }),
     completionDetails: completionDetails
@@ -411,6 +458,7 @@ export const fetchProviderOrders = createAsyncThunk<
     limit: number;
     search: string;
     status: string;
+    cacheKey: string;
   },
   ProviderOrdersQueryParams | void,
   {
@@ -420,12 +468,33 @@ export const fetchProviderOrders = createAsyncThunk<
 >(
   "providerOrders/fetchList",
   async (params, { getState, rejectWithValue }) => {
-    const state = getState().providerOrders;
+    const state = getState().providerOrders ?? initialState;
     const page = params?.page ?? state.page;
     const limit = params?.limit ?? state.limit;
     const search = params?.search ?? state.search;
     const status =
       params && "status" in params ? (params.status || "") : state.statusFilter;
+    const force = Boolean(params?.force);
+    const cacheKey = providerOrdersPageCacheKey(status, search, page, limit);
+
+    // Soft cache hit (non-force): return cached rows without hitting the network.
+    const cachedPage = state.pagesCache[cacheKey];
+    if (!force && Array.isArray(cachedPage) && cachedPage.length > 0) {
+      return {
+        orders: cachedPage,
+        pagination: {
+          page,
+          limit,
+          total: state.total,
+          totalPages: state.totalPages,
+        },
+        page,
+        limit,
+        search,
+        status,
+        cacheKey,
+      };
+    }
 
     try {
       const query: Record<string, string | number> = {
@@ -440,6 +509,7 @@ export const fetchProviderOrders = createAsyncThunk<
       }
       const response = await getData(providerOrdersApi.list, query, {
         silent: true,
+        force: true,
       });
       const parsed = parseOrdersResponse(response);
       return {
@@ -448,31 +518,11 @@ export const fetchProviderOrders = createAsyncThunk<
         limit,
         search,
         status,
+        cacheKey,
       };
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
     }
-  },
-  {
-    condition: (params, { getState }) => {
-      const state = getState().providerOrders;
-      if (state.loading) {
-        return false;
-      }
-      if (params?.force) {
-        return true;
-      }
-      const page = params?.page ?? state.page;
-      const limit = params?.limit ?? state.limit;
-      const search = params?.search ?? state.search;
-      const status =
-        params && "status" in params ? (params.status || "") : state.statusFilter;
-      const key = providerOrdersPageCacheKey(status, search, page, limit);
-      if (key in state.pagesCache) {
-        return false;
-      }
-      return true;
-    },
   },
 );
 
@@ -480,17 +530,19 @@ export const fetchProviderOrders = createAsyncThunk<
 export const fetchProviderOrderById = createAsyncThunk<
   ProviderOrder,
   string,
-  { rejectValue: string }
+  {
+    state: { providerOrders: ProviderOrdersState };
+    rejectValue: string;
+  }
 >("providerOrders/fetchById", async (id, { rejectWithValue }) => {
   const trimmed = String(id || "").trim();
   if (!trimmed) return rejectWithValue("Order ID is required.");
   try {
     const response = await getData(providerOrdersApi.byId(trimmed), undefined, {
       silent: true,
+      force: true,
     });
-    const root = asRecord(response) ?? {};
-    const data = asRecord(root.data) ?? root;
-    const order = normalizeOrder(data);
+    const order = normalizeOrder(resolveOrderPayload(response));
     if (!order.id) {
       return rejectWithValue("Order not found.");
     }
@@ -811,11 +863,33 @@ const providerOrdersSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // 1. Fetch List
+    // 1. Fetch List — soft pending: keep rows when cache has data (Leads pattern)
     builder
-      .addCase(fetchProviderOrders.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchProviderOrders.pending, (state, action) => {
         state.error = null;
+        const targetPage = action.meta.arg?.page ?? state.page;
+        const targetLimit = action.meta.arg?.limit ?? state.limit;
+        const targetStatus =
+          action.meta.arg && "status" in action.meta.arg
+            ? action.meta.arg.status || ""
+            : state.statusFilter;
+        const targetSearch =
+          action.meta.arg && "search" in action.meta.arg
+            ? action.meta.arg.search || ""
+            : state.search;
+        const key = providerOrdersPageCacheKey(
+          targetStatus,
+          targetSearch,
+          targetPage,
+          targetLimit,
+        );
+        const cached = state.pagesCache[key];
+        if (Array.isArray(cached) && cached.length > 0) {
+          state.items = cached;
+          state.loading = false;
+        } else {
+          state.loading = true;
+        }
       })
       .addCase(fetchProviderOrders.fulfilled, (state, action) => {
         state.loading = false;
@@ -832,13 +906,18 @@ const providerOrdersSlice = createSlice({
           state.page = state.totalPages;
           state.pagination.page = state.totalPages;
         }
-        const key = providerOrdersPageCacheKey(
-          state.statusFilter,
-          state.search,
-          state.page,
-          state.limit,
-        );
+        const key =
+          action.payload.cacheKey ||
+          providerOrdersPageCacheKey(
+            state.statusFilter,
+            state.search,
+            state.page,
+            state.limit,
+          );
         state.pagesCache[key] = action.payload.orders;
+        for (const order of action.payload.orders) {
+          if (order?.id) state.detailsCache[order.id] = order;
+        }
       })
       .addCase(fetchProviderOrders.rejected, (state, action) => {
         state.loading = false;
@@ -851,19 +930,37 @@ const providerOrdersSlice = createSlice({
           "Failed to load provider orders.";
       });
 
-    // 2. Fetch By Id
+    // 2. Fetch By Id — soft pending when this order is already on screen / cached
     builder
-      .addCase(fetchProviderOrderById.pending, (state) => {
-        state.selectedLoading = true;
+      .addCase(fetchProviderOrderById.pending, (state, action) => {
         state.error = null;
+        const id = action.meta.arg;
+        const cached = state.detailsCache[id];
+        if (cached) {
+          state.selectedOrder = cached;
+          state.selectedLoading = false;
+        } else if (state.selectedOrder?.id === id) {
+          state.selectedLoading = false;
+        } else {
+          if (state.selectedOrder && state.selectedOrder.id !== id) {
+            state.selectedOrder = null;
+          }
+          state.selectedLoading = true;
+        }
       })
       .addCase(fetchProviderOrderById.fulfilled, (state, action) => {
         state.selectedLoading = false;
         state.selectedOrder = action.payload;
+        state.detailsCache[action.payload.id] = action.payload;
         // Also update in list if present
         const idx = state.items.findIndex((o) => o.id === action.payload.id);
         if (idx !== -1) {
           state.items[idx] = action.payload;
+        }
+        for (const k of Object.keys(state.pagesCache)) {
+          state.pagesCache[k] = state.pagesCache[k].map((row) =>
+            row.id === action.payload.id ? action.payload : row,
+          );
         }
       })
       .addCase(fetchProviderOrderById.rejected, (state, action) => {
@@ -901,6 +998,10 @@ const providerOrdersSlice = createSlice({
       // Update selectedOrder if it's currently open
       if (state.selectedOrder && state.selectedOrder.id === orderId) {
         state.selectedOrder.status = nextStatus;
+      }
+      const cached = state.detailsCache[orderId];
+      if (cached) {
+        cached.status = nextStatus;
       }
     };
 

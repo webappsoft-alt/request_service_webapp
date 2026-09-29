@@ -2357,9 +2357,9 @@ export function JobDetailView({ id }: { id: string }) {
               return (
                 <JobAttachmentsTab
                   job={job}
-                  estimate={estimate}
                   invoice={invoice}
                   technician={technician}
+                  noun="job"
                   hideHeader
                   onActionsChange={onAttachmentsActionsChange}
                 />
@@ -2509,11 +2509,35 @@ export function InvoiceDetailView({ id }: { id: string }) {
         (item) => item.invoiceId === invoiceRef || item.invoiceId === id,
       );
   const customer = customers.find((item) => item.id === invoice?.customerId);
-  const customerLabel = customer
-    ? crmCustomerName(customer)
-    : invoice
-      ? getPortalCustomerName(provider, invoice.customerId)
-      : "Customer";
+  const customerLabel = (() => {
+    if (customer) {
+      const name = crmCustomerName(customer).trim();
+      if (name && name !== "Customer") return name;
+    }
+    const fromInvoice = String(invoice?.customerName || "").trim();
+    if (fromInvoice && fromInvoice !== "Customer") return fromInvoice;
+    const fromEstimate = String(estimate?.customerName || "").trim();
+    if (fromEstimate && fromEstimate !== "Customer") return fromEstimate;
+    const fromRequest = String(
+      requests.find(
+        (item) =>
+          item.customerId === invoice?.customerId ||
+          item.id === estimate?.requestId,
+      )?.customerName || "",
+    ).trim();
+    if (fromRequest && fromRequest !== "Customer") return fromRequest;
+    return fromInvoice || fromEstimate || fromRequest || "Customer";
+  })();
+  const customerPhone =
+    customer?.phone?.trim() ||
+    invoice?.customerPhone?.trim() ||
+    estimate?.customerPhone?.trim() ||
+    "";
+  const customerEmail =
+    customer?.email?.trim() ||
+    invoice?.customerEmail?.trim() ||
+    estimate?.customerEmail?.trim() ||
+    "";
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [resolvingStale, setResolvingStale] = useState(false);
@@ -2894,6 +2918,8 @@ export function InvoiceDetailView({ id }: { id: string }) {
                 invoice={invoice}
                 customer={customer}
                 customerLabel={customerLabel}
+                customerPhone={customerPhone}
+                customerEmail={customerEmail}
                 service={service}
                 job={job}
                 estimate={estimate}
@@ -3077,13 +3103,32 @@ export function PaymentDetailView({ id }: { id: string }) {
     (item) =>
       item.id === (invoice?.customerId || payment?.customerId || ""),
   );
-  const customerLabel = customer
-    ? crmCustomerName(customer)
-    : payment?.customerName?.trim()
-      ? payment.customerName.trim()
-      : invoice
-        ? getPortalCustomerName(provider, invoice.customerId)
-        : "Customer";
+  const customerLabel = (() => {
+    if (customer) {
+      const name = crmCustomerName(customer).trim();
+      if (name && name !== "Customer") return name;
+    }
+    const fromPayment = String(payment?.customerName || "").trim();
+    if (fromPayment && fromPayment !== "Customer") return fromPayment;
+    const fromInvoice = String(invoice?.customerName || "").trim();
+    if (fromInvoice && fromInvoice !== "Customer") return fromInvoice;
+    const fromEstimate = String(
+      allEstimates.find((item) => item.id === job?.estimateId)?.customerName ||
+        "",
+    ).trim();
+    if (fromEstimate && fromEstimate !== "Customer") return fromEstimate;
+    return fromPayment || fromInvoice || fromEstimate || "Customer";
+  })();
+  const customerPhone =
+    customer?.phone?.trim() ||
+    payment?.customerPhone?.trim() ||
+    invoice?.customerPhone?.trim() ||
+    "";
+  const customerEmail =
+    customer?.email?.trim() ||
+    payment?.customerEmail?.trim() ||
+    invoice?.customerEmail?.trim() ||
+    "";
   const service = job
     ? jobServiceLabel(job, allEstimates, requests)
     : invoice?.items[0]?.description || "Service";
@@ -3205,6 +3250,8 @@ export function PaymentDetailView({ id }: { id: string }) {
                 invoice={invoice}
                 customer={customer}
                 customerLabel={customerLabel}
+                customerPhone={customerPhone}
+                customerEmail={customerEmail}
                 service={service}
                 job={job}
               />

@@ -19,7 +19,8 @@ import {
 } from "@/store/customerPaymentsSlice";
 
 function paymentNumber(id: string) {
-  return `PMT-${String(id || "").replace(/^pay_?/i, "")}`;
+  const raw = String(id || "").replace(/^pay_?/i, "");
+  return `PMT-${raw.slice(-6).toUpperCase() || "000000"}`;
 }
 
 function statusLabel(status: string) {

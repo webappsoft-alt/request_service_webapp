@@ -343,6 +343,10 @@ export interface Invoice {
   number: string;
   providerId: string;
   customerId: string;
+  /** Populated convenience fields when API embeds customer. */
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
   jobId: string;
   status: InvoiceStatus;
   issuedAt: string;
@@ -367,6 +371,8 @@ export type PaymentStatus = "pending" | "processing" | "succeeded" | "failed" | 
 
 export interface Payment {
   id: string;
+  /** Human-readable payment number (never the raw Mongo ObjectId). */
+  number?: string;
   invoiceId: string;
   scheduleId?: string;
   amount: number;
@@ -379,6 +385,8 @@ export interface Payment {
   /** Populated convenience fields from API. */
   customerId?: string;
   customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
   invoiceNumber?: string;
   jobId?: string;
   notes?: string;

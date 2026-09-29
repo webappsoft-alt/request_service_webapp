@@ -1237,6 +1237,12 @@ function EmployeeJobsTab({ employeeId }: { employeeId: string }) {
   );
 }
 
+/** Session cache so Attachments survive detail clear on leave/back (Leads-style). */
+const employeeAttachmentsCache = new Map<
+  string,
+  NonNullable<PortalEmployee["attachments"]>
+>();
+
 function EmployeeEstimatesTab({
   employeeId,
   customers,
@@ -1251,6 +1257,7 @@ function EmployeeEstimatesTab({
   const tab = useAppSelector((state) => state.team?.estimates);
 
   useEffect(() => {
+    if (!employeeId) return;
     void dispatch(fetchEmployeeEstimates({ employeeId, force: true }));
   }, [dispatch, employeeId]);
 
@@ -1575,15 +1582,41 @@ export function EmployeeAttachmentsTab({
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [, bumpCache] = useState(0);
 
-  // Same pattern as Jobs/Tasks: open tab → fetch this employee's data (GET /team/:id includes attachments).
-  // Cached detail stays visible; detailLoading only blocks when this employee has no profile yet.
+  // Keep a session cache so leave/back still shows files while GET /team/:id refreshes.
+  useEffect(() => {
+    if (detail?.id === employee.id && Array.isArray(detail.attachments)) {
+      employeeAttachmentsCache.set(employee.id, detail.attachments);
+      bumpCache((n) => n + 1);
+    }
+  }, [detail?.id, detail?.attachments, employee.id]);
+
   useEffect(() => {
     if (!useApi || !employee.id) return;
-    void dispatch(fetchTeamMember(employee.id));
+    const hasCached =
+      employeeAttachmentsCache.has(employee.id) ||
+      (detail?.id === employee.id && Array.isArray(detail.attachments));
+    let cancelled = false;
+    if (!hasCached) setFetching(true);
+    void dispatch(fetchTeamMember(employee.id)).finally(() => {
+      if (!cancelled) setFetching(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // detail intentionally omitted — only refetch when employee identity / api mode changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, employee.id, useApi]);
 
-  const liveEmployee = detail?.id === employee.id ? detail : employee;
+  const cachedAttachments = employeeAttachmentsCache.get(employee.id);
+  const liveEmployee =
+    detail?.id === employee.id
+      ? detail
+      : cachedAttachments
+        ? { ...employee, attachments: cachedAttachments }
+        : employee;
   const attachments = (liveEmployee.attachments ?? []).map((item) => ({
     id: item.id,
     name: item.name,
@@ -1592,8 +1625,12 @@ export function EmployeeAttachmentsTab({
     dataUrl: item.url,
     addedAt: item.uploadedAt || "",
   }));
+  const hasCachedSnapshot =
+    employeeAttachmentsCache.has(employee.id) ||
+    (detail?.id === employee.id && Array.isArray(detail.attachments));
+  // Spinner only on first load for this employee; background refresh keeps rows visible.
   const listLoading =
-    useApi && detailLoading && detail?.id !== employee.id && attachments.length === 0;
+    useApi && !hasCachedSnapshot && (fetching || detailLoading);
 
   if (!useApi) {
     return (

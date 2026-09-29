@@ -112,8 +112,8 @@ export const fetchPayments = createAsyncThunk<
     targetLimit,
   );
 
-  const force = params?.force ?? false;
-  if (!force && key in state.pagesCache) {
+  const force = Boolean(params?.force);
+  if (!force && Array.isArray(state.pagesCache[key]) && state.pagesCache[key].length > 0) {
     return {
       items: state.pagesCache[key],
       page: targetPage,
@@ -213,18 +213,26 @@ const paymentsSlice = createSlice({
     },
     setPaymentsListFilter(state, action: PayloadAction<string>) {
       const filter = action.payload;
+      const nextArchived = filter === "archived";
+      const nextStatus = nextArchived ? "" : filter === "" ? "" : filter;
+      const unchanged =
+        state.isArchived === nextArchived && state.status === nextStatus;
+      if (unchanged) return;
+
+      state.isArchived = nextArchived;
+      state.status = nextStatus;
       state.page = 1;
-      state.pagesCache = {};
-      state.items = [];
-      state.total = 0;
-      state.totalPages = 1;
-      if (filter === "archived") {
-        state.isArchived = true;
-        state.status = "";
-        return;
+      const key = paymentsCacheKey(
+        state.search,
+        state.status,
+        state.isArchived,
+        1,
+        state.limit,
+      );
+      const cached = state.pagesCache[key];
+      if (Array.isArray(cached) && cached.length > 0) {
+        state.items = cached;
       }
-      state.isArchived = false;
-      state.status = filter === "" ? "" : filter;
     },
     invalidatePaymentsCache(state) {
       state.pagesCache = {};
@@ -283,7 +291,7 @@ const paymentsSlice = createSlice({
           state.items = state.pagesCache[key];
           state.loading = false;
         } else {
-          state.items = state.pagesCache[key] ?? [];
+          // Keep existing rows visible during background refresh (Leads pattern).
           state.loading = state.items.length === 0;
         }
         state.error = null;

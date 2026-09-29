@@ -136,6 +136,24 @@ export const fetchInvoices = createAsyncThunk<
     targetLimit,
   );
 
+  const force = Boolean(params?.force);
+  if (
+    !force &&
+    Array.isArray(state.pagesCache[key]) &&
+    state.pagesCache[key].length > 0
+  ) {
+    return {
+      items: state.pagesCache[key],
+      page: targetPage,
+      total: state.total,
+      totalPages: state.totalPages,
+      search: targetSearch,
+      status: targetStatus,
+      isArchived: targetArchived,
+      cacheKey: key,
+    };
+  }
+
   try {
     const result = await queryInvoices({
       page: targetPage,
@@ -143,7 +161,7 @@ export const fetchInvoices = createAsyncThunk<
       search: targetSearch.trim() || undefined,
       status: targetStatus.trim() || undefined,
       isArchived: targetArchived,
-      force: params?.force ?? true,
+      force: true,
       silent: params?.silent ?? true,
     });
     return {
@@ -333,15 +351,26 @@ const invoicesSlice = createSlice({
     /** Apply board filter from URL: all | unpaid | … | archived */
     setInvoicesListFilter(state, action: PayloadAction<InvoiceListStatus>) {
       const filter = action.payload;
+      const nextArchived = filter === "archived";
+      const nextStatus = nextArchived ? "" : filter === "" ? "" : filter;
+      const unchanged =
+        state.isArchived === nextArchived && state.status === nextStatus;
+      if (unchanged) return;
+
+      state.isArchived = nextArchived;
+      state.status = nextStatus;
       state.page = 1;
-      state.pagesCache = {};
-      if (filter === "archived") {
-        state.isArchived = true;
-        state.status = "";
-        return;
+      const key = invoicesCacheKey(
+        state.search,
+        state.status,
+        state.isArchived,
+        1,
+        state.limit,
+      );
+      const cached = state.pagesCache[key];
+      if (Array.isArray(cached) && cached.length > 0) {
+        state.items = cached;
       }
-      state.isArchived = false;
-      state.status = filter === "" ? "" : filter;
     },
     invalidateInvoicesCache(state) {
       state.pagesCache = {};
@@ -401,8 +430,8 @@ const invoicesSlice = createSlice({
           state.items = state.pagesCache[key];
           state.loading = false;
         } else {
-          state.items = state.pagesCache[key] ?? [];
-          state.loading = true;
+          // Keep existing rows visible during background refresh (Leads pattern).
+          state.loading = state.items.length === 0;
         }
       })
       .addCase(fetchInvoices.fulfilled, (state, action) => {

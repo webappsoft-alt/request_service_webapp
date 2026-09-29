@@ -1611,8 +1611,19 @@ export const PAYMENT_BOARD_FILTERS = [
 
 export type PaymentKind = "payment" | "deposit";
 
-export function paymentNumber(payment: Pick<Payment, "id">) {
-  return `PMT-${payment.id.replace(/^pay_?/, "")}`;
+export function paymentNumber(
+  payment: Pick<Payment, "id" | "number" | "transactionReference">,
+) {
+  const explicit = String(payment.number || "").trim();
+  if (explicit) return explicit;
+
+  const ref = String(payment.transactionReference || "").trim();
+  if (ref && !/^[a-f0-9]{24}$/i.test(ref)) return ref.startsWith("PMT-") ? ref : `PMT-${ref}`;
+
+  // Never surface the full Mongo ObjectId — short stable suffix only.
+  const raw = String(payment.id || "").replace(/^pay_?/i, "");
+  const suffix = raw.slice(-6).toUpperCase() || "000000";
+  return `PMT-${suffix}`;
 }
 
 export function paymentStatusLabel(status: PaymentStatus) {

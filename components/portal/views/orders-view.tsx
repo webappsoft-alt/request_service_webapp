@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -121,6 +121,17 @@ export function OrdersView() {
   const [searchInput, setSearchInput] = useState(search);
   const [actionLoadingState, setActionLoadingState] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFirstMountRef = useRef(true);
+  const prevQueryRef = useRef({
+    page,
+    search,
+    status: statusFilter,
+    limit,
+  });
+
+  const cacheKey = providerOrdersPageCacheKey(statusFilter, search, page, limit);
+  const hasCache =
+    Array.isArray(pagesCache?.[cacheKey]) && pagesCache[cacheKey]!.length > 0;
 
   // Active target order for modal actions
   const [activeModal, setActiveModal] = useState<
@@ -154,21 +165,64 @@ export function OrdersView() {
   // Sync URL tab status with Redux statusFilter
   useEffect(() => {
     if (urlStatus !== statusFilter) {
-      const cacheKey = providerOrdersPageCacheKey(urlStatus, search, 1, limit);
-      const hasCache = Boolean(pagesCache?.[cacheKey]);
-      if (!hasCache) setActionLoadingState(true);
+      const nextKey = providerOrdersPageCacheKey(urlStatus, search, 1, limit);
+      const nextHasCache =
+        Array.isArray(pagesCache?.[nextKey]) && pagesCache[nextKey]!.length > 0;
+      if (!nextHasCache) setActionLoadingState(true);
       dispatch(setProviderOrdersStatus(urlStatus));
     }
   }, [urlStatus, statusFilter, search, limit, pagesCache, dispatch]);
 
-  // Fetch orders when page, search, limit, or statusFilter changes (cached thunks exit early)
-  useEffect(() => {
-    void dispatch(fetchProviderOrders());
-  }, [dispatch, page, search, limit, statusFilter]);
+  const refreshOrders = useCallback(
+    async (options?: { showLoading?: boolean }) => {
+      const showLoading = options?.showLoading ?? true;
+      if (showLoading) setActionLoadingState(true);
+      try {
+        await dispatch(
+          fetchProviderOrders({
+            page,
+            limit,
+            status: statusFilter,
+            search,
+            force: true,
+          }),
+        ).unwrap();
+      } catch (err) {
+        toast.error(
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+              ? err.message
+              : "Could not load fixed service orders.",
+        );
+      } finally {
+        setActionLoadingState(false);
+      }
+    },
+    [dispatch, page, limit, statusFilter, search],
+  );
 
+  // Cache-aware refresh: silent when returning with data; loading on first visit /
+  // empty cache / search-filter-page changes. (Same pattern as Leads.)
   useEffect(() => {
-    if (!loading) setActionLoadingState(false);
-  }, [loading]);
+    const prev = prevQueryRef.current;
+    const queryChanged =
+      !isFirstMountRef.current &&
+      (prev.page !== page ||
+        prev.search !== search ||
+        prev.status !== statusFilter ||
+        prev.limit !== limit);
+    prevQueryRef.current = { page, search, status: statusFilter, limit };
+
+    const cached = pagesCache?.[cacheKey];
+    const hasData = Array.isArray(cached) && cached.length > 0;
+    const showLoading = queryChanged || !hasData;
+
+    if (isFirstMountRef.current) isFirstMountRef.current = false;
+
+    void refreshOrders({ showLoading });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
+  }, [page, limit, statusFilter, search, cacheKey, refreshOrders]);
 
   useEffect(() => {
     return () => {
@@ -185,7 +239,7 @@ export function OrdersView() {
   }, [dispatch, error, loading, mutating]);
 
   const handleRefresh = () => {
-    void dispatch(fetchProviderOrders({ force: true }));
+    void refreshOrders({ showLoading: !hasCache && items.length === 0 });
     toast.success("Orders refreshed.");
   };
 
@@ -200,9 +254,15 @@ export function OrdersView() {
 
   function onPageChange(nextPage: number) {
     if (nextPage === page) return;
-    const cacheKey = providerOrdersPageCacheKey(statusFilter, search, nextPage, limit);
-    const hasCache = Boolean(pagesCache?.[cacheKey]?.length);
-    if (!hasCache) setActionLoadingState(true);
+    const nextKey = providerOrdersPageCacheKey(
+      statusFilter,
+      search,
+      nextPage,
+      limit,
+    );
+    const nextHasCache =
+      Array.isArray(pagesCache?.[nextKey]) && pagesCache[nextKey]!.length > 0;
+    if (!nextHasCache) setActionLoadingState(true);
     dispatch(setProviderOrdersPage(nextPage));
   }
 
@@ -599,10 +659,12 @@ export function OrdersView() {
           variant="outline"
           size="sm"
           onClick={handleRefresh}
-          disabled={loading}
+          disabled={actionLoadingState && items.length === 0}
           className="gap-1.5 h-8 text-xs"
         >
-          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`size-3.5 ${actionLoadingState && items.length === 0 ? "animate-spin" : ""}`}
+          />
           Refresh
         </Button>
       }
@@ -624,7 +686,10 @@ export function OrdersView() {
         filename="provider-orders"
         searchPlaceholder="Search orders, customers, addresses..."
         empty={loading ? "Refreshing…" : "No operational orders found in this view."}
-        loading={softLoader || actionLoadingState}
+        loading={
+          actionLoadingState ||
+          (softLoader && !hasCache && items.length === 0)
+        }
         serverPagination={{
           page,
           pageSize: limit,

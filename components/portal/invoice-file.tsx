@@ -55,6 +55,8 @@ export function InvoiceFileChrome({
   invoice,
   customer,
   customerLabel,
+  customerPhone,
+  customerEmail,
   service,
   job,
   estimate,
@@ -62,6 +64,8 @@ export function InvoiceFileChrome({
   invoice: Invoice;
   customer?: PortalCustomerCrm;
   customerLabel: string;
+  customerPhone?: string;
+  customerEmail?: string;
   service: string;
   job?: Job;
   estimate?: Estimate;
@@ -78,6 +82,18 @@ export function InvoiceFileChrome({
   ]
     .filter(Boolean)
     .join(", ");
+  const phone =
+    customerPhone?.trim() ||
+    customer?.phone?.trim() ||
+    invoice.customerPhone?.trim() ||
+    estimate?.customerPhone?.trim() ||
+    "";
+  const email =
+    customerEmail?.trim() ||
+    customer?.email?.trim() ||
+    invoice.customerEmail?.trim() ||
+    estimate?.customerEmail?.trim() ||
+    "";
 
   return (
     <div className="space-y-0">
@@ -85,7 +101,7 @@ export function InvoiceFileChrome({
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
+            {[phone, email].filter(Boolean).join(" · ") ||
               "Customer details for this invoice"}
           </p>
         </div>
@@ -119,18 +135,14 @@ export function InvoiceFileChrome({
           <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Phone
           </p>
-          <p className="mt-1 text-sm font-medium">{customer?.phone || "—"}</p>
+          <p className="mt-1 text-sm font-medium">{phone || "—"}</p>
         </div>
         <div className="min-w-0">
           <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Email
           </p>
           <p className="mt-1 text-sm font-medium">
-            {customer?.email ? (
-              <span className="text-primary">{customer.email}</span>
-            ) : (
-              "—"
-            )}
+            {email ? <span className="text-primary">{email}</span> : "—"}
           </p>
         </div>
         <div className="min-w-0">

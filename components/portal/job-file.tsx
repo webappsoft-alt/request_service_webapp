@@ -38,6 +38,7 @@ import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-op
 import { useEstimateActivities } from "@/components/portal/use-estimate-activities";
 import { useJobActivities } from "@/components/portal/use-job-activities";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { UsStateSelect } from "@/components/shared/us-state-select";
 import { patchJobLocally } from "@/store/jobsSlice";
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
 import {
@@ -61,13 +62,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
+  getEstimate,
   updateEstimate as updateEstimateApi,
   updateEstimateAttachments,
   updateInvoiceAttachments,
@@ -78,19 +73,20 @@ import {
 } from "@/lib/api/crm-client";
 import { estimateStatusLabel } from "@/lib/data/portal";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   fetchJobDetail,
-  patchJobStatus,
   upsertJobItem,
   updateJobRecord,
 } from "@/store/jobsSlice";
+import { fetchTeam } from "@/store/teamSlice";
 import { upsertInvoiceItem } from "@/store/invoicesSlice";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
-import { employeeName, JOB_STATUSES, jobStatusLabel, jobStatusTone, minutesForWindow } from "@/lib/data/portal";
+import { employeeName, jobStatusLabel, jobStatusTone, minutesForWindow } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney, formatShortDate } from "@/lib/format";
-import type { Estimate, Invoice, Job, JobStatus } from "@/lib/types";
+import type { Estimate, Invoice, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/portal/status-pill";
 
@@ -698,17 +694,25 @@ export function JobSettingsTab({
   const { customers, contractors } = useCrmDirectory();
   const crm = useCrmApiData();
   const useApi = crm.enabled;
-  const technicianFilter = useMemo(() => ({ role: "technician" }), []);
   const customerPaging = usePaginatedCrmOptions(useApi ? "customer" : null, useApi);
+  // Fetch full team (no role filter) — DB roles may not match UI "technician"; we filter client-side.
   const assigneePaging = usePaginatedCrmOptions(
     useApi ? "assignee" : null,
     useApi,
-    undefined,
-    technicianFilter,
   );
+  const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const { employees, events } = usePortalCrew();
   const event = events.find((item) => item.kind === "job" && item.recordId === job.id);
+  /** Persist team-member options across Unassigned / selection changes. */
+  const teamMemberOptionsCacheRef = useRef<Map<string, { id: string; label: string }>>(
+    new Map(),
+  );
+
+  useEffect(() => {
+    if (!useApi) return;
+    void dispatch(fetchTeam({ force: true, limit: 100, page: 1, role: "" }));
+  }, [dispatch, useApi]);
 
   function resolveEmployeeId(): string {
     const candidates = [
@@ -800,9 +804,19 @@ export function JobSettingsTab({
     (draft.customerId ? `Customer ${draft.customerId.slice(-6)}` : "");
 
   const technicianOptions = useMemo(() => {
-    const base = employees.filter((item) => item.active !== false);
+    const merged = [...employees, ...teamItems];
+    const seen = new Set<string>();
+    const base: typeof employees = [];
+    for (const item of merged) {
+      if (!item?.id || seen.has(item.id)) continue;
+      seen.add(item.id);
+      if (item.active === false) continue;
+      // Only field "Team member" crew (role technician after CRM map).
+      if (item.role !== "technician") continue;
+      base.push(item);
+    }
     if (draft.employeeId && !base.some((item) => item.id === draft.employeeId)) {
-      const missing = employees.find((item) => item.id === draft.employeeId);
+      const missing = merged.find((item) => item.id === draft.employeeId);
       if (missing) return [missing, ...base];
       return [
         {
@@ -819,19 +833,18 @@ export function JobSettingsTab({
       ];
     }
     return base;
-  }, [employees, draft.employeeId, draft.assignedTo]);
+  }, [employees, teamItems, draft.employeeId, draft.assignedTo]);
 
   const contractorOptions = useMemo(() => {
-    const base = contractors.filter((item) => item.status === "active");
+    // Job assignee is team members only — keep lookup for legacy assigned contractors.
     if (
       draft.employeeId &&
-      !technicianOptions.some((item) => item.id === draft.employeeId) &&
-      !base.some((item) => item.id === draft.employeeId)
+      !technicianOptions.some((item) => item.id === draft.employeeId)
     ) {
       const missing = contractors.find((item) => item.id === draft.employeeId);
-      if (missing) return [missing, ...base];
+      if (missing) return [missing];
     }
-    return base;
+    return [];
   }, [contractors, draft.employeeId, technicianOptions]);
 
   const customerSelectOptions = useMemo(
@@ -846,22 +859,60 @@ export function JobSettingsTab({
   );
 
   const assigneeSelectOptions = useMemo(() => {
-    const rows = useApi
-      ? assigneePaging.options
-      : [
-          ...technicianOptions.map((item) => ({
-            id: item.id,
-            label: `${employeeName(item)}${item.trade ? ` · ${item.trade}` : ""}`,
-          })),
-          ...contractorOptions.map((item) => ({
-            id: item.id,
-            label: `${item.companyName} · Contractor`,
-          })),
-        ];
-    return [{ id: "", label: "Unassigned" }, ...rows];
-  }, [useApi, assigneePaging.options, technicianOptions, contractorOptions]);
+    const cache = teamMemberOptionsCacheRef.current;
+    const techIds = new Set(
+      [...employees, ...teamItems]
+        .filter((item) => item?.id && item.active !== false && item.role === "technician")
+        .map((item) => item.id),
+    );
 
-  const statusValue = JOB_STATUSES.includes(draft.status) ? draft.status : JOB_STATUSES[0];
+    // Drop non–team-member rows once we know roles (keeps Unassign from wiping list).
+    if (techIds.size > 0) {
+      for (const id of Array.from(cache.keys())) {
+        if (!techIds.has(id) && id !== draft.employeeId) cache.delete(id);
+      }
+    }
+
+    for (const item of technicianOptions) {
+      if (!item.id) continue;
+      cache.set(item.id, { id: item.id, label: employeeName(item) });
+    }
+
+    if (useApi) {
+      for (const item of assigneePaging.options) {
+        if (!item.id) continue;
+        if (techIds.size > 0 && !techIds.has(item.id) && item.id !== draft.employeeId) {
+          continue;
+        }
+        if (techIds.size === 0) continue; // wait for crew roles before caching API rows
+        const label = item.label.includes(" · ")
+          ? item.label.split(" · ")[0]!.trim()
+          : item.label;
+        cache.set(item.id, { id: item.id, label });
+      }
+    }
+
+    if (
+      draft.employeeId &&
+      !cache.has(draft.employeeId) &&
+      draft.assignedTo.trim()
+    ) {
+      cache.set(draft.employeeId, {
+        id: draft.employeeId,
+        label: draft.assignedTo.trim(),
+      });
+    }
+
+    return [{ id: "", label: "Unassigned" }, ...Array.from(cache.values())];
+  }, [
+    useApi,
+    assigneePaging.options,
+    technicianOptions,
+    employees,
+    teamItems,
+    draft.employeeId,
+    draft.assignedTo,
+  ]);
 
   const addressLine = [draft.street, formatLocation(draft.city, draft.state, draft.zip)]
     .filter(Boolean)
@@ -956,11 +1007,7 @@ export function JobSettingsTab({
           },
         }),
       ).unwrap();
-      if (next.status && next.status !== updated.status) {
-        await dispatch(
-          patchJobStatus({ id: job.id, status: next.status, notes: next.notes }),
-        ).unwrap();
-      }
+      // Status is edited from the job board / actions — not from settings.
 
       // Always hit schedule API so collisions return the exact server message.
       const slot = minutesForWindow(event?.timeWindow ?? "morning");
@@ -1050,27 +1097,6 @@ export function JobSettingsTab({
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Job name">
             <Input value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
-          </Field>
-          <Field label="Status">
-            <Select
-              value={statusValue}
-              onValueChange={(value) => patch({ status: value as JobStatus })}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                align="start"
-                className="z-[100] w-[var(--radix-select-trigger-width)]"
-              >
-                {JOB_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {jobStatusLabel(status)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </Field>
           <Field label="Customer">
             <PaginatedEntitySelect
@@ -1165,7 +1191,11 @@ export function JobSettingsTab({
             <Input value={draft.city} onChange={(event) => patch({ city: event.target.value })} />
           </Field>
           <Field label="State">
-            <Input value={draft.state} onChange={(event) => patch({ state: event.target.value })} />
+            <UsStateSelect
+              value={normalizeUsStateCode(draft.state)}
+              onChange={(code) => patch({ state: code })}
+              placeholder="State"
+            />
           </Field>
           <Field label="ZIP">
             <Input value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />
@@ -1399,6 +1429,8 @@ export function JobAttachmentsTab({
   ) => void;
 }) {
   const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const user = useAppSelector(selectAuthUser);
   const file = useJobFile(job, estimate, invoice, technician);
   const {
     addAttachments,
@@ -1408,31 +1440,119 @@ export function JobAttachmentsTab({
     attachments: localAttachments,
   } = file;
   const crm = useCrmApiData();
-  const apiReady = crm.enabled && crm.ready;
-  const preferApiAttachments = apiReady && noun === "job" && !estimate && !invoice;
+  const useApi =
+    auth.hydrated &&
+    Boolean(auth.token) &&
+    (user?.role === "provider" || auth.role === "provider");
+  // API is source of truth for estimate / job / invoice — never local-only when signed in.
+  const preferApiAttachments =
+    useApi && (noun === "estimate" || noun === "job" || noun === "invoice");
+  const jobDetail = useAppSelector((state) =>
+    job?.id ? state.jobs?.detailsCache?.[job.id] ?? null : null,
+  );
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<JobAttachment[] | null>(null);
+  const [liveEstimate, setLiveEstimate] = useState<Estimate | null>(null);
+  const [fetching, setFetching] = useState(false);
+
+  // Vendor pattern: GET the record again when Attachments opens.
+  useEffect(() => {
+    if (!preferApiAttachments) return;
+    let cancelled = false;
+
+    async function refreshFromApi() {
+      const estimateId = estimate?.id;
+      const jobId = job?.id;
+
+      if (noun === "estimate" && estimateId) {
+        const hasRows = (estimate?.attachments?.length ?? 0) > 0;
+        if (!hasRows) setFetching(true);
+        try {
+          const updated = await getEstimate(estimateId);
+          if (cancelled || !updated) return;
+          setLiveEstimate(updated);
+          onSave?.(updated);
+        } catch (error) {
+          if (!cancelled) {
+            toast.error(
+              error instanceof Error ? error.message : "Could not load attachments.",
+            );
+          }
+        } finally {
+          if (!cancelled) setFetching(false);
+        }
+        return;
+      }
+
+      if (noun === "job" && jobId) {
+        const hasRows =
+          (jobDetail?.attachments?.length ?? job?.attachments?.length ?? 0) > 0;
+        if (!hasRows) setFetching(true);
+        try {
+          await dispatch(fetchJobDetail(jobId)).unwrap();
+        } catch (error) {
+          if (!cancelled) {
+            toast.error(
+              typeof error === "string"
+                ? error
+                : error instanceof Error
+                  ? error.message
+                  : "Could not load attachments.",
+            );
+          }
+        } finally {
+          if (!cancelled) setFetching(false);
+        }
+      }
+    }
+
+    void refreshFromApi();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when tab opens / record id changes
+  }, [preferApiAttachments, noun, estimate?.id, job?.id, invoice?.id, dispatch]);
+
+  const activeEstimate =
+    liveEstimate?.id && estimate?.id && liveEstimate.id === estimate.id
+      ? liveEstimate
+      : estimate;
+  const activeJob =
+    jobDetail?.id === job.id
+      ? { ...job, ...jobDetail, attachments: jobDetail.attachments ?? job.attachments }
+      : job;
 
   const savedAttachments = useMemo<JobAttachment[]>(() => {
-    const prefix = estimate?.id ?? invoice?.id ?? job?.id ?? "att";
+    const prefix =
+      noun === "estimate"
+        ? activeEstimate?.id ?? "att"
+        : noun === "invoice"
+          ? invoice?.id ?? "att"
+          : activeJob?.id ?? "att";
     const addedAt =
-      estimate?.createdAt ?? invoice?.createdAt ?? job?.createdAt ?? new Date().toISOString();
+      (noun === "estimate"
+        ? activeEstimate?.createdAt
+        : noun === "invoice"
+          ? invoice?.createdAt
+          : activeJob?.createdAt) ?? new Date().toISOString();
+
+    const rawList =
+      noun === "estimate"
+        ? activeEstimate?.attachments
+        : noun === "invoice"
+          ? invoice?.attachments
+          : activeJob?.attachments;
 
     const fromRecord = (() => {
-      const rawList = estimate
-        ? estimate.attachments
-        : invoice
-          ? invoice.attachments
-          : job?.attachments;
       if (!rawList || !Array.isArray(rawList)) return [] as JobAttachment[];
       return rawList
         .map((item, index) => toJobAttachmentItem(item, index, prefix, addedAt))
         .filter((item) => Boolean(item.dataUrl));
     })();
 
-    // Prefer API/Redux attachments for live jobs; LS only for offline / estimates.
+    // Local merge only when CRM is offline / unavailable.
     if (!preferApiAttachments && localAttachments.length > 0) {
       const byUrl = new Map<string, JobAttachment>();
       for (const item of [...localAttachments, ...fromRecord]) {
@@ -1444,20 +1564,25 @@ export function JobAttachmentsTab({
     }
     return fromRecord;
   }, [
-    estimate,
+    noun,
+    activeEstimate,
     invoice,
-    job?.attachments,
-    job?.id,
-    job?.createdAt,
+    activeJob,
     localAttachments,
     preferApiAttachments,
   ]);
 
   useEffect(() => {
     setDraft(null);
+    setLiveEstimate(null);
   }, [estimate?.id, invoice?.id, job?.id]);
 
   const activeAttachments = draft ?? savedAttachments;
+  const listLoading =
+    preferApiAttachments &&
+    fetching &&
+    !draft &&
+    savedAttachments.length === 0;
 
   const isDirty = useMemo(() => {
     if (!draft) return false;
@@ -1564,24 +1689,28 @@ export function JobAttachmentsTab({
       replaceAttachments(nextAttachments);
     }
 
-    if (estimate?.id) {
+    if (noun === "estimate" && (activeEstimate?.id || estimate?.id)) {
+      const estimateId = activeEstimate?.id || estimate!.id;
       const payload = attachmentPayload(nextAttachments);
+      const base = activeEstimate ?? estimate!;
       const updatedEstimate: Estimate = {
-        ...estimate,
+        ...base,
         attachments: payload,
       };
-      crm.patchEstimate(estimate.id, updatedEstimate);
+      crm.patchEstimate(estimateId, updatedEstimate);
       onSave?.(updatedEstimate);
-      const updated = await updateEstimateAttachments(estimate.id, payload);
+      const updated = await updateEstimateAttachments(estimateId, payload);
       if (updated) {
-        crm.patchEstimate(estimate.id, updated);
+        setLiveEstimate(updated);
+        crm.patchEstimate(estimateId, updated);
         onSave?.(updated);
         return updated;
       }
+      setLiveEstimate(updatedEstimate);
       return updatedEstimate;
     }
 
-    if (invoice?.id) {
+    if (noun === "invoice" && invoice?.id) {
       const payload = attachmentPayload(nextAttachments);
       const updated = await updateInvoiceAttachments(invoice.id, payload);
       if (updated) {
@@ -1591,8 +1720,8 @@ export function JobAttachmentsTab({
       return null;
     }
 
-    // Real job record (not invoice-as-job when invoice is present).
-    if (job?.id && noun !== "invoice") {
+    // Job attachments (even when a linked estimate exists for context).
+    if (noun === "job" && job?.id) {
       const urls = nextAttachments
         .map((item) => (item.dataUrl || "").trim())
         .filter(Boolean);
@@ -1658,8 +1787,26 @@ export function JobAttachmentsTab({
       (item) => item.id !== fileItem.id && item.dataUrl !== fileItem.dataUrl,
     );
     setDraft(remaining);
-    removeAttachment(fileItem.id);
-    toast.success(`${fileItem.name} removed.`);
+    if (!preferApiAttachments) {
+      removeAttachment(fileItem.id);
+      toast.success(`${fileItem.name} removed.`);
+      return;
+    }
+    // Persist immediately to API (vendor-style).
+    void (async () => {
+      setSaving(true);
+      try {
+        await persistAttachments(remaining);
+        setDraft(null);
+        toast.success(`${fileItem.name} removed.`);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not remove attachment.",
+        );
+      } finally {
+        setSaving(false);
+      }
+    })();
   }
 
   async function readFiles(list: FileList | File[]) {
@@ -1692,11 +1839,18 @@ export function JobAttachmentsTab({
           actor,
         };
         addedList.push(item);
-        toast.success(`${nextFile.name} attached.`);
       }
-      const current = draft ?? savedAttachments;
-      setDraft([...addedList, ...current]);
-      addAttachments(addedList);
+      const nextList = [...addedList, ...(draft ?? savedAttachments)];
+      setDraft(nextList);
+      if (!preferApiAttachments) {
+        addAttachments(addedList);
+        for (const item of addedList) toast.success(`${item.name} attached.`);
+        return;
+      }
+      // Persist immediately to API (vendor-style).
+      await persistAttachments(nextList);
+      setDraft(null);
+      for (const item of addedList) toast.success(`${item.name} attached.`);
     } catch (error) {
       const message =
         error instanceof Error && error.message.trim()
@@ -1780,6 +1934,13 @@ export function JobAttachmentsTab({
           ) : null}
         </div>
       )}
+      {listLoading ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading attachments…
+        </div>
+      ) : (
+        <>
       {!locked ? (
         <label
           className={cn(
@@ -1878,6 +2039,8 @@ export function JobAttachmentsTab({
         </ul>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">{emptyLabel}</p>
+      )}
+        </>
       )}
 
       <UnsavedChangesDialog

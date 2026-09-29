@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -42,6 +42,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import type { ProviderOrder } from "@/lib/types/provider-order";
 import {
   acceptProviderOrder,
   arriveProviderOrder,
@@ -100,6 +101,129 @@ function SoftPanel({
       ) : null}
       <div className="p-4">{children}</div>
     </section>
+  );
+}
+
+/** Change Orders tab: always shows loading, list, or empty — never a blank panel. */
+function ChangeOrdersTabPanel({
+  order,
+  loading,
+  onPropose,
+  proposeDisabled,
+}: {
+  order: ProviderOrder;
+  loading: boolean;
+  onPropose: () => void;
+  proposeDisabled: boolean;
+}) {
+  const changeOrders = Array.isArray(order.changeOrders)
+    ? order.changeOrders
+    : [];
+  const canPropose =
+    order.status === "IN_PROGRESS" || order.status === "ARRIVED";
+
+  if (loading) {
+    return (
+      <div className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border-soft bg-muted/40 px-4 py-8">
+        <Spinner className="size-6 text-primary" />
+        <p className="text-sm font-medium text-foreground">
+          Loading change orders…
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Fetching the latest scope modifications for this order.
+        </p>
+      </div>
+    );
+  }
+
+  if (changeOrders.length > 0) {
+    return (
+      <div className="divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft bg-card">
+        {changeOrders.map((co, index) => (
+          <div key={co.id || `co-${index}`} className="space-y-2 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-foreground">
+                {co.description || `Change Order #${index + 1}`}
+              </span>
+              <span className="font-mono text-sm font-semibold text-foreground">
+                +${Number(co.additionalAmount || 0).toFixed(2)}
+              </span>
+            </div>
+            {co.reason ? (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Reason:</span>{" "}
+                {co.reason}
+              </p>
+            ) : null}
+            <div className="flex items-center gap-3 pt-1 text-xs">
+              <StatusPill
+                label={formatOrderStatus(co.status || "PENDING")}
+                tone={
+                  co.status === "APPROVED"
+                    ? "success"
+                    : co.status === "REJECTED"
+                      ? "danger"
+                      : "warning"
+                }
+              />
+              {co.createdAt ? (
+                <span className="text-muted-foreground">
+                  Submitted {formatDate(co.createdAt)}
+                </span>
+              ) : null}
+            </div>
+            {co.evidencePhotos && co.evidencePhotos.length > 0 ? (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {co.evidencePhotos.map((photo, pIdx) => (
+                  <a
+                    key={`${co.id || index}-photo-${pIdx}`}
+                    href={photo}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="relative block size-16 overflow-hidden rounded-md border border-border-soft bg-muted hover:opacity-85"
+                  >
+                    <Image
+                      src={photo}
+                      alt="Evidence"
+                      fill
+                      className="object-cover"
+                    />
+                  </a>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-dashed border-border-soft bg-muted/30 px-4 py-8 text-center">
+      <p className="text-sm font-medium text-foreground">
+        No change orders for this order yet
+      </p>
+      <p className="mx-auto max-w-md text-xs text-muted-foreground">
+        {canPropose
+          ? "In-field scope changes and extra parts will appear here after you propose them."
+          : order.status === "BOOKING_REQUESTED" ||
+              order.status === "CONFIRMED" ||
+              order.status === "IN_TRANSIT"
+            ? "Change orders become available after you arrive on site and start work."
+            : "No change orders have been proposed for this order."}
+      </p>
+      {canPropose ? (
+        <Button
+          size="sm"
+          className="mt-1 h-8 gap-1.5"
+          onClick={onPropose}
+          disabled={proposeDisabled}
+        >
+          <FileEdit className="size-3.5" />
+          + Propose Change Order
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
@@ -201,11 +325,20 @@ function getOrderStageBanner(status: string) {
 export function OrderDetailPageView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
   const {
-    selectedOrder: order,
+    selectedOrder: selectedOrder,
     selectedLoading: loading,
     actionLoading,
     error,
+    detailsCache = {},
   } = useAppSelector((state) => state.providerOrders);
+
+  const cachedOrder = detailsCache?.[id];
+  const displayOrder =
+    selectedOrder?.id === id
+      ? selectedOrder
+      : cachedOrder?.id === id
+        ? cachedOrder
+        : null;
 
   const [activeModal, setActiveModal] = useState<
     | "accept"
@@ -218,12 +351,38 @@ export function OrderDetailPageView({ id }: { id: string }) {
     | "cancel"
     | null
   >(null);
+  /** idle → loading → ready. Change Orders shows spinner until ready when empty. */
+  const [detailLoadState, setDetailLoadState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
 
-  useEffect(() => {
-    if (id) {
-      void dispatch(fetchProviderOrderById(id));
+  const refreshOrder = useCallback(async () => {
+    if (!id) return;
+    setDetailLoadState((prev) => (prev === "ready" ? "ready" : "loading"));
+    // Always mark loading when we have no change-order rows yet so the tab isn't blank.
+    const cached = detailsCache?.[id];
+    const hasChangeOrders =
+      (Array.isArray(cached?.changeOrders) && cached!.changeOrders!.length > 0) ||
+      (selectedOrder?.id === id &&
+        Array.isArray(selectedOrder.changeOrders) &&
+        selectedOrder.changeOrders.length > 0);
+    if (!hasChangeOrders) setDetailLoadState("loading");
+    try {
+      await dispatch(fetchProviderOrderById(id)).unwrap();
+      setDetailLoadState("ready");
+    } catch {
+      setDetailLoadState("error");
+      // Error toast handled via slice error effect.
     }
-  }, [dispatch, id]);
+  }, [dispatch, id, detailsCache, selectedOrder]);
+
+  // Soft load by order id (inner tabs share the same detail GET response).
+  useEffect(() => {
+    if (!id) return;
+    setDetailLoadState("loading");
+    void refreshOrder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when order id changes
+  }, [id]);
 
   useEffect(() => {
     if (error && !loading) {
@@ -234,26 +393,26 @@ export function OrderDetailPageView({ id }: { id: string }) {
 
   const handleRefresh = () => {
     if (id) {
-      void dispatch(fetchProviderOrderById(id));
+      refreshOrder();
       toast.success("Order refreshed.");
     }
   };
 
   const handleAccept = async () => {
-    if (!order) return;
-    const res = await dispatch(acceptProviderOrder(order.id));
+    if (!displayOrder) return;
+    const res = await dispatch(acceptProviderOrder(displayOrder.id));
     if (acceptProviderOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      void dispatch(fetchProviderOrderById(displayOrder.id));
     }
   };
 
   const handleReject = async (reason: string) => {
-    if (!order) return;
+    if (!displayOrder) return;
     const res = await dispatch(
       rejectProviderOrder({
-        id: order.id,
+        id: displayOrder.id,
         reason,
         rejectionReason: reason,
       }),
@@ -261,47 +420,47 @@ export function OrderDetailPageView({ id }: { id: string }) {
     if (rejectProviderOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      void dispatch(fetchProviderOrderById(displayOrder.id));
     }
   };
 
   const handleTransit = async (coords: [number, number]) => {
-    if (!order) return;
+    if (!displayOrder) return;
     const res = await dispatch(
       transitProviderOrder({
-        id: order.id,
+        id: displayOrder.id,
         startCoordinates: coords,
       }),
     );
     if (transitProviderOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      void dispatch(fetchProviderOrderById(displayOrder.id));
     }
   };
 
   const handleArrive = async (coords: [number, number]) => {
-    if (!order) return;
+    if (!displayOrder) return;
     const res = await dispatch(
       arriveProviderOrder({
-        id: order.id,
+        id: displayOrder.id,
         coordinates: coords,
       }),
     );
     if (arriveProviderOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      void dispatch(fetchProviderOrderById(displayOrder.id));
     }
   };
 
   const handleStartWork = async () => {
-    if (!order) return;
-    const res = await dispatch(startWorkProviderOrder(order.id));
+    if (!displayOrder) return;
+    const res = await dispatch(startWorkProviderOrder(displayOrder.id));
     if (startWorkProviderOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      void dispatch(fetchProviderOrderById(displayOrder.id));
     }
   };
 
@@ -311,17 +470,17 @@ export function OrderDetailPageView({ id }: { id: string }) {
     additionalAmount: number;
     evidencePhotos: string[];
   }) => {
-    if (!order) return;
+    if (!displayOrder) return;
     const res = await dispatch(
       proposeChangeOrder({
-        id: order.id,
+        id: displayOrder.id,
         ...payload,
       }),
     );
     if (proposeChangeOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      await refreshOrder();
     }
   };
 
@@ -330,36 +489,36 @@ export function OrderDetailPageView({ id }: { id: string }) {
     beforePhotos: string[];
     afterPhotos: string[];
   }) => {
-    if (!order) return;
+    if (!displayOrder) return;
     const res = await dispatch(
       completeProviderOrder({
-        id: order.id,
+        id: displayOrder.id,
         ...payload,
       }),
     );
     if (completeProviderOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      void dispatch(fetchProviderOrderById(displayOrder.id));
     }
   };
 
   const handleCancel = async (reason: string) => {
-    if (!order) return;
+    if (!displayOrder) return;
     const res = await dispatch(
       cancelProviderOrder({
-        id: order.id,
+        id: displayOrder.id,
         reason,
       }),
     );
     if (cancelProviderOrder.fulfilled.match(res)) {
       toast.success(res.payload.message);
       setActiveModal(null);
-      void dispatch(fetchProviderOrderById(order.id));
+      void dispatch(fetchProviderOrderById(displayOrder.id));
     }
   };
 
-  if (loading && !order) {
+  if (loading && !displayOrder) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Spinner className="size-8 text-primary" />
@@ -367,7 +526,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
     );
   }
 
-  if (!order) {
+  if (!displayOrder || displayOrder.id !== id) {
     return (
       <div className="rounded-md border border-border-soft bg-card p-6">
         <h1 className="text-lg font-semibold">Order not found</h1>
@@ -377,6 +536,8 @@ export function OrderDetailPageView({ id }: { id: string }) {
       </div>
     );
   }
+
+  const order = displayOrder;
 
   const coords = order.address?.location?.coordinates;
   const mapsUrl = coords
@@ -434,7 +595,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     In-field scope modifications and additional parts.
                   </p>
                 </div>
-                {order.status === "IN_PROGRESS" ? (
+                {order.status === "IN_PROGRESS" || order.status === "ARRIVED" ? (
                   <Button
                     size="sm"
                     className="h-8 shrink-0 gap-1.5"
@@ -477,7 +638,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
         }}
         badge={<OrderStatusPill status={order.status} full />}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <Button
               variant="outline"
               size="sm"
@@ -493,15 +654,15 @@ export function OrderDetailPageView({ id }: { id: string }) {
               variant="outline"
               size="sm"
               onClick={handleRefresh}
-              disabled={loading}
+              disabled={loading && !order}
               className="h-8 gap-1.5 border-border-soft text-xs"
             >
-              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`size-3.5 ${loading && !order ? "animate-spin" : ""}`} />
               Refresh
             </Button>
 
-            {order.status === "BOOKING_REQUESTED" && (
-              <>
+            {order.status === "BOOKING_REQUESTED" ? (
+              <div className="flex shrink-0 items-center justify-end gap-2">
                 <Button
                   size="sm"
                   onClick={() => setActiveModal("accept")}
@@ -519,8 +680,8 @@ export function OrderDetailPageView({ id }: { id: string }) {
                 >
                   <XCircle className="size-3.5" /> Decline
                 </Button>
-              </>
-            )}
+              </div>
+            ) : null}
 
             {order.status === "CONFIRMED" && (
               <>
@@ -920,92 +1081,23 @@ export function OrderDetailPageView({ id }: { id: string }) {
                 </div>
               );
 
-            case "change_orders":
+            case "change_orders": {
+              const changeOrders = Array.isArray(order.changeOrders)
+                ? order.changeOrders
+                : [];
+              const showLoading =
+                detailLoadState !== "ready" &&
+                detailLoadState !== "error" &&
+                changeOrders.length === 0;
               return (
-                <div className="space-y-4">
-                  {order.changeOrders?.length ? (
-                    <div className="divide-y divide-border-soft overflow-hidden rounded-md border border-border-soft bg-card">
-                      {order.changeOrders.map((co, index) => (
-                        <div key={co.id || index} className="space-y-2 p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold text-foreground">
-                              {co.description || `Change Order #${index + 1}`}
-                            </span>
-                            <span className="font-mono text-sm font-semibold text-foreground">
-                              +${co.additionalAmount?.toFixed(2) || "0.00"}
-                            </span>
-                          </div>
-
-                          {co.reason ? (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">
-                                Reason:
-                              </span>{" "}
-                              {co.reason}
-                            </p>
-                          ) : null}
-
-                          <div className="flex items-center gap-3 pt-1 text-xs">
-                            <StatusPill
-                              label={formatOrderStatus(co.status || "PENDING")}
-                              tone={
-                                co.status === "APPROVED"
-                                  ? "success"
-                                  : co.status === "REJECTED"
-                                    ? "danger"
-                                    : "warning"
-                              }
-                            />
-                            {co.createdAt ? (
-                              <span className="text-muted-foreground">
-                                Submitted {formatDate(co.createdAt)}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          {co.evidencePhotos?.length ? (
-                            <div className="flex flex-wrap gap-2 pt-2">
-                              {co.evidencePhotos.map((photo, pIdx) => (
-                                <a
-                                  key={pIdx}
-                                  href={photo}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="relative block size-16 overflow-hidden rounded-md border border-border-soft bg-muted hover:opacity-85"
-                                >
-                                  <Image
-                                    src={photo}
-                                    alt="Evidence"
-                                    fill
-                                    className="object-cover"
-                                  />
-                                </a>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-2 rounded-md border border-border-soft bg-secondary/40 p-6 text-center text-xs text-muted-foreground">
-                      <p>No change orders have been proposed for this order.</p>
-                      {order.status === "IN_PROGRESS" ? (
-                        <p className="text-foreground">
-                          Discover extra work on site? Use{" "}
-                          <button
-                            type="button"
-                            onClick={() => setActiveModal("changeOrder")}
-                            className="font-medium text-primary underline"
-                          >
-                            Propose Change Order
-                          </button>{" "}
-                          above to submit a request to the customer.
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
+                <ChangeOrdersTabPanel
+                  order={order}
+                  loading={showLoading}
+                  onPropose={() => setActiveModal("changeOrder")}
+                  proposeDisabled={isActionLoading}
+                />
               );
+            }
 
             case "completion":
               return (

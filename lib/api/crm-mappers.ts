@@ -201,6 +201,19 @@ function toStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+/** Job attachments are string URLs in the API; tolerate object shapes from older payloads. */
+function mapJobAttachmentUrls(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return trimmed(item);
+      const record = asRecord(item);
+      if (!record) return "";
+      return trimmed(record.attachment || record.url || record.dataUrl);
+    })
+    .filter(Boolean);
+}
+
 function displayNameFromRecord(value: unknown): string {
   const record = asRecord(value);
   if (!record) return "";
@@ -1334,18 +1347,37 @@ export function mapJob(raw: unknown): Job | null {
   if (!id) return null;
 
   const locationRecord = asRecord(record.location);
+  const snapshotAddress = asRecord(asRecord(record.customerSnapshot)?.address);
+  const fallbackAddress = asRecord(record.address);
   const locationHasAddress = Boolean(
     locationRecord &&
       (trimmed(locationRecord.address) ||
         trimmed(locationRecord.street) ||
         trimmed(locationRecord.city) ||
+        trimmed(locationRecord.state) ||
         trimmed(locationRecord.zip)),
   );
   const addressSource =
     (locationHasAddress ? locationRecord : null) ??
-    asRecord(asRecord(record.customerSnapshot)?.address) ??
-    asRecord(record.address) ??
+    snapshotAddress ??
+    fallbackAddress ??
     {};
+
+  const address = mapServiceAddress(addressSource, `addr_${id}`);
+  // Fill blanks from customer snapshot when location only has partial fields (e.g. city, no state).
+  if (snapshotAddress) {
+    if (!address.state) address.state = trimmed(snapshotAddress.state);
+    if (!address.zip) address.zip = trimmed(snapshotAddress.zip);
+    if (!address.city) address.city = trimmed(snapshotAddress.city);
+    if (!address.address && !address.street) {
+      const line =
+        trimmed(snapshotAddress.address) || trimmed(snapshotAddress.street);
+      if (line) {
+        address.address = line;
+        address.street = line;
+      }
+    }
+  }
 
   return {
     id,
@@ -1358,7 +1390,7 @@ export function mapJob(raw: unknown): Job | null {
       crmIdOf(asRecord(record.customer)?.id),
     estimateId: crmIdOf(record.estimateId),
     serviceId: crmIdOf(record.serviceId) || undefined,
-    address: mapServiceAddress(addressSource, `addr_${id}`),
+    address,
     assignedTo:
       mapAssignedName(record.assignedEmployees) ||
       mapAssignedName(record.assignedContractors) ||
@@ -1388,7 +1420,7 @@ export function mapJob(raw: unknown): Job | null {
     notes: trimmed(record.notes) || undefined,
     items: mapJobItems(id, record.items),
     changeOrders: mapChangeOrders(id, record.changeOrders),
-    attachments: toStringArray(record.attachments),
+    attachments: mapJobAttachmentUrls(record.attachments),
     invoiceId: crmIdOf(record.invoiceId) || undefined,
     isArchived:
       record.isArchived !== undefined
@@ -1443,11 +1475,16 @@ export function mapInvoice(raw: unknown): Invoice | null {
   const id = crmIdOf(record);
   if (!id) return null;
 
+  const customer = customerNameParts(record);
+
   return {
     id,
     number: trimmed(record.number) || `INV-${id.slice(-4).toUpperCase()}`,
     providerId: crmIdOf(record.providerId),
     customerId: crmIdOf(record.customerId),
+    customerName: customer.name || undefined,
+    customerPhone: customer.phone || undefined,
+    customerEmail: customer.email || undefined,
     jobId: crmIdOf(record.jobId),
     status:
       trimmed(record.status) === "sent" ||
@@ -1498,16 +1535,27 @@ export function mapPayment(raw: unknown): Payment | null {
   const customerId = customerRec
     ? crmIdOf(customerRec)
     : crmIdOf(record.customerId) || undefined;
-  const customerName = customerRec
-    ? (
-        trimmed(customerRec.companyName) ||
+  const customerParts = customerNameParts(record);
+  const customerName =
+    customerParts.name ||
+    (customerRec
+      ? trimmed(customerRec.companyName) ||
         `${trimmed(customerRec.firstName)} ${trimmed(customerRec.lastName)}`.trim() ||
         trimmed(customerRec.email)
-      )
-    : undefined;
+      : "") ||
+    trimmed(record.customerName) ||
+    undefined;
+  const explicitNumber = trimmed(record.number) || trimmed(record.paymentNumber);
+  const number =
+    explicitNumber && !/^[a-f0-9]{24}$/i.test(explicitNumber)
+      ? explicitNumber.startsWith("PMT-")
+        ? explicitNumber
+        : explicitNumber
+      : `PMT-${id.slice(-6).toUpperCase()}`;
 
   return {
     id,
+    number,
     invoiceId,
     scheduleId: crmIdOf(record.scheduleId) || undefined,
     amount: numberValue(record.amount),
@@ -1518,6 +1566,14 @@ export function mapPayment(raw: unknown): Payment | null {
     isArchived: Boolean(record.isArchived),
     customerId,
     customerName: customerName || undefined,
+    customerPhone:
+      customerParts.phone ||
+      (customerRec ? trimmed(customerRec.phone) : "") ||
+      undefined,
+    customerEmail:
+      customerParts.email ||
+      (customerRec ? trimmed(customerRec.email) : "") ||
+      undefined,
     invoiceNumber: invoiceRec ? trimmed(invoiceRec.number) || undefined : undefined,
     jobId: invoiceRec ? crmIdOf(invoiceRec.jobId) || undefined : undefined,
     notes: trimmed(record.notes) || undefined,

@@ -1871,7 +1871,10 @@ export async function createJob(job: Job, employees: PortalEmployee[]) {
 }
 
 export async function updateJob(id: string, job: Job, employees: PortalEmployee[]) {
-  const response = await putData(providerCrmApi.job(id), jobPayload(job, employees));
+  // Settings / general updates must not wipe attachments — use updateJobAttachments.
+  const payload = jobPayload(job, employees) as Record<string, unknown>;
+  delete payload.attachments;
+  const response = await putData(providerCrmApi.job(id), payload);
   return mapCrmEntity(response, mapJob);
 }
 

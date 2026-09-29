@@ -296,15 +296,16 @@ const jobsSlice = createSlice({
     /** Apply board filter from URL: all | status | archived */
     setJobsListFilter(state, action: PayloadAction<JobListStatus>) {
       const filter = action.payload;
-      state.page = 1;
-      state.pagesCache = {};
-      if (filter === "archived") {
-        state.isArchived = true;
-        state.status = "";
+      const nextArchived = filter === "archived";
+      const nextStatus = filter === "archived" || filter === "" ? "" : filter;
+      // Same filter → keep cache/items so remounts do not flash an empty spinner.
+      if (state.isArchived === nextArchived && state.status === nextStatus) {
         return;
       }
-      state.isArchived = false;
-      state.status = filter === "" ? "" : filter;
+      state.page = 1;
+      state.pagesCache = {};
+      state.isArchived = nextArchived;
+      state.status = nextStatus;
     },
     invalidateJobsCache(state) {
       state.pagesCache = {};
@@ -381,8 +382,11 @@ const jobsSlice = createSlice({
         if (key in state.pagesCache && state.pagesCache[key].length > 0) {
           state.items = state.pagesCache[key];
           state.loading = false;
+        } else if (state.items.length > 0) {
+          // Keep existing rows visible while a background refresh runs.
+          state.loading = false;
         } else {
-          state.items = state.pagesCache[key] ?? [];
+          state.items = [];
           state.loading = true;
         }
       })

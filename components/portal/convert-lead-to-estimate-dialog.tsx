@@ -222,7 +222,7 @@ export function ConvertLeadToEstimateDialog({
             <div className="space-y-3 pt-2 border-t border-input">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <span className="text-sm font-semibold text-slate-800">Proposal Line Items</span>
+                  <span className="text-sm font-semibold text-slate-800">Labour and Material</span>
                   <p className="text-xs text-slate-500">
                     Add labour hours or materials to this estimate.
                   </p>

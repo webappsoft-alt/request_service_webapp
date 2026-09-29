@@ -241,7 +241,7 @@ export function PortalDataTable<T>({
                 setPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="h-8 pl-8 text-xs border-border-soft"
+              className="h-8 border-border-soft bg-white pl-8 text-xs dark:bg-white"
             />
           </div>
           <p className="text-xs text-muted-foreground">

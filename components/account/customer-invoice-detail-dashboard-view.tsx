@@ -285,7 +285,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
 
       {/* Main 2-Column Grid */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        {/* Left Column: Line Items Table & Breakdown */}
+        {/* Left Column:  Table & Breakdown */}
         <div className="space-y-6">
           <section className="overflow-hidden rounded-xl border border-input bg-card shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input px-5 py-4 sm:px-6">

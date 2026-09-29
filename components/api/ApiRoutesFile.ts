@@ -180,6 +180,8 @@ export const providerCrmApi = {
   note: (id: string) => `provider/notes/${id}`,
   /** GET aggregated business reports dashboard */
   reports: "provider/reports",
+  /** GET Main / Sales / Service dashboard aggregates */
+  dashboard: "provider/dashboard",
   /** GET sales tax percent for a U.S. state — query: `state` */
   taxRate: "provider/tax-rate",
 } as const;

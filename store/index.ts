@@ -44,6 +44,7 @@ import invoicesReducer from "./invoicesSlice";
 import paymentsReducer from "./paymentsSlice";
 import requestsReducer from "./requestsSlice";
 import reportsReducer from "./reportsSlice";
+import dashboardReducer from "./dashboardSlice";
 import {
   contractorNotesModule,
   customerNotesModule,
@@ -95,6 +96,7 @@ const rootReducer = combineReducers({
   payments: paymentsReducer,
   requests: requestsReducer,
   reports: reportsReducer,
+  dashboard: dashboardReducer,
   customerNotes: customerNotesModule.reducer,
   estimateNotes: estimateNotesModule.reducer,
   requestNotes: requestNotesModule.reducer,
@@ -168,6 +170,8 @@ function needsReducerHotReplace(state: RootState) {
     state.invoices === undefined ||
     state.payments === undefined ||
     state.requests === undefined ||
+    state.reports === undefined ||
+    state.dashboard === undefined ||
     state.customerNotes === undefined ||
     state.estimateNotes === undefined ||
     state.requestNotes === undefined ||

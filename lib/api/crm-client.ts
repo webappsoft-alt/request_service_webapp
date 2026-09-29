@@ -2496,6 +2496,430 @@ export async function getProviderReports(query: ProviderReportsQuery = {}) {
   };
 }
 
+export type ProviderDashboardQuery = CrmRequestOptions;
+
+/** GET /api/provider/dashboard — Main / Sales / Service card aggregates. */
+export async function getProviderDashboard(query: ProviderDashboardQuery = {}) {
+  const response = await getData(
+    providerCrmApi.dashboard,
+    {},
+    {
+      silent: query.silent ?? true,
+      force: query.force ?? true,
+    },
+  );
+  const data = asReportsRecord(response);
+
+  const attentionRaw =
+    data.attention && typeof data.attention === "object"
+      ? (data.attention as Record<string, unknown>)
+      : {};
+  const overdueInv =
+    attentionRaw.overdueInvoices && typeof attentionRaw.overdueInvoices === "object"
+      ? (attentionRaw.overdueInvoices as Record<string, unknown>)
+      : {};
+  const awaitingSig =
+    attentionRaw.estimatesAwaitingSignature &&
+    typeof attentionRaw.estimatesAwaitingSignature === "object"
+      ? (attentionRaw.estimatesAwaitingSignature as Record<string, unknown>)
+      : {};
+
+  const leadsRaw =
+    data.leads && typeof data.leads === "object"
+      ? (data.leads as Record<string, unknown>)
+      : {};
+  const messagesRaw =
+    data.messages && typeof data.messages === "object"
+      ? (data.messages as Record<string, unknown>)
+      : {};
+  const estimatesRaw =
+    data.estimates && typeof data.estimates === "object"
+      ? (data.estimates as Record<string, unknown>)
+      : {};
+  const jobsRaw =
+    data.jobs && typeof data.jobs === "object" ? (data.jobs as Record<string, unknown>) : {};
+  const scheduleRaw =
+    data.schedule && typeof data.schedule === "object"
+      ? (data.schedule as Record<string, unknown>)
+      : {};
+  const invoicesRaw =
+    data.invoices && typeof data.invoices === "object"
+      ? (data.invoices as Record<string, unknown>)
+      : {};
+  const unpaidRaw =
+    invoicesRaw.unpaid && typeof invoicesRaw.unpaid === "object"
+      ? (invoicesRaw.unpaid as Record<string, unknown>)
+      : {};
+  const paymentsRaw =
+    data.payments && typeof data.payments === "object"
+      ? (data.payments as Record<string, unknown>)
+      : {};
+  const periodRaw =
+    paymentsRaw.period && typeof paymentsRaw.period === "object"
+      ? (paymentsRaw.period as Record<string, unknown>)
+      : {};
+  const peopleRaw =
+    data.people && typeof data.people === "object"
+      ? (data.people as Record<string, unknown>)
+      : {};
+  const tasksRaw =
+    data.tasks && typeof data.tasks === "object" ? (data.tasks as Record<string, unknown>) : {};
+  const remindersRaw =
+    data.reminders && typeof data.reminders === "object"
+      ? (data.reminders as Record<string, unknown>)
+      : {};
+
+  const mapCountRow = (item: unknown) => {
+    const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    return { label: stringOr(row.label), value: numberOr(row.value) };
+  };
+
+  const mapRequestRow = (item: unknown) => {
+    const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    return {
+      id: stringOr(row.id),
+      serviceName: stringOr(row.serviceName),
+      customerName: stringOr(row.customerName),
+      neighborhood: stringOr(row.neighborhood),
+      status: stringOr(row.status, "new"),
+      statusLabel: stringOr(row.statusLabel, stringOr(row.status, "New")),
+      preferredDate: row.preferredDate ? stringOr(row.preferredDate) : "",
+      details: stringOr(row.details),
+    };
+  };
+
+  const mapJobRow = (item: unknown) => {
+    const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    return {
+      id: stringOr(row.id),
+      number: stringOr(row.number),
+      customerName: stringOr(row.customerName),
+      status: stringOr(row.status, "unscheduled"),
+      statusLabel: stringOr(row.statusLabel, stringOr(row.status)),
+      scheduledAt: row.scheduledAt ? stringOr(row.scheduledAt) : null,
+      city: stringOr(row.city),
+      detail: stringOr(row.detail),
+      assignee: row.assignee ? stringOr(row.assignee) : null,
+    };
+  };
+
+  const mapChartScale = (
+    raw: unknown,
+    keys: { a: string; b: string },
+  ): Array<{ key: string; label: string; [k: string]: string | number }> => {
+    if (!raw || typeof raw !== "object") return [];
+    const root = raw as Record<string, unknown>;
+    const month = Array.isArray(root.month) ? root.month : [];
+    const year = Array.isArray(root.year) ? root.year : [];
+    return { month, year } as unknown as Array<{
+      key: string;
+      label: string;
+      [k: string]: string | number;
+    }>;
+  };
+
+  const mapSalesPoints = (items: unknown) =>
+    Array.isArray(items)
+      ? items.map((item) => {
+          const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+          return {
+            key: stringOr(row.key),
+            label: stringOr(row.label),
+            billed: numberOr(row.billed),
+            collected: numberOr(row.collected),
+          };
+        })
+      : [];
+
+  const mapJobsPoints = (items: unknown) =>
+    Array.isArray(items)
+      ? items.map((item) => {
+          const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+          return {
+            key: stringOr(row.key),
+            label: stringOr(row.label),
+            opened: numberOr(row.opened),
+            finished: numberOr(row.finished),
+          };
+        })
+      : [];
+
+  const salesChartRaw =
+    data.salesChart && typeof data.salesChart === "object"
+      ? (data.salesChart as Record<string, unknown>)
+      : {};
+  const jobsChartRaw =
+    data.jobsChart && typeof data.jobsChart === "object"
+      ? (data.jobsChart as Record<string, unknown>)
+      : {};
+
+  const mapPeriod = (key: string) => {
+    const raw =
+      periodRaw[key] && typeof periodRaw[key] === "object"
+        ? (periodRaw[key] as Record<string, unknown>)
+        : {};
+    return { revenue: numberOr(raw.revenue), count: numberOr(raw.count) };
+  };
+
+  const mapScheduleEvent = (item: unknown) => {
+    const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+    return {
+      id: stringOr(row.id),
+      title: stringOr(row.title),
+      detail: stringOr(row.detail),
+      date: stringOr(row.date),
+      startMinutes:
+        row.startMinutes == null || row.startMinutes === ""
+          ? null
+          : numberOr(row.startMinutes),
+      employeeName: row.employeeName ? stringOr(row.employeeName) : null,
+      href: stringOr(row.href, "/pro/dashboard/schedule"),
+    };
+  };
+
+  void mapChartScale;
+
+  return {
+    companyName: stringOr(data.companyName),
+    city: stringOr(data.city),
+    state: stringOr(data.state),
+    generatedAt: stringOr(data.generatedAt),
+    attention: {
+      overdueInvoices: {
+        count: numberOr(overdueInv.count),
+        amountPastDue: numberOr(overdueInv.amountPastDue),
+      },
+      uninvoicedCompletedJobs: numberOr(attentionRaw.uninvoicedCompletedJobs),
+      unassignedActiveJobs: numberOr(attentionRaw.unassignedActiveJobs),
+      overdueTasks: numberOr(attentionRaw.overdueTasks),
+      estimatesAwaitingSignature: {
+        count: numberOr(awaitingSig.count),
+        totalOut: numberOr(awaitingSig.totalOut),
+      },
+    },
+    leads: {
+      openCount: numberOr(leadsRaw.openCount),
+      newFromWebsite: numberOr(leadsRaw.newFromWebsite),
+      total: numberOr(leadsRaw.total),
+      byStatus: Array.isArray(leadsRaw.byStatus) ? leadsRaw.byStatus.map(mapCountRow) : [],
+      latest: Array.isArray(leadsRaw.latest) ? leadsRaw.latest.map(mapRequestRow) : [],
+      incoming: Array.isArray(leadsRaw.incoming) ? leadsRaw.incoming.map(mapRequestRow) : [],
+      field: Array.isArray(leadsRaw.field) ? leadsRaw.field.map(mapRequestRow) : [],
+    },
+    messages: {
+      unreadChats: numberOr(messagesRaw.unreadChats),
+      inboxPreview: Array.isArray(messagesRaw.inboxPreview)
+        ? messagesRaw.inboxPreview.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              id: stringOr(row.id),
+              href: stringOr(row.href, "/pro/dashboard/messages"),
+              title: stringOr(row.title),
+              detail: stringOr(row.detail),
+              kind: stringOr(row.kind, "lead") === "chat" ? ("chat" as const) : ("lead" as const),
+            };
+          })
+        : [],
+    },
+    estimates: {
+      openCount: numberOr(estimatesRaw.openCount),
+      pendingValue: numberOr(estimatesRaw.pendingValue),
+      awaitingSignature: numberOr(estimatesRaw.awaitingSignature),
+      latest: Array.isArray(estimatesRaw.latest)
+        ? estimatesRaw.latest.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              id: stringOr(row.id),
+              number: stringOr(row.number),
+              customerName: stringOr(row.customerName),
+              total: numberOr(row.total),
+              status: stringOr(row.status, "draft"),
+              statusLabel: stringOr(row.statusLabel, stringOr(row.status)),
+            };
+          })
+        : [],
+    },
+    jobs: {
+      total: numberOr(jobsRaw.total),
+      active: numberOr(jobsRaw.active),
+      scheduledThisWeek: numberOr(jobsRaw.scheduledThisWeek),
+      unscheduled: numberOr(jobsRaw.unscheduled),
+      inField: numberOr(jobsRaw.inField),
+      heldUp: numberOr(jobsRaw.heldUp),
+      byStatus: Array.isArray(jobsRaw.byStatus) ? jobsRaw.byStatus.map(mapCountRow) : [],
+      byServiceGroup: Array.isArray(jobsRaw.byServiceGroup)
+        ? jobsRaw.byServiceGroup.map(mapCountRow)
+        : [],
+      byServiceMix: Array.isArray(jobsRaw.byServiceMix)
+        ? jobsRaw.byServiceMix.map(mapCountRow)
+        : [],
+      serviceMixTotal: numberOr(jobsRaw.serviceMixTotal),
+      latestActive: Array.isArray(jobsRaw.latestActive)
+        ? jobsRaw.latestActive.map(mapJobRow)
+        : [],
+      upcoming: Array.isArray(jobsRaw.upcoming) ? jobsRaw.upcoming.map(mapJobRow) : [],
+    },
+    schedule: {
+      upcomingWeekCount: numberOr(scheduleRaw.upcomingWeekCount),
+      todayCount: numberOr(scheduleRaw.todayCount),
+      weekDays: Array.isArray(scheduleRaw.weekDays)
+        ? scheduleRaw.weekDays.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              date: stringOr(row.date),
+              label: stringOr(row.label),
+              day: numberOr(row.day),
+              count: numberOr(row.count),
+            };
+          })
+        : [],
+      upcoming: Array.isArray(scheduleRaw.upcoming)
+        ? scheduleRaw.upcoming.map(mapScheduleEvent)
+        : [],
+      weekEvents: Array.isArray(scheduleRaw.weekEvents)
+        ? scheduleRaw.weekEvents.map(mapScheduleEvent)
+        : [],
+    },
+    invoices: {
+      total: numberOr(invoicesRaw.total),
+      unpaid: {
+        count: numberOr(unpaidRaw.count),
+        balanceDue: numberOr(unpaidRaw.balanceDue),
+      },
+      byAging: Array.isArray(invoicesRaw.byAging)
+        ? invoicesRaw.byAging.map(mapCountRow)
+        : [],
+      latest: Array.isArray(invoicesRaw.latest)
+        ? invoicesRaw.latest.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              id: stringOr(row.id),
+              number: stringOr(row.number),
+              customerName: stringOr(row.customerName),
+              balanceDue: numberOr(row.balanceDue),
+              status: stringOr(row.status, "draft"),
+              statusLabel: stringOr(row.statusLabel, stringOr(row.status)),
+              daysOverdue: numberOr(row.daysOverdue),
+            };
+          })
+        : [],
+    },
+    payments: {
+      allTimeRevenue: numberOr(paymentsRaw.allTimeRevenue),
+      period: {
+        today: mapPeriod("today"),
+        week: mapPeriod("week"),
+        month: mapPeriod("month"),
+      },
+      revenueChart: Array.isArray(paymentsRaw.revenueChart)
+        ? paymentsRaw.revenueChart.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              key: stringOr(row.key),
+              label: stringOr(row.label),
+              value: numberOr(row.value),
+            };
+          })
+        : [],
+      latest: Array.isArray(paymentsRaw.latest)
+        ? paymentsRaw.latest.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              id: stringOr(row.id),
+              number: stringOr(row.number),
+              amount: numberOr(row.amount),
+              paidAt: stringOr(row.paidAt),
+              invoiceNumber: stringOr(row.invoiceNumber),
+              invoiceId: row.invoiceId ? stringOr(row.invoiceId) : null,
+            };
+          })
+        : [],
+    },
+    salesChart: {
+      month: mapSalesPoints(salesChartRaw.month),
+      year: mapSalesPoints(salesChartRaw.year),
+    },
+    jobsChart: {
+      month: mapJobsPoints(jobsChartRaw.month),
+      year: mapJobsPoints(jobsChartRaw.year),
+    },
+    people: {
+      customers: numberOr(peopleRaw.customers),
+      employees: numberOr(peopleRaw.employees),
+      contractors: numberOr(peopleRaw.contractors),
+      vendors: numberOr(peopleRaw.vendors),
+    },
+    tasks: {
+      overdueCount: numberOr(tasksRaw.overdueCount),
+      myDay: Array.isArray(tasksRaw.myDay)
+        ? tasksRaw.myDay.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              id: stringOr(row.id),
+              title: stringOr(row.title),
+              dueAt: stringOr(row.dueAt),
+              priority: stringOr(row.priority, "normal"),
+              isOverdue: Boolean(row.isOverdue),
+              subjectKind: row.subjectKind ? stringOr(row.subjectKind) : null,
+            };
+          })
+        : [],
+    },
+    reminders: {
+      dueNext14Days: Array.isArray(remindersRaw.dueNext14Days)
+        ? remindersRaw.dueNext14Days.map((item) => {
+            const row = (item && typeof item === "object" ? item : {}) as Record<
+              string,
+              unknown
+            >;
+            return {
+              id: stringOr(row.id),
+              title: stringOr(row.title),
+              dueAt: stringOr(row.dueAt),
+              subjectKind: row.subjectKind ? stringOr(row.subjectKind) : null,
+            };
+          })
+        : [],
+    },
+    activity: Array.isArray(data.activity)
+      ? data.activity.map((item) => {
+          const row = (item && typeof item === "object" ? item : {}) as Record<
+            string,
+            unknown
+          >;
+          return {
+            id: stringOr(row.id),
+            title: stringOr(row.title),
+            detail: stringOr(row.detail),
+            at: stringOr(row.at),
+            href: stringOr(row.href, "/pro/dashboard"),
+          };
+        })
+      : [],
+  };
+}
+
 export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
   const [
     customers,

@@ -31,7 +31,7 @@ import type { Job } from "@/lib/types";
 
 /** List page size for GET /provider/vendors */
 export const VENDORS_DEFAULT_LIMIT = 10;
-const DETAIL_TAB_LIMIT = 50;
+const DETAIL_TAB_LIMIT = 10;
 
 type TabListState<T> = {
   vendorId: string;
@@ -177,7 +177,14 @@ function setTabRejected<T>(tab: TabListState<T>, message: string) {
   tab.error = message;
 }
 
-function applyDetail(state: VendorsState, vendor: PortalVendor) {
+function textOrFallback(next: string | undefined, prev: string | undefined) {
+  const n = (next ?? "").trim();
+  if (n) return n;
+  return (prev ?? "").trim();
+}
+
+function applyDetail(state: VendorsState, vendor: PortalVendor, opts?: { allowClear?: boolean }) {
+  const allowClear = Boolean(opts?.allowClear);
   const cached =
     state.items.find((item) => item.id === vendor.id) ??
     (state.detail?.id === vendor.id ? state.detail : null);
@@ -185,6 +192,12 @@ function applyDetail(state: VendorsState, vendor: PortalVendor) {
     ? {
         ...cached,
         ...vendor,
+        category: vendor.category || cached.category,
+        // Keep last known subcategory/notes when a GET omits them (common until re-save).
+        subcategory: allowClear
+          ? vendor.subcategory ?? ""
+          : textOrFallback(vendor.subcategory, cached.subcategory),
+        notes: allowClear ? vendor.notes ?? "" : textOrFallback(vendor.notes, cached.notes),
         inventory: vendor.inventory !== undefined ? vendor.inventory : cached.inventory,
         purchaseOrders:
           vendor.purchaseOrders !== undefined ? vendor.purchaseOrders : cached.purchaseOrders,
@@ -277,11 +290,18 @@ export const updateVendorRecord = createAsyncThunk<
   { rejectValue: string }
 >("vendors/update", async ({ id, patch }, { rejectWithValue }) => {
   try {
-    const updated = await updateVendor(id, patch);
-    if (updated) return updated;
+    await updateVendor(id, patch);
+    // Always re-read so list/detail get persisted subcategory + notes.
     const detail = await getVendor(id);
     if (!detail) return rejectWithValue("Vendor was updated but could not be read.");
-    return detail;
+    return {
+      ...detail,
+      ...(patch.category !== undefined ? { category: patch.category || detail.category } : {}),
+      ...(patch.subcategory !== undefined
+        ? { subcategory: patch.subcategory || "" }
+        : {}),
+      ...(patch.notes !== undefined ? { notes: patch.notes || "" } : {}),
+    };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }
@@ -601,7 +621,16 @@ const vendorsSlice = createSlice({
       })
       .addCase(fetchVendors.fulfilled, (state, action) => {
         state.loading = false;
-        state.items = action.payload.items;
+        const previousById = new Map(state.items.map((item) => [item.id, item]));
+        state.items = action.payload.items.map((item) => {
+          const prev = previousById.get(item.id);
+          if (!prev) return item;
+          return {
+            ...item,
+            subcategory: textOrFallback(item.subcategory, prev.subcategory),
+            notes: textOrFallback(item.notes, prev.notes),
+          };
+        });
         state.page = action.payload.page;
         state.limit = VENDORS_DEFAULT_LIMIT;
         state.total = action.payload.total;
@@ -610,7 +639,18 @@ const vendorsSlice = createSlice({
         state.status = action.payload.status;
         state.pagesCache[
           cacheKey(state.search, state.status, state.page, state.limit)
-        ] = action.payload.items;
+        ] = state.items;
+        if (state.detail?.id) {
+          const refreshed = state.items.find((item) => item.id === state.detail?.id);
+          if (refreshed) {
+            state.detail = {
+              ...state.detail,
+              ...refreshed,
+              subcategory: textOrFallback(refreshed.subcategory, state.detail.subcategory),
+              notes: textOrFallback(refreshed.notes, state.detail.notes),
+            };
+          }
+        }
       })
       .addCase(fetchVendors.rejected, (state, action) => {
         state.loading = false;
@@ -654,7 +694,7 @@ const vendorsSlice = createSlice({
         state.error = action.payload || "Failed to create vendor.";
       })
       .addCase(updateVendorRecord.fulfilled, (state, action) => {
-        applyDetail(state, action.payload);
+        applyDetail(state, action.payload, { allowClear: true });
       })
       .addCase(deleteVendorRecord.fulfilled, (state, action) => {
         state.pagesCache = {};

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
@@ -26,6 +26,8 @@ import {
   CreateTaskDialog,
 } from "@/components/portal/create-person-dialogs";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { PaginatedCategorySelect } from "@/components/portal/paginated-category-select";
+import { usePaginatedCategoryOptions } from "@/components/portal/use-paginated-category-options";
 import {
   GoogleAddressAutocomplete,
   type PlaceAddress,
@@ -59,6 +61,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -509,11 +512,129 @@ function VendorSettingsTab({
   onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const [draft, setDraft] = useState(vendor);
+  const [categoryId, setCategoryId] = useState("");
+  const [subcategoryId, setSubcategoryId] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const VENDOR_CATEGORY_PAGE_SIZE = 10;
+  const realCategoryId = /^[a-f\d]{24}$/i.test(categoryId.trim()) ? categoryId.trim() : "";
+  const parentPaging = usePaginatedCategoryOptions(
+    "parents",
+    true,
+    undefined,
+    VENDOR_CATEGORY_PAGE_SIZE,
+  );
+  const subPaging = usePaginatedCategoryOptions(
+    realCategoryId ? "subs" : null,
+    Boolean(realCategoryId),
+    realCategoryId || undefined,
+    VENDOR_CATEGORY_PAGE_SIZE,
+  );
+
+  const categoryOptions = useMemo(() => {
+    const list = parentPaging.categories.map((item) => ({
+      id: item.id,
+      name: item.name,
+    }));
+    const name = draft.category?.trim();
+    if (name) {
+      const key = name.toLowerCase();
+      const byName = list.find((item) => item.name.trim().toLowerCase() === key);
+      if (!byName) {
+        list.unshift({ id: categoryId || `saved:cat:${key}`, name });
+      } else if (categoryId && categoryId !== byName.id && !list.some((item) => item.id === categoryId)) {
+        list.unshift({ id: categoryId, name });
+      }
+    }
+    return list;
+  }, [parentPaging.categories, categoryId, draft.category]);
+
+  const subcategoryOptions = useMemo(() => {
+    const list = subPaging.categories.map((item) => ({
+      id: item.id,
+      name: item.name,
+    }));
+    const name = draft.subcategory?.trim();
+    if (name) {
+      const key = name.toLowerCase();
+      const byName = list.find((item) => item.name.trim().toLowerCase() === key);
+      if (!byName) {
+        list.unshift({ id: subcategoryId || `saved:sub:${key}`, name });
+      } else if (
+        subcategoryId &&
+        subcategoryId !== byName.id &&
+        !list.some((item) => item.id === subcategoryId)
+      ) {
+        list.unshift({ id: subcategoryId, name });
+      }
+    }
+    return list;
+  }, [subPaging.categories, subcategoryId, draft.subcategory]);
+
   useEffect(() => {
-    setDraft(vendor);
-  }, [vendor]);
+    setDraft({
+      ...vendor,
+      subcategory: vendor.subcategory || "",
+      notes: vendor.notes || "",
+      category: vendor.category || "",
+    });
+    const catName = (vendor.category || "").trim();
+    const subName = (vendor.subcategory || "").trim();
+    setCategoryId((current) => {
+      if (catName && /^[a-f\d]{24}$/i.test(current.trim())) return current;
+      return catName ? `saved:cat:${catName.toLowerCase()}` : "";
+    });
+    setSubcategoryId((current) => {
+      if (subName && /^[a-f\d]{24}$/i.test(current.trim())) return current;
+      return subName ? `saved:sub:${subName.toLowerCase()}` : "";
+    });
+  }, [
+    vendor.id,
+    vendor.name,
+    vendor.category,
+    vendor.subcategory,
+    vendor.notes,
+    vendor.email,
+    vendor.phone,
+    vendor.street,
+    vendor.city,
+    vendor.state,
+    vendor.zip,
+    vendor.latitude,
+    vendor.longitude,
+    vendor.contact,
+    vendor.status,
+  ]);
+
+  useEffect(() => {
+    if (!draft.category?.trim()) return;
+    const match = parentPaging.categories.find(
+      (item) => item.name.trim().toLowerCase() === draft.category.trim().toLowerCase(),
+    );
+    if (match && match.id !== categoryId) setCategoryId(match.id);
+  }, [draft.category, categoryId, parentPaging.categories]);
+
+  useEffect(() => {
+    if (!realCategoryId || !draft.subcategory?.trim()) return;
+    const match = subPaging.categories.find(
+      (item) =>
+        item.name.trim().toLowerCase() === String(draft.subcategory || "").trim().toLowerCase(),
+    );
+    if (match && match.id !== subcategoryId) setSubcategoryId(match.id);
+  }, [realCategoryId, draft.subcategory, subcategoryId, subPaging.categories]);
+
+  // Help resolve category/subcategory that are not on the first page.
+  useEffect(() => {
+    if (!vendor.category?.trim()) return;
+    parentPaging.setSearch(vendor.category.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when vendor identity changes
+  }, [vendor.id, vendor.category]);
+
+  useEffect(() => {
+    if (!realCategoryId || !vendor.subcategory?.trim()) return;
+    subPaging.setSearch(vendor.subcategory.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when resolved category / vendor sub changes
+  }, [realCategoryId, vendor.id, vendor.subcategory]);
 
   function applyLocation(address: PlaceAddress) {
     setDraft((current) => ({
@@ -529,14 +650,19 @@ function VendorSettingsTab({
 
   async function save() {
     if (saving) return;
+    if (!draft.category.trim()) {
+      toast.error("Select a category.");
+      return;
+    }
     setSaving(true);
     try {
       await Promise.resolve(
         onSave({
           name: draft.name,
           category: draft.category,
-          contact: draft.contact,
-          status: draft.status,
+          subcategory: draft.subcategory || "",
+          notes: draft.notes || "",
+          contact: draft.contact || "",
           email: draft.email,
           phone: draft.phone,
           street: draft.street || "",
@@ -606,37 +732,72 @@ function VendorSettingsTab({
           />
         </Field>
         <Field label="Category">
-          <Input
-            value={draft.category}
-            placeholder="Plumbing supplies"
-            onChange={(event) => setDraft({ ...draft, category: event.target.value })}
+          <PaginatedCategorySelect
+            id="vendor-settings-category"
+            className="w-full"
+            value={categoryId}
+            options={categoryOptions}
+            loading={parentPaging.loading}
+            loadingMore={parentPaging.loadingMore}
+            hasMore={parentPaging.hasMore}
+            placeholder="Select category"
+            searchable
+            searchValue={parentPaging.search}
+            onSearchChange={parentPaging.setSearch}
+            searchPlaceholder="Search categories…"
+            onLoadMore={parentPaging.loadMore}
+            onChange={(nextId, option) => {
+              setCategoryId(nextId);
+              setSubcategoryId("");
+              setDraft({
+                ...draft,
+                category: option?.name ?? "",
+                subcategory: "",
+              });
+            }}
           />
         </Field>
-        <Field label="Contact">
-          <Input
-            value={draft.contact}
-            placeholder="Primary contact name"
-            onChange={(event) => setDraft({ ...draft, contact: event.target.value })}
+        {(categoryId || draft.category) ? (
+          <Field label="Subcategory" className="sm:col-span-2">
+            <PaginatedCategorySelect
+              id="vendor-settings-subcategory"
+              className="w-full"
+              value={subcategoryId}
+              options={subcategoryOptions}
+              disabled={!realCategoryId}
+              loading={subPaging.loading}
+              loadingMore={subPaging.loadingMore}
+              hasMore={subPaging.hasMore}
+              placeholder={
+                !realCategoryId
+                  ? "Select category first"
+                  : subPaging.loading && !subcategoryOptions.length
+                    ? "Loading subcategories…"
+                    : "Select subcategory"
+              }
+              searchable={Boolean(realCategoryId)}
+              searchValue={subPaging.search}
+              onSearchChange={subPaging.setSearch}
+              searchPlaceholder="Search subcategories…"
+              onLoadMore={subPaging.loadMore}
+              onChange={(nextId, option) => {
+                setSubcategoryId(nextId);
+                setDraft({
+                  ...draft,
+                  subcategory: option?.name ?? "",
+                });
+              }}
+            />
+          </Field>
+        ) : null}
+        <Field label="Notes" className="sm:col-span-2">
+          <Textarea
+            value={draft.notes || ""}
+            placeholder="Account details, delivery notes, etc."
+            rows={3}
+            className="min-h-20 resize-y"
+            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
           />
-        </Field>
-        <Field label="Status">
-          <Select
-            value={draft.status}
-            onValueChange={(value) =>
-              setDraft({ ...draft, status: value as CrmDirectoryStatus })
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              {DIRECTORY_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {crmStatusLabel(status)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </Field>
         <div className="grid gap-3 sm:col-span-2">
           <Field label="Email">
@@ -1344,9 +1505,16 @@ function VendorAttachmentsTab({
 }) {
   const dispatch = useAppDispatch();
   const detail = useAppSelector((state) => state.vendors?.detail ?? null);
+  const detailLoading = useAppSelector((state) => Boolean(state.vendors?.detailLoading));
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Same pattern as Employee Attachments: refresh this vendor on tab open.
+  useEffect(() => {
+    if (!vendor.id) return;
+    void dispatch(fetchVendorDetail(vendor.id));
+  }, [dispatch, vendor.id]);
 
   const liveVendor = detail?.id === vendor.id ? detail : vendor;
   const attachments = (liveVendor.attachments ?? []).map((item) => ({
@@ -1357,6 +1525,8 @@ function VendorAttachmentsTab({
     dataUrl: item.url,
     addedAt: item.uploadedAt || "",
   }));
+  const listLoading =
+    detailLoading && detail?.id !== vendor.id && attachments.length === 0;
 
   async function readFiles(list: FileList | File[]) {
     if (uploading) return;
@@ -1436,6 +1606,13 @@ function VendorAttachmentsTab({
           </p>
         </>
       )}
+      {listLoading ? (
+        <div className="mt-4 flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading attachments…
+        </div>
+      ) : (
+        <>
       <label
         className={cn(
           "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center",
@@ -1527,6 +1704,8 @@ function VendorAttachmentsTab({
         </ul>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">No documents yet for this vendor.</p>
+      )}
+        </>
       )}
     </div>
   );

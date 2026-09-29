@@ -296,7 +296,7 @@ export function RequestDetailView({ id }: { id: string }) {
   const { requests, estimates, jobs, invoices, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
   const { customers, reminders, tasks, contractors, setReminderStatus, setTaskStatus, remove } = useCrmDirectory();
-  const { events, employees: crewEmployees, assign, employeeLabel } = usePortalCrew();
+  const { events, employees: crewEmployees, employeeLabel } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const allEmployees = useMemo(() => {
     const pool = [...(crm.employees || []), ...(teamItems || []), ...(crewEmployees || [])];
@@ -1160,7 +1160,8 @@ export function RequestDetailView({ id }: { id: string }) {
       timeWindow: timeWin,
     };
 
-    // 1. Instant optimistic updates in local React state and Redux cache:
+    // Optimistic local updates (do NOT call assign() here — it also PUTs/POSTs
+    // schedule and races with updateLeadSchedule below, causing 409 collisions).
     dispatch(upsertLeadScheduleLocal({ key: tabKey, event: updatedEvent }));
     setApiSchedules((prev) => {
       const list = prev ? [...prev] : [];
@@ -1168,18 +1169,6 @@ export function RequestDetailView({ id }: { id: string }) {
       if (idx >= 0) list[idx] = updatedEvent;
       else list.push(updatedEvent);
       return list;
-    });
-
-    // 2. Keep portal crew in sync
-    assign({
-      kind: calEvent.kind,
-      recordId: calEvent.recordId,
-      date: move.date,
-      endDate: move.endDate,
-      startMinutes,
-      endMinutes,
-      timeWindow: timeWin,
-      employeeId: calEvent.employeeId ?? "",
     });
 
     const startFormatted = formatDate(move.date);
@@ -1190,7 +1179,7 @@ export function RequestDetailView({ id }: { id: string }) {
       `${calEvent.title}: ${startFormatted}${endFormatted}${timeFormatted}`,
     );
 
-    // 3. Persist to API in background:
+    // Persist to API (single write — avoids duplicate create/update races).
     const isLeadEvent =
       calEvent.kind === "request" &&
       (calEvent.recordId === id ||

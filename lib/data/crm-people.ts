@@ -131,7 +131,11 @@ export type PortalVendor = {
   number: string;
   name: string;
   category: string;
+  /** Optional subcategory name under `category` (from public categories API). */
+  subcategory?: string;
   contact: string;
+  /** Free-form vendor notes / details (not a phone or person name). */
+  notes?: string;
   email: string;
   phone: string;
   city: string;

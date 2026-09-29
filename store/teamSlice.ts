@@ -554,9 +554,8 @@ export const fetchEmployeeEstimates = createAsyncThunk<
 >("team/fetchEstimates", async (arg, { rejectWithValue }) => {
   const filterKey = tabCacheKey(arg);
   try {
-    // Manual wants ?employeeId=; backend list schema does not support it yet.
-    // Fetch page and filter by siteVisit.employeeId on the client until BE adds the filter.
     const result = await queryEstimates({
+      employeeId: arg.employeeId,
       status: arg.status || undefined,
       search: arg.search || undefined,
       page: arg.page ?? 1,
@@ -564,16 +563,13 @@ export const fetchEmployeeEstimates = createAsyncThunk<
       force: true,
       silent: true,
     });
-    const items = result.items.filter(
-      (item) => String(item.siteVisit?.employeeId || "").trim() === arg.employeeId,
-    );
     return {
       employeeId: arg.employeeId,
       filterKey,
-      items,
+      items: result.items,
       page: result.page,
-      total: items.length,
-      totalPages: 1,
+      total: result.total,
+      totalPages: result.totalPages,
     };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));

@@ -319,14 +319,29 @@ export function usePortalCrew() {
           throw new Error("Could not find the calendar item to assign.");
         }
 
-        const existingSchedule = workspace.calendarEvents.find(
-          (item) => item.kind === assignment.kind && item.recordId === assignment.recordId,
-        );
+        const existingSchedule =
+          events.find(
+            (item) =>
+              item.kind === assignment.kind &&
+              item.recordId === assignment.recordId &&
+              item.id &&
+              !String(item.id).startsWith("cal_"),
+          ) ??
+          workspace.calendarEvents.find(
+            (item) =>
+              item.kind === assignment.kind &&
+              item.recordId === assignment.recordId &&
+              item.id &&
+              !String(item.id).startsWith("cal_"),
+          ) ??
+          workspace.calendarEvents.find(
+            (item) => item.kind === assignment.kind && item.recordId === assignment.recordId,
+          );
         const contractor = contractors.find((item) => item.id === assignment.employeeId);
         const startMinutes = assignment.startMinutes ?? resolvedEvent.startMinutes ?? fallbackWindow.startMinutes;
         const endMinutes = assignment.endMinutes ?? resolvedEvent.endMinutes ?? fallbackWindow.endMinutes;
         const payload = {
-          title: resolvedEvent.title,
+          title: assignment.title || resolvedEvent.title,
           date: assignment.date,
           endDate: assignment.endDate ?? null,
           startMinutes,
@@ -337,7 +352,7 @@ export function usePortalCrew() {
           status: normalizeScheduleStatus(resolvedEvent.status),
         } as const;
 
-        if (existingSchedule) {
+        if (existingSchedule && !String(existingSchedule.id).startsWith("cal_")) {
           await updateScheduleApi(existingSchedule.id, payload);
         } else {
           await assignScheduleApi({

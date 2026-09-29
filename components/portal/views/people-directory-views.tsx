@@ -1299,7 +1299,8 @@ function vendorColumns() {
       id: "name",
       header: "Vendor",
       sortValue: (row: PortalVendor) => row.name,
-      searchValue: (row: PortalVendor) => `${row.name} ${row.contact}`,
+      searchValue: (row: PortalVendor) =>
+        `${row.name} ${row.category || ""} ${row.subcategory || ""}`,
       exportValue: (row: PortalVendor) => row.name,
       cell: (row: PortalVendor) => (
         <Link href={`/pro/dashboard/vendors/${row.id}`} className="font-medium text-primary hover:underline">
@@ -1313,15 +1314,15 @@ function vendorColumns() {
       sortValue: (row: PortalVendor) => row.category,
       searchValue: (row: PortalVendor) => row.category,
       exportValue: (row: PortalVendor) => row.category,
-      cell: (row: PortalVendor) => row.category,
+      cell: (row: PortalVendor) => row.category || "—",
     },
     {
-      id: "contact",
-      header: "Contact",
-      sortValue: (row: PortalVendor) => row.contact,
-      searchValue: (row: PortalVendor) => row.contact,
-      exportValue: (row: PortalVendor) => row.contact,
-      cell: (row: PortalVendor) => row.contact,
+      id: "subcategory",
+      header: "Subcategory",
+      sortValue: (row: PortalVendor) => row.subcategory || "",
+      searchValue: (row: PortalVendor) => row.subcategory || "",
+      exportValue: (row: PortalVendor) => row.subcategory || "",
+      cell: (row: PortalVendor) => row.subcategory?.trim() || "—",
     },
     {
       id: "email",
@@ -1354,25 +1355,6 @@ function vendorColumns() {
       searchValue: (row: PortalVendor) => row.terms,
       exportValue: (row: PortalVendor) => row.terms,
       cell: (row: PortalVendor) => row.terms,
-    },
-    {
-      id: "balance",
-      header: "Balance",
-      sortValue: (row: PortalVendor) => row.balance,
-      searchValue: (row: PortalVendor) => formatMoney(row.balance),
-      exportValue: (row: PortalVendor) => formatMoney(row.balance),
-      className: "tabular-nums",
-      cell: (row: PortalVendor) => formatMoney(row.balance),
-    },
-    {
-      id: "status",
-      header: "Status",
-      sortValue: (row: PortalVendor) => row.status,
-      searchValue: (row: PortalVendor) => crmStatusLabel(row.status),
-      exportValue: (row: PortalVendor) => crmStatusLabel(row.status),
-      cell: (row: PortalVendor) => (
-        <StatusPill label={crmStatusLabel(row.status)} tone={row.status === "active" ? "success" : "neutral"} />
-      ),
     },
   ];
 }

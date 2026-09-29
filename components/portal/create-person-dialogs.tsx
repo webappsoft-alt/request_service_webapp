@@ -34,7 +34,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
+import { PaginatedCategorySelect } from "@/components/portal/paginated-category-select";
 import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
+import { usePaginatedCategoryOptions } from "@/components/portal/use-paginated-category-options";
 import { useReminderLookups } from "@/components/portal/reminder-banner";
 import { employeeName } from "@/lib/data/portal";
 import type {
@@ -67,7 +69,7 @@ import { Loader2 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { createContractorRecord, updateContractorRecord } from "@/store/contractorsSlice";
-import { createVendorRecord, updateVendorRecord } from "@/store/vendorsSlice";
+import { createVendorRecord, fetchVendorDetail, updateVendorRecord } from "@/store/vendorsSlice";
 import {
   createReminderRecord,
   updateReminderRecord,
@@ -721,10 +723,14 @@ export function CreateVendorDialog({
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
   const { addVendor, updateVendor, provider, vendors } = useCrmDirectory();
+  const detail = useAppSelector((state) => state.vendors?.detail ?? null);
   const isEdit = Boolean(vendor);
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const [contact, setContact] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [categoryName, setCategoryName] = useState("");
+  const [subcategoryId, setSubcategoryId] = useState("");
+  const [subcategoryName, setSubcategoryName] = useState("");
+  const [notes, setNotes] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [street, setStreet] = useState("");
@@ -735,10 +741,110 @@ export function CreateVendorDialog({
   const [longitude, setLongitude] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Prefer fresh detail (includes subcategory + notes) when editing.
+  const sourceVendor = useMemo(() => {
+    if (!vendor) return null;
+    if (detail?.id !== vendor.id) return vendor;
+    return {
+      ...vendor,
+      ...detail,
+      category: detail.category || vendor.category || "",
+      subcategory: detail.subcategory || vendor.subcategory || "",
+      notes: detail.notes || vendor.notes || "",
+    };
+  }, [vendor, detail]);
+
+  useEffect(() => {
+    if (!open || !useApi || !vendor?.id) return;
+    void dispatch(fetchVendorDetail(vendor.id));
+  }, [open, useApi, vendor?.id, dispatch]);
+
+  const VENDOR_CATEGORY_PAGE_SIZE = 10;
+  const realCategoryId = /^[a-f\d]{24}$/i.test(categoryId.trim()) ? categoryId.trim() : "";
+  const parentPaging = usePaginatedCategoryOptions(
+    "parents",
+    open,
+    undefined,
+    VENDOR_CATEGORY_PAGE_SIZE,
+  );
+  const subPaging = usePaginatedCategoryOptions(
+    realCategoryId ? "subs" : null,
+    open && Boolean(realCategoryId),
+    realCategoryId || undefined,
+    VENDOR_CATEGORY_PAGE_SIZE,
+  );
+
+  const categoryOptions = useMemo(() => {
+    const list = parentPaging.categories.map((item) => ({
+      id: item.id,
+      name: item.name,
+    }));
+    const name = categoryName.trim();
+    if (name) {
+      const key = name.toLowerCase();
+      if (!list.some((item) => item.name.trim().toLowerCase() === key)) {
+        list.unshift({ id: categoryId || `saved:cat:${key}`, name });
+      } else if (categoryId && !list.some((item) => item.id === categoryId)) {
+        list.unshift({ id: categoryId, name });
+      }
+    }
+    return list;
+  }, [parentPaging.categories, categoryId, categoryName]);
+
+  const subcategoryOptions = useMemo(() => {
+    const list = subPaging.categories.map((item) => ({
+      id: item.id,
+      name: item.name,
+    }));
+    const name = subcategoryName.trim();
+    if (name) {
+      const key = name.toLowerCase();
+      if (!list.some((item) => item.name.trim().toLowerCase() === key)) {
+        list.unshift({ id: subcategoryId || `saved:sub:${key}`, name });
+      } else if (subcategoryId && !list.some((item) => item.id === subcategoryId)) {
+        list.unshift({ id: subcategoryId, name });
+      }
+    }
+    return list;
+  }, [subPaging.categories, subcategoryId, subcategoryName]);
+
+  // When editing, match saved category/subcategory names to loaded options.
+  useEffect(() => {
+    if (!open || !categoryName.trim()) return;
+    const match = parentPaging.categories.find(
+      (item) => item.name.trim().toLowerCase() === categoryName.trim().toLowerCase(),
+    );
+    if (match && match.id !== categoryId) setCategoryId(match.id);
+  }, [open, categoryName, categoryId, parentPaging.categories]);
+
+  useEffect(() => {
+    if (!open || !realCategoryId || !subcategoryName.trim()) return;
+    const match = subPaging.categories.find(
+      (item) =>
+        item.name.trim().toLowerCase() === subcategoryName.trim().toLowerCase(),
+    );
+    if (match && match.id !== subcategoryId) setSubcategoryId(match.id);
+  }, [open, realCategoryId, subcategoryName, subcategoryId, subPaging.categories]);
+
+  useEffect(() => {
+    if (!open || !sourceVendor?.category?.trim()) return;
+    parentPaging.setSearch(sourceVendor.category.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resolve saved category when dialog opens
+  }, [open, sourceVendor?.id, sourceVendor?.category]);
+
+  useEffect(() => {
+    if (!open || !realCategoryId || !sourceVendor?.subcategory?.trim()) return;
+    subPaging.setSearch(sourceVendor.subcategory.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resolve saved subcategory after category id is known
+  }, [open, realCategoryId, sourceVendor?.id, sourceVendor?.subcategory]);
+
   function reset() {
     setName("");
-    setCategory("");
-    setContact("");
+    setCategoryId("");
+    setCategoryName("");
+    setSubcategoryId("");
+    setSubcategoryName("");
+    setNotes("");
     setEmail("");
     setPhone("");
     setStreet("");
@@ -752,23 +858,43 @@ export function CreateVendorDialog({
 
   useEffect(() => {
     if (!open) return;
-    if (!vendor) {
+    if (!sourceVendor) {
       reset();
       return;
     }
-    setName(vendor.name);
-    setCategory(vendor.category);
-    setContact(vendor.contact);
-    setEmail(vendor.email);
-    setPhone(vendor.phone);
-    setStreet(vendor.street || "");
-    setCity(vendor.city || "");
-    setState(vendor.state || "");
-    setZip(vendor.zip || "");
-    setLatitude(vendor.latitude ?? null);
-    setLongitude(vendor.longitude ?? null);
+    setName(sourceVendor.name);
+    const catName = sourceVendor.category?.trim() || "";
+    const subName = sourceVendor.subcategory?.trim() || "";
+    setCategoryId(catName ? `saved:cat:${catName.toLowerCase()}` : "");
+    setCategoryName(catName);
+    setSubcategoryId(subName ? `saved:sub:${subName.toLowerCase()}` : "");
+    setSubcategoryName(subName);
+    setNotes(sourceVendor.notes || "");
+    setEmail(sourceVendor.email);
+    setPhone(sourceVendor.phone);
+    setStreet(sourceVendor.street || "");
+    setCity(sourceVendor.city || "");
+    setState(sourceVendor.state || "");
+    setZip(sourceVendor.zip || "");
+    setLatitude(sourceVendor.latitude ?? null);
+    setLongitude(sourceVendor.longitude ?? null);
     setSaving(false);
-  }, [open, vendor]);
+  }, [
+    open,
+    sourceVendor?.id,
+    sourceVendor?.name,
+    sourceVendor?.category,
+    sourceVendor?.subcategory,
+    sourceVendor?.notes,
+    sourceVendor?.email,
+    sourceVendor?.phone,
+    sourceVendor?.street,
+    sourceVendor?.city,
+    sourceVendor?.state,
+    sourceVendor?.zip,
+    sourceVendor?.latitude,
+    sourceVendor?.longitude,
+  ]);
 
   function applyVendorAddress(address: PlaceAddress) {
     setStreet(address.streetAddress.trim());
@@ -783,8 +909,10 @@ export function CreateVendorDialog({
     if (saving) return;
     const patch = {
       name: name.trim(),
-      category: category.trim() || "Supply",
-      contact: contact.trim() || "Accounts",
+      category: categoryName.trim() || "Supply",
+      subcategory: subcategoryName.trim(),
+      contact: "",
+      notes: notes.trim(),
       email: email.trim() || "orders@vendor.local",
       phone: phone.trim() || "(000) 000-0000",
       street: street.trim(),
@@ -795,13 +923,17 @@ export function CreateVendorDialog({
       longitude,
     };
     if (!patch.name) return;
+    if (!categoryName.trim()) {
+      toast.error("Select a category.");
+      return;
+    }
 
     setSaving(true);
     try {
       if (isEdit && vendor) {
         if (useApi) {
           const updated = await dispatch(
-            updateVendorRecord({ id: vendor.id, patch: { ...vendor, ...patch } }),
+            updateVendorRecord({ id: vendor.id, patch: { ...sourceVendor, ...patch } }),
           ).unwrap();
           toast.success(`${updated.name} updated.`);
         } else {
@@ -846,11 +978,11 @@ export function CreateVendorDialog({
       }}
     >
       <DialogContent className="sm:max-w-lg" data-lenis-prevent>
-        <DialogHeader>
+        <DialogHeader className="relative z-10 shrink-0 space-y-1.5 pr-8">
           <DialogTitle>{isEdit ? "Edit vendor" : "Create vendor"}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update supplier contact and account details."
+              ? "Update supplier account details."
               : "Supply houses and accounts payable records."}
           </DialogDescription>
         </DialogHeader>
@@ -861,11 +993,69 @@ export function CreateVendorDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="ven-cat">Category</FieldLabel>
-            <Input id="ven-cat" value={category} onChange={(change) => setCategory(change.target.value)} placeholder="Plumbing supply" />
+            <PaginatedCategorySelect
+              id="ven-cat"
+              className="w-full"
+              value={categoryId}
+              options={categoryOptions}
+              loading={parentPaging.loading}
+              loadingMore={parentPaging.loadingMore}
+              hasMore={parentPaging.hasMore}
+              placeholder="Select category"
+              searchable
+              searchValue={parentPaging.search}
+              onSearchChange={parentPaging.setSearch}
+              searchPlaceholder="Search categories…"
+              onLoadMore={parentPaging.loadMore}
+              onChange={(nextId, option) => {
+                setCategoryId(nextId);
+                setCategoryName(option?.name ?? "");
+                setSubcategoryId("");
+                setSubcategoryName("");
+              }}
+            />
           </Field>
+          {categoryId || categoryName ? (
+            <Field>
+              <FieldLabel htmlFor="ven-subcat">Subcategory</FieldLabel>
+              <PaginatedCategorySelect
+                id="ven-subcat"
+                className="w-full"
+                value={subcategoryId}
+                options={subcategoryOptions}
+                disabled={!realCategoryId}
+                loading={subPaging.loading}
+                loadingMore={subPaging.loadingMore}
+                hasMore={subPaging.hasMore}
+                placeholder={
+                  !realCategoryId
+                    ? "Select category first"
+                    : subPaging.loading && !subcategoryOptions.length
+                      ? "Loading subcategories…"
+                      : "Select subcategory"
+                }
+                searchable={Boolean(realCategoryId)}
+                searchValue={subPaging.search}
+                onSearchChange={subPaging.setSearch}
+                searchPlaceholder="Search subcategories…"
+                onLoadMore={subPaging.loadMore}
+                onChange={(nextId, option) => {
+                  setSubcategoryId(nextId);
+                  setSubcategoryName(option?.name ?? "");
+                }}
+              />
+            </Field>
+          ) : null}
           <Field>
-            <FieldLabel htmlFor="ven-contact">Contact</FieldLabel>
-            <Input id="ven-contact" value={contact} onChange={(change) => setContact(change.target.value)} placeholder="Accounts receivable" />
+            <FieldLabel htmlFor="ven-notes">Notes</FieldLabel>
+            <Textarea
+              id="ven-notes"
+              value={notes}
+              onChange={(change) => setNotes(change.target.value)}
+              placeholder="Account details, delivery notes, etc."
+              rows={3}
+              className="min-h-20 resize-y"
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="ven-email">Email</FieldLabel>

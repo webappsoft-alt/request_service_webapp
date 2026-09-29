@@ -860,8 +860,13 @@ export function mapPortalContractor(raw: unknown): PortalContractor | null {
 }
 
 export function mapPortalVendor(raw: unknown): PortalVendor | null {
-  const record = asRecord(raw);
-  if (!record) return null;
+  const outer = asRecord(raw);
+  if (!outer) return null;
+
+  // GET /vendors/:id returns { vendor, stats }; list/update return the vendor doc.
+  const nested = asRecord(outer.vendor);
+  const record =
+    nested && (crmIdOf(nested) || nested.name || nested.vendorName) ? { ...outer, ...nested } : outer;
 
   const id = crmIdOf(record);
   if (!id) return null;
@@ -878,7 +883,9 @@ export function mapPortalVendor(raw: unknown): PortalVendor | null {
     number: trimmed(record.number) || `VEN-${id.slice(-4).toUpperCase()}`,
     name: trimmed(record.name) || trimmed(record.vendorName) || "Vendor",
     category: trimmed(record.category),
+    subcategory: trimmed(record.subcategory ?? record.subCategory),
     contact: trimmed(record.contact) || trimmed(record.contactName),
+    notes: trimmed(record.notes ?? record.note ?? record.details),
     email: trimmed(record.email),
     phone: trimmed(record.phone),
     city: trimmed(location?.city) || trimmed(record.city),

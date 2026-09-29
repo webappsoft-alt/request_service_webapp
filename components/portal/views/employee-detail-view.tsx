@@ -1571,9 +1571,17 @@ export function EmployeeAttachmentsTab({
 }) {
   const dispatch = useAppDispatch();
   const detail = useAppSelector((state) => state.team?.detail ?? null);
+  const detailLoading = useAppSelector((state) => Boolean(state.team?.detailLoading));
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Same pattern as Jobs/Tasks: open tab → fetch this employee's data (GET /team/:id includes attachments).
+  // Cached detail stays visible; detailLoading only blocks when this employee has no profile yet.
+  useEffect(() => {
+    if (!useApi || !employee.id) return;
+    void dispatch(fetchTeamMember(employee.id));
+  }, [dispatch, employee.id, useApi]);
 
   const liveEmployee = detail?.id === employee.id ? detail : employee;
   const attachments = (liveEmployee.attachments ?? []).map((item) => ({
@@ -1584,6 +1592,8 @@ export function EmployeeAttachmentsTab({
     dataUrl: item.url,
     addedAt: item.uploadedAt || "",
   }));
+  const listLoading =
+    useApi && detailLoading && detail?.id !== employee.id && attachments.length === 0;
 
   if (!useApi) {
     return (
@@ -1691,6 +1701,13 @@ export function EmployeeAttachmentsTab({
           <p className="mt-0.5 text-xs text-muted-foreground">License, W-4, certifications, and other employee files.</p>
         </>
       )}
+      {listLoading ? (
+        <div className="mt-4 flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading attachments…
+        </div>
+      ) : (
+        <>
       <label
         className={cn(
           "mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center",
@@ -1784,6 +1801,8 @@ export function EmployeeAttachmentsTab({
         </ul>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">No files on this employee record yet.</p>
+      )}
+        </>
       )}
     </div>
   );

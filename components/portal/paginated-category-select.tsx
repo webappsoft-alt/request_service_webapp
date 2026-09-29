@@ -70,12 +70,29 @@ export function PaginatedCategorySelect({
   loadingMoreRef.current = Boolean(loadingMore);
   hasMoreRef.current = Boolean(hasMore);
 
-  const selected = options.find((item) => item.id === value);
+  const savedLabel =
+    value && value.startsWith("saved:")
+      ? value.replace(/^saved:(cat|sub):/i, "").trim()
+      : "";
+  const selected =
+    options.find((item) => item.id === value) ||
+    (savedLabel
+      ? options.find(
+          (item) => item.name.trim().toLowerCase() === savedLabel.toLowerCase(),
+        )
+      : undefined) ||
+    (value
+      ? options.find(
+          (item) => item.name.trim().toLowerCase() === value.trim().toLowerCase(),
+        )
+      : undefined);
   const label = selected
     ? toTitleCase(selected.name)
-    : loading && !options.length
-      ? "Loading…"
-      : placeholder;
+    : savedLabel
+      ? toTitleCase(savedLabel)
+      : loading && !options.length
+        ? "Loading…"
+        : placeholder;
 
   function tryLoadMore() {
     if (!hasMoreRef.current || loadingMoreRef.current) return;
@@ -155,7 +172,10 @@ export function PaginatedCategorySelect({
   }, [open, options.length, hasMore, loadingMore]);
 
   return (
-    <div ref={rootRef} className={cn("relative z-[1200] w-full", className)}>
+    <div
+      ref={rootRef}
+      className={cn("relative w-full", open && "z-[1200]", className)}
+    >
       <button
         id={id}
         type="button"

@@ -403,7 +403,9 @@ function vendorPayload(vendor: PortalVendor | Partial<PortalVendor>) {
     payload.vendorName = vendor.name || "";
   }
   if (vendor.category !== undefined) payload.category = vendor.category || "";
+  if (vendor.subcategory !== undefined) payload.subcategory = vendor.subcategory || "";
   if (vendor.contact !== undefined) payload.contact = vendor.contact || "";
+  if (vendor.notes !== undefined) payload.notes = vendor.notes || "";
   if (vendor.email !== undefined) payload.email = vendor.email || "";
   if (vendor.phone !== undefined) payload.phone = vendor.phone || "";
   const hasLocationFields =
@@ -1402,7 +1404,7 @@ export async function listEstimates(options?: CrmRequestOptions) {
   return listMapped(providerCrmApi.estimates, mapEstimate, options);
 }
 
-/** Paginated estimates list — supports `status`, `isArchived`, `customerId`, `contractorId`, and `search`. */
+/** Paginated estimates list — supports `status`, `isArchived`, `customerId`, `contractorId`, `employeeId`, and `search`. */
 export async function queryEstimates(query: CrmListQuery = {}) {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.max(1, query.limit ?? DEFAULT_LIST_LIMIT);
@@ -1411,6 +1413,7 @@ export async function queryEstimates(query: CrmListQuery = {}) {
   const status = query.status?.trim();
   const customerId = query.customerId?.trim();
   const contractorId = query.contractorId?.trim();
+  const employeeId = query.employeeId?.trim();
   const requestId = query.requestId?.trim();
   if (search) params.search = search;
   if (status) params.status = status;
@@ -1418,6 +1421,7 @@ export async function queryEstimates(query: CrmListQuery = {}) {
   params.isArchived = query.isArchived === true;
   if (customerId) params.customerId = customerId;
   if (contractorId) params.contractorId = contractorId;
+  if (employeeId) params.employeeId = employeeId;
   if (requestId) params.requestId = requestId;
   const response = await getData(providerCrmApi.estimates, params, {
     silent: query.silent ?? true,

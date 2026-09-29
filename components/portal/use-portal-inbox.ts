@@ -196,9 +196,10 @@ export function usePortalInbox() {
         return;
       }
       if (type === "INBOX_SUMMARY_INVALIDATE") {
-        if (String(detail?.payload?.reason || "") === "INBOX_ACK") {
-          const kinds = Array.isArray(detail?.payload?.kinds)
-            ? detail.payload.kinds.map((k: unknown) => String(k || "").toLowerCase())
+        const payload = asRecord(detail?.payload) ?? {};
+        if (String(payload.reason || "") === "INBOX_ACK") {
+          const kinds = Array.isArray(payload.kinds)
+            ? payload.kinds.map((k: unknown) => String(k || "").toLowerCase())
             : [];
           if (kinds.includes("leads")) clearPortalInboxCount("newLeads");
           if (kinds.includes("orders")) clearPortalInboxCount("pendingOrders");

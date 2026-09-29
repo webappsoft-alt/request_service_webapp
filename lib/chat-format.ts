@@ -105,14 +105,13 @@ export function getAvatarColor(name?: string): string {
 }
 
 /** Unread conversations first, then most recently updated. Stable for equal keys. */
-export function compareChatThreadsByUnreadThenRecent(
-  a: { updatedAt?: string; unreadForProvider?: number; unreadForCustomer?: number },
-  b: { updatedAt?: string; unreadForProvider?: number; unreadForCustomer?: number },
-  unreadOf: (thread: {
+export function compareChatThreadsByUnreadThenRecent<
+  T extends {
+    updatedAt?: string;
     unreadForProvider?: number;
     unreadForCustomer?: number;
-  }) => number,
-): number {
+  },
+>(a: T, b: T, unreadOf: (thread: T) => number): number {
   const aUnread = unreadOf(a) > 0 ? 1 : 0;
   const bUnread = unreadOf(b) > 0 ? 1 : 0;
   if (bUnread !== aUnread) return bUnread - aUnread;

@@ -233,6 +233,9 @@ export type SubmitCommentResponse = {
   success: boolean;
   message: string;
   comment?: PublicBlogComment;
+  isFlaggedUser?: boolean;
+  flaggedUserReason?: string;
+  supportMessage?: string;
 };
 
 /**

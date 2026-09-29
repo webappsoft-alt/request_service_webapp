@@ -252,7 +252,9 @@ export function PortalNotifications() {
       ) {
         if (
           type === "INBOX_SUMMARY_INVALIDATE" &&
-          String(detail?.payload?.reason || "") === "INBOX_ACK"
+          String(
+            (detail?.payload as { reason?: string } | undefined)?.reason || "",
+          ) === "INBOX_ACK"
         ) {
           return;
         }
@@ -273,8 +275,8 @@ export function PortalNotifications() {
       ? notifications
       : inbox.items.map((item) => ({
           id: item.id,
-          type: item.kind === "chat" ? "NEW_CHAT_MESSAGE" : "NEW_LEAD",
-          title: item.kind === "chat" ? "New message" : "New lead",
+          type: "NEW_LEAD" as const,
+          title: "New lead",
           message: item.detail,
           data: { href: item.href },
           isRead: false,

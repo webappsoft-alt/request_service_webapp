@@ -118,6 +118,7 @@ export type RealtimeEvents = {
     newLeads?: number;
     unreadChats?: number;
     pendingOrders?: number;
+    pendingEstimates?: number;
     total?: number;
     reason?: string;
     kinds?: string[];

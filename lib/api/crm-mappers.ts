@@ -1441,7 +1441,7 @@ export function mapJob(raw: unknown): Job | null {
 
 function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
   return asArray(value)
-    .map((entry, index) => {
+    .map((entry, index): InvoiceItem | null => {
       const record = asRecord(entry);
       if (!record) return null;
       const description = trimmed(record.description);
@@ -1462,9 +1462,9 @@ function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
         total: numberValue(record.total),
         kind,
         ...(kind === "materials" && images.length ? { images } : {}),
-      } satisfies InvoiceItem;
+      };
     })
-    .filter((item): item is InvoiceItem => Boolean(item));
+    .filter((item): item is InvoiceItem => item != null);
 }
 
 export function mapInvoice(raw: unknown): Invoice | null {

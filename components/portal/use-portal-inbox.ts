@@ -1,20 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { providerOrdersApi } from "@/components/api/ApiRoutesFile";
 import {
   getPortalInboxClearState,
   reopenPortalInboxBadge,
   setPortalInboxCleared,
   subscribePortalInboxClears,
 } from "@/components/portal/portal-inbox-clears";
-import { useChatThreads } from "@/components/portal/use-chat-threads";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
-import { fetchNotifications } from "@/lib/api/notifications-client";
-import { useAppSelector } from "@/store/hooks";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -22,49 +18,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** Count BOOKING_REQUESTED orders from the provider orders API (same source as the list). */
-async function fetchPendingOrderCount(): Promise<number> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- deferred http
-    const { getData } = require("@/components/api/apiFuntions") as typeof import("@/components/api/apiFuntions");
-    const response = await getData(
-      providerOrdersApi.list,
-      { page: 1, limit: 1, status: "BOOKING_REQUESTED" },
-      { silent: true, force: true },
-    );
-    const root = asRecord(response) ?? {};
-    const pagination =
-      asRecord(root.pagination) ?? asRecord(asRecord(root.data)?.pagination) ?? {};
-    const total = Number(pagination.total ?? pagination.totalDocs ?? 0);
-    if (Number.isFinite(total) && total >= 0) return total;
-
-    const rows = Array.isArray(root.data)
-      ? root.data
-      : Array.isArray(asRecord(root.data)?.orders)
-        ? (asRecord(root.data)?.orders as unknown[])
-        : [];
-    return rows.filter(
-      (row) => String(asRecord(row)?.status || "") === "BOOKING_REQUESTED",
-    ).length;
-  } catch {
-    return 0;
-  }
-}
-
+/**
+ * Sidebar / subnav badge counts.
+ * Counts come from CrmDataProvider.inboxSummary (loaded once + Socket updates).
+ * Does NOT fetch chats, notifications, or orders lists on mount — those belong
+ * to their own pages.
+ */
 export function usePortalInbox() {
   const { requests, estimates } = usePortalWorkspace();
   const records = usePortalRecords();
-  const chat = useChatThreads();
   const crm = useCrmApiData();
-  const providerOrders = useAppSelector((state) => state.providerOrders);
-  const [unreadLeadNotifs, setUnreadLeadNotifs] = useState(0);
-  const [unreadChatNotifs, setUnreadChatNotifs] = useState(0);
-  const [unreadBookingNotifs, setUnreadBookingNotifs] = useState(0);
-  const [unreadEstimateNotifs, setUnreadEstimateNotifs] = useState(0);
   const [liveLeadBump, setLiveLeadBump] = useState(0);
   const [liveOrderBump, setLiveOrderBump] = useState(0);
   const [liveEstimateBump, setLiveEstimateBump] = useState(0);
-  const [pendingFromApi, setPendingFromApi] = useState(0);
+  const [liveChatBump, setLiveChatBump] = useState(0);
   /** Shared across remounts — visiting a tab clears badge + dashboard alert. */
   const [clears, setClears] = useState(getPortalInboxClearState);
 
@@ -84,80 +51,6 @@ export function usePortalInbox() {
     [listedEstimates],
   );
 
-  const pendingFromStore = useMemo(() => {
-    const items = providerOrders?.items || [];
-    const fromItems = items.filter((row) => row.status === "BOOKING_REQUESTED").length;
-    const cache = providerOrders?.pagesCache || {};
-    const seen = new Set<string>();
-    let fromCache = 0;
-    for (const rows of Object.values(cache)) {
-      for (const row of rows) {
-        if (row.status !== "BOOKING_REQUESTED") continue;
-        if (seen.has(row.id)) continue;
-        seen.add(row.id);
-        fromCache += 1;
-      }
-    }
-    const requestedKey = Object.keys(cache).find((key) =>
-      key.startsWith("BOOKING_REQUESTED|"),
-    );
-    if (requestedKey && cache[requestedKey]) {
-      return Math.max(
-        fromItems,
-        cache[requestedKey].filter((row) => row.status === "BOOKING_REQUESTED").length,
-        providerOrders?.statusFilter === "BOOKING_REQUESTED"
-          ? providerOrders.total || 0
-          : 0,
-      );
-    }
-    return Math.max(fromItems, fromCache);
-  }, [providerOrders]);
-
-  const refreshPendingOrders = async () => {
-    const count = await fetchPendingOrderCount();
-    setPendingFromApi(count);
-    if (count > 0) setLiveOrderBump(0);
-  };
-
-  const refreshNotifBadges = async () => {
-    try {
-      const result = await fetchNotifications({
-        page: 1,
-        limit: 50,
-        status: "unread",
-        silent: true,
-        force: true,
-      });
-      setUnreadLeadNotifs(result.items.filter((item) => item.type === "NEW_LEAD").length);
-      setUnreadChatNotifs(
-        result.items.filter((item) => item.type === "NEW_CHAT_MESSAGE").length,
-      );
-      setUnreadBookingNotifs(
-        result.items.filter(
-          (item) =>
-            item.type === "NEW_BOOKING_REQUEST" ||
-            (/BOOKING|ORDER/i.test(item.type) &&
-              /request|review|booked/i.test(`${item.title} ${item.message}`)),
-        ).length,
-      );
-      setUnreadEstimateNotifs(
-        result.items.filter(
-          (item) =>
-            item.type === "ESTIMATE_CHANGES_REQUESTED" ||
-            (item.type.includes("ESTIMATE") &&
-              /change|request|revis/i.test(`${item.title} ${item.message}`)),
-        ).length,
-      );
-    } catch {
-      /* keep last */
-    }
-  };
-
-  useEffect(() => {
-    void refreshNotifBadges();
-    void refreshPendingOrders();
-  }, []);
-
   useEffect(() => {
     return subscribePortalInboxClears(() => {
       setClears(getPortalInboxClearState());
@@ -170,24 +63,20 @@ export function usePortalInbox() {
       if (type === "LEAD_CREATED") {
         reopenPortalInboxBadge("leads");
         setLiveLeadBump((count) => count + 1);
-        void refreshNotifBadges();
         return;
       }
       if (type === "LEADS_TAB_OPENED") {
         setPortalInboxCleared("leads", true);
-        setUnreadLeadNotifs(0);
         setLiveLeadBump(0);
         return;
       }
       if (type === "ORDERS_TAB_OPENED") {
         setPortalInboxCleared("orders", true);
-        setUnreadBookingNotifs(0);
         setLiveOrderBump(0);
         return;
       }
       if (type === "ESTIMATES_TAB_OPENED") {
         setPortalInboxCleared("estimates", true);
-        setUnreadEstimateNotifs(0);
         setLiveEstimateBump(0);
         return;
       }
@@ -202,7 +91,6 @@ export function usePortalInbox() {
           reopenPortalInboxBadge("estimates");
           setLiveEstimateBump((count) => count + 1);
         }
-        void refreshNotifBadges();
         return;
       }
       if (type === "ORDER_UPDATED") {
@@ -224,8 +112,6 @@ export function usePortalInbox() {
         ) {
           setLiveOrderBump(0);
         }
-        void refreshNotifBadges();
-        void refreshPendingOrders();
         return;
       }
       if (type === "NEW_NOTIFICATION") {
@@ -233,109 +119,86 @@ export function usePortalInbox() {
           | { type?: string; data?: { status?: string; action?: string } }
           | undefined;
         const notifType = String(payload?.type || "");
-        const notifAction = String(payload?.data?.action || "");
-        const notifStatus = String(payload?.data?.status || "");
-        if (
-          notifType === "NEW_BOOKING_REQUEST" &&
-          notifAction !== "auto_confirm" &&
-          notifStatus !== "CONFIRMED"
-        ) {
+        if (notifType === "NEW_BOOKING_REQUEST") {
           reopenPortalInboxBadge("orders");
           setLiveOrderBump((count) => count + 1);
+        } else if (notifType === "NEW_LEAD") {
+          reopenPortalInboxBadge("leads");
+          setLiveLeadBump((count) => count + 1);
+        } else if (notifType === "NEW_CHAT_MESSAGE") {
+          setLiveChatBump((count) => count + 1);
         }
-        if (notifType === "ESTIMATE_CHANGES_REQUESTED") {
-          reopenPortalInboxBadge("estimates");
-          setLiveEstimateBump((count) => count + 1);
-        }
-        if (
-          notifType === "BOOKING_ACCEPTED" ||
-          notifType === "BOOKING_REJECTED"
-        ) {
-          setLiveOrderBump(0);
-        }
-        void refreshNotifBadges();
-        void refreshPendingOrders();
         return;
       }
-      if (
-        type === "INBOX_SUMMARY_INVALIDATE" ||
-        type === "CHAT_MESSAGE" ||
-        type === "CHAT_THREAD_UPDATED" ||
-        type === "CHAT_READ_RECEIPT" ||
-        type === "SOCKET_RECONNECTED"
-      ) {
-        if (type === "CHAT_READ_RECEIPT") {
-          const payload = asRecord(detail?.payload) ?? {};
-          const cleared = Math.max(0, Number(payload.clearedUnread) || 0);
-          if (String(payload.readBy || "") === "provider" && cleared > 0) {
-            setUnreadChatNotifs((count) => Math.max(0, count - cleared));
-          }
+      if (type === "CHAT_MESSAGE" || type === "CHAT_THREAD_UPDATED") {
+        setLiveChatBump((count) => count + 1);
+        return;
+      }
+      if (type === "CHAT_READ_RECEIPT") {
+        const payload = asRecord(detail?.payload) ?? {};
+        const cleared = Math.max(0, Number(payload.clearedUnread) || 0);
+        if (String(payload.readBy || "") === "provider" && cleared > 0) {
+          setLiveChatBump((count) => Math.max(0, count - cleared));
         }
-        void refreshNotifBadges();
-        if (type === "INBOX_SUMMARY_INVALIDATE" || type === "SOCKET_RECONNECTED") {
-          void refreshPendingOrders();
+        return;
+      }
+      if (type === "INBOX_SUMMARY_APPLY" || type === "INBOX_SUMMARY_INVALIDATE") {
+        // Counts refreshed in CrmDataProvider — reset live bumps so summary wins.
+        if (String(detail?.payload?.reason || "") === "INBOX_ACK") {
+          const kinds = Array.isArray(detail?.payload?.kinds)
+            ? detail.payload.kinds.map((k: unknown) => String(k || "").toLowerCase())
+            : [];
+          if (kinds.includes("leads")) setLiveLeadBump(0);
+          if (kinds.includes("orders")) setLiveOrderBump(0);
+          if (kinds.includes("estimates")) setLiveEstimateBump(0);
+        } else {
+          setLiveLeadBump(0);
+          setLiveOrderBump(0);
+          setLiveEstimateBump(0);
+          setLiveChatBump(0);
         }
       }
     });
   }, []);
 
   useEffect(() => {
-    if ((crm.inboxSummary?.pendingOrders || 0) > 0 || pendingFromApi > 0 || pendingFromStore > 0) {
+    if ((crm.inboxSummary?.pendingOrders || 0) > 0) {
       setLiveOrderBump(0);
     }
-  }, [crm.inboxSummary?.pendingOrders, pendingFromApi, pendingFromStore]);
+  }, [crm.inboxSummary?.pendingOrders]);
 
   const items = useMemo(() => {
-    const leadItems = newLeads.map((item) => ({
+    return newLeads.slice(0, 8).map((item) => ({
       id: `lead:${item.id}`,
       href: `/pro/dashboard/requests/${item.id}`,
       title: `${item.customerName} requested ${item.serviceName}`,
       detail: item.details,
       kind: "lead" as const,
     }));
-    const chatItems = chat.threads
-      .filter((item) => item.unreadForProvider > 0)
-      .map((item) => ({
-        id: `chat:${item.id}`,
-        href: `/pro/dashboard/messages?thread=${item.id}`,
-        title: `${item.customerName} sent a message`,
-        detail: item.messages.at(-1)?.text || "New chat",
-        kind: "chat" as const,
-      }));
-    return [...chatItems, ...leadItems];
-  }, [chat.threads, newLeads]);
+  }, [newLeads]);
 
   const summaryLeads = crm.enabled ? crm.inboxSummary.newLeads || 0 : 0;
-  // Badge = unseen items only (inbox-summary respects server ACK watermarks).
-  // Do not use full CRM list lengths (status=new / BOOKING_REQUESTED totals).
   const newLeadCount = clears.leads
-    ? Math.max(unreadLeadNotifs, liveLeadBump)
-    : Math.max(summaryLeads, unreadLeadNotifs, liveLeadBump);
+    ? liveLeadBump
+    : Math.max(summaryLeads, liveLeadBump);
 
-  const unreadChats =
-    chat.threads.length > 0
-      ? chat.unread
-      : Math.max(
-          crm.enabled ? crm.inboxSummary.unreadChats || 0 : chat.unread,
-          unreadChatNotifs,
-        );
+  const unreadChats = Math.max(
+    crm.enabled ? crm.inboxSummary.unreadChats || 0 : 0,
+    liveChatBump,
+  );
 
   const pendingOrdersRaw = Math.max(
-    crm.enabled ? crm.inboxSummary.pendingOrders || 0 : pendingFromApi,
-    unreadBookingNotifs,
+    crm.enabled ? crm.inboxSummary.pendingOrders || 0 : 0,
     liveOrderBump,
   );
-  const pendingOrders = clears.orders
-    ? Math.max(unreadBookingNotifs, liveOrderBump)
-    : pendingOrdersRaw;
+  const pendingOrders = clears.orders ? liveOrderBump : pendingOrdersRaw;
 
   const pendingEstimatesRaw = Math.max(
     estimateAttention.length,
-    unreadEstimateNotifs,
     liveEstimateBump,
   );
   const pendingEstimates = clears.estimates
-    ? Math.max(unreadEstimateNotifs, liveEstimateBump)
+    ? liveEstimateBump
     : pendingEstimatesRaw;
 
   return {

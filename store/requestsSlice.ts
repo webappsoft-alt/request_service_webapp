@@ -283,8 +283,9 @@ export const fetchLeadEstimates = createAsyncThunk<
   const key = leadTabCacheKey(requestId, customerId);
   try {
     const result = await queryEstimates({
+      // Lead detail: scope by requestId only (do not broaden to all customer estimates).
       requestId: requestId || undefined,
-      customerId: customerId || undefined,
+      customerId: requestId ? undefined : customerId || undefined,
       limit: 20,
       force: true,
       silent: true,
@@ -304,7 +305,7 @@ export const fetchLeadJobs = createAsyncThunk<
   try {
     const result = await queryJobs({
       requestId: requestId || undefined,
-      customerId: customerId || undefined,
+      customerId: requestId ? undefined : customerId || undefined,
       limit: 20,
       force: true,
       silent: true,
@@ -323,7 +324,9 @@ export const fetchLeadTasks = createAsyncThunk<
   const key = leadTabCacheKey(requestId, customerId);
   try {
     const result = await queryTasks({
-      customerId: customerId || undefined,
+      subjectKind: requestId ? "request" : undefined,
+      subjectId: requestId || undefined,
+      customerId: requestId ? undefined : customerId || undefined,
       limit: 20,
       force: true,
       silent: true,
@@ -342,7 +345,9 @@ export const fetchLeadReminders = createAsyncThunk<
   const key = leadTabCacheKey(requestId, customerId);
   try {
     const result = await queryReminders({
-      customerId: customerId || undefined,
+      subjectKind: requestId ? "request" : undefined,
+      subjectId: requestId || undefined,
+      customerId: requestId ? undefined : customerId || undefined,
       limit: 20,
       force: true,
       silent: true,
@@ -373,16 +378,12 @@ export const fetchLeadSchedule = createAsyncThunk<
   { key: string; events: PortalCalendarEvent[] },
   { requestId: string; customerId?: string },
   { state: { requests: RequestsState }; rejectValue: string }
->("requests/fetchSchedule", async ({ requestId, customerId }, { getState, rejectWithValue }) => {
+>("requests/fetchSchedule", async ({ requestId, customerId }, { rejectWithValue }) => {
   const key = leadTabCacheKey(requestId, customerId);
   try {
-    const existing = getState().requests.scheduleCache[key];
-    if (existing !== undefined) {
-      return { key, events: existing };
-    }
     const list = await querySchedule({
       kind: "request",
-      customerId: customerId || undefined,
+      recordId: requestId,
       force: true,
       silent: true,
     });
@@ -392,7 +393,7 @@ export const fetchLeadSchedule = createAsyncThunk<
         item.id === requestId ||
         item.id === `cal_${requestId}`,
     );
-    return { key, events: matched };
+    return { key, events: matched.length ? matched : list };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
   }

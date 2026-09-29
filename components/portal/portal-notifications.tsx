@@ -108,8 +108,8 @@ export function PortalNotifications() {
   }, []);
 
   useEffect(() => {
-    void refreshNotifications();
-  }, [refreshNotifications]);
+    if (open) void refreshNotifications();
+  }, [open, refreshNotifications]);
 
   useEffect(() => {
     return subscribeRealtime((detail) => {
@@ -155,12 +155,13 @@ export function PortalNotifications() {
           }
           return;
         }
-        void refreshNotifications();
+        // Only hit the API when the bell panel is open.
+        if (open) void refreshNotifications();
         return;
       }
 
       if (type === "DIRECT_CHAT_READ") {
-        void refreshNotifications();
+        if (open) void refreshNotifications();
         return;
       }
 
@@ -185,7 +186,6 @@ export function PortalNotifications() {
           });
           setUnreadNotifications((count) => count + 1);
         }
-        void refreshNotifications();
         return;
       }
 
@@ -214,7 +214,6 @@ export function PortalNotifications() {
           });
           setUnreadNotifications((count) => count + 1);
         }
-        void refreshNotifications();
         return;
       }
 
@@ -248,18 +247,19 @@ export function PortalNotifications() {
 
       if (
         type === "INBOX_SUMMARY_INVALIDATE" ||
-        type === "ORDER_UPDATED" ||
         type === "CHAT_MESSAGE" ||
         type === "CHAT_THREAD_UPDATED"
       ) {
-        void refreshNotifications();
+        if (
+          type === "INBOX_SUMMARY_INVALIDATE" &&
+          String(detail?.payload?.reason || "") === "INBOX_ACK"
+        ) {
+          return;
+        }
+        if (open) void refreshNotifications();
       }
     });
-  }, [refreshNotifications]);
-
-  useEffect(() => {
-    if (open) void refreshNotifications();
-  }, [open, refreshNotifications]);
+  }, [refreshNotifications, open]);
 
   const unreadFromList = useMemo(
     () => notifications.filter((item) => !item.isRead).length,

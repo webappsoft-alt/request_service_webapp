@@ -33,7 +33,6 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
-import { ackInboxBadges } from "@/lib/api/crm-client";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -143,7 +142,7 @@ export function EstimatesView() {
   // Debounce timer ref
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Opening Estimates ACKs the sidebar / dashboard estimate badge (persists across refresh).
+  // Opening Estimates clears the sidebar badge locally — no ack API.
   useEffect(() => {
     setPortalInboxCleared("estimates", true);
     window.dispatchEvent(
@@ -151,7 +150,6 @@ export function EstimatesView() {
         detail: { type: "ESTIMATES_TAB_OPENED" },
       }),
     );
-    void ackInboxBadges(["estimates"]).catch(() => undefined);
   }, []);
 
   const useApi =

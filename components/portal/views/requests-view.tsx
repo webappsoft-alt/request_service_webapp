@@ -27,13 +27,10 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { markUnreadLeadNotificationsRead } from "@/lib/api/notifications-client";
-import { ackInboxBadges } from "@/lib/api/crm-client";
 import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchRequests,
-  fetchRequestsSummary,
   invalidateRequestsCache,
   patchLeadStatus,
   REQUESTS_DEFAULT_LIMIT,
@@ -137,13 +134,18 @@ export function RequestsView() {
 
   const cacheKey = requestsCacheKey(apiStatus, search, page, limit);
   const cachedItems = reduxRequests.pagesCache[cacheKey];
-  const items =
-    Array.isArray(cachedItems) && cachedItems.length > 0
-      ? cachedItems
-      : reduxRequests.items.length > 0
-        ? reduxRequests.items
-        : [];
-  const hasCache = Array.isArray(cachedItems) && cachedItems.length > 0;
+  const hasCacheForKey = Array.isArray(cachedItems);
+  const hasDataForKey = Array.isArray(cachedItems) && cachedItems.length > 0;
+  const prevQueryRef = useRef({ page, search, status: apiStatus, limit });
+  const isFirstMountRef = useRef(true);
+
+  // While a search/filter/page change is loading, do not show the previous page's rows.
+  const items = hasCacheForKey
+    ? cachedItems
+    : actionLoading || reduxRequests.loading
+      ? []
+      : reduxRequests.items;
+  const hasCache = hasDataForKey;
 
   useEffect(() => {
     setSearchInput(search);
@@ -170,23 +172,21 @@ export function RequestsView() {
   );
 
   const refreshLeads = useCallback(
-    async (force = true) => {
-      setActionLoading(true);
+    async (options?: { showLoading?: boolean; invalidate?: boolean }) => {
+      const showLoading = options?.showLoading ?? true;
+      if (showLoading) setActionLoading(true);
       try {
-        if (force) dispatch(invalidateRequestsCache());
-        await Promise.allSettled([
-          dispatch(
-            fetchRequests({
-              page,
-              limit,
-              status: apiStatus,
-              search,
-              force: true,
-              silent: true,
-            }),
-          ).unwrap(),
-          dispatch(fetchRequestsSummary({ silent: true })).unwrap(),
-        ]);
+        if (options?.invalidate) dispatch(invalidateRequestsCache());
+        await dispatch(
+          fetchRequests({
+            page,
+            limit,
+            status: apiStatus,
+            search,
+            force: true,
+            silent: true,
+          }),
+        ).unwrap();
       } catch (error) {
         toast.error(
           typeof error === "string"
@@ -202,12 +202,29 @@ export function RequestsView() {
     [dispatch, page, limit, apiStatus, search],
   );
 
-  // Always revalidate from the API so new quote leads appear immediately.
+  // Cache-aware refresh: silent when returning with data; loading on first visit /
+  // empty cache / search-filter-page changes.
   useEffect(() => {
-    void refreshLeads(true);
-  }, [refreshLeads]);
+    const prev = prevQueryRef.current;
+    const queryChanged =
+      !isFirstMountRef.current &&
+      (prev.page !== page ||
+        prev.search !== search ||
+        prev.status !== apiStatus ||
+        prev.limit !== limit);
+    prevQueryRef.current = { page, search, status: apiStatus, limit };
 
-  // Opening Leads ACKs the sidebar badge (persists across refresh) — never changes lead status.
+    const cached = reduxRequests.pagesCache[cacheKey];
+    const hasData = Array.isArray(cached) && cached.length > 0;
+    const showLoading = queryChanged || !hasData;
+
+    if (isFirstMountRef.current) isFirstMountRef.current = false;
+
+    void refreshLeads({ showLoading, invalidate: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
+  }, [page, limit, apiStatus, search, cacheKey, refreshLeads]);
+
+  // Opening Leads clears the sidebar badge locally — counts stay on the socket.
   useEffect(() => {
     if (clearedLeadBadgesRef.current) return;
     clearedLeadBadgesRef.current = true;
@@ -215,8 +232,6 @@ export function RequestsView() {
     window.dispatchEvent(
       new CustomEvent("rs-realtime", { detail: { type: "LEADS_TAB_OPENED" } }),
     );
-    void markUnreadLeadNotificationsRead().catch(() => undefined);
-    void ackInboxBadges(["leads"]).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -263,7 +278,7 @@ export function RequestsView() {
         type === "ESTIMATE_ACCEPTED" ||
         type === "ORDER_UPDATED"
       ) {
-        void refreshLeads(true);
+        void refreshLeads({ showLoading: false, invalidate: false });
       }
     };
 
@@ -317,33 +332,8 @@ export function RequestsView() {
   // Server already filters by status/search; only apply archive listing locally.
   const rows = records.listed("request", enrichedSource, archivedOnly);
 
-  const summary = reduxRequests.summary;
-  const newLeadsCount =
-    summary?.newLeads ??
-    source.filter((r) => r.status === "new" || r.status === "viewed").length;
-  const activeLeadsCount =
-    summary?.activeLeads ??
-    source.filter(
-      (r) =>
-        r.status === "contacted" ||
-        r.status === "estimate_sent" ||
-        r.status === "accepted",
-    ).length;
-  const convertedLeadsCount =
-    summary?.convertedLeads ??
-    source.filter(
-      (r) =>
-        r.status === "converted_to_job" ||
-        r.status === "declined" ||
-        r.status === "closed",
-    ).length;
-  const unreadChatsCount =
-    summary?.unreadChats ??
-    source.reduce((acc, r) => acc + (r.unreadMessagesCount || 0), 0);
-
   const tableLoading =
-    actionLoading ||
-    (reduxRequests.loading && !hasCache && rows.length === 0);
+    actionLoading || (reduxRequests.loading && !hasCache && rows.length === 0);
 
   return (
     <PortalPage

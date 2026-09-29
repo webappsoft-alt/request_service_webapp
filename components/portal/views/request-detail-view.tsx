@@ -341,6 +341,7 @@ export function RequestDetailView({ id }: { id: string }) {
   const [remindersLoading, setRemindersLoading] = useState(false);
   const [apiSchedules, setApiSchedules] = useState<PortalCalendarEvent[] | null | undefined>(undefined);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [photosLoading, setPhotosLoading] = useState(false);
   const [unlinkingScheduleId, setUnlinkingScheduleId] = useState<string | null>(null);
   const [selectedScheduleForEdit, setSelectedScheduleForEdit] = useState<PortalCalendarEvent | null>(null);
   const loadedTabsRef = useRef<{
@@ -350,12 +351,16 @@ export function RequestDetailView({ id }: { id: string }) {
     tasks?: string;
     reminders?: string;
     schedule?: string;
+    photos?: string;
   }>({});
 
   const reduxRequests = useAppSelector((state) => state.requests);
   const cachedLead = reduxRequests.detailsCache[id];
   const allRequests = records.mergeRequests(requests);
-  const request = cachedLead || apiLead || allRequests.find((item) => item.id === id);
+  const request =
+    cachedLead ||
+    (apiLead?.id === id ? apiLead : null) ||
+    allRequests.find((item) => item.id === id);
 
   const tabKey = leadTabCacheKey(id, request?.customerId);
   const cachedCustomer = request?.customerId ? reduxRequests.customerCache[request.customerId] : undefined;
@@ -366,11 +371,14 @@ export function RequestDetailView({ id }: { id: string }) {
   const cachedSchedules = reduxRequests.scheduleCache[tabKey];
 
   const hasCustomerCached = Boolean(cachedCustomer);
-  const hasEstimatesCached = Boolean(cachedEstimates);
-  const hasJobsCached = Boolean(cachedJobs);
-  const hasTasksCached = Boolean(cachedTasks);
-  const hasRemindersCached = Boolean(cachedReminders);
-  const hasScheduleCached = cachedSchedules !== undefined;
+  /** True only when there is at least one row to show (empty [] still means "no data"). */
+  const hasEstimatesData = (cachedEstimates?.length ?? apiEstimates?.length ?? 0) > 0;
+  const hasJobsData = (cachedJobs?.length ?? apiJobs?.length ?? 0) > 0;
+  const hasTasksData = (cachedTasks?.length ?? apiTasks?.length ?? 0) > 0;
+  const hasRemindersData = (cachedReminders?.length ?? apiReminders?.length ?? 0) > 0;
+  const hasScheduleData =
+    (cachedSchedules?.length ?? (apiSchedules?.length ?? 0)) > 0;
+  const hasPhotosData = (request?.photoUrls?.length ?? 0) > 0;
 
   const detailFetchedForIdRef = useRef<string | null>(null);
 
@@ -472,13 +480,16 @@ export function RequestDetailView({ id }: { id: string }) {
 
   const relatedEstimates = useMemo(() => {
     const estId = (request as { estimateId?: string })?.estimateId;
+    // API already scopes by requestId when useApi; keep client filter as a safety net.
+    if (useApi && (cachedEstimates || apiEstimates)) {
+      return baseEstimates.filter(
+        (item) => !item.requestId || item.requestId === id || (estId && item.id === estId),
+      );
+    }
     return baseEstimates.filter(
-      (item) =>
-        item.requestId === id ||
-        (estId && item.id === estId) ||
-        (request?.customerId && item.customerId === request.customerId),
+      (item) => item.requestId === id || (estId && item.id === estId),
     );
-  }, [baseEstimates, id, request]);
+  }, [baseEstimates, id, request, useApi, cachedEstimates, apiEstimates]);
 
   const baseJobs = useMemo(() => {
     if (useApi) return cachedJobs ?? apiJobs ?? [];
@@ -488,21 +499,24 @@ export function RequestDetailView({ id }: { id: string }) {
   const relatedJobs = useMemo(() => {
     const estId = (request as { estimateId?: string })?.estimateId;
     const jId = (request as { jobId?: string })?.jobId;
+    // Lead jobs API scopes via estimate.requestId — trust that list when present.
+    if (useApi && (cachedJobs || apiJobs)) {
+      return baseJobs;
+    }
     return baseJobs.filter(
       (item) =>
         (item as { requestId?: string }).requestId === id ||
-        (request?.customerId && item.customerId === request.customerId) ||
         relatedEstimates.some((estimate) => estimate.id === item.estimateId) ||
         (estId && item.estimateId === estId) ||
         (jId && item.id === jId),
     );
-  }, [baseJobs, id, request, relatedEstimates]);
+  }, [baseJobs, id, request, relatedEstimates, useApi, cachedJobs, apiJobs]);
 
   const estimate = relatedEstimates[0];
   const job = relatedJobs[0];
 
   const refreshEstimates = useCallback(() => {
-    if (!hasEstimatesCached) setEstimatesLoading(true);
+    if (!hasEstimatesData) setEstimatesLoading(true);
     void dispatch(
       fetchLeadEstimates({
         customerId: request?.customerId || undefined,
@@ -517,10 +531,10 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setEstimatesLoading(false));
-  }, [id, request?.customerId, dispatch, hasEstimatesCached]);
+  }, [id, request?.customerId, dispatch, hasEstimatesData]);
 
   const refreshJobs = useCallback(() => {
-    if (!hasJobsCached) setJobsLoading(true);
+    if (!hasJobsData) setJobsLoading(true);
     void dispatch(
       fetchLeadJobs({
         customerId: request?.customerId || undefined,
@@ -535,10 +549,10 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setJobsLoading(false));
-  }, [id, request?.customerId, dispatch, hasJobsCached]);
+  }, [id, request?.customerId, dispatch, hasJobsData]);
 
   const refreshTasks = useCallback(() => {
-    if (!hasTasksCached) setTasksLoading(true);
+    if (!hasTasksData) setTasksLoading(true);
     void dispatch(
       fetchLeadTasks({
         customerId: request?.customerId || undefined,
@@ -553,10 +567,10 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setTasksLoading(false));
-  }, [id, request?.customerId, dispatch, hasTasksCached]);
+  }, [id, request?.customerId, dispatch, hasTasksData]);
 
   const refreshReminders = useCallback(() => {
-    if (!hasRemindersCached) setRemindersLoading(true);
+    if (!hasRemindersData) setRemindersLoading(true);
     void dispatch(
       fetchLeadReminders({
         customerId: request?.customerId || undefined,
@@ -571,30 +585,76 @@ export function RequestDetailView({ id }: { id: string }) {
       })
       .catch(() => undefined)
       .finally(() => setRemindersLoading(false));
-  }, [id, request?.customerId, dispatch, hasRemindersCached]);
+  }, [id, request?.customerId, dispatch, hasRemindersData]);
 
-  // Fetch data per tab or when lead status indicates estimate/job exists
+  const refreshSchedule = useCallback(() => {
+    if (!hasScheduleData) setScheduleLoading(true);
+    void dispatch(
+      fetchLeadSchedule({
+        requestId: id,
+        customerId: request?.customerId || undefined,
+      }),
+    )
+      .unwrap()
+      .then((result) => {
+        setApiSchedules(result?.events ?? []);
+      })
+      .catch(() => {
+        setApiSchedules([]);
+      })
+      .finally(() => setScheduleLoading(false));
+  }, [id, request?.customerId, dispatch, hasScheduleData]);
+
+  // Clear lead-scoped local state when opening a different lead.
+  useEffect(() => {
+    setApiLead(null);
+    setApiCustomer(null);
+    setApiEstimates(null);
+    setApiJobs(null);
+    setApiTasks(null);
+    setApiReminders(null);
+    setApiSchedules(undefined);
+    setCustomerLoading(false);
+    setEstimatesLoading(false);
+    setJobsLoading(false);
+    setTasksLoading(false);
+    setRemindersLoading(false);
+    setScheduleLoading(false);
+    setPhotosLoading(false);
+    loadedTabsRef.current = {};
+  }, [id]);
+
+  // Fetch / silent-refresh each lead tab when it becomes active.
   useEffect(() => {
     let cancelled = false;
+    if (!id) return () => undefined;
 
-    // 1. Customer tab active -> fetch customer if linked
+    const customerId = request?.customerId || undefined;
+
+    // Snapshot has-data at tab-open time (do not put these in effect deps).
+    const estimatesHaveData = (cachedEstimates?.length ?? apiEstimates?.length ?? 0) > 0;
+    const jobsHaveData = (cachedJobs?.length ?? apiJobs?.length ?? 0) > 0;
+    const tasksHaveData = (cachedTasks?.length ?? apiTasks?.length ?? 0) > 0;
+    const remindersHaveData = (cachedReminders?.length ?? apiReminders?.length ?? 0) > 0;
+    const scheduleHaveData =
+      (cachedSchedules?.length ?? (apiSchedules?.length ?? 0)) > 0;
+    const photosHaveData = (cachedLead?.photoUrls?.length ?? apiLead?.photoUrls?.length ?? 0) > 0;
+
+    // 1. Customer
     if (tab === "customer" && request?.customerId) {
-      if (loadedTabsRef.current.customer !== request.customerId) {
-        loadedTabsRef.current.customer = request.customerId;
-        if (!cachedCustomer) setCustomerLoading(true);
-        void dispatch(fetchLeadCustomer(request.customerId))
-          .unwrap()
-          .then((cust) => {
-            if (!cancelled && cust) setApiCustomer(cust);
-          })
-          .catch(() => undefined)
-          .finally(() => {
-            if (!cancelled) setCustomerLoading(false);
-          });
-      }
+      if (!cachedCustomer) setCustomerLoading(true);
+      void dispatch(fetchLeadCustomer(request.customerId))
+        .unwrap()
+        .then((cust) => {
+          if (!cancelled && cust) setApiCustomer(cust);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setCustomerLoading(false);
+        });
     }
 
-    // 2. Estimates tab active OR status indicates estimate exists -> fetch estimates for this lead
+    // 2. Estimates (also when Jobs needs them / status implies estimate)
     const shouldFetchEstimates =
       tab === "estimates" ||
       tab === "jobs" ||
@@ -602,66 +662,37 @@ export function RequestDetailView({ id }: { id: string }) {
       request?.status === "accepted" ||
       request?.status === "converted_to_job";
 
-    const estimatesFetchKey = `${id}_${request?.customerId || "none"}`;
-    if (shouldFetchEstimates && (id || request?.customerId)) {
-      if (loadedTabsRef.current.estimates !== estimatesFetchKey) {
-        loadedTabsRef.current.estimates = estimatesFetchKey;
-        if (!cachedEstimates) setEstimatesLoading(true);
-        void dispatch(
-          fetchLeadEstimates({
-            customerId: request?.customerId || undefined,
-            requestId: id,
-          }),
-        )
-          .unwrap()
-          .then((result) => {
-            if (!cancelled && result?.items) {
-              setApiEstimates(result.items);
-            }
-          })
-          .catch(() => undefined)
-          .finally(() => {
-            if (!cancelled) setEstimatesLoading(false);
-          });
-      }
+    if (shouldFetchEstimates) {
+      if (tab === "estimates" && !estimatesHaveData) setEstimatesLoading(true);
+      void dispatch(fetchLeadEstimates({ customerId, requestId: id }))
+        .unwrap()
+        .then((result) => {
+          if (!cancelled && result?.items) setApiEstimates(result.items);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setEstimatesLoading(false);
+        });
     }
 
-    // 3. Jobs tab active -> fetch jobs for this lead
-    const jobsFetchKey = `${id}_${request?.customerId || "none"}`;
-    if ((tab === "jobs" || request?.status === "converted_to_job") && (id || request?.customerId)) {
-      if (loadedTabsRef.current.jobs !== jobsFetchKey) {
-        loadedTabsRef.current.jobs = jobsFetchKey;
-        if (!cachedJobs) setJobsLoading(true);
-        void dispatch(
-          fetchLeadJobs({
-            customerId: request?.customerId || undefined,
-            requestId: id,
-          }),
-        )
-          .unwrap()
-          .then((result) => {
-            if (!cancelled && result?.items) {
-              setApiJobs(result.items);
-            }
-          })
-          .catch(() => undefined)
-          .finally(() => {
-            if (!cancelled) setJobsLoading(false);
-          });
-      }
+    // 3. Jobs
+    if (tab === "jobs" || request?.status === "converted_to_job") {
+      if (tab === "jobs" && !jobsHaveData) setJobsLoading(true);
+      void dispatch(fetchLeadJobs({ customerId, requestId: id }))
+        .unwrap()
+        .then((result) => {
+          if (!cancelled && result?.items) setApiJobs(result.items);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setJobsLoading(false);
+        });
     }
 
-    // 4. Tasks: fetch on lead load or when tab is active
-    const taskFetchKey = `${id}_${request?.customerId || "none"}`;
-    if (id && loadedTabsRef.current.tasks !== taskFetchKey) {
-      loadedTabsRef.current.tasks = taskFetchKey;
-      if (!cachedTasks) setTasksLoading(true);
-      void dispatch(
-        fetchLeadTasks({
-          customerId: request?.customerId || undefined,
-          requestId: id,
-        }),
-      )
+    // 4. Tasks
+    if (tab === "tasks") {
+      if (!tasksHaveData) setTasksLoading(true);
+      void dispatch(fetchLeadTasks({ customerId, requestId: id }))
         .unwrap()
         .then((result) => {
           if (!cancelled && result?.items) {
@@ -675,17 +706,10 @@ export function RequestDetailView({ id }: { id: string }) {
         });
     }
 
-    // 5. Reminders: fetch on lead load or when tab is active
-    const reminderFetchKey = `${id}_${request?.customerId || "none"}`;
-    if (id && loadedTabsRef.current.reminders !== reminderFetchKey) {
-      loadedTabsRef.current.reminders = reminderFetchKey;
-      if (!cachedReminders) setRemindersLoading(true);
-      void dispatch(
-        fetchLeadReminders({
-          customerId: request?.customerId || undefined,
-          requestId: id,
-        }),
-      )
+    // 5. Reminders
+    if (tab === "reminders") {
+      if (!remindersHaveData) setRemindersLoading(true);
+      void dispatch(fetchLeadReminders({ customerId, requestId: id }))
         .unwrap()
         .then((result) => {
           if (!cancelled && result?.items) {
@@ -699,51 +723,47 @@ export function RequestDetailView({ id }: { id: string }) {
         });
     }
 
-    // 6. Schedule tab: cache-first like Customer — fetch only when Schedule is open and uncached.
-    const scheduleFetchKey = `${id}_${request?.customerId || "none"}`;
-    if (tab === "schedule" && id) {
-      if (hasScheduleCached) {
-        loadedTabsRef.current.schedule = scheduleFetchKey;
-        if (cachedSchedules) setApiSchedules(cachedSchedules);
-      } else if (loadedTabsRef.current.schedule !== scheduleFetchKey) {
-        loadedTabsRef.current.schedule = scheduleFetchKey;
-        setScheduleLoading(true);
-        void dispatch(
-          fetchLeadSchedule({
-            requestId: id,
-            customerId: request?.customerId || undefined,
-          }),
-        )
-          .unwrap()
-          .then((result) => {
-            if (!cancelled && result?.events) {
-              setApiSchedules(result.events);
-            }
-          })
-          .catch(() => undefined)
-          .finally(() => {
-            if (!cancelled) setScheduleLoading(false);
-          });
-      }
+    // 6. Schedule
+    if (tab === "schedule") {
+      if (!scheduleHaveData) setScheduleLoading(true);
+      void dispatch(fetchLeadSchedule({ requestId: id, customerId }))
+        .unwrap()
+        .then((result) => {
+          if (!cancelled) setApiSchedules(result?.events ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setApiSchedules([]);
+        })
+        .finally(() => {
+          if (!cancelled) setScheduleLoading(false);
+        });
+    }
+
+    // 7. Photos — revalidate detail; spinner only when no photos to show yet
+    if (tab === "photos") {
+      if (!photosHaveData) setPhotosLoading(true);
+      void dispatch(fetchRequestDetail(id))
+        .unwrap()
+        .then((item) => {
+          if (!cancelled && item) {
+            setApiLead(preserveScheduledLeadState(item, cachedLead || null));
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          // Always clear so a cancelled/re-run effect cannot leave an endless spinner.
+          setPhotosLoading(false);
+        });
+    } else {
+      setPhotosLoading(false);
     }
 
     return () => {
       cancelled = true;
     };
-  }, [
-    tab,
-    id,
-    request?.customerId,
-    request?.status,
-    crm,
-    dispatch,
-    Boolean(cachedCustomer),
-    Boolean(cachedEstimates),
-    Boolean(cachedJobs),
-    Boolean(cachedTasks),
-    Boolean(cachedReminders),
-    hasScheduleCached,
-  ]);
+    // Only re-run when the active tab or lead changes (not when cache fills).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: tab-open refresh
+  }, [tab, id, request?.customerId, request?.status, dispatch]);
 
   const allReminders = useMemo(() => {
     if (useApi) return cachedReminders ?? apiReminders ?? [];
@@ -756,33 +776,34 @@ export function RequestDetailView({ id }: { id: string }) {
   }, [useApi, cachedTasks, apiTasks, tasks]);
 
   const relatedReminders = useMemo(() => {
+    // API already scopes by subjectKind=request + subjectId; trust that list when present.
+    if (useApi && (cachedReminders || apiReminders)) {
+      return allReminders;
+    }
     return allReminders.filter(
       (item) =>
         reminderMatches(item, "request", id) ||
+        (item.subjectKind === "request" && item.subjectId === id) ||
         item.subjectId === id ||
-        (request?.customerId &&
-          (item.customerId === request.customerId ||
-            item.subjectId === request.customerId ||
-            reminderMatches(item, "customer", request.customerId))) ||
         (item.subjectKind === "estimate" && relatedEstimates.some((e) => e.id === item.subjectId)) ||
         (item.subjectKind === "job" && relatedJobs.some((j) => j.id === item.subjectId)),
     );
-  }, [allReminders, id, request?.customerId, relatedEstimates, relatedJobs]);
+  }, [allReminders, id, relatedEstimates, relatedJobs, useApi, cachedReminders, apiReminders]);
 
   const relatedTasks = useMemo(() => {
+    if (useApi && (cachedTasks || apiTasks)) {
+      return allTasks;
+    }
     return allTasks.filter(
       (item) =>
         taskMatches(item, "request", id) ||
+        (item.subjectKind === "request" && item.subjectId === id) ||
         item.subjectId === id ||
-        (request?.customerId &&
-          (item.customerId === request.customerId ||
-            item.subjectId === request.customerId ||
-            taskMatches(item, "customer", request.customerId))) ||
         (item.jobId && relatedJobs.some((j) => j.id === item.jobId)) ||
         (item.subjectKind === "job" && relatedJobs.some((j) => j.id === item.subjectId)) ||
         (item.subjectKind === "estimate" && relatedEstimates.some((e) => e.id === item.subjectId)),
     );
-  }, [allTasks, id, request?.customerId, relatedJobs, relatedEstimates]);
+  }, [allTasks, id, relatedJobs, relatedEstimates, useApi, cachedTasks, apiTasks]);
 
   const displayedTasks = useMemo(() => {
     let list = relatedTasks;
@@ -871,12 +892,11 @@ export function RequestDetailView({ id }: { id: string }) {
   };
 
   const scheduledVisits: PortalCalendarEvent[] = useMemo(() => {
+    // Only lead-scoped schedule from the lead API / cache — never the global calendar.
     if (cachedSchedules !== undefined) return cachedSchedules;
     if (apiSchedules !== undefined && apiSchedules !== null) return apiSchedules;
-    return events.filter(
-      (item) => item.kind === "request" && (item.recordId === id || item.id === `cal_${id}`),
-    );
-  }, [cachedSchedules, apiSchedules, events, id]);
+    return [];
+  }, [cachedSchedules, apiSchedules]);
 
   // Local-only heal: if a visit is on the calendar but badge still says Viewed, promote in Redux.
   // Do NOT PUT /status here — that re-fetches inbox noise and fails when API rejects "scheduled".
@@ -925,25 +945,22 @@ export function RequestDetailView({ id }: { id: string }) {
         dispatch(removeLeadScheduleLocal({ key: tabKey, id: targetVisit.id }));
       }
       setApiSchedules((prev) => (prev ? prev.filter((item) => item.id !== targetVisit.id) : []));
+      // Revalidate lead schedule so calendar/list stay in sync without a page refresh.
+      void dispatch(
+        fetchLeadSchedule({
+          requestId: id,
+          customerId: request?.customerId || undefined,
+        }),
+      )
+        .unwrap()
+        .then((result) => setApiSchedules(result?.events ?? []))
+        .catch(() => undefined);
       toast.success("Schedule visit unlinked.");
     } catch (err) {
       toast.error(typeof err === "string" ? err : "Failed to unlink schedule.");
     } finally {
       setUnlinkingScheduleId(null);
     }
-  };
-
-  const defaultRequestEvent: PortalCalendarEvent = {
-    id: `cal_${id}`,
-    kind: "request",
-    recordId: id,
-    title: request?.number ?? "Lead",
-    detail: request?.serviceName ?? "",
-    customerName: request?.customerName,
-    date: request?.preferredDate,
-    timeWindow: windowFromLabel(request?.preferredTimeWindow),
-    href: `/pro/dashboard/requests/${id}`,
-    status: request?.status ?? "new",
   };
 
   const thread =
@@ -1044,23 +1061,10 @@ export function RequestDetailView({ id }: { id: string }) {
   }
 
   // NOTE: must be declared before the early return to satisfy Rules of Hooks
+  // Lead Schedule tab shows only this lead's visits — never the overall provider calendar.
   const calendarEvents = useMemo(() => {
-    const list = events.filter(
-      (item) =>
-        !(
-          item.kind === "request" &&
-          (item.recordId === id ||
-            item.id === `cal_${id}` ||
-            scheduledVisits.some((v) => v.id === item.id))
-        ),
-    );
-    if (scheduledVisits.length > 0) {
-      list.push(...scheduledVisits);
-    } else if (defaultRequestEvent.date) {
-      list.push(defaultRequestEvent);
-    }
-    return list;
-  }, [events, scheduledVisits, id, defaultRequestEvent]);
+    return [...scheduledVisits];
+  }, [scheduledVisits]);
 
   if (!request) {
     if (pending) {
@@ -1684,7 +1688,7 @@ export function RequestDetailView({ id }: { id: string }) {
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm text-muted-foreground">
-                        {estimatesLoading && !hasEstimatesCached
+                        {estimatesLoading && !hasEstimatesData
                           ? "Loading estimates..."
                           : relatedEstimates.length
                             ? `${relatedEstimates.length} estimate${relatedEstimates.length === 1 ? "" : "s"} from this lead`
@@ -1698,12 +1702,12 @@ export function RequestDetailView({ id }: { id: string }) {
                         </Button>
                       ) : null}
                     </div>
-                    {(estimatesLoading && !hasEstimatesCached) || relatedEstimates.length ? (
+                    {(estimatesLoading && !hasEstimatesData) || relatedEstimates.length ? (
                       <PortalDataTable
                         filename={`${request.number}-estimates`}
                         countLabel="Estimates"
                         searchPlaceholder="Search estimates"
-                        loading={estimatesLoading && !hasEstimatesCached}
+                        loading={estimatesLoading && !hasEstimatesData}
                         rows={relatedEstimates}
                         rowKey={(row) => row.id}
                         rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
@@ -1719,6 +1723,79 @@ export function RequestDetailView({ id }: { id: string }) {
                                 {row.number}
                               </Link>
                             ),
+                          },
+                          {
+                            id: "name",
+                            header: "Estimate name",
+                            sortValue: (row) => row.title?.trim() || "",
+                            searchValue: (row) => row.title?.trim() || "",
+                            exportValue: (row) => row.title?.trim() || "",
+                            cell: (row) => row.title?.trim() || "—",
+                          },
+                          {
+                            id: "issued",
+                            header: "Issued",
+                            sortValue: (row) => row.issuedAt,
+                            searchValue: (row) => formatDate(row.issuedAt),
+                            exportValue: (row) => formatDate(row.issuedAt),
+                            cell: (row) => formatDate(row.issuedAt),
+                          },
+                          {
+                            id: "siteVisit",
+                            header: "Site visit",
+                            sortValue: (row) => row.siteVisit?.visitedAt || "",
+                            searchValue: (row) =>
+                              row.siteVisit?.visitedAt
+                                ? formatDate(row.siteVisit.visitedAt)
+                                : "",
+                            exportValue: (row) =>
+                              row.siteVisit?.visitedAt
+                                ? formatDate(row.siteVisit.visitedAt)
+                                : "",
+                            cell: (row) =>
+                              row.siteVisit?.visitedAt
+                                ? formatDate(row.siteVisit.visitedAt)
+                                : "—",
+                          },
+                          {
+                            id: "technician",
+                            header: "Technician",
+                            sortValue: (row) => {
+                              const visit = row.siteVisit;
+                              if (visit?.technician?.trim()) return visit.technician.trim();
+                              if (visit?.employeeId) return employeeLabel(visit.employeeId);
+                              return "";
+                            },
+                            searchValue: (row) => {
+                              const visit = row.siteVisit;
+                              if (visit?.technician?.trim()) return visit.technician.trim();
+                              if (visit?.employeeId) return employeeLabel(visit.employeeId);
+                              return "";
+                            },
+                            exportValue: (row) => {
+                              const visit = row.siteVisit;
+                              if (visit?.technician?.trim()) return visit.technician.trim();
+                              if (visit?.employeeId) return employeeLabel(visit.employeeId);
+                              return "";
+                            },
+                            cell: (row) => {
+                              const visit = row.siteVisit;
+                              if (visit?.technician?.trim()) return visit.technician.trim();
+                              if (visit?.employeeId) {
+                                const name = employeeLabel(visit.employeeId);
+                                return name && name !== visit.employeeId ? name : "—";
+                              }
+                              return "—";
+                            },
+                          },
+                          {
+                            id: "total",
+                            header: "Total",
+                            sortValue: (row) => row.total,
+                            searchValue: (row) => formatMoney(row.total),
+                            exportValue: (row) => formatMoney(row.total),
+                            className: "tabular-nums",
+                            cell: (row) => formatMoney(row.total),
                           },
                           {
                             id: "status",
@@ -1742,12 +1819,12 @@ export function RequestDetailView({ id }: { id: string }) {
               return (
                 <LeadCard hideHeader>
                   <div>
-                    {(jobsLoading && !hasJobsCached) || relatedJobs.length ? (
+                    {(jobsLoading && !hasJobsData) || relatedJobs.length ? (
                       <PortalDataTable
                         filename={`${request.number}-jobs`}
                         countLabel="Jobs"
                         searchPlaceholder="Search jobs"
-                        loading={jobsLoading && !hasJobsCached}
+                        loading={jobsLoading && !hasJobsData}
                         rows={relatedJobs}
                         rowKey={(row) => row.id}
                         rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
@@ -1774,6 +1851,13 @@ export function RequestDetailView({ id }: { id: string }) {
               );
             case "schedule": {
               const visitsCount = scheduledVisits.length;
+              if (scheduleLoading && !hasScheduleData) {
+                return (
+                  <div className="border-border-soft bg-card" aria-busy="true">
+                    <CenteredSpinner label="Loading schedule…" className="min-h-[16rem]" />
+                  </div>
+                );
+              }
               return (
                 <div className="space-y-0">
                   {/* Toolbar — attached secondary bar (no floating title + gap) */}
@@ -1878,7 +1962,7 @@ export function RequestDetailView({ id }: { id: string }) {
                     </p>
                   )}
 
-                  {/* Calendar — toolbar is the bar; no nested card title */}
+                  {/* Calendar — only this lead's visits */}
                   <EventCalendar
                     events={calendarEvents}
                     employees={employees}
@@ -1893,12 +1977,12 @@ export function RequestDetailView({ id }: { id: string }) {
               );
             }
             case "tasks":
-              return (tasksLoading && !hasTasksCached) || displayedTasks.length ? (
+              return (tasksLoading && !hasTasksData) || displayedTasks.length ? (
                     <PortalDataTable
                       filename={`${request.number}-tasks`}
                       countLabel="Tasks"
                       searchPlaceholder="Search tasks"
-                      loading={tasksLoading && !hasTasksCached}
+                      loading={tasksLoading && !hasTasksData}
                       rows={displayedTasks}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/tasks/${row.id}`}
@@ -2088,12 +2172,12 @@ export function RequestDetailView({ id }: { id: string }) {
                     </div>
                   );
             case "reminders":
-              return (remindersLoading && !hasRemindersCached) || displayedReminders.length ? (
+              return (remindersLoading && !hasRemindersData) || displayedReminders.length ? (
                     <PortalDataTable
                       filename={`${request.number}-reminders`}
                       countLabel="Reminders"
                       searchPlaceholder="Search reminders"
-                      loading={remindersLoading && !hasRemindersCached}
+                      loading={remindersLoading && !hasRemindersData}
                       rows={displayedReminders}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
@@ -2387,7 +2471,9 @@ export function RequestDetailView({ id }: { id: string }) {
               return (
                 <LeadCard hideHeader>
                   <div>
-                    {request.photoUrls.length ? (
+                    {photosLoading && !hasPhotosData ? (
+                      <CenteredSpinner label="Loading photos…" className="min-h-[12rem]" />
+                    ) : hasPhotosData ? (
                       <div className="space-y-3">
                         <p className="text-sm text-muted-foreground">
                           {request.photoUrls.length} photo
@@ -2526,6 +2612,16 @@ export function RequestDetailView({ id }: { id: string }) {
               else list.push(savedEvent);
               return list;
             });
+            // Revalidate so list + calendar reflect the latest server state immediately.
+            void dispatch(
+              fetchLeadSchedule({
+                requestId: id,
+                customerId: request?.customerId || undefined,
+              }),
+            )
+              .unwrap()
+              .then((result) => setApiSchedules(result?.events ?? []))
+              .catch(() => undefined);
             // Do not call assign() again — bookLeadSchedule/updateLeadSchedule
             // already persisted the calendar row (avoids collision + status races).
             const scheduledIso = assignment.date
@@ -2558,8 +2654,8 @@ export function RequestDetailView({ id }: { id: string }) {
       <CreateTaskDialog
         open={taskOpen || Boolean(editingTask)}
         task={editingTask}
-        subjectKind={request.customerId ? "customer" : undefined}
-        subjectId={request.customerId || undefined}
+        subjectKind="request"
+        subjectId={request.id}
         onOpenChange={(next) => {
           setTaskOpen(next);
           if (!next) setEditingTask(null);

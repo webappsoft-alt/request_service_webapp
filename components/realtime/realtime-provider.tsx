@@ -19,6 +19,7 @@ import {
   emitChatMarkRead,
   onSocketEvent,
   queryPresence,
+  requestProviderInboxCounts,
   type RealtimeEvents,
 } from "@/components/socket";
 import { normalizeSocketNotification, notificationHref } from "@/lib/api/notifications-client";
@@ -140,7 +141,10 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       }
       // Re-sync sidebar / badge counts after connect or reconnect (shared socket only).
       broadcastRealtime({ type: "SOCKET_RECONNECTED" });
-      broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload: { reason: "socket_connect" } });
+      // Provider counts arrive via provider:inbox-counts — no REST inbox-summary.
+      if (authRole === "provider") {
+        requestProviderInboxCounts();
+      }
       broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload: { reason: "socket_connect" } });
       socket.emit("presence:support", {}, (res: { ok?: boolean; isOnline?: boolean }) => {
         if (res?.ok) setSupportOnline(Boolean(res.isOnline));
@@ -433,6 +437,19 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       }),
       onSocketEvent("INBOX_SUMMARY_INVALIDATE", (payload) => {
         broadcastRealtime({ type: "INBOX_SUMMARY_INVALIDATE", payload });
+      }),
+      onSocketEvent("provider:inbox-counts", (payload) => {
+        broadcastRealtime({
+          type: "INBOX_SUMMARY_APPLY",
+          payload: {
+            newLeads: Number(payload?.newLeads) || 0,
+            unreadChats: Number(payload?.unreadChats) || 0,
+            pendingOrders: Number(payload?.pendingOrders) || 0,
+            total: Number(payload?.total) || 0,
+            reason: payload?.reason,
+            kinds: payload?.kinds,
+          },
+        });
       }),
       onSocketEvent("ORDER_UPDATED", (payload) => {
         broadcastRealtime({ type: "ORDER_UPDATED", payload });

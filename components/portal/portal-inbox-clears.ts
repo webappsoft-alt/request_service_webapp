@@ -3,7 +3,7 @@
  * Survives remounts and page refresh (localStorage).
  * Cleared flags reset when a new matching realtime event arrives.
  * Independent of header "Mark all read".
- * Server-side ACK (inbox-summary/ack) is the source of truth after refresh.
+ * Tab opens clear badges locally — sidebar counts come from the socket only.
  */
 
 export type PortalInboxClearKind = "leads" | "orders" | "estimates";

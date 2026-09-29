@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { invalidateGetCache } from "@/components/api/apiFuntions";
 import { publicApi } from "@/components/api/ApiRoutesFile";
-import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { useAppDispatch, useAppStore } from "@/store/hooks";
 import {
   fetchParentCategories,
@@ -27,7 +26,6 @@ const PUBLIC_CACHE_ROOTS = [
   publicApi.professionalsRelated,
 ] as const;
 
-const HIDDEN_REFRESH_MS = 20_000;
 const PUBLIC_INVALIDATE_EVENT = "rs-public-invalidate";
 
 function bustPublicHttpCache() {
@@ -36,77 +34,56 @@ function bustPublicHttpCache() {
   }
 }
 
+function isCustomerCatalogPath(pathname: string) {
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/services") ||
+    pathname.startsWith("/find-a-professional") ||
+    pathname.startsWith("/get-a-quote") ||
+    pathname.startsWith("/professionals") ||
+    pathname.startsWith("/fixed-services")
+  );
+}
+
 /**
- * Keeps public marketplace data fresh:
- * - HTTP GET cache for fast revisits
- * - Soft-stale Redux + cache bust + refetch on tab focus / realtime / explicit invalidate
+ * Public marketplace cache helper.
+ * - No visibility / timer / polling refresh (those were firing on provider too).
+ * - Explicit invalidate (e.g. after a fixed-service order) only refetches on
+ *   customer catalog routes; listing pages still fetch on location/filter/search.
  */
 export function PublicDataSync() {
   const dispatch = useAppDispatch();
   const store = useAppStore();
-  const hiddenAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    function softRefreshPublicCatalog() {
+    function onExplicitInvalidate() {
       bustPublicHttpCache();
       dispatch(markParentCategoriesStale());
       dispatch(invalidateSubcategories());
       dispatch(markPublicFixedServicesStale());
       dispatch(markPublicProfessionalsStale());
 
+      if (typeof window === "undefined") return;
+      if (!isCustomerCatalogPath(window.location.pathname)) return;
+
       const state = store.getState();
       void dispatch(fetchParentCategories());
-
-      if (state.publicFixedServices.query) {
+      // Only refresh lists that were already loaded on this customer page.
+      if (state.publicFixedServices.loaded) {
         void dispatch(
           fetchPublicFixedServices({ query: state.publicFixedServices.query }),
         );
       }
-      if (state.publicProfessionals.query) {
+      if (state.publicProfessionals.loaded) {
         void dispatch(
           fetchPublicProfessionals({ query: state.publicProfessionals.query }),
         );
       }
     }
 
-    function onVisibility() {
-      if (document.visibilityState === "hidden") {
-        hiddenAtRef.current = Date.now();
-        return;
-      }
-      const hiddenAt = hiddenAtRef.current;
-      hiddenAtRef.current = null;
-      if (hiddenAt == null) return;
-      if (Date.now() - hiddenAt < HIDDEN_REFRESH_MS) return;
-      softRefreshPublicCatalog();
-    }
-
-    function onExplicitInvalidate() {
-      softRefreshPublicCatalog();
-    }
-
-    const unsubRealtime = subscribeRealtime((detail) => {
-      const type = typeof detail.type === "string" ? detail.type : "";
-      if (
-        type === "ORDER_UPDATED" ||
-        type === "ESTIMATE_ACCEPTED" ||
-        type === "LEAD_CREATED" ||
-        type === "INBOX_SUMMARY_INVALIDATE" ||
-        type === "NEW_NOTIFICATION"
-      ) {
-        bustPublicHttpCache();
-        if (type === "ORDER_UPDATED" || type === "ESTIMATE_ACCEPTED") {
-          softRefreshPublicCatalog();
-        }
-      }
-    });
-
-    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener(PUBLIC_INVALIDATE_EVENT, onExplicitInvalidate);
 
     return () => {
-      unsubRealtime();
-      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener(PUBLIC_INVALIDATE_EVENT, onExplicitInvalidate);
     };
   }, [dispatch, store]);

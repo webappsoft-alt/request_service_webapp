@@ -178,6 +178,7 @@ export const CRM_TASK_SUBJECT_KINDS: ReminderSubjectKind[] = [
   "customer",
   "job",
   "estimate",
+  "request",
   "contractor",
   "vendor",
 ];

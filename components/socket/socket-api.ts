@@ -111,6 +111,21 @@ export type RealtimeEvents = {
   INBOX_SUMMARY_INVALIDATE: {
     reason?: string;
     threadId?: string;
+    kinds?: string[];
+  };
+  /** Provider sidebar badge counts — pushed over the shared socket (no REST). */
+  "provider:inbox-counts": {
+    newLeads?: number;
+    unreadChats?: number;
+    pendingOrders?: number;
+    total?: number;
+    reason?: string;
+    kinds?: string[];
+    inboxAck?: {
+      leadsSeenAt?: string | null;
+      ordersSeenAt?: string | null;
+      estimatesSeenAt?: string | null;
+    } | null;
   };
   ESTIMATE_ACCEPTED: {
     estimateId?: string;
@@ -303,6 +318,20 @@ export function emitChatTyping(
 export function emitChatMarkRead(threadId: string) {
   if (!sharedSocket || !threadId) return;
   sharedSocket.emit("chat:mark_read", { threadId });
+}
+
+/** Request provider sidebar badge counts over the shared socket (no REST). */
+export function requestProviderInboxCounts() {
+  if (!sharedSocket) return;
+  sharedSocket.emit("provider:inbox-counts:get");
+}
+
+/** Persist badge ACK when opening Leads / Orders / Estimates (socket, not REST). */
+export function ackProviderInboxBadges(
+  kinds: Array<"leads" | "orders" | "estimates">,
+) {
+  if (!sharedSocket || !kinds?.length) return;
+  sharedSocket.emit("provider:inbox-ack", { kinds });
 }
 
 export function queryPresence(

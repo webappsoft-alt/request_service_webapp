@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
   fetchCustomers,
   upsertCustomerTask,
@@ -8,8 +8,8 @@ import {
   removeCustomerTaskLocal,
   removeCustomerReminderLocal,
 } from "@/store/customersSlice";
-import { upsertTaskItem, removeTaskItemLocal, fetchTasks } from "@/store/tasksSlice";
-import { upsertReminderItem, removeReminderItemLocal, fetchReminders } from "@/store/remindersSlice";
+import { upsertTaskItem, removeTaskItemLocal } from "@/store/tasksSlice";
+import { upsertReminderItem, removeReminderItemLocal } from "@/store/remindersSlice";
 import {
   archiveCustomer,
   createContractor as createContractorApi,
@@ -169,17 +169,6 @@ export function useCrmDirectory() {
     if (suppressSeedData) return local;
     return [...seedCustomers, ...local];
   }, [apiReady, crm.customers, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
-
-  const initFetchedRef = useRef(false);
-
-  useEffect(() => {
-    if (crm.enabled && !initFetchedRef.current) {
-      initFetchedRef.current = true;
-      void dispatch(fetchCustomers({ limit: 100, force: true }));
-      void dispatch(fetchTasks({ limit: 100 }));
-      void dispatch(fetchReminders());
-    }
-  }, [crm.enabled, dispatch]);
 
   const loading = crm.enabled && customers.length === 0 && (reduxLoading || !crm.ready);
   const contractors = useMemo(

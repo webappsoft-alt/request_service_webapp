@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { handleUserLogout } from "@/components/api/apiFuntions";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAppSelector } from "@/store/hooks";
 import {
   selectAuth,
   selectAuthProvider,
   selectAuthUser,
   selectIsAuthenticated,
 } from "@/store/authSlice";
-import { fetchServiceAreasPicker } from "@/store/serviceAreasSlice";
 import type { DemoSession } from "@/lib/auth/demo-session";
 import { coverageNeighborhoodLabels, formatServiceAreaCoverageLabels } from "@/lib/coverage-areas";
 import type { PortalActivity, PortalRevenuePoint } from "@/lib/data/portal";
@@ -188,7 +187,6 @@ function subscriptionFromAuth(
 }
 
 export function usePortalWorkspace() {
-  const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const authProvider = useAppSelector(selectAuthProvider);
@@ -205,11 +203,8 @@ export function usePortalWorkspace() {
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
 
-  useEffect(() => {
-    if (!isProvider) return;
-    void dispatch(fetchServiceAreasPicker());
-  }, [dispatch, isProvider]);
-
+  // Service areas are loaded only on Profile / Services pages (not globally).
+  // Reuse whatever is already in the store when present.
   const areasById = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const area of [...listItems, ...pickerItems]) {

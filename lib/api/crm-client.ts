@@ -616,6 +616,7 @@ function taskPayload(task: PortalTask) {
     "estimate",
     "contractor",
     "vendor",
+    "request",
   ] as const;
 
   const subjectKind = normalizeStatus(
@@ -710,6 +711,8 @@ export type CrmListQuery = {
   kind?: string;
   startDate?: string;
   endDate?: string;
+  /** Calendar event linked record (lead / estimate / job / task id) */
+  recordId?: string;
   type?: string;
   silent?: boolean;
   force?: boolean;
@@ -2206,16 +2209,18 @@ export async function listSchedule(options?: CrmRequestOptions) {
   );
 }
 
-/** GET /api/provider/schedule?customerId=&employeeId=&contractorId=&startDate=&endDate=&kind= */
+/** GET /api/provider/schedule?customerId=&recordId=&employeeId=&contractorId=&startDate=&endDate=&kind= */
 export async function querySchedule(query: CrmListQuery = {}) {
   const params: Record<string, string | number> = {};
   const customerId = query.customerId?.trim();
+  const recordId = query.recordId?.trim();
   const employeeId = query.employeeId?.trim();
   const contractorId = query.contractorId?.trim();
   const startDate = query.startDate?.trim();
   const endDate = query.endDate?.trim();
   const kind = query.kind?.trim();
   if (customerId) params.customerId = customerId;
+  if (recordId) params.recordId = recordId;
   if (employeeId) params.employeeId = employeeId;
   if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;

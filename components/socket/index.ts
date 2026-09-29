@@ -14,6 +14,8 @@ export {
   leaveChatThread,
   emitChatTyping,
   emitChatMarkRead,
+  requestProviderInboxCounts,
+  ackProviderInboxBadges,
   queryPresence,
   onSocketEvent,
   onRealtime,

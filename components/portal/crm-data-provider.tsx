@@ -10,7 +10,6 @@ import {
   type PropsWithChildren,
 } from "react";
 import {
-  getInboxSummary,
   loadCrmSnapshot,
   type CrmSnapshot,
 } from "@/lib/api/crm-client";
@@ -27,13 +26,8 @@ import type { ChatThread } from "@/lib/booking/chat-store";
 import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
-import { getAuthToken, getAuthUser, invalidateGetCache } from "@/components/api/apiFuntions";
-
-function refreshInboxSummaryFromApi() {
-  invalidateGetCache("provider/requests/summary");
-  invalidateGetCache("provider/chats/inbox-summary");
-  return getInboxSummary({ silent: true, force: true });
-}
+import { getAuthToken, getAuthUser } from "@/components/api/apiFuntions";
+import { requestProviderInboxCounts } from "@/components/socket";
 
 const EVENT_NAME = "rs-crm-api";
 
@@ -359,26 +353,9 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    // Lightweight badge data only — do NOT load the full CRM snapshot here.
-    // Full snapshot is opt-in via ensureLoaded() / refresh() so Customers
-    // (and similar list pages) are not flooded with unrelated APIs.
-    let cancelled = false;
-    void refreshInboxSummaryFromApi()
-      .then((inboxSummary) => {
-        if (cancelled || !mountedRef.current) return;
-        setState((current) => ({
-          ...current,
-          inboxSummary,
-          error: null,
-        }));
-      })
-      .catch(() => {
-        /* badge is best-effort */
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    // Sidebar badge counts come from the shared socket (provider:inbox-counts).
+    // Do NOT GET inbox-summary / requests/summary on mount or nav.
+    requestProviderInboxCounts();
   }, [enabled, flushWaiters]);
 
   // No setInterval polling — full snapshot must not auto-fire on a timer.
@@ -390,14 +367,10 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       if (!mountedRef.current) return;
       setState((current) => ({ ...current, inboxSummary }));
     };
-    const onExternalRefresh = () => {
-      // Keep badge counters fresh. Full snapshot is NEVER auto-fired from
-      // background events — individual tabs manage only their own data.
+    const requestCountsSoon = () => {
       window.clearTimeout(debounceId);
       debounceId = window.setTimeout(() => {
-        void refreshInboxSummaryFromApi()
-          .then(applyInboxSummary)
-          .catch(() => undefined);
+        requestProviderInboxCounts();
       }, 300);
     };
 
@@ -414,9 +387,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             total: (current.inboxSummary?.total || 0) + 1,
           },
         }));
-        void refreshInboxSummaryFromApi()
-          .then(applyInboxSummary)
-          .catch(() => undefined);
+        requestCountsSoon();
         return;
       }
 
@@ -450,9 +421,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             },
           }));
         }
-        void refreshInboxSummaryFromApi()
-          .then(applyInboxSummary)
-          .catch(() => undefined);
+        requestCountsSoon();
         return;
       }
 
@@ -467,17 +436,46 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
               total: (current.inboxSummary?.total || 0) + 1,
             },
           }));
-          void refreshInboxSummaryFromApi()
-            .then(applyInboxSummary)
-            .catch(() => undefined);
+          requestCountsSoon();
+        }
+        return;
+      }
+
+      if (detail?.type === "INBOX_SUMMARY_APPLY") {
+        const summary = detail?.payload as
+          | (CrmInboxSummary & { reason?: string; kinds?: string[] })
+          | undefined;
+        if (summary && typeof summary === "object") {
+          applyInboxSummary({
+            newLeads: Number(summary.newLeads) || 0,
+            unreadChats: Number(summary.unreadChats) || 0,
+            pendingOrders: Number(summary.pendingOrders) || 0,
+            total: Number(summary.total) || 0,
+          });
         }
         return;
       }
 
       if (detail?.type === "INBOX_SUMMARY_INVALIDATE") {
-        void refreshInboxSummaryFromApi()
-          .then(applyInboxSummary)
-          .catch(() => undefined);
+        const reason = String(detail?.payload?.reason || "");
+        // Socket ACK clears badges locally; exact counts arrive via provider:inbox-counts.
+        if (reason === "INBOX_ACK") {
+          const kinds = Array.isArray(detail?.payload?.kinds)
+            ? detail.payload.kinds.map((k: unknown) => String(k || "").toLowerCase())
+            : [];
+          setState((current) => {
+            const next = { ...current.inboxSummary };
+            if (kinds.includes("leads")) next.newLeads = 0;
+            if (kinds.includes("orders")) next.pendingOrders = 0;
+            next.total =
+              (next.newLeads || 0) +
+              (next.unreadChats || 0) +
+              (next.pendingOrders || 0);
+            return { ...current, inboxSummary: next };
+          });
+          return;
+        }
+        requestCountsSoon();
         return;
       }
 
@@ -502,15 +500,48 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
             ),
           },
         }));
-        void refreshInboxSummaryFromApi()
-          .then(applyInboxSummary)
-          .catch(() => undefined);
+        requestCountsSoon();
         return;
       }
 
-      // Do NOT trigger full CRM snapshot refresh for chat/presence/typing events!
-      // Chat messages, read receipts, typing, and presence are handled in real-time
-      // by the chat socket listeners directly.
+      if (detail?.type === "LEADS_TAB_OPENED") {
+        setState((current) => ({
+          ...current,
+          inboxSummary: {
+            ...current.inboxSummary,
+            newLeads: 0,
+            total:
+              (current.inboxSummary?.unreadChats || 0) +
+              (current.inboxSummary?.pendingOrders || 0),
+          },
+        }));
+        return;
+      }
+
+      if (detail?.type === "ORDERS_TAB_OPENED") {
+        setState((current) => ({
+          ...current,
+          inboxSummary: {
+            ...current.inboxSummary,
+            pendingOrders: 0,
+            total:
+              (current.inboxSummary?.newLeads || 0) +
+              (current.inboxSummary?.unreadChats || 0),
+          },
+        }));
+        return;
+      }
+
+      if (detail?.type === "ESTIMATES_TAB_OPENED") {
+        return;
+      }
+
+      if (detail?.type === "SOCKET_RECONNECTED") {
+        requestProviderInboxCounts();
+        return;
+      }
+
+      // Chat/presence events must not refresh CRM snapshot or badge APIs.
       const isChatEvent =
         detail?.type === "CHAT_MESSAGE" ||
         detail?.type === "CHAT_TYPING" ||
@@ -520,7 +551,8 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
         detail?.type === "chat:presence";
 
       if (!isChatEvent) {
-        onExternalRefresh();
+        // Domain events may change badges — reconcile over socket only.
+        requestCountsSoon();
       }
     };
 
@@ -532,16 +564,17 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       }
     };
 
-    window.addEventListener(EVENT_NAME, onExternalRefresh);
+    window.addEventListener(EVENT_NAME, requestCountsSoon);
     window.addEventListener("rs-realtime", onRealtimeMessage);
     window.addEventListener("rs-lead-status", onLeadStatus);
     return () => {
       window.clearTimeout(debounceId);
-      window.removeEventListener(EVENT_NAME, onExternalRefresh);
+      window.removeEventListener(EVENT_NAME, requestCountsSoon);
       window.removeEventListener("rs-realtime", onRealtimeMessage);
       window.removeEventListener("rs-lead-status", onLeadStatus);
     };
-  }, [enabled, patchRequest, refresh]);
+  }, [enabled, patchRequest]);
+
 
   const value = useMemo<CrmApiContextValue>(
     () => ({

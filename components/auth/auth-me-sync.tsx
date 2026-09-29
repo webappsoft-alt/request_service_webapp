@@ -1,33 +1,41 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { selectIsAuthenticated, selectAuth } from "@/store/authSlice";
 import { refreshAuthMe } from "@/components/api/apiFuntions";
 
 /**
- * Refresh profile via GET /user/me once after auth hydrate — not on every
- * in-app navigation (that was causing duplicate /me calls on each sidebar click).
+ * Module flag survives remounts / React Strict Mode.
+ * One GET /user/me per logged-in session — not on every sidebar navigation,
+ * and not again after token refresh or /me updating the user payload.
+ */
+let authMeSyncedThisSession = false;
+
+/**
+ * Refresh profile via GET /user/me once after auth hydrate.
+ * Response updates existing auth user/provider via refreshAuthMe → updateAuthUser.
  */
 export function AuthMeSync() {
   const auth = useAppSelector(selectAuth);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  const fetchedForSession = useRef<string | null>(null);
 
   useEffect(() => {
     if (!auth.hydrated) return;
+
     if (!isAuthenticated) {
-      fetchedForSession.current = null;
+      authMeSyncedThisSession = false;
       return;
     }
-    const sessionKey = String(auth.token || auth.user?.id || "auth");
-    if (fetchedForSession.current === sessionKey) return;
-    fetchedForSession.current = sessionKey;
+
+    if (authMeSyncedThisSession) return;
+    authMeSyncedThisSession = true;
 
     void refreshAuthMe().catch(() => {
-      // 401 + refresh handled by api layer; ignore soft failures here
+      // Soft failure — allow a later retry (e.g. after reconnect).
+      authMeSyncedThisSession = false;
     });
-  }, [isAuthenticated, auth.hydrated, auth.token, auth.user?.id]);
+  }, [isAuthenticated, auth.hydrated]);
 
   return null;
 }

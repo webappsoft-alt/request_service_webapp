@@ -662,6 +662,8 @@ export const api = {
  * Always hits the network (no GET cache). Only updates the persisted `user`
  * (and provider) — never replaces the token unless refresh-token runs first
  * because the access token expired.
+ * Callers should invoke this once per session (AuthMeSync) or after explicit
+ * profile needs — not on every route change.
  */
 export async function refreshAuthMe(): Promise<AuthUser | null> {
   if (!isBrowser()) return null;
@@ -672,7 +674,6 @@ export async function refreshAuthMe(): Promise<AuthUser | null> {
 
   authMePromise = (async () => {
     try {
-      // Drop any short-lived cached /me so navigation always revalidates.
       invalidateCachedGets(userApi.me);
 
       const meRes = await getData<{

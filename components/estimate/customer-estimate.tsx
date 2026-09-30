@@ -205,19 +205,21 @@ function mapPublicEstimateToSnapshot(
     stringValue(companySignature?.imageBase64) ||
     stringValue(companySignature?.dataUrl) ||
     stringValue(companySignature?.signature) ||
-    stringValue(estimate.companySignatureDataUrl);
+    stringValue(companySignature?.signatureDataUrl) ||
+    stringValue(estimate.companySignatureDataUrl) ||
+    stringValue(estimate.companySignatureImageBase64);
   const companySignedAt =
     toIso(companySignature?.signedAt) || toIso(estimate.companySignedAt);
-  // Only treat as company-signed when we have an image and/or a real signedAt
-  // (do not fall back to companyName alone — that left a blank signature line).
-  const hasCompanySignature = Boolean(
-    companySignatureDataUrl || companySignedAt,
-  );
+  // Prefer a real signature image. signedBy alone is not enough to show a name
+  // as if it were the drawn company sign.
+  const hasCompanySignature = Boolean(companySignatureDataUrl);
   const companySignedBy = hasCompanySignature
     ? stringValue(companySignature?.signedBy) ||
       stringValue(estimate.companySignedBy) ||
       stringValue(provider.companyName)
-    : "";
+    : stringValue(companySignature?.signedBy) ||
+      stringValue(estimate.companySignedBy) ||
+      "";
 
   const siteVisitRaw = asRecord(estimate.siteVisit);
   let siteVisit: EstimateShareSiteVisit | undefined = undefined;

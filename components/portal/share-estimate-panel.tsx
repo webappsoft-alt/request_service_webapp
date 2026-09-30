@@ -148,6 +148,12 @@ export function EstimateShareTab({
         customerName: customer ? crmCustomerName(customer) : customerLabel,
         customerEmail: customer?.email,
         customerPhone: customer?.phone,
+        companySignedBy: existingBy || undefined,
+        companySignedAt:
+          estimate.companySignature?.signedAt ||
+          snapshot?.companySignedAt ||
+          undefined,
+        companySignatureDataUrl: existingSig || undefined,
       });
       share.saveSnapshot(next);
       setUrl(href);

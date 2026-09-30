@@ -189,7 +189,11 @@ export function buildEstimateSnapshot(
   const companySignedAt =
     extras.companySignedAt || companySig?.signedAt || undefined;
   const companySignatureDataUrl =
-    extras.companySignatureDataUrl || companySig?.imageBase64 || undefined;
+    extras.companySignatureDataUrl ||
+    companySig?.imageBase64 ||
+    (companySig as { signatureImageBase64?: string } | undefined)
+      ?.signatureImageBase64 ||
+    undefined;
   return {
     token,
     estimateId: estimate.id,

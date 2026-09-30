@@ -29,7 +29,7 @@ import {
   GoogleAddressAutocomplete,
   type PlaceAddress,
 } from "@/components/shared/google-address-autocomplete";
-import { JobCosting, type CostingNoun, type JobCostingActions } from "@/components/portal/job-costing";
+import { JobCosting, JobCostChart, JobCostLegend, type CostingNoun, type JobCostingActions } from "@/components/portal/job-costing";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
@@ -51,6 +51,12 @@ import {
 } from "@/components/portal/use-job-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -255,6 +261,9 @@ export function JobSummaryTab({
   technician,
   noun = "job",
   locked = false,
+  customerLabel,
+  siteAddress,
+  quoteTotal,
   onActivitiesChange,
   onEditEstimate,
   notice,
@@ -265,6 +274,9 @@ export function JobSummaryTab({
   technician: string;
   noun?: CostingNoun;
   locked?: boolean;
+  customerLabel?: string;
+  siteAddress?: string;
+  quoteTotal?: number;
   onActivitiesChange?: (next: Estimate["activities"]) => void;
   onEditEstimate?: () => void;
   notice?: ReactNode;
@@ -368,6 +380,57 @@ export function JobSummaryTab({
 
   return (
     <div className="space-y-4">
+      {isEstimate ? (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-md border border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
+          <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+            <span className="text-muted-foreground">Customer:</span>
+            {estimate?.customerId ? (
+              <Link
+                href={`/pro/dashboard/customers/${estimate.customerId}`}
+                className="truncate font-semibold text-primary hover:underline"
+              >
+                {customerLabel?.trim() ||
+                  estimate.customerName?.trim() ||
+                  "View customer"}
+              </Link>
+            ) : (
+              <span className="truncate font-medium text-foreground">
+                {customerLabel?.trim() ||
+                  estimate?.customerName?.trim() ||
+                  "—"}
+              </span>
+            )}
+          </span>
+          {siteAddress ? (
+            <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+              <span className="text-muted-foreground">Site:</span>
+              <span className="truncate font-medium text-foreground">
+                {siteAddress}
+              </span>
+            </span>
+          ) : null}
+          <span className="inline-flex items-center gap-1">
+            <span className="text-muted-foreground">Quote total:</span>
+            <span className="font-semibold tabular-nums text-foreground">
+              {formatMoney(
+                typeof quoteTotal === "number" ? quoteTotal : sheet.total,
+              )}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-muted-foreground">Status:</span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+              <span
+                className="size-2 shrink-0 rounded-full bg-primary"
+                aria-hidden
+              />
+              {estimate
+                ? estimateStatusLabel(estimate.status)
+                : "—"}
+            </span>
+          </span>
+        </div>
+      ) : null}
       {isEstimate && estimate ? (
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
           <div className="min-w-0">
@@ -416,24 +479,6 @@ export function JobSummaryTab({
         </div>
       )}
       {notice ? <div className="space-y-3">{notice}</div> : null}
-      {isEstimate && quoteAnswers.length ? (
-        <div>
-          <p className="mb-2 text-sm font-semibold text-foreground">Answers</p>
-          <dl className="flex flex-wrap gap-2">
-            {quoteAnswers.map((item) => (
-              <div
-                key={item.id}
-                className="inline-flex max-w-full items-baseline gap-1.5 rounded-md bg-secondary px-2.5 py-1.5 text-sm"
-              >
-                <dt className="shrink-0 text-xs text-muted-foreground">
-                  {item.label}:
-                </dt>
-                <dd className="min-w-0 truncate font-medium">{item.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ) : null}
       {isEstimate && estimate?.scheduledDate ? (
         <div className="rounded-md bg-sky-50 px-4 py-2.5 text-sm">
           <p className="text-[10px] font-semibold tracking-[0.12em] text-sky-800 uppercase">
@@ -444,43 +489,168 @@ export function JobSummaryTab({
           </p>
         </div>
       ) : null}
+      {isEstimate ? (
+        <>
+          <section className="rounded-md border border-input bg-card">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="answers" className="border-0">
+                <AccordionTrigger className="rounded-md border-0 bg-[#f5f5f5] px-4 py-2.5 shadow-none hover:no-underline data-[state=open]:rounded-b-none data-[state=open]:border-b data-[state=open]:border-input">
+                  <div className="flex w-full items-center justify-between gap-3 pr-2 text-left">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Estimate Request & Answers
+                      </h3>
+                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                        Click to view estimate request details and answers
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {quoteAnswers.length
+                        ? `${quoteAnswers.length} question${quoteAnswers.length === 1 ? "" : "s"}`
+                        : "No answers"}
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pb-0">
+                  <div className="p-3">
+                    {quoteAnswers.length ? (
+                      <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {quoteAnswers.map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-md border border-border-soft bg-[#fafbfc] px-3 py-2.5"
+                          >
+                            <dt className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                              {item.label}
+                            </dt>
+                            <dd className="mt-1 text-sm font-medium wrap-break-word text-foreground">
+                              {item.value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : (
+                      <p className="py-2 text-sm text-muted-foreground">
+                        No request answers linked to this estimate.
+                      </p>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </section>
+
+          <div className="grid items-start gap-4 lg:grid-cols-3">
+            <section className="h-auto self-start rounded-md border border-input bg-card">
+              <div className="flex items-center justify-between gap-3 rounded-t-md border-b border-input bg-[#f5f5f5] px-4 py-2.5">
+                <h3 className="text-sm font-semibold">Quote mix</h3>
+                <p className="text-xs text-muted-foreground">
+                  Labour {formatMoney(mix.labor)} · Material {formatMoney(mix.materials)}
+                </p>
+              </div>
+              <div className="flex flex-col items-center justify-center gap-3 rounded-b-md px-4 py-5">
+                <JobCostChart
+                  labor={mix.labor}
+                  materials={mix.materials}
+                  className="mx-0 size-36"
+                />
+                <JobCostLegend labor={mix.labor} materials={mix.materials} />
+              </div>
+            </section>
+
+            <section className="h-auto self-start rounded-md border border-input bg-card">
+              <div className="rounded-t-md border-b border-input bg-[#f5f5f5] px-4 py-3">
+                <h3 className="text-sm font-semibold">Line items</h3>
+              </div>
+              <div className="space-y-4 rounded-b-md p-4 text-sm">
+                <LineGroup title="Labour" lines={laborLines} />
+                <LineGroup title="Material" lines={materialLines} />
+                <dl className="space-y-2 border-t border-border-soft pt-3">
+                  <MoneyRow label="Subtotal" value={sheet.subtotal} />
+                  <MoneyRow label={`Tax (${taxRatePercent || 8.25}%)`} value={sheet.tax} />
+                  <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5">
+                    <dt className="font-semibold">Total</dt>
+                    <dd className="text-base font-semibold tabular-nums text-primary">
+                      {formatMoney(sheet.total)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
+
+            <section className="h-auto self-start bg-transparent">
+              <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-soft bg-[#f5f5f5] px-4 py-2.5">
+                <h3 className="text-sm font-semibold">Activity</h3>
+                {locked ? null : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1.5 text-xs font-semibold"
+                    onClick={() => {
+                      setEditing(null);
+                      setOpen(true);
+                    }}
+                  >
+                    <Plus className="size-3.5 text-primary" />
+                    Create note
+                  </Button>
+                )}
+              </div>
+              <div className="pt-3">
+                {activities.length ? (
+                  <ul className="relative space-y-0">
+                    {activities.map((item, index) => (
+                      <ActivityCard
+                        key={item.id}
+                        item={item}
+                        last={index === activities.length - 1}
+                        locked={locked}
+                        deleting={
+                          (isEstimate && estimateActivities.deletingId === item.id) ||
+                          (isJobRecord && jobActivities.deletingId === item.id)
+                        }
+                        onEdit={() => {
+                          setEditing({ id: item.id, title: item.title, html: item.html });
+                          setOpen(true);
+                        }}
+                        onDelete={async () => {
+                          if (isEstimate) {
+                            await estimateActivities.deleteActivity(item.id);
+                          } else if (isJobRecord) {
+                            await jobActivities.deleteActivity(item.id);
+                          } else {
+                            file.removeActivity(item.id);
+                            toast.success("Activity deleted.");
+                          }
+                        }}
+                      />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nothing posted yet. Add a field note, call, or follow-up.
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
+        </>
+      ) : (
       <div className="grid gap-4 lg:grid-cols-5">
           <div className="space-y-4 lg:col-span-3">
             <section className="overflow-hidden rounded-md border border-border-soft bg-card">
               <div className="flex items-center justify-between gap-3 border-b border-border-soft px-4 py-3">
                 <h3 className="text-sm font-semibold">
-                  {isEstimate ? "Quote mix" : "Cost mix"}
+                  Cost mix
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Labour {formatMoney(mix.labor)} · Material {formatMoney(mix.materials)}
                 </p>
               </div>
-              <div className="space-y-4 p-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-md bg-secondary/70 px-3 py-3">
-                    <p className="text-xs text-muted-foreground">Labour</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-primary">{formatMoney(mix.labor)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {sheet.total ? Math.round((mix.labor / Math.max(sheet.total, 0.01)) * 100) : 0}% of {isEstimate ? "quote" : "job"}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-secondary/70 px-3 py-3">
-                    <p className="text-xs text-muted-foreground">Material</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-primary">{formatMoney(mix.materials)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {sheet.total ? Math.round((mix.materials / Math.max(sheet.total, 0.01)) * 100) : 0}% of {isEstimate ? "quote" : "job"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex h-2.5 overflow-hidden rounded-full bg-[#e8eef5]" aria-hidden>
-                  <div
-                    className="h-full bg-[#003F7D]"
-                    style={{ width: `${sheet.total ? Math.round((mix.labor / Math.max(sheet.total, 0.01)) * 100) : 0}%` }}
-                  />
-                  <div
-                    className="h-full bg-[#5b8fa8]"
-                    style={{ width: `${sheet.total ? Math.round((mix.materials / Math.max(sheet.total, 0.01)) * 100) : 0}%` }}
-                  />
+              <div className="flex flex-wrap items-center gap-6 p-4 sm:gap-8">
+                <JobCostChart labor={mix.labor} materials={mix.materials} />
+                <div className="min-w-[12rem] flex-1">
+                  <JobCostLegend labor={mix.labor} materials={mix.materials} />
                 </div>
               </div>
             </section>
@@ -565,6 +735,7 @@ export function JobSummaryTab({
             </div>
           </section>
         </div>
+      )}
       <ActivityDialog
         open={open}
         activity={editing}
@@ -2127,7 +2298,7 @@ function ActivityCard({
         <span className="mt-1.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-card">
           <span className="size-1.5 rounded-full bg-primary" />
         </span>
-        {last ? null : <span className="my-1 w-px flex-1 border-l border-dashed border-primary/40" />}
+        {last ? null : <span className="my-1 w-px min-h-4 grow border-l border-dashed border-primary/40" />}
       </div>
       <div className={cn("min-w-0 flex-1 rounded-md bg-secondary/70 px-3 py-2.5", last ? "mb-0" : "mb-3")}>
         <div className="flex items-start justify-between gap-2">

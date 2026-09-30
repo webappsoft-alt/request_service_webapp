@@ -150,7 +150,7 @@ export function ConvertLeadToEstimateDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex flex-col sm:max-w-2xl lg:max-w-4xl max-h-[90vh] h-[90vh] sm:h-auto sm:max-h-[88vh] p-0 gap-0 rounded-2xl overflow-hidden border border-input bg-white shadow-2xl">
-        <DialogHeader className="shrink-0 px-6 py-3.5 border-b border-input bg-white z-10 pr-12">
+        <DialogHeader className="z-10 shrink-0 border-b border-input bg-[#f5f5f5] px-6 py-3.5 pr-12">
           <div className="flex items-center gap-3">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#003F7D]/10 text-[#003F7D]">
               <FilePlus2 className="size-4" />
@@ -222,7 +222,7 @@ export function ConvertLeadToEstimateDialog({
             <div className="space-y-3 pt-2 border-t border-input">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <span className="text-sm font-semibold text-slate-800">Labour and Material</span>
+                  <span className="text-sm font-semibold text-slate-800">Labour & Material</span>
                   <p className="text-xs text-slate-500">
                     Add labour hours or materials to this estimate.
                   </p>

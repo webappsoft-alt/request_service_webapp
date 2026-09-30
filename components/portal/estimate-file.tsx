@@ -11,6 +11,7 @@ import {
 import { UsStateSelect } from "@/components/shared/us-state-select";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
+import { CrmMark } from "@/components/portal/crm-mark";
 import { useJobFile, type EstimateSettingsDraft } from "@/components/portal/use-job-file";
 import { estimateAsJob } from "@/components/portal/work-builders";
 import { JobSummaryTab } from "@/components/portal/job-file";
@@ -55,17 +56,36 @@ export function EstimateFileChrome({
     .join(", ");
 
   return (
-    <div className="space-y-0">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
-              "Customer details for this estimate"}
-          </p>
+    <div className="w-full overflow-hidden rounded-lg border border-border-soft bg-card">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border-soft bg-[#f5f5f5] px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <CrmMark
+            name={customerLabel}
+            kind={customer?.entityKind === "company" ? "company" : "person"}
+            photoUrl={customer?.avatarUrl}
+            size="lg"
+          />
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
+              {estimate.customerId ? (
+                <Link
+                  href={`/pro/dashboard/customers/${estimate.customerId}`}
+                  className="hover:text-primary hover:underline"
+                >
+                  {customerLabel}
+                </Link>
+              ) : (
+                customerLabel
+              )}
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {[customer?.phone, customer?.email].filter(Boolean).join(" · ") ||
+                "Customer details for this estimate"}
+            </p>
+          </div>
         </div>
         {estimate.customerId ? (
-          <Button size="sm" variant="outline" className="h-8 border-border-soft" asChild>
+          <Button size="sm" variant="outline" className="h-8 shrink-0 border-border-soft" asChild>
             <Link href={`/pro/dashboard/customers/${estimate.customerId}`}>
               Open customer file
             </Link>
@@ -73,22 +93,7 @@ export function EstimateFileChrome({
         ) : null}
       </div>
 
-      <div className="grid gap-x-8 gap-y-3.5 px-1 py-1 sm:grid-cols-2">
-        <Detail
-          label="Customer"
-          value={
-            estimate.customerId ? (
-              <Link
-                href={`/pro/dashboard/customers/${estimate.customerId}`}
-                className="font-semibold text-primary hover:underline"
-              >
-                {customerLabel}
-              </Link>
-            ) : (
-              customerLabel
-            )
-          }
-        />
+      <div className="grid gap-x-8 gap-y-3.5 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
         {customer && customer.entityKind === "company" && contact ? (
           <Detail label="Contact" value={contact} />
         ) : null}

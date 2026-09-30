@@ -110,7 +110,11 @@ function toCostLine(item: JobItem): JobCostLine {
 }
 
 export function lineTotal(line: JobCostLine) {
-  return Math.round(line.quantity * line.unitPrice);
+  const qty = Number(line.quantity);
+  const price = Number(line.unitPrice);
+  if (!Number.isFinite(qty) || !Number.isFinite(price)) return 0;
+  // Money to 2 decimal places (cents).
+  return Math.round(qty * price * 100) / 100;
 }
 
 export function jobCostMix(lines: JobCostLine[]) {

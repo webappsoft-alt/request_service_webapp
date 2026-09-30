@@ -148,7 +148,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-header"
       className={cn(
-        "sticky top-0 z-10 -mx-4 -mt-4 shrink-0 space-y-2 border-b border-input bg-popover px-4 pt-4 pb-3 pr-12",
+        "sticky top-0 z-10 -mx-4 -mt-4 shrink-0 space-y-2 border-b border-input bg-[#f5f5f5] px-4 pt-4 pb-3 pr-12",
         className,
       )}
       {...props}
@@ -168,7 +168,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "sticky bottom-0 z-20 -mx-4 flex shrink-0 flex-col-reverse gap-2 border-t bg-muted p-4 sm:flex-row sm:justify-end",
+        "sticky bottom-0 z-20 -mx-4 flex shrink-0 flex-col-reverse gap-2 border-t border-input bg-white p-4 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}

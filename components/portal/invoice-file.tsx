@@ -495,7 +495,7 @@ export function InvoiceSummaryTab({
 
       <section className="overflow-hidden rounded-md border border-border-soft bg-card">
         <div className="border-b border-border-soft px-4 py-3">
-          <h2 className="text-sm font-semibold">Labour and Material</h2>
+          <h2 className="text-sm font-semibold">Labour & Material</h2>
         </div>
         <Table>
           <TableHeader>

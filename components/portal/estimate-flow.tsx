@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import {
   Check,
   ImageIcon,
@@ -156,21 +157,26 @@ export function EstimateStageBanner({
   signed,
   hasJob,
   signature,
+  job,
 }: {
   status: EstimateStatus;
   signed: boolean;
   hasJob: boolean;
   signature?: EstimateSignature | null;
+  job?: Pick<Job, "id" | "number"> | null;
 }) {
   const showSignature =
     Boolean(signature?.signedBy || signature?.signedAt || signature?.imageBase64) &&
     (signed || status === "accepted" || status === "converted_to_job" || hasJob);
+  const linkedJob = job?.id ? job : null;
 
   const copy = (() => {
-    if (hasJob)
+    if (hasJob || linkedJob)
       return {
-        title: "Converted to job",
-        body: "This estimate is now a job. Open the linked job to continue the work.",
+        title: linkedJob ? `Converted to job ${linkedJob.number}` : "Converted to job",
+        body: linkedJob
+          ? `Locked to ${linkedJob.number}. Open the job to continue.`
+          : "Open the linked job to continue the work.",
       };
     if (signed || status === "accepted") {
       return {
@@ -208,7 +214,7 @@ export function EstimateStageBanner({
         };
       case "sent":
         return {
-          title: "Waiting on signature",
+          title: "Awaiting signature",
           body: "The customer has the link. After they sign, convert this to a job.",
         };
       case "changes_requested":
@@ -228,8 +234,10 @@ export function EstimateStageBanner({
         };
       case "converted_to_job":
         return {
-          title: "Converted to job",
-          body: "This estimate was converted. Open the linked job to continue the work.",
+          title: linkedJob ? `Converted to job ${linkedJob.number}` : "Converted to job",
+          body: linkedJob
+            ? `Locked to ${linkedJob.number}. Open the job to continue.`
+            : "Open the linked job to continue the work.",
         };
       default: {
         const _never: never = status;
@@ -246,55 +254,68 @@ export function EstimateStageBanner({
   return (
     <div
       className={
-        showSignature
-          ? "rounded-[4px] border border-emerald-200 bg-emerald-50 px-4 py-3"
-          : "rounded-[4px] border border-input bg-[#f8fafc] px-4 py-3"
+        showSignature || linkedJob
+          ? "rounded-[4px] border border-emerald-200 bg-emerald-50 px-3.5 py-2.5"
+          : "rounded-[4px] border border-input bg-[#f8fafc] px-3.5 py-2.5"
       }
     >
-      <p
-        className={
-          showSignature
-            ? "text-sm font-semibold text-emerald-900"
-            : "text-sm font-semibold text-[#003F7D]"
-        }
-      >
-        {copy.title}
-      </p>
-      <p
-        className={
-          showSignature
-            ? "mt-1 text-sm text-emerald-950"
-            : "mt-1 text-sm text-muted-foreground"
-        }
-      >
-        {copy.body}
-      </p>
-      {showSignature ? (
-        <div className="mt-3 flex flex-wrap items-end gap-4">
-          {signatureSrc ? (
-            <div className="rounded-[4px] border border-emerald-200 bg-white px-3 py-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                alt={
-                  signature?.signedBy
-                    ? `Signature of ${signature.signedBy}`
-                    : "Customer signature"
-                }
-                src={signatureSrc}
-                className="h-16 w-48 object-contain"
-              />
-            </div>
-          ) : null}
-          <div className="min-w-0 text-sm text-emerald-950">
-            {signature?.signedBy ? (
-              <p className="font-medium">{signature.signedBy}</p>
-            ) : null}
-            {signedAtLabel ? (
-              <p className="text-emerald-900/80">Signed {signedAtLabel}</p>
-            ) : null}
-          </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <p
+            className={
+              showSignature || linkedJob
+                ? "text-sm font-semibold text-emerald-900"
+                : "text-sm font-semibold text-[#003F7D]"
+            }
+          >
+            {copy.title}
+          </p>
+          <p
+            className={
+              showSignature || linkedJob
+                ? "mt-0.5 text-xs text-emerald-950"
+                : "mt-0.5 text-xs text-muted-foreground"
+            }
+          >
+            {copy.body}
+          </p>
         </div>
-      ) : null}
+        {showSignature ? (
+          <div className="flex min-w-0 items-center gap-2.5">
+            {signatureSrc ? (
+              <div className="rounded-[4px] border border-emerald-200 bg-white px-2 py-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt={
+                    signature?.signedBy
+                      ? `Signature of ${signature.signedBy}`
+                      : "Customer signature"
+                  }
+                  src={signatureSrc}
+                  className="h-9 w-32 object-contain"
+                />
+              </div>
+            ) : null}
+            <div className="min-w-0 text-xs text-emerald-950">
+              {signature?.signedBy ? (
+                <p className="font-medium leading-tight">{signature.signedBy}</p>
+              ) : null}
+              {signedAtLabel ? (
+                <p className="leading-tight text-emerald-900/80">
+                  Signed {signedAtLabel}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        {linkedJob ? (
+          <Button size="sm" className="h-8 shrink-0" asChild>
+            <Link href={`/pro/dashboard/jobs/${linkedJob.id}`}>
+              Open {linkedJob.number}
+            </Link>
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

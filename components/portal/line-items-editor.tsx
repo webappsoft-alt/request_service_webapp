@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 const MATERIAL_UNITS = [
   { value: "ea", label: "Each" },
   { value: "ft", label: "Feet" },
-  { value: "sq ft", label: "Square feet" },
+  { value: "sq ft", label: "Sqft" },
 ] as const;
 
 const LABOR_UNITS = [{ value: "hr", label: "Hour" }] as const;
@@ -62,7 +62,7 @@ export type LineItemsEditorProps = {
   allowMaterialImages?: boolean;
   /** Minimum rows required before delete is disabled (default 0). */
   minLines?: number;
-  /** Wider description column — use in modals only. */
+  /** @deprecated Layout is table-fixed globally; prop kept for call-site compatibility. */
   wideDescription?: boolean;
   className?: string;
 };
@@ -74,7 +74,7 @@ export function LineItemsEditor({
   showUnit = true,
   allowMaterialImages = true,
   minLines = 0,
-  wideDescription = false,
+  wideDescription: _wideDescription = false,
   className,
 }: LineItemsEditorProps) {
   function patch(id: string, next: Partial<JobCostLine>) {
@@ -99,22 +99,33 @@ export function LineItemsEditor({
   }
 
   const colSpan = showUnit ? 7 : 6;
-  const descriptionHeadClass = wideDescription
-    ? "min-w-[320px] w-[45%]"
-    : "min-w-[220px]";
 
   return (
     <div className={cn("w-full overflow-x-auto rounded-lg border border-border-soft bg-card", className)}>
-      <Table className={cn(wideDescription ? "min-w-[820px]" : "min-w-[760px]", !showUnit && "min-w-[640px]")}>
+      <Table className="w-full min-w-[640px] table-fixed">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className={cn(descriptionHeadClass, "h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase")}>Description</TableHead>
-            <TableHead className="h-8 w-32 min-w-[125px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Type</TableHead>
-            <TableHead className="h-8 w-24 min-w-[90px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Qty</TableHead>
-            {showUnit ? <TableHead className="h-8 w-36 min-w-[135px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Unit</TableHead> : null}
-            <TableHead className="h-8 w-28 min-w-[110px] bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Price</TableHead>
-            <TableHead className="h-8 w-24 min-w-[95px] bg-[#f7f8fa] px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Total</TableHead>
-            <TableHead className="h-8 w-10 min-w-[44px] bg-[#f7f8fa]">
+            <TableHead className="h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Description
+            </TableHead>
+            <TableHead className="h-8 w-32 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Type
+            </TableHead>
+            <TableHead className="h-8 w-24 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Qty
+            </TableHead>
+            {showUnit ? (
+              <TableHead className="h-8 w-36 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Unit
+              </TableHead>
+            ) : null}
+            <TableHead className="h-8 w-28 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Price
+            </TableHead>
+            <TableHead className="h-8 w-32 bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              Total
+            </TableHead>
+            <TableHead className="h-8 w-10 bg-[#f7f8fa]">
               <span className="sr-only">Remove</span>
             </TableHead>
           </TableRow>
@@ -128,7 +139,6 @@ export function LineItemsEditor({
                 locked={locked}
                 showUnit={showUnit}
                 allowMaterialImages={allowMaterialImages}
-                wideDescription={wideDescription}
                 canRemove={!locked && lines.length > minLines}
                 onChange={patch}
                 onRemove={() => remove(line.id)}
@@ -152,7 +162,6 @@ function LineItemRow({
   locked,
   showUnit,
   allowMaterialImages,
-  wideDescription,
   canRemove,
   onChange,
   onRemove,
@@ -161,7 +170,6 @@ function LineItemRow({
   locked: boolean;
   showUnit: boolean;
   allowMaterialImages: boolean;
-  wideDescription: boolean;
   canRemove: boolean;
   onChange: (id: string, patch: Partial<JobCostLine>) => void;
   onRemove: () => void;
@@ -179,9 +187,6 @@ function LineItemRow({
   const images = line.kind === "materials" ? (line.images ?? []).slice(0, MAX_MATERIAL_IMAGES) : [];
   const materialImage = images[0];
   const showImages = allowMaterialImages && line.kind === "materials";
-  const descriptionCellClass = wideDescription
-    ? "min-w-[320px] align-top py-2"
-    : "min-w-[220px] align-top py-2";
 
   async function onUpload(files: FileList | null) {
     if (!files?.length || locked) return;
@@ -207,11 +212,13 @@ function LineItemRow({
 
   const softField =
     "h-8 border-border-soft bg-[#fafbfc] shadow-none focus-visible:bg-card";
+  const numberField =
+    "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell className={descriptionCellClass}>
-        <div className={cn("flex w-full flex-col gap-1.5", wideDescription && "min-w-[280px]")}>
+      <TableCell className="min-w-0 whitespace-normal align-top py-2">
+        <div className="flex w-full min-w-0 flex-col gap-1.5">
           <div className="relative w-full min-w-0">
             <Input
               aria-label="Description"
@@ -223,7 +230,7 @@ function LineItemRow({
               onChange={(event) => onChange(line.id, { description: event.target.value })}
               className={cn(
                 softField,
-                "w-full text-sm",
+                "w-full min-w-0 text-sm",
                 showImages && materialImage ? "pr-14" : undefined,
               )}
             />
@@ -305,7 +312,7 @@ function LineItemRow({
           ) : null}
         </div>
       </TableCell>
-      <TableCell className="w-32 min-w-[125px] align-top py-2">
+      <TableCell className="w-32 align-top py-2">
         <Select
           disabled={locked}
           value={line.kind}
@@ -321,7 +328,11 @@ function LineItemRow({
             });
           }}
         >
-          <SelectTrigger aria-label="Type" size="sm" className={cn(softField, "w-full")}>
+          <SelectTrigger
+            aria-label="Type"
+            size="sm"
+            className={cn(softField, "w-full min-w-0 justify-between gap-1 *:data-[slot=select-value]:line-clamp-none")}
+          >
             <SelectValue placeholder="Type">
               {jobCostKindLabel(line.kind)}
             </SelectValue>
@@ -336,35 +347,47 @@ function LineItemRow({
           </SelectContent>
         </Select>
       </TableCell>
-      <TableCell className="w-24 min-w-[90px] align-top py-2">
+      <TableCell className="w-24 align-top py-2">
         <Input
           aria-label="Quantity"
-          className={cn(softField, "w-full tabular-nums")}
+          className={cn(softField, numberField, "w-full px-2 text-right tabular-nums")}
           disabled={locked}
           inputMode="decimal"
           min={0}
           step="any"
           type="number"
           value={Number.isFinite(line.quantity) ? line.quantity : 0}
-          onChange={(event) =>
-            onChange(line.id, { quantity: Number(event.target.value) || 0 })
-          }
+          onChange={(event) => {
+            const raw = event.target.value;
+            if (raw === "") {
+              onChange(line.id, { quantity: 0 });
+              return;
+            }
+            const next = Number(raw);
+            onChange(line.id, {
+              quantity: Number.isFinite(next) ? next : 0,
+            });
+          }}
         />
       </TableCell>
       {showUnit ? (
-        <TableCell className="w-36 min-w-[135px] align-top py-2">
+        <TableCell className="w-36 align-top py-2">
           <Select
             disabled={locked}
             value={currentUnit}
             onValueChange={(unit) => onChange(line.id, { unit })}
           >
-            <SelectTrigger aria-label="Unit" size="sm" className={cn(softField, "w-full")}>
+            <SelectTrigger
+              aria-label="Unit"
+              size="sm"
+              className={cn(softField, "w-full min-w-0 justify-between gap-1 *:data-[slot=select-value]:line-clamp-none")}
+            >
               <SelectValue placeholder="Unit" />
             </SelectTrigger>
             <SelectContent
               position="popper"
               align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)]"
+              className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[10rem]"
             >
               {unitOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
@@ -375,26 +398,42 @@ function LineItemRow({
           </Select>
         </TableCell>
       ) : null}
-      <TableCell className="w-28 min-w-[110px] align-top py-2">
-        <Input
-          aria-label="Unit price"
-          className={cn(softField, "w-full tabular-nums")}
-          disabled={locked}
-          inputMode="decimal"
-          min={0}
-          placeholder="0"
-          step="0.01"
-          type="number"
-          value={line.unitPrice ? line.unitPrice : ""}
-          onChange={(event) =>
-            onChange(line.id, { unitPrice: Number(event.target.value) || 0 })
-          }
-        />
+      <TableCell className="w-28 align-top py-2">
+        <div className="relative w-full">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground"
+          >
+            $
+          </span>
+          <Input
+            aria-label="Unit price"
+            className={cn(softField, numberField, "w-full pl-6 pr-2 text-right tabular-nums")}
+            disabled={locked}
+            inputMode="decimal"
+            min={0}
+            placeholder="0"
+            step="0.01"
+            type="number"
+            value={line.unitPrice ? line.unitPrice : ""}
+            onChange={(event) => {
+              const raw = event.target.value;
+              if (raw === "") {
+                onChange(line.id, { unitPrice: 0 });
+                return;
+              }
+              const next = Number(raw);
+              onChange(line.id, {
+                unitPrice: Number.isFinite(next) ? next : 0,
+              });
+            }}
+          />
+        </div>
       </TableCell>
-      <TableCell className="w-24 min-w-[95px] align-top py-2 text-right text-sm font-medium tabular-nums">
+      <TableCell className="w-32 whitespace-nowrap align-top py-2 text-right text-sm font-medium tabular-nums">
         {formatMoney(lineTotal(line))}
       </TableCell>
-      <TableCell className="w-10 min-w-[44px] align-top py-2 text-center">
+      <TableCell className="w-10 align-top py-2 text-center">
         {canRemove ? (
           <Button
             aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}

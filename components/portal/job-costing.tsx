@@ -21,11 +21,19 @@ const LABOR = "#003F7D";
 const MATERIALS = "#5b8fa8";
 const RING = 2 * Math.PI * 54;
 
-export function JobCostChart({ labor, materials }: { labor: number; materials: number }) {
+export function JobCostChart({
+  labor,
+  materials,
+  className,
+}: {
+  labor: number;
+  materials: number;
+  className?: string;
+}) {
   const total = labor + materials;
   const laborShare = total ? labor / total : 0;
   return (
-    <div className="relative mx-auto size-48">
+    <div className={cn("relative mx-auto size-48", className)}>
       <svg viewBox="0 0 140 140" className="size-full -rotate-90" aria-hidden>
         <circle cx="70" cy="70" r="54" fill="none" stroke="#e6ebf0" strokeWidth="16" />
         {total > 0 ? (
@@ -411,7 +419,7 @@ export function JobCosting({
       {hideHeader ? null : (
         <div className="-mx-4 -mt-1.5 mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-border-soft bg-secondary px-4 py-2">
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-foreground">Labour and Material</h2>
+            <h2 className="text-sm font-bold text-foreground">Labour & Material</h2>
             <p className="text-xs text-muted-foreground">{costingHint(noun, locked)}</p>
             {saving ? (
               <p className="text-xs text-muted-foreground">Saving line items…</p>
@@ -452,47 +460,12 @@ export function JobCosting({
 }
 
 export function EstimateCostChart({ labor, materials }: { labor: number; materials: number }) {
-  const total = labor + materials;
-  const laborPct = total ? Math.round((labor / total) * 100) : 0;
-  const materialPct = total ? 100 - laborPct : 0;
-
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <EstimateMixTile label="Labour" amount={labor} percent={laborPct} color={LABOR} />
-        <EstimateMixTile label="Material" amount={materials} percent={materialPct} color={MATERIALS} />
+    <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+      <JobCostChart labor={labor} materials={materials} />
+      <div className="min-w-[12rem] flex-1">
+        <JobCostLegend labor={labor} materials={materials} />
       </div>
-      <div className="flex h-2 overflow-hidden rounded-full bg-[#e6ebf0]" aria-hidden="true">
-        <div className="h-full bg-[#003F7D]" style={{ width: `${laborPct}%` }} />
-        <div className="h-full bg-[#5b8fa8]" style={{ width: `${materialPct}%` }} />
-      </div>
-      <div className="flex items-baseline justify-between border-t border-border-soft pt-3">
-        <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Quote</p>
-        <p className="text-xl font-semibold tabular-nums text-[#003F7D]">{formatMoney(total)}</p>
-      </div>
-    </div>
-  );
-}
-
-function EstimateMixTile({
-  label,
-  amount,
-  percent,
-  color,
-}: {
-  label: string;
-  amount: number;
-  percent: number;
-  color: string;
-}) {
-  return (
-    <div className="bg-secondary/60 px-3 py-3">
-      <div className="flex items-center gap-2">
-        <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      </div>
-      <p className="mt-2 text-lg font-semibold tabular-nums text-[#003F7D]">{formatMoney(amount)}</p>
-      <p className="text-xs text-muted-foreground">{percent}% of quote</p>
     </div>
   );
 }

@@ -644,8 +644,8 @@ export function CreateEstimateDialog({
             </DialogTitle>
             <DialogDescription>
               {isEdit
-                ? "Update the estimate details. Changes are saved without leaving this customer."
-                : "Send a team member for a site visit, or write the quote in the office. The customer signs the finalized estimate before the job starts."}
+                ? "Update customer, visit, and pricing for this estimate."
+                : "Start with a site visit or write the quote in the office."}
             </DialogDescription>
           </DialogHeader>
           <WizardTabs
@@ -656,11 +656,11 @@ export function CreateEstimateDialog({
                 ? [
                     { id: "customer", label: "Customer" },
                     { id: "visit", label: "Site visit" },
-                    { id: "scope", label: "Labour and Material" },
+                    { id: "scope", label: "Labour & Material" },
                   ]
                 : [
                     { id: "customer", label: "Customer" },
-                    { id: "scope", label: "Labour and Material" },
+                    { id: "scope", label: "Labour & Material" },
                   ]
             }
           />
@@ -683,9 +683,8 @@ export function CreateEstimateDialog({
                   }}
                 >
                   <p className="text-sm font-semibold">Site visit first</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Send a team member to inspect, take photos, then finalize in
-                    the office.
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    Inspect on site, then finalize in the office.
                   </p>
                 </button>
                 <button

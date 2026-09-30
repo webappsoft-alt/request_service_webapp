@@ -87,6 +87,7 @@ export function RecordWorkspace({
   subnav,
   actions,
   badge,
+  metaBar,
   notice,
   children,
 }: {
@@ -100,6 +101,8 @@ export function RecordWorkspace({
   subnav?: (tab: string) => ReactNode;
   actions?: ReactNode;
   badge?: ReactNode;
+  /** Persistent info bar (Customer / Site / Total / Status), shown under the title row. */
+  metaBar?: ReactNode;
   notice?: ReactNode;
   children: (tab: string) => ReactNode;
 }) {
@@ -107,7 +110,11 @@ export function RecordWorkspace({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { openRecord } = useOpenRecords();
-  const tab = searchParams.get("tab") ?? tabs[0]?.id ?? "profile";
+  const tabParam = searchParams.get("tab");
+  const tab =
+    tabs.some((item) => item.id === tabParam) && tabParam
+      ? tabParam
+      : tabs[0]?.id ?? "profile";
   const hasSubnav = subnavTabs.includes(tab);
   const subnavNode = hasSubnav && subnav ? subnav(tab) : null;
 
@@ -138,6 +145,12 @@ export function RecordWorkspace({
           </div>
         ) : null}
       </div>
+
+      {metaBar ? (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
+          {metaBar}
+        </div>
+      ) : null}
 
       {/* Main folder tabs — grey track only */}
       <div className="bg-[#e8ecf1] px-3 pt-2 sm:px-4">

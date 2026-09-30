@@ -250,7 +250,7 @@ export function EstimateShareTab({
             {estimate.status === "site_visit"
               ? "Complete the site visit and save field notes before this estimate can be finalized or sent."
               : estimate.status === "inspected"
-                ? "Add pricing on Labour and Material, then Finalize before sending."
+                ? "Add pricing on Labour & Material, then Finalize before sending."
                 : estimate.status === "draft"
                   ? "Finish pricing, then Finalize before sending the customer link."
                   : "Finalize the estimate first so you can send the customer approval link."}

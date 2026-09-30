@@ -22,7 +22,6 @@ import {
 import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import {
-  EstimateFileChrome,
   EstimateSettingsDialog,
 } from "@/components/portal/estimate-file";
 import {
@@ -75,6 +74,7 @@ import {
 import { LineItemsActions } from "@/components/portal/line-items-editor";
 import {
   copyCostLines,
+  jobCostMix,
   readCostLines,
   writeCostLines,
 } from "@/components/portal/use-job-costing";
@@ -141,6 +141,7 @@ import {
   getAuthToken,
 } from "@/components/api/apiFuntions";
 import { crmCustomerName } from "@/lib/data/crm-people";
+import { formatLocation, formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -379,6 +380,19 @@ export function EstimateDetailView({ id }: { id: string }) {
   const quote = estimate;
   const asJob = estimateAsJob(quote);
   const service = settings?.name || estimateDisplayName(estimate);
+  const siteAddress = [
+    estimate.propertyAddress?.address || estimate.propertyAddress?.street,
+    formatLocation(
+      estimate.propertyAddress?.city || "",
+      estimate.propertyAddress?.state || "",
+      estimate.propertyAddress?.zip,
+    ),
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const quoteTotal = jobCostMix(
+    filledWorkLines(readCostLines(session?.email, asJob)),
+  ).total;
   const customerSignature =
     estimate.signature ||
     (localApproval
@@ -794,9 +808,8 @@ export function EstimateDetailView({ id }: { id: string }) {
         kind="estimate"
         tabs={[
           { id: "summary", label: "Summary" },
-          { id: "customer", label: "Customer" },
           { id: "visit", label: "Site visit" },
-          { id: "materials", label: "Labour and Material" },
+          { id: "materials", label: "Labour & Material" },
           { id: "share", label: "Share" },
           { id: "logs", label: "Logs" },
           { id: "notes", label: "Notes" },
@@ -857,7 +870,7 @@ export function EstimateDetailView({ id }: { id: string }) {
               <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-foreground">
-                    Labour and Material
+                    Labour & Material
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {costingHint("estimate", Boolean(signed))}
@@ -1118,6 +1131,9 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    customerLabel={customerLabel}
+                    siteAddress={siteAddress}
+                    quoteTotal={quoteTotal}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -1144,33 +1160,10 @@ export function EstimateDetailView({ id }: { id: string }) {
                               signed={signed}
                               hasJob={Boolean(job)}
                               signature={customerSignature}
+                              job={job ? { id: job.id, number: job.number } : null}
                             />
                           ) : null}
-                          {job ? (
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
-                              <p className="text-sm font-semibold text-emerald-900">
-                                Converted to job {job.number}
-                              </p>
-                              <p className="mt-1 text-sm text-emerald-950">
-                                This estimate is locked to{" "}
-                                <Link
-                                  href={`/pro/dashboard/jobs/${job.id}`}
-                                  className="font-semibold underline"
-                                >
-                                  {job.number}
-                                </Link>
-                                . Delete that job if you need to convert it
-                                again.
-                              </p>
-                              <div className="mt-3 flex justify-end">
-                                <Button size="sm" className="h-8" asChild>
-                                  <Link href={`/pro/dashboard/jobs/${job.id}`}>
-                                    Open {job.number}
-                                  </Link>
-                                </Button>
-                              </div>
-                            </div>
-                          ) : canConvert ? (
+                          {!job && canConvert ? (
                             <div className="rounded-lg border border-input bg-[#f4f7fb] px-4 py-3">
                               <p className="text-sm font-semibold text-[#003F7D]">
                                 Convert to job
@@ -1195,16 +1188,6 @@ export function EstimateDetailView({ id }: { id: string }) {
                         </>
                       ) : undefined
                     }
-                  />
-                );
-              case "customer":
-                return (
-                  <EstimateFileChrome
-                    estimate={estimate}
-                    customer={customer}
-                    customerLabel={customerLabel}
-                    service={service}
-                    job={job}
                   />
                 );
               case "visit":
@@ -2012,7 +1995,7 @@ export function JobDetailView({ id }: { id: string }) {
   const jobTabs = [
     { id: "summary", label: "Summary" },
     { id: "customer", label: "Customer" },
-    { id: "materials", label: "Labour and Material" },
+    { id: "materials", label: "Labour & Material" },
     ...(alreadyInvoiced
       ? [{ id: "invoice", label: invoice?.number || "Invoice" }]
       : []),
@@ -2036,7 +2019,7 @@ export function JobDetailView({ id }: { id: string }) {
               <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-foreground">
-                    Labour and Material
+                    Labour & Material
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {costingHint("job", materialsActions?.locked ?? false)}
@@ -2744,7 +2727,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
       tabs={[
         { id: "summary", label: "Summary" },
         { id: "customer", label: "Customer" },
-        { id: "materials", label: "Labour and Material" },
+        { id: "materials", label: "Labour & Material" },
         { id: "payments", label: "Payments" },
         { id: "attachments", label: "Attachments" },
         { id: "logs", label: "Logs" },
@@ -2756,7 +2739,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
             <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <div className="min-w-0">
                 <p className="text-sm font-bold text-foreground">
-                  Labour and Material
+                  Labour & Material
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {costingHint("invoice", materialsActions?.locked ?? false)}

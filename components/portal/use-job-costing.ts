@@ -136,8 +136,9 @@ export function jobMoneySheet(
   taxRatePercent = 0,
 ) {
   const subtotal = mix.labor + mix.materials;
-  const fraction = Math.max(0, Number(taxRatePercent) || 0) / 100;
-  const tax = Math.round(subtotal * fraction);
+  const rate = Math.max(0, Number(taxRatePercent) || 0);
+  // Match backend calculateTotals: cents-correct rounding.
+  const tax = Math.round(((subtotal * rate) / 100) * 100) / 100;
   return { labor: mix.labor, materials: mix.materials, subtotal, tax, total: subtotal + tax };
 }
 

@@ -71,6 +71,8 @@ export type EstimateShareSnapshot = {
   items: EstimateShareLine[];
   subtotal: number;
   tax: number;
+  /** Sales tax percent used for this quote (e.g. 3). */
+  taxRatePercent?: number;
   total: number;
   createdAt: string;
   status?: string;
@@ -176,7 +178,11 @@ export function buildEstimateSnapshot(
         unitPrice: item.unitPrice,
         ...(item.images?.length ? { images: item.images } : {}),
       }));
-  const money = moneyFromLines(lines);
+  const taxRatePercent = Math.max(
+    0,
+    Number(estimate.items?.[0]?.taxRate) || 0,
+  );
+  const money = moneyFromLines(lines, taxRatePercent);
   const companySig = estimate.companySignature;
   const companySignedBy =
     extras.companySignedBy || companySig?.signedBy || undefined;
@@ -222,9 +228,10 @@ export function buildEstimateSnapshot(
         ? { images: line.images }
         : {}),
     })),
-    subtotal: money.subtotal || estimate.subtotal,
-    tax: money.tax || estimate.tax,
-    total: money.total || estimate.total,
+    subtotal: estimate.subtotal ?? money.subtotal,
+    tax: estimate.tax ?? money.tax,
+    taxRatePercent,
+    total: estimate.total ?? money.total,
     createdAt: new Date().toISOString(),
     companySignedBy,
     companySignedAt,

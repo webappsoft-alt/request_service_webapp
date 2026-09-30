@@ -78,3 +78,37 @@ export function invalidateTaxRateCache(stateCode?: string) {
   }
   cache.clear();
 }
+
+/** Display helper: always show a numeric percent (including 0). */
+export function formatTaxRatePercent(rate: number | null | undefined) {
+  const value = Math.max(0, Number(rate) || 0);
+  if (Number.isInteger(value)) return String(value);
+  return String(Math.round(value * 100) / 100);
+}
+
+/**
+ * Subtotal → State Tax → Total (cents-correct; matches backend calculateTotals).
+ * Tax is computed on the pre-discount subtotal, then discount is applied to the total.
+ */
+export function moneyWithStateTax(
+  subtotal: number,
+  taxRatePercent = 0,
+  discount = 0,
+) {
+  const safeSubtotal = Math.max(0, Math.round((Number(subtotal) || 0) * 100) / 100);
+  const rate = Math.max(0, Number(taxRatePercent) || 0);
+  const safeDiscount = Math.min(
+    Math.max(0, Number(discount) || 0),
+    safeSubtotal,
+  );
+  const tax =
+    Math.round(((safeSubtotal * rate) / 100) * 100) / 100;
+  const total =
+    Math.round((Math.max(0, safeSubtotal - safeDiscount) + tax) * 100) / 100;
+  return {
+    subtotal: safeSubtotal,
+    discount: safeDiscount,
+    tax,
+    total,
+  };
+}

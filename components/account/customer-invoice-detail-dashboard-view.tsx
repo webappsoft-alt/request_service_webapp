@@ -393,14 +393,12 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                   </div>
                 ) : null}
 
-                {invoice.tax > 0 ? (
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>Tax</span>
-                    <span className="font-medium tabular-nums text-foreground">
-                      +{formatMoney(invoice.tax)}
-                    </span>
-                  </div>
-                ) : null}
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Tax</span>
+                  <span className="font-medium tabular-nums text-foreground">
+                    {invoice.tax > 0 ? `+${formatMoney(invoice.tax)}` : formatMoney(0)}
+                  </span>
+                </div>
 
                 <div className="flex items-center justify-between border-t border-input pt-2 text-base font-bold text-foreground">
                   <span>Invoice total</span>

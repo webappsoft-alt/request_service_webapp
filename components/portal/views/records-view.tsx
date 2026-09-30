@@ -141,6 +141,7 @@ export function EstimatesView() {
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<EstimateRow | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [changesRequestedCount, setChangesRequestedCount] = useState(0);
   // Controlled search input — updated immediately on keypress
   const [searchInput, setSearchInput] = useState("");
   // Debounce timer ref
@@ -184,6 +185,38 @@ export function EstimatesView() {
     page,
     limit,
   );
+
+  // Keep Changes requested tab badge in sync (independent of active filter).
+  useEffect(() => {
+    if (!useApi) {
+      setChangesRequestedCount(0);
+      return;
+    }
+    if (statusParam === "changes_requested") {
+      setChangesRequestedCount(Math.max(0, Number(total) || 0));
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await queryEstimates({
+          status: "changes_requested",
+          page: 1,
+          limit: 1,
+          silent: true,
+          force: true,
+        });
+        if (!cancelled) {
+          setChangesRequestedCount(Math.max(0, Number(result.total) || 0));
+        }
+      } catch {
+        if (!cancelled) setChangesRequestedCount(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [useApi, statusParam, total, loading]);
 
   const allRequests = useMemo(
     () => records.mergeRequests(requests),
@@ -386,7 +419,11 @@ export function EstimatesView() {
       <FilterTabs
         baseHref="/pro/dashboard/estimates"
         value={statusParam}
-        options={withArchiveFilter(ESTIMATE_STATUS_FILTERS)}
+        options={withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((opt) =>
+          opt.value === "changes_requested"
+            ? { ...opt, count: changesRequestedCount }
+            : opt,
+        )}
       />
       <PortalDataTable
         filename="estimates"

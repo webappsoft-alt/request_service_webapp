@@ -318,7 +318,13 @@ export const ESTIMATE_STATUSES: EstimateStatus[] = [
 
 export const ESTIMATE_STATUS_FILTERS = [
   { value: "", label: "All" },
-  ...ESTIMATE_STATUSES.filter((status) => status !== "draft").map((status) => ({
+  {
+    value: "changes_requested",
+    label: estimateStatusLabel("changes_requested"),
+  },
+  ...ESTIMATE_STATUSES.filter(
+    (status) => status !== "draft" && status !== "changes_requested",
+  ).map((status) => ({
     value: status,
     label: estimateStatusLabel(status),
   })),

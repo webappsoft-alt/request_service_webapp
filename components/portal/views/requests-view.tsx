@@ -101,7 +101,7 @@ function formatReceivedDateTime(dateStr?: string | null) {
 
 const filters = [
   { value: "", label: "All" },
-  { value: "new", label: "New" },
+  { value: "new,viewed", label: "New" },
   { value: "contacted", label: "Active" },
   { value: "scheduled", label: "Scheduled" },
   { value: "closed", label: "History" },
@@ -130,7 +130,12 @@ export function RequestsView() {
   const search = reduxRequests.search || "";
 
   // Map filter-tab values to API status when needed. "All" = no status filter.
-  const apiStatus = archivedOnly ? "" : status;
+  // Legacy ?status=new should still include viewed (same New inbox bucket).
+  const apiStatus = archivedOnly
+    ? ""
+    : status === "new"
+      ? "new,viewed"
+      : status;
 
   const cacheKey = requestsCacheKey(apiStatus, search, page, limit);
   const cachedItems = reduxRequests.pagesCache[cacheKey];
@@ -278,7 +283,7 @@ export function RequestsView() {
         type === "ESTIMATE_ACCEPTED" ||
         type === "ORDER_UPDATED"
       ) {
-        void refreshLeads({ showLoading: false, invalidate: false });
+        void refreshLeads({ showLoading: false, invalidate: true });
       }
     };
 

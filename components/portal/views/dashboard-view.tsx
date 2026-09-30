@@ -55,7 +55,19 @@ export function DashboardView() {
   const [taskOpen, setTaskOpen] = useState(false);
 
   useEffect(() => {
-    void dispatch(fetchProviderDashboard({ force: false, silent: true }));
+    // Always load fresh Incoming requests (new quote leads) when opening Overview.
+    void dispatch(fetchProviderDashboard({ force: true, silent: true }));
+  }, [dispatch]);
+
+  useEffect(() => {
+    const onRealtime = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: string }>).detail;
+      if (detail?.type === "LEAD_CREATED" || detail?.type === "LEAD_UPDATED") {
+        void dispatch(fetchProviderDashboard({ force: true, silent: true }));
+      }
+    };
+    window.addEventListener("rs-realtime", onRealtime);
+    return () => window.removeEventListener("rs-realtime", onRealtime);
   }, [dispatch]);
 
   useEffect(() => {
@@ -163,7 +175,7 @@ export function DashboardView() {
               label="Open leads"
               value={String(Math.max(leads?.openCount ?? 0, leads?.newFromWebsite ?? 0))}
               note={`${leads?.newFromWebsite ?? 0} new from the website`}
-              href="/pro/dashboard/requests?status=new"
+              href="/pro/dashboard/requests?status=new,viewed"
             />
             <BreakdownCard
               label="Leads by status"

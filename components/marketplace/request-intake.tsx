@@ -30,6 +30,11 @@ import {
 import { getJobRecord } from "@/lib/data/jobs";
 import { isValidZip } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
+import {
+  selectAuthUser,
+  selectIsAuthenticated,
+} from "@/store/authSlice";
 
 const MAX_INTAKE_PHOTOS = 8;
 
@@ -61,6 +66,9 @@ export function RequestIntake({
   onComplete: (answers: IntakeAnswers) => void | Promise<void>;
 }) {
   const searchParams = useSearchParams();
+  const authUser = useAppSelector(selectAuthUser);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const contactLocked = Boolean(isAuthenticated && authUser);
   const startingService = searchParams.get("service") ?? "";
   const startingZipRaw = searchParams.get("zip") ?? "";
   const startingZip = isValidZip(startingZipRaw) ? startingZipRaw.trim() : "";
@@ -114,6 +122,37 @@ export function RequestIntake({
     () => getIntakeSteps(answers.service, startingZip || undefined),
     [answers.service, startingZip],
   );
+
+  // Logged-in customers: lock contact fields to their account profile.
+  useEffect(() => {
+    if (!contactLocked || !authUser) return;
+    const firstName = String(authUser.firstName || "").trim();
+    const lastName = String(authUser.lastName || "").trim();
+    const email = String(authUser.email || "").trim();
+    const phone = String(authUser.phone || "").trim();
+    setAnswers((current) => {
+      const nextFirst = firstName || current.firstName || "";
+      const nextLast = lastName || current.lastName || "";
+      const nextEmail = email || current.email || "";
+      const nextPhone = phone || current.phone || "";
+      if (
+        current.firstName === nextFirst &&
+        current.lastName === nextLast &&
+        current.email === nextEmail &&
+        current.phone === nextPhone
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        firstName: nextFirst,
+        lastName: nextLast,
+        email: nextEmail,
+        phone: nextPhone,
+        name: [nextFirst, nextLast].filter(Boolean).join(" "),
+      };
+    });
+  }, [authUser, contactLocked]);
 
   useEffect(() => {
     setStepIndex((current) => Math.min(current, Math.max(0, steps.length - 1)));
@@ -518,6 +557,8 @@ export function RequestIntake({
               onChange={(event) => setAnswer("firstName", event.target.value)}
               autoComplete="given-name"
               placeholder="Jordan"
+              disabled={contactLocked}
+              readOnly={contactLocked}
             />
           </Field>
           <Field>
@@ -528,6 +569,8 @@ export function RequestIntake({
               onChange={(event) => setAnswer("lastName", event.target.value)}
               autoComplete="family-name"
               placeholder="Lee"
+              disabled={contactLocked}
+              readOnly={contactLocked}
             />
           </Field>
           <Field className="sm:col-span-2">
@@ -539,6 +582,8 @@ export function RequestIntake({
               onChange={(event) => setAnswer("email", event.target.value)}
               autoComplete="email"
               placeholder="you@email.com"
+              disabled={contactLocked}
+              readOnly={contactLocked}
             />
           </Field>
           <Field className="sm:col-span-2">
@@ -548,8 +593,14 @@ export function RequestIntake({
               value={answers.phone ?? ""}
               onChange={(value) => setAnswer("phone", value)}
               placeholder="(512) 555-0182"
+              disabled={contactLocked}
             />
           </Field>
+          {contactLocked ? (
+            <p className="sm:col-span-2 text-xs text-muted-foreground">
+              Contact details come from your account and can’t be edited here.
+            </p>
+          ) : null}
         </div>
       ) : null}
 

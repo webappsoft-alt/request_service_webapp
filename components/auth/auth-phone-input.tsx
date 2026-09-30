@@ -313,6 +313,7 @@ export function AuthPhoneInput({
         disabled={disabled}
         enableSearch
         disableSearchIcon
+        searchPlaceholder="Search countries…"
         countryCodeEditable={false}
         placeholder={placeholder}
         specialLabel=""

@@ -25,6 +25,7 @@ import {
   selectCustomerOrdersPagination,
 } from "@/store/ordersSlice";
 import {
+  CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
   fetchCustomerEstimates,
   fetchCustomerQuoteRequests,
   selectCustomerApiEstimates,
@@ -156,7 +157,13 @@ export function CustomerDashboardView() {
   useEffect(() => {
     void dispatch(fetchCustomerOrders({ page: 1, limit: 5 }));
     void dispatch(fetchCustomerEstimates());
-    void dispatch(fetchCustomerQuoteRequests());
+    void dispatch(
+      fetchCustomerQuoteRequests({
+        page: 1,
+        limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+        force: true,
+      }),
+    );
     void dispatch(fetchCustomerInvoices());
   }, [dispatch]);
 
@@ -237,7 +244,7 @@ export function CustomerDashboardView() {
           <Button asChild size="sm">
             <Link href={customerPaths.estimateRequest}>
               <Plus className="size-3.5" />
-              Request new estimate
+              Request new quote
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">

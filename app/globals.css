@@ -907,6 +907,17 @@
   padding: 0.35rem 0.65rem !important;
   background: transparent !important;
   color: var(--foreground) !important;
+  font-size: 0.875rem !important;
+  outline: none !important;
+}
+
+.rs-phone-input .rs-phone-search::placeholder {
+  color: var(--muted-foreground) !important;
+}
+
+.rs-phone-input .rs-phone-search:focus {
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent) !important;
 }
 
 .rs-phone-input .react-tel-input .flag-dropdown.open,

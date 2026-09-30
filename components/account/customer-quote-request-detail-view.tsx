@@ -52,6 +52,7 @@ import {
   selectIsAuthenticated,
 } from "@/store/authSlice";
 import {
+  CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
   fetchCustomerEstimates,
   fetchCustomerQuoteRequests,
   selectCustomerApiEstimates,
@@ -67,6 +68,7 @@ function isDeclinedStatus(status: string) {
 
 function statusLabel(status: string) {
   const clean = String(status || "").toLowerCase();
+  if (clean === "new") return "Pending";
   if (clean === "converted_to_job") return "Job Created";
   if (clean === "site_visit") return "Site Visit";
   if (clean === "changes_requested") return "Changes Requested";
@@ -378,7 +380,14 @@ export function CustomerQuoteRequestDetailView() {
       );
       return;
     }
-    void dispatch(fetchCustomerQuoteRequests());
+    void dispatch(
+      fetchCustomerQuoteRequests({
+        page: 1,
+        limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+        search: id,
+        force: true,
+      }),
+    );
     void dispatch(fetchCustomerEstimates());
   }, [auth.hydrated, isAuthenticated, router, dispatch, id]);
 
@@ -543,7 +552,14 @@ export function CustomerQuoteRequestDetailView() {
       );
       setAcceptTarget(null);
       await Promise.all([
-        dispatch(fetchCustomerQuoteRequests()),
+        dispatch(
+          fetchCustomerQuoteRequests({
+            page: 1,
+            limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+            search: id,
+            force: true,
+          }),
+        ),
         dispatch(fetchCustomerEstimates()),
       ]);
     } catch (err) {
@@ -1358,21 +1374,37 @@ export function CustomerQuoteRequestDetailView() {
         if (!open && !accepting) setAcceptTarget(null);
       }}
     >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md" showCloseButton={!accepting}>
+        <DialogHeader className="bg-transparent">
           <DialogTitle>Accept this estimate?</DialogTitle>
-          <DialogDescription>
-            Accept{" "}
-            <strong>{acceptTarget?.number}</strong> from{" "}
-            <strong>{acceptTarget?.providerName}</strong>
-            {acceptTarget?.total
-              ? ` for ${formatMoney(acceptTarget.total)}`
-              : ""}
-            . Other estimates for this request will be rejected and their Accept
-            buttons will be removed.
-          </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogDescription className="space-y-2 text-sm leading-relaxed">
+          <span className="block">
+            Accept{" "}
+            <strong className="font-semibold text-foreground">
+              {acceptTarget?.number || "this estimate"}
+            </strong>{" "}
+            from{" "}
+            <strong className="font-semibold text-foreground">
+              {acceptTarget?.providerName || "this professional"}
+            </strong>
+            {acceptTarget?.total != null ? (
+              <>
+                {" "}
+                for{" "}
+                <strong className="font-semibold text-foreground">
+                  {formatMoney(acceptTarget.total)}
+                </strong>
+              </>
+            ) : null}
+            .
+          </span>
+          <span className="block">
+            Other estimates for this request will be rejected and their Accept
+            buttons will be removed.
+          </span>
+        </DialogDescription>
+        <DialogFooter className="gap-2 sm:gap-2">
           <Button
             type="button"
             variant="outline"
@@ -1386,7 +1418,7 @@ export function CustomerQuoteRequestDetailView() {
             disabled={accepting || !acceptTarget?.id}
             onClick={() => void confirmAcceptEstimate()}
           >
-            {accepting ? "Accepting…" : "Confirm accept"}
+            {accepting ? "Accepting…" : "Accept"}
           </Button>
         </DialogFooter>
       </DialogContent>

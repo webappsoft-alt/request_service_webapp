@@ -21,8 +21,13 @@ import type {
 import type { PortalCalendarEvent, PortalEmployee, PortalRequest } from "@/lib/data/portal";
 import type { ChatThread } from "@/lib/booking/chat-store";
 import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import { fetchProviderDashboard } from "@/store/dashboardSlice";
+import {
+  fetchRequests,
+  invalidateRequestsCache,
+} from "@/store/requestsSlice";
 import { getAuthToken, getAuthUser } from "@/components/api/apiFuntions";
 import { applyPortalInboxCounts } from "@/components/portal/portal-inbox-counts-store";
 import {
@@ -188,6 +193,7 @@ function toState(snapshot: CrmSnapshot): CrmDataState {
 }
 
 export function CrmDataProvider({ children }: PropsWithChildren) {
+  const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const mountedRef = useRef(true);
@@ -436,6 +442,10 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
           },
         }));
         requestCountsSoon();
+        // Keep Overview Incoming requests and Leads list in sync with the new quote.
+        void dispatch(fetchProviderDashboard({ force: true, silent: true }));
+        dispatch(invalidateRequestsCache());
+        void dispatch(fetchRequests({ force: true, silent: true, page: 1 }));
         return;
       }
 
@@ -641,7 +651,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       window.removeEventListener("rs-realtime", onRealtimeMessage);
       window.removeEventListener("rs-lead-status", onLeadStatus);
     };
-  }, [enabled, patchRequest]);
+  }, [enabled, patchRequest, dispatch]);
 
 
   const value = useMemo<CrmApiContextValue>(

@@ -393,6 +393,8 @@ export function RequestServiceForm({
   const router = useRouter();
   const dispatch = useAppDispatch();
   const authUser = useAppSelector(selectAuthUser);
+  const contactLocked = Boolean(authUser);
+
   const professionalDetail = useAppSelector(
     (state) => state.publicProfessionals?.detail ?? null,
   );
@@ -1303,6 +1305,8 @@ export function RequestServiceForm({
                     autoComplete="given-name"
                     placeholder="Jordan"
                     required
+                    disabled={contactLocked}
+                    readOnly={contactLocked}
                   />
                 </Field>
                 <Field>
@@ -1314,6 +1318,8 @@ export function RequestServiceForm({
                     autoComplete="family-name"
                     placeholder="Lee"
                     required
+                    disabled={contactLocked}
+                    readOnly={contactLocked}
                   />
                 </Field>
                 <Field className="sm:col-span-2">
@@ -1326,6 +1332,8 @@ export function RequestServiceForm({
                     autoComplete="email"
                     placeholder="you@email.com"
                     required
+                    disabled={contactLocked}
+                    readOnly={contactLocked}
                   />
                 </Field>
                 <Field className="sm:col-span-2">
@@ -1336,6 +1344,7 @@ export function RequestServiceForm({
                     onChange={setPhone}
                     placeholder="(512) 555-0182"
                     required
+                    disabled={contactLocked}
                   />
                 </Field>
               </div>
@@ -1488,6 +1497,8 @@ export function RequestServiceForm({
               autoComplete="given-name"
               placeholder="Jordan"
               required
+              disabled={contactLocked}
+              readOnly={contactLocked}
             />
           </Field>
           <Field>
@@ -1499,6 +1510,8 @@ export function RequestServiceForm({
               autoComplete="family-name"
               placeholder="Lee"
               required
+              disabled={contactLocked}
+              readOnly={contactLocked}
             />
           </Field>
           <Field className="sm:col-span-2">
@@ -1511,6 +1524,8 @@ export function RequestServiceForm({
               autoComplete="email"
               placeholder="you@email.com"
               required
+              disabled={contactLocked}
+              readOnly={contactLocked}
             />
           </Field>
           <Field className="sm:col-span-2">
@@ -1521,6 +1536,7 @@ export function RequestServiceForm({
               onChange={setPhone}
               placeholder="(512) 555-0182"
               required
+              disabled={contactLocked}
             />
           </Field>
         </div>

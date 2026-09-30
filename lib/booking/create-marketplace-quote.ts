@@ -1,5 +1,5 @@
-import { postData } from "@/components/api/apiFuntions";
-import { publicQuoteApi } from "@/components/api/ApiRoutesFile";
+import { postData, invalidateGetCache } from "@/components/api/apiFuntions";
+import { publicQuoteApi, userApi } from "@/components/api/ApiRoutesFile";
 import { formatIntakeQuote, writePendingQuote, clearPendingQuote } from "@/lib/booking/format-quote-answers";
 import type { IntakeAnswers } from "@/lib/data/intake";
 import { getAreaName } from "@/lib/data/service-areas";
@@ -135,6 +135,8 @@ export async function createMarketplaceQuote(input: {
     token: null,
     skipLogoutOn401: true,
   });
+  // Creating a quote must refresh the customer dashboard list (different endpoint).
+  invalidateGetCache(userApi.quoteRequests);
   const requests = (response?.data?.requests ?? []).map((item) => {
     const matchedProvider = providers.find(
       (provider) => provider.id === item.providerId || provider.slug === item.providerSlug,

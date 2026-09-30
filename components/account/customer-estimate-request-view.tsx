@@ -15,6 +15,7 @@ import { customerPaths } from "@/lib/customer-paths";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
 import {
+  CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
   fetchCustomerQuoteRequests,
   fetchCustomerEstimates,
 } from "@/store/customerQuotesSlice";
@@ -73,7 +74,13 @@ export function CustomerEstimateRequestView() {
           ? `Request sent to ${count} matching professionals.`
           : result.message || "Request sent to the professional.",
       );
-      void dispatch(fetchCustomerQuoteRequests());
+      void dispatch(
+        fetchCustomerQuoteRequests({
+          page: 1,
+          limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+          force: true,
+        }),
+      );
       void dispatch(fetchCustomerEstimates());
       router.push(customerPaths.estimateRequests);
     } catch (err) {
@@ -88,7 +95,7 @@ export function CustomerEstimateRequestView() {
   return (
     <PortalPage
       eyebrow="Estimates"
-      title="Request new estimate"
+      title="Request new quote"
       description="Same questions as Get a Quote on the website. Matching professionals receive your answers as a lead."
       actions={
         <Button asChild variant="outline" size="sm">

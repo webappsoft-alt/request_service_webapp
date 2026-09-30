@@ -26,17 +26,20 @@ import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
 import {
+  CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
   fetchCustomerEstimates,
   fetchCustomerQuoteRequests,
   selectCustomerApiEstimates,
   selectCustomerApiEstimatesLoading,
   selectCustomerQuoteBatches,
   selectCustomerQuoteBatchesLoading,
+  selectCustomerQuoteBatchesPagination,
   type CustomerQuoteBatch,
 } from "@/store/customerQuotesSlice";
 
 function statusLabel(status: string, jobNumber?: string | null) {
   const value = String(status || "").toLowerCase();
+  if (value === "new") return "Pending";
   if (value === "site_visit") return "Site visit";
   if (value === "draft") return "Preparing";
   if (value === "inspected") return "Inspected";
@@ -118,9 +121,15 @@ export function CustomerEstimatesDashboardView({
   const apiEstimatesLoading = useAppSelector(selectCustomerApiEstimatesLoading);
   const batches = useAppSelector(selectCustomerQuoteBatches);
   const batchesLoading = useAppSelector(selectCustomerQuoteBatchesLoading);
+  const batchesPagination = useAppSelector(
+    selectCustomerQuoteBatchesPagination,
+  );
   const [remembered, setRemembered] = useState<CustomerEstimateListItem[]>([]);
   const [rememberedLoading, setRememberedLoading] = useState(true);
   const [openLink, setOpenLink] = useState("");
+  const [requestsPage, setRequestsPage] = useState(1);
+  const [requestsSearchInput, setRequestsSearchInput] = useState("");
+  const [requestsSearch, setRequestsSearch] = useState("");
 
   const tabParam = searchParams.get("tab");
   const activeTab: TabId =
@@ -129,6 +138,16 @@ export function CustomerEstimatesDashboardView({
       : tabParam === "requests"
         ? "requests"
         : defaultTab;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const next = requestsSearchInput.trim();
+      if (next === requestsSearch) return;
+      setRequestsSearch(next);
+      setRequestsPage(1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [requestsSearchInput, requestsSearch]);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -140,7 +159,14 @@ export function CustomerEstimatesDashboardView({
     }
 
     void dispatch(fetchCustomerEstimates());
-    void dispatch(fetchCustomerQuoteRequests());
+    void dispatch(
+      fetchCustomerQuoteRequests({
+        page: requestsPage,
+        limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+        search: requestsSearch || undefined,
+        force: true,
+      }),
+    );
 
     let cancelled = false;
     void (async () => {
@@ -158,8 +184,14 @@ export function CustomerEstimatesDashboardView({
     return () => {
       cancelled = true;
     };
-  }, [auth.hydrated, isAuthenticated, router, dispatch]);
-
+  }, [
+    auth.hydrated,
+    isAuthenticated,
+    router,
+    dispatch,
+    requestsPage,
+    requestsSearch,
+  ]);
   const estimateItems = useMemo(() => {
     const byToken = new Map<string, CustomerEstimateListItem>();
     for (const item of remembered) {
@@ -270,7 +302,7 @@ export function CustomerEstimatesDashboardView({
         <Button asChild size="sm">
           <Link href={customerPaths.estimateRequest}>
             <Plus className="size-3.5" />
-            Request new estimate
+            Request new quote
           </Link>
         </Button>
       }
@@ -310,6 +342,21 @@ export function CustomerEstimatesDashboardView({
           searchPlaceholder="Search requests…"
           loading={loadingRequests}
           rows={batches}
+          pageSize={
+            batchesPagination.limit || CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT
+          }
+          serverPagination={{
+            page: batchesPagination.page || requestsPage,
+            pageSize:
+              batchesPagination.limit || CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+            total: batchesPagination.total ?? batches.length,
+            totalPages: batchesPagination.totalPages || 1,
+            onPageChange: (nextPage) => setRequestsPage(nextPage),
+            search: requestsSearchInput,
+            onSearchChange: (val) => {
+              setRequestsSearchInput(val);
+            },
+          }}
           rowKey={(row) => batchKey(row)}
           rowHref={(row) => customerPaths.quoteRequest(batchKey(row))}
           empty="No quote requests yet."

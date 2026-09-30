@@ -4,6 +4,8 @@ import { getData } from "@/components/api/sliceHttp";
 import { userApi } from "@/components/api/ApiRoutesFile";
 import type { RootState } from "@/store";
 
+export const CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT = 20;
+
 export type CustomerQuoteProfessional = {
   requestId: string;
   number: string;
@@ -67,8 +69,18 @@ export type CustomerApiEstimate = {
   } | null;
 };
 
+export type CustomerQuoteRequestsPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+};
+
 type CustomerQuotesState = {
   batches: CustomerQuoteBatch[];
+  batchesPagination: CustomerQuoteRequestsPagination | null;
   batchesLoading: boolean;
   batchesLoaded: boolean;
   batchesError: string | null;
@@ -78,8 +90,18 @@ type CustomerQuotesState = {
   estimatesError: string | null;
 };
 
+const initialPagination = (): CustomerQuoteRequestsPagination => ({
+  page: 1,
+  limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+  total: 0,
+  totalPages: 1,
+  hasNextPage: false,
+  hasPrevPage: false,
+});
+
 const initialState: CustomerQuotesState = {
   batches: [],
+  batchesPagination: null,
   batchesLoading: false,
   batchesLoaded: false,
   batchesError: null,
@@ -109,101 +131,179 @@ function numberValue(value: unknown, fallback = 0) {
   return fallback;
 }
 
-export const fetchCustomerQuoteRequests = createAsyncThunk(
-  "customerQuotes/fetchQuoteRequests",
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await getData(userApi.quoteRequests);
-      const root = asRecord(response);
-      const data = asRecord(root?.data) ?? root;
-      const batchesRaw = Array.isArray(data?.batches) ? data.batches : [];
-      const batches: CustomerQuoteBatch[] = batchesRaw.map((item) => {
-        const row = asRecord(item) ?? {};
-        const professionalsRaw = Array.isArray(row.professionals)
-          ? row.professionals
-          : [];
-        const rawPhotos = Array.isArray(row.photos)
-          ? row.photos
-          : Array.isArray(row.images)
-            ? row.images
-            : [];
-        const photos = rawPhotos.filter((p): p is string => typeof p === "string" && Boolean(p.trim()));
+function parseBatches(raw: unknown[]): CustomerQuoteBatch[] {
+  return raw.map((item) => {
+    const row = asRecord(item) ?? {};
+    const professionalsRaw = Array.isArray(row.professionals)
+      ? row.professionals
+      : [];
+    const rawPhotos = Array.isArray(row.photos)
+      ? row.photos
+      : Array.isArray(row.images)
+        ? row.images
+        : [];
+    const photos = rawPhotos.filter(
+      (p): p is string => typeof p === "string" && Boolean(p.trim()),
+    );
+
+    return {
+      quoteBatchId: stringValue(row.quoteBatchId) || null,
+      serviceName: stringValue(row.serviceName) || "Service request",
+      zip: stringValue(row.zip),
+      street: stringValue(row.street),
+      city: stringValue(row.city),
+      state: stringValue(row.state),
+      channel: stringValue(row.channel),
+      createdAt: stringValue(row.createdAt),
+      details: stringValue(row.details),
+      answers: Array.isArray(row.answers)
+        ? row.answers.map((a) => {
+            const ans = asRecord(a) ?? {};
+            return {
+              id: stringValue(ans.id),
+              label: stringValue(ans.label),
+              value: stringValue(ans.value),
+            };
+          })
+        : [],
+      photos,
+      images: photos,
+      sentToCount: numberValue(row.sentToCount),
+      seenCount: numberValue(row.seenCount),
+      estimateCount: numberValue(row.estimateCount),
+      professionals: professionalsRaw.map((pro) => {
+        const p = asRecord(pro) ?? {};
+        const estimatesRaw = Array.isArray(p.estimates) ? p.estimates : [];
+        const proPhotos = (
+          Array.isArray(p.photos)
+            ? p.photos
+            : Array.isArray(p.images)
+              ? p.images
+              : []
+        ).filter((x): x is string => typeof x === "string" && Boolean(x.trim()));
 
         return {
-          quoteBatchId: stringValue(row.quoteBatchId) || null,
-          serviceName: stringValue(row.serviceName) || "Service request",
-          zip: stringValue(row.zip),
-          street: stringValue(row.street),
-          city: stringValue(row.city),
-          state: stringValue(row.state),
-          channel: stringValue(row.channel),
-          createdAt: stringValue(row.createdAt),
-          details: stringValue(row.details),
-          answers: Array.isArray(row.answers)
-            ? row.answers.map((a) => {
-                const ans = asRecord(a) ?? {};
-                return {
-                  id: stringValue(ans.id),
-                  label: stringValue(ans.label),
-                  value: stringValue(ans.value),
-                };
-              })
-            : [],
-          photos,
-          images: photos,
-          sentToCount: numberValue(row.sentToCount),
-          seenCount: numberValue(row.seenCount),
-          estimateCount: numberValue(row.estimateCount),
-          professionals: professionalsRaw.map((pro) => {
-            const p = asRecord(pro) ?? {};
-            const estimatesRaw = Array.isArray(p.estimates) ? p.estimates : [];
-            const proPhotos = (
-              Array.isArray(p.photos)
-                ? p.photos
-                : Array.isArray(p.images)
-                  ? p.images
+          requestId: stringValue(p.requestId),
+          number: stringValue(p.number),
+          providerId: stringValue(p.providerId),
+          providerName: stringValue(p.providerName) || "Professional",
+          providerSlug: stringValue(p.providerSlug),
+          status: stringValue(p.status) || "new",
+          seen: Boolean(p.seen),
+          firstViewedAt: stringValue(p.firstViewedAt) || null,
+          photos: proPhotos,
+          images: proPhotos,
+          estimates: estimatesRaw.map((est) => {
+            const e = asRecord(est) ?? {};
+            const estPhotos = (
+              Array.isArray(e.photos)
+                ? e.photos
+                : Array.isArray(e.images)
+                  ? e.images
                   : []
-            ).filter((x): x is string => typeof x === "string" && Boolean(x.trim()));
+            ).filter(
+              (x): x is string => typeof x === "string" && Boolean(x.trim()),
+            );
 
             return {
-              requestId: stringValue(p.requestId),
-              number: stringValue(p.number),
-              providerId: stringValue(p.providerId),
-              providerName: stringValue(p.providerName) || "Professional",
-              providerSlug: stringValue(p.providerSlug),
-              status: stringValue(p.status) || "new",
-              seen: Boolean(p.seen),
-              firstViewedAt: stringValue(p.firstViewedAt) || null,
-              photos: proPhotos,
-              images: proPhotos,
-              estimates: estimatesRaw.map((est) => {
-                const e = asRecord(est) ?? {};
-                const estPhotos = (
-                  Array.isArray(e.photos)
-                    ? e.photos
-                    : Array.isArray(e.images)
-                      ? e.images
-                      : []
-                ).filter((x): x is string => typeof x === "string" && Boolean(x.trim()));
-
-                return {
-                  id: stringValue(e.id),
-                  number: stringValue(e.number),
-                  title: stringValue(e.title),
-                  status: stringValue(e.status),
-                  shareToken: stringValue(e.shareToken),
-                  total: numberValue(e.total),
-                  createdAt: stringValue(e.createdAt) || undefined,
-                  photos: estPhotos,
-                  images: estPhotos,
-                  siteVisit: e.siteVisit || undefined,
-                };
-              }),
+              id: stringValue(e.id),
+              number: stringValue(e.number),
+              title: stringValue(e.title),
+              status: stringValue(e.status),
+              shareToken: stringValue(e.shareToken),
+              total: numberValue(e.total),
+              createdAt: stringValue(e.createdAt) || undefined,
+              photos: estPhotos,
+              images: estPhotos,
+              siteVisit: e.siteVisit || undefined,
             };
           }),
         };
-      });
-      return batches;
+      }),
+    };
+  });
+}
+
+function parsePagination(
+  raw: unknown,
+  fallbackCount: number,
+  page: number,
+  limit: number,
+): CustomerQuoteRequestsPagination {
+  const pagination = asRecord(raw) ?? {};
+  const resolvedPage = Math.max(
+    1,
+    numberValue(pagination.page ?? pagination.currentPage, page),
+  );
+  const resolvedLimit = Math.max(
+    1,
+    numberValue(pagination.limit, limit || CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT),
+  );
+  const total = Math.max(
+    0,
+    numberValue(
+      pagination.total ?? pagination.totalRecords ?? fallbackCount,
+      fallbackCount,
+    ),
+  );
+  let totalPages = Math.max(1, numberValue(pagination.totalPages, 0));
+  if (!pagination.totalPages) {
+    totalPages = Math.max(1, Math.ceil(total / resolvedLimit) || 1);
+  }
+  const hasNextPage =
+    typeof pagination.hasNextPage === "boolean"
+      ? pagination.hasNextPage
+      : resolvedPage < totalPages;
+  const hasPrevPage =
+    typeof pagination.hasPrevPage === "boolean"
+      ? pagination.hasPrevPage
+      : resolvedPage > 1;
+  return {
+    page: resolvedPage,
+    limit: resolvedLimit,
+    total,
+    totalPages,
+    hasNextPage,
+    hasPrevPage,
+  };
+}
+
+export const fetchCustomerQuoteRequests = createAsyncThunk(
+  "customerQuotes/fetchQuoteRequests",
+  async (
+    arg:
+      | {
+          page?: number;
+          limit?: number;
+          search?: string;
+          force?: boolean;
+        }
+      | undefined,
+    { rejectWithValue },
+  ) => {
+    const page = Math.max(1, Number(arg?.page) || 1);
+    const limit = Math.max(
+      1,
+      Number(arg?.limit) || CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+    );
+    const search = String(arg?.search || "").trim() || undefined;
+    try {
+      const response = await getData(
+        userApi.quoteRequests,
+        { page, limit, search },
+        { force: Boolean(arg?.force), silent: true },
+      );
+      const root = asRecord(response);
+      const data = asRecord(root?.data) ?? root;
+      const batchesRaw = Array.isArray(data?.batches) ? data.batches : [];
+      const batches = parseBatches(batchesRaw);
+      const pagination = parsePagination(
+        data?.pagination ?? root?.pagination,
+        numberValue(data?.count, batches.length),
+        page,
+        limit,
+      );
+      return { batches, pagination };
     } catch (err) {
       return rejectWithValue(
         extractErrorMessage(err) || "Could not load quote requests.",
@@ -270,7 +370,9 @@ const customerQuotesSlice = createSlice({
       .addCase(fetchCustomerQuoteRequests.fulfilled, (state, action) => {
         state.batchesLoading = false;
         state.batchesLoaded = true;
-        state.batches = action.payload;
+        state.batches = action.payload.batches;
+        state.batchesPagination =
+          action.payload.pagination || initialPagination();
       })
       .addCase(fetchCustomerQuoteRequests.rejected, (state, action) => {
         state.batchesLoading = false;
@@ -306,6 +408,8 @@ export const selectCustomerQuoteBatches = (state: RootState) =>
   state.customerQuotes?.batches ?? [];
 export const selectCustomerQuoteBatchesLoading = (state: RootState) =>
   Boolean(state.customerQuotes?.batchesLoading);
+export const selectCustomerQuoteBatchesPagination = (state: RootState) =>
+  state.customerQuotes?.batchesPagination ?? initialPagination();
 export const selectCustomerApiEstimates = (state: RootState) =>
   state.customerQuotes?.estimates ?? [];
 export const selectCustomerApiEstimatesLoading = (state: RootState) =>

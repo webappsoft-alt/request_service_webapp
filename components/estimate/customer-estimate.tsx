@@ -55,6 +55,7 @@ import {
 import { formatDate, formatMoney } from "@/lib/format";
 import { useAppDispatch } from "@/store/hooks";
 import {
+  CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
   fetchCustomerEstimates,
   fetchCustomerQuoteRequests,
 } from "@/store/customerQuotesSlice";
@@ -588,7 +589,13 @@ export function CustomerEstimatePage({
     toast.success(
       "Estimate signed and approved! Other estimates for this request were declined. The company has been notified.",
     );
-    void dispatch(fetchCustomerQuoteRequests());
+    void dispatch(
+      fetchCustomerQuoteRequests({
+        page: 1,
+        limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+        force: true,
+      }),
+    );
     void dispatch(fetchCustomerEstimates());
     void load();
   }

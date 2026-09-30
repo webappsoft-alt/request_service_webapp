@@ -62,10 +62,31 @@ export type LineItemsEditorProps = {
   allowMaterialImages?: boolean;
   /** Minimum rows required before delete is disabled (default 0). */
   minLines?: number;
-  /** @deprecated Layout is table-fixed globally; prop kept for call-site compatibility. */
+  /** Prefer a wider description column (tighter Type/Unit/Price). */
   wideDescription?: boolean;
   className?: string;
 };
+
+function colWidths(wide: boolean) {
+  if (wide) {
+    return {
+      type: "w-[5.5rem]",
+      qty: "w-12",
+      unit: "w-14",
+      price: "w-16",
+      total: "w-16",
+      remove: "w-8",
+    };
+  }
+  return {
+    type: "w-32",
+    qty: "w-24",
+    unit: "w-36",
+    price: "w-28",
+    total: "w-32",
+    remove: "w-10",
+  };
+}
 
 export function LineItemsEditor({
   lines,
@@ -74,7 +95,7 @@ export function LineItemsEditor({
   showUnit = true,
   allowMaterialImages = true,
   minLines = 0,
-  wideDescription: _wideDescription = false,
+  wideDescription = false,
   className,
 }: LineItemsEditorProps) {
   function patch(id: string, next: Partial<JobCostLine>) {
@@ -99,33 +120,59 @@ export function LineItemsEditor({
   }
 
   const colSpan = showUnit ? 7 : 6;
+  const cols = colWidths(wideDescription);
 
   return (
     <div className={cn("w-full overflow-x-auto rounded-lg border border-border-soft bg-card", className)}>
-      <Table className="w-full min-w-[640px] table-fixed">
+      <Table className="w-full min-w-0 table-fixed">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <TableHead className="h-8 min-w-0 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
               Description
             </TableHead>
-            <TableHead className="h-8 w-32 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <TableHead
+              className={cn(
+                "h-8 bg-[#f7f8fa] px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                cols.type,
+              )}
+            >
               Type
             </TableHead>
-            <TableHead className="h-8 w-24 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <TableHead
+              className={cn(
+                "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                cols.qty,
+              )}
+            >
               Qty
             </TableHead>
             {showUnit ? (
-              <TableHead className="h-8 w-36 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <TableHead
+                className={cn(
+                  "h-8 bg-[#f7f8fa] px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                  cols.unit,
+                )}
+              >
                 Unit
               </TableHead>
             ) : null}
-            <TableHead className="h-8 w-28 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <TableHead
+              className={cn(
+                "h-8 bg-[#f7f8fa] px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                cols.price,
+              )}
+            >
               Price
             </TableHead>
-            <TableHead className="h-8 w-32 bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <TableHead
+              className={cn(
+                "h-8 bg-[#f7f8fa] px-0.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                cols.total,
+              )}
+            >
               Total
             </TableHead>
-            <TableHead className="h-8 w-10 bg-[#f7f8fa]">
+            <TableHead className={cn("h-8 bg-[#f7f8fa]", cols.remove)}>
               <span className="sr-only">Remove</span>
             </TableHead>
           </TableRow>
@@ -139,6 +186,7 @@ export function LineItemsEditor({
                 locked={locked}
                 showUnit={showUnit}
                 allowMaterialImages={allowMaterialImages}
+                wideDescription={wideDescription}
                 canRemove={!locked && lines.length > minLines}
                 onChange={patch}
                 onRemove={() => remove(line.id)}
@@ -162,6 +210,7 @@ function LineItemRow({
   locked,
   showUnit,
   allowMaterialImages,
+  wideDescription,
   canRemove,
   onChange,
   onRemove,
@@ -170,6 +219,7 @@ function LineItemRow({
   locked: boolean;
   showUnit: boolean;
   allowMaterialImages: boolean;
+  wideDescription: boolean;
   canRemove: boolean;
   onChange: (id: string, patch: Partial<JobCostLine>) => void;
   onRemove: () => void;
@@ -177,6 +227,7 @@ function LineItemRow({
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const cols = colWidths(wideDescription);
   const currentUnit =
     line.kind === "labor"
       ? "hr"
@@ -214,11 +265,12 @@ function LineItemRow({
     "h-8 border-border-soft bg-[#fafbfc] shadow-none focus-visible:bg-card";
   const numberField =
     "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  const compact = wideDescription;
 
   return (
     <TableRow className="hover:bg-transparent">
       <TableCell className="min-w-0 whitespace-normal align-top py-2">
-        <div className="flex w-full min-w-0 flex-col gap-1.5">
+        <div className="flex w-full min-w-0 flex-col gap-1">
           <div className="relative w-full min-w-0">
             <Input
               aria-label="Description"
@@ -268,7 +320,7 @@ function LineItemRow({
           </div>
           {showImages ? (
             <>
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1">
                 <input
                   ref={fileRef}
                   type="file"
@@ -281,7 +333,7 @@ function LineItemRow({
                   size="sm"
                   variant="ghost"
                   disabled={locked || uploading}
-                  className="h-7 gap-1 px-2 text-xs text-primary hover:bg-secondary"
+                  className="h-7 gap-1 px-1.5 text-xs text-primary hover:bg-secondary"
                   onClick={() => fileRef.current?.click()}
                 >
                   {uploading ? (
@@ -312,7 +364,7 @@ function LineItemRow({
           ) : null}
         </div>
       </TableCell>
-      <TableCell className="w-32 align-top py-2">
+      <TableCell className={cn(cols.type, "align-top px-1 py-2")}>
         <Select
           disabled={locked}
           value={line.kind}
@@ -331,7 +383,10 @@ function LineItemRow({
           <SelectTrigger
             aria-label="Type"
             size="sm"
-            className={cn(softField, "w-full min-w-0 justify-between gap-1 *:data-[slot=select-value]:line-clamp-none")}
+            className={cn(
+              softField,
+              "w-full min-w-0 justify-between gap-0.5 px-1.5 text-xs *:data-[slot=select-value]:line-clamp-none",
+            )}
           >
             <SelectValue placeholder="Type">
               {jobCostKindLabel(line.kind)}
@@ -347,10 +402,15 @@ function LineItemRow({
           </SelectContent>
         </Select>
       </TableCell>
-      <TableCell className="w-24 align-top py-2">
+      <TableCell className={cn(cols.qty, "align-top px-0.5 py-2")}>
         <Input
           aria-label="Quantity"
-          className={cn(softField, numberField, "w-full px-2 text-right tabular-nums")}
+          className={cn(
+            softField,
+            numberField,
+            "w-full px-1 text-center tabular-nums",
+            compact && "text-xs",
+          )}
           disabled={locked}
           inputMode="decimal"
           min={0}
@@ -371,7 +431,7 @@ function LineItemRow({
         />
       </TableCell>
       {showUnit ? (
-        <TableCell className="w-36 align-top py-2">
+        <TableCell className={cn(cols.unit, "align-top px-0.5 py-2")}>
           <Select
             disabled={locked}
             value={currentUnit}
@@ -380,14 +440,17 @@ function LineItemRow({
             <SelectTrigger
               aria-label="Unit"
               size="sm"
-              className={cn(softField, "w-full min-w-0 justify-between gap-1 *:data-[slot=select-value]:line-clamp-none")}
+              className={cn(
+                softField,
+                "w-full min-w-0 justify-between gap-0.5 px-1 text-xs *:data-[slot=select-value]:line-clamp-none",
+              )}
             >
               <SelectValue placeholder="Unit" />
             </SelectTrigger>
             <SelectContent
               position="popper"
               align="start"
-              className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[10rem]"
+              className="z-[100] w-auto min-w-[7.5rem]"
             >
               {unitOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
@@ -398,17 +461,22 @@ function LineItemRow({
           </Select>
         </TableCell>
       ) : null}
-      <TableCell className="w-28 align-top py-2">
+      <TableCell className={cn(cols.price, "align-top px-0.5 py-2")}>
         <div className="relative w-full">
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground"
+            className="pointer-events-none absolute top-1/2 left-1 -translate-y-1/2 text-xs text-muted-foreground"
           >
             $
           </span>
           <Input
             aria-label="Unit price"
-            className={cn(softField, numberField, "w-full pl-6 pr-2 text-right tabular-nums")}
+            className={cn(
+              softField,
+              numberField,
+              "w-full pl-4 pr-0.5 text-right tabular-nums",
+              compact && "text-xs",
+            )}
             disabled={locked}
             inputMode="decimal"
             min={0}
@@ -430,10 +498,16 @@ function LineItemRow({
           />
         </div>
       </TableCell>
-      <TableCell className="w-32 whitespace-nowrap align-top py-2 text-right text-sm font-medium tabular-nums">
+      <TableCell
+        className={cn(
+          cols.total,
+          "whitespace-nowrap align-top px-0.5 py-2 text-right font-medium tabular-nums",
+          compact ? "text-xs" : "text-sm",
+        )}
+      >
         {formatMoney(lineTotal(line))}
       </TableCell>
-      <TableCell className="w-10 align-top py-2 text-center">
+      <TableCell className={cn(cols.remove, "align-top px-0 py-2 text-center")}>
         {canRemove ? (
           <Button
             aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}

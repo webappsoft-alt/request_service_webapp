@@ -637,7 +637,7 @@ export function CreateEstimateDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="flex max-h-[min(92vh,54rem)] w-[calc(100%-1.5rem)] flex-col gap-4 overflow-hidden sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle>
               {isEdit ? "Edit estimate" : "Create estimate"}
@@ -664,6 +664,7 @@ export function CreateEstimateDialog({
                   ]
             }
           />
+          <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
           {tab === "customer" ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
@@ -852,6 +853,7 @@ export function CreateEstimateDialog({
           {tab === "scope" ? (
             <LineEditor lines={lines} onChange={setLines} />
           ) : null}
+          </div>
           <DialogFooter>
             {tab !== "customer" ? (
               <Button variant="outline" onClick={() => setTab(prevTab(tab))}>
@@ -1682,7 +1684,12 @@ function LineEditor({
         onAddMaterial={() => onChange([...lines, createEmptyLine("materials")])}
         className="justify-start"
       />
-      <LineItemsEditor lines={lines} onChange={onChange} allowMaterialImages />
+      <LineItemsEditor
+        lines={lines}
+        onChange={onChange}
+        allowMaterialImages
+        wideDescription
+      />
     </div>
   );
 }

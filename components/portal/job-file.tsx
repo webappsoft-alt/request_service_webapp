@@ -347,6 +347,17 @@ export function JobSummaryTab({
     (item) => item.label?.trim() && item.value?.trim(),
   ) ?? [];
 
+  const jobSiteAddress = [
+    job.address?.street,
+    formatLocation(
+      job.address?.city || "",
+      job.address?.state || "",
+      job.address?.zip,
+    ),
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   const apiActivities = isEstimate
     ? estimateActivities
     : isJobRecord
@@ -380,7 +391,49 @@ export function JobSummaryTab({
 
   return (
     <div className="space-y-4">
-      {isEstimate ? (
+      {!isEstimate ? (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-md border border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
+          <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+            <span className="text-muted-foreground">Customer:</span>
+            {job.customerId ? (
+              <Link
+                href={`/pro/dashboard/customers/${job.customerId}`}
+                className="truncate font-semibold text-primary hover:underline"
+              >
+                {customerLabel?.trim() || "View customer"}
+              </Link>
+            ) : (
+              <span className="truncate font-medium text-foreground">
+                {customerLabel?.trim() || "—"}
+              </span>
+            )}
+          </span>
+          {(siteAddress || jobSiteAddress) ? (
+            <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+              <span className="text-muted-foreground">Site:</span>
+              <span className="truncate font-medium text-foreground">
+                {siteAddress || jobSiteAddress}
+              </span>
+            </span>
+          ) : null}
+          <span className="inline-flex items-center gap-1">
+            <span className="text-muted-foreground">Job total:</span>
+            <span className="font-semibold tabular-nums text-foreground">
+              {formatMoney(sheet.total)}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-muted-foreground">Status:</span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+              <span
+                className="size-2 shrink-0 rounded-full bg-primary"
+                aria-hidden
+              />
+              {jobStatusLabel(job.status)}
+            </span>
+          </span>
+        </div>
+      ) : (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-md border border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
           <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
             <span className="text-muted-foreground">Customer:</span>
@@ -430,7 +483,7 @@ export function JobSummaryTab({
             </span>
           </span>
         </div>
-      ) : null}
+      )}
       {isEstimate && estimate ? (
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
           <div className="min-w-0">
@@ -489,253 +542,160 @@ export function JobSummaryTab({
           </p>
         </div>
       ) : null}
-      {isEstimate ? (
-        <>
-          <section className="rounded-md border border-input bg-card">
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="answers" className="border-0">
-                <AccordionTrigger className="rounded-md border-0 bg-[#f5f5f5] px-4 py-2.5 shadow-none hover:no-underline data-[state=open]:rounded-b-none data-[state=open]:border-b data-[state=open]:border-input">
-                  <div className="flex w-full items-center justify-between gap-3 pr-2 text-left">
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground">
-                        Estimate Request & Answers
-                      </h3>
-                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
-                        Click to view estimate request details and answers
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {quoteAnswers.length
-                        ? `${quoteAnswers.length} question${quoteAnswers.length === 1 ? "" : "s"}`
-                        : "No answers"}
-                    </span>
+      {isEstimate && quoteAnswers.length > 0 ? (
+        <section className="rounded-md border border-input bg-card">
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="answers" className="border-0">
+              <AccordionTrigger className="rounded-md border-0 bg-[#f5f5f5] px-4 py-2.5 shadow-none hover:no-underline data-[state=open]:rounded-b-none data-[state=open]:border-b data-[state=open]:border-input">
+                <div className="flex w-full items-center justify-between gap-3 pr-2 text-left">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Estimate Request & Answers
+                    </h3>
+                    <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                      Click to view estimate request details and answers
+                    </p>
                   </div>
-                </AccordionTrigger>
-                <AccordionContent className="pb-0">
-                  <div className="p-3">
-                    {quoteAnswers.length ? (
-                      <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {quoteAnswers.map((item) => (
-                          <div
-                            key={item.id}
-                            className="rounded-md border border-border-soft bg-[#fafbfc] px-3 py-2.5"
-                          >
-                            <dt className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                              {item.label}
-                            </dt>
-                            <dd className="mt-1 text-sm font-medium wrap-break-word text-foreground">
-                              {item.value}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : (
-                      <p className="py-2 text-sm text-muted-foreground">
-                        No request answers linked to this estimate.
-                      </p>
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </section>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {quoteAnswers.length} question
+                    {quoteAnswers.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-0">
+                <div className="p-3">
+                  <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {quoteAnswers.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-md border border-border-soft bg-[#fafbfc] px-3 py-2.5"
+                      >
+                        <dt className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                          {item.label}
+                        </dt>
+                        <dd className="mt-1 text-sm font-medium wrap-break-word text-foreground">
+                          {item.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </section>
+      ) : null}
 
-          <div className="grid items-start gap-4 lg:grid-cols-3">
-            <section className="h-auto self-start rounded-md border border-input bg-card">
-              <div className="flex items-center justify-between gap-3 rounded-t-md border-b border-input bg-[#f5f5f5] px-4 py-2.5">
-                <h3 className="text-sm font-semibold">Quote mix</h3>
-                <p className="text-xs text-muted-foreground">
-                  Labour {formatMoney(mix.labor)} · Material {formatMoney(mix.materials)}
-                </p>
-              </div>
-              <div className="flex flex-col items-center justify-center gap-3 rounded-b-md px-4 py-5">
-                <JobCostChart
-                  labor={mix.labor}
-                  materials={mix.materials}
-                  className="mx-0 size-36"
-                />
-                <JobCostLegend labor={mix.labor} materials={mix.materials} />
-              </div>
-            </section>
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <section className="h-auto self-start rounded-md border border-input bg-card">
+          <div className="flex items-center justify-between gap-3 rounded-t-md border-b border-input bg-[#f5f5f5] px-4 py-2.5">
+            <h3 className="text-sm font-semibold">
+              {isEstimate ? "Quote mix" : "Cost mix"}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Labour {formatMoney(mix.labor)} · Material {formatMoney(mix.materials)}
+            </p>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-b-md px-4 py-5">
+            <JobCostChart
+              labor={mix.labor}
+              materials={mix.materials}
+              className="mx-0 size-44"
+            />
+            <JobCostLegend labor={mix.labor} materials={mix.materials} />
+          </div>
+        </section>
 
-            <section className="h-auto self-start rounded-md border border-input bg-card">
-              <div className="rounded-t-md border-b border-input bg-[#f5f5f5] px-4 py-3">
-                <h3 className="text-sm font-semibold">Line items</h3>
+        <section className="h-auto self-start rounded-md border border-input bg-card">
+          <div className="rounded-t-md border-b border-input bg-[#f5f5f5] px-4 py-3">
+            <h3 className="text-sm font-semibold">Line items</h3>
+          </div>
+          <div className="space-y-4 rounded-b-md p-4 text-sm">
+            <LineGroup title="Labour" lines={laborLines} />
+            <LineGroup title="Material" lines={materialLines} />
+            <dl className="space-y-2 border-t border-border-soft pt-3">
+              <MoneyRow label="Subtotal" value={sheet.subtotal} />
+              <MoneyRow
+                label={`Tax (${taxRatePercent || 8.25}%)`}
+                value={sheet.tax}
+              />
+              <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5">
+                <dt className="font-semibold">Total</dt>
+                <dd className="text-base font-semibold tabular-nums text-primary">
+                  {formatMoney(sheet.total)}
+                </dd>
               </div>
-              <div className="space-y-4 rounded-b-md p-4 text-sm">
-                <LineGroup title="Labour" lines={laborLines} />
-                <LineGroup title="Material" lines={materialLines} />
-                <dl className="space-y-2 border-t border-border-soft pt-3">
-                  <MoneyRow label="Subtotal" value={sheet.subtotal} />
-                  <MoneyRow label={`Tax (${taxRatePercent || 8.25}%)`} value={sheet.tax} />
-                  <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5">
-                    <dt className="font-semibold">Total</dt>
-                    <dd className="text-base font-semibold tabular-nums text-primary">
-                      {formatMoney(sheet.total)}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </section>
+            </dl>
+            {!isEstimate ? (
+              <p className="text-xs text-muted-foreground">
+                {invoice
+                  ? `${invoice.number} is on file. Materials lock after the invoice leaves draft.`
+                  : hasInvoice
+                    ? "Materials lock after the invoice leaves draft."
+                    : "No invoice yet. Costs can still move."}
+              </p>
+            ) : null}
+          </div>
+        </section>
 
-            <section className="h-auto self-start bg-transparent">
-              <div className="flex min-h-10 items-center justify-between gap-2 border-t border-border-soft bg-[#f5f5f5] px-4 py-2.5">
-                <h3 className="text-sm font-semibold">Activity</h3>
-                {locked ? null : (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 gap-1.5 text-xs font-semibold"
-                    onClick={() => {
-                      setEditing(null);
+        <section className="h-auto self-start bg-transparent">
+          <div className="flex min-h-10 items-center justify-between gap-2 rounded-t-md border border-input bg-[#f5f5f5] px-4 py-2.5">
+            <h3 className="text-sm font-semibold">Activity</h3>
+            {locked ? null : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs font-semibold"
+                onClick={() => {
+                  setEditing(null);
+                  setOpen(true);
+                }}
+              >
+                <Plus className="size-3.5 text-primary" />
+                Create note
+              </Button>
+            )}
+          </div>
+          <div className="pt-3">
+            {activities.length ? (
+              <ul className="relative space-y-0">
+                {activities.map((item, index) => (
+                  <ActivityCard
+                    key={item.id}
+                    item={item}
+                    last={index === activities.length - 1}
+                    locked={locked}
+                    deleting={
+                      (isEstimate && estimateActivities.deletingId === item.id) ||
+                      (isJobRecord && jobActivities.deletingId === item.id)
+                    }
+                    onEdit={() => {
+                      setEditing({ id: item.id, title: item.title, html: item.html });
                       setOpen(true);
                     }}
-                  >
-                    <Plus className="size-3.5 text-primary" />
-                    Create note
-                  </Button>
-                )}
-              </div>
-              <div className="pt-3">
-                {activities.length ? (
-                  <ul className="relative space-y-0">
-                    {activities.map((item, index) => (
-                      <ActivityCard
-                        key={item.id}
-                        item={item}
-                        last={index === activities.length - 1}
-                        locked={locked}
-                        deleting={
-                          (isEstimate && estimateActivities.deletingId === item.id) ||
-                          (isJobRecord && jobActivities.deletingId === item.id)
-                        }
-                        onEdit={() => {
-                          setEditing({ id: item.id, title: item.title, html: item.html });
-                          setOpen(true);
-                        }}
-                        onDelete={async () => {
-                          if (isEstimate) {
-                            await estimateActivities.deleteActivity(item.id);
-                          } else if (isJobRecord) {
-                            await jobActivities.deleteActivity(item.id);
-                          } else {
-                            file.removeActivity(item.id);
-                            toast.success("Activity deleted.");
-                          }
-                        }}
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nothing posted yet. Add a field note, call, or follow-up.
-                  </p>
-                )}
-              </div>
-            </section>
-          </div>
-        </>
-      ) : (
-      <div className="grid gap-4 lg:grid-cols-5">
-          <div className="space-y-4 lg:col-span-3">
-            <section className="overflow-hidden rounded-md border border-border-soft bg-card">
-              <div className="flex items-center justify-between gap-3 border-b border-border-soft px-4 py-3">
-                <h3 className="text-sm font-semibold">
-                  Cost mix
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Labour {formatMoney(mix.labor)} · Material {formatMoney(mix.materials)}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-6 p-4 sm:gap-8">
-                <JobCostChart labor={mix.labor} materials={mix.materials} />
-                <div className="min-w-[12rem] flex-1">
-                  <JobCostLegend labor={mix.labor} materials={mix.materials} />
-                </div>
-              </div>
-            </section>
-            <section className="overflow-hidden rounded-md border border-border-soft bg-card">
-              <div className="border-b border-border-soft px-4 py-3">
-                <h3 className="text-sm font-semibold">Line items</h3>
-              </div>
-              <div className="space-y-4 p-4 text-sm">
-                <LineGroup title="Labour" lines={laborLines} />
-                <LineGroup title="Material" lines={materialLines} />
-                <dl className="space-y-2 border-t border-border-soft pt-3">
-                  <MoneyRow label="Subtotal" value={sheet.subtotal} />
-                  <MoneyRow label="Tax (8.25%)" value={sheet.tax} />
-                  <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5">
-                    <dt className="font-semibold">Total</dt>
-                    <dd className="text-base font-semibold tabular-nums text-primary">{formatMoney(sheet.total)}</dd>
-                  </div>
-                </dl>
-                <p className="text-xs text-muted-foreground">
-                  {invoice
-                    ? `${invoice.number} is on file. Materials lock after the invoice leaves draft.`
-                    : hasInvoice
-                      ? "Materials lock after the invoice leaves draft."
-                      : "No invoice yet. Costs can still move."}
-                </p>
-              </div>
-            </section>
-          </div>
-          <section className="overflow-hidden rounded-md border border-border-soft bg-card lg:col-span-2">
-            <div className="flex min-h-10 items-center justify-between gap-2 border-b border-border-soft px-4 py-2.5">
-              <h3 className="text-sm font-semibold">Activity</h3>
-              {locked ? null : (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 gap-1.5 text-xs font-semibold"
-                  onClick={() => {
-                    setEditing(null);
-                    setOpen(true);
-                  }}
-                >
-                  <Plus className="size-3.5 text-primary" />
-                  Create note
-                </Button>
-              )}
-            </div>
-            <div className="p-4">
-              {activities.length ? (
-                <ul className="relative space-y-0">
-                  {activities.map((item, index) => (
-                    <ActivityCard
-                      key={item.id}
-                      item={item}
-                      last={index === activities.length - 1}
-                      locked={locked}
-                      deleting={
-                        (isEstimate && estimateActivities.deletingId === item.id) ||
-                        (isJobRecord && jobActivities.deletingId === item.id)
+                    onDelete={async () => {
+                      if (isEstimate) {
+                        await estimateActivities.deleteActivity(item.id);
+                      } else if (isJobRecord) {
+                        await jobActivities.deleteActivity(item.id);
+                      } else {
+                        file.removeActivity(item.id);
+                        toast.success("Activity deleted.");
                       }
-                      onEdit={() => {
-                        setEditing({ id: item.id, title: item.title, html: item.html });
-                        setOpen(true);
-                      }}
-                      onDelete={async () => {
-                        if (isEstimate) {
-                          await estimateActivities.deleteActivity(item.id);
-                        } else if (isJobRecord) {
-                          await jobActivities.deleteActivity(item.id);
-                        } else {
-                          file.removeActivity(item.id);
-                          toast.success("Activity deleted.");
-                        }
-                      }}
-                    />
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Nothing posted yet. Add a field note, call, or follow-up.
-                </p>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
+                    }}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nothing posted yet. Add a field note, call, or follow-up.
+              </p>
+            )}
+          </div>
+        </section>
+      </div>
+
+
       <ActivityDialog
         open={open}
         activity={editing}

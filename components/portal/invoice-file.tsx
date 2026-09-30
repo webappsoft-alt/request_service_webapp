@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { StatusDot, moneyTone } from "@/components/portal/status-pill";
+import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
@@ -387,8 +388,8 @@ export function ApplyPaymentButton({
 
 export function InvoiceSummaryTab({
   invoice,
-  customer: _customer,
-  customerLabel: _customerLabel,
+  customer,
+  customerLabel,
   service,
   job,
   estimate,
@@ -404,12 +405,64 @@ export function InvoiceSummaryTab({
   payments: Payment[];
   onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
 }) {
+  const [summaryTab, setSummaryTab] = useState<"overview" | "payments">("overview");
   const address = job?.address;
   const overdueDays = invoiceDaysOverdue(invoice);
   const kind = invoiceKindLabel(invoiceKind(invoice));
+  const siteAddress = address
+    ? `${address.street}, ${formatLocation(address.city, address.state, address.zip)}`
+    : "";
+  const phone =
+    customer?.phone?.trim() ||
+    invoice.customerPhone?.trim() ||
+    estimate?.customerPhone?.trim() ||
+    "";
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-md border border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+          <span className="text-muted-foreground">Customer:</span>
+          {invoice.customerId ? (
+            <Link
+              href={`/pro/dashboard/customers/${invoice.customerId}`}
+              className="truncate font-semibold text-primary hover:underline"
+            >
+              {customerLabel?.trim() || "View customer"}
+            </Link>
+          ) : (
+            <span className="truncate font-medium text-foreground">
+              {customerLabel?.trim() || "—"}
+            </span>
+          )}
+        </span>
+        {siteAddress ? (
+          <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+            <span className="text-muted-foreground">Site:</span>
+            <span className="truncate font-medium text-foreground">{siteAddress}</span>
+          </span>
+        ) : null}
+        {phone ? (
+          <span className="inline-flex items-center gap-1">
+            <span className="text-muted-foreground">Phone:</span>
+            <span className="font-medium text-foreground">{phone}</span>
+          </span>
+        ) : null}
+        <span className="inline-flex items-center gap-1">
+          <span className="text-muted-foreground">Balance:</span>
+          <span className="font-semibold tabular-nums text-foreground">
+            {formatMoney(invoice.balanceDue)}
+          </span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-muted-foreground">Status:</span>
+          <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+            <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
+            {invoiceStatusLabel(invoice.status)}
+          </span>
+        </span>
+      </div>
+
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border-soft pb-4">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
@@ -433,6 +486,69 @@ export function InvoiceSummaryTab({
         </div>
       </div>
 
+      <LocalFilterTabs
+        value={summaryTab}
+        onChange={(next) => setSummaryTab(next as "overview" | "payments")}
+        options={[
+          { value: "overview", label: "Overview" },
+          {
+            value: "payments",
+            label: payments.length ? `Payments (${payments.length})` : "Payments",
+          },
+        ]}
+      />
+
+      {summaryTab === "payments" ? (
+        <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Payment history</h2>
+              <p className="text-sm text-muted-foreground">
+                {payments.length ? `${payments.length} recorded` : "None recorded"}
+              </p>
+            </div>
+            <ApplyPaymentButton invoice={invoice} onPaid={onPaid} />
+          </div>
+          {payments.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Payment no.</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.map((payment) => (
+                  <TableRow key={payment.id}>
+                    <TableCell>
+                      <Link
+                        href={`/pro/dashboard/payments/${payment.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {paymentNumber(payment)}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{payment.paidAt ? formatDate(payment.paidAt) : "—"}</TableCell>
+                    <TableCell>{paymentMethodLabel(payment.method)}</TableCell>
+                    <TableCell>{paymentStatusLabel(payment.status)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMoney(payment.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              No payments on this invoice yet.
+            </p>
+          )}
+        </section>
+      ) : (
+        <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MoneyStat label="Price" value={formatMoney(invoice.total)} />
         <MoneyStat label="Paid" value={formatMoney(invoice.amountPaid)} />
@@ -445,7 +561,7 @@ export function InvoiceSummaryTab({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
+        <section className="overflow-hidden rounded-md border border-input bg-card p-4">
           <h2 className="text-sm font-semibold">Invoice</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail label="Invoice type" value={kind} />
@@ -457,7 +573,7 @@ export function InvoiceSummaryTab({
             <Detail label="Due date" value={invoice.dueAt ? formatDate(invoice.dueAt) : "—"} />
           </dl>
         </section>
-        <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
+        <section className="overflow-hidden rounded-md border border-input bg-card p-4">
           <h2 className="text-sm font-semibold">Job / site</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <Detail
@@ -493,67 +609,85 @@ export function InvoiceSummaryTab({
         </section>
       </div>
 
-      <section className="overflow-hidden rounded-md border border-border-soft bg-card">
-        <div className="border-b border-border-soft px-4 py-3">
-          <h2 className="text-sm font-semibold">Labour & Material</h2>
+      <section className="overflow-hidden rounded-md border border-input bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="border-b border-input bg-[#e8eef5] px-4 py-2.5">
+          <p className="text-[10px] font-semibold tracking-[0.14em] text-[#003F7D] uppercase">
+            Labour & Material
+          </p>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[220px] w-[50%]">Description</TableHead>
-              <TableHead className="w-20 whitespace-nowrap">Source</TableHead>
-              <TableHead className="w-14 whitespace-nowrap text-right">Qty</TableHead>
-              <TableHead className="w-16 whitespace-nowrap">Unit</TableHead>
-              <TableHead className="w-24 whitespace-nowrap text-right">Price</TableHead>
-              <TableHead className="w-24 whitespace-nowrap text-right">Total</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invoice.items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="min-w-0 font-medium align-top">
-                  <div className="whitespace-pre-wrap break-words">{item.description}</div>
-                  {item.images?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {item.images.map((src, index) => (
-                        <span
-                          key={`${src}-${index}`}
-                          className="relative inline-block h-12 w-14 overflow-hidden rounded border border-input"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={src}
-                            alt={`Material for ${item.description}`}
-                            className="size-full object-cover"
-                          />
-                          <span className="absolute inset-x-0 bottom-0 bg-black/55 px-0.5 py-px text-center text-[8px] font-medium text-white">
-                            Material
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </TableCell>
-                <TableCell className="w-20 whitespace-nowrap align-top text-sm text-muted-foreground">
-                  {invoiceItemSourceLabel(item.source)}
-                </TableCell>
-                <TableCell className="w-14 whitespace-nowrap text-right tabular-nums align-top">
-                  {item.quantity}
-                </TableCell>
-                <TableCell className="w-16 whitespace-nowrap align-top text-sm capitalize">
-                  {item.unit || "ea"}
-                </TableCell>
-                <TableCell className="w-24 whitespace-nowrap text-right tabular-nums align-top">
-                  {formatMoney(item.unitPrice)}
-                </TableCell>
-                <TableCell className="w-24 whitespace-nowrap text-right tabular-nums align-top">
-                  {formatMoney(item.total)}
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table className="w-full table-auto">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Description
+                </TableHead>
+                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Source
+                </TableHead>
+                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Qty
+                </TableHead>
+                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Unit
+                </TableHead>
+                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Price
+                </TableHead>
+                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Total
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-border-soft px-4 py-3 text-sm">
+            </TableHeader>
+            <TableBody>
+              {invoice.items.map((item) => (
+                <TableRow key={item.id} className="border-b border-input hover:bg-transparent">
+                  <TableCell className="min-w-0 px-2.5 py-2.5 align-top font-medium">
+                    <div className="whitespace-pre-wrap break-words text-sm">
+                      {item.description}
+                    </div>
+                    {item.images?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {item.images.map((src, index) => (
+                          <span
+                            key={`${src}-${index}`}
+                            className="relative inline-block h-12 w-14 overflow-hidden rounded border border-input"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={src}
+                              alt={`Material for ${item.description}`}
+                              className="size-full object-cover"
+                            />
+                            <span className="absolute inset-x-0 bottom-0 bg-black/55 px-0.5 py-px text-center text-[8px] font-medium text-white">
+                              Material
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 align-top text-sm text-muted-foreground">
+                    {invoiceItemSourceLabel(item.source)}
+                  </TableCell>
+                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 text-right align-top text-sm tabular-nums">
+                    {item.quantity}
+                  </TableCell>
+                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 align-top text-sm text-muted-foreground">
+                    {lineUnitLabel(item.unit)}
+                  </TableCell>
+                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 text-right align-top text-sm tabular-nums">
+                    {formatMoney(item.unitPrice)}
+                  </TableCell>
+                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 text-right align-top text-sm font-medium tabular-nums">
+                    {formatMoney(item.total)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-input px-4 py-3 text-sm">
           <dt className="text-muted-foreground">Subtotal</dt>
           <dd className="text-right tabular-nums">{formatMoney(invoice.subtotal)}</dd>
           {invoice.discount ? (
@@ -568,52 +702,14 @@ export function InvoiceSummaryTab({
           <dd className="text-right font-semibold tabular-nums">{formatMoney(invoice.total)}</dd>
           <dt className="text-muted-foreground">Paid</dt>
           <dd className="text-right tabular-nums">{formatMoney(invoice.amountPaid)}</dd>
-          <dt className="font-medium">Balance</dt>
-          <dd className="text-right font-semibold tabular-nums text-[#003F7D]">{formatMoney(invoice.balanceDue)}</dd>
+          <dt className="border-t border-input pt-2 font-semibold text-[#003F7D]">Balance</dt>
+          <dd className="border-t border-input pt-2 text-right font-semibold tabular-nums text-[#003F7D]">
+            {formatMoney(invoice.balanceDue)}
+          </dd>
         </dl>
       </section>
-
-      <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Payments</h2>
-            <p className="text-sm text-muted-foreground">
-              {payments.length ? `${payments.length} recorded` : "None recorded"}
-            </p>
-          </div>
-          <ApplyPaymentButton invoice={invoice} onPaid={onPaid} />
-        </div>
-        {payments.length ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Payment no.</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payments.map((payment) => (
-                <TableRow key={payment.id}>
-                  <TableCell>
-                    <Link href={`/pro/dashboard/payments/${payment.id}`} className="font-medium text-primary hover:underline">
-                      {paymentNumber(payment)}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{payment.paidAt ? formatDate(payment.paidAt) : "—"}</TableCell>
-                  <TableCell>{paymentMethodLabel(payment.method)}</TableCell>
-                  <TableCell>{paymentStatusLabel(payment.status)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatMoney(payment.amount)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <p className="mt-3 text-sm text-muted-foreground">No payments on this invoice yet.</p>
-        )}
-      </section>
+        </>
+      )}
     </div>
   );
 }
@@ -810,7 +906,7 @@ function MoneyStat({
   warn?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-border-soft bg-card px-4 py-3">
+    <div className="rounded-md border border-input bg-card px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p
         className={
@@ -825,6 +921,16 @@ function MoneyStat({
       </p>
     </div>
   );
+}
+
+/** Match Labour & Material editor unit labels. */
+function lineUnitLabel(unit?: string) {
+  const key = String(unit || "ea").trim().toLowerCase();
+  if (key === "hr" || key === "hour") return "Hour";
+  if (key === "ea" || key === "each") return "Each";
+  if (key === "ft" || key === "feet") return "Feet";
+  if (key === "sq ft" || key === "sqft" || key === "square feet") return "sqft";
+  return unit || "Each";
 }
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {

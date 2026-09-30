@@ -34,7 +34,6 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { useEstimateShare } from "@/components/portal/use-estimate-share";
 import {
-  ApplyPaymentButton,
   InvoiceFileChrome,
   InvoicePaymentsTab,
   InvoiceSummaryTab,
@@ -61,7 +60,6 @@ import {
 } from "@/components/portal/payment-file";
 import {
   JobAttachmentsTab,
-  JobFileChrome,
   JobLogsTab,
   JobMaterialsTab,
   JobSettingsTab,
@@ -1994,7 +1992,6 @@ export function JobDetailView({ id }: { id: string }) {
 
   const jobTabs = [
     { id: "summary", label: "Summary" },
-    { id: "customer", label: "Customer" },
     { id: "materials", label: "Labour & Material" },
     ...(alreadyInvoiced
       ? [{ id: "invoice", label: invoice?.number || "Invoice" }]
@@ -2259,22 +2256,19 @@ export function JobDetailView({ id }: { id: string }) {
                     estimate={estimate}
                     invoice={invoice}
                     technician={technician}
+                    customerLabel={customerLabel}
+                    siteAddress={[
+                      job.address?.street,
+                      formatLocation(
+                        job.address?.city || "",
+                        job.address?.state || "",
+                        job.address?.zip,
+                      ),
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
                   />
                 </div>
-              );
-            case "customer":
-              return (
-                <JobFileChrome
-                  job={job}
-                  customer={customer}
-                  customerLabel={customerLabel}
-                  service={service}
-                  estimate={estimate}
-                  invoice={invoice}
-                  start={start}
-                  due={due}
-                  technician={technician}
-                />
               );
             case "materials":
               return (
@@ -2386,6 +2380,17 @@ export function JobDetailView({ id }: { id: string }) {
                   estimate={estimate}
                   invoice={invoice}
                   technician={technician}
+                  customerLabel={customerLabel}
+                  siteAddress={[
+                    job.address?.street,
+                    formatLocation(
+                      job.address?.city || "",
+                      job.address?.state || "",
+                      job.address?.zip,
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
                 />
               );
           }
@@ -2511,16 +2516,6 @@ export function InvoiceDetailView({ id }: { id: string }) {
     if (fromRequest && fromRequest !== "Customer") return fromRequest;
     return fromInvoice || fromEstimate || fromRequest || "Customer";
   })();
-  const customerPhone =
-    customer?.phone?.trim() ||
-    invoice?.customerPhone?.trim() ||
-    estimate?.customerPhone?.trim() ||
-    "";
-  const customerEmail =
-    customer?.email?.trim() ||
-    invoice?.customerEmail?.trim() ||
-    estimate?.customerEmail?.trim() ||
-    "";
   const [sending, setSending] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [resolvingStale, setResolvingStale] = useState(false);
@@ -2726,7 +2721,6 @@ export function InvoiceDetailView({ id }: { id: string }) {
       kind="invoice"
       tabs={[
         { id: "summary", label: "Summary" },
-        { id: "customer", label: "Customer" },
         { id: "materials", label: "Labour & Material" },
         { id: "payments", label: "Payments" },
         { id: "attachments", label: "Attachments" },
@@ -2844,10 +2838,6 @@ export function InvoiceDetailView({ id }: { id: string }) {
           >
             {sending ? "Sending…" : "Send invoice"}
           </Button>
-          <ApplyPaymentButton
-            invoice={invoice}
-            onPaid={handlePaymentApplied}
-          />
           {job ? (
             <Button size="sm" variant="outline" className="h-8" asChild>
               <Link href={`/pro/dashboard/jobs/${job.id}`}>
@@ -2893,19 +2883,6 @@ export function InvoiceDetailView({ id }: { id: string }) {
                 estimate={estimate}
                 payments={relatedPayments}
                 onPaid={handlePaymentApplied}
-              />
-            );
-          case "customer":
-            return (
-              <InvoiceFileChrome
-                invoice={invoice}
-                customer={customer}
-                customerLabel={customerLabel}
-                customerPhone={customerPhone}
-                customerEmail={customerEmail}
-                service={service}
-                job={job}
-                estimate={estimate}
               />
             );
           case "materials":

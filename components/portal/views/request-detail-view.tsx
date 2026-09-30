@@ -101,7 +101,6 @@ import { CustomerLocationMapLazy } from "@/components/portal/customer-location-m
 import {
   crmCustomerName,
   crmReminderStatusLabel,
-  crmSourceLabel,
   crmTaskPriorityLabel,
   crmTaskStatusLabel,
   reminderIsOverdue,
@@ -135,7 +134,6 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "summary", label: "Summary" },
-  { id: "customer", label: "Customer" },
   { id: "estimates", label: "Estimates" },
   { id: "jobs", label: "Jobs" },
   { id: "schedule", label: "Schedule" },
@@ -148,7 +146,6 @@ const TABS = [
 
 type LeadTab =
   | "summary"
-  | "customer"
   | "estimates"
   | "jobs"
   | "schedule"
@@ -330,7 +327,6 @@ export function RequestDetailView({ id }: { id: string }) {
   const [apiLead, setApiLead] = useState<PortalRequest | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiCustomer, setApiCustomer] = useState<PortalCustomerCrm | null>(null);
-  const [customerLoading, setCustomerLoading] = useState(false);
   const [apiEstimates, setApiEstimates] = useState<Estimate[] | null>(null);
   const [estimatesLoading, setEstimatesLoading] = useState(false);
   const [apiJobs, setApiJobs] = useState<Job[] | null>(null);
@@ -614,7 +610,6 @@ export function RequestDetailView({ id }: { id: string }) {
     setApiTasks(null);
     setApiReminders(null);
     setApiSchedules(undefined);
-    setCustomerLoading(false);
     setEstimatesLoading(false);
     setJobsLoading(false);
     setTasksLoading(false);
@@ -640,18 +635,14 @@ export function RequestDetailView({ id }: { id: string }) {
       (cachedSchedules?.length ?? (apiSchedules?.length ?? 0)) > 0;
     const photosHaveData = (cachedLead?.photoUrls?.length ?? apiLead?.photoUrls?.length ?? 0) > 0;
 
-    // 1. Customer
-    if (tab === "customer" && request?.customerId) {
-      if (!cachedCustomer) setCustomerLoading(true);
+    // 1. Customer (for info bar — always load when linked)
+    if (request?.customerId) {
       void dispatch(fetchLeadCustomer(request.customerId))
         .unwrap()
         .then((cust) => {
           if (!cancelled && cust) setApiCustomer(cust);
         })
-        .catch(() => undefined)
-        .finally(() => {
-          if (!cancelled) setCustomerLoading(false);
-        });
+        .catch(() => undefined);
     }
 
     // 2. Estimates (also when Jobs needs them / status implies estimate)
@@ -1105,6 +1096,17 @@ export function RequestDetailView({ id }: { id: string }) {
     country: "US",
   };
 
+  const siteAddress = [
+    customer?.addresses?.[0]?.street,
+    formatLocation(
+      customer?.addresses?.[0]?.city || request.city || request.neighborhood || "",
+      customer?.addresses?.[0]?.state || request.state || "",
+      customer?.addresses?.[0]?.zip || request.zip,
+    ),
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   async function markContacted() {
     setApiLead((prev) => (prev ? { ...prev, status: "contacted" } : prev));
     try {
@@ -1459,6 +1461,44 @@ export function RequestDetailView({ id }: { id: string }) {
             case "summary":
               return (
                 <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-md border border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
+                    <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+                      <span className="text-muted-foreground">Customer:</span>
+                      {request.customerId ? (
+                        <Link
+                          href={`/pro/dashboard/customers/${request.customerId}`}
+                          className="truncate font-semibold text-primary hover:underline"
+                        >
+                          {customerLabel?.trim() || "View customer"}
+                        </Link>
+                      ) : (
+                        <span className="truncate font-medium text-foreground">
+                          {customerLabel?.trim() || "—"}
+                        </span>
+                      )}
+                    </span>
+                    {siteAddress ? (
+                      <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+                        <span className="text-muted-foreground">Site:</span>
+                        <span className="truncate font-medium text-foreground">{siteAddress}</span>
+                      </span>
+                    ) : null}
+                    {(customer?.phone || request.customerPhone) ? (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-muted-foreground">Phone:</span>
+                        <span className="font-medium text-foreground">
+                          {customer?.phone || request.customerPhone}
+                        </span>
+                      </span>
+                    ) : null}
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="text-muted-foreground">Status:</span>
+                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                        <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
+                        {requestStatusLabel(request.status)}
+                      </span>
+                    </span>
+                  </div>
                   <LeadCard hideHeader borderless>
                     <div className="space-y-6 px-1 py-1 sm:px-2">
                       <div>
@@ -1607,69 +1647,6 @@ export function RequestDetailView({ id }: { id: string }) {
                     plain
                   />
                 </div>
-              );
-            case "customer":
-              if (customerLoading && !customer) {
-                return (
-                  <div className="flex min-h-[16rem] items-center justify-center rounded-lg bg-card p-6">
-                    <CenteredSpinner label="Loading customer details..." />
-                  </div>
-                );
-              }
-              return (
-                <LeadCard hideHeader>
-                  <div className="space-y-4 px-1 py-1 sm:px-0">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-[15px] font-semibold tracking-tight">{customerLabel}</h2>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {[customer?.phone || request.customerPhone, customer?.email || request.customerEmail]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      {customer ? (
-                        <Button size="sm" asChild className="h-8">
-                          <Link href={`/pro/dashboard/customers/${customer.id}`}>Open customer file</Link>
-                        </Button>
-                      ) : null}
-                    </div>
-                    <div className="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">
-                      <InfoRow label="Customer name" value={customerLabel} />
-                      <InfoRow label="Phone" value={customer?.phone || request.customerPhone || null} />
-                      <InfoRow
-                        label="Email"
-                        value={
-                          (customer?.email || request.customerEmail) ? (
-                            <span className="text-primary">{customer?.email || request.customerEmail}</span>
-                          ) : null
-                        }
-                      />
-                      <InfoRow
-                        label="Service area"
-                        value={
-                          customer?.addresses?.[0]
-                            ? `${customer.addresses[0].street ? `${customer.addresses[0].street}, ` : ""}${formatLocation(
-                                customer.addresses[0].city || request.city || "",
-                                customer.addresses[0].state || request.state || "",
-                                customer.addresses[0].zip || request.zip,
-                              )}`
-                            : formatLocation(
-                                request.neighborhood || request.city || "",
-                                request.state || "",
-                                request.zip,
-                              ) || null
-                        }
-                      />
-                      {customer ? (
-                        <>
-                          <InfoRow label="Source" value={crmSourceLabel(customer.source)} />
-                          <InfoRow label="Client since" value={formatDate(customer.createdAt)} />
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                </LeadCard>
               );
             case "estimates":
               return (

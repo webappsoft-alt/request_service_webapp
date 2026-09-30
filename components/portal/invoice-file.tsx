@@ -645,25 +645,25 @@ export function InvoiceSummaryTab({
           </p>
         </div>
         <div className="overflow-x-auto">
-          <Table className="w-full table-auto">
+          <Table className="w-full table-fixed">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 min-w-0 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Description
                 </TableHead>
-                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 w-[5.5rem] bg-[#f7f8fa] px-1 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Source
                 </TableHead>
-                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 w-12 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Qty
                 </TableHead>
-                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 w-14 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Unit
                 </TableHead>
-                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 w-16 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Price
                 </TableHead>
-                <TableHead className="h-8 w-[1%] whitespace-nowrap bg-[#f7f8fa] px-2 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 w-16 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Total
                 </TableHead>
               </TableRow>
@@ -696,19 +696,19 @@ export function InvoiceSummaryTab({
                       </div>
                     ) : null}
                   </TableCell>
-                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 align-top text-sm text-muted-foreground">
+                  <TableCell className="w-[5.5rem] px-1 py-2.5 text-center align-top text-xs text-muted-foreground">
                     {invoiceItemSourceLabel(item.source)}
                   </TableCell>
-                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 text-right align-top text-sm tabular-nums">
+                  <TableCell className="w-12 px-0.5 py-2.5 text-center align-top text-sm tabular-nums">
                     {item.quantity}
                   </TableCell>
-                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 align-top text-sm text-muted-foreground">
+                  <TableCell className="w-14 px-0.5 py-2.5 text-center align-top text-xs text-muted-foreground">
                     {lineUnitLabel(item.unit)}
                   </TableCell>
-                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 text-right align-top text-sm tabular-nums">
+                  <TableCell className="w-16 px-0.5 py-2.5 text-center align-top text-sm tabular-nums">
                     {formatMoney(item.unitPrice)}
                   </TableCell>
-                  <TableCell className="w-[1%] whitespace-nowrap px-2 py-2.5 text-right align-top text-sm font-medium tabular-nums">
+                  <TableCell className="w-16 px-0.5 py-2.5 text-center align-middle text-sm font-medium tabular-nums">
                     {formatMoney(item.total)}
                   </TableCell>
                 </TableRow>

@@ -720,15 +720,15 @@ export function CustomerOrderDetailView({
                         Itemized service tasks & materials ({items.length})
                       </h3>
                       <div className="overflow-x-auto rounded-lg border border-input bg-card">
-                        <table className="w-full text-left text-sm">
+                        <table className="w-full table-fixed text-left text-sm">
                           <thead className="border-b border-input bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             <tr>
-                              <th className="px-4 py-3">#</th>
-                              <th className="px-4 py-3">Description</th>
-                              <th className="px-4 py-3">Kind</th>
-                              <th className="px-4 py-3 text-right">Qty</th>
-                              <th className="px-4 py-3 text-right">Unit Price</th>
-                              <th className="px-4 py-3 text-right">Total</th>
+                              <th className="w-8 px-2 py-3 text-center">#</th>
+                              <th className="min-w-0 px-3 py-3">Description</th>
+                              <th className="w-20 px-1 py-3 text-center">Kind</th>
+                              <th className="w-12 px-1 py-3 text-center">Qty</th>
+                              <th className="w-20 px-1 py-3 text-center">Unit Price</th>
+                              <th className="w-20 px-1 py-3 text-center">Total</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-input">
@@ -737,13 +737,13 @@ export function CustomerOrderDetailView({
                                 key={item.id || item._id || idx}
                                 className="transition-colors hover:bg-muted/30"
                               >
-                                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                                <td className="w-8 px-2 py-3 text-center font-mono text-xs text-muted-foreground">
                                   {idx + 1}
                                 </td>
-                                <td className="px-4 py-3 font-medium text-foreground">
+                                <td className="min-w-0 px-3 py-3 font-medium break-words text-foreground">
                                   {item.description}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="w-20 px-1 py-3 text-center">
                                   <Badge
                                     variant="outline"
                                     className="capitalize text-[11px]"
@@ -751,10 +751,10 @@ export function CustomerOrderDetailView({
                                     {item.kind || "service"}
                                   </Badge>
                                 </td>
-                                <td className="px-4 py-3 text-right font-mono text-xs">
+                                <td className="w-12 px-1 py-3 text-center font-mono text-xs">
                                   {item.quantity ?? 1}
                                 </td>
-                                <td className="px-4 py-3 text-right font-mono text-xs">
+                                <td className="w-20 px-1 py-3 text-center font-mono text-xs">
                                   {item.unitPrice != null
                                     ? formatOrderMoney(
                                         item.unitPrice,
@@ -762,7 +762,7 @@ export function CustomerOrderDetailView({
                                       )
                                     : "—"}
                                 </td>
-                                <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-foreground">
+                                <td className="w-20 px-1 py-3 text-center font-mono text-xs font-semibold text-foreground">
                                   {item.total != null
                                     ? formatOrderMoney(
                                         item.total,

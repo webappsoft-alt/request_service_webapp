@@ -308,13 +308,13 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[540px] text-left text-sm">
+              <table className="w-full table-fixed text-left text-sm">
                 <thead className="border-b border-input bg-muted/40 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                   <tr>
-                    <th className="px-5 py-3 sm:px-6">Description</th>
-                    <th className="px-4 py-3 text-center">Qty</th>
-                    <th className="px-4 py-3 text-right">Unit rate</th>
-                    <th className="px-5 py-3 text-right sm:px-6">Total</th>
+                    <th className="min-w-0 px-4 py-3 sm:px-5">Description</th>
+                    <th className="w-14 px-1 py-3 text-center">Qty</th>
+                    <th className="w-20 px-1 py-3 text-center">Unit rate</th>
+                    <th className="w-20 px-1 py-3 text-center sm:px-2">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-input">
@@ -324,8 +324,8 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                         key={item.id || `${item.description}-${index}`}
                         className="transition-colors hover:bg-muted/20"
                       >
-                        <td className="px-5 py-4 sm:px-6">
-                          <p className="font-medium text-foreground">
+                        <td className="min-w-0 px-4 py-4 sm:px-5">
+                          <p className="font-medium break-words text-foreground">
                             {item.description}
                           </p>
                           {item.kind ? (
@@ -343,13 +343,13 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-4 py-4 text-center tabular-nums text-foreground">
+                        <td className="w-14 px-1 py-4 text-center tabular-nums text-foreground">
                           {item.quantity}
                         </td>
-                        <td className="px-4 py-4 text-right tabular-nums text-muted-foreground">
+                        <td className="w-20 px-1 py-4 text-center tabular-nums text-muted-foreground">
                           {formatMoney(item.unitPrice)}
                         </td>
-                        <td className="px-5 py-4 text-right font-semibold tabular-nums text-foreground sm:px-6">
+                        <td className="w-20 px-1 py-4 text-center font-semibold tabular-nums text-foreground sm:px-2">
                           {formatMoney(item.total)}
                         </td>
                       </tr>

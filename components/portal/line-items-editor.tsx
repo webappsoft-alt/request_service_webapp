@@ -62,7 +62,7 @@ export type LineItemsEditorProps = {
   allowMaterialImages?: boolean;
   /** Minimum rows required before delete is disabled (default 0). */
   minLines?: number;
-  /** Prefer a wider description column (tighter Type/Unit/Price). */
+  /** Prefer a wider description column (tighter Type/Unit/Price). Default on everywhere. */
   wideDescription?: boolean;
   className?: string;
 };
@@ -95,7 +95,7 @@ export function LineItemsEditor({
   showUnit = true,
   allowMaterialImages = true,
   minLines = 0,
-  wideDescription = false,
+  wideDescription = true,
   className,
 }: LineItemsEditorProps) {
   function patch(id: string, next: Partial<JobCostLine>) {
@@ -132,7 +132,7 @@ export function LineItemsEditor({
             </TableHead>
             <TableHead
               className={cn(
-                "h-8 bg-[#f7f8fa] px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                "h-8 bg-[#f7f8fa] px-1 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
                 cols.type,
               )}
             >
@@ -149,7 +149,7 @@ export function LineItemsEditor({
             {showUnit ? (
               <TableHead
                 className={cn(
-                  "h-8 bg-[#f7f8fa] px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                  "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
                   cols.unit,
                 )}
               >
@@ -158,7 +158,7 @@ export function LineItemsEditor({
             ) : null}
             <TableHead
               className={cn(
-                "h-8 bg-[#f7f8fa] px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
                 cols.price,
               )}
             >
@@ -166,7 +166,7 @@ export function LineItemsEditor({
             </TableHead>
             <TableHead
               className={cn(
-                "h-8 bg-[#f7f8fa] px-0.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
                 cols.total,
               )}
             >
@@ -385,7 +385,7 @@ function LineItemRow({
             size="sm"
             className={cn(
               softField,
-              "w-full min-w-0 justify-between gap-0.5 px-1.5 text-xs *:data-[slot=select-value]:line-clamp-none",
+              "w-full min-w-0 justify-center gap-0.5 px-1.5 text-xs *:data-[slot=select-value]:line-clamp-none",
             )}
           >
             <SelectValue placeholder="Type">
@@ -394,7 +394,7 @@ function LineItemRow({
           </SelectTrigger>
           <SelectContent
             position="popper"
-            align="start"
+            align="center"
             className="z-[100] w-[var(--radix-select-trigger-width)]"
           >
             <SelectItem value="labor">Labour</SelectItem>
@@ -442,14 +442,14 @@ function LineItemRow({
               size="sm"
               className={cn(
                 softField,
-                "w-full min-w-0 justify-between gap-0.5 px-1 text-xs *:data-[slot=select-value]:line-clamp-none",
+                "w-full min-w-0 justify-center gap-0.5 px-1 text-xs *:data-[slot=select-value]:line-clamp-none",
               )}
             >
               <SelectValue placeholder="Unit" />
             </SelectTrigger>
             <SelectContent
               position="popper"
-              align="start"
+              align="center"
               className="z-[100] w-auto min-w-[7.5rem]"
             >
               {unitOptions.map((opt) => (
@@ -462,7 +462,7 @@ function LineItemRow({
         </TableCell>
       ) : null}
       <TableCell className={cn(cols.price, "align-top px-0.5 py-2")}>
-        <div className="relative w-full">
+        <div className="relative mx-auto w-full">
           <span
             aria-hidden="true"
             className="pointer-events-none absolute top-1/2 left-1 -translate-y-1/2 text-xs text-muted-foreground"
@@ -474,7 +474,7 @@ function LineItemRow({
             className={cn(
               softField,
               numberField,
-              "w-full pl-4 pr-0.5 text-right tabular-nums",
+              "w-full pl-4 pr-0.5 text-center tabular-nums",
               compact && "text-xs",
             )}
             disabled={locked}
@@ -501,7 +501,7 @@ function LineItemRow({
       <TableCell
         className={cn(
           cols.total,
-          "whitespace-nowrap align-top px-0.5 py-2 text-right font-medium tabular-nums",
+          "whitespace-nowrap align-middle px-0.5 py-2 text-center font-medium tabular-nums",
           compact ? "text-xs" : "text-sm",
         )}
       >

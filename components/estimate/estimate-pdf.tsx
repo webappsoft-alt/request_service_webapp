@@ -74,19 +74,19 @@ export function EstimatePdfDocument({
           <p className="text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Work details</p>
           <table className="mt-2 w-full table-fixed border-collapse text-[12px]">
             <colgroup>
-              <col className="w-[52%]" />
+              <col className="w-[58%]" />
               <col className="w-[12%]" />
               <col className="w-[10%]" />
-              <col className="w-[13%]" />
-              <col className="w-[13%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
             </colgroup>
             <thead>
               <tr className="border-y border-input bg-[#e8eef5] text-[10px] tracking-[0.12em] text-[#003F7D] uppercase print:bg-transparent">
                 <th className="px-2 py-2 text-left font-semibold">Description</th>
-                <th className="px-1.5 py-2 text-left font-semibold">Type</th>
-                <th className="px-1.5 py-2 text-right font-semibold">Qty</th>
-                <th className="px-1.5 py-2 text-right font-semibold">Price</th>
-                <th className="px-2 py-2 text-right font-semibold">Amount</th>
+                <th className="px-1.5 py-2 text-center font-semibold">Type</th>
+                <th className="px-1.5 py-2 text-center font-semibold">Qty</th>
+                <th className="px-1.5 py-2 text-center font-semibold">Price</th>
+                <th className="px-2 py-2 text-center font-semibold">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -117,16 +117,16 @@ export function EstimatePdfDocument({
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-1.5 py-2 capitalize whitespace-nowrap text-muted-foreground align-top">
+                  <td className="px-1.5 py-2 capitalize whitespace-nowrap text-center text-muted-foreground align-top">
                     {row.kind === "materials" ? "Material" : "Labour"}
                   </td>
-                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap text-muted-foreground align-top">
+                  <td className="px-1.5 py-2 text-center tabular-nums whitespace-nowrap text-muted-foreground align-top">
                     {row.quantity} {row.unit}
                   </td>
-                  <td className="px-1.5 py-2 text-right tabular-nums whitespace-nowrap align-top">
+                  <td className="px-1.5 py-2 text-center tabular-nums whitespace-nowrap align-top">
                     {formatMoney(row.unitPrice)}
                   </td>
-                  <td className="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap align-top">
+                  <td className="px-2 py-2 text-center font-medium tabular-nums whitespace-nowrap align-middle">
                     {formatMoney(row.total)}
                   </td>
                 </tr>

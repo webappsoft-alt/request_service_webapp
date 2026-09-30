@@ -322,8 +322,7 @@ export function PeriodBar({
   onChange: (value: DashboardPeriod) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-input bg-card px-3 py-2">
-      <p className="text-xs font-medium text-muted-foreground">Reporting period</p>
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <LocalFilterTabs
         value={value}
         onChange={(next) => onChange(next as DashboardPeriod)}

@@ -233,11 +233,10 @@ export function EstimateStageBanner({
           body: "Re-issue a new quote or restore this one with a new expiry.",
         };
       case "converted_to_job":
+        // Job link already handled above when `linkedJob` / `hasJob` is set.
         return {
-          title: linkedJob ? `Converted to job ${linkedJob.number}` : "Converted to job",
-          body: linkedJob
-            ? `Locked to ${linkedJob.number}. Open the job to continue.`
-            : "Open the linked job to continue the work.",
+          title: "Converted to job",
+          body: "Open the linked job to continue the work.",
         };
       default: {
         const _never: never = status;

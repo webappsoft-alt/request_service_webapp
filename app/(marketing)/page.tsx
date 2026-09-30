@@ -1,4 +1,3 @@
-import { BlogSection } from "@/components/home/blog-section";
 import { HomeCategoryFilterProvider } from "@/components/home/home-category-filter";
 import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
 import { HeroSection } from "@/components/home/hero-section";
@@ -36,7 +35,6 @@ export default function HomePage() {
 
           <WorkflowSection />
           <HomeFaqSection />
-          <BlogSection limit={4} />
         </HomeMotion>
       </HomeCategoryFilterProvider>
     </>

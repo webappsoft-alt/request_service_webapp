@@ -1,109 +1,395 @@
+"use client";
+
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container, Section } from "@/components/layout/container";
 import { customerWorkflow } from "@/lib/data/navigation";
 import { cn } from "@/lib/utils";
 
+type WorkflowStep = {
+  step: number;
+  title: string;
+  body: string;
+  phase: string;
+  image: string;
+  imageAlt: string;
+  href: string;
+  cta: string;
+};
+
+const WORKFLOW_STEPS: WorkflowStep[] = customerWorkflow.map((item, index) => {
+  const extras = [
+    {
+      phase: "Start",
+      image:
+        "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80",
+      imageAlt: "Home service tools ready for a project",
+      href: "/find-a-professional",
+      cta: "Browse services",
+    },
+    {
+      phase: "Request",
+      image:
+        "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80",
+      imageAlt: "Homeowner filling out project details on a laptop",
+      href: "/get-a-quote",
+      cta: "Start a request",
+    },
+    {
+      phase: "Match",
+      image:
+        "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=1200&q=80",
+      imageAlt: "Homeowner meeting with local service professionals",
+      href: "/find-a-professional",
+      cta: "Find professionals",
+    },
+    {
+      phase: "Quote",
+      image:
+        "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1200&q=80",
+      imageAlt: "Written estimate with line items on a desk",
+      href: "/how-it-works",
+      cta: "See the estimate flow",
+    },
+    {
+      phase: "Approve",
+      image:
+        "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
+      imageAlt: "Customer approving and signing on a tablet",
+      href: "/how-it-works",
+      cta: "How signing works",
+    },
+    {
+      phase: "Job",
+      image:
+        "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1200&q=80",
+      imageAlt: "Crew completing home renovation work",
+      href: "/how-it-works",
+      cta: "From estimate to job",
+    },
+    {
+      phase: "Pay",
+      image:
+        "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80",
+      imageAlt: "Invoice and payment for completed work",
+      href: "/get-a-quote",
+      cta: "Get a written estimate",
+    },
+  ] as const;
+
+  const extra = extras[index] ?? extras[0];
+  return {
+    step: item.step,
+    title: item.title,
+    body: item.body,
+    ...extra,
+  };
+});
+
+const TOTAL = WORKFLOW_STEPS.length;
+
+/** Layout slot stays fixed so the track slide stays smooth. */
+const SLOT_REM = 15;
+const GAP_REM = 0.875; // gap-3.5
+const PREV_PEEK_REM = SLOT_REM * 0.04; // ~4% previous-card peek
+
+function stepLabel(step: number) {
+  return String(step).padStart(2, "0");
+}
+
 export function WorkflowSection() {
+  const labelId = useId();
+  const [active, setActive] = useState(0);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const touchX = useRef<number | null>(null);
+  const current = WORKFLOW_STEPS[active] ?? WORKFLOW_STEPS[0];
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const onChange = () => setReducedMotion(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const goTo = useCallback((index: number) => {
+    setActive(((index % TOTAL) + TOTAL) % TOTAL);
+  }, []);
+
+  const prev = useCallback(() => goTo(active - 1), [active, goTo]);
+  const next = useCallback(() => goTo(active + 1), [active, goTo]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      if (event.key === "ArrowLeft") prev();
+      if (event.key === "ArrowRight") next();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [next, prev]);
+
+  const stride = SLOT_REM + GAP_REM;
+  // Active stays in the leading slot; previous card peeks on the left.
+  const trackOffsetRem =
+    active === 0 ? 0 : -(active * stride) + PREV_PEEK_REM;
+
   return (
-    <Section className="overflow-hidden">
-      <Container className="grid items-start gap-12 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] lg:gap-20">
-        <div className="flex flex-col gap-5 lg:sticky lg:top-28">
-          <p className="eyebrow text-primary">How it works</p>
-          <h2 className="text-3xl font-semibold tracking-tight md:text-[2.5rem]">
+    <Section className="relative bg-white">
+      {/* Soft lift from Featured Pros — no ornament over the cards */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-0"
+      >
+        <svg
+          className="absolute inset-x-0 -top-10 h-10 w-full text-white"
+          viewBox="0 0 1440 40"
+          preserveAspectRatio="none"
+        >
+          <path
+            fill="currentColor"
+            d="M0 40C240 8 480 0 720 0s480 8 720 40V40H0Z"
+          />
+        </svg>
+        <div className="absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(0,63,125,0.05),transparent)]" />
+      </div>
+
+      <Container className="relative z-[1] grid items-stretch gap-10 pt-2 lg:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)] lg:gap-12 xl:gap-16">
+        {/* Left narrative rail */}
+        <div className="flex flex-col lg:min-h-[28rem]">
+          <div className="flex items-center gap-3">
+            <span className="h-px w-8 bg-primary/40" aria-hidden="true" />
+            <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
+              · 03 / How it works
+            </p>
+          </div>
+          <h2
+            id={labelId}
+            className="mt-3 text-3xl font-semibold tracking-tight text-foreground md:text-[2.35rem] md:leading-[1.15]"
+          >
             From choosing a service to paying the invoice
           </h2>
-          <p className="max-w-sm text-sm leading-7 text-muted-foreground">
+          <p className="mt-4 max-w-sm text-sm leading-7 text-muted-foreground">
             Seven steps. One file. The estimate you sign is the job that gets done and the invoice
             you pay.
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Button size="xl" asChild>
+
+          <div className="mt-8 hidden border-t border-input pt-6 lg:block">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
+                  Active step
+                </p>
+                <p className="mt-1.5 truncate text-base font-semibold tracking-tight">
+                  {current.title}
+                </p>
+              </div>
+              <p className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground">
+                {stepLabel(current.step)} / {stepLabel(TOTAL)}
+              </p>
+            </div>
+
+            <div
+              className="mt-5 flex gap-1.5"
+              role="tablist"
+              aria-label="Workflow steps"
+            >
+              {WORKFLOW_STEPS.map((step, index) => (
+                <button
+                  key={step.step}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === active}
+                  aria-label={`Go to step ${step.step}: ${step.title}`}
+                  className={cn(
+                    "h-1 flex-1 rounded-full transition-all duration-500",
+                    index === active
+                      ? "bg-foreground"
+                      : "bg-foreground/15 hover:bg-foreground/30",
+                  )}
+                  onClick={() => goTo(index)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-4 pt-8">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={prev}
+                disabled={active === 0}
+                aria-label="Previous step"
+                className="flex size-11 items-center justify-center rounded-full border border-input bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35"
+              >
+                <ArrowLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={next}
+                disabled={active === TOTAL - 1}
+                aria-label="Next step"
+                className="flex size-11 items-center justify-center rounded-full border border-input bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35"
+              >
+                <ArrowRight className="size-4" />
+              </button>
+            </div>
+            <Link
+              href="/how-it-works"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-primary"
+            >
+              Full walkthrough
+              <ArrowUpRight className="size-3.5" />
+            </Link>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-2.5 sm:flex-row lg:hidden">
+            <Button size="lg" asChild>
               <Link href="/get-a-quote">
                 Get a written estimate
                 <ArrowRight data-icon="inline-end" />
               </Link>
             </Button>
-            <Button
-              size="xl"
-              variant="outline"
-              className="border-input hover:border-input"
-              asChild
-            >
+            <Button size="lg" variant="outline" asChild>
               <Link href="/find-a-professional">Find a professional</Link>
             </Button>
           </div>
         </div>
 
-        <ol className="relative">
-          <span
-            className="pointer-events-none absolute top-8 right-0 hidden size-64 rounded-full bg-primary/[0.05] lg:block"
-            aria-hidden="true"
-          />
-          <svg
-            viewBox="0 0 64 800"
-            preserveAspectRatio="none"
-            className="pointer-events-none absolute top-6 bottom-6 left-5 hidden w-10 text-primary md:left-1/2 md:block md:-translate-x-1/2 md:w-16"
-            aria-hidden="true"
+        {/* Right column: track + stationary CTAs */}
+        <div className="relative flex min-w-0 flex-col">
+          {/* Fixed-height swipe viewport so CTA buttons never jump */}
+          <div
+            className="relative h-[22.75rem] overflow-x-clip"
+            aria-labelledby={labelId}
+            onTouchStart={(event) => {
+              touchX.current = event.changedTouches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(event) => {
+              if (touchX.current == null) return;
+              const dx =
+                (event.changedTouches[0]?.clientX ?? touchX.current) - touchX.current;
+              if (Math.abs(dx) > 48) goTo(active + (dx < 0 ? 1 : -1));
+              touchX.current = null;
+            }}
           >
-            <path
-              d="M32 0 C58 57 6 114 32 171 C58 228 6 285 32 342 C58 399 6 456 32 513 C58 570 6 627 32 684 C50 730 20 770 32 800"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span
-            className="absolute top-6 bottom-6 left-5 w-px bg-primary/20 md:hidden"
-            aria-hidden="true"
-          />
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-16 bg-linear-to-l from-white to-transparent lg:block" />
 
-          {customerWorkflow.map((item, index) => {
-            const left = index % 2 === 0;
-            const number = String(item.step).padStart(2, "0");
-            return (
-              <li
-                key={item.step}
-                className="relative grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-4 py-6 md:grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] md:gap-6 md:py-7"
-              >
-                <div
+            <ul
+              className="flex h-full items-end gap-3.5 will-change-transform"
+              style={{
+                transform: `translate3d(${trackOffsetRem}rem, 0, 0)`,
+                transition: reducedMotion
+                  ? "none"
+                  : "transform 520ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            >
+              {WORKFLOW_STEPS.map((step, index) => {
+                const isActive = index === active;
+                return (
+                  <li
+                    key={step.step}
+                    className="flex w-[15rem] shrink-0 items-end justify-center"
+                  >
+                    <article
+                      className={cn(
+                        "group relative flex flex-col overflow-hidden rounded-[12px] text-left",
+                        "transition-[width,height,box-shadow,opacity,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                        isActive
+                          ? "z-10 h-[22.75rem] w-[16.5rem] shadow-[0_14px_36px_rgba(15,23,42,0.16)]"
+                          : "z-0 h-[20rem] w-[15rem] opacity-55 shadow-[0_6px_18px_rgba(15,23,42,0.07)] grayscale-[35%] hover:opacity-80",
+                      )}
+                      aria-current={isActive ? "step" : undefined}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => goTo(index)}
+                        className="absolute inset-0 z-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        aria-label={`Step ${step.step}: ${step.title}`}
+                      />
+                      <Image
+                        src={step.image}
+                        alt={step.imageAlt}
+                        fill
+                        sizes="280px"
+                        className="pointer-events-none rounded-[12px] object-cover"
+                        priority={index < 2}
+                      />
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-[12px] bg-linear-to-t from-black/88 via-black/35 to-black/10"
+                        aria-hidden="true"
+                      />
+
+                      <div className="relative z-10 mt-auto flex flex-col gap-1.5 p-4 sm:p-5">
+                        <p className="pointer-events-none font-mono text-[10px] tracking-[0.16em] text-white/75 uppercase">
+                          {stepLabel(step.step)} · {step.phase}
+                        </p>
+                        <h3
+                          className={cn(
+                            "pointer-events-none font-semibold tracking-tight text-white transition-[font-size] duration-500",
+                            isActive ? "text-lg sm:text-xl" : "text-base",
+                          )}
+                        >
+                          {step.title}
+                        </h3>
+
+                        {isActive ? (
+                          <>
+                            <p className="pointer-events-none text-pretty text-sm leading-6 text-white/80">
+                              {step.body}
+                            </p>
+                            <Link
+                              href={step.href}
+                              className="relative z-20 mt-2.5 inline-flex h-9 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 text-xs font-semibold text-foreground transition-colors hover:bg-white/90"
+                            >
+                              {step.cta}
+                              <ArrowUpRight className="size-3.5" />
+                            </Link>
+                          </>
+                        ) : null}
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {/* Mobile progress — outside swipe track */}
+          <div className="mt-5 flex items-center justify-between gap-4 lg:hidden">
+            <p className="font-mono text-xs tabular-nums text-muted-foreground">
+              {stepLabel(current.step)} / {stepLabel(TOTAL)} · {current.phase}
+            </p>
+            <div className="flex max-w-[10rem] flex-1 gap-1">
+              {WORKFLOW_STEPS.map((step, index) => (
+                <span
+                  key={step.step}
                   className={cn(
-                    "relative hidden md:block",
-                    left ? "text-right" : "invisible"
+                    "h-1 flex-1 rounded-full",
+                    index === active ? "bg-foreground" : "bg-foreground/15",
                   )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -top-6 right-0 -z-10 text-7xl font-semibold leading-none text-primary/[0.07]"
-                  >
-                    {item.step}
-                  </span>
-                  <h3 className="text-lg font-semibold">{item.title}</h3>
-                  <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{item.body}</p>
-                </div>
+                />
+              ))}
+            </div>
+          </div>
 
-                <span className="relative z-10 flex size-11 items-center justify-center justify-self-center rounded-full bg-primary font-mono text-[0.7rem] font-semibold text-primary-foreground">
-                  {number}
-                </span>
-
-                <div className={cn("relative", left ? "md:invisible" : "")}>
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -top-5 left-0 -z-10 text-6xl font-semibold leading-none text-primary/[0.07] md:text-7xl"
-                  >
-                    {item.step}
-                  </span>
-                  <h3 className="text-lg font-semibold">{item.title}</h3>
-                  <p className="mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground">
-                    {item.body}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+          {/* Stationary CTAs — never inside the swipe/transform area */}
+          <div className="mt-6 hidden gap-3 lg:flex">
+            <Button size="lg" asChild>
+              <Link href="/get-a-quote">
+                Get a written estimate
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" className="border-input bg-card" asChild>
+              <Link href="/find-a-professional">Find a professional</Link>
+            </Button>
+          </div>
+        </div>
       </Container>
     </Section>
   );

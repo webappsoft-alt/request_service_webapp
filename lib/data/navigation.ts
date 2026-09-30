@@ -51,12 +51,12 @@ export const footerNav = {
 
 export const customerWorkflow = [
   { step: 1, title: "Choose a service", body: "Select the category that matches the work you need." },
-  { step: 2, title: "Submit a request", body: "Add your ZIP code, details, timing, and photos if helpful." },
+  { step: 2, title: "Submit a request", body: "Add your ZIP, details, timing, and photos." },
   { step: 3, title: "Connect with professionals", body: "Matching local Pros review the request." },
   { step: 4, title: "Review the estimate", body: "Compare line items, materials, labor, and terms." },
   { step: 5, title: "Approve and sign", body: "Accept digitally. The original estimate is preserved." },
   { step: 6, title: "Get the work completed", body: "The approved estimate becomes a tracked job." },
-  { step: 7, title: "Pay", body: "Pay a deposit, progress amount, or balance against the invoice." },
+  { step: 7, title: "Pay", body: "Pay deposit, progress, or balance on the invoice." },
 ];
 
 export const providerWorkflow = [

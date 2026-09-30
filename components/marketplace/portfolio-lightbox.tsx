@@ -13,6 +13,50 @@ import { cn } from "@/lib/utils";
 
 export type GalleryPhoto = { src: string; alt: string };
 
+/** Remote / data / blob URLs must skip the Next optimizer or they render blank. */
+function shouldSkipImageOptimize(src: string) {
+  return /^(https?:|data:|blob:)/i.test(src.trim());
+}
+
+function LightboxImage({
+  src,
+  alt,
+  sizes,
+  className,
+  priority,
+}: {
+  src: string;
+  alt: string;
+  sizes: string;
+  className?: string;
+  priority?: boolean;
+}) {
+  const unoptimized = shouldSkipImageOptimize(src);
+  // Prefer a plain <img> for remote uploads — Next/Image optimizer often 400s
+  // on signed GCS/API hosts that are not in remotePatterns.
+  if (unoptimized) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={alt}
+        className={cn("absolute inset-0 size-full", className)}
+        decoding="async"
+      />
+    );
+  }
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes={sizes}
+      className={className}
+      priority={priority}
+    />
+  );
+}
+
 export function PhotoLightbox({
   photos,
   title,
@@ -56,14 +100,15 @@ export function PhotoLightbox({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="top-0 left-0 flex h-dvh max-h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none bg-black p-0 text-white ring-0 sm:max-w-none"
+        shell={false}
+        className="top-0 left-0 z-[200] flex h-dvh max-h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none bg-black p-0 text-white ring-0 sm:max-w-none"
       >
         <DialogTitle className="sr-only">{title} gallery</DialogTitle>
         <DialogDescription className="sr-only">
           Full-size photos for {title}. Use the arrows to move through the gallery.
         </DialogDescription>
 
-        <div className="flex items-center justify-between gap-4 px-4 py-3 md:px-6">
+        <div className="relative z-10 flex items-center justify-between gap-4 px-4 py-3 md:px-6">
           <p className="min-w-0 truncate text-sm text-white/75">
             {title}
             <span className="mx-2 text-white/35">·</span>
@@ -80,7 +125,7 @@ export function PhotoLightbox({
         </div>
 
         <div
-          className="relative min-h-0 flex-1"
+          className="relative z-0 min-h-0 flex-1 bg-black"
           onTouchStart={(event) => {
             touchX.current = event.changedTouches[0]?.clientX ?? null;
           }}
@@ -93,12 +138,13 @@ export function PhotoLightbox({
           }}
         >
           {current ? (
-            <Image
+            <LightboxImage
+              key={current.src}
               src={current.src}
               alt={current.alt}
-              fill
               sizes="100vw"
               className="object-contain"
+              priority
             />
           ) : null}
 
@@ -124,7 +170,7 @@ export function PhotoLightbox({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-3 px-4 pt-2 pb-4 md:px-6">
+        <div className="relative z-10 flex flex-col gap-3 px-4 pt-2 pb-4 md:px-6">
           <p className="truncate text-sm text-white/80">{current?.alt}</p>
           {count > 1 ? (
             <ul className="flex gap-2 overflow-x-auto pb-1">
@@ -142,10 +188,9 @@ export function PhotoLightbox({
                     aria-label={`Show photo ${photoIndex + 1}`}
                     aria-current={photoIndex === index}
                   >
-                    <Image
+                    <LightboxImage
                       src={photo.src}
                       alt=""
-                      fill
                       sizes="56px"
                       className="object-cover"
                     />
@@ -192,13 +237,12 @@ export function PortfolioGallery({
             onClick={() => setOpen(true)}
           >
             {banner ? (
-              <Image
+              <LightboxImage
                 src={banner.src}
                 alt={banner.alt}
-                fill
                 sizes="(min-width: 1440px) 72rem, 80vw"
                 className="object-cover! transition-transform duration-500 ease-out group-hover:scale-[1.03]"
-                style={{ objectFit: "cover" }}
+                priority
               />
             ) : null}
             <span className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/45 px-2 py-1 text-white backdrop-blur-md">
@@ -238,10 +282,9 @@ export function PortfolioGallery({
                     aria-label={`Show ${photo.alt} in the main photo`}
                     aria-current={photoIndex === index ? true : undefined}
                   >
-                    <Image
+                    <LightboxImage
                       src={photo.src}
                       alt=""
-                      fill
                       sizes="160px"
                       className="object-cover"
                     />

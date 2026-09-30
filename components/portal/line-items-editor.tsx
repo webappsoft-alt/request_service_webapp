@@ -301,7 +301,9 @@ function LineItemRow({
                       fill
                       sizes="32px"
                       className="object-cover"
-                      unoptimized={materialImage.startsWith("http")}
+                      unoptimized={
+                        /^(https?:|data:|blob:)/i.test(materialImage.trim())
+                      }
                     />
                   </button>
                   {!locked ? (

@@ -51,12 +51,15 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  /** Skip padded scroll shell — for fullscreen lightboxes and custom layouts. */
+  shell = true,
   onPointerDownOutside,
   onInteractOutside,
   onFocusOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  shell?: boolean
 }) {
   function isPortaledSelectEvent(event: {
     target: EventTarget | null
@@ -80,20 +83,20 @@ function DialogContent({
     if (path.some(matchesPortaledUi)) {
       return true
     }
-    const target = (original?.target ?? event.target) as EventTarget | null
+    const target = (original?.target ?? event.target) as Element | null
     return Boolean(target && matchesPortaledUi(target))
   }
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={shell ? undefined : "z-[190] bg-black/80"} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-bottom-4 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-closed:slide-out-to-bottom-2",
           className,
-          // Shell wins over call-site max-h / overflow.
-          "flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0",
+          shell &&
+            "flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0",
         )}
         {...props}
         onPointerDownOutside={(event) => {
@@ -118,14 +121,16 @@ function DialogContent({
           onFocusOutside?.(event)
         }}
       >
-        <div
-          data-slot="dialog-scroll"
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-        >
-          <div className="flex flex-col gap-4 px-4 pt-4 pb-4">
-            {children}
+        {shell ? (
+          <div
+            data-slot="dialog-scroll"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          >
+            <div className="flex flex-col gap-4 px-4 pt-4 pb-4">{children}</div>
           </div>
-        </div>
+        ) : (
+          children
+        )}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button

@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const KINDS: PortalEventKind[] = ["job", "estimate", "request", "invoice", "task"];
-const VIEWS = ["day", "week", "month"] as const;
+const VIEWS = ["month", "week", "day"] as const;
 const DAY_START = 6 * 60;   // 6:00 AM
 const DAY_END = 24 * 60;    // midnight (00:00 next day)
 const SLOT = 30;
@@ -188,19 +188,14 @@ export function EventCalendar({
   }, [propEvents]);
 
   const today = toIso(new Date());
-  const firstDated =
-    localEvents.find((item) => item.date && item.kind === "job")?.date ??
-    localEvents.find((item) => item.date && item.kind === "estimate")?.date ??
-    localEvents.find((item) => item.date)?.date ??
-    today;
-  const start = parseIso(firstDated);
-  const [view, setView] = useState<CalendarView>("day");
-  const [cursor, setCursor] = useState({ year: start.getFullYear(), month: start.getMonth() });
+  const now = new Date();
+  const [view, setView] = useState<CalendarView>("month");
+  const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
   const [kindFilterInternal, setKindFilterInternal] = useState<PortalEventKind | "">("");
   const [employeeFilterInternal, setEmployeeFilterInternal] = useState(
     lockEmployeeId || initialEmployeeId,
   );
-  const [selectedDay, setSelectedDay] = useState(firstDated);
+  const [selectedDay, setSelectedDay] = useState(today);
   const [overDay, setOverDay] = useState<string | null>(null);
 
   const kindFilter = controlledKindFilter !== undefined ? controlledKindFilter : kindFilterInternal;
@@ -250,7 +245,7 @@ export function EventCalendar({
     const first = new Date(cursor.year, cursor.month, 1);
     const gridStart = new Date(first);
     gridStart.setDate(1 - first.getDay());
-    return Array.from({ length: 42 }, (_, index) => {
+    const all = Array.from({ length: 42 }, (_, index) => {
       const date = new Date(gridStart);
       date.setDate(gridStart.getDate() + index);
       const iso = toIso(date);
@@ -261,6 +256,16 @@ export function EventCalendar({
         events: visible.filter((item) => eventCovers(item, iso)),
       };
     });
+
+    // Drop trailing weeks that are entirely outside the current month
+    let weekCount = 6;
+    while (weekCount > 4) {
+      const start = (weekCount - 1) * 7;
+      const week = all.slice(start, start + 7);
+      if (week.some((cell) => cell.inMonth)) break;
+      weekCount -= 1;
+    }
+    return all.slice(0, weekCount * 7);
   }, [cursor.month, cursor.year, visible]);
 
   const weekDays = useMemo(
@@ -636,50 +641,78 @@ function MonthGrid({
   onOpen?: (event: PortalCalendarEvent) => void;
 }) {
   return (
-    <div className="overflow-hidden border border-border-soft bg-card">
-      <div className="grid grid-cols-7 border-b border-border-soft bg-[#f7f8fa]">
-        {WEEKDAYS.map((day) => (
-          <p key={day} className="px-2 py-2 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-            {day}
-          </p>
-        ))}
-      </div>
-      <div className="grid grid-cols-7">
-        {cells.map((cell) => (
-          <div
-            key={cell.iso}
-            onClick={() => onSelect(cell.iso)}
-            onDragOver={(drag) => {
-              drag.preventDefault();
-              onOver(cell.iso);
-            }}
-            onDragLeave={() => onOver(null)}
-            onDrop={(drag) => onDrop(cell.iso, drag)}
-            className={cn(
-              "min-h-28 border-b border-r border-border-soft p-1.5 last:border-r-0",
-              !cell.inMonth && "bg-[#f7f8fa] text-muted-foreground",
-              selectedDay === cell.iso && "bg-secondary/50",
-              overDay === cell.iso && "bg-primary/10",
-            )}
-          >
+    <div className="overflow-hidden border border-input bg-card">
+      <div className="grid grid-cols-7 border-b border-input bg-[#f7f8fa]">
+        {WEEKDAYS.map((day, index) => {
+          const weekend = index === 0 || index === 6;
+          return (
             <p
+              key={day}
               className={cn(
-                "mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium",
-                cell.iso === today && "bg-primary text-primary-foreground",
+                "px-2 py-2 text-center text-[11px] font-semibold tracking-wide uppercase",
+                weekend ? "bg-primary/[0.06] text-primary" : "text-muted-foreground",
               )}
             >
-              {cell.day}
+              {day}
             </p>
-            <div className="flex flex-col gap-1">
-              {cell.events.slice(0, 3).map((item) => (
-                <CalendarChip key={item.id} event={item} onOpen={onOpen} />
-              ))}
-              {cell.events.length > 3 ? (
-                <p className="px-1 text-[10px] text-muted-foreground">+{cell.events.length - 3} more</p>
-              ) : null}
+          );
+        })}
+      </div>
+      <div className="grid grid-cols-7">
+        {cells.map((cell, index) => {
+          const weekday = index % 7;
+          const weekend = weekday === 0 || weekday === 6;
+
+          if (!cell.inMonth) {
+            return (
+              <div
+                key={cell.iso}
+                aria-hidden="true"
+                className={cn(
+                  "min-h-28 border-b border-r border-input bg-[#f3f4f6] [&:nth-child(7n)]:border-r-0 [&:nth-last-child(-n+7)]:border-b-0",
+                  weekend && "bg-[#eef1f6]",
+                )}
+              />
+            );
+          }
+
+          return (
+            <div
+              key={cell.iso}
+              onClick={() => onSelect(cell.iso)}
+              onDragOver={(drag) => {
+                drag.preventDefault();
+                onOver(cell.iso);
+              }}
+              onDragLeave={() => onOver(null)}
+              onDrop={(drag) => onDrop(cell.iso, drag)}
+              className={cn(
+                "min-h-28 border-b border-r border-input p-1.5 [&:nth-child(7n)]:border-r-0 [&:nth-last-child(-n+7)]:border-b-0",
+                weekend && "bg-primary/[0.04]",
+                selectedDay === cell.iso && "bg-secondary/50",
+                overDay === cell.iso && "bg-primary/10",
+              )}
+            >
+              <p
+                className={cn(
+                  "mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium",
+                  weekend && cell.iso !== today && "text-primary",
+                  cell.iso === today && "bg-primary text-primary-foreground",
+                )}
+              >
+                {cell.day}
+              </p>
+              <div className="flex flex-col gap-1">
+                {cell.events.slice(0, 3).map((item) => (
+                  <CalendarChip key={item.id} event={item} onOpen={onOpen} />
+                ))}
+                {cell.events.length > 3 ? (
+                  <p className="px-1 text-[10px] text-muted-foreground">+{cell.events.length - 3} more</p>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

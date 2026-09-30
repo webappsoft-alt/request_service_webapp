@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
@@ -55,6 +55,8 @@ export function ScheduleView() {
     searchParams.get("employeeId")?.trim() || searchParams.get("employee")?.trim() || "";
   const dispatch = useAppDispatch();
   const crm = useCrmApiData();
+  const crmEnabled = crm.enabled;
+  const ensureCrmLoaded = crm.ensureLoaded;
   const team = useAppSelector((state) => state.team.items);
   const teamLoading = useAppSelector((state) => state.team.loading);
   const { contractors } = useCrmDirectory();
@@ -85,6 +87,9 @@ export function ScheduleView() {
     return [...employeeRows, ...contractorRows];
   }, [contractors, team]);
 
+  const memberOptionsRef = useRef(memberOptions);
+  memberOptionsRef.current = memberOptions;
+
   const employeesForCalendar = useMemo(
     () =>
       memberOptions.map((item) => ({
@@ -111,14 +116,14 @@ export function ScheduleView() {
   );
 
   useEffect(() => {
-    void dispatch(fetchTeam({ force: true, limit: 100 }));
-    if (crm.enabled) void crm.ensureLoaded();
-  }, [crm, dispatch]);
+    void dispatch(fetchTeam({ limit: 100 }));
+    if (crmEnabled) void ensureCrmLoaded();
+  }, [crmEnabled, dispatch, ensureCrmLoaded]);
 
-  const loadSchedule = useCallback(async () => {
-    setScheduleLoading(true);
+  const loadSchedule = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setScheduleLoading(true);
     try {
-      const selected = memberOptions.find((item) => item.id === memberFilter);
+      const selected = memberOptionsRef.current.find((item) => item.id === memberFilter);
       const items = await querySchedule({
         employeeId:
           selected?.kind === "employee"
@@ -138,7 +143,7 @@ export function ScheduleView() {
     } finally {
       setScheduleLoading(false);
     }
-  }, [kindFilter, memberFilter, memberOptions]);
+  }, [kindFilter, memberFilter]);
 
   useEffect(() => {
     void loadSchedule();
@@ -160,11 +165,11 @@ export function ScheduleView() {
         startMinutes: move.startMinutes,
         endMinutes: move.endMinutes,
         timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
-        employeeId: event.employeeId ?? memberOptions[0]?.id ?? "",
+        employeeId: event.employeeId ?? memberOptionsRef.current[0]?.id ?? "",
       }),
     )
       .then(() => {
-        void loadSchedule();
+        void loadSchedule({ quiet: true });
         if (move.date) {
           const time =
             move.startMinutes != null && move.endMinutes != null
@@ -176,7 +181,7 @@ export function ScheduleView() {
         }
       })
       .catch((error) => {
-        void loadSchedule();
+        void loadSchedule({ quiet: true });
         toast.error(formatScheduleError(error));
       });
   }
@@ -197,7 +202,7 @@ export function ScheduleView() {
                   .then(() => {
                     toast.success(`${editing.title} removed from the schedule.`);
                     setEditing(null);
-                    void loadSchedule();
+                    void loadSchedule({ quiet: true });
                   })
                   .catch((error) => {
                     toast.error(formatScheduleError(error));
@@ -257,7 +262,7 @@ export function ScheduleView() {
         defaultEmployeeId={memberFilter || undefined}
         onSave={async (assignment) => {
           await assign(assignment);
-          await loadSchedule();
+          await loadSchedule({ quiet: true });
           const label = resolveMemberLabel(assignment.employeeId);
           toast.success(
             `${calendarEventKindLabel(assignment.kind)} assigned to ${label} on ${formatDate(assignment.date)}.`,

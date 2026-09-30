@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import type { EstimateApproval, EstimateShareSnapshot } from "@/components/portal/use-estimate-share";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { formatTaxRatePercent } from "@/lib/tax/state-tax";
 import { cn } from "@/lib/utils";
 
 export const DEFAULT_ESTIMATE_TERMS = [
@@ -135,7 +136,10 @@ export function EstimatePdfDocument({
         </div>
         <div className="mt-4 ml-auto w-56 text-[12px]">
           <Row label="Subtotal" value={formatMoney(snapshot.subtotal)} />
-          <Row label="Tax" value={formatMoney(snapshot.tax)} />
+          <Row
+            label={`Tax (${formatTaxRatePercent(snapshot.taxRatePercent)}%)`}
+            value={formatMoney(snapshot.tax)}
+          />
           <div className="mt-1 flex justify-between border-t border-[#003F7D]/25 pt-2 text-sm font-semibold">
             <span>Total</span>
             <span className="tabular-nums">{formatMoney(snapshot.total)}</span>

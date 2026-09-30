@@ -326,6 +326,14 @@ function mapPublicEstimateToSnapshot(
     items,
     subtotal: numberValue(estimate.subtotal),
     tax: numberValue(estimate.tax),
+    taxRatePercent: Math.max(
+      0,
+      numberValue(
+        (Array.isArray(estimate.items) ? estimate.items : [])
+          .map((entry) => numberValue(asRecord(entry)?.taxRate))
+          .find((rate) => rate > 0),
+      ),
+    ),
     total: numberValue(estimate.total),
     createdAt: toIso(estimate.createdAt) || new Date().toISOString(),
     status: stringValue(estimate.status) || undefined,

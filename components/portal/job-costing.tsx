@@ -9,11 +9,13 @@ import {
 } from "@/components/portal/line-items-editor";
 import {
   jobCostMix,
+  jobMoneySheet,
   useJobCosting,
   type JobCostLine,
 } from "@/components/portal/use-job-costing";
 import { mergeStashedMaterialImages, clearStashedEstimateMaterialImages, readStashedEstimateMaterialImages } from "@/components/portal/line-item-images";
 import { formatMoney } from "@/lib/format";
+import { formatTaxRatePercent } from "@/lib/tax/state-tax";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -189,6 +191,23 @@ export function JobCosting({
 
   const activeLines = draft ?? lines;
   const mix = useMemo(() => jobCostMix(activeLines), [activeLines]);
+  const [taxRatePercent, setTaxRatePercent] = useState(0);
+  const addressState = job?.address?.state || "";
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
+      const rate = await fetchTaxRatePercent(addressState);
+      if (!cancelled) setTaxRatePercent(rate);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [addressState]);
+  const sheet = useMemo(
+    () => jobMoneySheet(mix, taxRatePercent),
+    [mix, taxRatePercent],
+  );
 
   // Only treat as dirty when complete (filled) lines differ from saved complete lines.
   // Empty / incomplete new rows do not trigger an API save.
@@ -448,11 +467,23 @@ export function JobCosting({
           <dt className="text-muted-foreground">Material</dt>
           <dd className="text-right tabular-nums">{formatMoney(mix.materials)}</dd>
         </div>
+        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
+          <dt className="text-muted-foreground">Subtotal</dt>
+          <dd className="text-right tabular-nums">{formatMoney(sheet.subtotal)}</dd>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
+          <dt className="text-muted-foreground">
+            Tax ({formatTaxRatePercent(taxRatePercent)}%)
+          </dt>
+          <dd className="text-right tabular-nums">{formatMoney(sheet.tax)}</dd>
+        </div>
         <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft bg-[#f7f8fa] px-3 py-2.5">
           <dt className="font-semibold">
             {noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}
           </dt>
-          <dd className="text-right font-semibold tabular-nums text-primary">{formatMoney(mix.total)}</dd>
+          <dd className="text-right font-semibold tabular-nums text-primary">
+            {formatMoney(sheet.total)}
+          </dd>
         </div>
       </dl>
     </div>

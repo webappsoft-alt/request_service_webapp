@@ -45,6 +45,7 @@ import {
   paymentStatusLabel,
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { formatTaxRatePercent, moneyWithStateTax } from "@/lib/tax/state-tax";
 import type { Estimate, Invoice, InvoiceStatus, Job, Payment, PaymentMethodType } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -407,6 +408,34 @@ export function InvoiceSummaryTab({
 }) {
   const [summaryTab, setSummaryTab] = useState<"overview" | "payments">("overview");
   const address = job?.address;
+  const estimateAddr = estimate?.propertyAddress;
+  const addressState = address?.state || estimateAddr?.state || "";
+  const [taxRatePercent, setTaxRatePercent] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
+      const rate = await fetchTaxRatePercent(addressState);
+      if (!cancelled) setTaxRatePercent(rate);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [addressState]);
+  const money = useMemo(() => {
+    const sheet = moneyWithStateTax(
+      invoice.subtotal,
+      taxRatePercent,
+      invoice.discount,
+    );
+    const balanceDue = Math.max(0, sheet.total - (invoice.amountPaid || 0));
+    return { ...sheet, balanceDue, amountPaid: invoice.amountPaid || 0 };
+  }, [
+    invoice.subtotal,
+    invoice.discount,
+    invoice.amountPaid,
+    taxRatePercent,
+  ]);
   const overdueDays = invoiceDaysOverdue(invoice);
   const kind = invoiceKindLabel(invoiceKind(invoice));
   const siteAddress = address
@@ -451,7 +480,7 @@ export function InvoiceSummaryTab({
         <span className="inline-flex items-center gap-1">
           <span className="text-muted-foreground">Balance:</span>
           <span className="font-semibold tabular-nums text-foreground">
-            {formatMoney(invoice.balanceDue)}
+            {formatMoney(money.balanceDue)}
           </span>
         </span>
         <span className="inline-flex items-center gap-1.5">
@@ -481,7 +510,7 @@ export function InvoiceSummaryTab({
             Balance due
           </p>
           <p className="text-lg font-semibold tabular-nums text-primary">
-            {formatMoney(invoice.balanceDue)}
+            {formatMoney(money.balanceDue)}
           </p>
         </div>
       </div>
@@ -550,9 +579,9 @@ export function InvoiceSummaryTab({
       ) : (
         <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MoneyStat label="Price" value={formatMoney(invoice.total)} />
-        <MoneyStat label="Paid" value={formatMoney(invoice.amountPaid)} />
-        <MoneyStat label="Balance" value={formatMoney(invoice.balanceDue)} emphasize={invoice.balanceDue > 0} />
+        <MoneyStat label="Price" value={formatMoney(money.total)} />
+        <MoneyStat label="Paid" value={formatMoney(money.amountPaid)} />
+        <MoneyStat label="Balance" value={formatMoney(money.balanceDue)} emphasize={money.balanceDue > 0} />
         <MoneyStat
           label="Days overdue"
           value={overdueDays ? String(overdueDays) : "—"}
@@ -689,22 +718,24 @@ export function InvoiceSummaryTab({
         </div>
         <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-input px-4 py-3 text-sm">
           <dt className="text-muted-foreground">Subtotal</dt>
-          <dd className="text-right tabular-nums">{formatMoney(invoice.subtotal)}</dd>
-          {invoice.discount ? (
+          <dd className="text-right tabular-nums">{formatMoney(money.subtotal)}</dd>
+          {money.discount ? (
             <>
               <dt className="text-muted-foreground">Discount</dt>
-              <dd className="text-right tabular-nums">{formatMoney(invoice.discount)}</dd>
+              <dd className="text-right tabular-nums">{formatMoney(money.discount)}</dd>
             </>
           ) : null}
-          <dt className="text-muted-foreground">Tax</dt>
-          <dd className="text-right tabular-nums">{formatMoney(invoice.tax)}</dd>
+          <dt className="text-muted-foreground">
+            Tax ({formatTaxRatePercent(taxRatePercent)}%)
+          </dt>
+          <dd className="text-right tabular-nums">{formatMoney(money.tax)}</dd>
           <dt className="font-medium">Price</dt>
-          <dd className="text-right font-semibold tabular-nums">{formatMoney(invoice.total)}</dd>
+          <dd className="text-right font-semibold tabular-nums">{formatMoney(money.total)}</dd>
           <dt className="text-muted-foreground">Paid</dt>
-          <dd className="text-right tabular-nums">{formatMoney(invoice.amountPaid)}</dd>
+          <dd className="text-right tabular-nums">{formatMoney(money.amountPaid)}</dd>
           <dt className="border-t border-input pt-2 font-semibold text-[#003F7D]">Balance</dt>
           <dd className="border-t border-input pt-2 text-right font-semibold tabular-nums text-[#003F7D]">
-            {formatMoney(invoice.balanceDue)}
+            {formatMoney(money.balanceDue)}
           </dd>
         </dl>
       </section>

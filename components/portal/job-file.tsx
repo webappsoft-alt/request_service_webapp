@@ -41,6 +41,7 @@ import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { UsStateSelect } from "@/components/shared/us-state-select";
 import { patchJobLocally } from "@/store/jobsSlice";
 import { jobMoneySheet, lineTotal, useJobCosting, type JobCostLine } from "@/components/portal/use-job-costing";
+import { formatTaxRatePercent } from "@/lib/tax/state-tax";
 import {
   useJobFile,
   toJobAttachmentItem,
@@ -616,7 +617,7 @@ export function JobSummaryTab({
             <dl className="space-y-2 border-t border-border-soft pt-3">
               <MoneyRow label="Subtotal" value={sheet.subtotal} />
               <MoneyRow
-                label={`Tax (${taxRatePercent || 8.25}%)`}
+                label={`Tax (${formatTaxRatePercent(taxRatePercent)}%)`}
                 value={sheet.tax}
               />
               <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5">

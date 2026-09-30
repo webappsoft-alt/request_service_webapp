@@ -175,14 +175,9 @@ export function EstimatePdfDocument({
         <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <SignatureBlock
             title="Company authorization"
-            name={snapshot.companySignedBy || snapshot.companyName}
+            name={snapshot.companySignedBy || undefined}
             date={snapshot.companySignedAt}
-            image={
-              snapshot.companySignatureDataUrl ||
-              (snapshot.companySignedAt && snapshot.companySignedBy
-                ? typedSignature(snapshot.companySignedBy)
-                : undefined)
-            }
+            image={snapshot.companySignatureDataUrl || undefined}
             slot={companySlot}
             empty="Authorized company signature"
           />
@@ -378,6 +373,7 @@ function SignatureBlock({
 }
 
 export function typedSignature(name: string) {
+  if (typeof document === "undefined") return "";
   const canvas = document.createElement("canvas");
   canvas.width = 420;
   canvas.height = 120;
@@ -385,7 +381,7 @@ export function typedSignature(name: string) {
   if (!ctx) return "";
   ctx.fillStyle = "#003F7D";
   ctx.font = "italic 36px Georgia, serif";
-  ctx.fillText(name, 16, 72);
+  ctx.fillText(String(name || "").trim(), 16, 72);
   return canvas.toDataURL("image/png");
 }
 

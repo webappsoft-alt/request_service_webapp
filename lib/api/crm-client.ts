@@ -1589,17 +1589,20 @@ export type ShareEstimateInput = {
 };
 
 export async function shareEstimate(id: string, input?: ShareEstimateInput) {
+  const image = String(input?.companySignatureDataUrl || "").trim();
+  const signedBy = String(input?.companySignedBy || "").trim();
+  const signedAt = input?.companySignedAt || new Date().toISOString();
   const body =
-    input?.companySignatureDataUrl || input?.companySignedBy
+    image || signedBy
       ? {
           companySignature: {
-            signedBy: input.companySignedBy || "",
-            signatureImageBase64: input.companySignatureDataUrl || "",
-            signedAt: input.companySignedAt || new Date().toISOString(),
+            signedBy,
+            ...(image ? { signatureImageBase64: image } : {}),
+            signedAt,
           },
-          companySignedBy: input.companySignedBy,
-          companySignatureDataUrl: input.companySignatureDataUrl,
-          companySignedAt: input.companySignedAt,
+          companySignedBy: signedBy || undefined,
+          ...(image ? { companySignatureDataUrl: image } : {}),
+          companySignedAt: signedAt,
         }
       : undefined;
   const response = await postData(

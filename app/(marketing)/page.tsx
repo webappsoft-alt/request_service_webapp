@@ -36,7 +36,7 @@ export default function HomePage() {
 
           <WorkflowSection />
           <HomeFaqSection />
-          <BlogSection />
+          <BlogSection limit={4} />
         </HomeMotion>
       </HomeCategoryFilterProvider>
     </>

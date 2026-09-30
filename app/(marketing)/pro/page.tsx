@@ -1,3 +1,4 @@
+import { BlogSection } from "@/components/home/blog-section";
 import { HomeMotion } from "@/components/home/home-motion";
 import { Container, Section } from "@/components/layout/container";
 import { ProClose } from "@/components/pro/pro-close";
@@ -62,6 +63,15 @@ export default function ProLandingPage() {
         </Section>
 
         <ProFaqSection />
+
+        <BlogSection
+          eyebrow="Pro Insights"
+          title="Guides & insights for service businesses"
+          description="Practical guides on winning jobs, managing client communications, estimating accurately, and growing your home service business."
+          linkText="Explore pro articles"
+          linkHref="/blog"
+          limit={4}
+        />
 
         <ProClose />
       </HomeMotion>

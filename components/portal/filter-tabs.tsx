@@ -47,7 +47,13 @@ export function FilterTabs({
           >
             {option.label}
             {count > 0 ? (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#003F7D] px-1.5 text-[10px] font-semibold leading-none text-white">
+              <span
+                className={cn(
+                  "inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#003F7D] px-1.5 text-[10px] font-semibold leading-none text-white",
+                  option.value === "changes_requested" &&
+                    "animate-pulse ring-2 ring-amber-400 ring-offset-1",
+                )}
+              >
                 {count > 99 ? "99+" : count}
               </span>
             ) : null}

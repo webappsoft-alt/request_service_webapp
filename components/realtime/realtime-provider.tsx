@@ -409,9 +409,46 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
           new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
         );
       }),
+      onSocketEvent("ESTIMATE_CHANGES_REQUESTED", (payload) => {
+        broadcastRealtime({ type: "ESTIMATE_CHANGES_REQUESTED", payload });
+        window.dispatchEvent(new Event("rs-crm-api"));
+        window.dispatchEvent(
+          new CustomEvent("rs-realtime", { detail: { type: "INBOX_SUMMARY_INVALIDATE" } }),
+        );
+        if (authRole === "provider" || authRole === "pro") {
+          const number = String(payload?.number || "").trim();
+          showNotificationToast(
+            "Change request received",
+            number
+              ? `Customer requested changes on ${number}.`
+              : "A customer requested changes on an estimate.",
+            {
+              href: payload?.href
+                ? String(payload.href)
+                : "/pro/dashboard/estimates?status=changes_requested",
+              onOpen: () =>
+                router.push(
+                  payload?.href
+                    ? String(payload.href)
+                    : "/pro/dashboard/estimates?status=changes_requested",
+                ),
+            },
+          );
+        }
+      }),
       onSocketEvent("ESTIMATE_SENT", (payload) => {
         broadcastRealtime({ type: "ESTIMATE_SENT", payload });
         broadcastRealtime({ type: "CUSTOMER_BADGE_INVALIDATE", payload });
+        // Fallback toast when NEW_NOTIFICATION is delayed or only guest-bound.
+        if (authRole === "customer") {
+          const number = String(payload?.number || "").trim();
+          showNotificationToast(
+            "Estimate ready to review & sign",
+            number
+              ? `A provider sent estimate ${number} for your review.`
+              : "A provider sent an estimate for your review.",
+          );
+        }
       }),
       onSocketEvent("SERVICE_SCHEDULED", (payload) => {
         broadcastRealtime({ type: "SERVICE_SCHEDULED", payload });

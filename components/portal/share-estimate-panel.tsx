@@ -167,15 +167,17 @@ export function EstimateShareTab({
       if (shared.emailSent) {
         toast.success(
           shared.emailTo
-            ? `Estimate emailed to ${shared.emailTo}.`
-            : "Estimate emailed to the customer.",
+            ? `Estimate has been sent to ${shared.emailTo}.`
+            : "Estimate has been sent.",
         );
       } else if (shared.emailSkippedReason) {
-        toast.message("Link ready", { description: shared.emailSkippedReason });
+        toast.success("Estimate has been sent. Link ready — email skipped.");
       } else if (shared.emailError) {
-        toast.message("Link ready", {
-          description: "Email could not be sent — check mail settings on the server.",
-        });
+        toast.success(
+          "Estimate has been sent. Link ready — email could not be delivered.",
+        );
+      } else {
+        toast.success("Estimate has been sent.");
       }
       return href;
     } catch (error) {

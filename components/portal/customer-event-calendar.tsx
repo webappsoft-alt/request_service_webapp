@@ -16,8 +16,8 @@ export function CustomerEventCalendar({
 }) {
   const { employees, assign } = usePortalCrew();
 
-  function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
-    return assign({
+  async function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
+    await assign({
       kind: event.kind,
       recordId: event.recordId,
       date: move.date,

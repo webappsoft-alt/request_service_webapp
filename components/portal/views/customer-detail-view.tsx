@@ -234,6 +234,8 @@ export function CustomerDetailView({ id }: { id: string }) {
     switch (event.kind) {
       case "job":
         return relatedJobs.some((job) => job.id === event.recordId);
+      case "fixed_service":
+        return relatedJobs.some((job) => job.id === event.recordId);
       case "estimate":
         return relatedEstimates.some((estimate) => estimate.id === event.recordId);
       case "request":

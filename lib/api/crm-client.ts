@@ -2443,7 +2443,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
             const estName =
               est.title && est.title !== est.number
                 ? est.title
-                : est.items?.[0]?.name || est.items?.[0]?.description || undefined;
+                : est.items?.[0]?.description || undefined;
             const category = item.category || estName || undefined;
             return {
               ...item,
@@ -2460,7 +2460,11 @@ export async function querySchedule(query: CrmListQuery = {}) {
           if (req) {
             const addr =
               item.serviceAddress ||
-              (req.address ? (typeof req.address === "string" ? req.address : formatAddr(req.address)) : undefined);
+              formatAddr({
+                city: req.city,
+                state: req.state,
+                zip: req.zip,
+              });
             const reqBudget =
               (req as unknown as Record<string, unknown>).budget ??
               (req as unknown as Record<string, unknown>).startingPrice ??
@@ -2469,14 +2473,14 @@ export async function querySchedule(query: CrmListQuery = {}) {
             const price =
               item.price ||
               (!Number.isNaN(reqNum) && reqNum > 0 ? `$${reqNum.toFixed(2)}` : undefined);
-            const reqName = req.serviceName || req.title || undefined;
+            const reqName = req.serviceName || undefined;
             const category = item.category || reqName || undefined;
             return {
               ...item,
               serviceAddress: addr || item.serviceAddress || undefined,
               price: price || item.price || undefined,
               category: category || item.category || undefined,
-              notes: req.notes || req.description || item.notes || undefined,
+              notes: req.details || item.notes || undefined,
               detail: reqName || item.detail,
               customerName: item.customerName || req.customerName || undefined,
             };
@@ -2489,7 +2493,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
             return {
               ...item,
               category: category || item.category || undefined,
-              notes: task.notes || task.description || item.notes || undefined,
+              notes: task.note || item.notes || undefined,
               detail: taskName || item.detail,
               customerName: item.customerName || task.customerName || undefined,
             };

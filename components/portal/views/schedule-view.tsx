@@ -150,7 +150,7 @@ export function ScheduleView() {
           const estName =
             est.title && est.title !== est.number
               ? est.title
-              : est.items?.[0]?.name || est.items?.[0]?.description || undefined;
+              : est.items?.[0]?.description || undefined;
           if (!detail || detail === event.title) detail = estName || detail;
           if (!serviceAddress && est.propertyAddress) serviceAddress = formatAddrObj(est.propertyAddress);
           if (!price) {
@@ -173,13 +173,16 @@ export function ScheduleView() {
       } else if (event.kind === "request" && event.recordId) {
         const req = crm.requests.find((r) => r.id === event.recordId);
         if (req) {
-          if (!notes) notes = req.notes || req.description || "";
+          if (!notes) notes = req.details || "";
           if (!customerName && req.customerName) customerName = req.customerName;
-          const reqName = req.serviceName || req.title || undefined;
+          const reqName = req.serviceName || undefined;
           if (!detail || detail === event.title) detail = reqName || detail;
-          if (!serviceAddress && req.address) {
-            serviceAddress =
-              typeof req.address === "string" ? req.address : formatAddrObj(req.address);
+          if (!serviceAddress) {
+            serviceAddress = formatAddrObj({
+              city: req.city,
+              state: req.state,
+              zip: req.zip,
+            });
           }
           if (!price) {
             const reqBudget =
@@ -195,7 +198,7 @@ export function ScheduleView() {
       } else if (event.kind === "task" && event.recordId) {
         const task = crm.tasks.find((t) => t.id === event.recordId);
         if (task) {
-          if (!notes) notes = task.notes || task.description || "";
+          if (!notes) notes = task.note || "";
           if (!customerName && task.customerName) customerName = task.customerName;
           const taskName = task.title && task.title !== task.number ? task.title : undefined;
           if (!detail || detail === event.title) detail = taskName || detail;
@@ -205,7 +208,6 @@ export function ScheduleView() {
       } else if (event.kind === "invoice" && event.recordId) {
         const inv = crm.invoices.find((i) => i.id === event.recordId);
         if (inv) {
-          if (!notes) notes = inv.notes || "";
           if (!customerName && inv.customerName) customerName = inv.customerName;
           if (!price && typeof inv.total === "number" && inv.total > 0) {
             price = `$${inv.total.toFixed(2)}`;

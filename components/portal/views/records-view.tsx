@@ -149,7 +149,7 @@ export function EstimatesView() {
   const isFirstMountRef = useRef(true);
   const prevQueryRef = useRef({ page: 1, search: "", status: "", limit: 10 });
 
-  // Opening Estimates clears the sidebar badge locally — no ack API.
+  // Opening Estimates clears the badge locally and acks via provider:inbox-ack.
   useEffect(() => {
     setPortalInboxCleared("estimates", true);
     window.dispatchEvent(
@@ -714,8 +714,8 @@ export function EstimatesView() {
                         );
                         toast.success(
                           token
-                            ? `${row.number} sent. Customer link copied.`
-                            : `${row.number} sent to customer.`,
+                            ? "Estimate has been sent. Customer link copied."
+                            : "Estimate has been sent.",
                         );
                       } catch (err) {
                         showApiErrorToast(err, "Failed to share estimate.");

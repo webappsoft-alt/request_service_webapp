@@ -24,6 +24,14 @@ import {
   requestProviderInboxCounts,
 } from "@/components/socket";
 
+/** Marketplace / chat / quote intake — not provider-added CRM leads. */
+const CUSTOMER_LEAD_SOURCES = new Set([
+  "quote_request",
+  "profile_view",
+  "fixed_service_view",
+  "direct_message",
+]);
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -41,13 +49,23 @@ function countsFromPayload(payload: unknown): Partial<PortalInboxCounts> | null 
   };
 }
 
+function isCustomerLeadPayload(payload: Record<string, unknown> | null) {
+  if (!payload) return true;
+  const source = String(payload.source || "").trim().toLowerCase();
+  if (!source) return true;
+  return CUSTOMER_LEAD_SOURCES.has(source);
+}
+
 /**
  * Sidebar / subnav badge counts.
  * Source of truth: module store fed by `provider:inbox-counts` (socket only).
  * Live bumps cover the gap until the next socket apply.
+ *
+ * Estimates badge = customer `changes_requested` only (never provider drafts).
+ * Leads badge = customer-originated sources only.
  */
 export function usePortalInbox() {
-  const { requests, estimates } = usePortalWorkspace();
+  const { requests } = usePortalWorkspace();
   const records = usePortalRecords();
   const [counts, setCounts] = useState(getPortalInboxCounts);
   /** Shared across remounts — visiting a tab dismisses dashboard alerts only. */
@@ -55,22 +73,14 @@ export function usePortalInbox() {
 
   const leads = records.listed("request", records.mergeRequests(requests), false);
   const newLeads = useMemo(
-    () => leads.filter((item) => item.status === "new"),
-    [leads],
-  );
-
-  const listedEstimates = records.listed(
-    "estimate",
-    records.mergeEstimates(estimates),
-    false,
-  );
-  const estimateAttention = useMemo(
     () =>
-      listedEstimates.filter(
-        (item) =>
-          item.status === "changes_requested" || item.status === "draft",
-      ),
-    [listedEstimates],
+      leads.filter((item) => {
+        if (item.status !== "new") return false;
+        const source = String(item.source || "").trim().toLowerCase();
+        if (!source) return true;
+        return CUSTOMER_LEAD_SOURCES.has(source);
+      }),
+    [leads],
   );
 
   useEffect(() => {
@@ -105,6 +115,8 @@ export function usePortalInbox() {
     return subscribeRealtime((detail) => {
       const type = String(detail?.type || "");
       if (type === "LEAD_CREATED") {
+        const payload = asRecord(detail?.payload);
+        if (!isCustomerLeadPayload(payload)) return;
         reopenPortalInboxBadge("leads");
         bumpPortalInboxCount("newLeads", 1);
         return;
@@ -130,11 +142,16 @@ export function usePortalInbox() {
       if (
         type === "ESTIMATE_UPDATED" ||
         type === "ESTIMATE_SENT" ||
-        type === "ESTIMATE_ACCEPTED"
+        type === "ESTIMATE_ACCEPTED" ||
+        type === "ESTIMATE_CHANGES_REQUESTED"
       ) {
         const estimatePayload = asRecord(detail?.payload) ?? {};
         const status = String(estimatePayload.status || "").toLowerCase();
-        if (status === "changes_requested" || status === "draft") {
+        // Only customer change-requests — never provider drafts.
+        if (
+          type === "ESTIMATE_CHANGES_REQUESTED" ||
+          status === "changes_requested"
+        ) {
           reopenPortalInboxBadge("estimates");
           bumpPortalInboxCount("pendingEstimates", 1);
         }
@@ -163,17 +180,25 @@ export function usePortalInbox() {
       }
       if (type === "NEW_NOTIFICATION") {
         const payload = detail?.payload as
-          | { type?: string; data?: { status?: string; action?: string } }
+          | {
+              type?: string;
+              data?: { status?: string; action?: string; source?: string };
+            }
           | undefined;
         const notifType = String(payload?.type || "");
         if (notifType === "NEW_BOOKING_REQUEST") {
           reopenPortalInboxBadge("orders");
           bumpPortalInboxCount("pendingOrders", 1);
         } else if (notifType === "NEW_LEAD") {
+          const data = asRecord(payload?.data);
+          if (!isCustomerLeadPayload(data)) return;
           reopenPortalInboxBadge("leads");
           bumpPortalInboxCount("newLeads", 1);
         } else if (notifType === "NEW_CHAT_MESSAGE") {
           bumpPortalInboxCount("unreadChats", 1);
+        } else if (notifType === "ESTIMATE_CHANGES_REQUESTED") {
+          reopenPortalInboxBadge("estimates");
+          bumpPortalInboxCount("pendingEstimates", 1);
         }
         return;
       }
@@ -224,13 +249,11 @@ export function usePortalInbox() {
     }));
   }, [newLeads]);
 
+  // Trust socket/ack counts — do not floor with local draft lists.
   const newLeadCount = counts.newLeads || 0;
   const unreadChats = counts.unreadChats || 0;
   const pendingOrders = counts.pendingOrders || 0;
-  const pendingEstimates = Math.max(
-    counts.pendingEstimates || 0,
-    estimateAttention.length,
-  );
+  const pendingEstimates = counts.pendingEstimates || 0;
 
   return {
     newLeads: newLeadCount,

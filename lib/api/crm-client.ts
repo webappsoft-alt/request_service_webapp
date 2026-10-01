@@ -465,6 +465,10 @@ function requestPayload(request: Partial<PortalRequest>) {
   if (request.preferredDate && request.preferredDate.trim()) {
     payload.preferredDate = request.preferredDate;
   }
+  // Provider-added CRM leads must not look like marketplace quote requests.
+  if (request.source) {
+    payload.source = request.source;
+  }
   return payload;
 }
 

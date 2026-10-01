@@ -2250,18 +2250,53 @@ function ActivityCard({
 }) {
   const timestamp = item.at || item.createdAt || "";
   const content = item.html ?? item.description ?? "";
+  const isSiteVisitActivity =
+    /site visit|visit scheduled|calendar visit/i.test(item.title || "") ||
+    content.includes("Site visit scheduled");
   return (
     <li className="flex gap-3">
       <div className="flex w-5 flex-col items-center">
-        <span className="mt-1.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-card">
-          <span className="size-1.5 rounded-full bg-primary" />
+        <span
+          className={cn(
+            "mt-1.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 bg-card",
+            isSiteVisitActivity ? "border-[#003F7D]" : "border-primary",
+          )}
+        >
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              isSiteVisitActivity ? "bg-[#003F7D]" : "bg-primary",
+            )}
+          />
         </span>
-        {last ? null : <span className="my-1 w-px min-h-4 grow border-l border-dashed border-primary/40" />}
+        {last ? null : (
+          <span
+            className={cn(
+              "my-1 w-px min-h-4 grow border-l border-dashed",
+              isSiteVisitActivity
+                ? "border-[#003F7D]/40"
+                : "border-primary/40",
+            )}
+          />
+        )}
       </div>
-      <div className={cn("min-w-0 flex-1 rounded-md bg-secondary/70 px-3 py-2.5", last ? "mb-0" : "mb-3")}>
+      <div
+        className={cn(
+          "min-w-0 flex-1 rounded-md px-3 py-2.5",
+          last ? "mb-0" : "mb-3",
+          isSiteVisitActivity
+            ? "border border-[#003F7D]/25 bg-[#e8eef5]/60"
+            : "bg-secondary/70",
+        )}
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-primary">
+            <p
+              className={cn(
+                "text-sm font-medium",
+                isSiteVisitActivity ? "text-[#003F7D]" : "text-primary",
+              )}
+            >
               {item.actor || "Desk"}
               {timestamp ? (
                 <span className="font-normal text-muted-foreground">

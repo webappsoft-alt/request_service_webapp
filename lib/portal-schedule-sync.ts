@@ -32,6 +32,8 @@ export async function syncCalendarAssignment(input: {
   status?: string;
   /** Estimate site-visit link: calendar only, no estimate status change. */
   linkOnly?: boolean;
+  /** Always create a new calendar row (e.g. schedule another site visit). */
+  forceNew?: boolean;
 }) {
   const date = dateOnly(input.date);
   if (!input.recordId || !date) return null;
@@ -51,13 +53,15 @@ export async function syncCalendarAssignment(input: {
       force: true,
       silent: true,
     });
-    const match = (existing || []).find(
-      (item) =>
-        item.kind === input.kind &&
-        item.recordId === input.recordId &&
-        item.id &&
-        !String(item.id).startsWith("cal_"),
-    );
+    const match = input.forceNew
+      ? undefined
+      : (existing || []).find(
+          (item) =>
+            item.kind === input.kind &&
+            item.recordId === input.recordId &&
+            item.id &&
+            !String(item.id).startsWith("cal_"),
+        );
 
     const payload = {
       title: input.title || (input.kind === "job" ? "Job" : "Site visit"),
@@ -68,7 +72,12 @@ export async function syncCalendarAssignment(input: {
       timeWindow,
       employeeId,
       contractorId: null as string | null,
-      status: input.status || "scheduled",
+      status: (input.status || "scheduled") as
+        | "scheduled"
+        | "confirmed"
+        | "in_progress"
+        | "completed"
+        | "cancelled",
       linkOnly,
     };
 

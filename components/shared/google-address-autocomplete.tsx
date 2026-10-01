@@ -442,6 +442,35 @@ export function GoogleAddressAutocomplete({
     }
   }
 
+  // Keep Google Places dropdown usable inside Radix dialogs (focus trap /
+  // dismissable layer otherwise swallows pac-item clicks).
+  useEffect(() => {
+    function isPacTarget(target: EventTarget | null) {
+      return (
+        target instanceof Element &&
+        Boolean(target.closest(".pac-container, .pac-item"))
+      );
+    }
+
+    function onPointerDown(event: PointerEvent) {
+      if (!isPacTarget(event.target)) return;
+      // Stop dialog dismiss / focus-out from cancelling the suggestion click.
+      event.stopPropagation();
+    }
+
+    function onMouseDown(event: MouseEvent) {
+      if (!isPacTarget(event.target)) return;
+      event.stopPropagation();
+    }
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("mousedown", onMouseDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("mousedown", onMouseDown, true);
+    };
+  }, []);
+
   return (
     <div className={cn("relative", className)}>
       <div className="relative">

@@ -1078,9 +1078,23 @@ export function mapEstimateSiteVisit(value: unknown): EstimateSiteVisitRecord | 
     record.findings,
     record.recommendations,
     record.measurements,
+    record.label,
+    record.scheduledAt,
+    record.id,
   ].some((item) => trimmed(item));
-  if (!hasText && !photos.length) return undefined;
+  const detailsPending =
+    record.detailsPending === true ||
+    record.detailsPending === "true" ||
+    record.detailsPending === 1
+      ? true
+      : record.detailsPending === false ||
+          record.detailsPending === "false" ||
+          record.detailsPending === 0
+        ? false
+        : undefined;
+  if (!hasText && !photos.length && !detailsPending) return undefined;
   return {
+    id: trimmed(record.id) || undefined,
     employeeId: trimmed(record.employeeId) || undefined,
     technician: trimmed(record.technician) || undefined,
     visitedAt: trimmed(record.visitedAt) || undefined,
@@ -1088,6 +1102,10 @@ export function mapEstimateSiteVisit(value: unknown): EstimateSiteVisitRecord | 
     findings: trimmed(record.findings) || undefined,
     recommendations: trimmed(record.recommendations) || undefined,
     measurements: trimmed(record.measurements) || undefined,
+    label: trimmed(record.label) || undefined,
+    scheduledAt: trimmed(record.scheduledAt) || toIsoString(record.scheduledAt) || undefined,
+    createdAt: trimmed(record.createdAt) || toIsoString(record.createdAt) || undefined,
+    detailsPending,
     photos,
   };
 }
@@ -1188,6 +1206,9 @@ export function mapEstimate(raw: unknown): Estimate | null {
     items: mapEstimateItems(id, record.items),
     attachments: mapEstimateAttachments(record.attachments),
     siteVisit: mapEstimateSiteVisit(record.siteVisit),
+    siteVisits: asArray(record.siteVisits)
+      .map((entry) => mapEstimateSiteVisit(entry))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
     scheduledDate: toIsoString(record.scheduledDate) || undefined,
     signature: mapApprovalSignature(record.approval ?? record.signature),
     companySignature: mapApprovalSignature(

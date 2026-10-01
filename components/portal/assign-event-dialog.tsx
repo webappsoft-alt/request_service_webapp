@@ -203,7 +203,9 @@ export function AssignEventDialog({
     selected?.kind === "request" || selected?.kind === "estimate";
 
   async function handleSave() {
-    if (!selected || !date || !employeeId) return;
+    if (!selected || !date) return;
+    const assigneeRequired = selected.kind !== "estimate";
+    if (assigneeRequired && !employeeId) return;
     setSaving(true);
     const slot =
       TIME_INTERVAL_SLOTS.find((s) => s.value === timeSlot) ??
@@ -226,7 +228,7 @@ export function AssignEventDialog({
         timeWindow,
         startMinutes: slot.startMinutes,
         endMinutes: slot.endMinutes,
-        employeeId,
+        employeeId: employeeId || "",
         employeeLabel: employeeLabel.trim() || undefined,
       });
       onOpenChange(false);
@@ -250,7 +252,7 @@ export function AssignEventDialog({
           </DialogTitle>
           <DialogDescription>
             {event?.kind === "estimate"
-              ? "Set or update the site-visit date, time, and assignee. Changes update the estimate visit and calendar."
+              ? "Set or update the site-visit date and time. Technician is optional for estimates."
               : "Put a job, estimate visit, or request on the calendar and assign it to a team member or contractor."}
           </DialogDescription>
         </DialogHeader>
@@ -357,8 +359,19 @@ export function AssignEventDialog({
               id="crew-assign"
               value={employeeId}
               selectedLabel={employeeLabel}
-              options={technicianOptions}
-              placeholder="Select person"
+              options={
+                selected?.kind === "estimate"
+                  ? [
+                      { id: "", label: "Assign later (optional)" },
+                      ...technicianOptions,
+                    ]
+                  : technicianOptions
+              }
+              placeholder={
+                selected?.kind === "estimate"
+                  ? "Assign later (optional)"
+                  : "Select person"
+              }
               emptyLabel="No people found."
               loading={useApi ? assigneePaging.loading : false}
               loadingMore={useApi ? assigneePaging.loadingMore : false}
@@ -378,6 +391,11 @@ export function AssignEventDialog({
                 setEmployeeLabel(option?.label && id ? option.label : "");
               }}
             />
+            {selected?.kind === "estimate" ? (
+              <p className="text-xs text-muted-foreground">
+                Technician is optional — you can schedule the date now and assign later.
+              </p>
+            ) : null}
           </Field>
         </FieldGroup>
         <DialogFooter>
@@ -386,7 +404,12 @@ export function AssignEventDialog({
           </Button>
           <Button
             onClick={() => void handleSave()}
-            disabled={!selected || !date || !employeeId || saving}
+            disabled={
+              !selected ||
+              !date ||
+              (selected.kind !== "estimate" && !employeeId) ||
+              saving
+            }
           >
             {saving ? "Saving..." : "Save assignment"}
           </Button>

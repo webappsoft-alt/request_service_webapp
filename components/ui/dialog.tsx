@@ -77,7 +77,7 @@ function DialogContent({
       node instanceof Element &&
       Boolean(
         node.closest(
-          "[data-paginated-entity-menu], [data-searchable-select-menu], [data-us-state-select-menu], .rs-phone-dropdown, .rs-phone-input .country-list, .rs-phone-input .flag-dropdown",
+          "[data-paginated-entity-menu], [data-searchable-select-menu], [data-us-state-select-menu], .rs-phone-dropdown, .rs-phone-input .country-list, .rs-phone-input .flag-dropdown, .pac-container, .pac-item, .pac-item-query",
         ),
       )
     if (path.some(matchesPortaledUi)) {

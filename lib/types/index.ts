@@ -160,6 +160,7 @@ export interface EstimateSitePhoto {
 }
 
 export interface EstimateSiteVisitRecord {
+  id?: string;
   employeeId?: string;
   technician?: string;
   visitedAt?: string;
@@ -168,6 +169,12 @@ export interface EstimateSiteVisitRecord {
   recommendations?: string;
   measurements?: string;
   photos: EstimateSitePhoto[];
+  /** Optional label when multiple visits exist (e.g. "Visit 2"). */
+  label?: string;
+  scheduledAt?: string;
+  createdAt?: string;
+  /** True after schedule until notes/photos are saved for this visit. */
+  detailsPending?: boolean;
 }
 
 export interface Estimate {
@@ -194,7 +201,10 @@ export interface Estimate {
   total: number;
   items: EstimateItem[];
   attachments?: EstimateAttachmentItem[] | string[];
+  /** Primary / latest site visit (backward compatible). */
   siteVisit?: EstimateSiteVisitRecord;
+  /** All site visits for this estimate (multi-visit support). */
+  siteVisits?: EstimateSiteVisitRecord[];
   /** Provider-assigned calendar date for this estimate. */
   scheduledDate?: string;
   /** Customer digital acceptance (when signed). */

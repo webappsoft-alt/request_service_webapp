@@ -22,6 +22,11 @@ import {
 import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import {
+  ChangeVisitAssignmentDialog,
+  ScheduleAnotherSiteVisitDialog,
+  SiteVisitDetailsDialog,
+} from "@/components/portal/schedule-another-site-visit-dialog";
+import {
   EstimateSettingsDialog,
 } from "@/components/portal/estimate-file";
 import {
@@ -121,6 +126,7 @@ import {
 } from "@/components/portal/work-builders";
 import {
   convertEstimateToJob as convertEstimateToJobApi,
+  createEstimateActivity,
   deleteJob as deleteJobApi,
   finalizeEstimate as finalizeEstimateApi,
   getEstimate,
@@ -139,7 +145,7 @@ import {
   clearCalendarAssignment,
   syncCalendarAssignment,
 } from "@/lib/portal-schedule-sync";
-import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
+import type { Estimate, EstimateSiteVisitRecord, Invoice, Job, Payment } from "@/lib/types";
 import {
   extractErrorMessage,
   getAuthToken,
@@ -155,7 +161,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   calendarEventKindLabel,
-  employeeName,
   estimateCanConvert,
   estimateCanFinalize,
   estimateCanShare,
@@ -180,6 +185,99 @@ import {
   type PortalCalendarEvent,
 } from "@/lib/data/portal";
 
+function siteVisitScheduledActivityDescription(input: {
+  date: string;
+  startMinutes?: number;
+  endMinutes?: number;
+  technician?: string;
+  visitLabel?: string;
+}) {
+  const dateLabel = input.date
+    ? new Date(`${input.date}T12:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "TBD";
+  const start =
+    typeof input.startMinutes === "number" ? input.startMinutes : 540;
+  const end =
+    typeof input.endMinutes === "number" ? input.endMinutes : start + 30;
+  const fmt = (m: number) => {
+    const h24 = Math.floor(m / 60) % 24;
+    const mins = m % 60;
+    const period = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 || 12;
+    return `${h12}:${String(mins).padStart(2, "0")} ${period}`;
+  };
+  const tech = String(input.technician || "").trim() || "Unassigned";
+  const visit = input.visitLabel
+    ? `<p><strong>${input.visitLabel}</strong></p>`
+    : "";
+  return `${visit}<p><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e8eef5;color:#003F7D;font-weight:600;font-size:12px;">Site visit scheduled</span></p><p><strong>Date:</strong> ${dateLabel}</p><p><strong>Time:</strong> ${fmt(start)} – ${fmt(end)}</p><p><strong>Technician:</strong> ${tech}</p>`;
+}
+
+function cloneVisitRecord(entry: EstimateSiteVisitRecord): EstimateSiteVisitRecord {
+  return {
+    ...entry,
+    photos: Array.isArray(entry.photos)
+      ? entry.photos.map((photo) => ({ ...photo }))
+      : [],
+  };
+}
+
+/** Always return the full visit history — never collapse to a single siteVisit. */
+function resolveSiteVisitList(
+  estimate: Estimate,
+  local?: EstimateSiteVisit | null,
+): EstimateSiteVisitRecord[] {
+  if (Array.isArray(estimate.siteVisits) && estimate.siteVisits.length > 0) {
+    return estimate.siteVisits.map(cloneVisitRecord);
+  }
+  if (estimate.siteVisit) {
+    return [cloneVisitRecord(estimate.siteVisit)];
+  }
+  if (local) {
+    const record = siteVisitToRecord(local);
+    return record ? [cloneVisitRecord(record)] : [];
+  }
+  return [];
+}
+
+/** Prefer the longer local history if the API response dropped earlier visits. */
+function preferFullVisitHistory(
+  localVisits: EstimateSiteVisitRecord[],
+  apiVisits?: EstimateSiteVisitRecord[] | null,
+): EstimateSiteVisitRecord[] {
+  if (!apiVisits?.length) return localVisits;
+  if (apiVisits.length < localVisits.length) return localVisits;
+  return apiVisits.map((entry, index) => {
+    const prev = localVisits[index];
+    if (!prev) return cloneVisitRecord(entry);
+    return {
+      ...cloneVisitRecord(entry),
+      id: entry.id || prev.id,
+      label: entry.label || prev.label,
+      detailsPending:
+        entry.detailsPending === true
+          ? true
+          : entry.detailsPending === false
+            ? false
+            : prev.detailsPending,
+      photos:
+        entry.photos?.length || !prev.photos?.length
+          ? entry.photos || []
+          : prev.photos,
+      accessNotes: entry.accessNotes || prev.accessNotes,
+      findings: entry.findings || prev.findings,
+      visitedAt: entry.visitedAt || prev.visitedAt,
+      scheduledAt: entry.scheduledAt || prev.scheduledAt,
+      technician: entry.technician || prev.technician,
+      employeeId: entry.employeeId || prev.employeeId,
+    };
+  });
+}
+
 export function EstimateDetailView({ id }: { id: string }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -192,12 +290,20 @@ export function EstimateDetailView({ id }: { id: string }) {
   const crm = useCrmApiData();
   const { session, estimates, provider, jobs, invoices } = usePortalWorkspace();
   const { customers } = useCrmDirectory();
-  const { events, employees, assign } = usePortalCrew();
+  const { events } = usePortalCrew();
   const records = usePortalRecords();
   const settings = useEstimateSettings(id);
   const localVisit = useEstimateSiteVisit(id);
   const share = useEstimateShare();
-  const [assignOpen, setAssignOpen] = useState(false);
+  const [changeAssignOpen, setChangeAssignOpen] = useState(false);
+  const [scheduleAnotherOpen, setScheduleAnotherOpen] = useState(false);
+  const [visitDetailsOpen, setVisitDetailsOpen] = useState(false);
+  const [editingVisitIndex, setEditingVisitIndex] = useState<number | null>(
+    null,
+  );
+  const [visitDetailsMode, setVisitDetailsMode] = useState<"add" | "edit">(
+    "add",
+  );
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [converting, setConverting] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
@@ -257,35 +363,6 @@ export function EstimateDetailView({ id }: { id: string }) {
           prev.saving === next.saving &&
           prev.uploading === next.uploading &&
           prev.dirty === next.dirty &&
-          prev.save === next.save
-        ) {
-          return prev;
-        }
-        return next;
-      });
-    },
-    [],
-  );
-  const [visitActions, setVisitActions] = useState<{
-    locked: boolean;
-    saving: boolean;
-    save: () => void;
-  } | null>(null);
-  const onVisitActionsChange = useCallback(
-    (
-      next: {
-        locked: boolean;
-        saving: boolean;
-        save: () => void;
-      } | null,
-    ) => {
-      setVisitActions((prev) => {
-        if (!prev && !next) return prev;
-        if (!next) return null;
-        if (
-          prev &&
-          prev.locked === next.locked &&
-          prev.saving === next.saving &&
           prev.save === next.save
         ) {
           return prev;
@@ -851,19 +928,6 @@ export function EstimateDetailView({ id }: { id: string }) {
                     Findings, private notes, and photos for this estimate.
                   </p>
                 </div>
-                {signed ? null : (
-                  <Button
-                    size="sm"
-                    className="h-8 shrink-0 gap-1.5"
-                    disabled={visitActions?.saving ?? false}
-                    onClick={() => visitActions?.save()}
-                  >
-                    {visitActions?.saving ? (
-                      <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                    ) : null}
-                    {visitActions?.saving ? "Saving…" : "Save notes"}
-                  </Button>
-                )}
               </div>
             );
           }
@@ -1044,7 +1108,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                   size="sm"
                   variant="outline"
                   className="h-8"
-                  onClick={() => setAssignOpen(true)}
+                  onClick={() => setChangeAssignOpen(true)}
                 >
                   {hasVisitAssignment ? "Change assignment" : "Assign team member"}
                 </Button>
@@ -1060,7 +1124,7 @@ export function EstimateDetailView({ id }: { id: string }) {
               <DropdownMenuContent align="end" className="min-w-44">
                 {!job ? (
                   <>
-                    <DropdownMenuItem onSelect={() => setAssignOpen(true)}>
+                    <DropdownMenuItem onSelect={() => setChangeAssignOpen(true)}>
                       {hasVisitAssignment
                         ? "Change site visit assignment"
                         : "Assign site visit"}
@@ -1198,74 +1262,24 @@ export function EstimateDetailView({ id }: { id: string }) {
                 return (
                   <EstimateSiteVisitTab
                     estimate={estimate}
-                    asJob={asJob}
                     locked={signed || visitLocked}
-                    onActionsChange={onVisitActionsChange}
-                    onSave={async (visit) => {
-                      const nextStatus =
-                        estimate.status === "draft" ||
-                        estimate.status === "site_visit"
-                          ? "inspected"
-                          : estimate.status;
-                      if (apiReady) {
-                        try {
-                          const siteVisitRecord = siteVisitToRecord(visit);
-                          const updated = await updateEstimateSiteVisit(
-                            estimate.id,
-                            siteVisitRecord ?? { photos: [] },
-                            nextStatus !== estimate.status
-                              ? nextStatus
-                              : undefined,
-                          );
-                          if (updated) {
-                            crm.patchEstimate(estimate.id, updated);
-                            setFetched(updated);
-                          } else {
-                            crm.patchEstimate(estimate.id, {
-                              status: nextStatus,
-                              siteVisit: siteVisitRecord,
-                            });
-                            setFetched((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    status: nextStatus,
-                                    siteVisit: siteVisitRecord,
-                                  }
-                                : prev,
-                            );
-                          }
-                          await syncCalendarAssignment({
-                            kind: "estimate",
-                            recordId: estimate.id,
-                            title: `${estimate.number || "Estimate"} site visit`,
-                            date: visit.visitedAt,
-                            employeeId: visit.employeeId || null,
-                            linkOnly: true,
-                          });
-                          if (crm.ready) {
-                            void crm.refresh({ silent: true });
-                          }
-                        } catch (error) {
-                          toast.error(
-                            error instanceof Error
-                              ? error.message
-                              : "Could not update this estimate.",
-                          );
-                          throw error;
-                        }
-                      } else {
-                        if (
-                          estimate.status === "draft" ||
-                          estimate.status === "site_visit"
-                        ) {
-                          records.setStatus(
-                            "estimate",
-                            estimate.id,
-                            "inspected",
-                          );
-                        }
-                      }
+                    onScheduleAnother={() => setScheduleAnotherOpen(true)}
+                    onAddVisitDetails={() => {
+                      const list = resolveSiteVisitList(estimate, siteVisit);
+                      if (!list.length) return;
+                      const pendingIdx = list.findIndex(
+                        (entry) => entry.detailsPending === true,
+                      );
+                      setEditingVisitIndex(
+                        pendingIdx >= 0 ? pendingIdx : list.length - 1,
+                      );
+                      setVisitDetailsMode("add");
+                      setVisitDetailsOpen(true);
+                    }}
+                    onEditVisit={(index) => {
+                      setEditingVisitIndex(index);
+                      setVisitDetailsMode("edit");
+                      setVisitDetailsOpen(true);
                     }}
                   />
                 );
@@ -1418,97 +1432,431 @@ export function EstimateDetailView({ id }: { id: string }) {
           setFetched(updated);
         }}
       />
-      <AssignEventDialog
-        open={assignOpen}
-        onOpenChange={setAssignOpen}
-        event={estimateAssignmentEvent}
-        events={[estimateAssignmentEvent]}
-        employees={employees}
-        onSave={async (assignment) => {
-          await assign({
-            ...assignment,
-            title:
-              assignment.title ||
-              `${estimate.number || "Estimate"} site visit`,
+      <ChangeVisitAssignmentDialog
+        open={changeAssignOpen}
+        onOpenChange={setChangeAssignOpen}
+        currentEmployeeId={assignedTechId}
+        currentLabel={
+          siteVisit?.technician ||
+          estimate.siteVisit?.technician ||
+          ""
+        }
+        onSubmit={async ({ employeeId, technician }) => {
+          const existingVisits = resolveSiteVisitList(estimate, siteVisit);
+          const targetIndex = Math.max(existingVisits.length - 1, 0);
+          const nextSiteVisits =
+            existingVisits.length > 0
+              ? existingVisits.map((entry, index) =>
+                  index === targetIndex
+                    ? {
+                        ...entry,
+                        employeeId: employeeId || "",
+                        technician: technician || "",
+                      }
+                    : entry,
+                )
+              : [
+                  {
+                    employeeId: employeeId || "",
+                    technician: technician || "",
+                    visitedAt: visitDate || new Date().toISOString(),
+                    accessNotes: "",
+                    findings: "",
+                    recommendations: "",
+                    measurements: "",
+                    photos: [],
+                    label: "Site Visit #1",
+                    detailsPending: false,
+                  },
+                ];
+          const primaryRecord = nextSiteVisits[0];
+          const primaryLocal = siteVisitFromRecord(primaryRecord);
+          if (primaryLocal) {
+            writeSiteVisit(session?.email, estimate.id, {
+              ...primaryLocal,
+              // Only touch assignee on the latest visit locally when it is Visit #1.
+              ...(nextSiteVisits.length === 1
+                ? {
+                    employeeId: employeeId || "",
+                    technician: technician || "",
+                  }
+                : {}),
+            });
+          }
+
+          if (visitDate) {
+            await syncCalendarAssignment({
+              kind: "estimate",
+              recordId: estimate.id,
+              title: estimateAssignmentEvent.title,
+              date: visitDate,
+              employeeId: employeeId || null,
+              startMinutes: estimateAssignmentEvent.startMinutes,
+              endMinutes: estimateAssignmentEvent.endMinutes,
+              timeWindow: estimateAssignmentEvent.timeWindow,
+              linkOnly: true,
+            });
+          }
+
+          if (apiReady) {
+            try {
+              const updated = await updateEstimateSiteVisit(
+                estimate.id,
+                primaryRecord,
+                undefined,
+                nextSiteVisits,
+              );
+              const mergedVisits = preferFullVisitHistory(
+                nextSiteVisits,
+                updated?.siteVisits,
+              );
+              const patch = {
+                ...(updated || {}),
+                siteVisit: primaryRecord,
+                siteVisits: mergedVisits,
+              };
+              crm.patchEstimate(estimate.id, patch);
+              setFetched((prev) =>
+                prev ? { ...prev, ...patch } : prev,
+              );
+
+              const activity = await createEstimateActivity(estimate.id, {
+                title: "Site visit assignment updated",
+                description:
+                  '<p><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e8eef5;color:#003F7D;font-weight:600;font-size:12px;">Assignment changed</span></p><p><strong>Technician:</strong> ' +
+                  (technician || "Unassigned") +
+                  "</p>",
+              });
+              if (activity) {
+                const nextActivities = [
+                  activity,
+                  ...(updated?.activities || estimate.activities || []),
+                ];
+                crm.patchEstimate(estimate.id, {
+                  activities: nextActivities,
+                });
+                setFetched((prev) =>
+                  prev ? { ...prev, activities: nextActivities } : prev,
+                );
+              }
+            } catch {
+              const patch = {
+                siteVisit: primaryRecord,
+                siteVisits: nextSiteVisits,
+              };
+              crm.patchEstimate(estimate.id, patch);
+              setFetched((prev) =>
+                prev ? { ...prev, ...patch } : prev,
+              );
+            }
+          } else {
+            const patch = {
+              siteVisit: primaryRecord,
+              siteVisits: nextSiteVisits,
+            };
+            crm.patchEstimate(estimate.id, patch);
+            setFetched((prev) =>
+              prev ? { ...prev, ...patch } : prev,
+            );
+          }
+
+          toast.success(
+            technician
+              ? `Assignment updated to ${technician}.`
+              : "Site visit assignment cleared.",
+          );
+        }}
+      />
+      <ScheduleAnotherSiteVisitDialog
+        open={scheduleAnotherOpen}
+        onOpenChange={setScheduleAnotherOpen}
+        visitNumber={resolveSiteVisitList(estimate, siteVisit).length + 1}
+        onSubmit={async (result) => {
+          const existingVisits = resolveSiteVisitList(estimate, siteVisit).map(
+            (entry, index) => ({
+              ...entry,
+              detailsPending: false,
+              label: entry.label || `Site Visit #${index + 1}`,
+            }),
+          );
+          const visitNumber = existingVisits.length + 1;
+          const visitLabel = `Site Visit #${visitNumber}`;
+          const newVisitEntry: EstimateSiteVisitRecord = {
+            ...result.visit,
+            label: visitLabel,
+            detailsPending: true,
+          };
+          const nextSiteVisits = [...existingVisits, newVisitEntry];
+          // Keep primary siteVisit as Visit #1 so earlier data is never replaced.
+          const primaryRecord =
+            existingVisits[0] ||
+            estimate.siteVisit ||
+            siteVisitToRecord(
+              siteVisit || {
+                employeeId: "",
+                technician: "",
+                visitedAt: estimate.issuedAt,
+                accessNotes: "",
+                findings: "",
+                recommendations: "",
+                measurements: "",
+                photos: [],
+              },
+            );
+
+          await syncCalendarAssignment({
+            kind: "estimate",
+            recordId: estimate.id,
+            title: `${estimate.number || "Estimate"} ${visitLabel}`,
+            date: result.date,
+            employeeId: result.employeeId || null,
+            startMinutes: result.startMinutes,
+            endMinutes: result.endMinutes,
             linkOnly: true,
+            forceNew: true,
           });
 
-          const selectedTech = employees.find(
-            (emp) => emp.id === assignment.employeeId,
-          );
-          const techName =
-            String(assignment.employeeLabel || "").trim() ||
-            (selectedTech ? employeeName(selectedTech) : "") ||
-            assignment.employeeId ||
-            "";
-          const currentVisit =
-            siteVisit || siteVisitFromRecord(estimate.siteVisit);
-          const visitIso = assignment.date
-            ? `${assignment.date}T00:00:00.000Z`
-            : currentVisit?.visitedAt || new Date().toISOString();
+          if (apiReady) {
+            try {
+              const updated = await updateEstimateSiteVisit(
+                estimate.id,
+                primaryRecord,
+                undefined,
+                nextSiteVisits,
+              );
+              const mergedVisits = preferFullVisitHistory(
+                nextSiteVisits,
+                updated?.siteVisits,
+              ).map((entry, index, list) =>
+                index === list.length - 1
+                  ? { ...entry, detailsPending: true, label: visitLabel }
+                  : { ...entry, detailsPending: false },
+              );
+              const patch = {
+                ...(updated || {}),
+                siteVisit: primaryRecord,
+                siteVisits: mergedVisits,
+              };
+              crm.patchEstimate(estimate.id, patch);
+              setFetched((prev) =>
+                prev ? { ...prev, ...patch } : ({ ...estimate, ...patch } as Estimate),
+              );
 
-          const updatedSiteVisit: EstimateSiteVisit = {
-            employeeId: assignment.employeeId || "",
-            technician: techName,
-            visitedAt: visitIso,
-            accessNotes: currentVisit?.accessNotes || "",
-            findings: currentVisit?.findings || "",
-            recommendations: currentVisit?.recommendations || "",
-            measurements: currentVisit?.measurements || "",
-            photos: currentVisit?.photos || [],
-          };
+              const activity = await createEstimateActivity(estimate.id, {
+                title: "Site visit scheduled",
+                description: siteVisitScheduledActivityDescription({
+                  date: result.date,
+                  startMinutes: result.startMinutes,
+                  endMinutes: result.endMinutes,
+                  technician: result.technician,
+                  visitLabel,
+                }),
+              });
+              if (activity) {
+                const nextActivities = [
+                  activity,
+                  ...(updated?.activities || estimate.activities || []),
+                ];
+                crm.patchEstimate(estimate.id, { activities: nextActivities });
+                setFetched((prev) =>
+                  prev ? { ...prev, activities: nextActivities } : prev,
+                );
+              }
+            } catch {
+              const patch = {
+                siteVisit: primaryRecord,
+                siteVisits: nextSiteVisits,
+              };
+              crm.patchEstimate(estimate.id, patch);
+              setFetched((prev) =>
+                prev ? { ...prev, ...patch } : prev,
+              );
+            }
+          } else {
+            const patch = {
+              siteVisit: primaryRecord,
+              siteVisits: nextSiteVisits,
+            };
+            crm.patchEstimate(estimate.id, patch);
+            setFetched((prev) => (prev ? { ...prev, ...patch } : prev));
+          }
 
-          writeSiteVisit(session?.email, estimate.id, updatedSiteVisit);
+          toast.success(`${visitLabel} scheduled. Add visit details when ready.`);
+        }}
+      />
+      <SiteVisitDetailsDialog
+        open={visitDetailsOpen}
+        onOpenChange={(open) => {
+          setVisitDetailsOpen(open);
+          if (!open) setEditingVisitIndex(null);
+        }}
+        mode={visitDetailsMode}
+        visitNumber={(editingVisitIndex ?? 0) + 1}
+        visit={(() => {
+          const list = resolveSiteVisitList(estimate, siteVisit);
+          if (editingVisitIndex == null) return null;
+          return list[editingVisitIndex] || null;
+        })()}
+        onSubmit={async (result) => {
+          if (editingVisitIndex == null) return;
+          const existingVisits = resolveSiteVisitList(estimate, siteVisit);
+          let nextSiteVisits: EstimateSiteVisitRecord[];
 
-          // Calendar assignment must never force estimate → scheduled.
-          // Draft → site_visit; otherwise keep current (e.g. inspected).
+          if (visitDetailsMode === "add") {
+            const pendingIdx = existingVisits.findIndex(
+              (entry) => entry.detailsPending === true,
+            );
+            if (pendingIdx >= 0) {
+              // Fill the scheduled pending visit only — leave earlier visits untouched.
+              nextSiteVisits = existingVisits.map((entry, index) =>
+                index === pendingIdx
+                  ? {
+                      ...entry,
+                      ...result.visit,
+                      id: entry.id || result.visit.id,
+                      label:
+                        entry.label ||
+                        result.visit.label ||
+                        `Site Visit #${index + 1}`,
+                      employeeId: entry.employeeId || result.visit.employeeId,
+                      technician:
+                        entry.technician || result.visit.technician,
+                      detailsPending: false,
+                    }
+                  : entry,
+              );
+            } else if (
+              editingVisitIndex >= 0 &&
+              editingVisitIndex < existingVisits.length &&
+              existingVisits[editingVisitIndex]?.detailsPending
+            ) {
+              nextSiteVisits = existingVisits.map((entry, index) =>
+                index === editingVisitIndex
+                  ? { ...entry, ...result.visit, detailsPending: false }
+                  : entry,
+              );
+            } else {
+              // Never overwrite a completed visit — append a new one.
+              nextSiteVisits = [
+                ...existingVisits.map((entry) => ({
+                  ...entry,
+                  detailsPending: false,
+                })),
+                {
+                  ...result.visit,
+                  label:
+                    result.visit.label ||
+                    `Site Visit #${existingVisits.length + 1}`,
+                  detailsPending: false,
+                },
+              ];
+            }
+          } else {
+            nextSiteVisits = existingVisits.map((entry, index) =>
+              index === editingVisitIndex
+                ? {
+                    ...entry,
+                    ...result.visit,
+                    id: entry.id || result.visit.id,
+                    label:
+                      entry.label ||
+                      result.visit.label ||
+                      `Site Visit #${index + 1}`,
+                    detailsPending: false,
+                  }
+                : entry,
+            );
+          }
+
+          // Keep Visit #1 as the primary siteVisit record for backward compatibility.
+          const primaryRecord = nextSiteVisits[0] || result.visit;
+          const primaryLocal = siteVisitFromRecord(primaryRecord);
+          if (primaryLocal) {
+            writeSiteVisit(session?.email, estimate.id, primaryLocal);
+          }
+
+          await syncCalendarAssignment({
+            kind: "estimate",
+            recordId: estimate.id,
+            title: `${estimate.number || "Estimate"} ${result.visit.label || `Site Visit #${editingVisitIndex + 1}`}`,
+            date: result.date,
+            employeeId: result.visit.employeeId || null,
+            startMinutes: result.startMinutes,
+            endMinutes: result.endMinutes,
+            linkOnly: true,
+            forceNew: visitDetailsMode === "add",
+          });
+
           const nextStatus =
-            estimate.status === "draft" || estimate.status === "scheduled"
-              ? "site_visit"
+            estimate.status === "draft" || estimate.status === "site_visit"
+              ? "inspected"
               : estimate.status;
 
           if (apiReady) {
             try {
-              const siteVisitRecord = siteVisitToRecord(updatedSiteVisit);
               const updated = await updateEstimateSiteVisit(
                 estimate.id,
-                siteVisitRecord ?? { photos: [] },
+                primaryRecord,
                 nextStatus !== estimate.status ? nextStatus : undefined,
+                nextSiteVisits,
               );
-              if (updated) {
-                crm.patchEstimate(estimate.id, updated);
-                setFetched(updated);
-                if (updated.status) setStatusOverride(updated.status);
-              } else {
-                const patch = {
-                  siteVisit: siteVisitRecord,
-                  ...(nextStatus !== estimate.status
-                    ? { status: nextStatus as Estimate["status"] }
-                    : {}),
-                };
-                crm.patchEstimate(estimate.id, patch);
+              const mergedVisits = preferFullVisitHistory(
+                nextSiteVisits,
+                updated?.siteVisits,
+              );
+              const patch = {
+                status: nextStatus,
+                siteVisit: primaryRecord,
+                siteVisits: mergedVisits,
+              };
+              crm.patchEstimate(estimate.id, {
+                ...(updated || {}),
+                ...patch,
+              });
+              setFetched((prev) =>
+                prev
+                  ? { ...prev, ...(updated || {}), ...patch }
+                  : prev,
+              );
+
+              const activity = await createEstimateActivity(estimate.id, {
+                title: visitDetailsMode === "add"
+                  ? "Site visit details added"
+                  : "Site visit details updated",
+                description:
+                  `<p><strong>${result.visit.label || `Site Visit #${editingVisitIndex + 1}`}</strong></p><p>${visitDetailsMode === "add" ? "Details uploaded" : "Details edited"}</p>`,
+              });
+              if (activity) {
+                const nextActivities = [
+                  activity,
+                  ...(updated?.activities || estimate.activities || []),
+                ];
+                crm.patchEstimate(estimate.id, { activities: nextActivities });
                 setFetched((prev) =>
-                  prev ? { ...prev, ...patch } : prev,
+                  prev ? { ...prev, activities: nextActivities } : prev,
                 );
-                if (nextStatus !== estimate.status) {
-                  setStatusOverride(nextStatus);
-                }
               }
             } catch {
-              // local fallback already written
+              const patch = {
+                status: nextStatus,
+                siteVisit: primaryRecord,
+                siteVisits: nextSiteVisits,
+              };
+              crm.patchEstimate(estimate.id, patch);
+              setFetched((prev) => (prev ? { ...prev, ...patch } : prev));
             }
-          } else if (nextStatus !== estimate.status) {
-            records.setStatus("estimate", estimate.id, nextStatus);
-            setStatusOverride(nextStatus);
+          } else {
+            const patch = {
+              status: nextStatus,
+              siteVisit: primaryRecord,
+              siteVisits: nextSiteVisits,
+            };
+            crm.patchEstimate(estimate.id, patch);
+            setFetched((prev) => (prev ? { ...prev, ...patch } : prev));
           }
 
-          if (crm.ready) void crm.refresh({ silent: true });
-
-          toast.success(
-            techName
-              ? `${techName} assigned for site visit — calendar updated.`
-              : "Site visit assignment saved on the calendar.",
-          );
+          toast.success("Visit details saved.");
+          setEditingVisitIndex(null);
         }}
       />
       <SendApprovalDialog
@@ -3455,3 +3803,4 @@ function Missing({ title, href }: { title: string; href: string }) {
     </PortalPage>
   );
 }
+

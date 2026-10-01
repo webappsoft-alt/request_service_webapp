@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Check, ClipboardList, ImageIcon, Loader2, MapPinned, Upload } from "lucide-react";
+import {
+  extractUploadedUrl,
+  uploadDoc,
+  uploadFile,
+} from "@/components/api/uploadFile";
 import {
   GoogleAddressAutocomplete,
   type PlaceAddress,
@@ -28,6 +34,7 @@ import { createCustomerJob, updateCustomerJob } from "@/store/customersSlice";
 import { fetchTeam } from "@/store/teamSlice";
 import {
   createEstimate as createEstimateApi,
+  createEstimateActivity,
   getEstimate,
   updateEstimate as updateEstimateApi,
   createRequest,
@@ -42,6 +49,7 @@ import {
 import {
   siteVisitFromRecord,
   writeSiteVisit,
+  type JobAttachment,
 } from "@/components/portal/use-job-file";
 import {
   addressFrom,
@@ -65,6 +73,13 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CRM_API_EVENT } from "@/components/portal/crm-data-provider";
 import { crmCustomerName } from "@/lib/data/crm-people";
@@ -87,9 +102,58 @@ import {
   setLocationFromPlace,
 } from "@/store/locationSlice";
 
-type EstimateTab = "customer" | "scope" | "visit";
-type EstimatePath = "site_visit" | "office";
+type EstimateTab = "customer" | "prep" | "visit" | "schedule" | "scope";
+type EstimatePath = "site_visit" | "office" | "";
 type JobTab = "customer" | "schedule" | "review";
+
+const ESTIMATE_TIME_SLOTS = (() => {
+  const slots: { value: string; startMinutes: number; endMinutes: number; label: string }[] = [];
+  const formatClock = (totalMinutes: number) => {
+    const clamped = ((totalMinutes % 1440) + 1440) % 1440;
+    const hours24 = Math.floor(clamped / 60);
+    const mins = clamped % 60;
+    const period = hours24 >= 12 ? "PM" : "AM";
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+    return `${String(hours12).padStart(2, "0")}:${String(mins).padStart(2, "0")} ${period}`;
+  };
+  for (let min = 0; min < 1440; min += 30) {
+    slots.push({
+      value: String(min),
+      startMinutes: min,
+      endMinutes: min + 30,
+      label: `${formatClock(min)} – ${formatClock(min + 30)}`,
+    });
+  }
+  return slots;
+})();
+
+function siteVisitActivityDescription(input: {
+  date: string;
+  startMinutes?: number;
+  endMinutes?: number;
+  technician?: string;
+  visitLabel?: string;
+}) {
+  const dateLabel = input.date
+    ? new Date(`${input.date}T12:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "TBD";
+  const start = typeof input.startMinutes === "number" ? input.startMinutes : 540;
+  const end = typeof input.endMinutes === "number" ? input.endMinutes : start + 30;
+  const fmt = (m: number) => {
+    const h24 = Math.floor(m / 60) % 24;
+    const mins = m % 60;
+    const period = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 || 12;
+    return `${h12}:${String(mins).padStart(2, "0")} ${period}`;
+  };
+  const tech = String(input.technician || "").trim() || "Unassigned";
+  const visit = input.visitLabel ? `<p><strong>${input.visitLabel}</strong></p>` : "";
+  return `${visit}<p><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e8eef5;color:#003F7D;font-weight:600;font-size:12px;">Site visit scheduled</span></p><p><strong>Date:</strong> ${dateLabel}</p><p><strong>Time:</strong> ${fmt(start)} – ${fmt(end)}</p><p><strong>Technician:</strong> ${tech}</p>`;
+}
 
 export function CreateEstimateDialog({
   open,
@@ -139,7 +203,7 @@ export function CreateEstimateDialog({
   const first = customers[0];
   const isEdit = Boolean(estimate?.id);
   const [tab, setTab] = useState<EstimateTab>("customer");
-  const [path, setPath] = useState<EstimatePath>("site_visit");
+  const [path, setPath] = useState<EstimatePath>("");
   const [name, setName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(
     customerId ?? first?.id ?? "",
@@ -165,10 +229,14 @@ export function CreateEstimateDialog({
     address?.longitude ?? address?.lng ?? customerLocation.longitude ?? null,
   );
   const [issuedAt, setIssuedAt] = useState(todayISO());
-  const [expiresAt, setExpiresAt] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [visitedAt, setVisitedAt] = useState(todayISO());
-  const [accessNotes, setAccessNotes] = useState("");
+  const [scheduleTimeSlot, setScheduleTimeSlot] = useState("540");
+  const [visitFindings, setVisitFindings] = useState("");
+  const [visitNotes, setVisitNotes] = useState("");
+  const [visitPhotos, setVisitPhotos] = useState<JobAttachment[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [photoDropOver, setPhotoDropOver] = useState(false);
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState(
     "Valid for 30 days. Materials may change after site inspection.",
@@ -188,8 +256,8 @@ export function CreateEstimateDialog({
     open && useApi && !lockedCustomer,
   );
   const assigneePaging = usePaginatedCrmOptions(
-    open && useApi && path === "site_visit" ? "assignee" : null,
-    open && useApi && path === "site_visit",
+    null,
+    false,
     undefined,
     technicianFilter,
   );
@@ -219,20 +287,51 @@ export function CreateEstimateDialog({
             id: item.id,
             label: `${employeeName(item)}${item.trade ? ` · ${item.trade}` : ""}`,
           }));
-    return [{ id: "", label: "Assign later" }, ...rows];
+    return [{ id: "", label: "Assign later (optional)" }, ...rows];
   }, [useApi, assigneePaging.options, employees]);
 
+  const wizardOptions = useMemo(() => {
+    const base = [{ id: "customer" as const, label: "Customer" }];
+    if (!path) {
+      return [...base, { id: "prep" as const, label: "Prepare" }];
+    }
+    if (path === "site_visit") {
+      return [
+        ...base,
+        { id: "prep" as const, label: "Prepare" },
+        { id: "visit" as const, label: "Site visit" },
+        { id: "scope" as const, label: "Labour & Material" },
+      ];
+    }
+    return [
+      ...base,
+      { id: "prep" as const, label: "Prepare" },
+      { id: "scope" as const, label: "Labour & Material" },
+    ];
+  }, [path]);
+
   const nextTab = (current: EstimateTab): EstimateTab => {
-    if (current === "customer")
-      return path === "site_visit" ? "visit" : "scope";
+    if (current === "customer") return "prep";
+    if (current === "prep") {
+      if (path === "site_visit") return "visit";
+      if (path === "office") return "scope";
+      return "prep";
+    }
     if (current === "visit") return "scope";
     return "scope";
   };
   const prevTab = (current: EstimateTab): EstimateTab => {
-    if (current === "scope") return path === "site_visit" ? "visit" : "customer";
-    if (current === "visit") return "customer";
+    if (current === "scope") {
+      return path === "site_visit" ? "visit" : "prep";
+    }
+    if (current === "visit") return "prep";
+    if (current === "prep") return "customer";
     return "customer";
   };
+
+  useEffect(() => {
+    if (tab === "schedule") setTab(path === "site_visit" ? "visit" : "prep");
+  }, [tab, path]);
 
   useEffect(() => {
     if (!open) {
@@ -252,12 +351,14 @@ export function CreateEstimateDialog({
     }
     setSaving(false);
     setLines([]);
-    setPath("site_visit");
+    setPath("");
     setIssuedAt(todayISO());
-    setExpiresAt("");
     setEmployeeId("");
     setVisitedAt(todayISO());
-    setAccessNotes("");
+    setScheduleTimeSlot("540");
+    setVisitFindings("");
+    setVisitNotes("");
+    setVisitPhotos([]);
     setTerms("Valid for 30 days. Materials may change after site inspection.");
     if (requestNotes) setNotes(requestNotes);
     else setNotes("");
@@ -305,7 +406,6 @@ export function CreateEstimateDialog({
       setState(source.propertyAddress?.state || "CO");
       setZip(source.propertyAddress?.zip || "");
       setIssuedAt((source.issuedAt || todayISO()).slice(0, 10));
-      setExpiresAt(source.expiresAt ? source.expiresAt.slice(0, 10) : "");
       setNotes(source.notes || "");
       setTerms(
         source.terms ||
@@ -318,7 +418,20 @@ export function CreateEstimateDialog({
       setVisitedAt(
         (source.siteVisit?.visitedAt || todayISO()).slice(0, 10),
       );
-      setAccessNotes(source.siteVisit?.accessNotes || "");
+      setVisitFindings(source.siteVisit?.findings || "");
+      setVisitNotes(source.siteVisit?.accessNotes || "");
+      setVisitPhotos(
+        (source.siteVisit?.photos || []).map((photo) => ({
+          id: photo.id,
+          name: photo.name,
+          type: photo.type,
+          size: photo.size,
+          dataUrl: photo.url,
+          addedAt: photo.addedAt,
+          actor: photo.actor || "",
+        })),
+      );
+      setScheduleTimeSlot("540");
       setLines(
         (source.items || []).map((item) => ({
           id: item.id,
@@ -465,12 +578,79 @@ export function CreateEstimateDialog({
     dispatch(setLocationFromPlace(address));
   }
 
+  const scheduleSlot =
+    ESTIMATE_TIME_SLOTS.find((slot) => slot.value === scheduleTimeSlot) ??
+    ESTIMATE_TIME_SLOTS.find((slot) => slot.value === "540") ??
+    ESTIMATE_TIME_SLOTS[0];
+  const scheduleStartMinutes = scheduleSlot?.startMinutes ?? 540;
+  const scheduleEndMinutes = scheduleSlot?.endMinutes ?? scheduleStartMinutes + 30;
+  const techName =
+    (technician ? employeeName(technician) : "") ||
+    (employeeId
+      ? technicianOptions.find((option) => option.id === employeeId)?.label || ""
+      : "");
+
+  function canContinueFromTab(current: EstimateTab) {
+    if (current === "customer") {
+      return (
+        hasEstimateName &&
+        Boolean((boundCustomerId || selectedCustomer || "").trim())
+      );
+    }
+    if (current === "prep") return Boolean(path);
+    return true;
+  }
+
+  async function uploadVisitPhotos(list: FileList | File[]) {
+    const files = Array.from(list);
+    if (!files.length || uploadingPhotos) return;
+    setUploadingPhotos(true);
+    const added: JobAttachment[] = [];
+    try {
+      for (const file of files) {
+        if (file.size > 15 * 1024 * 1024) {
+          toast.error(`${file.name} is over 15 MB.`);
+          continue;
+        }
+        const isPdf =
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf");
+        const response = isPdf ? await uploadDoc(file) : await uploadFile(file);
+        const url = extractUploadedUrl(response.data);
+        if (!url) throw new Error(`Could not upload ${file.name}.`);
+        added.push({
+          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name,
+          type: file.type || (isPdf ? "application/pdf" : "image/jpeg"),
+          size: file.size,
+          dataUrl: url,
+          addedAt: new Date().toISOString(),
+          actor: "",
+        });
+      }
+      if (added.length) {
+        setVisitPhotos((prev) => [...added, ...prev]);
+        toast.success(
+          added.length === 1
+            ? `${added[0].name} uploaded.`
+            : `${added.length} photos uploaded.`,
+        );
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not upload that photo.",
+      );
+    } finally {
+      setUploadingPhotos(false);
+    }
+  }
+
   async function create() {
     // Prefer the customer id from the detail page URL / props.
     const customerIdValue = (boundCustomerId || selectedCustomer || "").trim();
     if (!customerIdValue || !name.trim() || saving) {
       if (!customerIdValue || !name.trim()) {
-        toast.error("Customer and estimate name are required.");
+        toast.error("Customer and estimate title are required.");
         setTab("customer");
       }
       return;
@@ -481,19 +661,42 @@ export function CreateEstimateDialog({
     }
     setSaving(true);
     try {
+      const visitPhotosPayload = visitPhotos.map((photo) => ({
+        id: photo.id,
+        name: photo.name,
+        type: photo.type,
+        size: photo.size,
+        url: photo.dataUrl,
+        addedAt: photo.addedAt,
+        actor: photo.actor || "",
+      }));
       const siteVisitPayload =
         path === "site_visit"
           ? {
-              employeeId,
-              technician: technician ? employeeName(technician) : "",
-              visitedAt,
-              accessNotes,
-              findings: estimate?.siteVisit?.findings || "",
+              id: `visit_${Date.now()}`,
+              label: "Visit 1",
+              employeeId: "",
+              technician: "",
+              visitedAt: "",
+              scheduledAt: "",
+              createdAt: new Date().toISOString(),
+              findings: visitFindings,
               recommendations: estimate?.siteVisit?.recommendations || "",
               measurements: estimate?.siteVisit?.measurements || "",
-              photos: estimate?.siteVisit?.photos || [],
+              photos: visitPhotosPayload,
+              accessNotes: visitNotes,
             }
           : estimate?.siteVisit;
+
+      async function syncSiteVisitSideEffects(
+        savedId: string,
+        visit: NonNullable<typeof siteVisitPayload>,
+      ) {
+        // Schedule is done later by the provider on the estimate — do not
+        // create a calendar entry during estimate create.
+        const record = siteVisitFromRecord(visit);
+        if (record) writeSiteVisit(session?.email, savedId, record);
+      }
 
       if (isEdit && estimate) {
         const taxRatePercent = await (
@@ -517,21 +720,26 @@ export function CreateEstimateDialog({
             estimate.propertyAddress?.id,
             { latitude, longitude, lat: latitude, lng: longitude },
           ),
-          // Keep existing status; if a site visit is selected, never leave it as scheduled.
-          status:
-            path === "site_visit" && estimate.status === "scheduled"
-              ? "site_visit"
-              : estimate.status,
+          status: estimate.status,
           issuedAt,
-          expiresAt: expiresAt || undefined,
           notes,
           terms,
           siteVisit: siteVisitPayload,
           lines,
           taxRatePercent,
         });
+        const siteVisits =
+          path === "site_visit" && siteVisitPayload
+            ? [
+                ...(estimate.siteVisits || []).filter(
+                  (visit) => visit.id && visit.id !== siteVisitPayload.id,
+                ),
+                siteVisitPayload,
+              ]
+            : estimate.siteVisits;
         const updated = await updateEstimateApi(estimate.id, {
           ...nextEstimate,
+          siteVisits,
           discount: estimate.discount,
           attachments: estimate.attachments,
           signature: estimate.signature,
@@ -541,7 +749,7 @@ export function CreateEstimateDialog({
           isArchieved: estimate.isArchieved,
           createdAt: estimate.createdAt,
         });
-        const saved = updated ?? nextEstimate;
+        const saved = updated ?? { ...nextEstimate, siteVisits };
         if (!saved?.id) throw new Error("Could not update this estimate.");
         writeCostLines(
           session?.email,
@@ -556,16 +764,7 @@ export function CreateEstimateDialog({
           })),
         );
         if (path === "site_visit" && siteVisitPayload) {
-          const visit = siteVisitFromRecord(siteVisitPayload);
-          if (visit) writeSiteVisit(session?.email, saved.id, visit);
-          await syncCalendarAssignment({
-            kind: "estimate",
-            recordId: saved.id,
-            title: `${saved.number || "Estimate"} site visit`,
-            date: siteVisitPayload.visitedAt,
-            employeeId: siteVisitPayload.employeeId || null,
-            linkOnly: true,
-          });
+          await syncSiteVisitSideEffects(saved.id, siteVisitPayload);
         }
         dispatch(invalidateEstimatesCache());
         void dispatch(fetchEstimates({ force: true }));
@@ -595,16 +794,21 @@ export function CreateEstimateDialog({
           lat: latitude,
           lng: longitude,
         }),
-        status: path === "site_visit" ? "site_visit" : "draft",
+        status: "draft",
         issuedAt,
-        expiresAt: expiresAt || undefined,
         notes,
         terms,
         siteVisit: path === "site_visit" ? siteVisitPayload : undefined,
         lines,
         taxRatePercent,
       });
-      const created = await createEstimateApi(estimateDraft);
+      const created = await createEstimateApi({
+        ...estimateDraft,
+        siteVisits:
+          path === "site_visit" && siteVisitPayload
+            ? [siteVisitPayload]
+            : undefined,
+      });
       if (!created?.id) {
         throw new Error("Could not create this estimate on the server.");
       }
@@ -622,16 +826,7 @@ export function CreateEstimateDialog({
         })),
       );
       if (path === "site_visit" && siteVisitPayload) {
-        const visit = siteVisitFromRecord(siteVisitPayload);
-        if (visit) writeSiteVisit(session?.email, saved.id, visit);
-        await syncCalendarAssignment({
-          kind: "estimate",
-          recordId: saved.id,
-          title: `${saved.number || "Estimate"} site visit`,
-          date: siteVisitPayload.visitedAt,
-          employeeId: siteVisitPayload.employeeId || null,
-          linkOnly: true,
-        });
+        await syncSiteVisitSideEffects(saved.id, siteVisitPayload);
       }
       dispatch(invalidateEstimatesCache());
       void dispatch(fetchEstimates({ force: true }));
@@ -665,70 +860,21 @@ export function CreateEstimateDialog({
             <DialogDescription>
               {isEdit
                 ? "Update customer, visit, and pricing for this estimate."
-                : "Start with a site visit or write the quote in the office."}
+                : "Add the estimate title and customer, then choose how to prepare it."}
             </DialogDescription>
           </DialogHeader>
           <WizardTabs
-            value={tab}
-            onChange={setTab}
-            options={
-              path === "site_visit"
-                ? [
-                    { id: "customer", label: "Customer" },
-                    { id: "visit", label: "Site visit" },
-                    { id: "scope", label: "Labour & Material" },
-                  ]
-                : [
-                    { id: "customer", label: "Customer" },
-                    { id: "scope", label: "Labour & Material" },
-                  ]
-            }
+            value={tab === "schedule" ? "visit" : tab}
+            onChange={(next) => {
+              if (next === "visit" && path !== "site_visit") return;
+              if (next === "scope" && !path) return;
+              setTab(next);
+            }}
+            options={wizardOptions}
           />
           <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
           {tab === "customer" ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  className={cn(
-                    "rounded-[4px] border px-3 py-3 text-left",
-                    path === "site_visit"
-                      ? "border-[#003F7D] bg-[#e8eef5]"
-                      : "border-input bg-card",
-                  )}
-                  onClick={() => {
-                    setPath("site_visit");
-                    setTab((current) =>
-                      current === "scope" ? "visit" : current,
-                    );
-                  }}
-                >
-                  <p className="text-sm font-semibold">Site visit first</p>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    Inspect on site, then finalize in the office.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "rounded-[4px] border px-3 py-3 text-left",
-                    path === "office"
-                      ? "border-[#003F7D] bg-[#e8eef5]"
-                      : "border-input bg-card",
-                  )}
-                  onClick={() => {
-                    setPath("office");
-                    setTab((current) =>
-                      current === "visit" ? "scope" : current,
-                    );
-                  }}
-                >
-                  <p className="text-sm font-semibold">Write in the office</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Price the quote now, finalize, and send it for signature.
-                  </p>
-                </button>
-              </div>
               {!lockedCustomer ? (
                 <Field
                   label="Customer"
@@ -763,28 +909,15 @@ export function CreateEstimateDialog({
                   />
                 </Field>
               ) : null}
-              <Field label="Estimate name">
+              <Field
+                label="Estimate Title"
+                className={lockedCustomer ? "sm:col-span-2" : undefined}
+              >
                 <Input
                   value={name}
-                  placeholder="Enter estimate name"
+                  placeholder="Enter estimate title"
                   required
                   onChange={(event) => setName(event.target.value)}
-                />
-              </Field>
-              <Field label="Issued">
-                <Input
-                  type="date"
-                  value={issuedAt}
-                  placeholder="mm/dd/yyyy"
-                  onChange={(event) => setIssuedAt(event.target.value)}
-                />
-              </Field>
-              <Field label="Expires">
-                <Input
-                  type="date"
-                  value={expiresAt}
-                  placeholder="mm/dd/yyyy"
-                  onChange={(event) => setExpiresAt(event.target.value)}
                 />
               </Field>
               <Field label="Address" className="sm:col-span-2">
@@ -823,55 +956,244 @@ export function CreateEstimateDialog({
               </div>
             </div>
           ) : null}
-          {tab === "visit" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Team member">
-                <PaginatedEntitySelect
-                  id="estimate-technician"
-                  value={employeeId}
-                  options={technicianOptions}
-                  placeholder="Assign later"
-                  selectedLabel={
-                    technician
-                      ? employeeName(technician)
-                      : estimate?.siteVisit?.technician || undefined
-                  }
-                  emptyLabel="No team members found."
-                  loading={useApi ? assigneePaging.loading : false}
-                  loadingMore={useApi ? assigneePaging.loadingMore : false}
-                  hasMore={useApi ? assigneePaging.hasMore : false}
-                  onLoadMore={useApi ? assigneePaging.loadMore : () => {}}
-                  searchable={useApi}
-                  searchValue={useApi ? assigneePaging.search : ""}
-                  onSearchChange={useApi ? assigneePaging.setSearch : undefined}
-                  searchPlaceholder="Search team members…"
-                  onChange={(id) => setEmployeeId(id)}
+          {tab === "prep" ? (
+            <div className="flex w-full flex-col gap-3">
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#003F7D]">
+                  Preparation method
+                </p>
+                <h3 className="text-base font-semibold text-foreground">
+                  How would you like to prepare this estimate?
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Choose one path to continue. You can schedule the site visit later from the estimate.
+                </p>
+              </div>
+
+              <div
+                className="grid gap-3 sm:grid-cols-2"
+                role="radiogroup"
+                aria-label="Estimate preparation method"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={path === "site_visit"}
+                  className={cn(
+                    "flex h-full w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors",
+                    path === "site_visit"
+                      ? "border-[#003F7D] bg-[#f3f7fb] ring-1 ring-[#003F7D]"
+                      : "border-input bg-background hover:border-[#003F7D]/40 hover:bg-secondary/30",
+                  )}
+                  onClick={() => setPath("site_visit")}
+                >
+                  <span
+                    className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-md border",
+                      path === "site_visit"
+                        ? "border-[#003F7D]/20 bg-white text-[#003F7D]"
+                        : "border-input bg-secondary/50 text-muted-foreground",
+                    )}
+                  >
+                    <MapPinned className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-foreground">
+                        After a Site Visit
+                      </span>
+                      <span
+                        className={cn(
+                          "flex size-5 shrink-0 items-center justify-center rounded-full border",
+                          path === "site_visit"
+                            ? "border-[#003F7D] bg-[#003F7D] text-white"
+                            : "border-input bg-white text-transparent",
+                        )}
+                        aria-hidden="true"
+                      >
+                        <Check className="size-3 stroke-[3]" />
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-sm leading-snug text-muted-foreground">
+                      Add visit notes and photos first. Schedule the visit later when ready.
+                    </span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={path === "office"}
+                  className={cn(
+                    "flex h-full w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors",
+                    path === "office"
+                      ? "border-[#003F7D] bg-[#f3f7fb] ring-1 ring-[#003F7D]"
+                      : "border-input bg-background hover:border-[#003F7D]/40 hover:bg-secondary/30",
+                  )}
+                  onClick={() => setPath("office")}
+                >
+                  <span
+                    className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-md border",
+                      path === "office"
+                        ? "border-[#003F7D]/20 bg-white text-[#003F7D]"
+                        : "border-input bg-secondary/50 text-muted-foreground",
+                    )}
+                  >
+                    <ClipboardList className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-foreground">
+                        Create Estimate Directly
+                      </span>
+                      <span
+                        className={cn(
+                          "flex size-5 shrink-0 items-center justify-center rounded-full border",
+                          path === "office"
+                            ? "border-[#003F7D] bg-[#003F7D] text-white"
+                            : "border-input bg-white text-transparent",
+                        )}
+                        aria-hidden="true"
+                      >
+                        <Check className="size-3 stroke-[3]" />
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-sm leading-snug text-muted-foreground">
+                      Skip the site visit and go straight to labour and materials.
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {tab === "visit" && path === "site_visit" ? (
+            <div className="grid gap-4">
+              <Field label="Site Visit information">
+                <Textarea
+                  rows={4}
+                  placeholder="Describe the visit scope, ticket details, POC, and what to inspect…"
+                  value={visitFindings}
+                  onChange={(event) => setVisitFindings(event.target.value)}
                 />
               </Field>
-              <Field label="Visit date">
-                <Input
-                  type="date"
-                  value={visitedAt}
-                  placeholder="mm/dd/yyyy"
-                  onChange={(event) => setVisitedAt(event.target.value)}
-                />
-              </Field>
-              <Field label="Access / site notes" className="sm:col-span-2">
+              <Field label="Notes">
                 <Textarea
                   rows={3}
-                  placeholder="Gate code, pets, parking, who to ask for"
-                  value={accessNotes}
-                  onChange={(event) => setAccessNotes(event.target.value)}
+                  placeholder="Gate code, parking, pets, who to ask for…"
+                  value={visitNotes}
+                  onChange={(event) => setVisitNotes(event.target.value)}
                 />
               </Field>
-              <p className="sm:col-span-2 text-sm text-muted-foreground">
-                Photos and findings are captured on the estimate after the
-                team member is on site.
-              </p>
+              <div className="space-y-2">
+                <div>
+                  <h3 className="text-sm font-medium text-foreground">Upload images</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    PNG, JPG, or PDF up to 15 MB
+                  </p>
+                </div>
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-3 transition-colors",
+                    photoDropOver
+                      ? "border-primary bg-secondary"
+                      : "border-input bg-transparent",
+                  )}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setPhotoDropOver(true);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setPhotoDropOver(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    setPhotoDropOver(false);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setPhotoDropOver(false);
+                    if (event.dataTransfer.files.length) {
+                      void uploadVisitPhotos(event.dataTransfer.files);
+                    }
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    className="sr-only"
+                    disabled={uploadingPhotos}
+                    onChange={(event) => {
+                      if (event.target.files?.length) {
+                        void uploadVisitPhotos(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
+                  {uploadingPhotos ? (
+                    <Loader2 className="size-5 animate-spin text-primary" />
+                  ) : (
+                    <Upload className="size-5 text-muted-foreground" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium">
+                      {uploadingPhotos ? "Uploading…" : "Drop photos here or browse"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Optional — you can add more later on the estimate.
+                    </p>
+                  </div>
+                </label>
+                {visitPhotos.length ? (
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {visitPhotos.map((photo) => (
+                      <li
+                        key={photo.id}
+                        className="flex items-center gap-2 rounded-md border border-input px-2 py-1.5 text-sm"
+                      >
+                        <ImageIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">{photo.name}</span>
+                        <button
+                          type="button"
+                          className="text-xs text-destructive hover:underline"
+                          onClick={() =>
+                            setVisitPhotos((prev) =>
+                              prev.filter((item) => item.id !== photo.id),
+                            )
+                          }
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No photos yet.</p>
+                )}
+              </div>
             </div>
           ) : null}
           {tab === "scope" ? (
-            <LineEditor lines={lines} onChange={setLines} />
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-input bg-secondary/40 px-3 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    Labour &amp; materials are optional — you can skip and add them later.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    disabled={!hasEstimateName || saving}
+                    onClick={() => void create()}
+                  >
+                    Skip &amp; create estimate
+                  </Button>
+                </div>
+              <LineEditor lines={lines} onChange={setLines} />
+            </div>
           ) : null}
           </div>
           <DialogFooter>
@@ -888,7 +1210,7 @@ export function CreateEstimateDialog({
               <Button
                 data-action="submit-estimate"
                 disabled={!hasEstimateName || saving}
-                onClick={create}
+                onClick={() => void create()}
               >
                 {saving
                   ? isEdit
@@ -900,7 +1222,7 @@ export function CreateEstimateDialog({
               </Button>
             ) : (
               <Button
-                disabled={!hasEstimateName}
+                disabled={!canContinueFromTab(tab)}
                 onClick={() => setTab(nextTab(tab))}
               >
                 Continue

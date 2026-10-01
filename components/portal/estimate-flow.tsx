@@ -1,51 +1,20 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type DragEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import {
-  Check,
-  ImageIcon,
-  Loader2,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
-import {
-  extractUploadedUrl,
-  uploadDoc,
-  uploadFile,
-} from "@/components/api/uploadFile";
-import { useCrmApiData } from "@/components/portal/use-crm-api-data";
-import {
-  useJobFile,
-  siteVisitFromRecord,
-  type EstimateSiteVisit,
-  type JobAttachment,
-} from "@/components/portal/use-job-file";
-import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
-import { usePortalCrew } from "@/components/portal/use-portal-crew";
-import { useCrmDirectory } from "@/components/portal/use-crm-directory";
-import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchTeam } from "@/store/teamSlice";
+import { Check, ImageIcon, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
-import { employeeName, type PortalEmployee } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
-import type { Estimate, EstimateSignature, EstimateStatus, Job } from "@/lib/types";
+import type {
+  Estimate,
+  EstimateSignature,
+  EstimateSiteVisitRecord,
+  EstimateStatus,
+  Job,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
+import type { JobAttachment } from "@/components/portal/use-job-file";
 
 const STEPS = [
   { id: "site_visit", label: "Site visit" },
@@ -55,8 +24,6 @@ const STEPS = [
   { id: "accepted", label: "Signed" },
   { id: "job", label: "Job" },
 ] as const;
-
-const MAX_FILE = 15 * 1024 * 1024;
 
 export function estimateFlowIndex(args: {
   status: EstimateStatus;
@@ -319,17 +286,41 @@ export function EstimateStageBanner({
   );
 }
 
+function visitDateLabel(value?: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "No date";
+  const day = raw.slice(0, 10);
+  return day ? formatDate(day) : "No date";
+}
+
+function allVisitRecords(estimate: Estimate): EstimateSiteVisitRecord[] {
+  const visits = Array.isArray(estimate.siteVisits)
+    ? estimate.siteVisits.filter(Boolean)
+    : [];
+  if (visits.length) return visits;
+  if (estimate.siteVisit) return [estimate.siteVisit];
+  return [];
+}
+
+function photoUrl(photo: { url?: string; dataUrl?: string }) {
+  return String(photo.url || photo.dataUrl || "").trim();
+}
+
+function visitIsPending(entry: EstimateSiteVisitRecord) {
+  return entry.detailsPending === true;
+}
+
 export function EstimateSiteVisitTab({
   estimate,
-  asJob,
   locked,
-  onSave,
-  onActionsChange,
+  onScheduleAnother,
+  onAddVisitDetails,
+  onEditVisit,
 }: {
   estimate: Estimate;
-  asJob: Job;
+  asJob?: Job;
   locked: boolean;
-  onSave: (visit: EstimateSiteVisit) => void | Promise<void>;
+  onSave?: (visit: import("@/components/portal/use-job-file").EstimateSiteVisit) => void | Promise<void>;
   onActionsChange?: (
     actions: {
       locked: boolean;
@@ -337,120 +328,15 @@ export function EstimateSiteVisitTab({
       save: () => void;
     } | null,
   ) => void;
+  onScheduleAnother?: () => void;
+  onAddVisitDetails?: () => void;
+  onEditVisit?: (index: number) => void;
 }) {
-  const dispatch = useAppDispatch();
-  const reduxEmployees = useAppSelector((state) => state.team?.items ?? []);
-  const teamLoading = useAppSelector((state) => state.team?.loading ?? false);
-  const { employees: crewEmployees, loading: crewLoading } = usePortalCrew();
-  const { contractors } = useCrmDirectory();
-  const crm = useCrmApiData();
-  const useApi = crm.enabled;
-  const technicianFilter = useMemo(() => ({ role: "technician" }), []);
-  const assigneePaging = usePaginatedCrmOptions(
-    useApi ? "assignee" : null,
-    useApi,
-    undefined,
-    technicianFilter,
-  );
-
-  useEffect(() => {
-    if (useApi) return;
-    void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
-  }, [dispatch, useApi]);
-
-  const technicians = useMemo(() => {
-    const contractorIds = new Set([
-      ...(contractors || []).map((c) => c.id),
-      ...(crm.contractors || []).map((c) => c.id),
-    ]);
-    const list = [
-      ...(crewEmployees || []),
-      ...(reduxEmployees || []),
-      ...(crm.employees || []),
-    ];
-    const seen = new Set<string>();
-    const result: PortalEmployee[] = [];
-    for (const item of list) {
-      if (item && item.id && !seen.has(item.id)) {
-        seen.add(item.id);
-        if (
-          contractorIds.has(item.id) ||
-          item.id.startsWith("con_") ||
-          "companyName" in item
-        ) {
-          continue;
-        }
-        const role = String(item.role || "").toLowerCase().trim();
-        const isTechnician =
-          role === "technician" ||
-          role === "tech" ||
-          (!role && !item.id.startsWith("con_"));
-        if (item.active !== false && isTechnician) {
-          result.push(item);
-        }
-      }
-    }
-    return result;
-  }, [crewEmployees, reduxEmployees, crm.employees, crm.contractors, contractors]);
-
-  const technicianSelectOptions = useMemo(() => {
-    const rows = useApi
-      ? assigneePaging.options
-      : technicians.map((item) => ({
-          id: item.id,
-          label: `${employeeName(item)}${item.trade ? ` · ${item.trade}` : ""}`,
-        }));
-    return [{ id: "", label: "Unassigned" }, ...rows];
-  }, [useApi, assigneePaging.options, technicians]);
-
-  const loading =
-    (useApi ? assigneePaging.loading : crewLoading || teamLoading) &&
-    technicianSelectOptions.length <= 1;
-  const { siteVisit, saveSiteVisit, actor } = useJobFile(
-    asJob,
-    estimate,
-    undefined,
-    "",
-  );
-  const fallback: EstimateSiteVisit = siteVisit ??
-    siteVisitFromRecord(estimate.siteVisit) ?? {
-      employeeId: "",
-      technician: "",
-      visitedAt: estimate.issuedAt.slice(0, 10),
-      accessNotes: "",
-      findings: "",
-      recommendations: "",
-      measurements: "",
-      photos: [],
-    };
-  const [draft, setDraft] = useState<EstimateSiteVisit | null>(null);
-  const visit = draft ?? fallback;
-  const visitRef = useRef(visit);
-  visitRef.current = visit;
-  const [over, setOver] = useState(false);
+  const visits = useMemo(() => allVisitRecords(estimate), [estimate]);
   const [preview, setPreview] = useState<JobAttachment | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [savingNotes, setSavingNotes] = useState(false);
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-
-  const pendingActionRef = useRef<(() => void) | null>(null);
-  const bypassingRef = useRef(false);
-
-  const isDirty = useMemo(() => {
-    if (!draft) return false;
-    return (
-      (draft.employeeId || "") !== (fallback.employeeId || "") ||
-      (draft.visitedAt || "") !== (fallback.visitedAt || "") ||
-      (draft.accessNotes || "").trim() !==
-        (fallback.accessNotes || "").trim() ||
-      (draft.findings || "").trim() !== (fallback.findings || "").trim() ||
-      (draft.recommendations || "").trim() !==
-        (fallback.recommendations || "").trim() ||
-      (draft.measurements || "").trim() !==
-        (fallback.measurements || "").trim() ||
-      draft.photos !== fallback.photos
-    );
-  }, [draft, fallback]);
+  const hasExistingVisit = visits.length > 0;
+  const latestPending =
+    visits.length > 0 && visitIsPending(visits[visits.length - 1]);
 
   useEffect(() => {
     if (!preview) return;
@@ -461,394 +347,184 @@ export function EstimateSiteVisitTab({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [preview]);
 
-  // Window beforeunload (tab close / refresh)
-  useEffect(() => {
-    if (!isDirty) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-      return "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
-
-  // Intercept navigation or tab change when form has unsaved changes
-  useEffect(() => {
-    if (!isDirty) return;
-
-    const handleClickCapture = (event: MouseEvent) => {
-      if (bypassingRef.current) return;
-
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-
-      // Allow clicks within the site visit form, modals, dropdowns, toasts
-      if (
-        target.closest("[data-site-visit-form]") ||
-        target.closest("[role='dialog']") ||
-        target.closest("[role='listbox']") ||
-        target.closest("[data-radix-popper-content-wrapper]") ||
-        target.closest("[data-radix-focus-guard]") ||
-        target.closest("[data-radix-portal]") ||
-        target.closest("[data-sonner-toaster]") ||
-        target.closest(".sonner-toast")
-      ) {
-        return;
-      }
-
-      // Check if clicking on an interactive navigation or button element
-      const interactiveEl = target.closest(
-        "button, a[href], [role='tab'], [role='button'], [data-tab-id]",
-      ) as HTMLElement | null;
-
-      if (!interactiveEl) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-
-      pendingActionRef.current = () => {
-        interactiveEl.click();
-      };
-
-      setShowUnsavedDialog(true);
-    };
-
-    document.addEventListener("click", handleClickCapture, true);
-    return () => {
-      document.removeEventListener("click", handleClickCapture, true);
-    };
-  }, [isDirty]);
-
-  function executePending() {
-    const action = pendingActionRef.current;
-    pendingActionRef.current = null;
-    setShowUnsavedDialog(false);
-    if (action) {
-      bypassingRef.current = true;
-      setTimeout(() => {
-        action();
-        setTimeout(() => {
-          bypassingRef.current = false;
-        }, 150);
-      }, 0);
-    }
-  }
-
-  function patch(next: Partial<EstimateSiteVisit>) {
-    setDraft({ ...visit, ...next });
-  }
-
-  async function persist(next: EstimateSiteVisit) {
-    visitRef.current = next;
-    setDraft(null);
-    saveSiteVisit(next);
-    await onSave(next);
-  }
-
-  async function saveNotes() {
-    try {
-      setSavingNotes(true);
-      await persist(visitRef.current);
-      toast.success("Site visit saved.");
-    } catch {
-      // toast shown by onSave handler
-    } finally {
-      setSavingNotes(false);
-    }
-  }
-
-  const saveNotesRef = useRef(saveNotes);
-  saveNotesRef.current = saveNotes;
-
-  const saveStable = useCallback(() => {
-    void saveNotesRef.current();
-  }, []);
-
-  useEffect(() => {
-    if (!onActionsChange) return;
-    onActionsChange({
-      locked,
-      saving: savingNotes,
-      save: saveStable,
-    });
-  }, [onActionsChange, locked, savingNotes, saveStable]);
-
-  useEffect(() => {
-    if (!onActionsChange) return;
-    return () => onActionsChange(null);
-  }, [onActionsChange]);
-
-  async function handleSaveAndLeave() {
-    await persist(visit);
-    toast.success("Site visit saved.");
-    executePending();
-  }
-
-  function handleDiscardAndLeave() {
-    setDraft(null);
-    executePending();
-  }
-
-  function handleCancelDialog() {
-    pendingActionRef.current = null;
-    setShowUnsavedDialog(false);
-  }
-
-  async function readFiles(list: FileList | File[]) {
-    if (locked || uploading) return;
-    const files = Array.from(list);
-    if (!files.length) return;
-    setUploading(true);
-    const newPhotos: JobAttachment[] = [];
-    try {
-      for (const file of files) {
-        if (file.size > MAX_FILE) {
-          toast.error(`${file.name} is over 15 MB.`);
-          continue;
-        }
-        const isPdf =
-          file.type === "application/pdf" ||
-          file.name.toLowerCase().endsWith(".pdf");
-        const response = isPdf ? await uploadDoc(file) : await uploadFile(file);
-        const url = extractUploadedUrl(response.data);
-        if (!url) throw new Error(`Could not upload ${file.name}.`);
-        const photo: JobAttachment = {
-          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${file.name}`,
-          name: file.name,
-          type: file.type || (isPdf ? "application/pdf" : "image/jpeg"),
-          size: file.size,
-          dataUrl: url,
-          addedAt: new Date().toISOString(),
-          actor,
-        };
-        newPhotos.push(photo);
-      }
-      if (newPhotos.length > 0) {
-        patch({ photos: [...newPhotos, ...visit.photos] });
-        toast.success(
-          newPhotos.length === 1
-            ? `${newPhotos[0].name} uploaded. Click "Save site" to save.`
-            : `${newPhotos.length} photos uploaded. Click "Save site" to save.`,
-        );
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : error && typeof error === "object" && "message" in error
-            ? String((error as { message?: unknown }).message || "").trim()
-            : "";
-      toast.error(message || "Could not upload that photo.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    setOver(false);
-    if (event.dataTransfer.files.length)
-      void readFiles(event.dataTransfer.files);
-  }
-
   return (
     <div data-site-visit-form className="space-y-4 py-1">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Technician">
-          <PaginatedEntitySelect
-            value={visit.employeeId || ""}
-            onChange={(id, option) => {
-              const label = (option?.label || "")
-                .replace(/^Unassigned$/, "")
-                .trim();
-              patch({
-                employeeId: id,
-                technician: label,
-              });
-            }}
-            options={technicianSelectOptions}
-            disabled={locked}
-            loading={loading}
-            placeholder="Assign technician"
-            searchable={useApi}
-            searchValue={useApi ? assigneePaging.search : undefined}
-            onSearchChange={useApi ? assigneePaging.setSearch : undefined}
-            searchPlaceholder="Search technicians…"
-            emptyLabel="No technicians found"
-            onLoadMore={useApi ? () => void assigneePaging.loadMore() : () => undefined}
-            hasMore={useApi ? assigneePaging.hasMore : false}
-            loadingMore={useApi ? assigneePaging.loadingMore : false}
-          />
-        </Field>
-        <Field label="Visit date">
-          <Input
-            type="date"
-            disabled={locked}
-            value={(visit.visitedAt || "").slice(0, 10)}
-            onChange={(event) => patch({ visitedAt: event.target.value })}
-          />
-        </Field>
-      </div>
-
-      <div className="grid items-stretch gap-3 sm:grid-cols-2">
-        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
-          <span className="h-5 text-sm font-medium leading-5 text-foreground">Description</span>
-          <Textarea
-            rows={3}
-            disabled={locked}
-            className="h-24 min-h-24 flex-1 resize-none text-sm shadow-none"
-            placeholder="Description, ticket #, ticket information, POC…"
-            value={visit.findings}
-            onChange={(event) => patch({ findings: event.target.value })}
-          />
-        </label>
-        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
-          <span className="flex h-5 items-baseline gap-1.5 text-sm font-medium leading-5 text-foreground">
-            Private notes
-            <span className="text-[11px] font-normal text-muted-foreground">
-              · not visible to customer
-            </span>
-          </span>
-          <Textarea
-            rows={3}
-            disabled={locked}
-            className="h-24 min-h-24 flex-1 resize-none text-sm shadow-none"
-            placeholder="Access notes, gate codes…"
-            value={visit.accessNotes}
-            onChange={(event) => patch({ accessNotes: event.target.value })}
-          />
-        </label>
-        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
-          <span className="h-5 text-sm font-medium leading-5 text-foreground">Recommendations</span>
-          <Textarea
-            rows={2}
-            disabled={locked}
-            className="h-20 min-h-20 flex-1 resize-none text-sm shadow-none"
-            placeholder="Recommended next steps"
-            value={visit.recommendations}
-            onChange={(event) => patch({ recommendations: event.target.value })}
-          />
-        </label>
-        <label className="flex min-h-0 flex-col gap-1.5 text-sm">
-          <span className="h-5 text-sm font-medium leading-5 text-foreground">Measurements</span>
-          <Textarea
-            rows={2}
-            disabled={locked}
-            className="h-20 min-h-20 flex-1 resize-none text-sm shadow-none"
-            placeholder="Lengths, quantities, room sizes…"
-            value={visit.measurements}
-            onChange={(event) => patch({ measurements: event.target.value })}
-          />
-        </label>
-      </div>
-
-      <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-medium text-foreground">Site photos</h3>
-          <p className="text-[11px] text-muted-foreground">Images and PDFs up to 15 MB</p>
+          <p className="text-sm font-medium text-foreground">
+            {visits.length > 1
+              ? `${visits.length} site visits on this estimate`
+              : "Site visit details"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Schedule a visit, then add notes and photos. Each visit stays
+            separate.
+          </p>
         </div>
-        {locked ? null : (
-          <label
-            className={cn(
-              "flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-3 transition-colors",
-              over
-                ? "border-primary bg-secondary"
-                : "border-input bg-transparent",
-            )}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setOver(true);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setOver(true);
-            }}
-            onDragLeave={() => setOver(false)}
-            onDrop={onDrop}
-          >
-            {uploading ? (
-              <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
-            ) : (
-              <Upload className="size-4 shrink-0 text-primary" />
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-medium">
-                {uploading ? "Uploading…" : "Drop photos here or browse"}
-              </p>
-              <p className="text-[11px] text-muted-foreground">PNG, JPG, or PDF</p>
-            </div>
-            <input
-              className="sr-only"
-              type="file"
-              accept="image/*,.pdf"
-              multiple
-              disabled={uploading}
-              onChange={(event) => {
-                if (event.target.files?.length)
-                  void readFiles(event.target.files);
-                event.target.value = "";
-              }}
-            />
-          </label>
-        )}
-        {visit.photos.length ? (
-          <ul className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            {visit.photos.map((file) => (
-              <li
-                key={file.id}
-                className="overflow-hidden rounded-md border border-border-soft bg-card"
-              >
-                <button
-                  type="button"
-                  className="block w-full cursor-pointer"
-                  onClick={() => setPreview(file)}
-                >
-                  {file.type.startsWith("image/") ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      alt={file.name}
-                      src={file.dataUrl}
-                      className="h-20 w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-20 items-center justify-center bg-secondary text-primary">
-                      <ImageIcon className="size-5" />
-                    </span>
-                  )}
-                </button>
-                <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-                  <p className="truncate text-[11px] font-medium">{file.name}</p>
-                  {locked ? null : (
-                    <button
-                      type="button"
-                      className="cursor-pointer text-destructive"
-                      aria-label={`Remove ${file.name}`}
-                      onClick={() => {
-                        patch({
-                          photos: visit.photos.filter(
-                            (item) => item.id !== file.id,
-                          ),
-                        });
-                        toast.success(
-                          'Photo removed. Click "Save notes" to keep changes.',
-                        );
-                      }}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-muted-foreground">No photos yet.</p>
-        )}
+        {!locked && hasExistingVisit ? (
+          latestPending && onAddVisitDetails ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8"
+              onClick={onAddVisitDetails}
+            >
+              Add Visit Details
+            </Button>
+          ) : onScheduleAnother ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={onScheduleAnother}
+            >
+              Schedule Another Site Visit
+            </Button>
+          ) : null
+        ) : null}
       </div>
+
+      {visits.length > 0 ? (
+        <ul className="space-y-3">
+          {visits.map((entry, index) => {
+            const label =
+              String(entry.label || "").trim() || `Site Visit #${index + 1}`;
+            const displayLabel = label.startsWith("Site Visit")
+              ? label
+              : `Site Visit #${index + 1}`;
+            const tech =
+              String(entry.technician || "").trim() ||
+              (entry.employeeId ? "Assigned" : "Unassigned");
+            const notes = String(entry.accessNotes || entry.findings || "").trim();
+            const photos = Array.isArray(entry.photos) ? entry.photos : [];
+            const pending = visitIsPending(entry);
+            return (
+              <li
+                key={entry.id || `${label}-${entry.visitedAt || index}`}
+                className="rounded-lg border border-[#003F7D]/20 bg-[#f7fafc] p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#003F7D]/10 pb-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-[#003F7D]">
+                        {displayLabel}
+                      </p>
+                      {pending ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                          Awaiting details
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">Date:</span>{" "}
+                      {visitDateLabel(entry.visitedAt || entry.scheduledAt)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        Technician:
+                      </span>{" "}
+                      {tech}
+                    </p>
+                  </div>
+                  {!locked && onEditVisit ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => onEditVisit(index)}
+                    >
+                      <Pencil className="size-3" />
+                      Edit
+                    </Button>
+                  ) : null}
+                </div>
+                {pending ? (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Scheduled. Use <span className="font-medium">Add Visit Details</span>{" "}
+                    or Edit to add notes and photos.
+                  </p>
+                ) : (
+                  <>
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Notes
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                        {notes || "—"}
+                      </p>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Images ({photos.length})
+                      </p>
+                      {photos.length ? (
+                        <ul className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                          {photos.map((file, photoIndex) => {
+                            const src = photoUrl(file);
+                            if (!src) return null;
+                            const isImage =
+                              String(file.type || "").startsWith("image/") ||
+                              /\.(png|jpe?g|gif|webp)$/i.test(file.name || "");
+                            return (
+                              <li
+                                key={file.id || `${src}-${photoIndex}`}
+                                className="overflow-hidden rounded-md border border-border-soft bg-card"
+                              >
+                                <button
+                                  type="button"
+                                  className="block w-full cursor-pointer"
+                                  onClick={() =>
+                                    setPreview({
+                                      id: file.id || `p_${photoIndex}`,
+                                      name: file.name || "Photo",
+                                      type: file.type || "image/jpeg",
+                                      size: file.size || 0,
+                                      dataUrl: src,
+                                      addedAt: file.addedAt || "",
+                                      actor: file.actor || "",
+                                    })
+                                  }
+                                >
+                                  {isImage ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      alt={file.name || "Site photo"}
+                                      src={src}
+                                      className="h-20 w-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="flex h-20 items-center justify-center bg-secondary text-primary">
+                                      <ImageIcon className="size-5" />
+                                    </span>
+                                  )}
+                                </button>
+                                <p className="truncate px-2 py-1.5 text-[11px] font-medium">
+                                  {file.name || "Photo"}
+                                </p>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          No photos for this visit.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="rounded-lg border border-dashed border-input px-4 py-8 text-center text-sm text-muted-foreground">
+          No site visits yet. Complete the first site visit from estimate setup,
+          or schedule one from the calendar.
+        </p>
+      )}
 
       {preview && typeof document !== "undefined"
         ? createPortal(
@@ -871,20 +547,9 @@ export function EstimateSiteVisitTab({
                 <img
                   alt={preview.name}
                   src={preview.dataUrl}
-                  className="max-h-[90vh] max-w-[90vw] cursor-default object-contain rounded-md shadow-2xl"
+                  className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
                   onClick={(e) => e.stopPropagation()}
                 />
-              ) : preview.type === "application/pdf" ? (
-                <div
-                  className="h-[85vh] w-full max-w-4xl overflow-hidden rounded-lg bg-card shadow-2xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <iframe
-                    title={preview.name}
-                    src={preview.dataUrl}
-                    className="h-full w-full border-none"
-                  />
-                </div>
               ) : (
                 <a
                   href={preview.dataUrl}
@@ -899,33 +564,6 @@ export function EstimateSiteVisitTab({
             document.body,
           )
         : null}
-
-      <UnsavedChangesDialog
-        open={showUnsavedDialog}
-        onOpenChange={(open) => {
-          if (!open) handleCancelDialog();
-        }}
-        onSave={handleSaveAndLeave}
-        onDiscard={handleDiscardAndLeave}
-        onCancel={handleCancelDialog}
-      />
     </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-  className,
-}: {
-  label: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <label className={cn("grid gap-1.5 text-sm", className)}>
-      <span className="font-medium">{label}</span>
-      {children}
-    </label>
   );
 }

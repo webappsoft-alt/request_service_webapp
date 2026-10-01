@@ -477,6 +477,7 @@ function requestPayload(request: Partial<PortalRequest>) {
 function siteVisitPayload(visit?: Estimate["siteVisit"]) {
   if (!visit) return undefined;
   return {
+    id: visit.id || "",
     employeeId: visit.employeeId || "",
     technician: visit.technician || "",
     visitedAt: visit.visitedAt || "",
@@ -484,6 +485,10 @@ function siteVisitPayload(visit?: Estimate["siteVisit"]) {
     findings: visit.findings || "",
     recommendations: visit.recommendations || "",
     measurements: visit.measurements || "",
+    label: visit.label || "",
+    scheduledAt: visit.scheduledAt || "",
+    createdAt: visit.createdAt || "",
+    detailsPending: Boolean(visit.detailsPending),
     photos: (visit.photos ?? []).map((photo) => ({
       id: photo.id,
       name: photo.name,
@@ -541,6 +546,9 @@ function estimatePayload(estimate: Estimate) {
     terms: estimate.terms || "",
     propertyAddress: mapAddressForApi(estimate.propertyAddress),
     siteVisit: siteVisitPayload(estimate.siteVisit),
+    siteVisits: Array.isArray(estimate.siteVisits)
+      ? estimate.siteVisits.map((visit) => siteVisitPayload(visit)).filter(Boolean)
+      : undefined,
     attachments: estimateAttachmentsToApi(estimate.attachments as unknown[]),
   };
 }
@@ -1534,11 +1542,17 @@ export async function updateEstimateSiteVisit(
   id: string,
   siteVisit: EstimateSiteVisitRecord,
   status?: EstimateStatus,
+  siteVisits?: EstimateSiteVisitRecord[],
 ) {
   const payload: Record<string, unknown> = {
     siteVisit: siteVisitPayload(siteVisit),
   };
   if (status !== undefined) payload.status = status;
+  if (siteVisits !== undefined) {
+    payload.siteVisits = siteVisits
+      .map((visit) => siteVisitPayload(visit))
+      .filter(Boolean);
+  }
   const response = await putData(providerCrmApi.estimate(id), payload, { silent: false });
   return mapCrmEntity(response, mapEstimate);
 }

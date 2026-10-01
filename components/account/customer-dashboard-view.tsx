@@ -59,7 +59,7 @@ function batchStatusLabel(batch: CustomerQuoteBatch) {
   if (statuses.some((s) => s === "converted_to_job")) return "Job Created";
   if (statuses.some((s) => s === "accepted")) return "Accepted";
   if (batch.estimateCount > 0 || statuses.some((s) => s === "estimate_sent"))
-    return `${batch.estimateCount} Estimate${batch.estimateCount === 1 ? "" : "s"}`;
+    return "Ready to review";
   if (statuses.some((s) => s === "changes_requested")) return "Changes Requested";
   if (statuses.some((s) => s === "site_visit")) return "Site Visit";
 
@@ -96,7 +96,10 @@ function estimateStatusLabel(status: string) {
   if (clean === "converted_to_job") return "Job Created";
   if (clean === "site_visit") return "Site Visit";
   if (clean === "changes_requested") return "Changes Requested";
-  if (clean === "sent" || clean === "finalized") return "Ready to Review";
+  if (clean === "draft") return "Preparing";
+  if (clean === "finalized") return "Almost ready";
+  if (clean === "sent" || clean === "estimate_sent") return "Ready to review";
+  if (clean === "accepted") return "Accepted";
   return clean
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

@@ -143,7 +143,8 @@ export function PaginatedEntitySelect({
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const maxH = 240;
-    const gap = 4;
+    // When search replaces the trigger, sit flush under it (no dual border gap).
+    const gap = searchable ? 0 : 4;
     const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
     const spaceAbove = rect.top - gap - 8;
     const openUp = spaceBelow < Math.min(maxH, 140) && spaceAbove > spaceBelow;
@@ -257,7 +258,10 @@ export function PaginatedEntitySelect({
       style={menuStyle}
       data-paginated-entity-menu=""
       data-lenis-prevent=""
-      className="flex flex-col overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
+      className={cn(
+        "flex flex-col overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-md",
+        searchable && "rounded-t-none border-t-0",
+      )}
       onWheel={(event) => {
         event.stopPropagation();
       }}
@@ -375,6 +379,7 @@ export function PaginatedEntitySelect({
             className={cn(
               triggerClassName,
               "pr-9 select-text",
+              open && "rounded-b-none",
             )}
             onChange={(event) => onSearchChange?.(event.target.value)}
             onKeyDown={(event) => {

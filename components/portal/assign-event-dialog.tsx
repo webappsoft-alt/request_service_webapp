@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
@@ -120,6 +121,7 @@ export function AssignEventDialog({
   defaultEmployeeId?: string;
   onSave: (assignment: PortalAssignment) => void | Promise<void>;
 }) {
+  const router = useRouter();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const role = String(user?.role || auth.role || "").toLowerCase();
@@ -360,6 +362,11 @@ export function AssignEventDialog({
               searchValue={useApi ? assigneePaging.search : ""}
               onSearchChange={useApi ? assigneePaging.setSearch : undefined}
               searchPlaceholder="Search people…"
+              addLabel="Add team member"
+              onAdd={() => {
+                onOpenChange(false);
+                router.push("/pro/dashboard/team");
+              }}
               onChange={(id, option) => {
                 setEmployeeId(id);
                 setEmployeeLabel(option?.label && id ? option.label : "");

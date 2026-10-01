@@ -43,13 +43,16 @@ function statusLabel(status: string, jobNumber?: string | null) {
   if (value === "site_visit") return "Site visit";
   if (value === "draft") return "Preparing";
   if (value === "inspected") return "Inspected";
-  if (value === "finalized") return "Ready to send";
+  if (value === "finalized") return "Almost ready";
+  if (value === "sent" || value === "estimate_sent") return "Ready to review";
+  if (value === "accepted") return "Accepted";
+  if (value === "changes_requested") return "Changes requested";
   if (value === "converted_to_job") {
     return jobNumber
       ? `Converted to Job · ${jobNumber}`
       : "Converted to Job";
   }
-  if (value === "declined") return "Declined";
+  if (value === "declined" || value === "rejected") return "Declined";
   return status
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -207,13 +210,18 @@ export function CustomerEstimatesDashboardView({
         status: item.status,
         total: item.total,
         shareToken: item.shareToken,
-        issuedAt: item.updatedAt || item.createdAt || null,
+        // Prefer createdAt so "latest estimate" stays on top even after status updates.
+        issuedAt: item.createdAt || item.updatedAt || null,
         jobId: item.jobId,
         jobNumber: item.jobNumber,
         provider: item.provider,
       });
     }
-    return [...byToken.values()];
+    return [...byToken.values()].sort((a, b) => {
+      const aTs = a.issuedAt ? Date.parse(a.issuedAt) : 0;
+      const bTs = b.issuedAt ? Date.parse(b.issuedAt) : 0;
+      return bTs - aTs;
+    });
   }, [apiEstimates, remembered]);
 
   const [chatBusyId, setChatBusyId] = useState<string | null>(null);

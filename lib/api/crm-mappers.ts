@@ -396,9 +396,14 @@ function getPagination(response: unknown, count: number) {
   return { page, limit, total, totalPages };
 }
 
-function populatedCustomer(record: Record<string, unknown>): Record<string, unknown> | null {
-  const customer = asRecord(record.customerId);
-  return customer ?? asRecord(record.customerSnapshot);
+function populatedCustomer(record: Record<string, unknown>) {
+  return (
+    asRecord(record.customerId) ??
+    asRecord(record.customer) ??
+    asRecord(record.customerSnapshot) ??
+    asRecord(record.client) ??
+    asRecord(record.user)
+  );
 }
 
 function customerNameParts(record: Record<string, unknown>) {
@@ -421,8 +426,17 @@ function customerNameParts(record: Record<string, unknown>) {
       populated.fullName,
     ),
   );
+  const displayName = trimmed(
+    firstValue(
+      populated.displayName,
+      populated.name,
+      record.displayName,
+      record.customerDisplayName,
+    ),
+  );
   const name =
     companyName ||
+    displayName ||
     `${firstName} ${lastName}`.trim() ||
     displayNameFromRecord(populated) ||
     directName ||
@@ -1500,6 +1514,14 @@ export function mapInvoice(raw: unknown): Invoice | null {
   if (!id) return null;
 
   const customer = customerNameParts(record);
+  const addressSource =
+    asRecord(asRecord(record.customerSnapshot)?.address) ??
+    asRecord(record.address) ??
+    asRecord(record.serviceAddress) ??
+    asRecord(record.propertyAddress) ??
+    asRecord(asRecord(record.customer)?.address) ??
+    {};
+  const address = Object.keys(addressSource).length ? mapServiceAddress(addressSource, `addr_${id}`) : undefined;
 
   return {
     id,
@@ -1527,6 +1549,9 @@ export function mapInvoice(raw: unknown): Invoice | null {
     amountPaid: numberValue(record.amountPaid),
     balanceDue: numberValue(record.balanceDue, Math.max(0, numberValue(record.total) - numberValue(record.amountPaid))),
     items: mapInvoiceItems(id, record.items),
+    address,
+    notes: trimmed(record.notes) || undefined,
+    terms: trimmed(record.terms) || undefined,
     isArchived: Boolean(record.isArchived ?? record.isArchieved),
     attachments: mapEstimateAttachments(record.attachments),
     createdAt: toIsoString(record.createdAt),
@@ -1638,35 +1663,85 @@ export function mapPortalTask(raw: unknown): PortalTask | null {
 
   const assignedEmployeeName =
     extractPersonName(record.assignedEmployeeId) ||
+    extractPersonName(record.assignedEmployee) ||
+    extractPersonName(record.employee) ||
     trimmed(record.assignedEmployeeName) ||
     trimmed(record.employeeName);
   const assignedContractorName =
     extractPersonName(record.assignedContractorId) ||
+    extractPersonName(record.assignedContractor) ||
+    extractPersonName(record.contractor) ||
     trimmed(record.assignedContractorName) ||
     trimmed(record.contractorName);
   const assignedVendorName =
     extractPersonName(record.assignedVendorId) ||
+    extractPersonName(record.assignedVendor) ||
+    extractPersonName(record.vendor) ||
     trimmed(record.assignedVendorName) ||
     trimmed(record.vendorName);
+
+  const jobObj = asRecord(record.job) ?? asRecord(record.jobId);
+  const estimateObj = asRecord(record.estimate) ?? asRecord(record.estimateId);
+  const requestObj = asRecord(record.request) ?? asRecord(record.requestId);
+
+  const customerObj =
+    asRecord(record.customer) ??
+    asRecord(record.customerId) ??
+    asRecord(record.customerSnapshot) ??
+    asRecord(record.client) ??
+    asRecord(record.user) ??
+    asRecord(jobObj?.customer) ??
+    asRecord(jobObj?.customerId) ??
+    asRecord(jobObj?.customerSnapshot) ??
+    asRecord(estimateObj?.customer) ??
+    asRecord(estimateObj?.customerId) ??
+    asRecord(estimateObj?.customerSnapshot) ??
+    asRecord(requestObj?.customer) ??
+    asRecord(requestObj?.customerId) ??
+    asRecord(requestObj?.customerSnapshot);
+
+  const customerId =
+    crmIdOf(record.customerId) ||
+    crmIdOf(record.customer) ||
+    crmIdOf(record.client) ||
+    crmIdOf(record.user) ||
+    crmIdOf(asRecord(record.customerSnapshot)?._id || asRecord(record.customerSnapshot)?.id) ||
+    (record.subjectKind === "customer" ? crmIdOf(record.subjectId) : undefined) ||
+    crmIdOf(jobObj?.customerId) ||
+    crmIdOf(estimateObj?.customerId) ||
+    crmIdOf(requestObj?.customerId);
+
   const customerName =
+    extractPersonName(customerObj) ||
     extractPersonName(record.customerId) ||
-    trimmed(record.customerName);
+    extractPersonName(record.customer) ||
+    extractPersonName(record.customerSnapshot) ||
+    extractPersonName(record.client) ||
+    extractPersonName(record.user) ||
+    trimmed(record.customerName) ||
+    trimmed(jobObj?.customerName) ||
+    trimmed(estimateObj?.customerName) ||
+    trimmed(requestObj?.customerName) ||
+    (record.subjectKind === "customer"
+      ? extractPersonName(record.subject) || trimmed(record.subjectName)
+      : "") ||
+    undefined;
 
   return {
     id,
     number: trimmed(record.number) || makeTaskNumber(id),
     title: trimmed(record.title) || "Task",
-    note: trimmed(record.note),
-    jobId: crmIdOf(record.jobId) || undefined,
-    customerId: crmIdOf(record.customerId) || undefined,
+    note: trimmed(record.note) || trimmed(record.notes) || trimmed(record.description),
+    jobId: crmIdOf(record.jobId) || (record.subjectKind === "job" ? crmIdOf(record.subjectId) : undefined) || undefined,
+    customerId: customerId || undefined,
     customerName: customerName || undefined,
     subjectKind: trimmed(record.subjectKind) as PortalTask["subjectKind"],
     subjectId: crmIdOf(record.subjectId) || undefined,
-    assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || undefined,
+    assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || crmIdOf(record.employeeId) || undefined,
     assignedEmployeeName: assignedEmployeeName || undefined,
-    assignedContractorId: crmIdOf(record.assignedContractorId) || undefined,
+    assignedContractorId: crmIdOf(record.assignedContractorId) || crmIdOf(record.contractorId) || undefined,
     assignedContractorName: assignedContractorName || undefined,
-    assignedVendorId: crmIdOf(record.assignedVendorId) || undefined,
+    assignedVendorId: crmIdOf(record.assignedVendorId) || crmIdOf(record.vendorId) || undefined,
     assignedVendorName: assignedVendorName || undefined,
     priority:
       trimmed(record.priority) === "low" ||
@@ -1680,7 +1755,7 @@ export function mapPortalTask(raw: unknown): PortalTask | null {
       trimmed(record.status) === "done"
         ? (trimmed(record.status) as PortalTask["status"])
         : "open",
-    dueAt: toIsoString(record.dueAt) || toIsoString(record.createdAt),
+    dueAt: toIsoString(record.dueAt) || toIsoString(record.dueDate) || toIsoString(record.date) || toIsoString(record.createdAt),
     createdAt: toIsoString(record.createdAt),
   };
 }
@@ -1694,35 +1769,66 @@ export function mapPortalReminder(raw: unknown): PortalReminder | null {
 
   const assignedEmployeeName =
     extractPersonName(record.assignedEmployeeId) ||
+    extractPersonName(record.assignedEmployee) ||
+    extractPersonName(record.employee) ||
     trimmed(record.assignedEmployeeName) ||
     trimmed(record.employeeName);
   const assignedContractorName =
     extractPersonName(record.assignedContractorId) ||
+    extractPersonName(record.assignedContractor) ||
+    extractPersonName(record.contractor) ||
     trimmed(record.assignedContractorName) ||
     trimmed(record.contractorName);
   const assignedVendorName =
     extractPersonName(record.assignedVendorId) ||
+    extractPersonName(record.assignedVendor) ||
+    extractPersonName(record.vendor) ||
     trimmed(record.assignedVendorName) ||
     trimmed(record.vendorName);
+
+  const customerObj =
+    asRecord(record.customer) ??
+    asRecord(record.customerId) ??
+    asRecord(record.customerSnapshot) ??
+    asRecord(record.client) ??
+    asRecord(record.user);
+
+  const customerId =
+    crmIdOf(record.customerId) ||
+    crmIdOf(record.customer) ||
+    crmIdOf(record.client) ||
+    crmIdOf(record.user) ||
+    crmIdOf(asRecord(record.customerSnapshot)?._id || asRecord(record.customerSnapshot)?.id) ||
+    (record.subjectKind === "customer" ? crmIdOf(record.subjectId) : undefined);
+
   const customerName =
+    extractPersonName(customerObj) ||
     extractPersonName(record.customerId) ||
-    trimmed(record.customerName);
+    extractPersonName(record.customer) ||
+    extractPersonName(record.customerSnapshot) ||
+    extractPersonName(record.client) ||
+    extractPersonName(record.user) ||
+    trimmed(record.customerName) ||
+    (record.subjectKind === "customer"
+      ? extractPersonName(record.subject) || trimmed(record.subjectName)
+      : "") ||
+    undefined;
 
   return {
     id,
-    customerId: crmIdOf(record.customerId) || undefined,
+    customerId: customerId || undefined,
     customerName: customerName || undefined,
     subjectKind: trimmed(record.subjectKind) as PortalReminder["subjectKind"],
     subjectId: crmIdOf(record.subjectId) || undefined,
     subjectLabel: trimmed(record.subjectLabel) || undefined,
     title: trimmed(record.title) || "Reminder",
-    note: trimmed(record.note),
-    dueAt: toIsoString(record.dueAt) || toIsoString(record.createdAt),
-    assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || undefined,
+    note: trimmed(record.note) || trimmed(record.notes) || trimmed(record.description),
+    dueAt: toIsoString(record.dueAt) || toIsoString(record.dueDate) || toIsoString(record.date) || toIsoString(record.createdAt),
+    assignedEmployeeId: crmIdOf(record.assignedEmployeeId) || crmIdOf(record.employeeId) || undefined,
     assignedEmployeeName: assignedEmployeeName || undefined,
-    assignedContractorId: crmIdOf(record.assignedContractorId) || undefined,
+    assignedContractorId: crmIdOf(record.assignedContractorId) || crmIdOf(record.contractorId) || undefined,
     assignedContractorName: assignedContractorName || undefined,
-    assignedVendorId: crmIdOf(record.assignedVendorId) || undefined,
+    assignedVendorId: crmIdOf(record.assignedVendorId) || crmIdOf(record.vendorId) || undefined,
     assignedVendorName: assignedVendorName || undefined,
     status: trimmed(record.status) === "done" ? "done" : "open",
     isArchived: Boolean(record.isArchived ?? record.isArchieved),
@@ -1927,27 +2033,62 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
 
   const id = crmIdOf(record);
   const kindRaw = trimmed(record.kind).toLowerCase();
+  const jobObj = asRecord(record.job);
+  const estimateObj = asRecord(record.estimate);
+  const requestObj = asRecord(record.request);
+  const invoiceObj = asRecord(record.invoice);
+  const taskObj = asRecord(record.task);
+
   const hasFixedIndicator =
     Boolean(record.serviceId) ||
     Boolean(record.fixedServiceId) ||
     Boolean(record.isFixedService) ||
+    Boolean(requestObj?.serviceId) ||
+    Boolean(requestObj?.fixedServiceId) ||
+    Boolean(requestObj?.isFixedService) ||
+    trimmed(record.source) === "fixed_service_view" ||
+    trimmed(record.source) === "order" ||
+    trimmed(requestObj?.source) === "fixed_service_view" ||
+    trimmed(requestObj?.source) === "order" ||
     String(record.title || "").toLowerCase().includes("fixed") ||
     String(record.detail || "").toLowerCase().includes("fixed");
 
   const kind: PortalEventKind =
     kindRaw === "estimate" ||
-    kindRaw === "request" ||
     kindRaw === "invoice" ||
     kindRaw === "task"
       ? (kindRaw as PortalEventKind)
-      : kindRaw === "fixed_service" || kindRaw === "service" || kindRaw === "order" || hasFixedIndicator
-        ? "fixed_service"
-        : "job";
+      : kindRaw === "request"
+        ? (hasFixedIndicator ? "fixed_service" : "request")
+        : kindRaw === "fixed_service" || kindRaw === "service" || kindRaw === "order" || hasFixedIndicator
+          ? "fixed_service"
+          : "job";
   const recordId = crmIdOf(record.recordId);
   const dueDate = toDateOnly(record.dueDate || record.dueAt) || undefined;
   const employeeObj = asRecord(record.employee) ?? asRecord(record.employeeId);
   const contractorObj = asRecord(record.contractor) ?? asRecord(record.contractorId);
-  const customerObj = asRecord(record.customer) ?? asRecord(record.customerId);
+
+  const customerObj =
+    asRecord(record.customer) ??
+    asRecord(record.customerId) ??
+    asRecord(record.customerSnapshot) ??
+    asRecord(record.client) ??
+    asRecord(record.user) ??
+    asRecord(jobObj?.customer) ??
+    asRecord(jobObj?.customerId) ??
+    asRecord(jobObj?.customerSnapshot) ??
+    asRecord(estimateObj?.customer) ??
+    asRecord(estimateObj?.customerId) ??
+    asRecord(estimateObj?.customerSnapshot) ??
+    asRecord(requestObj?.customer) ??
+    asRecord(requestObj?.customerId) ??
+    asRecord(requestObj?.customerSnapshot) ??
+    asRecord(invoiceObj?.customer) ??
+    asRecord(invoiceObj?.customerId) ??
+    asRecord(invoiceObj?.customerSnapshot) ??
+    asRecord(taskObj?.customer) ??
+    asRecord(taskObj?.customerId) ??
+    asRecord(taskObj?.customerSnapshot);
 
   const employeeNameFromObj = employeeObj
     ? trimmed(employeeObj.name) || `${trimmed(employeeObj.firstName)} ${trimmed(employeeObj.lastName)}`.trim()
@@ -1960,6 +2101,7 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
   const customerNameFromObj = customerObj
     ? trimmed(customerObj.displayName) ||
       trimmed(customerObj.name) ||
+      trimmed(customerObj.companyName) ||
       `${trimmed(customerObj.firstName)} ${trimmed(customerObj.lastName)}`.trim()
     : "";
 
@@ -1974,13 +2116,12 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
   const customerName =
     customerNameFromObj ||
     trimmed(record.customerName) ||
+    trimmed(jobObj?.customerName) ||
+    trimmed(estimateObj?.customerName) ||
+    trimmed(requestObj?.customerName) ||
+    trimmed(invoiceObj?.customerName) ||
+    trimmed(taskObj?.customerName) ||
     undefined;
-
-  const jobObj = asRecord(record.job);
-  const estimateObj = asRecord(record.estimate);
-  const requestObj = asRecord(record.request);
-  const invoiceObj = asRecord(record.invoice);
-  const taskObj = asRecord(record.task);
 
   const notes =
     trimmed(record.notes) ||
@@ -2012,6 +2153,9 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     asRecord(estimateObj?.location) ??
     asRecord(requestObj?.address) ??
     asRecord(requestObj?.location) ??
+    asRecord(invoiceObj?.address) ??
+    asRecord(taskObj?.location) ??
+    asRecord(taskObj?.address) ??
     null;
 
   let serviceAddress: string | undefined;
@@ -2031,6 +2175,10 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
       trimmed(record.location) ||
       trimmed(jobObj?.serviceAddress) ||
       trimmed(estimateObj?.serviceAddress) ||
+      trimmed(invoiceObj?.serviceAddress) ||
+      trimmed(invoiceObj?.address) ||
+      trimmed(taskObj?.location) ||
+      trimmed(taskObj?.address) ||
       undefined;
   }
 
@@ -2040,7 +2188,7 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     record.totalPrice ?? record.grandTotal ??
     jobObj?.totalAmount ?? jobObj?.total ?? jobObj?.price ??
     estimateObj?.totalAmount ?? estimateObj?.total ?? estimateObj?.price ??
-    invoiceObj?.totalAmount ?? invoiceObj?.total ?? invoiceObj?.price;
+    invoiceObj?.totalAmount ?? invoiceObj?.total ?? invoiceObj?.price ?? invoiceObj?.balance;
 
   let price: string | undefined;
   if (rawPrice != null) {
@@ -2063,14 +2211,32 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     trimmed(estimateObj?.serviceCategory) ||
     trimmed(requestObj?.category) ||
     trimmed(requestObj?.serviceCategory) ||
+    trimmed(invoiceObj?.category) ||
+    trimmed(taskObj?.category) ||
+    (kind === "invoice" ? (trimmed(record.status) ? `Invoice · ${trimmed(record.status)}` : "Invoice") : undefined) ||
+    (kind === "task" ? (trimmed(taskObj?.priority) ? `Task · ${trimmed(taskObj?.priority)}` : "Task") : undefined) ||
     undefined;
+
+  const rawTitle = trimmed(record.title) || "Scheduled item";
+  let title = rawTitle;
+  let detail = trimmed(record.detail);
+
+  if (rawTitle.includes(" · ")) {
+    const parts = rawTitle.split(" · ");
+    title = parts[0].trim();
+    if (!detail || detail === rawTitle) {
+      detail = parts.slice(1).join(" · ").trim();
+    }
+  } else if (!detail) {
+    detail = rawTitle;
+  }
 
   return {
     id: id || `cal_${recordId || Math.random().toString(36).slice(2, 8)}`,
     kind,
     recordId,
-    title: trimmed(record.title) || "Scheduled item",
-    detail: trimmed(record.detail) || trimmed(record.title),
+    title,
+    detail,
     customerName,
     technicianName,
     notes,

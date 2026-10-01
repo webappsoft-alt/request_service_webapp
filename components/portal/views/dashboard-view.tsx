@@ -91,7 +91,10 @@ export function DashboardView() {
           force: true,
         });
         if (cancelled) return;
-        const rows: RecentMessageRow[] = sortChatThreadsByUnreadThenRecent(threads)
+        const rows: RecentMessageRow[] = sortChatThreadsByUnreadThenRecent(
+          threads,
+          (thread) => thread.unreadForProvider || 0,
+        )
           .slice(0, 7)
           .map((thread) => {
             const last = thread.messages?.[thread.messages.length - 1];

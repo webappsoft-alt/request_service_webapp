@@ -3,6 +3,7 @@ import {
   deleteSchedule,
   querySchedule,
   updateSchedule,
+  type CrmScheduleStatus,
 } from "@/lib/api/crm-client";
 import type { PortalTimeWindow } from "@/lib/data/portal";
 
@@ -13,6 +14,19 @@ function dateOnly(value?: string | null) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   return raw.slice(0, 10);
+}
+
+function normalizeScheduleStatus(value?: string): CrmScheduleStatus {
+  switch (value) {
+    case "scheduled":
+    case "confirmed":
+    case "in_progress":
+    case "completed":
+    case "cancelled":
+      return value;
+    default:
+      return "scheduled";
+  }
 }
 
 /**
@@ -72,12 +86,7 @@ export async function syncCalendarAssignment(input: {
       timeWindow,
       employeeId,
       contractorId: null as string | null,
-      status: (input.status || "scheduled") as
-        | "scheduled"
-        | "confirmed"
-        | "in_progress"
-        | "completed"
-        | "cancelled",
+      status: normalizeScheduleStatus(input.status),
       linkOnly,
     };
 

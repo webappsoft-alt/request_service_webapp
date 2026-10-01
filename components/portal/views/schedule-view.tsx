@@ -112,26 +112,62 @@ export function ScheduleView() {
       if ((event.kind === "job" || event.kind === "fixed_service") && event.recordId) {
         const job = crm.jobs.find((j) => j.id === event.recordId);
         if (job) {
-          if (!notes) notes = job.notes || job.description || "";
-          if (!customerName && job.customerName) customerName = job.customerName;
-          if (!detail || detail === event.title) detail = job.serviceName || job.notes || detail;
-          if (!serviceAddress && job.address) serviceAddress = formatAddrObj(job.address);
-          if (!price && typeof job.totalAmount === "number" && job.totalAmount > 0) {
-            price = `$${job.totalAmount.toFixed(2)}`;
+          if (!notes) notes = job.notes || (job as unknown as Record<string, unknown>).description ? String(job.notes || (job as unknown as Record<string, unknown>).description) : "";
+          if (!customerName && ((job as unknown as Record<string, unknown>).customerName || job.assignedTo)) {
+            customerName = String((job as unknown as Record<string, unknown>).customerName || "");
           }
-          if (!category) category = job.serviceName || undefined;
+          const jobName =
+            job.title && job.title !== job.number
+              ? job.title
+              : (job as unknown as Record<string, unknown>).serviceName
+                ? String((job as unknown as Record<string, unknown>).serviceName)
+                : job.items?.[0]?.description || undefined;
+          if (!detail || detail === event.title) detail = jobName || detail;
+          if (!serviceAddress && job.address) serviceAddress = formatAddrObj(job.address);
+          if (!price) {
+            const rawJobTotal =
+              (job as unknown as Record<string, unknown>).totalAmount ??
+              (job as unknown as Record<string, unknown>).total ??
+              (job as unknown as Record<string, unknown>).price ??
+              (Array.isArray(job.items)
+                ? job.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const jobNum = Number(rawJobTotal);
+            if (!Number.isNaN(jobNum) && jobNum > 0) price = `$${jobNum.toFixed(2)}`;
+          }
+          if (!category) category = jobName || undefined;
           foundCustomerId = job.customerId;
         }
       } else if (event.kind === "estimate" && event.recordId) {
         const est = crm.estimates.find((e) => e.id === event.recordId);
         if (est) {
-          if (!notes) notes = est.notes || est.description || "";
+          if (!notes) notes = est.notes || est.terms || "";
           if (!customerName && est.customerName) customerName = est.customerName;
+          const estName =
+            est.title && est.title !== est.number
+              ? est.title
+              : est.items?.[0]?.name || est.items?.[0]?.description || undefined;
+          if (!detail || detail === event.title) detail = estName || detail;
           if (!serviceAddress && est.propertyAddress) serviceAddress = formatAddrObj(est.propertyAddress);
-          if (!price && typeof est.total === "number" && est.total > 0) {
-            price = `$${est.total.toFixed(2)}`;
+          if (!price) {
+            const rawEstTotal =
+              est.total ??
+              est.subtotal ??
+              (Array.isArray(est.items)
+                ? est.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const estNum = Number(rawEstTotal);
+            if (!Number.isNaN(estNum) && estNum > 0) price = `$${estNum.toFixed(2)}`;
           }
-          if (!category) category = est.title || undefined;
+          if (!category) category = estName || undefined;
           foundCustomerId = est.customerId;
         }
       } else if (event.kind === "request" && event.recordId) {
@@ -139,14 +175,32 @@ export function ScheduleView() {
         if (req) {
           if (!notes) notes = req.notes || req.description || "";
           if (!customerName && req.customerName) customerName = req.customerName;
-          if (!detail || detail === event.title) detail = req.serviceName || detail;
-          if (!category) category = req.serviceName || undefined;
+          const reqName = req.serviceName || req.title || undefined;
+          if (!detail || detail === event.title) detail = reqName || detail;
+          if (!serviceAddress && req.address) {
+            serviceAddress =
+              typeof req.address === "string" ? req.address : formatAddrObj(req.address);
+          }
+          if (!price) {
+            const reqBudget =
+              (req as unknown as Record<string, unknown>).budget ??
+              (req as unknown as Record<string, unknown>).startingPrice ??
+              (req as unknown as Record<string, unknown>).price;
+            const reqNum = Number(reqBudget);
+            if (!Number.isNaN(reqNum) && reqNum > 0) price = `$${reqNum.toFixed(2)}`;
+          }
+          if (!category) category = reqName || undefined;
           foundCustomerId = req.customerId;
         }
       } else if (event.kind === "task" && event.recordId) {
         const task = crm.tasks.find((t) => t.id === event.recordId);
         if (task) {
           if (!notes) notes = task.notes || task.description || "";
+          if (!customerName && task.customerName) customerName = task.customerName;
+          const taskName = task.title && task.title !== task.number ? task.title : undefined;
+          if (!detail || detail === event.title) detail = taskName || detail;
+          if (!category) category = taskName || undefined;
+          foundCustomerId = task.customerId;
         }
       } else if (event.kind === "invoice" && event.recordId) {
         const inv = crm.invoices.find((i) => i.id === event.recordId);

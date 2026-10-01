@@ -2289,7 +2289,33 @@ export async function querySchedule(query: CrmListQuery = {}) {
     ),
   );
 
-  const formatAddr = (addr?: ServiceAddress | null) => {
+  const missingRequestIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "request" &&
+            item.recordId &&
+            (!item.serviceAddress || !item.customerName || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const missingTaskIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "task" &&
+            item.recordId &&
+            (!item.customerName || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const formatAddr = (addr?: ServiceAddress | { address?: string; street?: string; city?: string; state?: string; zip?: string } | null) => {
     if (!addr) return undefined;
     const street = (addr.address || addr.street || "").trim();
     const city = (addr.city || "").trim();
@@ -2300,14 +2326,25 @@ export async function querySchedule(query: CrmListQuery = {}) {
     return parts.length ? parts.join(" ") : undefined;
   };
 
-  if (missingJobIds.length > 0 || missingEstimateIds.length > 0) {
+  if (
+    missingJobIds.length > 0 ||
+    missingEstimateIds.length > 0 ||
+    missingRequestIds.length > 0 ||
+    missingTaskIds.length > 0
+  ) {
     try {
-      const [jobResults, estimateResults] = await Promise.all([
+      const [jobResults, estimateResults, requestResults, taskResults] = await Promise.all([
         missingJobIds.length > 0
           ? Promise.allSettled(missingJobIds.map((jobId) => getJob(jobId)))
           : Promise.resolve([]),
         missingEstimateIds.length > 0
           ? Promise.allSettled(missingEstimateIds.map((estId) => getEstimate(estId)))
+          : Promise.resolve([]),
+        missingRequestIds.length > 0
+          ? Promise.allSettled(missingRequestIds.map((reqId) => getRequest(reqId)))
+          : Promise.resolve([]),
+        missingTaskIds.length > 0
+          ? Promise.allSettled(missingTaskIds.map((taskId) => getTask(taskId)))
           : Promise.resolve([]),
       ]);
 
@@ -2325,44 +2362,127 @@ export async function querySchedule(query: CrmListQuery = {}) {
         }
       });
 
+      const requestMap = new Map<string, PortalRequest>();
+      requestResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          requestMap.set(res.value.id, res.value);
+        }
+      });
+
+      const taskMap = new Map<string, PortalTask>();
+      taskResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          taskMap.set(res.value.id, res.value);
+        }
+      });
+
       return items.map((item) => {
         if ((item.kind === "job" || item.kind === "fixed_service") && item.recordId) {
           const job = jobMap.get(item.recordId);
           if (job) {
             const addr = item.serviceAddress || formatAddr(job.address);
+            const rawJobTotal =
+              (job as unknown as Record<string, unknown>).totalAmount ??
+              (job as unknown as Record<string, unknown>).total ??
+              (job as unknown as Record<string, unknown>).price ??
+              (Array.isArray(job.items)
+                ? job.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const jobNum = Number(rawJobTotal);
             const price =
               item.price ||
-              (typeof job.totalAmount === "number" && job.totalAmount > 0
-                ? `$${job.totalAmount.toFixed(2)}`
-                : undefined);
-            const category = item.category || job.serviceName || undefined;
+              (!Number.isNaN(jobNum) && jobNum > 0 ? `$${jobNum.toFixed(2)}` : undefined);
+            const jobName =
+              job.title && job.title !== job.number
+                ? job.title
+                : (job as unknown as Record<string, unknown>).serviceName
+                  ? String((job as unknown as Record<string, unknown>).serviceName)
+                  : job.items?.[0]?.description || undefined;
+            const category = item.category || jobName || undefined;
             return {
               ...item,
               serviceAddress: addr || item.serviceAddress || undefined,
               price: price || item.price || undefined,
               category: category || item.category || undefined,
-              notes: job.notes || job.description || item.notes || undefined,
-              detail: job.serviceName || job.notes || item.detail,
-              customerName: item.customerName || job.customerName || undefined,
+              notes: job.notes || (job as unknown as Record<string, unknown>).description ? String(job.notes || (job as unknown as Record<string, unknown>).description) : item.notes || undefined,
+              detail: jobName || item.detail,
+              customerName: item.customerName || ((job as unknown as Record<string, unknown>).customerName ? String((job as unknown as Record<string, unknown>).customerName) : undefined),
             };
           }
         } else if (item.kind === "estimate" && item.recordId) {
           const est = estimateMap.get(item.recordId);
           if (est) {
             const addr = item.serviceAddress || formatAddr(est.propertyAddress);
+            const rawEstTotal =
+              est.total ??
+              est.subtotal ??
+              (Array.isArray(est.items)
+                ? est.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const estNum = Number(rawEstTotal);
             const price =
               item.price ||
-              (typeof est.total === "number" && est.total > 0
-                ? `$${est.total.toFixed(2)}`
-                : undefined);
-            const category = item.category || est.title || undefined;
+              (!Number.isNaN(estNum) && estNum > 0 ? `$${estNum.toFixed(2)}` : undefined);
+            const estName =
+              est.title && est.title !== est.number
+                ? est.title
+                : est.items?.[0]?.name || est.items?.[0]?.description || undefined;
+            const category = item.category || estName || undefined;
             return {
               ...item,
               serviceAddress: addr || item.serviceAddress || undefined,
               price: price || item.price || undefined,
               category: category || item.category || undefined,
-              notes: est.notes || est.description || item.notes || undefined,
+              notes: est.notes || item.notes || undefined,
+              detail: estName || item.detail,
               customerName: item.customerName || est.customerName || undefined,
+            };
+          }
+        } else if (item.kind === "request" && item.recordId) {
+          const req = requestMap.get(item.recordId);
+          if (req) {
+            const addr =
+              item.serviceAddress ||
+              (req.address ? (typeof req.address === "string" ? req.address : formatAddr(req.address)) : undefined);
+            const reqBudget =
+              (req as unknown as Record<string, unknown>).budget ??
+              (req as unknown as Record<string, unknown>).startingPrice ??
+              (req as unknown as Record<string, unknown>).price;
+            const reqNum = Number(reqBudget);
+            const price =
+              item.price ||
+              (!Number.isNaN(reqNum) && reqNum > 0 ? `$${reqNum.toFixed(2)}` : undefined);
+            const reqName = req.serviceName || req.title || undefined;
+            const category = item.category || reqName || undefined;
+            return {
+              ...item,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: req.notes || req.description || item.notes || undefined,
+              detail: reqName || item.detail,
+              customerName: item.customerName || req.customerName || undefined,
+            };
+          }
+        } else if (item.kind === "task" && item.recordId) {
+          const task = taskMap.get(item.recordId);
+          if (task) {
+            const taskName = task.title && task.title !== task.number ? task.title : undefined;
+            const category = item.category || taskName || undefined;
+            return {
+              ...item,
+              category: category || item.category || undefined,
+              notes: task.notes || task.description || item.notes || undefined,
+              detail: taskName || item.detail,
+              customerName: item.customerName || task.customerName || undefined,
             };
           }
         }

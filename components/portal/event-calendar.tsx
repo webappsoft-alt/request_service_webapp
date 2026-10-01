@@ -1266,6 +1266,13 @@ function TimedBar({
           {/* Job No */}
           <span className="truncate text-xs font-bold leading-tight block">{event.title}</span>
 
+          {/* Estimate / Job / Request / Task Name */}
+          {event.detail && event.detail !== event.title ? (
+            <span className="truncate text-[10.5px] font-semibold leading-tight text-white/95 block">
+              {event.detail}
+            </span>
+          ) : null}
+
           {/* Customer Name */}
           {event.customerName ? (
             <span className="flex items-center gap-1 min-w-0 text-[10px] leading-tight text-white/90 font-medium">
@@ -1288,7 +1295,7 @@ function TimedBar({
           ) : null}
 
           {/* Category */}
-          {event.category ? (
+          {event.category && event.category !== event.detail && event.category !== event.title ? (
             <span className="block truncate text-[10px] leading-tight text-white/80">
               {event.category}
             </span>
@@ -1296,7 +1303,7 @@ function TimedBar({
 
           {/* Price */}
           {event.price ? (
-            <span className="block truncate text-[10px] leading-tight text-white/90 font-semibold">
+            <span className="block truncate text-[10.5px] leading-tight text-white/95 font-bold">
               {event.price}
             </span>
           ) : null}
@@ -1421,6 +1428,13 @@ function CalendarChip({
         {/* Job No */}
         <span className="block truncate text-[11px] font-bold leading-snug">{event.title}</span>
 
+        {/* Estimate / Job / Request / Task Name */}
+        {event.detail && event.detail !== event.title ? (
+          <span className="block truncate text-[10px] font-semibold leading-tight text-white/95">
+            {event.detail}
+          </span>
+        ) : null}
+
         {/* Customer Name */}
         {event.customerName ? (
           <span className="flex items-center gap-1 min-w-0 text-[10px] leading-tight text-white/90 font-medium">
@@ -1443,7 +1457,7 @@ function CalendarChip({
         ) : null}
 
         {/* Category */}
-        {event.category ? (
+        {event.category && event.category !== event.detail && event.category !== event.title ? (
           <span className="block truncate text-[10px] leading-tight text-white/80">
             {event.category}
           </span>
@@ -1451,7 +1465,7 @@ function CalendarChip({
 
         {/* Price */}
         {event.price ? (
-          <span className="block truncate text-[10px] leading-tight text-white/90 font-semibold">
+          <span className="block truncate text-[10px] leading-tight text-white/95 font-bold">
             {event.price}
           </span>
         ) : null}

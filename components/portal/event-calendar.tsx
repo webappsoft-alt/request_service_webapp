@@ -21,10 +21,11 @@ import {
   timeWindowLabel,
 } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const KINDS: PortalEventKind[] = ["job", "estimate", "request", "invoice", "task"];
+const KINDS: PortalEventKind[] = ["job", "fixed_service", "estimate", "request", "invoice", "task"];
 const VIEWS = ["month", "week", "day"] as const;
 const DAY_START = 6 * 60;   // 6:00 AM
 const DAY_END = 24 * 60;    // midnight (00:00 next day)
@@ -162,6 +163,7 @@ export function EventCalendar({
   onEmployeeFilterChange,
   kindFilter: controlledKindFilter,
   onKindFilterChange,
+  loading = false,
 }: {
   events: PortalCalendarEvent[];
   employeeLabel: (id?: string) => string;
@@ -180,6 +182,7 @@ export function EventCalendar({
   onEmployeeFilterChange?: (employeeId: string) => void;
   kindFilter?: PortalEventKind | "";
   onKindFilterChange?: (kind: PortalEventKind | "") => void;
+  loading?: boolean;
 }) {
   const [localEvents, setLocalEvents] = useState<PortalCalendarEvent[]>(propEvents);
 
@@ -346,6 +349,18 @@ export function EventCalendar({
     const times = eventTimes(item);
     const duration = Math.max(SLOT, payload.duration || times.end - times.start);
     if (payload.mode === "resize") {
+      const startDate = item.date ?? iso;
+      if (iso !== startDate) {
+        const end = iso < startDate ? startDate : iso;
+        const nextStart = iso < startDate ? iso : startDate;
+        applyMove(item, {
+          date: nextStart,
+          endDate: end === nextStart ? undefined : end,
+          startMinutes: times.start,
+          endMinutes: times.end,
+        });
+        return;
+      }
       const nextEnd = snapMinutes(slotStart + SLOT, times.start + SLOT, DAY_END);
       applyMove(item, {
         date: item.date ?? iso,
@@ -459,6 +474,7 @@ export function EventCalendar({
           onValueChange={(value) => {
             setKindFilter(
               value === "job" ||
+                value === "fixed_service" ||
                 value === "estimate" ||
                 value === "request" ||
                 value === "invoice" ||
@@ -523,17 +539,20 @@ export function EventCalendar({
         <span className="text-muted-foreground">
           {view === "month"
             ? "Drag to a day. Pull the right edge to extend dates."
-            : "30-minute slots, 6 AM–midnight. Drag to any time or date. Pull the bottom edge to extend."}
+            : "30-minute slots, 6 AM–midnight. Drag to any time or date. Pull the right or bottom edge to extend."}
         </span>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        {view === "month" ? (
+      <div className="w-full">
+        {loading ? (
+          <CalendarGridSkeleton />
+        ) : view === "month" ? (
           <MonthGrid
             cells={cells}
             today={today}
             selectedDay={selectedDay}
             overDay={overDay}
+            employeeLabel={employeeLabel}
             onSelect={setSelectedDay}
             onOver={setOverDay}
             onDrop={dropOnDay}
@@ -545,77 +564,13 @@ export function EventCalendar({
             today={today}
             selectedDay={selectedDay}
             events={visible}
+            employeeLabel={employeeLabel}
             onSelect={setSelectedDay}
             onDropSlot={dropOnSlot}
             onResize={resizeTo}
             onOpen={onEventOpen}
           />
         )}
-
-        <aside className="border border-border-soft bg-card">
-          <div className="border-b border-border-soft px-4 py-3">
-            <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Day roster</p>
-            <h2 className="mt-1 text-sm font-semibold">{formatDate(selectedDay)}</h2>
-            <p className="text-xs text-muted-foreground">{dayEvents.length ? `${dayEvents.length} booked` : "Free"}</p>
-          </div>
-          <div
-            className="min-h-32 divide-y divide-input"
-            onDragOver={(drag) => drag.preventDefault()}
-            onDrop={(drag) => dropOnDay(selectedDay, drag)}
-          >
-            {dayEvents.length ? (
-              dayEvents.map((item) => {
-                const times = eventTimes(item);
-                return (
-                  <div key={item.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{item.title}</p>
-                        <p className="text-xs text-muted-foreground">{item.detail}</p>
-                      </div>
-                      <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium", calendarEventTone(item.kind))}>
-                        {calendarEventKindLabel(item.kind)}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {isAllDay(item)
-                        ? `${calendarEventStatusLabel(item.kind, item.status)} · ${timeWindowLabel(item.timeWindow)}`
-                        : `${formatClock(times.start)}–${formatClock(times.end)} · ${calendarEventStatusLabel(item.kind, item.status)}`}
-                    </p>
-                    {item.customerName ? <p className="mt-1 text-xs text-foreground">{item.customerName}</p> : null}
-                    <p className="mt-0.5 text-xs text-muted-foreground">{employeeLabel(item.employeeId)}</p>
-                    <Link href={item.href} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
-                      Open
-                    </Link>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="px-4 py-8 text-sm text-muted-foreground">Drop a block here or pick another day.</p>
-            )}
-          </div>
-          <div
-            className="border-t border-border-soft px-4 py-3"
-            onDragOver={(drag) => drag.preventDefault()}
-            onDrop={(drag) => {
-              drag.preventDefault();
-              const payload = readPayload(drag);
-              const item = localEvents.find((entry) => entry.id === payload?.id);
-              if (!item) return;
-              onMove(item, { date: "" });
-            }}
-          >
-            <p className="text-xs font-medium">Unscheduled</p>
-            <p className="text-xs text-muted-foreground">
-              {unscheduled.length ? `${unscheduled.length} waiting — drag onto a day` : "Board is clear"}
-            </p>
-            <div className="mt-2 flex flex-col gap-1">
-              {unscheduled.map((item) => (
-                <CalendarChip key={item.id} event={item} onOpen={onEventOpen} />
-              ))}
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
   );
@@ -626,6 +581,7 @@ function MonthGrid({
   today,
   selectedDay,
   overDay,
+  employeeLabel,
   onSelect,
   onOver,
   onDrop,
@@ -635,6 +591,7 @@ function MonthGrid({
   today: string;
   selectedDay: string;
   overDay: string | null;
+  employeeLabel?: (id?: string) => string;
   onSelect: (iso: string) => void;
   onOver: (iso: string | null) => void;
   onDrop: (iso: string, drag: DragEvent) => void;
@@ -704,7 +661,13 @@ function MonthGrid({
               </p>
               <div className="flex flex-col gap-1">
                 {cell.events.slice(0, 3).map((item) => (
-                  <CalendarChip key={item.id} event={item} onOpen={onOpen} />
+                  <CalendarChip
+                    key={item.id}
+                    event={item}
+                    cellIso={cell.iso}
+                    employeeLabel={employeeLabel}
+                    onOpen={onOpen}
+                  />
                 ))}
                 {cell.events.length > 3 ? (
                   <p className="px-1 text-[10px] text-muted-foreground">+{cell.events.length - 3} more</p>
@@ -723,6 +686,7 @@ function TimeGrid({
   today,
   selectedDay,
   events,
+  employeeLabel,
   onSelect,
   onDropSlot,
   onResize,
@@ -732,6 +696,7 @@ function TimeGrid({
   today: string;
   selectedDay: string;
   events: PortalCalendarEvent[];
+  employeeLabel?: (id?: string) => string;
   onSelect: (iso: string) => void;
   onDropSlot: (iso: string, slotStart: number, drag: DragEvent) => void;
   onResize: (event: PortalCalendarEvent, endMinutes: number) => void;
@@ -804,7 +769,7 @@ function TimeGrid({
               onDrop={(drag) => onDropSlot(iso, DAY_START, drag)}
             >
               {allDay.map((item) => (
-                <CalendarChip key={item.id} event={item} onOpen={onOpen} />
+                <CalendarChip key={item.id} event={item} cellIso={iso} onOpen={onOpen} />
               ))}
             </div>
           );
@@ -926,6 +891,7 @@ function TimeGrid({
                     height={heightPx}
                     leftPct={leftPct}
                     widthPct={widthPct}
+                    employeeLabel={employeeLabel}
                     onOpen={onOpen}
                     onResize={(endMinutes) => onResize(item, endMinutes)}
                   />
@@ -945,6 +911,7 @@ function TimedBar({
   height,
   leftPct,
   widthPct,
+  employeeLabel,
   onOpen,
   onResize,
 }: {
@@ -953,6 +920,7 @@ function TimedBar({
   height: number;
   leftPct: number;
   widthPct: number;
+  employeeLabel?: (id?: string) => string;
   onOpen?: (event: PortalCalendarEvent) => void;
   onResize: (endMinutes: number) => void;
 }) {
@@ -977,14 +945,13 @@ function TimedBar({
     drag.dataTransfer.effectAllowed = "move";
   }
 
-  const blockHeight = displayHeight || height;
-  const showDetails = blockHeight >= SLOT_PX * 1.5;
-  const timeLabel = `${formatClock(times.start)}–${formatClock(end)}`;
-  const service = eventService(event);
-  const secondary =
-    showDetails && service && service !== event.title
-      ? `${timeLabel} · ${service}`
-      : timeLabel;
+  const isInvoice = event.kind === "invoice";
+  const dueDateDisplay = event.dueDate || event.date;
+  const resolvedLabel = event.employeeId && employeeLabel ? employeeLabel(event.employeeId) : "";
+  const techName =
+    event.technicianName ||
+    (resolvedLabel && resolvedLabel !== "Unassigned" ? resolvedLabel : "") ||
+    (event.employeeId ? "Assigned" : "Unassigned");
 
   return (
     <div
@@ -1001,17 +968,50 @@ function TimedBar({
         width: `calc(${widthPct}% - 6px)`,
       }}
       className={cn(
-        "pointer-events-auto absolute z-20 flex cursor-grab flex-col justify-center overflow-hidden rounded-md px-2.5 py-1 text-left active:cursor-grabbing transition-shadow hover:shadow-lg shadow-sm border border-white/25",
+        "pointer-events-auto absolute z-20 flex cursor-grab flex-col justify-start overflow-hidden rounded-md p-1.5 text-left active:cursor-grabbing transition-shadow hover:shadow-lg shadow-sm border border-white/25",
         calendarEventTone(event.kind),
       )}
-      title={`${calendarEventKindLabel(event.kind)} · ${event.title} · ${isMultiDay ? `${formatDate(event.date!)} – ${formatDate(endDate)} · ` : ""}${formatClock(times.start)}–${formatClock(end)}`}
+      title={`${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} · ${isInvoice && dueDateDisplay ? `Due: ${formatDate(dueDateDisplay)} · ` : ""}${isMultiDay ? `${formatDate(event.date!)} – ${formatDate(endDate)} · ` : ""}${formatClock(times.start)}–${formatClock(end)}${event.notes ? ` · Notes: ${event.notes}` : ""}`}
     >
-      <div className="flex items-center justify-between gap-2 overflow-hidden">
-        <span className="truncate text-xs font-semibold leading-tight">{event.title}</span>
-        <span className="truncate text-[11px] font-medium opacity-90 shrink-0">
-          {formatClock(times.start)}–{formatClock(end)}{event.detail ? ` · ${eventService(event)}` : ""}
+      {/* 1. Technician Name Only with Black Background on Top */}
+      <div className="-mx-1.5 -mt-1.5 mb-1 flex items-center bg-neutral-900 text-white dark:bg-black dark:text-neutral-100 px-2 py-0.5 rounded-t-sm text-[10px] leading-tight overflow-hidden">
+        <span className="flex items-center gap-1 min-w-0 font-semibold">
+          <svg className="size-2.5 shrink-0 opacity-85" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <span className="truncate">{techName}</span>
         </span>
       </div>
+
+      {/* 2. Main Details of Schedule in the Box */}
+      <div className="min-w-0 flex-1 overflow-hidden space-y-0.5">
+        {/* First Row: Start and End Time */}
+        <div className="truncate text-[9.5px] font-semibold tracking-tight uppercase opacity-95">
+          {isInvoice && dueDateDisplay
+            ? `Due: ${formatDate(dueDateDisplay)}`
+            : `⏱ ${formatClock(times.start)} – ${formatClock(end)}`}
+        </div>
+
+        {/* Second Row: Title */}
+        <span className="truncate text-xs font-bold leading-tight block">{event.title}</span>
+
+        {/* Third Row: Notes */}
+        {(event.notes || event.detail) ? (
+          <span className="truncate text-[10px] font-normal leading-tight opacity-90 block">
+            {event.notes ? `📝 ${event.notes}` : eventService(event)}
+          </span>
+        ) : null}
+      </div>
+
+      {/* Side handle for dragging across days to extend date range */}
+      <span
+        draggable
+        onDragStart={(drag) => startDrag("resize", drag)}
+        className="absolute top-0 bottom-1.5 right-0 w-2 cursor-ew-resize rounded-r-md bg-white/40 hover:bg-white/70"
+        aria-label="Extend dates"
+        title="Drag right to extend dates across days"
+      />
+      {/* Bottom handle for extending end time within the day */}
       <span
         onPointerDown={(pointer) => {
           pointer.preventDefault();
@@ -1046,20 +1046,40 @@ function TimedBar({
 
 function CalendarChip({
   event,
+  cellIso,
+  employeeLabel,
   onOpen,
 }: {
   event: PortalCalendarEvent;
+  cellIso?: string;
+  employeeLabel?: (id?: string) => string;
   onOpen?: (event: PortalCalendarEvent) => void;
 }) {
   const times = eventTimes(event);
-  const span = event.date && eventEndDate(event) ? diffDays(event.date, eventEndDate(event) ?? event.date) + 1 : 1;
+  const span =
+    event.date && eventEndDate(event)
+      ? diffDays(event.date, eventEndDate(event) ?? event.date) + 1
+      : 1;
   const duration = times.end - times.start;
+  const dayOffset =
+    cellIso && event.date ? Math.max(0, diffDays(event.date, cellIso)) : 0;
 
   function startDrag(mode: "move" | "resize", drag: DragEvent) {
     drag.stopPropagation();
-    drag.dataTransfer.setData("text/plain", JSON.stringify({ id: event.id, mode, span, duration } satisfies DragPayload));
+    drag.dataTransfer.setData(
+      "text/plain",
+      JSON.stringify({ id: event.id, mode, span, duration, dayOffset } satisfies DragPayload),
+    );
     drag.dataTransfer.effectAllowed = "move";
   }
+
+  const isInvoice = event.kind === "invoice";
+  const dueDateDisplay = event.dueDate || event.date;
+  const resolvedLabel = event.employeeId && employeeLabel ? employeeLabel(event.employeeId) : "";
+  const techName =
+    event.technicianName ||
+    (resolvedLabel && resolvedLabel !== "Unassigned" ? resolvedLabel : "") ||
+    (event.employeeId ? "Assigned" : "Unassigned");
 
   return (
     <div
@@ -1070,29 +1090,145 @@ function CalendarChip({
         onOpen?.(event);
       }}
       className={cn(
-        "relative flex cursor-grab items-start gap-1 rounded-md px-1.5 py-1 text-left active:cursor-grabbing",
+        "relative flex cursor-grab flex-col gap-0.5 rounded-md p-1.5 text-left active:cursor-grabbing shadow-xs transition-shadow hover:shadow-md border border-white/20",
         calendarEventTone(event.kind),
       )}
-      title={`${calendarEventKindLabel(event.kind)} · ${event.title} · ${event.detail}${event.customerName ? ` · ${event.customerName}` : ""}`}
+      title={`${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} · ${event.detail}${isInvoice && dueDateDisplay ? ` · Due: ${formatDate(dueDateDisplay)}` : ""}${event.notes ? ` · Notes: ${event.notes}` : ""}${event.customerName ? ` · ${event.customerName}` : ""}`}
     >
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-1">
-          <span className="truncate text-[11px] font-medium">{event.title}</span>
-          <span className="shrink-0 text-[9px] font-medium uppercase opacity-80">
-            {isAllDay(event) ? windowShort(event.timeWindow) : formatClock(times.start)}
+      {/* 1. Technician Name Only with Black Background on Top */}
+      <div className="-mx-1.5 -mt-1.5 mb-1 flex items-center bg-neutral-900 text-white dark:bg-black dark:text-neutral-100 px-1.5 py-0.5 rounded-t-sm text-[10px] leading-tight overflow-hidden">
+        <span className="flex items-center gap-1 min-w-0 font-semibold">
+          <svg className="size-2.5 shrink-0 opacity-85" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <span className="truncate">{techName}</span>
+        </span>
+      </div>
+
+      {/* 2. Main Details of Schedule in the Box */}
+      <div className="min-w-0 space-y-0.5">
+        {/* First Row: Start and End Time */}
+        <div className="truncate text-[9px] font-semibold tracking-tight uppercase opacity-95">
+          {isInvoice && dueDateDisplay ? (
+            <span className="text-amber-200">Due: {formatDate(dueDateDisplay)}</span>
+          ) : (
+            <span>⏱ {isAllDay(event) ? windowShort(event.timeWindow) : `${formatClock(times.start)} – ${formatClock(times.end)}`}</span>
+          )}
+        </div>
+
+        {/* Second Row: Title */}
+        <span className="block truncate text-[11px] font-bold leading-snug">{event.title}</span>
+
+        {/* Third Row: Notes */}
+        {(event.notes || event.detail) ? (
+          <span className="block truncate text-[10px] font-normal leading-tight opacity-95">
+            {event.notes ? `📝 ${event.notes}` : eventService(event)}
           </span>
-        </span>
-        <span className="mt-0.5 block truncate text-[10px] font-normal leading-tight opacity-90">
-          {eventService(event)}
-        </span>
-      </span>
+        ) : null}
+      </div>
+
+      {/* Side resize handle */}
       <span
         draggable
         onDragStart={(drag) => startDrag("resize", drag)}
-        className="mt-0.5 h-3 w-1.5 shrink-0 cursor-ew-resize rounded-sm bg-white/50"
+        className="absolute top-1 bottom-1 right-0.5 w-1.5 cursor-ew-resize rounded-sm bg-white/40 hover:bg-white/80"
         aria-label="Extend dates"
-        title="Drag to extend"
+        title="Drag right to extend dates"
       />
+    </div>
+  );
+}
+
+export function CalendarGridSkeleton() {
+  return (
+    <div className="w-full overflow-hidden border border-input bg-card" aria-busy="true">
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 border-b border-input bg-[#f7f8fa]">
+        {WEEKDAYS.map((day) => (
+          <div key={day} className="px-2 py-2 text-center text-[11px] font-semibold text-muted-foreground uppercase">
+            {day}
+          </div>
+        ))}
+      </div>
+      {/* 35 Calendar Cells */}
+      <div className="grid grid-cols-7">
+        {Array.from({ length: 35 }).map((_, index) => {
+          const hasEvent1 = index % 3 === 1 || index % 5 === 2;
+          const hasEvent2 = index % 4 === 0 && index > 3;
+          return (
+            <div
+              key={index}
+              className="min-h-28 border-b border-r border-input p-1.5 [&:nth-child(7n)]:border-r-0 [&:nth-last-child(-n+7)]:border-b-0"
+            >
+              <Skeleton className="mb-1 size-6 rounded-full bg-muted" />
+              <div className="flex flex-col gap-1">
+                {hasEvent1 ? <Skeleton className="h-10 w-full rounded-md bg-muted" /> : null}
+                {hasEvent2 ? <Skeleton className="h-10 w-full rounded-md bg-muted" /> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function EventCalendarSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn("space-y-0", className)} aria-busy="true">
+      {/* Top Toolbar — always stays visible with buttons intact */}
+      <div className="-mx-4 flex flex-wrap items-center gap-2 border-y border-border-soft bg-secondary px-4 py-2">
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" className="size-8 border-border-soft bg-card" disabled>
+            <ChevronLeft />
+          </Button>
+          <p className="min-w-52 text-center text-sm font-semibold">Schedule</p>
+          <Button variant="outline" size="icon" className="size-8 border-border-soft bg-card" disabled>
+            <ChevronRight />
+          </Button>
+        </div>
+        <Button variant="ghost" size="sm" className="h-8" disabled>
+          Today
+        </Button>
+        <div className="inline-flex h-8 overflow-hidden rounded-md border border-border-soft bg-card">
+          <button type="button" className="bg-primary text-primary-foreground px-3 text-xs font-medium capitalize leading-none" disabled>
+            Month
+          </button>
+          <button type="button" className="bg-card text-muted-foreground px-3 text-xs font-medium capitalize leading-none" disabled>
+            Week
+          </button>
+          <button type="button" className="bg-card text-muted-foreground px-3 text-xs font-medium capitalize leading-none" disabled>
+            Day
+          </button>
+        </div>
+        <div className="h-8 w-40 rounded-md border border-border-soft bg-card px-3 py-1 text-xs text-muted-foreground flex items-center">
+          All work
+        </div>
+        <div className="h-8 w-52 rounded-md border border-border-soft bg-card px-3 py-1 text-xs text-muted-foreground flex items-center">
+          Everyone
+        </div>
+      </div>
+
+      {/* Filter Badges Row */}
+      <div className="flex flex-wrap gap-2 py-2 text-[11px]">
+        {KINDS.map((kind) => (
+          <span
+            key={kind}
+            className={cn(
+              "rounded-md px-2 py-0.5 font-medium",
+              calendarEventTone(kind),
+            )}
+          >
+            {calendarEventKindLabel(kind)}
+          </span>
+        ))}
+        <span className="text-muted-foreground">
+          Drag to a day. Pull the right edge to extend dates.
+        </span>
+      </div>
+
+      {/* Calendar Grid Skeleton */}
+      <CalendarGridSkeleton />
     </div>
   );
 }

@@ -288,6 +288,24 @@ export function usePortalCrew() {
                     }
                   : undefined;
               }
+              case "fixed_service": {
+                return {
+                  id: `cal_${assignment.recordId}`,
+                  kind: "fixed_service",
+                  recordId: assignment.recordId,
+                  title: assignment.title || "Fix Service Order",
+                  detail: "Fixed service package",
+                  customerName: undefined,
+                  date: assignment.date,
+                  endDate: assignment.endDate,
+                  timeWindow: assignment.timeWindow,
+                  startMinutes: fallbackWindow.startMinutes,
+                  endMinutes: fallbackWindow.endMinutes,
+                  employeeId: assignment.employeeId,
+                  href: `/pro/dashboard/orders/${assignment.recordId}`,
+                  status: assignment.status ?? "scheduled",
+                };
+              }
               default: {
                 const _never: never = assignment.kind;
                 return _never;

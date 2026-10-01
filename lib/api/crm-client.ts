@@ -2243,22 +2243,71 @@ export async function querySchedule(query: CrmListQuery = {}) {
   if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
-  if (kind) params.kind = kind;
+  // Backend validation strictly expects [job, estimate, request, invoice, task]
+  if (kind) {
+    params.kind = kind === "fixed_service" ? "job" : kind;
+  }
   const response = await getData(providerCrmApi.schedule, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,
   });
-  return mapCrmList(response, mapScheduleEvent).items.filter(
+  const rawItems = mapCrmList(response, mapScheduleEvent).items.filter(
     (item): item is NonNullable<typeof item> => Boolean(item),
   );
+  const items =
+    kind === "fixed_service"
+      ? rawItems.filter((item) => item.kind === "fixed_service")
+      : rawItems;
+
+  const missingJobIds = Array.from(
+    new Set(
+      items
+        .filter((item) => (item.kind === "job" || item.kind === "fixed_service") && item.recordId && !item.notes)
+        .map((item) => item.recordId),
+    ),
+  );
+
+  if (missingJobIds.length > 0) {
+    try {
+      const jobResults = await Promise.allSettled(
+        missingJobIds.map((jobId) => getJob(jobId)),
+      );
+      const jobMap = new Map<string, Job>();
+      jobResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          jobMap.set(res.value.id, res.value);
+        }
+      });
+      return items.map((item) => {
+        if ((item.kind === "job" || item.kind === "fixed_service") && item.recordId && !item.notes) {
+          const job = jobMap.get(item.recordId);
+          if (job) {
+            return {
+              ...item,
+              notes: job.notes || job.description || undefined,
+              detail: job.serviceName || job.notes || item.detail,
+              customerName: item.customerName || job.customerName || undefined,
+            };
+          }
+        }
+        return item;
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  return items;
 }
 
 export async function assignSchedule(schedule: CrmScheduleAssignment) {
+  // Backend validation strictly expects [job, estimate, request, invoice, task]
+  const backendKind = schedule.kind === "fixed_service" ? "job" : schedule.kind;
   const response = await postData(
     providerCrmApi.scheduleAssign,
     {
       recordId: schedule.recordId || null,
-      kind: schedule.kind,
+      kind: backendKind,
       title: schedule.title,
       date: schedule.date,
       endDate: schedule.endDate ?? null,

@@ -297,6 +297,8 @@ function makeHref(kind: PortalEventKind, recordId: string): string {
   switch (kind) {
     case "job":
       return `/pro/dashboard/jobs/${recordId}`;
+    case "fixed_service":
+      return `/pro/dashboard/orders/${recordId}`;
     case "estimate":
       return `/pro/dashboard/estimates/${recordId}`;
     case "request":
@@ -1903,15 +1905,79 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
   if (!record) return null;
 
   const id = crmIdOf(record);
-  const kindRaw = trimmed(record.kind);
+  const kindRaw = trimmed(record.kind).toLowerCase();
+  const hasFixedIndicator =
+    Boolean(record.serviceId) ||
+    Boolean(record.fixedServiceId) ||
+    Boolean(record.isFixedService) ||
+    String(record.title || "").toLowerCase().includes("fixed") ||
+    String(record.detail || "").toLowerCase().includes("fixed");
+
   const kind: PortalEventKind =
     kindRaw === "estimate" ||
     kindRaw === "request" ||
     kindRaw === "invoice" ||
     kindRaw === "task"
       ? (kindRaw as PortalEventKind)
-      : "job";
+      : kindRaw === "fixed_service" || kindRaw === "service" || kindRaw === "order" || hasFixedIndicator
+        ? "fixed_service"
+        : "job";
   const recordId = crmIdOf(record.recordId);
+  const dueDate = toDateOnly(record.dueDate || record.dueAt) || undefined;
+  const employeeObj = asRecord(record.employee) ?? asRecord(record.employeeId);
+  const contractorObj = asRecord(record.contractor) ?? asRecord(record.contractorId);
+  const customerObj = asRecord(record.customer) ?? asRecord(record.customerId);
+
+  const employeeNameFromObj = employeeObj
+    ? trimmed(employeeObj.name) || `${trimmed(employeeObj.firstName)} ${trimmed(employeeObj.lastName)}`.trim()
+    : "";
+  const contractorNameFromObj = contractorObj
+    ? trimmed(contractorObj.companyName) ||
+      trimmed(contractorObj.name) ||
+      `${trimmed(contractorObj.firstName)} ${trimmed(contractorObj.lastName)}`.trim()
+    : "";
+  const customerNameFromObj = customerObj
+    ? trimmed(customerObj.displayName) ||
+      trimmed(customerObj.name) ||
+      `${trimmed(customerObj.firstName)} ${trimmed(customerObj.lastName)}`.trim()
+    : "";
+
+  const technicianName =
+    employeeNameFromObj ||
+    contractorNameFromObj ||
+    trimmed(record.technicianName) ||
+    trimmed(record.employeeName) ||
+    trimmed(record.contractorName) ||
+    undefined;
+
+  const customerName =
+    customerNameFromObj ||
+    trimmed(record.customerName) ||
+    undefined;
+
+  const jobObj = asRecord(record.job);
+  const estimateObj = asRecord(record.estimate);
+  const requestObj = asRecord(record.request);
+  const invoiceObj = asRecord(record.invoice);
+  const taskObj = asRecord(record.task);
+
+  const notes =
+    trimmed(record.notes) ||
+    trimmed(record.description) ||
+    trimmed(record.instructions) ||
+    trimmed(record.instruction) ||
+    trimmed(jobObj?.notes) ||
+    trimmed(jobObj?.description) ||
+    trimmed(estimateObj?.notes) ||
+    trimmed(estimateObj?.description) ||
+    trimmed(requestObj?.notes) ||
+    trimmed(requestObj?.description) ||
+    trimmed(invoiceObj?.notes) ||
+    trimmed(taskObj?.notes) ||
+    trimmed(record.jobNotes) ||
+    trimmed(record.estimateNotes) ||
+    trimmed(record.requestNotes) ||
+    undefined;
 
   return {
     id: id || `cal_${recordId || Math.random().toString(36).slice(2, 8)}`,
@@ -1919,9 +1985,12 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     recordId,
     title: trimmed(record.title) || "Scheduled item",
     detail: trimmed(record.detail) || trimmed(record.title),
-    customerName: trimmed(record.customerName) || undefined,
+    customerName,
+    technicianName,
+    notes,
     date: toDateOnly(record.date) || undefined,
     endDate: toDateOnly(record.endDate) || undefined,
+    dueDate,
     timeWindow: mapEventTimeWindow(record.timeWindow),
     startMinutes: numberValue(record.startMinutes, 0) || undefined,
     endMinutes: numberValue(record.endMinutes, 0) || undefined,

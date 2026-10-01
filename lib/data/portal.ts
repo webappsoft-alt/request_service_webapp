@@ -256,7 +256,7 @@ export type PortalEmployeeDetail = {
   activeAssignments: PortalEmployeeActiveAssignments;
 };
 
-export type PortalEventKind = "job" | "estimate" | "request" | "invoice" | "task";
+export type PortalEventKind = "job" | "fixed_service" | "estimate" | "request" | "invoice" | "task";
 
 export type PortalTimeWindow = "morning" | "afternoon" | "all_day";
 
@@ -267,8 +267,11 @@ export type PortalCalendarEvent = {
   title: string;
   detail: string;
   customerName?: string;
+  technicianName?: string;
+  notes?: string;
   date?: string;
   endDate?: string;
+  dueDate?: string;
   timeWindow: PortalTimeWindow;
   startMinutes?: number;
   endMinutes?: number;
@@ -1065,6 +1068,7 @@ export function getPortalCalendarEvents(provider: Provider): PortalCalendarEvent
     detail: `Balance ${invoice.balanceDue ? "due" : "current"}`,
     customerName: getPortalCustomerName(provider, invoice.customerId),
     date: invoice.dueAt ?? invoice.issuedAt,
+    dueDate: invoice.dueAt ?? invoice.issuedAt,
     timeWindow: "all_day" as const,
     ...minutesForWindow("all_day"),
     employeeId: crew[0]?.id,
@@ -1401,6 +1405,8 @@ export function calendarEventStatusLabel(kind: PortalEventKind, status: string) 
   switch (kind) {
     case "job":
       return JOB_STATUSES.includes(status as JobStatus) ? jobStatusLabel(status as JobStatus) : status;
+    case "fixed_service":
+      return status ? status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ") : "Scheduled";
     case "estimate":
       return ESTIMATE_STATUSES.includes(status as EstimateStatus)
         ? estimateStatusLabel(status as EstimateStatus)
@@ -1433,6 +1439,8 @@ export function calendarEventKindLabel(kind: PortalEventKind) {
   switch (kind) {
     case "job":
       return "Job";
+    case "fixed_service":
+      return "Fix Service";
     case "estimate":
       return "Estimate";
     case "request":
@@ -1452,6 +1460,8 @@ export function calendarEventTone(kind: PortalEventKind) {
   switch (kind) {
     case "job":
       return "bg-[#003F7D] text-white";
+    case "fixed_service":
+      return "bg-[#ea580c] text-white";
     case "estimate":
       return "bg-[#0f766e] text-white";
     case "request":

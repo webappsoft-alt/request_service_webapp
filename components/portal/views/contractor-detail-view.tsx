@@ -28,7 +28,7 @@ import {
 } from "@/components/portal/create-person-dialogs";
 import { CreateNoteDialogForSubject, NotesPanel } from "@/components/portal/notes-panel";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
-import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
+import { EventCalendar, EventCalendarSkeleton, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
@@ -1078,11 +1078,7 @@ function ContractorScheduleTab({
   const listLoading = selectContractorsTabShowLoader(tab, contractor.id, filterKey);
 
   if (listLoading) {
-    return (
-      <div className="rounded-md border border-border-soft" aria-busy="true">
-        <CenteredSpinner label="Loading schedule" className="min-h-[16rem]" />
-      </div>
-    );
+    return <EventCalendarSkeleton />;
   }
 
   return (

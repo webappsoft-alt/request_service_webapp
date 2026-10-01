@@ -5,13 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
-import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
+import { EventCalendar, EventCalendarSkeleton, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalPage } from "@/components/portal/portal-page";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
-import { CenteredSpinner } from "@/components/ui/spinner";
 import { querySchedule } from "@/lib/api/crm-client";
 import type { PortalCalendarEvent, PortalEventKind } from "@/lib/data/portal";
 import {
@@ -67,7 +66,6 @@ export function ScheduleView() {
   const [memberFilter, setMemberFilter] = useState(initialEmployeeId);
   const [kindFilter, setKindFilter] = useState<PortalEventKind | "">("");
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
-  const [scheduling, setScheduling] = useState(false);
 
   const memberOptions = useMemo<ScheduleMemberOption[]>(() => {
     const employeeRows = (team.length ? team : []).filter((item) => item.active !== false).map(
@@ -89,6 +87,54 @@ export function ScheduleView() {
 
   const memberOptionsRef = useRef(memberOptions);
   memberOptionsRef.current = memberOptions;
+
+  const enrichedEvents = useMemo(() => {
+    return events.map((event) => {
+      let notes = event.notes;
+      let detail = event.detail;
+      let customerName = event.customerName;
+      if (!notes || !customerName) {
+        if ((event.kind === "job" || event.kind === "fixed_service") && event.recordId) {
+          const job = crm.jobs.find((j) => j.id === event.recordId);
+          if (job) {
+            if (!notes) notes = job.notes || job.description || "";
+            if (!customerName && job.customerName) customerName = job.customerName;
+            if (!detail || detail === event.title) detail = job.serviceName || job.notes || detail;
+          }
+        } else if (event.kind === "estimate" && event.recordId) {
+          const est = crm.estimates.find((e) => e.id === event.recordId);
+          if (est) {
+            if (!notes) notes = est.notes || est.description || "";
+            if (!customerName && est.customerName) customerName = est.customerName;
+          }
+        } else if (event.kind === "request" && event.recordId) {
+          const req = crm.requests.find((r) => r.id === event.recordId);
+          if (req) {
+            if (!notes) notes = req.notes || req.description || "";
+            if (!customerName && req.customerName) customerName = req.customerName;
+            if (!detail || detail === event.title) detail = req.serviceName || detail;
+          }
+        } else if (event.kind === "task" && event.recordId) {
+          const task = crm.tasks.find((t) => t.id === event.recordId);
+          if (task) {
+            if (!notes) notes = task.notes || task.description || "";
+          }
+        } else if (event.kind === "invoice" && event.recordId) {
+          const inv = crm.invoices.find((i) => i.id === event.recordId);
+          if (inv) {
+            if (!notes) notes = inv.notes || "";
+            if (!customerName && inv.customerName) customerName = inv.customerName;
+          }
+        }
+      }
+      return {
+        ...event,
+        notes: notes || undefined,
+        detail,
+        customerName,
+      };
+    });
+  }, [crm.estimates, crm.invoices, crm.jobs, crm.requests, crm.tasks, events]);
 
   const employeesForCalendar = useMemo(
     () =>
@@ -192,72 +238,52 @@ export function ScheduleView() {
       title="Schedule"
       description="Day, week, and month views. Drag a job to any time, or pull the edge to extend it."
       actions={
-        <div className="flex flex-wrap gap-2">
-          {editing ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                void Promise.resolve(removeSchedule(editing.id))
-                  .then(() => {
-                    toast.success(`${editing.title} removed from the schedule.`);
-                    setEditing(null);
-                    void loadSchedule({ quiet: true });
-                  })
-                  .catch((error) => {
-                    toast.error(formatScheduleError(error));
-                  });
-              }}
-            >
-              Remove from calendar
-            </Button>
-          ) : null}
+        editing ? (
           <Button
             size="sm"
+            variant="outline"
             onClick={() => {
-              setEditing(null);
-              setScheduling(true);
+              void Promise.resolve(removeSchedule(editing.id))
+                .then(() => {
+                  toast.success(`${editing.title} removed from the schedule.`);
+                  setEditing(null);
+                  void loadSchedule({ quiet: true });
+                })
+                .catch((error) => {
+                  toast.error(formatScheduleError(error));
+                });
             }}
           >
-            Assign work
+            Remove from calendar
           </Button>
-        </div>
+        ) : null
       }
     >
-      {scheduleLoading && events.length === 0 ? (
-        <div className="border border-border-soft bg-card" aria-busy="true">
-          <CenteredSpinner
-            className="min-h-[22rem]"
-            label={teamLoading ? "Loading team…" : "Loading schedule…"}
-          />
-        </div>
-      ) : (
-        <EventCalendar
-          events={events}
-          employees={employeesForCalendar}
-          memberOptions={memberOptions}
-          employeeLabel={resolveMemberLabel}
-          initialEmployeeId={initialEmployeeId}
-          serverFiltered
-          employeeFilter={memberFilter}
-          onEmployeeFilterChange={setMemberFilter}
-          kindFilter={kindFilter}
-          onKindFilterChange={setKindFilter}
-          onMove={moveEvent}
-          onEventOpen={setEditing}
-        />
-      )}
+      <EventCalendar
+        events={enrichedEvents}
+        employees={employeesForCalendar}
+        memberOptions={memberOptions}
+        employeeLabel={resolveMemberLabel}
+        initialEmployeeId={initialEmployeeId}
+        serverFiltered
+        employeeFilter={memberFilter}
+        onEmployeeFilterChange={setMemberFilter}
+        kindFilter={kindFilter}
+        onKindFilterChange={setKindFilter}
+        loading={scheduleLoading}
+        onMove={moveEvent}
+        onEventOpen={setEditing}
+      />
 
       <AssignEventDialog
-        open={Boolean(editing) || scheduling}
+        open={Boolean(editing)}
         onOpenChange={(open) => {
           if (!open) {
             setEditing(null);
-            setScheduling(false);
           }
         }}
         event={editing}
-        events={events}
+        events={enrichedEvents}
         employees={team}
         defaultEmployeeId={memberFilter || undefined}
         onSave={async (assignment) => {

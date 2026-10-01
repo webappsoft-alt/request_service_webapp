@@ -154,6 +154,8 @@ export type CrmScheduleAssignment = {
   employeeId?: string | null;
   contractorId?: string | null;
   status?: CrmScheduleStatus;
+  /** Calendar link only — do not change estimate/job lifecycle status. */
+  linkOnly?: boolean;
 };
 
 export type CrmEstimateShareResult = {
@@ -546,6 +548,13 @@ function estimatePayload(estimate: Estimate) {
 function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
   const techId = String(job.assignedEmployeeId || job.assignedTo || "").trim();
   const assignedEmployees = (() => {
+    // Explicit empty assignee (clear / unassign).
+    if (
+      job.assignedEmployeeId === "" ||
+      (job.assignedTo === "" && job.assignedEmployeeId === undefined)
+    ) {
+      return [];
+    }
     if (!techId) return resolveAssignedEmployeeIds(job, _employees);
     if (_employees.some((employee) => employee.id === techId)) return [techId];
     return resolveAssignedEmployeeIds({ ...job, assignedTo: techId }, _employees);
@@ -2513,6 +2522,7 @@ export async function assignSchedule(schedule: CrmScheduleAssignment) {
       employeeId: schedule.employeeId || null,
       contractorId: schedule.contractorId || null,
       status: schedule.status ?? "scheduled",
+      linkOnly: schedule.linkOnly === true,
     },
     // Caller (AssignEventDialog) shows extractErrorMessage — avoid duplicate/generic toasts.
     { silent: true },
@@ -2982,6 +2992,7 @@ export async function getProviderDashboard(query: ProviderDashboardQuery = {}) {
               title: stringOr(row.title),
               detail: stringOr(row.detail),
               kind: stringOr(row.kind, "lead") === "chat" ? ("chat" as const) : ("lead" as const),
+              unread: numberOr(row.unread),
             };
           })
         : [],

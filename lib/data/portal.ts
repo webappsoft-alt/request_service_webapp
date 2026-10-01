@@ -296,7 +296,11 @@ export type PortalAssignment = {
   startMinutes?: number;
   endMinutes?: number;
   employeeId: string;
+  /** Display name from the assign picker (avoids "Unassigned" when crew list is incomplete). */
+  employeeLabel?: string;
   status?: string;
+  /** Calendar link only — do not change the linked record's workflow status. */
+  linkOnly?: boolean;
 };
 
 const REQUEST_STATUSES: RequestStatus[] = [

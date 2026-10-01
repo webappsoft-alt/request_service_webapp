@@ -358,6 +358,9 @@ export function usePortalCrew() {
         const contractor = contractors.find((item) => item.id === assignment.employeeId);
         const startMinutes = assignment.startMinutes ?? resolvedEvent.startMinutes ?? fallbackWindow.startMinutes;
         const endMinutes = assignment.endMinutes ?? resolvedEvent.endMinutes ?? fallbackWindow.endMinutes;
+        // Estimate site visits: calendar only — never flip estimate status to scheduled.
+        const linkOnly =
+          assignment.linkOnly === true || assignment.kind === "estimate";
         const payload = {
           title: assignment.title || resolvedEvent.title,
           date: assignment.date,
@@ -368,6 +371,7 @@ export function usePortalCrew() {
           employeeId: contractor ? null : assignment.employeeId,
           contractorId: contractor ? assignment.employeeId : null,
           status: normalizeScheduleStatus(resolvedEvent.status),
+          linkOnly,
         } as const;
 
         let savedEvent: PortalCalendarEvent | null = null;
@@ -508,7 +512,14 @@ export function usePortalCrew() {
       const employee = employeeById(id);
       if (employee) return employeeName(employee);
       const contractor = contractors.find((item) => item.id === id);
-      return contractor ? contractor.companyName : "Unassigned";
+      if (contractor) {
+        return (
+          contractor.companyName ||
+          `${contractor.firstName || ""} ${contractor.lastName || ""}`.trim() ||
+          ""
+        );
+      }
+      return "";
     },
     loading,
     ready: !crm.enabled || crm.ready,

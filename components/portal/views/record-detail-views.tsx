@@ -103,6 +103,7 @@ import {
   deleteJobRecord,
   fetchJobDetail,
   patchJobArchive,
+  patchJobLocally,
   updateJobRecord,
   upsertJobItem,
 } from "@/store/jobsSlice";
@@ -133,13 +134,18 @@ import {
   updateEstimateArchive as updateEstimateArchiveApi,
   updateEstimateSiteVisit,
 } from "@/lib/api/crm-client";
+import {
+  canStartJobNow,
+  clearCalendarAssignment,
+  syncCalendarAssignment,
+} from "@/lib/portal-schedule-sync";
 import type { Estimate, Invoice, Job, Payment } from "@/lib/types";
 import {
   extractErrorMessage,
   getAuthToken,
 } from "@/components/api/apiFuntions";
 import { crmCustomerName } from "@/lib/data/crm-people";
-import { formatLocation, formatMoney } from "@/lib/format";
+import { formatDate, formatLocation, formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -421,39 +427,38 @@ export function EstimateDetailView({ id }: { id: string }) {
     estimate.siteVisit?.employeeId ||
     undefined;
   const visitDate = (
+    event?.date ||
     siteVisit?.visitedAt ||
     estimate.siteVisit?.visitedAt ||
-    estimate.issuedAt
+    estimate.scheduledDate ||
+    estimate.issuedAt ||
+    ""
   ).slice(0, 10);
-  const visitWindow = minutesForWindow("morning");
-  const estimateAssignmentEvent: PortalCalendarEvent = event
-    ? {
-        ...event,
-        employeeId: event.employeeId || assignedTechId,
-      }
-    : {
-        id: `cal_${estimate.id}`,
-        kind: "estimate",
-        recordId: estimate.id,
-        title: estimate.number,
-        detail: `${service} · site visit`,
-        customerName: customerLabel,
-        date: visitDate,
-        endDate: visitDate,
-        timeWindow: "morning",
-        startMinutes: visitWindow.startMinutes,
-        endMinutes: visitWindow.endMinutes,
-        employeeId:
-          assignedTechId ||
-          employees.find(
-            (item) =>
-              item.active &&
-              (String(item.role || "").toLowerCase().trim() === "technician" ||
-                String(item.role || "").toLowerCase().trim() === "tech"),
-          )?.id,
-        href: `/pro/dashboard/estimates/${estimate.id}`,
-        status: estimate.status,
-      };
+  const visitWindow = minutesForWindow(event?.timeWindow || "morning");
+  const hasVisitAssignment = Boolean(
+    assignedTechId ||
+      visitDate ||
+      siteVisit?.visitedAt ||
+      estimate.siteVisit?.visitedAt,
+  );
+  const estimateAssignmentEvent: PortalCalendarEvent = {
+    id: event?.id || `cal_${estimate.id}`,
+    kind: "estimate",
+    recordId: estimate.id,
+    title:
+      event?.title ||
+      `${estimate.number || "Estimate"} site visit`,
+    detail: event?.detail || `${service} · site visit`,
+    customerName: event?.customerName || customerLabel,
+    date: visitDate,
+    endDate: (event?.endDate || visitDate).slice(0, 10),
+    timeWindow: event?.timeWindow || "morning",
+    startMinutes: event?.startMinutes ?? visitWindow.startMinutes,
+    endMinutes: event?.endMinutes ?? visitWindow.endMinutes,
+    employeeId: assignedTechId,
+    href: `/pro/dashboard/estimates/${estimate.id}`,
+    status: estimate.status,
+  };
 
   async function setEstimateStatus(
     status: (typeof quote)["status"],
@@ -1041,7 +1046,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                   className="h-8"
                   onClick={() => setAssignOpen(true)}
                 >
-                  Assign team member
+                  {hasVisitAssignment ? "Change assignment" : "Assign team member"}
                 </Button>
               </>
             )}
@@ -1053,10 +1058,12 @@ export function EstimateDetailView({ id }: { id: string }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
-                {!signed && !job ? (
+                {!job ? (
                   <>
                     <DropdownMenuItem onSelect={() => setAssignOpen(true)}>
-                      Assign team member
+                      {hasVisitAssignment
+                        ? "Change site visit assignment"
+                        : "Assign site visit"}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setTaskOpen(true)}>
                       Create task
@@ -1228,6 +1235,14 @@ export function EstimateDetailView({ id }: { id: string }) {
                                 : prev,
                             );
                           }
+                          await syncCalendarAssignment({
+                            kind: "estimate",
+                            recordId: estimate.id,
+                            title: `${estimate.number || "Estimate"} site visit`,
+                            date: visit.visitedAt,
+                            employeeId: visit.employeeId || null,
+                            linkOnly: true,
+                          });
                           if (crm.ready) {
                             void crm.refresh({ silent: true });
                           }
@@ -1410,14 +1425,22 @@ export function EstimateDetailView({ id }: { id: string }) {
         events={[estimateAssignmentEvent]}
         employees={employees}
         onSave={async (assignment) => {
-          await assign(assignment);
+          await assign({
+            ...assignment,
+            title:
+              assignment.title ||
+              `${estimate.number || "Estimate"} site visit`,
+            linkOnly: true,
+          });
 
           const selectedTech = employees.find(
             (emp) => emp.id === assignment.employeeId,
           );
-          const techName = selectedTech
-            ? employeeName(selectedTech)
-            : assignment.employeeId || "";
+          const techName =
+            String(assignment.employeeLabel || "").trim() ||
+            (selectedTech ? employeeName(selectedTech) : "") ||
+            assignment.employeeId ||
+            "";
           const currentVisit =
             siteVisit || siteVisitFromRecord(estimate.siteVisit);
           const visitIso = assignment.date
@@ -1437,15 +1460,12 @@ export function EstimateDetailView({ id }: { id: string }) {
 
           writeSiteVisit(session?.email, estimate.id, updatedSiteVisit);
 
-          const scheduledPatch = {
-            status: "scheduled" as const,
-            scheduledDate: visitIso,
-          };
-          crm.patchEstimate(estimate.id, scheduledPatch);
-          setFetched((prev) =>
-            prev ? { ...prev, ...scheduledPatch } : prev,
-          );
-          setStatusOverride("scheduled");
+          // Calendar assignment must never force estimate → scheduled.
+          // Draft → site_visit; otherwise keep current (e.g. inspected).
+          const nextStatus =
+            estimate.status === "draft" || estimate.status === "scheduled"
+              ? "site_visit"
+              : estimate.status;
 
           if (apiReady) {
             try {
@@ -1453,32 +1473,41 @@ export function EstimateDetailView({ id }: { id: string }) {
               const updated = await updateEstimateSiteVisit(
                 estimate.id,
                 siteVisitRecord ?? { photos: [] },
+                nextStatus !== estimate.status ? nextStatus : undefined,
               );
               if (updated) {
-                crm.patchEstimate(estimate.id, {
-                  ...updated,
-                  ...scheduledPatch,
-                });
-                setFetched({ ...updated, ...scheduledPatch });
+                crm.patchEstimate(estimate.id, updated);
+                setFetched(updated);
+                if (updated.status) setStatusOverride(updated.status);
               } else {
-                crm.patchEstimate(estimate.id, {
+                const patch = {
                   siteVisit: siteVisitRecord,
-                  ...scheduledPatch,
-                });
+                  ...(nextStatus !== estimate.status
+                    ? { status: nextStatus as Estimate["status"] }
+                    : {}),
+                };
+                crm.patchEstimate(estimate.id, patch);
                 setFetched((prev) =>
-                  prev
-                    ? { ...prev, siteVisit: siteVisitRecord, ...scheduledPatch }
-                    : prev,
+                  prev ? { ...prev, ...patch } : prev,
                 );
+                if (nextStatus !== estimate.status) {
+                  setStatusOverride(nextStatus);
+                }
               }
-              // Local patch only — do not force a full CRM View reload after schedule.
             } catch {
               // local fallback already written
             }
+          } else if (nextStatus !== estimate.status) {
+            records.setStatus("estimate", estimate.id, nextStatus);
+            setStatusOverride(nextStatus);
           }
 
+          if (crm.ready) void crm.refresh({ silent: true });
+
           toast.success(
-            `${techName ? `${techName} assigned to estimate` : "Assignment saved"} and scheduled on the calendar.`,
+            techName
+              ? `${techName} assigned for site visit — calendar updated.`
+              : "Site visit assignment saved on the calendar.",
           );
         }}
       />
@@ -1584,6 +1613,11 @@ export function JobDetailView({ id }: { id: string }) {
   const [assignOpen, setAssignOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [removingAssignee, setRemovingAssignee] = useState(false);
+  const [assigneeOverride, setAssigneeOverride] = useState<{
+    employeeId: string;
+    name: string;
+  } | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -1717,6 +1751,7 @@ export function JobDetailView({ id }: { id: string }) {
 
   // ── Fetch via Redux (cache-first: only show loading when no cached data) ──
   useEffect(() => {
+    setAssigneeOverride(null);
     if (!id) return;
     dispatch(fetchJobDetail(id))
       .unwrap()
@@ -1768,12 +1803,16 @@ export function JobDetailView({ id }: { id: string }) {
   }
 
   const currentJob = job;
-  const technician = apiReady
-    ? event
-      ? employeeLabel(event.employeeId)
-      : (currentJob.assignedTo ?? "")
-    : settings?.assignedTo ||
-      (event ? employeeLabel(event.employeeId) : (currentJob.assignedTo ?? ""));
+  // Prefer live override (Change/Remove), then job fields, then calendar event.
+  const technician =
+    assigneeOverride !== null
+      ? assigneeOverride.name
+      : currentJob.assignedTo ||
+        (currentJob.assignedEmployeeId
+          ? employeeLabel(currentJob.assignedEmployeeId)
+          : "") ||
+        (event ? employeeLabel(event.employeeId) : "") ||
+        (!apiReady ? settings?.assignedTo || "" : "");
   const service = apiReady
     ? job.title || jobServiceLabel(job, allEstimates, requests)
     : settings?.name || job.title || jobServiceLabel(job, allEstimates, requests);
@@ -1781,7 +1820,9 @@ export function JobDetailView({ id }: { id: string }) {
   const jobStartDate = (start || todayISO()).slice(0, 10);
   const jobEndDate = (due || start || todayISO()).slice(0, 10);
   const resolvedEmployeeId =
-    job.assignedEmployeeId ||
+    (assigneeOverride !== null
+      ? assigneeOverride.employeeId
+      : job.assignedEmployeeId) ||
     event?.employeeId ||
     (!apiReady ? settings?.employeeId : undefined) ||
     employees.find(
@@ -1805,6 +1846,64 @@ export function JobDetailView({ id }: { id: string }) {
     href: `/pro/dashboard/jobs/${job.id}`,
     status: job.status,
   };
+
+  async function removeJobAssignee() {
+    if (!job || removingAssignee) return;
+    setRemovingAssignee(true);
+    // Optimistic UI — show Unassigned immediately.
+    setAssigneeOverride({ employeeId: "", name: "" });
+    dispatch(
+      patchJobLocally({
+        id: job.id,
+        patch: { assignedTo: "", assignedEmployeeId: "" },
+      }),
+    );
+    try {
+      await dispatch(
+        updateJobRecord({
+          id: job.id,
+          employees,
+          job: {
+            ...job,
+            assignedTo: "",
+            assignedEmployeeId: "",
+          },
+        }),
+      ).unwrap();
+      // Keep the calendar date; only clear the person on the schedule row.
+      if (start) {
+        await syncCalendarAssignment({
+          kind: "job",
+          recordId: job.id,
+          title: job.number || "Job",
+          date: start,
+          endDate: due || start,
+          employeeId: null,
+          startMinutes: event?.startMinutes,
+          endMinutes: event?.endMinutes,
+          timeWindow: event?.timeWindow,
+          status: "scheduled",
+        });
+      } else {
+        await clearCalendarAssignment({ kind: "job", recordId: job.id });
+      }
+      if (crm.ready) void crm.refresh({ silent: true });
+      toast.success("Team member removed from this job.");
+    } catch (error) {
+      // Roll back optimistic clear.
+      setAssigneeOverride(null);
+      void dispatch(fetchJobDetail(job.id));
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not remove the assignee.",
+      );
+    } finally {
+      setRemovingAssignee(false);
+    }
+  }
 
   async function convertToInvoice() {
     if (converting) return;
@@ -2170,8 +2269,19 @@ export function JobDetailView({ id }: { id: string }) {
               className="h-8"
               onClick={() => setAssignOpen(true)}
             >
-              Assign team member
+              {technician ? "Change assignment" : "Assign team member"}
             </Button>
+            {technician ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-muted-foreground"
+                disabled={removingAssignee}
+                onClick={() => void removeJobAssignee()}
+              >
+                {removingAssignee ? "Removing…" : "Remove assignee"}
+              </Button>
+            ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8">
@@ -2250,6 +2360,49 @@ export function JobDetailView({ id }: { id: string }) {
                       </p>
                     </div>
                   ) : null}
+                  <div
+                    className={
+                      technician
+                        ? "flex flex-wrap items-center justify-between gap-3 rounded-md border border-sky-200 bg-sky-50/80 px-4 py-3"
+                        : "flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-input bg-muted/30 px-4 py-3"
+                    }
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                        Assigned technician
+                      </p>
+                      <p className="mt-0.5 text-sm font-semibold text-foreground">
+                        {technician || "Unassigned"}
+                      </p>
+                      {start ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Scheduled {formatDate(start)}
+                          {due && due !== start ? ` → ${formatDate(due)}` : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8"
+                        onClick={() => setAssignOpen(true)}
+                      >
+                        {technician ? "Change" : "Assign"}
+                      </Button>
+                      {technician ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8"
+                          disabled={removingAssignee}
+                          onClick={() => void removeJobAssignee()}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
                   <JobSummaryTab
                     job={job}
                     estimate={estimate}
@@ -2403,8 +2556,68 @@ export function JobDetailView({ id }: { id: string }) {
         employees={employees}
         onSave={async (assignment) => {
           await assign(assignment);
+          const lookedUp = assignment.employeeId
+            ? employeeLabel(assignment.employeeId)
+            : "";
+          const techName =
+            String(assignment.employeeLabel || "").trim() ||
+            lookedUp ||
+            "";
+          setAssigneeOverride({
+            employeeId: assignment.employeeId || "",
+            name: techName,
+          });
+          dispatch(
+            patchJobLocally({
+              id: job.id,
+              patch: {
+                assignedTo: techName || "",
+                assignedEmployeeId: assignment.employeeId || "",
+                scheduledAt: assignment.date || job.scheduledAt,
+                dueAt: assignment.endDate || job.dueAt,
+              },
+            }),
+          );
+          // Persist assignee on the job document as well (schedule assign may already do this).
+          try {
+            await dispatch(
+              updateJobRecord({
+                id: job.id,
+                employees,
+                job: {
+                  ...job,
+                  assignedTo: techName || "",
+                  assignedEmployeeId: assignment.employeeId || "",
+                  scheduledAt: assignment.date || job.scheduledAt,
+                  dueAt: assignment.endDate || job.dueAt,
+                },
+              }),
+            ).unwrap();
+          } catch {
+            // Schedule already saved; local patch keeps UI correct.
+          }
+          // Re-fetch so assignee name matches server after refresh.
+          try {
+            const fresh = await dispatch(fetchJobDetail(job.id)).unwrap();
+            const freshName =
+              String(fresh.assignedTo || "").trim() ||
+              (fresh.assignedEmployeeId
+                ? employeeLabel(fresh.assignedEmployeeId)
+                : "") ||
+              techName;
+            setAssigneeOverride({
+              employeeId: fresh.assignedEmployeeId || assignment.employeeId || "",
+              name: freshName,
+            });
+            records.cacheJob(fresh);
+          } catch {
+            // keep optimistic override
+          }
+          if (crm.ready) void crm.refresh({ silent: true });
           toast.success(
-            `${calendarEventKindLabel(assignment.kind)} assigned on the calendar.`,
+            techName
+              ? `${techName} assigned to ${job.number}.`
+              : `Assignment saved on ${job.number}.`,
           );
         }}
       />

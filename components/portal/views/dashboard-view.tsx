@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
@@ -45,6 +45,20 @@ import { jobStatusTone } from "@/lib/data/portal";
 import type { JobStatus, RequestStatus } from "@/lib/types";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import {
+  ADMIN_DIRECT_THREAD_ID,
+  listProviderChatThreads,
+} from "@/lib/api/chat-client";
+import { sortChatThreadsByUnreadThenRecent } from "@/lib/chat-format";
+
+type RecentMessageRow = {
+  id: string;
+  href: string;
+  title: string;
+  detail: string;
+  kind: "chat" | "lead";
+  unread?: number;
+};
 
 export function DashboardView() {
   const dispatch = useAppDispatch();
@@ -59,16 +73,87 @@ export function DashboardView() {
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [jobOpen, setJobOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
+  const [recentChatRows, setRecentChatRows] = useState<RecentMessageRow[]>([]);
+  const [recentChatsLoading, setRecentChatsLoading] = useState(true);
+  const [chatRefreshKey, setChatRefreshKey] = useState(0);
 
   useEffect(() => {
     void dispatch(fetchProviderDashboard({ force: true, silent: true }));
   }, [dispatch]);
 
   useEffect(() => {
+    let cancelled = false;
+    setRecentChatsLoading(true);
+    void (async () => {
+      try {
+        const threads = await listProviderChatThreads({
+          silent: true,
+          force: true,
+        });
+        if (cancelled) return;
+        const rows: RecentMessageRow[] = sortChatThreadsByUnreadThenRecent(threads)
+          .slice(0, 7)
+          .map((thread) => {
+            const last = thread.messages?.[thread.messages.length - 1];
+            const lastText = String(last?.text || "").trim();
+            const hasAttachment = Boolean(last?.attachments?.length);
+            const from =
+              last?.from === "provider"
+                ? "You"
+                : last?.from === "admin"
+                  ? "Support"
+                  : null;
+            const detail = lastText
+              ? from
+                ? `${from}: ${lastText}`
+                : lastText
+              : hasAttachment
+                ? from
+                  ? `${from}: Sent an attachment`
+                  : "Sent an attachment"
+                : "Open conversation";
+            const isAdmin = thread.id === ADMIN_DIRECT_THREAD_ID;
+            return {
+              id: thread.id,
+              href: isAdmin
+                ? "/pro/dashboard/messages?direct=admin"
+                : `/pro/dashboard/messages?thread=${encodeURIComponent(thread.id)}`,
+              title: thread.customerName || thread.customerEmail || "Customer",
+              detail,
+              kind: "chat" as const,
+              unread: thread.unreadForProvider || 0,
+            };
+          });
+        setRecentChatRows(rows);
+      } catch {
+        if (!cancelled) setRecentChatRows([]);
+      } finally {
+        if (!cancelled) setRecentChatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.generatedAt, chatRefreshKey]);
+
+  useEffect(() => {
     const onRealtime = (event: Event) => {
       const detail = (event as CustomEvent<{ type?: string }>).detail;
-      if (detail?.type === "LEAD_CREATED" || detail?.type === "LEAD_UPDATED") {
+      if (
+        detail?.type === "LEAD_CREATED" ||
+        detail?.type === "LEAD_UPDATED" ||
+        detail?.type === "CHAT_MESSAGE" ||
+        detail?.type === "NEW_CHAT_MESSAGE" ||
+        detail?.type === "INBOX_SUMMARY_INVALIDATE"
+      ) {
         void dispatch(fetchProviderDashboard({ force: true, silent: true }));
+        if (
+          detail?.type === "CHAT_MESSAGE" ||
+          detail?.type === "NEW_CHAT_MESSAGE" ||
+          detail?.type === "INBOX_SUMMARY_INVALIDATE"
+        ) {
+          setChatRefreshKey((key) => key + 1);
+        }
       }
     };
     window.addEventListener("rs-realtime", onRealtime);
@@ -108,7 +193,16 @@ export function DashboardView() {
   const weekDays = schedule?.weekDays ?? [];
 
   const incomingLeads = (leads?.incoming ?? []).slice(0, 8);
-  const inboxPreview = (messages?.inboxPreview ?? []).slice(0, 7);
+  const inboxPreview = useMemo(() => {
+    if (recentChatRows.length) return recentChatRows;
+    return (messages?.inboxPreview ?? []).slice(0, 7);
+  }, [messages?.inboxPreview, recentChatRows]);
+  const unreadChatCount = useMemo(() => {
+    if (recentChatRows.length) {
+      return recentChatRows.reduce((sum, row) => sum + (row.unread || 0), 0);
+    }
+    return messages?.unreadChats ?? 0;
+  }, [messages?.unreadChats, recentChatRows]);
   const upcomingJobs = (jobs?.upcoming ?? []).slice(0, 6);
   const upcomingSchedule = (schedule?.upcoming ?? []).slice(0, 6);
   const myDayTasks = (tasks?.myDay ?? []).slice(0, 6);
@@ -336,16 +430,28 @@ export function DashboardView() {
 
           <div className="xl:col-span-4">
             <FeedPanel
-              title="Website inbox"
+              title="Recent Messages"
               href="/pro/dashboard/messages"
               hrefLabel="Messages"
-              empty={inboxPreview.length ? undefined : "Inbox is clear."}
+              empty={
+                !recentChatsLoading && inboxPreview.length === 0
+                  ? "No conversations yet."
+                  : undefined
+              }
             >
+              {recentChatsLoading && inboxPreview.length === 0 ? (
+                <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  Loading conversations…
+                </p>
+              ) : (
+                <>
               <div className="border-b border-input/60 px-3.5 py-2.5">
                 <p className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
                   Unread
                 </p>
-                <p className="text-lg font-semibold tabular-nums">{messages?.unreadChats ?? 0}</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {unreadChatCount}
+                </p>
               </div>
               {inboxPreview.map((item) => (
                 <Link
@@ -356,17 +462,37 @@ export function DashboardView() {
                   <span
                     className={cn(
                       "mt-1.5 size-1.5 shrink-0 rounded-full",
-                      item.kind === "chat" ? "bg-[#c2410c]" : "bg-primary",
+                      (item.unread ?? 0) > 0 || item.kind === "chat"
+                        ? "bg-[#c2410c]"
+                        : "bg-primary",
                     )}
                   />
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium">{item.title}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={cn(
+                          "truncate text-[13px]",
+                          (item.unread ?? 0) > 0
+                            ? "font-semibold text-foreground"
+                            : "font-medium",
+                        )}
+                      >
+                        {item.title}
+                      </p>
+                      {(item.unread ?? 0) > 0 ? (
+                        <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
+                          {item.unread}
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
                       {item.detail}
                     </p>
                   </div>
                 </Link>
               ))}
+                </>
+              )}
             </FeedPanel>
           </div>
         </div>

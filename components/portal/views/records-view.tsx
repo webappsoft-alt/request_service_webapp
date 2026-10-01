@@ -34,6 +34,7 @@ import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { canStartJobNow } from "@/lib/portal-schedule-sync";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
@@ -149,7 +150,7 @@ export function EstimatesView() {
   const isFirstMountRef = useRef(true);
   const prevQueryRef = useRef({ page: 1, search: "", status: "", limit: 10 });
 
-  // Opening Estimates clears the sidebar badge locally — no ack API.
+  // Opening Estimates clears the badge locally and acks via provider:inbox-ack.
   useEffect(() => {
     setPortalInboxCleared("estimates", true);
     window.dispatchEvent(
@@ -714,8 +715,8 @@ export function EstimatesView() {
                         );
                         toast.success(
                           token
-                            ? `${row.number} sent. Customer link copied.`
-                            : `${row.number} sent to customer.`,
+                            ? "Estimate has been sent. Customer link copied."
+                            : "Estimate has been sent.",
                         );
                       } catch (err) {
                         showApiErrorToast(err, "Failed to share estimate.");
@@ -1252,13 +1253,29 @@ export function JobsView() {
                   onSelect: () => void handleConvert(row),
                 },
             { label: "Assign on calendar", href: "/pro/dashboard/schedule" },
-            ...(archived || isFinished || row.status === "in_progress"
+            ...(archived ||
+            isFinished ||
+            row.status === "in_progress" ||
+            !canStartJobNow({
+              scheduledAt:
+                row.scheduledAt ||
+                events.find(
+                  (item) => item.kind === "job" && item.recordId === row.id,
+                )?.date,
+              startMinutes: events.find(
+                (item) => item.kind === "job" && item.recordId === row.id,
+              )?.startMinutes,
+            })
               ? []
               : [
                   {
                     label: "Start job",
                     onSelect: () => {
-                      void handleStatusAction(row.id, "in_progress", "Job marked in progress.");
+                      void handleStatusAction(
+                        row.id,
+                        "in_progress",
+                        "Job marked in progress.",
+                      );
                     },
                   },
                 ]),

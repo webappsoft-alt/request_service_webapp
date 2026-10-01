@@ -469,9 +469,22 @@ export function PublicProfessionalDetail({
     if (!customerEmail) return;
     if (authUser?.role && authUser.role !== "customer") return;
 
-    const trackKey = `${targetId || targetSlug}|${customerEmail.toLowerCase()}`;
+    const trackKey = `lead-track:profile:${targetId || targetSlug}|${customerEmail.toLowerCase()}`;
     if (trackedRef.current === trackKey) return;
+    try {
+      if (typeof window !== "undefined" && sessionStorage.getItem(trackKey)) {
+        trackedRef.current = trackKey;
+        return;
+      }
+    } catch {
+      // sessionStorage may be unavailable
+    }
     trackedRef.current = trackKey;
+    try {
+      if (typeof window !== "undefined") sessionStorage.setItem(trackKey, "1");
+    } catch {
+      // ignore
+    }
 
     const customerName =
       [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||

@@ -32,6 +32,7 @@ import {
   updateEstimate as updateEstimateApi,
   createRequest,
 } from "@/lib/api/crm-client";
+import { syncCalendarAssignment } from "@/lib/portal-schedule-sync";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
 import {
   seedJobLines,
@@ -516,8 +517,11 @@ export function CreateEstimateDialog({
             estimate.propertyAddress?.id,
             { latitude, longitude, lat: latitude, lng: longitude },
           ),
-          // Status has dedicated endpoints — keep existing on update.
-          status: estimate.status,
+          // Keep existing status; if a site visit is selected, never leave it as scheduled.
+          status:
+            path === "site_visit" && estimate.status === "scheduled"
+              ? "site_visit"
+              : estimate.status,
           issuedAt,
           expiresAt: expiresAt || undefined,
           notes,
@@ -554,6 +558,14 @@ export function CreateEstimateDialog({
         if (path === "site_visit" && siteVisitPayload) {
           const visit = siteVisitFromRecord(siteVisitPayload);
           if (visit) writeSiteVisit(session?.email, saved.id, visit);
+          await syncCalendarAssignment({
+            kind: "estimate",
+            recordId: saved.id,
+            title: `${saved.number || "Estimate"} site visit`,
+            date: siteVisitPayload.visitedAt,
+            employeeId: siteVisitPayload.employeeId || null,
+            linkOnly: true,
+          });
         }
         dispatch(invalidateEstimatesCache());
         void dispatch(fetchEstimates({ force: true }));
@@ -612,6 +624,14 @@ export function CreateEstimateDialog({
       if (path === "site_visit" && siteVisitPayload) {
         const visit = siteVisitFromRecord(siteVisitPayload);
         if (visit) writeSiteVisit(session?.email, saved.id, visit);
+        await syncCalendarAssignment({
+          kind: "estimate",
+          recordId: saved.id,
+          title: `${saved.number || "Estimate"} site visit`,
+          date: siteVisitPayload.visitedAt,
+          employeeId: siteVisitPayload.employeeId || null,
+          linkOnly: true,
+        });
       }
       dispatch(invalidateEstimatesCache());
       void dispatch(fetchEstimates({ force: true }));
@@ -1306,7 +1326,7 @@ export function CreateJobDialog({
             job.address?.id,
             jobCoords,
           ),
-          assignedTo: techId || undefined,
+          assignedTo: techId || "",
           scheduledAt: start,
           dueAt: due || undefined,
           // Status has a separate PUT /jobs/:id/status endpoint — do not change it here.
@@ -1321,6 +1341,7 @@ export function CreateJobDialog({
               id: job.id,
               job: {
                 ...nextJob,
+                assignedEmployeeId: techId || "",
                 changeOrders: job.changeOrders,
                 createdAt: job.createdAt,
               },
@@ -1338,6 +1359,17 @@ export function CreateJobDialog({
           return;
         }
         writeCostLines(session?.email, saved.id, workLines);
+        if (start) {
+          await syncCalendarAssignment({
+            kind: "job",
+            recordId: saved.id,
+            title: saved.number || name.trim() || "Job",
+            date: start,
+            endDate: due || start,
+            employeeId: techId || null,
+            status: "scheduled",
+          });
+        }
         onUpdated?.(saved);
         onOpenChange(false);
         toast.success(`${saved.number || "Job"} updated.`);
@@ -1381,7 +1413,7 @@ export function CreateJobDialog({
         estimateId: estimateId || undefined,
         address: addressFrom(street, city, state, zip, undefined, jobCoords),
         // Technician select id → job.assignedTo → assignedEmployees[]
-        assignedTo: techId || undefined,
+        assignedTo: techId || "",
         scheduledAt: start,
         dueAt: due || undefined,
         status,
@@ -1393,7 +1425,10 @@ export function CreateJobDialog({
       if (useApi) {
         // MD: POST /api/provider/jobs { customerId, estimateId?, title, items, scheduledAt, ... }
         saved = await dispatch(
-          createCustomerJob({ job: createdJob, employees }),
+          createCustomerJob({
+            job: { ...createdJob, assignedEmployeeId: techId || "" },
+            employees,
+          }),
         ).unwrap();
       } else {
         const created = await Promise.resolve(records.addJob(createdJob));
@@ -1408,6 +1443,18 @@ export function CreateJobDialog({
         writeCostLines(session?.email, estimateId, workLines);
       }
       writeCostLines(session?.email, saved.id, workLines);
+      // Put Start / assignee on the Schedule calendar when a date is set.
+      if (start) {
+        await syncCalendarAssignment({
+          kind: "job",
+          recordId: saved.id,
+          title: saved.number || name.trim() || "Job",
+          date: start,
+          endDate: due || start,
+          employeeId: techId || null,
+          status: status === "unscheduled" ? "scheduled" : "scheduled",
+        });
+      }
       onCreated?.(saved);
       onOpenChange(false);
       toast.success(`${saved.number || "Job"} created.`);
@@ -1790,6 +1837,7 @@ export function CreateLeadDialog({
             customerId,
             serviceName: serviceName.trim(),
             channel: "direct",
+            source: "phone",
             details: details.trim(),
             preferredDate,
             preferredTimeWindow,
@@ -1813,6 +1861,7 @@ export function CreateLeadDialog({
         providerId: provider.id,
         categoryId: provider.categoryIds[0] ?? "plumbing",
         channel: "direct",
+        source: "phone",
         zip: address?.zip || customerLocation.zip || "",
         city: address?.city || customerLocation.city || provider.city,
         state: address?.state || customerLocation.state || provider.state,

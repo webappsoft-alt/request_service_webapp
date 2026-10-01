@@ -125,12 +125,6 @@ export function ConvertLeadToEstimateDialog({
         }
       }
 
-      toast.success(
-        created?.number
-          ? `Proposal ${created.number} created successfully!`
-          : "Request successfully converted to Estimate proposal.",
-      );
-
       onOpenChange(false);
       if (created?.id) {
         if (onConverted) onConverted(created.id);

@@ -154,6 +154,8 @@ export type CrmScheduleAssignment = {
   employeeId?: string | null;
   contractorId?: string | null;
   status?: CrmScheduleStatus;
+  /** Calendar link only — do not change estimate/job lifecycle status. */
+  linkOnly?: boolean;
 };
 
 export type CrmEstimateShareResult = {
@@ -465,6 +467,10 @@ function requestPayload(request: Partial<PortalRequest>) {
   if (request.preferredDate && request.preferredDate.trim()) {
     payload.preferredDate = request.preferredDate;
   }
+  // Provider-added CRM leads must not look like marketplace quote requests.
+  if (request.source) {
+    payload.source = request.source;
+  }
   return payload;
 }
 
@@ -542,6 +548,13 @@ function estimatePayload(estimate: Estimate) {
 function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
   const techId = String(job.assignedEmployeeId || job.assignedTo || "").trim();
   const assignedEmployees = (() => {
+    // Explicit empty assignee (clear / unassign).
+    if (
+      job.assignedEmployeeId === "" ||
+      (job.assignedTo === "" && job.assignedEmployeeId === undefined)
+    ) {
+      return [];
+    }
     if (!techId) return resolveAssignedEmployeeIds(job, _employees);
     if (_employees.some((employee) => employee.id === techId)) return [techId];
     return resolveAssignedEmployeeIds({ ...job, assignedTo: techId }, _employees);
@@ -2243,22 +2256,263 @@ export async function querySchedule(query: CrmListQuery = {}) {
   if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
-  if (kind) params.kind = kind;
+  // Backend validation strictly expects [job, estimate, request, invoice, task]
+  if (kind) {
+    params.kind = kind === "fixed_service" ? "job" : kind;
+  }
   const response = await getData(providerCrmApi.schedule, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,
   });
-  return mapCrmList(response, mapScheduleEvent).items.filter(
+  const rawItems = mapCrmList(response, mapScheduleEvent).items.filter(
     (item): item is NonNullable<typeof item> => Boolean(item),
   );
+  const items =
+    kind === "fixed_service"
+      ? rawItems.filter((item) => item.kind === "fixed_service")
+      : rawItems;
+
+  const missingJobIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            (item.kind === "job" || item.kind === "fixed_service") &&
+            item.recordId &&
+            (!item.serviceAddress || !item.price || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const missingEstimateIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "estimate" &&
+            item.recordId &&
+            (!item.serviceAddress || !item.price || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const missingRequestIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "request" &&
+            item.recordId &&
+            (!item.serviceAddress || !item.customerName || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const missingTaskIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "task" &&
+            item.recordId &&
+            (!item.customerName || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const formatAddr = (addr?: ServiceAddress | { address?: string; street?: string; city?: string; state?: string; zip?: string } | null) => {
+    if (!addr) return undefined;
+    const street = (addr.address || addr.street || "").trim();
+    const city = (addr.city || "").trim();
+    const state = (addr.state || "").trim();
+    const zip = (addr.zip || "").trim();
+    const loc = city && state ? `${city}, ${state}` : city || state;
+    const parts = [street, loc, zip].filter(Boolean);
+    return parts.length ? parts.join(" ") : undefined;
+  };
+
+  if (
+    missingJobIds.length > 0 ||
+    missingEstimateIds.length > 0 ||
+    missingRequestIds.length > 0 ||
+    missingTaskIds.length > 0
+  ) {
+    try {
+      const [jobResults, estimateResults, requestResults, taskResults] = await Promise.all([
+        missingJobIds.length > 0
+          ? Promise.allSettled(missingJobIds.map((jobId) => getJob(jobId)))
+          : Promise.resolve([]),
+        missingEstimateIds.length > 0
+          ? Promise.allSettled(missingEstimateIds.map((estId) => getEstimate(estId)))
+          : Promise.resolve([]),
+        missingRequestIds.length > 0
+          ? Promise.allSettled(missingRequestIds.map((reqId) => getRequest(reqId)))
+          : Promise.resolve([]),
+        missingTaskIds.length > 0
+          ? Promise.allSettled(missingTaskIds.map((taskId) => getTask(taskId)))
+          : Promise.resolve([]),
+      ]);
+
+      const jobMap = new Map<string, Job>();
+      jobResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          jobMap.set(res.value.id, res.value);
+        }
+      });
+
+      const estimateMap = new Map<string, Estimate>();
+      estimateResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          estimateMap.set(res.value.id, res.value);
+        }
+      });
+
+      const requestMap = new Map<string, PortalRequest>();
+      requestResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          requestMap.set(res.value.id, res.value);
+        }
+      });
+
+      const taskMap = new Map<string, PortalTask>();
+      taskResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          taskMap.set(res.value.id, res.value);
+        }
+      });
+
+      return items.map((item) => {
+        if ((item.kind === "job" || item.kind === "fixed_service") && item.recordId) {
+          const job = jobMap.get(item.recordId);
+          if (job) {
+            const addr = item.serviceAddress || formatAddr(job.address);
+            const rawJobTotal =
+              (job as unknown as Record<string, unknown>).totalAmount ??
+              (job as unknown as Record<string, unknown>).total ??
+              (job as unknown as Record<string, unknown>).price ??
+              (Array.isArray(job.items)
+                ? job.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const jobNum = Number(rawJobTotal);
+            const price =
+              item.price ||
+              (!Number.isNaN(jobNum) && jobNum > 0 ? `$${jobNum.toFixed(2)}` : undefined);
+            const jobName =
+              job.title && job.title !== job.number
+                ? job.title
+                : (job as unknown as Record<string, unknown>).serviceName
+                  ? String((job as unknown as Record<string, unknown>).serviceName)
+                  : job.items?.[0]?.description || undefined;
+            const category = item.category || jobName || undefined;
+            return {
+              ...item,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: job.notes || (job as unknown as Record<string, unknown>).description ? String(job.notes || (job as unknown as Record<string, unknown>).description) : item.notes || undefined,
+              detail: jobName || item.detail,
+              customerName: item.customerName || ((job as unknown as Record<string, unknown>).customerName ? String((job as unknown as Record<string, unknown>).customerName) : undefined),
+            };
+          }
+        } else if (item.kind === "estimate" && item.recordId) {
+          const est = estimateMap.get(item.recordId);
+          if (est) {
+            const addr = item.serviceAddress || formatAddr(est.propertyAddress);
+            const rawEstTotal =
+              est.total ??
+              est.subtotal ??
+              (Array.isArray(est.items)
+                ? est.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const estNum = Number(rawEstTotal);
+            const price =
+              item.price ||
+              (!Number.isNaN(estNum) && estNum > 0 ? `$${estNum.toFixed(2)}` : undefined);
+            const estName =
+              est.title && est.title !== est.number
+                ? est.title
+                : est.items?.[0]?.name || est.items?.[0]?.description || undefined;
+            const category = item.category || estName || undefined;
+            return {
+              ...item,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: est.notes || item.notes || undefined,
+              detail: estName || item.detail,
+              customerName: item.customerName || est.customerName || undefined,
+            };
+          }
+        } else if (item.kind === "request" && item.recordId) {
+          const req = requestMap.get(item.recordId);
+          if (req) {
+            const addr =
+              item.serviceAddress ||
+              (req.address ? (typeof req.address === "string" ? req.address : formatAddr(req.address)) : undefined);
+            const reqBudget =
+              (req as unknown as Record<string, unknown>).budget ??
+              (req as unknown as Record<string, unknown>).startingPrice ??
+              (req as unknown as Record<string, unknown>).price;
+            const reqNum = Number(reqBudget);
+            const price =
+              item.price ||
+              (!Number.isNaN(reqNum) && reqNum > 0 ? `$${reqNum.toFixed(2)}` : undefined);
+            const reqName = req.serviceName || req.title || undefined;
+            const category = item.category || reqName || undefined;
+            return {
+              ...item,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: req.notes || req.description || item.notes || undefined,
+              detail: reqName || item.detail,
+              customerName: item.customerName || req.customerName || undefined,
+            };
+          }
+        } else if (item.kind === "task" && item.recordId) {
+          const task = taskMap.get(item.recordId);
+          if (task) {
+            const taskName = task.title && task.title !== task.number ? task.title : undefined;
+            const category = item.category || taskName || undefined;
+            return {
+              ...item,
+              category: category || item.category || undefined,
+              notes: task.notes || task.description || item.notes || undefined,
+              detail: taskName || item.detail,
+              customerName: item.customerName || task.customerName || undefined,
+            };
+          }
+        }
+        return item;
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  return items;
 }
 
 export async function assignSchedule(schedule: CrmScheduleAssignment) {
+  // Backend validation strictly expects [job, estimate, request, invoice, task]
+  const backendKind = schedule.kind === "fixed_service" ? "job" : schedule.kind;
   const response = await postData(
     providerCrmApi.scheduleAssign,
     {
       recordId: schedule.recordId || null,
-      kind: schedule.kind,
+      kind: backendKind,
       title: schedule.title,
       date: schedule.date,
       endDate: schedule.endDate ?? null,
@@ -2268,6 +2522,7 @@ export async function assignSchedule(schedule: CrmScheduleAssignment) {
       employeeId: schedule.employeeId || null,
       contractorId: schedule.contractorId || null,
       status: schedule.status ?? "scheduled",
+      linkOnly: schedule.linkOnly === true,
     },
     // Caller (AssignEventDialog) shows extractErrorMessage — avoid duplicate/generic toasts.
     { silent: true },
@@ -2737,6 +2992,7 @@ export async function getProviderDashboard(query: ProviderDashboardQuery = {}) {
               title: stringOr(row.title),
               detail: stringOr(row.detail),
               kind: stringOr(row.kind, "lead") === "chat" ? ("chat" as const) : ("lead" as const),
+              unread: numberOr(row.unread),
             };
           })
         : [],

@@ -82,14 +82,26 @@ function NavLinks({
                   <span className="relative shrink-0">
                     <Icon className="size-4" aria-hidden="true" />
                     {collapsed && count > 0 ? (
-                      <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]">
+                      <span
+                        className={cn(
+                          "absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]",
+                          item.href === "/pro/dashboard/estimates" &&
+                            "animate-pulse ring-2 ring-amber-300",
+                        )}
+                      >
                         {count > 99 ? "99+" : count}
                       </span>
                     ) : null}
                   </span>
                   {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
                   {!collapsed && count > 0 ? (
-                    <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]">
+                    <span
+                      className={cn(
+                        "ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]",
+                        item.href === "/pro/dashboard/estimates" &&
+                          "animate-pulse ring-2 ring-amber-300 ring-offset-1 ring-offset-[#003F7D]",
+                      )}
+                    >
                       {count > 99 ? "99+" : count}
                     </span>
                   ) : null}

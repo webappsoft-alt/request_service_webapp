@@ -156,6 +156,14 @@ export type RealtimeEvents = {
     href?: string;
     providerId?: string;
   };
+  ESTIMATE_CHANGES_REQUESTED: {
+    estimateId?: string;
+    number?: string;
+    status?: string;
+    reason?: string;
+    href?: string;
+    providerId?: string;
+  };
   INVOICE_SENT: {
     invoiceId?: string;
     number?: string;

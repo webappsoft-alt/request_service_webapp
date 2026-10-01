@@ -288,6 +288,24 @@ export function usePortalCrew() {
                     }
                   : undefined;
               }
+              case "fixed_service": {
+                return {
+                  id: `cal_${assignment.recordId}`,
+                  kind: "fixed_service",
+                  recordId: assignment.recordId,
+                  title: assignment.title || "Fix Service Order",
+                  detail: "Fixed service package",
+                  customerName: undefined,
+                  date: assignment.date,
+                  endDate: assignment.endDate,
+                  timeWindow: assignment.timeWindow,
+                  startMinutes: fallbackWindow.startMinutes,
+                  endMinutes: fallbackWindow.endMinutes,
+                  employeeId: assignment.employeeId,
+                  href: `/pro/dashboard/orders/${assignment.recordId}`,
+                  status: assignment.status ?? "scheduled",
+                };
+              }
               default: {
                 const _never: never = assignment.kind;
                 return _never;
@@ -340,6 +358,9 @@ export function usePortalCrew() {
         const contractor = contractors.find((item) => item.id === assignment.employeeId);
         const startMinutes = assignment.startMinutes ?? resolvedEvent.startMinutes ?? fallbackWindow.startMinutes;
         const endMinutes = assignment.endMinutes ?? resolvedEvent.endMinutes ?? fallbackWindow.endMinutes;
+        // Estimate site visits: calendar only — never flip estimate status to scheduled.
+        const linkOnly =
+          assignment.linkOnly === true || assignment.kind === "estimate";
         const payload = {
           title: assignment.title || resolvedEvent.title,
           date: assignment.date,
@@ -350,27 +371,26 @@ export function usePortalCrew() {
           employeeId: contractor ? null : assignment.employeeId,
           contractorId: contractor ? assignment.employeeId : null,
           status: normalizeScheduleStatus(resolvedEvent.status),
+          linkOnly,
         } as const;
 
+        let savedEvent: PortalCalendarEvent | null = null;
         if (existingSchedule && !String(existingSchedule.id).startsWith("cal_")) {
-          await updateScheduleApi(existingSchedule.id, payload);
+          savedEvent = await updateScheduleApi(existingSchedule.id, payload);
         } else {
-          await assignScheduleApi({
+          savedEvent = await assignScheduleApi({
             recordId: assignment.recordId,
             kind: assignment.kind,
             ...payload,
           });
         }
 
-        if (apiReady) {
-          await crm.refresh();
-        }
-        return;
+        return savedEvent;
       }
 
       throw new Error("Sign in to update the schedule on the server.");
     },
-    [apiReady, canCallApi, contractors, crm, events, key, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
+    [canCallApi, contractors, events, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
   );
 
   const addEmployee = useCallback(
@@ -492,7 +512,14 @@ export function usePortalCrew() {
       const employee = employeeById(id);
       if (employee) return employeeName(employee);
       const contractor = contractors.find((item) => item.id === id);
-      return contractor ? contractor.companyName : "Unassigned";
+      if (contractor) {
+        return (
+          contractor.companyName ||
+          `${contractor.firstName || ""} ${contractor.lastName || ""}`.trim() ||
+          ""
+        );
+      }
+      return "";
     },
     loading,
     ready: !crm.enabled || crm.ready,

@@ -165,21 +165,19 @@ export function SendApprovalDialog({
                 if (shared.emailSent) {
                   toast.success(
                     shared.emailTo
-                      ? `Estimate emailed to ${shared.emailTo}. Link also copied.`
-                      : "Estimate emailed to the customer. Link also copied.",
+                      ? `Estimate has been sent to ${shared.emailTo}.`
+                      : "Estimate has been sent.",
                   );
                 } else if (shared.emailSkippedReason) {
                   toast.success(
-                    "Estimate shared with customer. Link copied — email skipped (no customer email).",
+                    "Estimate has been sent. Link copied — email skipped (no customer email).",
                   );
                 } else if (shared.emailError) {
                   toast.success(
-                    "Estimate shared with customer. Link copied — email could not be sent.",
+                    "Estimate has been sent. Link copied — email could not be delivered.",
                   );
                 } else {
-                  toast.success(
-                    "Estimate shared with customer. They can review and sign now.",
-                  );
+                  toast.success("Estimate has been sent.");
                 }
                 onOpenChange(false);
               } catch (error) {

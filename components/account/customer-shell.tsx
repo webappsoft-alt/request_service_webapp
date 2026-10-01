@@ -573,11 +573,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         type === "ESTIMATE_UPDATED" ||
         type === "ESTIMATE_ACCEPTED"
       ) {
+        // NEW_NOTIFICATION already bumps the Estimates badge when a row is
+        // persisted. Domain events only reopen + refresh so counts stay accurate.
         reopenCustomerInboxBadge("estimates");
-        setSidebarBump((current) => ({
-          ...current,
-          estimates: current.estimates + 1,
-        }));
         void refreshNotifications();
         return;
       }

@@ -9,7 +9,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme="light"
       position="top-right"
       closeButton
-      visibleToasts={3}
+      visibleToasts={1}
       className="toaster group"
       icons={{
         success: (

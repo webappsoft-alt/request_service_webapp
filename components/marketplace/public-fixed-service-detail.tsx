@@ -430,9 +430,24 @@ export function PublicFixedServiceDetail({
     if (!customerEmail) return;
     if (authUser?.role && authUser.role !== "customer") return;
 
-    const trackKey = `${service.id || serviceSlug}|${customerEmail.toLowerCase()}`;
+    const providerKey =
+      service.provider?.id || service.provider?.slug || service.id || serviceSlug;
+    const trackKey = `lead-track:browse:${providerKey}|${customerEmail.toLowerCase()}`;
     if (trackedRef.current === trackKey) return;
+    try {
+      if (typeof window !== "undefined" && sessionStorage.getItem(trackKey)) {
+        trackedRef.current = trackKey;
+        return;
+      }
+    } catch {
+      // sessionStorage may be unavailable
+    }
     trackedRef.current = trackKey;
+    try {
+      if (typeof window !== "undefined") sessionStorage.setItem(trackKey, "1");
+    } catch {
+      // ignore
+    }
 
     const customerName =
       [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||

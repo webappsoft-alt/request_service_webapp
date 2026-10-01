@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
@@ -120,6 +121,7 @@ export function AssignEventDialog({
   defaultEmployeeId?: string;
   onSave: (assignment: PortalAssignment) => void | Promise<void>;
 }) {
+  const router = useRouter();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const role = String(user?.role || auth.role || "").toLowerCase();
@@ -225,6 +227,7 @@ export function AssignEventDialog({
         startMinutes: slot.startMinutes,
         endMinutes: slot.endMinutes,
         employeeId,
+        employeeLabel: employeeLabel.trim() || undefined,
       });
       onOpenChange(false);
     } catch (error) {
@@ -239,11 +242,16 @@ export function AssignEventDialog({
       <DialogContent className="sm:max-w-md" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>
-            {event ? "Assign on calendar" : "Schedule a visit"}
+            {event?.kind === "estimate"
+              ? "Schedule site visit"
+              : event
+                ? "Assign on calendar"
+                : "Schedule a visit"}
           </DialogTitle>
           <DialogDescription>
-            Put a job, estimate visit, or request on the calendar and assign it
-            to a team member or contractor.
+            {event?.kind === "estimate"
+              ? "Set or update the site-visit date, time, and assignee. Changes update the estimate visit and calendar."
+              : "Put a job, estimate visit, or request on the calendar and assign it to a team member or contractor."}
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -360,6 +368,11 @@ export function AssignEventDialog({
               searchValue={useApi ? assigneePaging.search : ""}
               onSearchChange={useApi ? assigneePaging.setSearch : undefined}
               searchPlaceholder="Search people…"
+              addLabel="Add team member"
+              onAdd={() => {
+                onOpenChange(false);
+                router.push("/pro/dashboard/team");
+              }}
               onChange={(id, option) => {
                 setEmployeeId(id);
                 setEmployeeLabel(option?.label && id ? option.label : "");

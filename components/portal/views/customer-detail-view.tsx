@@ -31,6 +31,7 @@ import { CreateEstimateDialog, CreateJobDialog } from "@/components/portal/creat
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { CrmMark } from "@/components/portal/crm-mark";
 import { CustomerEventCalendar } from "@/components/portal/customer-event-calendar";
+import { EventCalendarSkeleton } from "@/components/portal/event-calendar";
 import { CustomerLocationMapLazy } from "@/components/portal/customer-location-map-lazy";
 import { ApplyPaymentDialog } from "@/components/portal/invoice-file";
 import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
@@ -1651,7 +1652,7 @@ function CustomerSchedulePanel({
   const listLoading = selectCustomerTabShowLoader(tab, customerId, filterKey);
 
   if (listLoading) {
-    return <CenteredSpinner label="Loading schedules" className="min-h-[12rem]" />;
+    return <EventCalendarSkeleton />;
   }
 
   return <CustomerEventCalendar events={events} employeeLabel={employeeLabel} />;

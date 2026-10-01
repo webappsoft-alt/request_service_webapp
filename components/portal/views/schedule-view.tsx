@@ -89,52 +89,96 @@ export function ScheduleView() {
   memberOptionsRef.current = memberOptions;
 
   const enrichedEvents = useMemo(() => {
+    const formatAddrObj = (addr?: { address?: string; street?: string; city?: string; state?: string; zip?: string } | null) => {
+      if (!addr) return undefined;
+      const street = (addr.address || addr.street || "").trim();
+      const city = (addr.city || "").trim();
+      const state = (addr.state || "").trim();
+      const zip = (addr.zip || "").trim();
+      const loc = city && state ? `${city}, ${state}` : city || state;
+      const parts = [street, loc, zip].filter(Boolean);
+      return parts.length ? parts.join(" ") : undefined;
+    };
+
     return events.map((event) => {
       let notes = event.notes;
       let detail = event.detail;
       let customerName = event.customerName;
-      if (!notes || !customerName) {
-        if ((event.kind === "job" || event.kind === "fixed_service") && event.recordId) {
-          const job = crm.jobs.find((j) => j.id === event.recordId);
-          if (job) {
-            if (!notes) notes = job.notes || job.description || "";
-            if (!customerName && job.customerName) customerName = job.customerName;
-            if (!detail || detail === event.title) detail = job.serviceName || job.notes || detail;
+      let serviceAddress = event.serviceAddress;
+      let price = event.price;
+      let category = event.category;
+      let foundCustomerId: string | undefined;
+
+      if ((event.kind === "job" || event.kind === "fixed_service") && event.recordId) {
+        const job = crm.jobs.find((j) => j.id === event.recordId);
+        if (job) {
+          if (!notes) notes = job.notes || job.description || "";
+          if (!customerName && job.customerName) customerName = job.customerName;
+          if (!detail || detail === event.title) detail = job.serviceName || job.notes || detail;
+          if (!serviceAddress && job.address) serviceAddress = formatAddrObj(job.address);
+          if (!price && typeof job.totalAmount === "number" && job.totalAmount > 0) {
+            price = `$${job.totalAmount.toFixed(2)}`;
           }
-        } else if (event.kind === "estimate" && event.recordId) {
-          const est = crm.estimates.find((e) => e.id === event.recordId);
-          if (est) {
-            if (!notes) notes = est.notes || est.description || "";
-            if (!customerName && est.customerName) customerName = est.customerName;
+          if (!category) category = job.serviceName || undefined;
+          foundCustomerId = job.customerId;
+        }
+      } else if (event.kind === "estimate" && event.recordId) {
+        const est = crm.estimates.find((e) => e.id === event.recordId);
+        if (est) {
+          if (!notes) notes = est.notes || est.description || "";
+          if (!customerName && est.customerName) customerName = est.customerName;
+          if (!serviceAddress && est.propertyAddress) serviceAddress = formatAddrObj(est.propertyAddress);
+          if (!price && typeof est.total === "number" && est.total > 0) {
+            price = `$${est.total.toFixed(2)}`;
           }
-        } else if (event.kind === "request" && event.recordId) {
-          const req = crm.requests.find((r) => r.id === event.recordId);
-          if (req) {
-            if (!notes) notes = req.notes || req.description || "";
-            if (!customerName && req.customerName) customerName = req.customerName;
-            if (!detail || detail === event.title) detail = req.serviceName || detail;
+          if (!category) category = est.title || undefined;
+          foundCustomerId = est.customerId;
+        }
+      } else if (event.kind === "request" && event.recordId) {
+        const req = crm.requests.find((r) => r.id === event.recordId);
+        if (req) {
+          if (!notes) notes = req.notes || req.description || "";
+          if (!customerName && req.customerName) customerName = req.customerName;
+          if (!detail || detail === event.title) detail = req.serviceName || detail;
+          if (!category) category = req.serviceName || undefined;
+          foundCustomerId = req.customerId;
+        }
+      } else if (event.kind === "task" && event.recordId) {
+        const task = crm.tasks.find((t) => t.id === event.recordId);
+        if (task) {
+          if (!notes) notes = task.notes || task.description || "";
+        }
+      } else if (event.kind === "invoice" && event.recordId) {
+        const inv = crm.invoices.find((i) => i.id === event.recordId);
+        if (inv) {
+          if (!notes) notes = inv.notes || "";
+          if (!customerName && inv.customerName) customerName = inv.customerName;
+          if (!price && typeof inv.total === "number" && inv.total > 0) {
+            price = `$${inv.total.toFixed(2)}`;
           }
-        } else if (event.kind === "task" && event.recordId) {
-          const task = crm.tasks.find((t) => t.id === event.recordId);
-          if (task) {
-            if (!notes) notes = task.notes || task.description || "";
-          }
-        } else if (event.kind === "invoice" && event.recordId) {
-          const inv = crm.invoices.find((i) => i.id === event.recordId);
-          if (inv) {
-            if (!notes) notes = inv.notes || "";
-            if (!customerName && inv.customerName) customerName = inv.customerName;
-          }
+          foundCustomerId = inv.customerId;
         }
       }
+
+      // If serviceAddress is still missing, fallback to customer profile primary address
+      if (!serviceAddress && foundCustomerId) {
+        const cust = crm.customers.find((c) => c.id === foundCustomerId);
+        if (cust?.addresses?.[0]) {
+          serviceAddress = formatAddrObj(cust.addresses[0]);
+        }
+      }
+
       return {
         ...event,
         notes: notes || undefined,
         detail,
         customerName,
+        serviceAddress: serviceAddress || undefined,
+        price: price || undefined,
+        category: category || undefined,
       };
     });
-  }, [crm.estimates, crm.invoices, crm.jobs, crm.requests, crm.tasks, events]);
+  }, [crm.customers, crm.estimates, crm.invoices, crm.jobs, crm.requests, crm.tasks, events]);
 
   const employeesForCalendar = useMemo(
     () =>
@@ -200,22 +244,59 @@ export function ScheduleView() {
   }, [initialEmployeeId]);
 
   function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
-    void Promise.resolve(
-      assign({
-        kind: event.kind,
-        recordId: event.recordId,
-        title: event.title,
-        status: event.status,
-        date: move.date,
-        endDate: move.endDate,
-        startMinutes: move.startMinutes,
-        endMinutes: move.endMinutes,
-        timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
-        employeeId: event.employeeId ?? memberOptionsRef.current[0]?.id ?? "",
-      }),
-    )
-      .then(() => {
-        void loadSchedule({ quiet: true });
+    // Optimistically update schedule-view's events state immediately
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === event.id ||
+        (e.kind === event.kind && e.recordId && e.recordId === event.recordId)
+          ? {
+              ...e,
+              date: move.date,
+              endDate: move.endDate,
+              startMinutes: move.startMinutes ?? e.startMinutes,
+              endMinutes: move.endMinutes ?? e.endMinutes,
+              timeWindow:
+                windowFromMinutes(move.startMinutes, move.endMinutes) || e.timeWindow,
+            }
+          : e,
+      ),
+    );
+
+    return assign({
+      kind: event.kind,
+      recordId: event.recordId,
+      title: event.title,
+      status: event.status,
+      date: move.date,
+      endDate: move.endDate,
+      startMinutes: move.startMinutes,
+      endMinutes: move.endMinutes,
+      timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
+      employeeId: event.employeeId ?? memberOptionsRef.current[0]?.id ?? "",
+    })
+      .then((saved) => {
+        if (saved) {
+          setEvents((prev) =>
+            prev.map((e) =>
+              e.id === event.id ||
+              e.id === saved.id ||
+              (e.kind === saved.kind && e.recordId && e.recordId === saved.recordId)
+                ? {
+                    ...e,
+                    ...saved,
+                    date: saved.date || move.date,
+                    endDate: saved.endDate ?? move.endDate,
+                    startMinutes: saved.startMinutes ?? move.startMinutes ?? e.startMinutes,
+                    endMinutes: saved.endMinutes ?? move.endMinutes ?? e.endMinutes,
+                    timeWindow:
+                      saved.timeWindow ||
+                      windowFromMinutes(move.startMinutes, move.endMinutes) ||
+                      e.timeWindow,
+                  }
+                : e,
+            ),
+          );
+        }
         if (move.date) {
           const time =
             move.startMinutes != null && move.endMinutes != null
@@ -227,8 +308,8 @@ export function ScheduleView() {
         }
       })
       .catch((error) => {
-        void loadSchedule({ quiet: true });
         toast.error(formatScheduleError(error));
+        void loadSchedule({ quiet: true });
       });
   }
 
@@ -243,14 +324,23 @@ export function ScheduleView() {
             size="sm"
             variant="outline"
             onClick={() => {
-              void Promise.resolve(removeSchedule(editing.id))
+              const toRemove = editing;
+              setEditing(null);
+              // Optimistically remove from state
+              setEvents((prev) =>
+                prev.filter(
+                  (e) =>
+                    e.id !== toRemove.id &&
+                    !(e.kind === toRemove.kind && e.recordId && e.recordId === toRemove.recordId),
+                ),
+              );
+              void Promise.resolve(removeSchedule(toRemove.id))
                 .then(() => {
-                  toast.success(`${editing.title} removed from the schedule.`);
-                  setEditing(null);
-                  void loadSchedule({ quiet: true });
+                  toast.success(`${toRemove.title} removed from the schedule.`);
                 })
                 .catch((error) => {
                   toast.error(formatScheduleError(error));
+                  void loadSchedule({ quiet: true });
                 });
             }}
           >
@@ -273,6 +363,25 @@ export function ScheduleView() {
         loading={scheduleLoading}
         onMove={moveEvent}
         onEventOpen={setEditing}
+        onEventRemove={(event) => {
+          // Optimistically remove from state
+          setEvents((prev) =>
+            prev.filter(
+              (e) =>
+                e.id !== event.id &&
+                !(e.kind === event.kind && e.recordId && e.recordId === event.recordId),
+            ),
+          );
+          if (editing?.id === event.id) setEditing(null);
+          void Promise.resolve(removeSchedule(event.id))
+            .then(() => {
+              toast.success(`${event.title} removed from the schedule.`);
+            })
+            .catch((error) => {
+              toast.error(formatScheduleError(error));
+              void loadSchedule({ quiet: true });
+            });
+        }}
       />
 
       <AssignEventDialog
@@ -287,8 +396,41 @@ export function ScheduleView() {
         employees={team}
         defaultEmployeeId={memberFilter || undefined}
         onSave={async (assignment) => {
-          await assign(assignment);
-          await loadSchedule({ quiet: true });
+          const saved = await assign(assignment);
+          if (saved) {
+            setEvents((prev) => {
+              const exists = prev.some(
+                (e) =>
+                  e.id === saved.id ||
+                  (e.kind === saved.kind && e.recordId && e.recordId === saved.recordId),
+              );
+              if (exists) {
+                return prev.map((e) =>
+                  e.id === saved.id ||
+                  (e.kind === saved.kind && e.recordId && e.recordId === saved.recordId)
+                    ? { ...e, ...saved }
+                    : e,
+                );
+              }
+              return [...prev, saved];
+            });
+          } else {
+            setEvents((prev) =>
+              prev.map((e) =>
+                e.kind === assignment.kind && e.recordId === assignment.recordId
+                  ? {
+                      ...e,
+                      date: assignment.date,
+                      endDate: assignment.endDate,
+                      employeeId: assignment.employeeId,
+                      timeWindow: assignment.timeWindow,
+                      startMinutes: assignment.startMinutes ?? e.startMinutes,
+                      endMinutes: assignment.endMinutes ?? e.endMinutes,
+                    }
+                  : e,
+              ),
+            );
+          }
           const label = resolveMemberLabel(assignment.employeeId);
           toast.success(
             `${calendarEventKindLabel(assignment.kind)} assigned to ${label} on ${formatDate(assignment.date)}.`,

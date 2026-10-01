@@ -1979,6 +1979,71 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     trimmed(record.requestNotes) ||
     undefined;
 
+  // ── Site / service address ───────────────────────────────────────────────
+  // Try top-level address fields, then nested job/estimate location objects
+  const addrSource =
+    asRecord(record.address) ??
+    asRecord(record.location) ??
+    asRecord(record.serviceAddress) ??
+    asRecord(jobObj?.address) ??
+    asRecord(jobObj?.location) ??
+    asRecord(estimateObj?.address) ??
+    asRecord(estimateObj?.location) ??
+    asRecord(requestObj?.address) ??
+    asRecord(requestObj?.location) ??
+    null;
+
+  let serviceAddress: string | undefined;
+  if (addrSource) {
+    const street = trimmed(addrSource.address) || trimmed(addrSource.street);
+    const city = trimmed(addrSource.city);
+    const state = trimmed(addrSource.state);
+    const zip = trimmed(addrSource.zip);
+    const parts = [street, city && state ? `${city}, ${state}` : city || state, zip].filter(Boolean);
+    serviceAddress = parts.length ? parts.join(" ") : undefined;
+  }
+  // Fallback: plain string address fields
+  if (!serviceAddress) {
+    serviceAddress =
+      trimmed(record.serviceAddress) ||
+      trimmed(record.address) ||
+      trimmed(record.location) ||
+      trimmed(jobObj?.serviceAddress) ||
+      trimmed(estimateObj?.serviceAddress) ||
+      undefined;
+  }
+
+  // ── Price ────────────────────────────────────────────────────────────────
+  const rawPrice =
+    record.totalAmount ?? record.total ?? record.price ?? record.amount ??
+    record.totalPrice ?? record.grandTotal ??
+    jobObj?.totalAmount ?? jobObj?.total ?? jobObj?.price ??
+    estimateObj?.totalAmount ?? estimateObj?.total ?? estimateObj?.price ??
+    invoiceObj?.totalAmount ?? invoiceObj?.total ?? invoiceObj?.price;
+
+  let price: string | undefined;
+  if (rawPrice != null) {
+    const num = Number(rawPrice);
+    if (!Number.isNaN(num) && num > 0) {
+      price = `$${num.toFixed(2)}`;
+    }
+  }
+
+  // ── Category ─────────────────────────────────────────────────────────────
+  const category =
+    trimmed(record.category) ||
+    trimmed(record.serviceCategory) ||
+    trimmed(record.serviceName) ||
+    trimmed(record.serviceType) ||
+    trimmed(jobObj?.category) ||
+    trimmed(jobObj?.serviceCategory) ||
+    trimmed(jobObj?.serviceName) ||
+    trimmed(estimateObj?.category) ||
+    trimmed(estimateObj?.serviceCategory) ||
+    trimmed(requestObj?.category) ||
+    trimmed(requestObj?.serviceCategory) ||
+    undefined;
+
   return {
     id: id || `cal_${recordId || Math.random().toString(36).slice(2, 8)}`,
     kind,
@@ -1997,6 +2062,9 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     employeeId: crmIdOf(record.employeeId) || crmIdOf(record.contractorId) || undefined,
     href: makeHref(kind, recordId),
     status: trimmed(record.status) || "scheduled",
+    serviceAddress,
+    price,
+    category,
   };
 }
 

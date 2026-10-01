@@ -2266,31 +2266,103 @@ export async function querySchedule(query: CrmListQuery = {}) {
   const missingJobIds = Array.from(
     new Set(
       items
-        .filter((item) => (item.kind === "job" || item.kind === "fixed_service") && item.recordId && !item.notes)
+        .filter(
+          (item) =>
+            (item.kind === "job" || item.kind === "fixed_service") &&
+            item.recordId &&
+            (!item.serviceAddress || !item.price || !item.category || !item.notes),
+        )
         .map((item) => item.recordId),
     ),
   );
 
-  if (missingJobIds.length > 0) {
+  const missingEstimateIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "estimate" &&
+            item.recordId &&
+            (!item.serviceAddress || !item.price || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const formatAddr = (addr?: ServiceAddress | null) => {
+    if (!addr) return undefined;
+    const street = (addr.address || addr.street || "").trim();
+    const city = (addr.city || "").trim();
+    const state = (addr.state || "").trim();
+    const zip = (addr.zip || "").trim();
+    const loc = city && state ? `${city}, ${state}` : city || state;
+    const parts = [street, loc, zip].filter(Boolean);
+    return parts.length ? parts.join(" ") : undefined;
+  };
+
+  if (missingJobIds.length > 0 || missingEstimateIds.length > 0) {
     try {
-      const jobResults = await Promise.allSettled(
-        missingJobIds.map((jobId) => getJob(jobId)),
-      );
+      const [jobResults, estimateResults] = await Promise.all([
+        missingJobIds.length > 0
+          ? Promise.allSettled(missingJobIds.map((jobId) => getJob(jobId)))
+          : Promise.resolve([]),
+        missingEstimateIds.length > 0
+          ? Promise.allSettled(missingEstimateIds.map((estId) => getEstimate(estId)))
+          : Promise.resolve([]),
+      ]);
+
       const jobMap = new Map<string, Job>();
       jobResults.forEach((res) => {
         if (res.status === "fulfilled" && res.value) {
           jobMap.set(res.value.id, res.value);
         }
       });
+
+      const estimateMap = new Map<string, Estimate>();
+      estimateResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          estimateMap.set(res.value.id, res.value);
+        }
+      });
+
       return items.map((item) => {
-        if ((item.kind === "job" || item.kind === "fixed_service") && item.recordId && !item.notes) {
+        if ((item.kind === "job" || item.kind === "fixed_service") && item.recordId) {
           const job = jobMap.get(item.recordId);
           if (job) {
+            const addr = item.serviceAddress || formatAddr(job.address);
+            const price =
+              item.price ||
+              (typeof job.totalAmount === "number" && job.totalAmount > 0
+                ? `$${job.totalAmount.toFixed(2)}`
+                : undefined);
+            const category = item.category || job.serviceName || undefined;
             return {
               ...item,
-              notes: job.notes || job.description || undefined,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: job.notes || job.description || item.notes || undefined,
               detail: job.serviceName || job.notes || item.detail,
               customerName: item.customerName || job.customerName || undefined,
+            };
+          }
+        } else if (item.kind === "estimate" && item.recordId) {
+          const est = estimateMap.get(item.recordId);
+          if (est) {
+            const addr = item.serviceAddress || formatAddr(est.propertyAddress);
+            const price =
+              item.price ||
+              (typeof est.total === "number" && est.total > 0
+                ? `$${est.total.toFixed(2)}`
+                : undefined);
+            const category = item.category || est.title || undefined;
+            return {
+              ...item,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: est.notes || est.description || item.notes || undefined,
+              customerName: item.customerName || est.customerName || undefined,
             };
           }
         }

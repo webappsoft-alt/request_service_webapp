@@ -278,6 +278,12 @@ export type PortalCalendarEvent = {
   employeeId?: string;
   href: string;
   status: string;
+  /** One-line formatted site/service address e.g. "123 Main St, Austin TX 78701" */
+  serviceAddress?: string;
+  /** Total price / amount for the event (formatted as string e.g. "$250.00") */
+  price?: string;
+  /** Service category / type label */
+  category?: string;
 };
 
 export type PortalAssignment = {

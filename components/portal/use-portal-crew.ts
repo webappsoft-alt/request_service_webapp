@@ -370,25 +370,23 @@ export function usePortalCrew() {
           status: normalizeScheduleStatus(resolvedEvent.status),
         } as const;
 
+        let savedEvent: PortalCalendarEvent | null = null;
         if (existingSchedule && !String(existingSchedule.id).startsWith("cal_")) {
-          await updateScheduleApi(existingSchedule.id, payload);
+          savedEvent = await updateScheduleApi(existingSchedule.id, payload);
         } else {
-          await assignScheduleApi({
+          savedEvent = await assignScheduleApi({
             recordId: assignment.recordId,
             kind: assignment.kind,
             ...payload,
           });
         }
 
-        if (apiReady) {
-          await crm.refresh();
-        }
-        return;
+        return savedEvent;
       }
 
       throw new Error("Sign in to update the schedule on the server.");
     },
-    [apiReady, canCallApi, contractors, crm, events, key, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
+    [canCallApi, contractors, events, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
   );
 
   const addEmployee = useCallback(

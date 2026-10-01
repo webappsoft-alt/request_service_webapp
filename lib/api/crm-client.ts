@@ -2247,22 +2247,143 @@ export async function querySchedule(query: CrmListQuery = {}) {
   if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
-  if (kind) params.kind = kind;
+  // Backend validation strictly expects [job, estimate, request, invoice, task]
+  if (kind) {
+    params.kind = kind === "fixed_service" ? "job" : kind;
+  }
   const response = await getData(providerCrmApi.schedule, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,
   });
-  return mapCrmList(response, mapScheduleEvent).items.filter(
+  const rawItems = mapCrmList(response, mapScheduleEvent).items.filter(
     (item): item is NonNullable<typeof item> => Boolean(item),
   );
+  const items =
+    kind === "fixed_service"
+      ? rawItems.filter((item) => item.kind === "fixed_service")
+      : rawItems;
+
+  const missingJobIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            (item.kind === "job" || item.kind === "fixed_service") &&
+            item.recordId &&
+            (!item.serviceAddress || !item.price || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const missingEstimateIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "estimate" &&
+            item.recordId &&
+            (!item.serviceAddress || !item.price || !item.category || !item.notes),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const formatAddr = (addr?: ServiceAddress | null) => {
+    if (!addr) return undefined;
+    const street = (addr.address || addr.street || "").trim();
+    const city = (addr.city || "").trim();
+    const state = (addr.state || "").trim();
+    const zip = (addr.zip || "").trim();
+    const loc = city && state ? `${city}, ${state}` : city || state;
+    const parts = [street, loc, zip].filter(Boolean);
+    return parts.length ? parts.join(" ") : undefined;
+  };
+
+  if (missingJobIds.length > 0 || missingEstimateIds.length > 0) {
+    try {
+      const [jobResults, estimateResults] = await Promise.all([
+        missingJobIds.length > 0
+          ? Promise.allSettled(missingJobIds.map((jobId) => getJob(jobId)))
+          : Promise.resolve([]),
+        missingEstimateIds.length > 0
+          ? Promise.allSettled(missingEstimateIds.map((estId) => getEstimate(estId)))
+          : Promise.resolve([]),
+      ]);
+
+      const jobMap = new Map<string, Job>();
+      jobResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          jobMap.set(res.value.id, res.value);
+        }
+      });
+
+      const estimateMap = new Map<string, Estimate>();
+      estimateResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value) {
+          estimateMap.set(res.value.id, res.value);
+        }
+      });
+
+      return items.map((item) => {
+        if ((item.kind === "job" || item.kind === "fixed_service") && item.recordId) {
+          const job = jobMap.get(item.recordId);
+          if (job) {
+            const addr = item.serviceAddress || formatAddr(job.address);
+            const price =
+              item.price ||
+              (typeof job.totalAmount === "number" && job.totalAmount > 0
+                ? `$${job.totalAmount.toFixed(2)}`
+                : undefined);
+            const category = item.category || job.serviceName || undefined;
+            return {
+              ...item,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: job.notes || job.description || item.notes || undefined,
+              detail: job.serviceName || job.notes || item.detail,
+              customerName: item.customerName || job.customerName || undefined,
+            };
+          }
+        } else if (item.kind === "estimate" && item.recordId) {
+          const est = estimateMap.get(item.recordId);
+          if (est) {
+            const addr = item.serviceAddress || formatAddr(est.propertyAddress);
+            const price =
+              item.price ||
+              (typeof est.total === "number" && est.total > 0
+                ? `$${est.total.toFixed(2)}`
+                : undefined);
+            const category = item.category || est.title || undefined;
+            return {
+              ...item,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: est.notes || est.description || item.notes || undefined,
+              customerName: item.customerName || est.customerName || undefined,
+            };
+          }
+        }
+        return item;
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  return items;
 }
 
 export async function assignSchedule(schedule: CrmScheduleAssignment) {
+  // Backend validation strictly expects [job, estimate, request, invoice, task]
+  const backendKind = schedule.kind === "fixed_service" ? "job" : schedule.kind;
   const response = await postData(
     providerCrmApi.scheduleAssign,
     {
       recordId: schedule.recordId || null,
-      kind: schedule.kind,
+      kind: backendKind,
       title: schedule.title,
       date: schedule.date,
       endDate: schedule.endDate ?? null,

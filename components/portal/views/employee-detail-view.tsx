@@ -29,7 +29,7 @@ import {
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import { CreateNoteDialogForSubject, NotesPanel } from "@/components/portal/notes-panel";
 import { FileNotices } from "@/components/portal/task-banner";
-import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
+import { EventCalendar, EventCalendarSkeleton, type CalendarMove } from "@/components/portal/event-calendar";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
@@ -1105,11 +1105,7 @@ function EmployeeScheduleTab({
   const listLoading = selectTeamTabShowLoader(tab, employee.id, filterKey);
 
   if (listLoading) {
-    return (
-      <div className="rounded-md border border-border-soft" aria-busy="true">
-        <CenteredSpinner label="Loading schedule" className="min-h-[16rem]" />
-      </div>
-    );
+    return <EventCalendarSkeleton />;
   }
 
   return (

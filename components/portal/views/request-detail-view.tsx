@@ -36,7 +36,7 @@ import { NotesPanel } from "@/components/portal/notes-panel";
 import { ChatPanel } from "@/components/shared/chat-panel";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
 import { ConvertLeadToEstimateDialog } from "@/components/portal/convert-lead-to-estimate-dialog";
-import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
+import { EventCalendar, EventCalendarSkeleton, type CalendarMove } from "@/components/portal/event-calendar";
 import { jobBoardColumns } from "@/components/portal/job-columns";
 import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
@@ -1818,11 +1818,7 @@ export function RequestDetailView({ id }: { id: string }) {
             case "schedule": {
               const visitsCount = scheduledVisits.length;
               if (scheduleLoading && !hasScheduleData) {
-                return (
-                  <div className="border-border-soft bg-card" aria-busy="true">
-                    <CenteredSpinner label="Loading schedule…" className="min-h-[16rem]" />
-                  </div>
-                );
+                return <EventCalendarSkeleton />;
               }
               return (
                 <div className="space-y-0">

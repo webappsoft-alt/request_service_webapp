@@ -288,6 +288,24 @@ export function usePortalCrew() {
                     }
                   : undefined;
               }
+              case "fixed_service": {
+                return {
+                  id: `cal_${assignment.recordId}`,
+                  kind: "fixed_service",
+                  recordId: assignment.recordId,
+                  title: assignment.title || "Fix Service Order",
+                  detail: "Fixed service package",
+                  customerName: undefined,
+                  date: assignment.date,
+                  endDate: assignment.endDate,
+                  timeWindow: assignment.timeWindow,
+                  startMinutes: fallbackWindow.startMinutes,
+                  endMinutes: fallbackWindow.endMinutes,
+                  employeeId: assignment.employeeId,
+                  href: `/pro/dashboard/orders/${assignment.recordId}`,
+                  status: assignment.status ?? "scheduled",
+                };
+              }
               default: {
                 const _never: never = assignment.kind;
                 return _never;
@@ -352,25 +370,23 @@ export function usePortalCrew() {
           status: normalizeScheduleStatus(resolvedEvent.status),
         } as const;
 
+        let savedEvent: PortalCalendarEvent | null = null;
         if (existingSchedule && !String(existingSchedule.id).startsWith("cal_")) {
-          await updateScheduleApi(existingSchedule.id, payload);
+          savedEvent = await updateScheduleApi(existingSchedule.id, payload);
         } else {
-          await assignScheduleApi({
+          savedEvent = await assignScheduleApi({
             recordId: assignment.recordId,
             kind: assignment.kind,
             ...payload,
           });
         }
 
-        if (apiReady) {
-          await crm.refresh();
-        }
-        return;
+        return savedEvent;
       }
 
       throw new Error("Sign in to update the schedule on the server.");
     },
-    [apiReady, canCallApi, contractors, crm, events, key, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
+    [canCallApi, contractors, events, tasks, workspace.calendarEvents, workspace.estimates, workspace.invoices, workspace.jobs, workspace.requests],
   );
 
   const addEmployee = useCallback(

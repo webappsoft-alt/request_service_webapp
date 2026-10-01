@@ -75,6 +75,7 @@ export type ProviderDashboardData = {
       title: string;
       detail: string;
       kind: "chat" | "lead";
+      unread?: number;
     }>;
   };
   estimates: {

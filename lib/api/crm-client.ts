@@ -2741,6 +2741,7 @@ export async function getProviderDashboard(query: ProviderDashboardQuery = {}) {
               title: stringOr(row.title),
               detail: stringOr(row.detail),
               kind: stringOr(row.kind, "lead") === "chat" ? ("chat" as const) : ("lead" as const),
+              unread: numberOr(row.unread),
             };
           })
         : [],

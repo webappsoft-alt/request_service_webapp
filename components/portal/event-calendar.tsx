@@ -872,18 +872,27 @@ function MonthGrid({
   onContextMenuCard?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
   onContextMenuDay?: (e: React.MouseEvent, iso: string) => void;
 }) {
+  const gridLine = "#c5ccd6";
+
   return (
-    <div className="overflow-hidden border border-input bg-card">
-      <div className="grid grid-cols-7 border-b border-input bg-[#f7f8fa]">
+    <div
+      className="overflow-hidden rounded-sm bg-card"
+      style={{ border: `1px solid ${gridLine}` }}
+    >
+      <div
+        className="grid grid-cols-7 bg-[#f7f8fa]"
+        style={{ borderBottom: `1px solid ${gridLine}` }}
+      >
         {WEEKDAYS.map((day, index) => {
           const weekend = index === 0 || index === 6;
           return (
             <p
               key={day}
               className={cn(
-                "px-2 py-2 text-center text-[11px] font-semibold tracking-wide uppercase",
-                weekend ? "bg-primary/[0.06] text-primary" : "text-muted-foreground",
+                "px-2 py-2.5 text-center text-[11px] font-semibold tracking-wide uppercase",
+                weekend ? "bg-[#c5ceda] text-slate-700" : "text-muted-foreground",
               )}
+              style={index < 6 ? { borderRight: `1px solid ${gridLine}` } : undefined}
             >
               {day}
             </p>
@@ -894,16 +903,24 @@ function MonthGrid({
         {cells.map((cell, index) => {
           const weekday = index % 7;
           const weekend = weekday === 0 || weekday === 6;
+          const isLastCol = weekday === 6;
+          const isLastRow = index >= cells.length - 7;
 
           if (!cell.inMonth) {
+            const next = index < cells.length - 1 ? cells[index + 1] : null;
+            // Merge adjacent out-of-month cells into one muted block (no internal lines)
+            const mergeWithNext = Boolean(next && !next.inMonth && weekday < 6);
+
             return (
               <div
                 key={cell.iso}
                 aria-hidden="true"
-                className={cn(
-                  "min-h-36 h-auto border-b border-r border-input bg-[#f3f4f6] [&:nth-child(7n)]:border-r-0 [&:nth-last-child(-n+7)]:border-b-0",
-                  weekend && "bg-[#eef1f6]",
-                )}
+                className="min-h-36 h-auto pointer-events-none bg-[#e8ebef]"
+                style={{
+                  borderRight:
+                    mergeWithNext || isLastCol ? undefined : `1px solid ${gridLine}`,
+                  borderBottom: isLastRow ? undefined : `1px solid ${gridLine}`,
+                }}
               />
             );
           }
@@ -920,16 +937,20 @@ function MonthGrid({
               onDragLeave={() => onOver(null)}
               onDrop={(drag) => onDrop(cell.iso, drag)}
               className={cn(
-                "min-h-36 h-auto border-b border-r border-input p-1.5 flex flex-col justify-start [&:nth-child(7n)]:border-r-0 [&:nth-last-child(-n+7)]:border-b-0",
-                weekend && "bg-primary/[0.04]",
-                selectedDay === cell.iso && "bg-secondary/50",
-                overDay === cell.iso && "bg-primary/10",
+                "min-h-36 h-auto p-1.5 flex flex-col justify-start",
+                weekend && "bg-[#d5dde8]",
+                selectedDay === cell.iso && "bg-secondary/55",
+                overDay === cell.iso && "bg-primary/15",
               )}
+              style={{
+                borderRight: isLastCol ? undefined : `1px solid ${gridLine}`,
+                borderBottom: isLastRow ? undefined : `1px solid ${gridLine}`,
+              }}
             >
               <p
                 className={cn(
                   "mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium",
-                  weekend && cell.iso !== today && "text-primary",
+                  weekend && cell.iso !== today && "font-semibold text-slate-600",
                   cell.iso === today && "bg-primary text-primary-foreground",
                 )}
               >

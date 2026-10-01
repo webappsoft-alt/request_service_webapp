@@ -41,6 +41,11 @@ import {
   setRequestsStatus,
 } from "@/store/requestsSlice";
 import { crmCustomerName } from "@/lib/data/crm-people";
+import {
+  displayLeadArea,
+  displayLeadCustomerName,
+  displayLeadEmail,
+} from "@/lib/lead-display";
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import type { RequestStatus } from "@/lib/types";
@@ -320,17 +325,32 @@ export function RequestsView() {
 
   const enrichedSource: PortalRequest[] = useMemo(() => {
     return source.map((lead) => {
-      if (lead.customerName && lead.customerName !== "Customer") return lead;
-      const matched = customers.find((c) => c.id === lead.customerId);
-      if (matched) {
-        return {
-          ...lead,
-          customerName: crmCustomerName(matched),
-          customerEmail: lead.customerEmail || matched.email,
-          customerPhone: lead.customerPhone || matched.phone || "",
-        };
+      let next = lead;
+      if (!lead.customerName || lead.customerName === "Customer") {
+        const matched = customers.find((c) => c.id === lead.customerId);
+        if (matched) {
+          next = {
+            ...lead,
+            customerName: crmCustomerName(matched),
+            customerEmail: lead.customerEmail || matched.email,
+            customerPhone: lead.customerPhone || matched.phone || "",
+          };
+        }
       }
-      return lead;
+      const email = displayLeadEmail(next.customerEmail);
+      const area = displayLeadArea({
+        neighborhood: next.neighborhood,
+        city: next.city,
+        zip: next.zip,
+        email: next.customerEmail,
+      });
+      return {
+        ...next,
+        customerName: displayLeadCustomerName(next.customerName, next.customerEmail),
+        customerEmail: email,
+        neighborhood: area.label,
+        zip: area.zip || next.zip,
+      };
     });
   }, [source, customers]);
 

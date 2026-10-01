@@ -25,6 +25,11 @@ import type {
   QuoteAnswer,
 } from "@/lib/data/portal";
 import type { ChatAttachment, ChatMessage, ChatThread } from "@/lib/booking/chat-store";
+import {
+  displayLeadArea,
+  displayLeadCustomerName,
+  displayLeadEmail,
+} from "@/lib/lead-display";
 import type {
   ChangeOrder,
   Customer,
@@ -673,12 +678,20 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
         : "new",
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
-    customerName: customer.name || "Customer",
-    customerEmail: customer.email,
+    customerName: displayLeadCustomerName(customer.name, customer.email),
+    customerEmail: displayLeadEmail(customer.email),
     customerPhone: customer.phone,
     serviceName: trimmed(record.serviceName) || "Service request",
     categoryName: trimmed(category?.name) || trimmed(record.categoryName),
-    neighborhood: trimmed(record.neighborhood) || trimmed(record.city),
+    neighborhood: (() => {
+      const area = displayLeadArea({
+        neighborhood: trimmed(record.neighborhood),
+        city: trimmed(record.city),
+        zip: trimmed(record.zip),
+        email: customer.email,
+      });
+      return area.label;
+    })(),
     answers: answers.length ? answers : undefined,
   };
 }

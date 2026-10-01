@@ -25,7 +25,9 @@ import type {
 } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { trackLeadInteraction } from "@/lib/api/crm-client";
+import { getOrCreateGuestLeadId, guestLeadEmail } from "@/lib/lead-display";
 import { setLocation } from "@/store/locationSlice";
+import { selectAuthUser } from "@/store/authSlice";
 import {
   normalizePortfolioProject,
   type PortfolioProject,
@@ -42,7 +44,6 @@ import {
   type PublicProfessional,
   type PublicProfessionalActiveService,
 } from "@/store/publicProfessionalsSlice";
-import { selectAuthUser } from "@/store/authSlice";
 
 const RELATED_LIMIT = 8;
 
@@ -457,6 +458,7 @@ export function PublicProfessionalDetail({
   const [relatedProviders, setRelatedProviders] = useState<Provider[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const authUser = useAppSelector(selectAuthUser);
+  const customerLocation = useAppSelector((state) => state.location);
   const trackedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -464,12 +466,16 @@ export function PublicProfessionalDetail({
     const targetId = professional?.id || fallbackProvider?.id;
     if (!targetSlug && !targetId) return;
 
-    // Only logged-in registered customers create profile-view leads (once per provider).
-    const customerEmail = String(authUser?.email || "").trim();
-    if (!customerEmail) return;
+    // Pros / admins browsing should not create leads.
     if (authUser?.role && authUser.role !== "customer") return;
 
-    const trackKey = `lead-track:profile:${targetId || targetSlug}|${customerEmail.toLowerCase()}`;
+    const loggedInEmail = String(authUser?.email || "").trim().toLowerCase();
+    const isCustomer = Boolean(loggedInEmail) && (!authUser?.role || authUser.role === "customer");
+    const guestId = isCustomer ? "" : getOrCreateGuestLeadId();
+    const customerEmail = isCustomer ? loggedInEmail : guestLeadEmail(guestId);
+    if (!customerEmail) return;
+
+    const trackKey = `lead-track:profile:${targetId || targetSlug}|${customerEmail}`;
     if (trackedRef.current === trackKey) return;
     try {
       if (typeof window !== "undefined" && sessionStorage.getItem(trackKey)) {
@@ -486,11 +492,15 @@ export function PublicProfessionalDetail({
       // ignore
     }
 
-    const customerName =
-      [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
-      authUser?.name ||
-      "";
-    const phone = authUser?.phone || "";
+    const customerName = isCustomer
+      ? [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
+        authUser?.name ||
+        ""
+      : "Guest";
+    const phone = isCustomer ? authUser?.phone || "" : "";
+    const zip = String(customerLocation?.zip || "").trim();
+    const city = String(customerLocation?.city || "").trim();
+    const state = String(customerLocation?.state || "").trim();
 
     void trackLeadInteraction({
       providerId: targetId && /^[a-f\d]{24}$/i.test(targetId) ? targetId : undefined,
@@ -499,9 +509,24 @@ export function PublicProfessionalDetail({
       customerName,
       customerEmail,
       phone,
-      details: "Customer viewed provider profile on public directory.",
+      ...(zip ? { zip } : {}),
+      ...(city ? { city } : {}),
+      ...(state ? { state } : {}),
+      details: isCustomer
+        ? "Customer viewed provider profile on public directory."
+        : "Guest viewed provider profile on public directory.",
     });
-  }, [authUser, fallbackProvider?.id, fallbackProvider?.slug, professional?.id, professional?.slug, professionalSlug]);
+  }, [
+    authUser,
+    customerLocation?.city,
+    customerLocation?.state,
+    customerLocation?.zip,
+    fallbackProvider?.id,
+    fallbackProvider?.slug,
+    professional?.id,
+    professional?.slug,
+    professionalSlug,
+  ]);
 
   useEffect(() => {
     if (!professionalSlug) return;

@@ -33,6 +33,7 @@ import {
 } from "@/store/ordersSlice";
 import { selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
 import { trackLeadInteraction } from "@/lib/api/crm-client";
+import { getOrCreateGuestLeadId, guestLeadEmail } from "@/lib/lead-display";
 import type { JobRecord } from "@/lib/data/jobs";
 import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
@@ -425,14 +426,18 @@ export function PublicFixedServiceDetail({
   useEffect(() => {
     if (!service) return;
 
-    // Only logged-in registered customers create browsing leads (once per provider).
-    const customerEmail = String(authUser?.email || "").trim();
-    if (!customerEmail) return;
+    // Pros / admins browsing should not create leads.
     if (authUser?.role && authUser.role !== "customer") return;
+
+    const loggedInEmail = String(authUser?.email || "").trim().toLowerCase();
+    const isCustomer = Boolean(loggedInEmail) && (!authUser?.role || authUser.role === "customer");
+    const guestId = isCustomer ? "" : getOrCreateGuestLeadId();
+    const customerEmail = isCustomer ? loggedInEmail : guestLeadEmail(guestId);
+    if (!customerEmail) return;
 
     const providerKey =
       service.provider?.id || service.provider?.slug || service.id || serviceSlug;
-    const trackKey = `lead-track:browse:${providerKey}|${customerEmail.toLowerCase()}`;
+    const trackKey = `lead-track:browse:${providerKey}|${customerEmail}`;
     if (trackedRef.current === trackKey) return;
     try {
       if (typeof window !== "undefined" && sessionStorage.getItem(trackKey)) {
@@ -449,11 +454,15 @@ export function PublicFixedServiceDetail({
       // ignore
     }
 
-    const customerName =
-      [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
-      authUser?.name ||
-      "";
-    const phone = authUser?.phone || "";
+    const customerName = isCustomer
+      ? [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
+        authUser?.name ||
+        ""
+      : "Guest";
+    const phone = isCustomer ? authUser?.phone || "" : "";
+    const guestZip = String(customerLocation.zip || "").trim();
+    const guestCity = String(customerLocation.city || "").trim();
+    const guestState = String(customerLocation.state || "").trim();
 
     void trackLeadInteraction({
       fixedServiceId: /^[a-f\d]{24}$/i.test(service.id) ? service.id : undefined,
@@ -467,11 +476,14 @@ export function PublicFixedServiceDetail({
       customerName,
       customerEmail,
       phone,
-      zip: zip || service.workingArea?.[0] || "",
-      city: customerLocation.city || "",
-      details: `Customer inspected fixed service pricing and scope: ${service.servicesName || "Fixed Service"}.`,
+      ...(guestZip ? { zip: guestZip } : {}),
+      ...(guestCity ? { city: guestCity } : {}),
+      ...(guestState ? { state: guestState } : {}),
+      details: isCustomer
+        ? `Customer inspected fixed service pricing and scope: ${service.servicesName || "Fixed Service"}.`
+        : `Guest inspected fixed service pricing and scope: ${service.servicesName || "Fixed Service"}.`,
     });
-  }, [authUser, customerLocation.city, service, serviceSlug, zip]);
+  }, [authUser, customerLocation.city, customerLocation.state, customerLocation.zip, service, serviceSlug]);
 
   const openOrder = useMemo(() => {
     if (!isAuthenticated || !service?.id) return null;

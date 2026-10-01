@@ -1,10 +1,17 @@
 "use client";
 
 import { toast } from "sonner";
-import { EventCalendar, type CalendarMove } from "@/components/portal/event-calendar";
+import {
+  EventCalendar,
+  type CalendarMove,
+} from "@/components/portal/event-calendar";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import type { PortalCalendarEvent } from "@/lib/data/portal";
-import { calendarEventKindLabel, formatClock, windowFromMinutes } from "@/lib/data/portal";
+import {
+  calendarEventKindLabel,
+  formatClock,
+  windowFromMinutes,
+} from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 
 export function CustomerEventCalendar({
@@ -24,8 +31,11 @@ export function CustomerEventCalendar({
       endDate: move.endDate,
       startMinutes: move.startMinutes,
       endMinutes: move.endMinutes,
-      timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
-      employeeId: event.employeeId ?? employees.find((item) => item.active)?.id ?? "",
+      timeWindow:
+        windowFromMinutes(move.startMinutes, move.endMinutes) ||
+        event.timeWindow,
+      employeeId:
+        event.employeeId ?? employees.find((item) => item.active)?.id ?? "",
     });
     if (move.date) {
       const time =
@@ -39,5 +49,11 @@ export function CustomerEventCalendar({
     return result;
   }
 
-  return <EventCalendar events={events} employeeLabel={employeeLabel} onMove={moveEvent} />;
+  return (
+    <EventCalendar
+      events={events}
+      employeeLabel={employeeLabel}
+      onMove={moveEvent}
+    />
+  );
 }

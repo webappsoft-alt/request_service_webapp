@@ -5,14 +5,22 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
-import { EventCalendar, EventCalendarSkeleton, type CalendarMove } from "@/components/portal/event-calendar";
+import {
+  EventCalendar,
+  EventCalendarSkeleton,
+  type CalendarMove,
+} from "@/components/portal/event-calendar";
 import { PortalPage } from "@/components/portal/portal-page";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
 import { querySchedule } from "@/lib/api/crm-client";
-import type { PortalCalendarEvent, PortalEventKind, PortalTimeWindow } from "@/lib/data/portal";
+import type {
+  PortalCalendarEvent,
+  PortalEventKind,
+  PortalTimeWindow,
+} from "@/lib/data/portal";
 import {
   calendarEventKindLabel,
   employeeName,
@@ -51,7 +59,9 @@ function formatScheduleError(error: unknown): string {
 export function ScheduleView() {
   const searchParams = useSearchParams();
   const initialEmployeeId =
-    searchParams.get("employeeId")?.trim() || searchParams.get("employee")?.trim() || "";
+    searchParams.get("employeeId")?.trim() ||
+    searchParams.get("employee")?.trim() ||
+    "";
   const dispatch = useAppDispatch();
   const crm = useCrmApiData();
   const crmEnabled = crm.enabled;
@@ -68,13 +78,13 @@ export function ScheduleView() {
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
 
   const memberOptions = useMemo<ScheduleMemberOption[]>(() => {
-    const employeeRows = (team.length ? team : []).filter((item) => item.active !== false).map(
-      (item) => ({
+    const employeeRows = (team.length ? team : [])
+      .filter((item) => item.active !== false)
+      .map((item) => ({
         id: item.id,
         label: employeeName(item),
         kind: "employee" as const,
-      }),
-    );
+      }));
     const contractorRows = contractors
       .filter((item) => item.status === "active")
       .map((item) => ({
@@ -89,7 +99,15 @@ export function ScheduleView() {
   memberOptionsRef.current = memberOptions;
 
   const enrichedEvents = useMemo(() => {
-    const formatAddrObj = (addr?: { address?: string; street?: string; city?: string; state?: string; zip?: string } | null) => {
+    const formatAddrObj = (
+      addr?: {
+        address?: string;
+        street?: string;
+        city?: string;
+        state?: string;
+        zip?: string;
+      } | null,
+    ) => {
       if (!addr) return undefined;
       const street = (addr.address || addr.street || "").trim();
       const city = (addr.city || "").trim();
@@ -110,7 +128,7 @@ export function ScheduleView() {
             req.fixedServiceId ||
             (req as unknown as Record<string, unknown>).isFixedService ||
             src === "fixed_service_view" ||
-            src === "order"
+            src === "order",
           );
           if (isFixed) return false;
           if (src === "profile_view" || src === "direct_message") return false;
@@ -128,21 +146,41 @@ export function ScheduleView() {
       let category = event.category;
       let foundCustomerId: string | undefined;
 
-      if ((event.kind === "job" || event.kind === "fixed_service") && event.recordId) {
+      if (
+        (event.kind === "job" || event.kind === "fixed_service") &&
+        event.recordId
+      ) {
         const job = crm.jobs.find((j) => j.id === event.recordId);
         if (job) {
-          if (!notes) notes = job.notes || (job as unknown as Record<string, unknown>).description ? String(job.notes || (job as unknown as Record<string, unknown>).description) : "";
-          if (!customerName && ((job as unknown as Record<string, unknown>).customerName || job.assignedTo)) {
-            customerName = String((job as unknown as Record<string, unknown>).customerName || "");
+          if (!notes)
+            notes =
+              job.notes ||
+              (job as unknown as Record<string, unknown>).description
+                ? String(
+                    job.notes ||
+                      (job as unknown as Record<string, unknown>).description,
+                  )
+                : "";
+          if (
+            !customerName &&
+            ((job as unknown as Record<string, unknown>).customerName ||
+              job.assignedTo)
+          ) {
+            customerName = String(
+              (job as unknown as Record<string, unknown>).customerName || "",
+            );
           }
           const jobName =
             job.title && job.title !== job.number
               ? job.title
               : (job as unknown as Record<string, unknown>).serviceName
-                ? String((job as unknown as Record<string, unknown>).serviceName)
+                ? String(
+                    (job as unknown as Record<string, unknown>).serviceName,
+                  )
                 : job.items?.[0]?.description || undefined;
           if (!detail || detail === event.title) detail = jobName || detail;
-          if (!serviceAddress && job.address) serviceAddress = formatAddrObj(job.address);
+          if (!serviceAddress && job.address)
+            serviceAddress = formatAddrObj(job.address);
           if (!price) {
             const rawJobTotal =
               (job as unknown as Record<string, unknown>).totalAmount ??
@@ -151,12 +189,17 @@ export function ScheduleView() {
               (Array.isArray(job.items)
                 ? job.items.reduce(
                     (s: number, it) =>
-                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                      s +
+                      (Number(it.total) ||
+                        (Number(it.quantity) || 1) *
+                          (Number(it.unitPrice) || 0) ||
+                        0),
                     0,
                   )
                 : 0);
             const jobNum = Number(rawJobTotal);
-            if (!Number.isNaN(jobNum) && jobNum > 0) price = `$${jobNum.toFixed(2)}`;
+            if (!Number.isNaN(jobNum) && jobNum > 0)
+              price = `$${jobNum.toFixed(2)}`;
           }
           if (!category) category = jobName || undefined;
           foundCustomerId = job.customerId;
@@ -165,13 +208,15 @@ export function ScheduleView() {
         const est = crm.estimates.find((e) => e.id === event.recordId);
         if (est) {
           if (!notes) notes = est.notes || est.terms || "";
-          if (!customerName && est.customerName) customerName = est.customerName;
+          if (!customerName && est.customerName)
+            customerName = est.customerName;
           const estName =
             est.title && est.title !== est.number
               ? est.title
-              : est.items?.[0]?.name || est.items?.[0]?.description || undefined;
+              : est.items?.[0]?.description || undefined;
           if (!detail || detail === event.title) detail = estName || detail;
-          if (!serviceAddress && est.propertyAddress) serviceAddress = formatAddrObj(est.propertyAddress);
+          if (!serviceAddress && est.propertyAddress)
+            serviceAddress = formatAddrObj(est.propertyAddress);
           if (!price) {
             const rawEstTotal =
               est.total ??
@@ -179,12 +224,17 @@ export function ScheduleView() {
               (Array.isArray(est.items)
                 ? est.items.reduce(
                     (s: number, it) =>
-                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                      s +
+                      (Number(it.total) ||
+                        (Number(it.quantity) || 1) *
+                          (Number(it.unitPrice) || 0) ||
+                        0),
                     0,
                   )
                 : 0);
             const estNum = Number(rawEstTotal);
-            if (!Number.isNaN(estNum) && estNum > 0) price = `$${estNum.toFixed(2)}`;
+            if (!Number.isNaN(estNum) && estNum > 0)
+              price = `$${estNum.toFixed(2)}`;
           }
           if (!category) category = estName || undefined;
           foundCustomerId = est.customerId;
@@ -192,18 +242,31 @@ export function ScheduleView() {
       } else if (event.kind === "request" && event.recordId) {
         const req = crm.requests.find((r) => r.id === event.recordId);
         if (req) {
-          if (!notes) notes = req.notes || req.description || (req as unknown as Record<string, unknown>).details ? String(req.notes || req.description || (req as unknown as Record<string, unknown>).details) : "";
+          if (!notes)
+            notes =
+              req.details || (req as unknown as Record<string, unknown>).details
+                ? String(
+                    req.notes ||
+                      req.description ||
+                      (req as unknown as Record<string, unknown>).details,
+                  )
+                : "";
           if (!customerName || customerName === "Customer") {
-            customerName = req.customerName && req.customerName !== "Customer" ? req.customerName : undefined;
+            customerName =
+              req.customerName && req.customerName !== "Customer"
+                ? req.customerName
+                : undefined;
           }
-          const reqName = req.serviceName || req.title || undefined;
+          const reqName = req.serviceName || undefined;
           if (!detail || detail === event.title) detail = reqName || detail;
           if (!serviceAddress) {
             serviceAddress =
               typeof req.address === "string" && req.address
                 ? req.address
                 : formatAddrObj(req.address) ||
-                  (req.city && req.state ? `${req.city}, ${req.state} ${req.zip || ""}`.trim() : req.city || undefined);
+                  (req.city && req.state
+                    ? `${req.city}, ${req.state} ${req.zip || ""}`.trim()
+                    : req.city || undefined);
           }
           if (!price) {
             const reqBudget =
@@ -211,7 +274,8 @@ export function ScheduleView() {
               (req as unknown as Record<string, unknown>).startingPrice ??
               (req as unknown as Record<string, unknown>).price;
             const reqNum = Number(reqBudget);
-            if (!Number.isNaN(reqNum) && reqNum > 0) price = `$${reqNum.toFixed(2)}`;
+            if (!Number.isNaN(reqNum) && reqNum > 0)
+              price = `$${reqNum.toFixed(2)}`;
           }
           if (!category) category = req.categoryName || reqName || undefined;
           foundCustomerId = req.customerId;
@@ -219,46 +283,77 @@ export function ScheduleView() {
       } else if (event.kind === "task" && event.recordId) {
         const task = crm.tasks.find((t) => t.id === event.recordId);
         if (task) {
-          if (!notes) notes = task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description ? String(task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description) : "";
-          if (!customerName && task.customerName) customerName = task.customerName;
-          const taskName = task.title && task.title !== task.number ? task.title : undefined;
+          if (!notes)
+            notes =
+              task.note ||
+              (task as unknown as Record<string, unknown>).notes ||
+              (task as unknown as Record<string, unknown>).description
+                ? String(
+                    task.note ||
+                      (task as unknown as Record<string, unknown>).notes ||
+                      (task as unknown as Record<string, unknown>).description,
+                  )
+                : "";
+          if (!customerName && task.customerName)
+            customerName = task.customerName;
+          const taskName =
+            task.title && task.title !== task.number ? task.title : undefined;
           if (!detail || detail === event.title) detail = taskName || detail;
-          if (!category) category = (task.priority ? `Task · ${task.priority}` : taskName || "Task");
+          if (!category)
+            category = task.priority
+              ? `Task · ${task.priority}`
+              : taskName || "Task";
           foundCustomerId = task.customerId;
           if (task.jobId) {
             const linkedJob = crm.jobs.find((j) => j.id === task.jobId);
             if (linkedJob) {
-              if (!serviceAddress && linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+              if (!serviceAddress && linkedJob.address)
+                serviceAddress = formatAddrObj(linkedJob.address);
               if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
               if (!customerName && linkedJob.customerId) {
-                const cust = crm.customers.find((c) => c.id === linkedJob.customerId);
+                const cust = crm.customers.find(
+                  (c) => c.id === linkedJob.customerId,
+                );
                 if (cust) customerName = cust.name || cust.displayName;
               }
             }
           }
-          if (task.subjectKind === "customer" && task.subjectId && !foundCustomerId) {
+          if (
+            task.subjectKind === "customer" &&
+            task.subjectId &&
+            !foundCustomerId
+          ) {
             foundCustomerId = task.subjectId;
           } else if (task.subjectKind === "job" && task.subjectId) {
             const linkedJob = crm.jobs.find((j) => j.id === task.subjectId);
             if (linkedJob) {
-              if (!serviceAddress && linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+              if (!serviceAddress && linkedJob.address)
+                serviceAddress = formatAddrObj(linkedJob.address);
               if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
               if (!customerName && linkedJob.customerId) {
-                const cust = crm.customers.find((c) => c.id === linkedJob.customerId);
+                const cust = crm.customers.find(
+                  (c) => c.id === linkedJob.customerId,
+                );
                 if (cust) customerName = cust.name || cust.displayName;
               }
             }
           } else if (task.subjectKind === "estimate" && task.subjectId) {
-            const linkedEst = crm.estimates.find((e) => e.id === task.subjectId);
+            const linkedEst = crm.estimates.find(
+              (e) => e.id === task.subjectId,
+            );
             if (linkedEst) {
-              if (!serviceAddress && linkedEst.propertyAddress) serviceAddress = formatAddrObj(linkedEst.propertyAddress);
+              if (!serviceAddress && linkedEst.propertyAddress)
+                serviceAddress = formatAddrObj(linkedEst.propertyAddress);
               if (!foundCustomerId) foundCustomerId = linkedEst.customerId;
               if (!customerName) {
                 if (linkedEst.customerId) {
-                  const cust = crm.customers.find((c) => c.id === linkedEst.customerId);
+                  const cust = crm.customers.find(
+                    (c) => c.id === linkedEst.customerId,
+                  );
                   if (cust) customerName = cust.name || cust.displayName;
                 }
-                if (!customerName && linkedEst.customerName) customerName = linkedEst.customerName;
+                if (!customerName && linkedEst.customerName)
+                  customerName = linkedEst.customerName;
               }
             }
           } else if (task.subjectKind === "request" && task.subjectId) {
@@ -269,15 +364,23 @@ export function ScheduleView() {
                   typeof linkedReq.address === "string" && linkedReq.address
                     ? linkedReq.address
                     : formatAddrObj(linkedReq.address) ||
-                      (linkedReq.city && linkedReq.state ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim() : linkedReq.city || undefined);
+                      (linkedReq.city && linkedReq.state
+                        ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim()
+                        : linkedReq.city || undefined);
               }
               if (!foundCustomerId) foundCustomerId = linkedReq.customerId;
               if (!customerName) {
                 if (linkedReq.customerId) {
-                  const cust = crm.customers.find((c) => c.id === linkedReq.customerId);
+                  const cust = crm.customers.find(
+                    (c) => c.id === linkedReq.customerId,
+                  );
                   if (cust) customerName = cust.name || cust.displayName;
                 }
-                if (!customerName && linkedReq.customerName && linkedReq.customerName !== "Customer") {
+                if (
+                  !customerName &&
+                  linkedReq.customerName &&
+                  linkedReq.customerName !== "Customer"
+                ) {
                   customerName = linkedReq.customerName;
                 }
               }
@@ -287,9 +390,13 @@ export function ScheduleView() {
       } else if (event.kind === "invoice" && event.recordId) {
         const inv = crm.invoices.find((i) => i.id === event.recordId);
         if (inv) {
-          if (!notes) notes = inv.notes || "";
-          if (!customerName && inv.customerName) customerName = inv.customerName;
-          const invName = inv.subject || inv.title || inv.items?.[0]?.description || undefined;
+          if (!customerName && inv.customerName)
+            customerName = inv.customerName;
+          const invName =
+            inv.subject ||
+            inv.title ||
+            inv.items?.[0]?.description ||
+            undefined;
           if (!detail || detail === event.title) detail = invName || detail;
           if (!price) {
             const rawInvTotal =
@@ -298,15 +405,23 @@ export function ScheduleView() {
               (Array.isArray(inv.items)
                 ? inv.items.reduce(
                     (s: number, it) =>
-                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                      s +
+                      (Number(it.total) ||
+                        (Number(it.quantity) || 1) *
+                          (Number(it.unitPrice) || 0) ||
+                        0),
                     0,
                   )
                 : 0);
             const invNum = Number(rawInvTotal);
-            if (!Number.isNaN(invNum) && invNum > 0) price = `$${invNum.toFixed(2)}`;
+            if (!Number.isNaN(invNum) && invNum > 0)
+              price = `$${invNum.toFixed(2)}`;
           }
-          if (!category) category = invName || (inv.status ? `Invoice · ${inv.status}` : "Invoice");
-          if (!serviceAddress && inv.address) serviceAddress = formatAddrObj(inv.address);
+          if (!category)
+            category =
+              invName || (inv.status ? `Invoice · ${inv.status}` : "Invoice");
+          if (!serviceAddress && inv.address)
+            serviceAddress = formatAddrObj(inv.address);
           foundCustomerId = inv.customerId;
         }
       }
@@ -324,8 +439,10 @@ export function ScheduleView() {
           : customerName
             ? crm.customers.find(
                 (c) =>
-                  (c.name && c.name.toLowerCase() === customerName.toLowerCase()) ||
-                  (c.displayName && c.displayName.toLowerCase() === customerName.toLowerCase()),
+                  (c.name &&
+                    c.name.toLowerCase() === customerName.toLowerCase()) ||
+                  (c.displayName &&
+                    c.displayName.toLowerCase() === customerName.toLowerCase()),
               )
             : undefined;
         if (cust?.addresses?.[0]) {
@@ -380,7 +497,12 @@ export function ScheduleView() {
               if (mins > 0) {
                 startMinutes = mins;
                 endMinutes = Math.min(mins + 30, 24 * 60);
-                timeWindow = mins < 720 ? "morning" : mins < 1020 ? "afternoon" : "all_day";
+                timeWindow =
+                  mins < 720
+                    ? "morning"
+                    : mins < 1020
+                      ? "afternoon"
+                      : "all_day";
               }
             }
           }
@@ -395,30 +517,48 @@ export function ScheduleView() {
         if (task.jobId) {
           const linkedJob = crm.jobs.find((j) => j.id === task.jobId);
           if (linkedJob) {
-            if (linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+            if (linkedJob.address)
+              serviceAddress = formatAddrObj(linkedJob.address);
             if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
-            if (!taskCustName && (linkedJob as unknown as Record<string, unknown>).customerName) {
-              taskCustName = String((linkedJob as unknown as Record<string, unknown>).customerName);
+            if (
+              !taskCustName &&
+              (linkedJob as unknown as Record<string, unknown>).customerName
+            ) {
+              taskCustName = String(
+                (linkedJob as unknown as Record<string, unknown>).customerName,
+              );
             }
           }
         }
-        if (task.subjectKind === "customer" && task.subjectId && !foundCustomerId) {
+        if (
+          task.subjectKind === "customer" &&
+          task.subjectId &&
+          !foundCustomerId
+        ) {
           foundCustomerId = task.subjectId;
         } else if (task.subjectKind === "job" && task.subjectId) {
           const linkedJob = crm.jobs.find((j) => j.id === task.subjectId);
           if (linkedJob) {
-            if (!serviceAddress && linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+            if (!serviceAddress && linkedJob.address)
+              serviceAddress = formatAddrObj(linkedJob.address);
             if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
-            if (!taskCustName && (linkedJob as unknown as Record<string, unknown>).customerName) {
-              taskCustName = String((linkedJob as unknown as Record<string, unknown>).customerName);
+            if (
+              !taskCustName &&
+              (linkedJob as unknown as Record<string, unknown>).customerName
+            ) {
+              taskCustName = String(
+                (linkedJob as unknown as Record<string, unknown>).customerName,
+              );
             }
           }
         } else if (task.subjectKind === "estimate" && task.subjectId) {
           const linkedEst = crm.estimates.find((e) => e.id === task.subjectId);
           if (linkedEst) {
-            if (!serviceAddress && linkedEst.propertyAddress) serviceAddress = formatAddrObj(linkedEst.propertyAddress);
+            if (!serviceAddress && linkedEst.propertyAddress)
+              serviceAddress = formatAddrObj(linkedEst.propertyAddress);
             if (!foundCustomerId) foundCustomerId = linkedEst.customerId;
-            if (!taskCustName && linkedEst.customerName) taskCustName = linkedEst.customerName;
+            if (!taskCustName && linkedEst.customerName)
+              taskCustName = linkedEst.customerName;
           }
         } else if (task.subjectKind === "request" && task.subjectId) {
           const linkedReq = crm.requests.find((r) => r.id === task.subjectId);
@@ -428,10 +568,16 @@ export function ScheduleView() {
                 typeof linkedReq.address === "string" && linkedReq.address
                   ? linkedReq.address
                   : formatAddrObj(linkedReq.address) ||
-                    (linkedReq.city && linkedReq.state ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim() : linkedReq.city || undefined);
+                    (linkedReq.city && linkedReq.state
+                      ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim()
+                      : linkedReq.city || undefined);
             }
             if (!foundCustomerId) foundCustomerId = linkedReq.customerId;
-            if (!taskCustName && linkedReq.customerName && linkedReq.customerName !== "Customer") {
+            if (
+              !taskCustName &&
+              linkedReq.customerName &&
+              linkedReq.customerName !== "Customer"
+            ) {
               taskCustName = linkedReq.customerName;
             }
           }
@@ -447,9 +593,21 @@ export function ScheduleView() {
           }
         }
 
-        const taskName = task.title && task.title !== task.number ? task.title : undefined;
-        const category = task.priority ? `Task · ${task.priority}` : taskName || "Task";
-        const notes = task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description ? String(task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description) : undefined;
+        const taskName =
+          task.title && task.title !== task.number ? task.title : undefined;
+        const category = task.priority
+          ? `Task · ${task.priority}`
+          : taskName || "Task";
+        const notes =
+          task.note ||
+          (task as unknown as Record<string, unknown>).notes ||
+          (task as unknown as Record<string, unknown>).description
+            ? String(
+                task.note ||
+                  (task as unknown as Record<string, unknown>).notes ||
+                  (task as unknown as Record<string, unknown>).description,
+              )
+            : undefined;
 
         taskEvents.push({
           id: `task_${task.id}`,
@@ -464,8 +622,12 @@ export function ScheduleView() {
           timeWindow,
           startMinutes,
           endMinutes,
-          employeeId: task.assignedEmployeeId || task.assignedContractorId || undefined,
-          technicianName: task.assignedEmployeeName || task.assignedContractorName || undefined,
+          employeeId:
+            task.assignedEmployeeId || task.assignedContractorId || undefined,
+          technicianName:
+            task.assignedEmployeeName ||
+            task.assignedContractorName ||
+            undefined,
           href: `/pro/dashboard/tasks`,
           status: task.status || "scheduled",
           serviceAddress,
@@ -497,10 +659,13 @@ export function ScheduleView() {
         if (inv.jobId) {
           const linkedJob = crm.jobs.find((j) => j.id === inv.jobId);
           if (linkedJob) {
-            if (linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+            if (linkedJob.address)
+              serviceAddress = formatAddrObj(linkedJob.address);
             if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
             if (!customerName && linkedJob.customerId) {
-              const cust = crm.customers.find((c) => c.id === linkedJob.customerId);
+              const cust = crm.customers.find(
+                (c) => c.id === linkedJob.customerId,
+              );
               if (cust) customerName = cust.name || cust.displayName;
             }
           }
@@ -522,13 +687,21 @@ export function ScheduleView() {
           (Array.isArray(inv.items)
             ? inv.items.reduce(
                 (s: number, it) =>
-                  s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                  s +
+                  (Number(it.total) ||
+                    (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) ||
+                    0),
                 0,
               )
             : 0);
         const invNum = Number(rawInvTotal);
-        const price = !Number.isNaN(invNum) && invNum > 0 ? `$${invNum.toFixed(2)}` : undefined;
-        const invName = inv.items?.[0]?.description || (inv.status ? `Invoice · ${inv.status}` : "Invoice");
+        const price =
+          !Number.isNaN(invNum) && invNum > 0
+            ? `$${invNum.toFixed(2)}`
+            : undefined;
+        const invName =
+          inv.items?.[0]?.description ||
+          (inv.status ? `Invoice · ${inv.status}` : "Invoice");
 
         invoiceEvents.push({
           id: `inv_${inv.id}`,
@@ -552,7 +725,17 @@ export function ScheduleView() {
     }
 
     return [...scheduledEvents, ...taskEvents, ...invoiceEvents];
-  }, [crm.customers, crm.estimates, crm.invoices, crm.jobs, crm.requests, crm.tasks, events, kindFilter, memberFilter]);
+  }, [
+    crm.customers,
+    crm.estimates,
+    crm.invoices,
+    crm.jobs,
+    crm.requests,
+    crm.tasks,
+    events,
+    kindFilter,
+    memberFilter,
+  ]);
 
   const employeesForCalendar = useMemo(
     () =>
@@ -584,30 +767,36 @@ export function ScheduleView() {
     if (crmEnabled) void ensureCrmLoaded();
   }, [crmEnabled, dispatch, ensureCrmLoaded]);
 
-  const loadSchedule = useCallback(async (opts?: { quiet?: boolean }) => {
-    if (!opts?.quiet) setScheduleLoading(true);
-    try {
-      const selected = memberOptionsRef.current.find((item) => item.id === memberFilter);
-      const items = await querySchedule({
-        employeeId:
-          selected?.kind === "employee"
-            ? memberFilter
-            : memberFilter && !selected
+  const loadSchedule = useCallback(
+    async (opts?: { quiet?: boolean }) => {
+      if (!opts?.quiet) setScheduleLoading(true);
+      try {
+        const selected = memberOptionsRef.current.find(
+          (item) => item.id === memberFilter,
+        );
+        const items = await querySchedule({
+          employeeId:
+            selected?.kind === "employee"
               ? memberFilter
-              : undefined,
-        contractorId: selected?.kind === "contractor" ? memberFilter : undefined,
-        kind: kindFilter || undefined,
-        force: true,
-        silent: true,
-      });
-      setEvents(items);
-    } catch (error) {
-      toast.error(formatScheduleError(error));
-      setEvents([]);
-    } finally {
-      setScheduleLoading(false);
-    }
-  }, [kindFilter, memberFilter]);
+              : memberFilter && !selected
+                ? memberFilter
+                : undefined,
+          contractorId:
+            selected?.kind === "contractor" ? memberFilter : undefined,
+          kind: kindFilter || undefined,
+          force: true,
+          silent: true,
+        });
+        setEvents(items);
+      } catch (error) {
+        toast.error(formatScheduleError(error));
+        setEvents([]);
+      } finally {
+        setScheduleLoading(false);
+      }
+    },
+    [kindFilter, memberFilter],
+  );
 
   useEffect(() => {
     void loadSchedule();
@@ -630,7 +819,8 @@ export function ScheduleView() {
               startMinutes: move.startMinutes ?? e.startMinutes,
               endMinutes: move.endMinutes ?? e.endMinutes,
               timeWindow:
-                windowFromMinutes(move.startMinutes, move.endMinutes) || e.timeWindow,
+                windowFromMinutes(move.startMinutes, move.endMinutes) ||
+                e.timeWindow,
             }
           : e,
       ),
@@ -645,7 +835,9 @@ export function ScheduleView() {
       endDate: move.endDate,
       startMinutes: move.startMinutes,
       endMinutes: move.endMinutes,
-      timeWindow: windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow,
+      timeWindow:
+        windowFromMinutes(move.startMinutes, move.endMinutes) ||
+        event.timeWindow,
       employeeId: event.employeeId ?? memberOptionsRef.current[0]?.id ?? "",
     })
       .then((saved) => {
@@ -654,14 +846,18 @@ export function ScheduleView() {
             prev.map((e) =>
               e.id === event.id ||
               e.id === saved.id ||
-              (e.kind === saved.kind && e.recordId && e.recordId === saved.recordId)
+              (e.kind === saved.kind &&
+                e.recordId &&
+                e.recordId === saved.recordId)
                 ? {
                     ...e,
                     ...saved,
                     date: saved.date || move.date,
                     endDate: saved.endDate ?? move.endDate,
-                    startMinutes: saved.startMinutes ?? move.startMinutes ?? e.startMinutes,
-                    endMinutes: saved.endMinutes ?? move.endMinutes ?? e.endMinutes,
+                    startMinutes:
+                      saved.startMinutes ?? move.startMinutes ?? e.startMinutes,
+                    endMinutes:
+                      saved.endMinutes ?? move.endMinutes ?? e.endMinutes,
                     timeWindow:
                       saved.timeWindow ||
                       windowFromMinutes(move.startMinutes, move.endMinutes) ||
@@ -705,7 +901,11 @@ export function ScheduleView() {
                 prev.filter(
                   (e) =>
                     e.id !== toRemove.id &&
-                    !(e.kind === toRemove.kind && e.recordId && e.recordId === toRemove.recordId),
+                    !(
+                      e.kind === toRemove.kind &&
+                      e.recordId &&
+                      e.recordId === toRemove.recordId
+                    ),
                 ),
               );
               void Promise.resolve(removeSchedule(toRemove.id))
@@ -743,7 +943,11 @@ export function ScheduleView() {
             prev.filter(
               (e) =>
                 e.id !== event.id &&
-                !(e.kind === event.kind && e.recordId && e.recordId === event.recordId),
+                !(
+                  e.kind === event.kind &&
+                  e.recordId &&
+                  e.recordId === event.recordId
+                ),
             ),
           );
           if (editing?.id === event.id) setEditing(null);
@@ -776,12 +980,16 @@ export function ScheduleView() {
               const exists = prev.some(
                 (e) =>
                   e.id === saved.id ||
-                  (e.kind === saved.kind && e.recordId && e.recordId === saved.recordId),
+                  (e.kind === saved.kind &&
+                    e.recordId &&
+                    e.recordId === saved.recordId),
               );
               if (exists) {
                 return prev.map((e) =>
                   e.id === saved.id ||
-                  (e.kind === saved.kind && e.recordId && e.recordId === saved.recordId)
+                  (e.kind === saved.kind &&
+                    e.recordId &&
+                    e.recordId === saved.recordId)
                     ? { ...e, ...saved }
                     : e,
                 );

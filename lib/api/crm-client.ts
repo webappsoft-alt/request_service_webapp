@@ -2582,7 +2582,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
             const estName =
               est.title && est.title !== est.number
                 ? est.title
-                : est.items?.[0]?.name || est.items?.[0]?.description || undefined;
+                : est.items?.[0]?.description || undefined;
             const category = item.category || estName || undefined;
             return {
               ...item,
@@ -2609,7 +2609,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
             const price =
               item.price ||
               (!Number.isNaN(reqNum) && reqNum > 0 ? `$${reqNum.toFixed(2)}` : undefined);
-            const reqName = req.serviceName || req.title || undefined;
+            const reqName = req.serviceName || undefined;
             const category = item.category || req.categoryName || reqName || undefined;
             const reqCustomer = req.customerName && req.customerName !== "Customer" ? req.customerName : undefined;
             return {
@@ -2617,7 +2617,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
               serviceAddress: addr || item.serviceAddress || undefined,
               price: price || item.price || undefined,
               category: category || item.category || undefined,
-              notes: req.notes || req.description || item.notes || undefined,
+              notes: req.details || item.notes || undefined,
               detail: reqName || item.detail,
               customerName: item.customerName || reqCustomer || undefined,
             };

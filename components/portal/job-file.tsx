@@ -1080,14 +1080,11 @@ export function JobSettingsTab({
       toast.error("Select a customer before saving.");
       return;
     }
-    if (!draft.employeeId) {
-      toast.error("Select a team member before saving.");
-      return;
-    }
     if (!draft.start) {
       toast.error("Set a start date before saving.");
       return;
     }
+    // Empty employeeId = Unassigned is allowed; provider can assign later.
     const next = {
       ...draft,
       customerId: nextCustomerId,
@@ -1110,8 +1107,8 @@ export function JobSettingsTab({
             notes: next.notes,
             scheduledAt: next.start || undefined,
             dueAt: next.due || undefined,
-            assignedTo: next.employeeId || next.assignedTo || job.assignedTo,
-            assignedEmployeeId: next.employeeId || undefined,
+            assignedTo: next.employeeId || "",
+            assignedEmployeeId: next.employeeId || "",
             address: {
               ...job.address,
               address: next.street || job.address.address || job.address.street,

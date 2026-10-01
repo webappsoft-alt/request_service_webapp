@@ -227,6 +227,7 @@ export function AssignEventDialog({
         startMinutes: slot.startMinutes,
         endMinutes: slot.endMinutes,
         employeeId,
+        employeeLabel: employeeLabel.trim() || undefined,
       });
       onOpenChange(false);
     } catch (error) {
@@ -241,11 +242,16 @@ export function AssignEventDialog({
       <DialogContent className="sm:max-w-md" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>
-            {event ? "Assign on calendar" : "Schedule a visit"}
+            {event?.kind === "estimate"
+              ? "Schedule site visit"
+              : event
+                ? "Assign on calendar"
+                : "Schedule a visit"}
           </DialogTitle>
           <DialogDescription>
-            Put a job, estimate visit, or request on the calendar and assign it
-            to a team member or contractor.
+            {event?.kind === "estimate"
+              ? "Set or update the site-visit date, time, and assignee. Changes update the estimate visit and calendar."
+              : "Put a job, estimate visit, or request on the calendar and assign it to a team member or contractor."}
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">

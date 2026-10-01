@@ -2299,9 +2299,10 @@ export async function querySchedule(query: CrmListQuery = {}) {
   if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
-  // Backend validation strictly expects [job, estimate, request, invoice, task]
-  if (kind) {
-    params.kind = kind === "fixed_service" ? "job" : kind;
+  // Do not send kind=fixed_service to the API — older backends reject it.
+  // Fetch unfiltered schedule rows, then filter / merge Fix Service client-side.
+  if (kind && kind !== "fixed_service") {
+    params.kind = kind;
   }
   const response = await getData(providerCrmApi.schedule, params, {
     silent: query.silent ?? true,
@@ -2310,10 +2311,13 @@ export async function querySchedule(query: CrmListQuery = {}) {
   const rawItems = mapCrmList(response, mapScheduleEvent).items.filter(
     (item): item is NonNullable<typeof item> => Boolean(item),
   );
-  const items =
-    kind === "fixed_service"
-      ? rawItems.filter((item) => item.kind === "fixed_service")
-      : [...rawItems];
+  let items = rawItems.filter(
+    (item) =>
+      !(item.kind === "fixed_service" && String(item.status || "").toLowerCase() === "cancelled"),
+  );
+  if (kind === "fixed_service") {
+    items = items.filter((item) => item.kind === "fixed_service");
+  }
 
   if (!kind || kind === "invoice") {
     try {
@@ -2401,12 +2405,151 @@ export async function querySchedule(query: CrmListQuery = {}) {
     }
   }
 
+  // Fixed Service Orders: merge booking dates onto Schedule (existing + checkout sync).
+  if (!kind || kind === "fixed_service") {
+    try {
+      const { providerOrdersApi } = await import("@/components/api/ApiRoutesFile");
+      const ordersResponse = await getData(
+        providerOrdersApi.list,
+        { page: 1, limit: 200 },
+        { silent: true, force: true },
+      );
+      const root =
+        ordersResponse && typeof ordersResponse === "object"
+          ? (ordersResponse as Record<string, unknown>)
+          : {};
+      const data =
+        root.data && typeof root.data === "object"
+          ? (root.data as Record<string, unknown>)
+          : root;
+      const rawOrders = Array.isArray(data.orders)
+        ? data.orders
+        : Array.isArray(root.orders)
+          ? root.orders
+          : Array.isArray(data)
+            ? data
+            : [];
+      const existingIds = new Set(
+        items.map((it) => String(it.recordId || it.id || "")).filter(Boolean),
+      );
+      const hiddenStatuses = new Set(["CANCELLED", "DISPUTED"]);
+
+      for (const raw of rawOrders) {
+        if (!raw || typeof raw !== "object") continue;
+        const order = raw as Record<string, unknown>;
+        const orderId = String(order.id || order._id || "").trim();
+        if (!orderId || existingIds.has(orderId)) continue;
+
+        const status = String(order.status || "").toUpperCase();
+        if (hiddenStatuses.has(status)) continue;
+
+        const booking =
+          order.booking && typeof order.booking === "object"
+            ? (order.booking as Record<string, unknown>)
+            : order.bookingId && typeof order.bookingId === "object"
+              ? (order.bookingId as Record<string, unknown>)
+              : null;
+        const startIso = String(booking?.startTime || "").trim();
+        if (!startIso) continue;
+        const dateIso = startIso.slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) continue;
+
+        const startAt = new Date(startIso);
+        const endIso = String(booking?.endTime || "").trim();
+        const endAt = endIso ? new Date(endIso) : null;
+        if (Number.isNaN(startAt.getTime())) continue;
+
+        const startMinutes = startAt.getHours() * 60 + startAt.getMinutes();
+        let endMinutes =
+          endAt && !Number.isNaN(endAt.getTime())
+            ? endAt.getHours() * 60 + endAt.getMinutes()
+            : startMinutes + (Number(booking?.durationMinutes) || 60);
+        if (endMinutes <= startMinutes) endMinutes = startMinutes + 60;
+
+        const service =
+          order.service && typeof order.service === "object"
+            ? (order.service as Record<string, unknown>)
+            : order.serviceSnapshot && typeof order.serviceSnapshot === "object"
+              ? (order.serviceSnapshot as Record<string, unknown>)
+              : {};
+        const serviceName = String(
+          service.servicesName || service.title || service.name || "Fixed service",
+        );
+        const customer =
+          order.customer && typeof order.customer === "object"
+            ? (order.customer as Record<string, unknown>)
+            : order.customerId && typeof order.customerId === "object"
+              ? (order.customerId as Record<string, unknown>)
+              : {};
+        const customerName =
+          String(customer.name || "").trim() ||
+          `${customer.firstName || ""} ${customer.lastName || ""}`.trim() ||
+          undefined;
+        const orderNumber = String(order.orderNumber || "").trim();
+        const pricing =
+          order.pricing && typeof order.pricing === "object"
+            ? (order.pricing as Record<string, unknown>)
+            : {};
+        const totalNum = Number(pricing.totalAmount ?? pricing.basePrice);
+        const price =
+          !Number.isNaN(totalNum) && totalNum > 0
+            ? `$${totalNum.toFixed(2)}`
+            : undefined;
+
+        const address =
+          order.address && typeof order.address === "object"
+            ? (order.address as Record<string, unknown>)
+            : null;
+        let serviceAddress: string | undefined;
+        if (address) {
+          const street = String(address.street || address.address || "").trim();
+          const city = String(address.city || "").trim();
+          const state = String(address.state || "").trim();
+          const zip = String(address.zip || "").trim();
+          const parts = [
+            street,
+            city && state ? `${city}, ${state}` : city || state,
+            zip,
+          ].filter(Boolean);
+          serviceAddress = parts.length ? parts.join(" ") : undefined;
+        }
+
+        items.push({
+          id: `fso_${orderId}`,
+          kind: "fixed_service",
+          recordId: orderId,
+          title: orderNumber || `FSO-${orderId.slice(-4).toUpperCase()}`,
+          detail: serviceName,
+          customerName,
+          serviceAddress,
+          date: dateIso,
+          endDate: dateIso,
+          timeWindow: "custom",
+          startMinutes,
+          endMinutes,
+          href: `/pro/dashboard/orders/${orderId}`,
+          status:
+            status === "CONFIRMED" || status === "IN_PROGRESS"
+              ? "confirmed"
+              : status === "WORK_COMPLETED" || status === "SETTLED"
+                ? "completed"
+                : "scheduled",
+          price,
+          category: status ? `Fix Service · ${status}` : "Fix Service",
+        });
+        existingIds.add(orderId);
+      }
+    } catch {
+      /* non-blocking */
+    }
+  }
+
   const missingJobIds = Array.from(
     new Set(
       items
         .filter(
           (item) =>
-            (item.kind === "job" || item.kind === "fixed_service") &&
+            item.kind === "job" &&
             item.recordId &&
             (!item.serviceAddress || !item.price || !item.category || !item.notes),
         )
@@ -2738,8 +2881,8 @@ export async function querySchedule(query: CrmListQuery = {}) {
 }
 
 export async function assignSchedule(schedule: CrmScheduleAssignment) {
-  // Backend validation strictly expects [job, estimate, request, invoice, task]
-  const backendKind = schedule.kind === "fixed_service" ? "job" : schedule.kind;
+  // Backend accepts job | estimate | request | invoice | task | fixed_service
+  const backendKind = schedule.kind;
   const response = await postData(
     providerCrmApi.scheduleAssign,
     {

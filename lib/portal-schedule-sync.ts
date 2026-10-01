@@ -34,7 +34,7 @@ function normalizeScheduleStatus(value?: string): CrmScheduleStatus {
  * Silent on failure so create/update flows still succeed.
  */
 export async function syncCalendarAssignment(input: {
-  kind: "job" | "estimate";
+  kind: "job" | "estimate" | "fixed_service";
   recordId: string;
   title: string;
   date?: string | null;
@@ -59,7 +59,9 @@ export async function syncCalendarAssignment(input: {
   const employeeId = String(input.employeeId || "").trim() || null;
   // Site-visit → calendar must never flip estimate status to "scheduled".
   const linkOnly =
-    input.linkOnly === true || input.kind === "estimate";
+    input.linkOnly === true ||
+    input.kind === "estimate" ||
+    input.kind === "fixed_service";
 
   try {
     const existing = await querySchedule({
@@ -74,11 +76,18 @@ export async function syncCalendarAssignment(input: {
             item.kind === input.kind &&
             item.recordId === input.recordId &&
             item.id &&
-            !String(item.id).startsWith("cal_"),
+            !String(item.id).startsWith("cal_") &&
+            !String(item.id).startsWith("fso_"),
         );
 
     const payload = {
-      title: input.title || (input.kind === "job" ? "Job" : "Site visit"),
+      title:
+        input.title ||
+        (input.kind === "job"
+          ? "Job"
+          : input.kind === "fixed_service"
+            ? "Fixed service"
+            : "Site visit"),
       date,
       endDate,
       startMinutes,
@@ -105,9 +114,9 @@ export async function syncCalendarAssignment(input: {
   }
 }
 
-/** Remove calendar row(s) for a job/estimate and clear linkage. */
+/** Remove calendar row(s) for a job/estimate/fixed service and clear linkage. */
 export async function clearCalendarAssignment(input: {
-  kind: "job" | "estimate";
+  kind: "job" | "estimate" | "fixed_service";
   recordId: string;
 }) {
   if (!input.recordId) return;

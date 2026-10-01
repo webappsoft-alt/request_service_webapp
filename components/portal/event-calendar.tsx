@@ -31,8 +31,9 @@ export function getEventDetailUrl(event: PortalCalendarEvent): string {
   const id = event.recordId || event.id;
   switch (event.kind) {
     case "job":
-    case "fixed_service":
       return `/pro/dashboard/jobs/${id}`;
+    case "fixed_service":
+      return `/pro/dashboard/orders/${id}`;
     case "estimate":
       return `/pro/dashboard/estimates/${id}`;
     case "request":

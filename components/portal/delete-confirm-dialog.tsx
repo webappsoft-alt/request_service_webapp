@@ -17,6 +17,7 @@ export function DeleteConfirmDialog({
   title = "Delete Item",
   description = "Are you sure you want to delete this item? This action cannot be undone.",
   confirmLabel = "Delete",
+  loadingLabel = "Deleting…",
   loading = false,
   onConfirm,
 }: {
@@ -25,6 +26,7 @@ export function DeleteConfirmDialog({
   title?: string;
   description?: string;
   confirmLabel?: string;
+  loadingLabel?: string;
   loading?: boolean;
   onConfirm: () => void | Promise<void>;
 }) {
@@ -37,18 +39,18 @@ export function DeleteConfirmDialog({
       }}
     >
       <DialogContent className="max-w-md" data-lenis-prevent>
-        <DialogHeader>
+        <DialogHeader className="border-b-0 bg-transparent">
           <div className="flex items-center gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400">
               <AlertTriangle className="size-5" />
             </div>
             <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
           </div>
-          <DialogDescription className="pt-2 text-sm text-muted-foreground leading-relaxed">
-            {description}
-          </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="mt-4 flex flex-row justify-end gap-2">
+        <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
+          {description}
+        </DialogDescription>
+        <DialogFooter className="mt-0 border-t-0 pt-0 flex flex-row justify-end gap-2">
           <Button
             type="button"
             variant="outline"
@@ -68,7 +70,7 @@ export function DeleteConfirmDialog({
             {loading ? (
               <>
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
-                Deleting…
+                {loadingLabel}
               </>
             ) : (
               confirmLabel

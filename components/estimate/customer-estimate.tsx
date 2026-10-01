@@ -48,6 +48,7 @@ import {
 import { publicApi, userApi } from "@/components/api/ApiRoutesFile";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
 import {
   forgetCustomerEstimateToken,
   rememberCustomerEstimateToken,
@@ -398,6 +399,7 @@ export function CustomerEstimatePage({
     undefined,
   );
   const [rejecting, setRejecting] = useState(false);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const [requestingChanges, setRequestingChanges] = useState(false);
   const [changeReason, setChangeReason] = useState("");
   const [showChangeForm, setShowChangeForm] = useState(false);
@@ -604,10 +606,6 @@ export function CustomerEstimatePage({
 
   async function rejectEstimate() {
     if (!snapshot || rejecting) return;
-    const confirmed = window.confirm(
-      "Decline this estimate? The professional will be notified.",
-    );
-    if (!confirmed) return;
     setRejecting(true);
     try {
       if (viaUserApi && estimateId) {
@@ -621,6 +619,7 @@ export function CustomerEstimatePage({
           { token: null, skipLogoutOn401: true },
         );
       }
+      setDeclineOpen(false);
       toast.success("Estimate declined.");
       void load();
     } catch (err) {
@@ -824,9 +823,9 @@ export function CustomerEstimatePage({
                   variant="outline"
                   size="sm"
                   disabled={rejecting || requestingChanges}
-                  onClick={() => void rejectEstimate()}
+                  onClick={() => setDeclineOpen(true)}
                 >
-                  {rejecting ? "Declining…" : "Decline estimate"}
+                  Decline estimate
                 </Button>
               </>
             ) : null}
@@ -999,8 +998,26 @@ export function CustomerEstimatePage({
       </div>
   );
 
+  const declineDialog = (
+    <DeleteConfirmDialog
+      open={declineOpen}
+      onOpenChange={setDeclineOpen}
+      title="Decline this estimate?"
+      description="The professional will be notified that you declined this estimate. You can still request a new quote later if needed."
+      confirmLabel="Decline estimate"
+      loadingLabel="Declining…"
+      loading={rejecting}
+      onConfirm={() => void rejectEstimate()}
+    />
+  );
+
   if (embedded) {
-    return <div className="w-full space-y-4 print:space-y-0">{documentContent}</div>;
+    return (
+      <div className="w-full space-y-4 print:space-y-0">
+        {documentContent}
+        {declineDialog}
+      </div>
+    );
   }
 
   return (
@@ -1009,6 +1026,7 @@ export function CustomerEstimatePage({
       className="min-h-svh bg-muted/20 px-4 py-6 sm:py-10 print:min-h-0 print:bg-white print:p-0 print:m-0"
     >
       {documentContent}
+      {declineDialog}
     </main>
   );
 }

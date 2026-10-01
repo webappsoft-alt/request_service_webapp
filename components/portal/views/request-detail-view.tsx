@@ -2496,7 +2496,7 @@ export function RequestDetailView({ id }: { id: string }) {
             );
           }
           toast.success(
-            "Estimate created. Finalize and Share with customer so they can review and sign.",
+            "Estimate created as Draft. Click Finalize & send to email the customer.",
           );
         }}
       />

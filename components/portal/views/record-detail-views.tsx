@@ -530,17 +530,16 @@ export function EstimateDetailView({ id }: { id: string }) {
         records.setStatus("estimate", quote.id, "finalized");
         setStatusOverride("finalized");
       }
-      toast.success(
-        "Estimate finalized. Open Share to send the customer link.",
-      );
+      toast.success("Estimate finalized. Send it to the customer to review & sign.");
+      // Immediately open Send for approval — creating/finalizing alone does not notify.
+      setApprovalOpen(true);
     } catch (error) {
       const message = extractErrorMessage(error);
       if (/status/i.test(message) && /finalized|one of|valid/i.test(message)) {
         setStatusOverride("finalized");
         crm.patchEstimate(quote.id, { status: "finalized" });
-        toast.success(
-          "Estimate finalized. Open Share to send the customer link.",
-        );
+        toast.success("Estimate finalized. Send it to the customer to review & sign.");
+        setApprovalOpen(true);
         return;
       }
       toast.error(message || "Could not finalize this estimate.");
@@ -1018,7 +1017,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                 {canShare ? (
                   <Button size="sm" className="h-8" variant="default" onClick={openApproval}>
                     <Share2 className="size-3.5" />
-                    Send for approval
+                    Send to customer
                   </Button>
                 ) : canFinalize ? (
                   <Button
@@ -1027,7 +1026,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     disabled={finalizing}
                     onClick={() => void finalizeEstimate()}
                   >
-                    {finalizing ? "Finalizing…" : "Finalize estimate"}
+                    {finalizing ? "Finalizing…" : "Finalize & send"}
                   </Button>
                 ) : estimate.status === "site_visit" ? (
                   <Button size="sm" variant="outline" className="h-8" asChild>

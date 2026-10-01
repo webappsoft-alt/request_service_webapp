@@ -72,7 +72,10 @@ function statusLabel(status: string) {
   if (clean === "converted_to_job") return "Job Created";
   if (clean === "site_visit") return "Site Visit";
   if (clean === "changes_requested") return "Changes Requested";
-  if (clean === "estimate_sent") return "Estimate Sent";
+  if (clean === "estimate_sent" || clean === "sent") return "Ready to review";
+  if (clean === "finalized") return "Almost ready";
+  if (clean === "draft") return "Preparing";
+  if (clean === "accepted") return "Accepted";
   if (clean === "declined") return "Declined";
   if (clean === "rejected") return "Rejected";
   return status

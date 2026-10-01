@@ -12,7 +12,7 @@ import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
 import { querySchedule } from "@/lib/api/crm-client";
-import type { PortalCalendarEvent, PortalEventKind } from "@/lib/data/portal";
+import type { PortalCalendarEvent, PortalEventKind, PortalTimeWindow } from "@/lib/data/portal";
 import {
   calendarEventKindLabel,
   employeeName,
@@ -100,7 +100,26 @@ export function ScheduleView() {
       return parts.length ? parts.join(" ") : undefined;
     };
 
-    return events.map((event) => {
+    const filteredEvents = events.filter((event) => {
+      if (event.kind === "request") {
+        const req = crm.requests.find((r) => r.id === event.recordId);
+        if (req) {
+          const src = (req.source || "").toLowerCase();
+          const isFixed = Boolean(
+            req.serviceId ||
+            req.fixedServiceId ||
+            (req as unknown as Record<string, unknown>).isFixedService ||
+            src === "fixed_service_view" ||
+            src === "order"
+          );
+          if (isFixed) return false;
+          if (src === "profile_view" || src === "direct_message") return false;
+        }
+      }
+      return true;
+    });
+
+    const scheduledEvents = filteredEvents.map((event) => {
       let notes = event.notes;
       let detail = event.detail;
       let customerName = event.customerName;
@@ -173,13 +192,18 @@ export function ScheduleView() {
       } else if (event.kind === "request" && event.recordId) {
         const req = crm.requests.find((r) => r.id === event.recordId);
         if (req) {
-          if (!notes) notes = req.notes || req.description || "";
-          if (!customerName && req.customerName) customerName = req.customerName;
+          if (!notes) notes = req.notes || req.description || (req as unknown as Record<string, unknown>).details ? String(req.notes || req.description || (req as unknown as Record<string, unknown>).details) : "";
+          if (!customerName || customerName === "Customer") {
+            customerName = req.customerName && req.customerName !== "Customer" ? req.customerName : undefined;
+          }
           const reqName = req.serviceName || req.title || undefined;
           if (!detail || detail === event.title) detail = reqName || detail;
-          if (!serviceAddress && req.address) {
+          if (!serviceAddress) {
             serviceAddress =
-              typeof req.address === "string" ? req.address : formatAddrObj(req.address);
+              typeof req.address === "string" && req.address
+                ? req.address
+                : formatAddrObj(req.address) ||
+                  (req.city && req.state ? `${req.city}, ${req.state} ${req.zip || ""}`.trim() : req.city || undefined);
           }
           if (!price) {
             const reqBudget =
@@ -189,34 +213,121 @@ export function ScheduleView() {
             const reqNum = Number(reqBudget);
             if (!Number.isNaN(reqNum) && reqNum > 0) price = `$${reqNum.toFixed(2)}`;
           }
-          if (!category) category = reqName || undefined;
+          if (!category) category = req.categoryName || reqName || undefined;
           foundCustomerId = req.customerId;
         }
       } else if (event.kind === "task" && event.recordId) {
         const task = crm.tasks.find((t) => t.id === event.recordId);
         if (task) {
-          if (!notes) notes = task.notes || task.description || "";
+          if (!notes) notes = task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description ? String(task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description) : "";
           if (!customerName && task.customerName) customerName = task.customerName;
           const taskName = task.title && task.title !== task.number ? task.title : undefined;
           if (!detail || detail === event.title) detail = taskName || detail;
-          if (!category) category = taskName || undefined;
+          if (!category) category = (task.priority ? `Task · ${task.priority}` : taskName || "Task");
           foundCustomerId = task.customerId;
+          if (task.jobId) {
+            const linkedJob = crm.jobs.find((j) => j.id === task.jobId);
+            if (linkedJob) {
+              if (!serviceAddress && linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+              if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
+              if (!customerName && linkedJob.customerId) {
+                const cust = crm.customers.find((c) => c.id === linkedJob.customerId);
+                if (cust) customerName = cust.name || cust.displayName;
+              }
+            }
+          }
+          if (task.subjectKind === "customer" && task.subjectId && !foundCustomerId) {
+            foundCustomerId = task.subjectId;
+          } else if (task.subjectKind === "job" && task.subjectId) {
+            const linkedJob = crm.jobs.find((j) => j.id === task.subjectId);
+            if (linkedJob) {
+              if (!serviceAddress && linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+              if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
+              if (!customerName && linkedJob.customerId) {
+                const cust = crm.customers.find((c) => c.id === linkedJob.customerId);
+                if (cust) customerName = cust.name || cust.displayName;
+              }
+            }
+          } else if (task.subjectKind === "estimate" && task.subjectId) {
+            const linkedEst = crm.estimates.find((e) => e.id === task.subjectId);
+            if (linkedEst) {
+              if (!serviceAddress && linkedEst.propertyAddress) serviceAddress = formatAddrObj(linkedEst.propertyAddress);
+              if (!foundCustomerId) foundCustomerId = linkedEst.customerId;
+              if (!customerName) {
+                if (linkedEst.customerId) {
+                  const cust = crm.customers.find((c) => c.id === linkedEst.customerId);
+                  if (cust) customerName = cust.name || cust.displayName;
+                }
+                if (!customerName && linkedEst.customerName) customerName = linkedEst.customerName;
+              }
+            }
+          } else if (task.subjectKind === "request" && task.subjectId) {
+            const linkedReq = crm.requests.find((r) => r.id === task.subjectId);
+            if (linkedReq) {
+              if (!serviceAddress) {
+                serviceAddress =
+                  typeof linkedReq.address === "string" && linkedReq.address
+                    ? linkedReq.address
+                    : formatAddrObj(linkedReq.address) ||
+                      (linkedReq.city && linkedReq.state ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim() : linkedReq.city || undefined);
+              }
+              if (!foundCustomerId) foundCustomerId = linkedReq.customerId;
+              if (!customerName) {
+                if (linkedReq.customerId) {
+                  const cust = crm.customers.find((c) => c.id === linkedReq.customerId);
+                  if (cust) customerName = cust.name || cust.displayName;
+                }
+                if (!customerName && linkedReq.customerName && linkedReq.customerName !== "Customer") {
+                  customerName = linkedReq.customerName;
+                }
+              }
+            }
+          }
         }
       } else if (event.kind === "invoice" && event.recordId) {
         const inv = crm.invoices.find((i) => i.id === event.recordId);
         if (inv) {
           if (!notes) notes = inv.notes || "";
           if (!customerName && inv.customerName) customerName = inv.customerName;
-          if (!price && typeof inv.total === "number" && inv.total > 0) {
-            price = `$${inv.total.toFixed(2)}`;
+          const invName = inv.subject || inv.title || inv.items?.[0]?.description || undefined;
+          if (!detail || detail === event.title) detail = invName || detail;
+          if (!price) {
+            const rawInvTotal =
+              inv.total ??
+              inv.balance ??
+              (Array.isArray(inv.items)
+                ? inv.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const invNum = Number(rawInvTotal);
+            if (!Number.isNaN(invNum) && invNum > 0) price = `$${invNum.toFixed(2)}`;
           }
+          if (!category) category = invName || (inv.status ? `Invoice · ${inv.status}` : "Invoice");
+          if (!serviceAddress && inv.address) serviceAddress = formatAddrObj(inv.address);
           foundCustomerId = inv.customerId;
         }
       }
 
-      // If serviceAddress is still missing, fallback to customer profile primary address
-      if (!serviceAddress && foundCustomerId) {
+      // If customerName is still missing, fallback to found customer profile
+      if ((!customerName || customerName === "Customer") && foundCustomerId) {
         const cust = crm.customers.find((c) => c.id === foundCustomerId);
+        if (cust) customerName = cust.name || cust.displayName;
+      }
+
+      // If serviceAddress is still missing, fallback to customer profile primary address
+      if (!serviceAddress) {
+        const cust = foundCustomerId
+          ? crm.customers.find((c) => c.id === foundCustomerId)
+          : customerName
+            ? crm.customers.find(
+                (c) =>
+                  (c.name && c.name.toLowerCase() === customerName.toLowerCase()) ||
+                  (c.displayName && c.displayName.toLowerCase() === customerName.toLowerCase()),
+              )
+            : undefined;
         if (cust?.addresses?.[0]) {
           serviceAddress = formatAddrObj(cust.addresses[0]);
         }
@@ -232,7 +343,216 @@ export function ScheduleView() {
         category: category || undefined,
       };
     });
-  }, [crm.customers, crm.estimates, crm.invoices, crm.jobs, crm.requests, crm.tasks, events]);
+
+    // Also include all CRM tasks whose due date is in the future / scheduled that are not already present
+    const existingTaskRecordIds = new Set(
+      scheduledEvents
+        .filter((e) => e.kind === "task")
+        .map((e) => e.recordId || e.id),
+    );
+
+    const taskEvents: PortalCalendarEvent[] = [];
+    if (!kindFilter || kindFilter === "task") {
+      crm.tasks.forEach((task) => {
+        if (!task.id || existingTaskRecordIds.has(task.id)) return;
+        if (!task.dueAt) return;
+        const dueIso = task.dueAt.slice(0, 10);
+        if (!dueIso || !/^\d{4}-\d{2}-\d{2}$/.test(dueIso)) return;
+
+        // If memberFilter is set, only include tasks assigned to that member
+        if (
+          memberFilter &&
+          task.assignedEmployeeId !== memberFilter &&
+          task.assignedContractorId !== memberFilter
+        ) {
+          return;
+        }
+
+        let startMinutes = 540;
+        let endMinutes = 570;
+        let timeWindow: PortalTimeWindow = "morning";
+
+        try {
+          if (task.dueAt.includes("T")) {
+            const d = new Date(task.dueAt);
+            if (!Number.isNaN(d.getTime())) {
+              const mins = d.getHours() * 60 + d.getMinutes();
+              if (mins > 0) {
+                startMinutes = mins;
+                endMinutes = Math.min(mins + 30, 24 * 60);
+                timeWindow = mins < 720 ? "morning" : mins < 1020 ? "afternoon" : "all_day";
+              }
+            }
+          }
+        } catch {
+          /* use defaults */
+        }
+
+        let serviceAddress: string | undefined;
+        let foundCustomerId = task.customerId;
+        let taskCustName = task.customerName;
+
+        if (task.jobId) {
+          const linkedJob = crm.jobs.find((j) => j.id === task.jobId);
+          if (linkedJob) {
+            if (linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+            if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
+            if (!taskCustName && (linkedJob as unknown as Record<string, unknown>).customerName) {
+              taskCustName = String((linkedJob as unknown as Record<string, unknown>).customerName);
+            }
+          }
+        }
+        if (task.subjectKind === "customer" && task.subjectId && !foundCustomerId) {
+          foundCustomerId = task.subjectId;
+        } else if (task.subjectKind === "job" && task.subjectId) {
+          const linkedJob = crm.jobs.find((j) => j.id === task.subjectId);
+          if (linkedJob) {
+            if (!serviceAddress && linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+            if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
+            if (!taskCustName && (linkedJob as unknown as Record<string, unknown>).customerName) {
+              taskCustName = String((linkedJob as unknown as Record<string, unknown>).customerName);
+            }
+          }
+        } else if (task.subjectKind === "estimate" && task.subjectId) {
+          const linkedEst = crm.estimates.find((e) => e.id === task.subjectId);
+          if (linkedEst) {
+            if (!serviceAddress && linkedEst.propertyAddress) serviceAddress = formatAddrObj(linkedEst.propertyAddress);
+            if (!foundCustomerId) foundCustomerId = linkedEst.customerId;
+            if (!taskCustName && linkedEst.customerName) taskCustName = linkedEst.customerName;
+          }
+        } else if (task.subjectKind === "request" && task.subjectId) {
+          const linkedReq = crm.requests.find((r) => r.id === task.subjectId);
+          if (linkedReq) {
+            if (!serviceAddress) {
+              serviceAddress =
+                typeof linkedReq.address === "string" && linkedReq.address
+                  ? linkedReq.address
+                  : formatAddrObj(linkedReq.address) ||
+                    (linkedReq.city && linkedReq.state ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim() : linkedReq.city || undefined);
+            }
+            if (!foundCustomerId) foundCustomerId = linkedReq.customerId;
+            if (!taskCustName && linkedReq.customerName && linkedReq.customerName !== "Customer") {
+              taskCustName = linkedReq.customerName;
+            }
+          }
+        }
+
+        if (foundCustomerId) {
+          const cust = crm.customers.find((c) => c.id === foundCustomerId);
+          if (cust) {
+            if (!taskCustName) taskCustName = cust.name || cust.displayName;
+            if (!serviceAddress && cust.addresses?.[0]) {
+              serviceAddress = formatAddrObj(cust.addresses[0]);
+            }
+          }
+        }
+
+        const taskName = task.title && task.title !== task.number ? task.title : undefined;
+        const category = task.priority ? `Task · ${task.priority}` : taskName || "Task";
+        const notes = task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description ? String(task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description) : undefined;
+
+        taskEvents.push({
+          id: `task_${task.id}`,
+          kind: "task",
+          recordId: task.id,
+          title: task.number || `TSK-${task.id.slice(-4).toUpperCase()}`,
+          detail: taskName || task.title || "Task",
+          customerName: taskCustName || undefined,
+          notes,
+          date: dueIso,
+          dueDate: dueIso,
+          timeWindow,
+          startMinutes,
+          endMinutes,
+          employeeId: task.assignedEmployeeId || task.assignedContractorId || undefined,
+          technicianName: task.assignedEmployeeName || task.assignedContractorName || undefined,
+          href: `/pro/dashboard/tasks`,
+          status: task.status || "scheduled",
+          serviceAddress,
+          category,
+        });
+      });
+    }
+
+    // Also include all CRM invoices whose due date or issue date is present that are not already scheduled
+    const existingInvoiceRecordIds = new Set(
+      scheduledEvents
+        .filter((e) => e.kind === "invoice")
+        .map((e) => e.recordId || e.id),
+    );
+
+    const invoiceEvents: PortalCalendarEvent[] = [];
+    if (!kindFilter || kindFilter === "invoice") {
+      crm.invoices.forEach((inv) => {
+        if (!inv.id || existingInvoiceRecordIds.has(inv.id)) return;
+        const dueOrIssued = inv.dueAt || inv.issuedAt || inv.createdAt;
+        if (!dueOrIssued) return;
+        const dateIso = dueOrIssued.slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return;
+
+        let serviceAddress: string | undefined;
+        let foundCustomerId = inv.customerId;
+        let customerName = inv.customerName;
+
+        if (inv.jobId) {
+          const linkedJob = crm.jobs.find((j) => j.id === inv.jobId);
+          if (linkedJob) {
+            if (linkedJob.address) serviceAddress = formatAddrObj(linkedJob.address);
+            if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
+            if (!customerName && linkedJob.customerId) {
+              const cust = crm.customers.find((c) => c.id === linkedJob.customerId);
+              if (cust) customerName = cust.name || cust.displayName;
+            }
+          }
+        }
+        if (!customerName && foundCustomerId) {
+          const cust = crm.customers.find((c) => c.id === foundCustomerId);
+          if (cust) customerName = cust.name || cust.displayName;
+        }
+        if (!serviceAddress && foundCustomerId) {
+          const cust = crm.customers.find((c) => c.id === foundCustomerId);
+          if (cust?.addresses?.[0]) {
+            serviceAddress = formatAddrObj(cust.addresses[0]);
+          }
+        }
+
+        const rawInvTotal =
+          inv.total ??
+          inv.balanceDue ??
+          (Array.isArray(inv.items)
+            ? inv.items.reduce(
+                (s: number, it) =>
+                  s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                0,
+              )
+            : 0);
+        const invNum = Number(rawInvTotal);
+        const price = !Number.isNaN(invNum) && invNum > 0 ? `$${invNum.toFixed(2)}` : undefined;
+        const invName = inv.items?.[0]?.description || (inv.status ? `Invoice · ${inv.status}` : "Invoice");
+
+        invoiceEvents.push({
+          id: `inv_${inv.id}`,
+          kind: "invoice",
+          recordId: inv.id,
+          title: inv.number || `INV-${inv.id.slice(-4).toUpperCase()}`,
+          detail: invName,
+          customerName: customerName || undefined,
+          date: dateIso,
+          dueDate: inv.dueAt ? inv.dueAt.slice(0, 10) : dateIso,
+          timeWindow: "all_day",
+          startMinutes: 540,
+          endMinutes: 570,
+          href: `/pro/dashboard/invoices/${inv.id}`,
+          status: inv.status || "sent",
+          serviceAddress,
+          price,
+          category: inv.status ? `Invoice · ${inv.status}` : "Invoice",
+        });
+      });
+    }
+
+    return [...scheduledEvents, ...taskEvents, ...invoiceEvents];
+  }, [crm.customers, crm.estimates, crm.invoices, crm.jobs, crm.requests, crm.tasks, events, kindFilter, memberFilter]);
 
   const employeesForCalendar = useMemo(
     () =>

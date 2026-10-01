@@ -358,6 +358,9 @@ export interface Invoice {
   amountPaid: number;
   balanceDue: number;
   items: InvoiceItem[];
+  address?: ServiceAddress;
+  notes?: string;
+  terms?: string;
   /** Soft-archive — independent of lifecycle status. */
   isArchived?: boolean;
   attachments?: EstimateAttachmentItem[] | string[];

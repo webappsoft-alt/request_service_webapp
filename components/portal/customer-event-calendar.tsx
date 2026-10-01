@@ -16,8 +16,8 @@ export function CustomerEventCalendar({
 }) {
   const { employees, assign } = usePortalCrew();
 
-  function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
-    return assign({
+  async function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
+    const result = await assign({
       kind: event.kind,
       recordId: event.recordId,
       date: move.date,
@@ -36,6 +36,7 @@ export function CustomerEventCalendar({
         `${calendarEventKindLabel(event.kind)} ${event.title} moved to ${formatDate(move.date)}${move.endDate && move.endDate !== move.date ? `–${formatDate(move.endDate)}` : ""}${time}.`,
       );
     }
+    return result;
   }
 
   return <EventCalendar events={events} employeeLabel={employeeLabel} onMove={moveEvent} />;

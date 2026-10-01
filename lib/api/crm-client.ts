@@ -816,8 +816,12 @@ export async function getCustomer(id: string) {
 
 /** GET /api/provider/customers/:id — customer + dossier. */
 export async function getCustomerDetail(id: string): Promise<CustomerDetailPayload | null> {
-  const response = await getData(providerCrmApi.customer(id), undefined, { silent: true, force: true });
-  return mapCustomerDetail(response);
+  try {
+    const response = await getData(providerCrmApi.customer(id), undefined, { silent: true, force: true });
+    return mapCustomerDetail(response);
+  } catch {
+    return null;
+  }
 }
 
 /** GET /api/provider/customers/:id/timeline */
@@ -1321,11 +1325,15 @@ export async function queryRequests(query: CrmListQuery = {}) {
 }
 
 export async function getRequest(id: string, options?: CrmRequestOptions) {
-  const response = await getData(providerCrmApi.request(id), undefined, {
-    silent: options?.silent ?? true,
-    force: true,
-  });
-  return mapCrmEntity(response, mapPortalRequest);
+  try {
+    const response = await getData(providerCrmApi.request(id), undefined, {
+      silent: options?.silent ?? true,
+      force: true,
+    });
+    return mapCrmEntity(response, mapPortalRequest);
+  } catch {
+    return null;
+  }
 }
 
 export async function createRequest(request: Partial<PortalRequest>) {
@@ -1461,8 +1469,12 @@ export async function createEstimate(estimate: Estimate) {
 }
 
 export async function getEstimate(id: string) {
-  const response = await getData(providerCrmApi.estimate(id), undefined, { silent: true, force: true });
-  return mapCrmEntity(response, mapEstimate);
+  try {
+    const response = await getData(providerCrmApi.estimate(id), undefined, { silent: true, force: true });
+    return mapCrmEntity(response, mapEstimate);
+  } catch {
+    return null;
+  }
 }
 
 export async function updateEstimate(id: string, estimate: Estimate) {
@@ -1865,8 +1877,12 @@ export async function deleteJobActivity(
 }
 
 export async function getJob(id: string) {
-  const response = await getData(providerCrmApi.job(id), undefined, { silent: true, force: true });
-  return mapCrmEntity(response, mapJob);
+  try {
+    const response = await getData(providerCrmApi.job(id), undefined, { silent: true, force: true });
+    return mapCrmEntity(response, mapJob);
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteJob(id: string) {
@@ -1949,11 +1965,15 @@ export async function listTasks(options?: CrmRequestOptions) {
 
 /** GET /api/provider/tasks/:id */
 export async function getTask(id: string) {
-  const response = await getData(providerCrmApi.task(id), undefined, {
-    silent: true,
-    force: true,
-  });
-  return mapCrmEntity(response, mapPortalTask);
+  try {
+    const response = await getData(providerCrmApi.task(id), undefined, {
+      silent: true,
+      force: true,
+    });
+    return mapCrmEntity(response, mapPortalTask);
+  } catch {
+    return null;
+  }
 }
 
 /** Paginated tasks — page/limit/customerId/status/priority/search. */
@@ -2115,12 +2135,21 @@ export async function sendInvoice(id: string) {
 }
 
 export async function getInvoiceWithPayments(id: string) {
-  const invoiceRef = requireInvoiceId(id);
-  const response = await getData(providerCrmApi.invoice(invoiceRef), undefined, {
-    silent: true,
-    force: true,
-  });
-  return mapInvoiceWithPayments(response);
+  try {
+    const invoiceRef = requireInvoiceId(id);
+    const response = await getData(providerCrmApi.invoice(invoiceRef), undefined, {
+      silent: true,
+      force: true,
+    });
+    return mapInvoiceWithPayments(response);
+  } catch {
+    return null;
+  }
+}
+
+export async function getInvoice(id: string): Promise<Invoice | null> {
+  const detail = await getInvoiceWithPayments(id);
+  return detail?.invoice ?? null;
 }
 
 export async function recordInvoicePayment(invoiceId: string, payment: Payment) {
@@ -2270,7 +2299,93 @@ export async function querySchedule(query: CrmListQuery = {}) {
   const items =
     kind === "fixed_service"
       ? rawItems.filter((item) => item.kind === "fixed_service")
-      : rawItems;
+      : [...rawItems];
+
+  if (!kind || kind === "invoice") {
+    try {
+      const invList = await listInvoices({ silent: true });
+      const existingIds = new Set(items.map((it) => it.recordId || it.id));
+      invList.forEach((inv) => {
+        if (!inv.id || existingIds.has(inv.id)) return;
+        const dueOrIssued = inv.dueAt || inv.issuedAt || inv.createdAt;
+        if (!dueOrIssued) return;
+        const dateIso = dueOrIssued.slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return;
+
+        const rawInvTotal =
+          inv.total ??
+          inv.balanceDue ??
+          (Array.isArray(inv.items)
+            ? inv.items.reduce(
+                (s: number, it) =>
+                  s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                0,
+              )
+            : 0);
+        const invNum = Number(rawInvTotal);
+        const price = !Number.isNaN(invNum) && invNum > 0 ? `$${invNum.toFixed(2)}` : undefined;
+
+        items.push({
+          id: `inv_${inv.id}`,
+          kind: "invoice",
+          recordId: inv.id,
+          title: inv.number || `INV-${inv.id.slice(-4).toUpperCase()}`,
+          detail: inv.items?.[0]?.description || (inv.status ? `Invoice · ${inv.status}` : "Invoice"),
+          customerName: inv.customerName || undefined,
+          date: dateIso,
+          dueDate: inv.dueAt ? inv.dueAt.slice(0, 10) : dateIso,
+          timeWindow: "all_day",
+          startMinutes: 540,
+          endMinutes: 570,
+          href: `/pro/dashboard/invoices/${inv.id}`,
+          status: inv.status || "sent",
+          price,
+          category: inv.status ? `Invoice · ${inv.status}` : "Invoice",
+        });
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  if (!kind || kind === "task") {
+    try {
+      const taskList = await listTasks({ silent: true });
+      const existingIds = new Set(items.map((it) => it.recordId || it.id));
+      taskList.forEach((task) => {
+        if (!task.id || existingIds.has(task.id)) return;
+        if (!task.dueAt) return;
+        const dueIso = task.dueAt.slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dueIso)) return;
+
+        if (employeeId && task.assignedEmployeeId !== employeeId) return;
+        if (contractorId && task.assignedContractorId !== contractorId) return;
+
+        const taskName = task.title && task.title !== task.number ? task.title : undefined;
+        items.push({
+          id: `task_${task.id}`,
+          kind: "task",
+          recordId: task.id,
+          title: task.number || `TSK-${task.id.slice(-4).toUpperCase()}`,
+          detail: taskName || task.title || "Task",
+          customerName: task.customerName || undefined,
+          notes: task.note || (task as unknown as Record<string, unknown>).notes ? String(task.note || (task as unknown as Record<string, unknown>).notes) : undefined,
+          date: dueIso,
+          dueDate: dueIso,
+          timeWindow: "morning",
+          startMinutes: 540,
+          endMinutes: 570,
+          employeeId: task.assignedEmployeeId || task.assignedContractorId || undefined,
+          technicianName: task.assignedEmployeeName || task.assignedContractorName || undefined,
+          href: `/pro/dashboard/tasks`,
+          status: task.status || "scheduled",
+          category: task.priority ? `Task · ${task.priority}` : "Task",
+        });
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
 
   const missingJobIds = Array.from(
     new Set(
@@ -2318,7 +2433,20 @@ export async function querySchedule(query: CrmListQuery = {}) {
           (item) =>
             item.kind === "task" &&
             item.recordId &&
-            (!item.customerName || !item.category || !item.notes),
+            (!item.customerName || !item.category || !item.notes || !item.detail),
+        )
+        .map((item) => item.recordId),
+    ),
+  );
+
+  const missingInvoiceIds = Array.from(
+    new Set(
+      items
+        .filter(
+          (item) =>
+            item.kind === "invoice" &&
+            item.recordId &&
+            (!item.serviceAddress || !item.price || !item.customerName || !item.category || !item.notes),
         )
         .map((item) => item.recordId),
     ),
@@ -2339,10 +2467,11 @@ export async function querySchedule(query: CrmListQuery = {}) {
     missingJobIds.length > 0 ||
     missingEstimateIds.length > 0 ||
     missingRequestIds.length > 0 ||
-    missingTaskIds.length > 0
+    missingTaskIds.length > 0 ||
+    missingInvoiceIds.length > 0
   ) {
     try {
-      const [jobResults, estimateResults, requestResults, taskResults] = await Promise.all([
+      const [jobResults, estimateResults, requestResults, taskResults, invoiceResults] = await Promise.all([
         missingJobIds.length > 0
           ? Promise.allSettled(missingJobIds.map((jobId) => getJob(jobId)))
           : Promise.resolve([]),
@@ -2354,6 +2483,9 @@ export async function querySchedule(query: CrmListQuery = {}) {
           : Promise.resolve([]),
         missingTaskIds.length > 0
           ? Promise.allSettled(missingTaskIds.map((taskId) => getTask(taskId)))
+          : Promise.resolve([]),
+        missingInvoiceIds.length > 0
+          ? Promise.allSettled(missingInvoiceIds.map((invId) => getInvoiceWithPayments(invId)))
           : Promise.resolve([]),
       ]);
 
@@ -2382,6 +2514,13 @@ export async function querySchedule(query: CrmListQuery = {}) {
       taskResults.forEach((res) => {
         if (res.status === "fulfilled" && res.value) {
           taskMap.set(res.value.id, res.value);
+        }
+      });
+
+      const invoiceMap = new Map<string, Invoice>();
+      invoiceResults.forEach((res) => {
+        if (res.status === "fulfilled" && res.value?.invoice) {
+          invoiceMap.set(res.value.invoice.id, res.value.invoice);
         }
       });
 
@@ -2460,7 +2599,8 @@ export async function querySchedule(query: CrmListQuery = {}) {
           if (req) {
             const addr =
               item.serviceAddress ||
-              (req.address ? (typeof req.address === "string" ? req.address : formatAddr(req.address)) : undefined);
+              (req.address ? (typeof req.address === "string" ? req.address : formatAddr(req.address)) : undefined) ||
+              (req.city && req.state ? `${req.city}, ${req.state} ${req.zip || ""}`.trim() : req.city || undefined);
             const reqBudget =
               (req as unknown as Record<string, unknown>).budget ??
               (req as unknown as Record<string, unknown>).startingPrice ??
@@ -2470,7 +2610,8 @@ export async function querySchedule(query: CrmListQuery = {}) {
               item.price ||
               (!Number.isNaN(reqNum) && reqNum > 0 ? `$${reqNum.toFixed(2)}` : undefined);
             const reqName = req.serviceName || req.title || undefined;
-            const category = item.category || reqName || undefined;
+            const category = item.category || req.categoryName || reqName || undefined;
+            const reqCustomer = req.customerName && req.customerName !== "Customer" ? req.customerName : undefined;
             return {
               ...item,
               serviceAddress: addr || item.serviceAddress || undefined,
@@ -2478,20 +2619,97 @@ export async function querySchedule(query: CrmListQuery = {}) {
               category: category || item.category || undefined,
               notes: req.notes || req.description || item.notes || undefined,
               detail: reqName || item.detail,
-              customerName: item.customerName || req.customerName || undefined,
+              customerName: item.customerName || reqCustomer || undefined,
             };
           }
         } else if (item.kind === "task" && item.recordId) {
           const task = taskMap.get(item.recordId);
           if (task) {
             const taskName = task.title && task.title !== task.number ? task.title : undefined;
-            const category = item.category || taskName || undefined;
+            const category = item.category || (task.priority ? `Task · ${task.priority}` : taskName || "Task");
+            let customerName = item.customerName || task.customerName || undefined;
+            let serviceAddress = item.serviceAddress;
+            let foundCustomerId = task.customerId;
+
+            const linkedJobId = task.jobId || (task.subjectKind === "job" ? task.subjectId : undefined);
+            if (linkedJobId) {
+              const linkedJob = jobMap.get(linkedJobId);
+              if (linkedJob) {
+                if (!serviceAddress && linkedJob.address) serviceAddress = formatAddr(linkedJob.address);
+                if (!customerName) {
+                  customerName = linkedJob.customerName || ((linkedJob as unknown as Record<string, unknown>).customerName ? String((linkedJob as unknown as Record<string, unknown>).customerName) : undefined);
+                }
+                if (!foundCustomerId) foundCustomerId = linkedJob.customerId;
+              }
+            }
+
+            const linkedEstId = task.subjectKind === "estimate" ? task.subjectId : undefined;
+            if (linkedEstId) {
+              const linkedEst = estimateMap.get(linkedEstId);
+              if (linkedEst) {
+                if (!serviceAddress && linkedEst.propertyAddress) serviceAddress = formatAddr(linkedEst.propertyAddress);
+                if (!customerName) customerName = linkedEst.customerName;
+                if (!foundCustomerId) foundCustomerId = linkedEst.customerId;
+              }
+            }
+
+            const linkedReqId = task.subjectKind === "request" ? task.subjectId : undefined;
+            if (linkedReqId) {
+              const linkedReq = requestMap.get(linkedReqId);
+              if (linkedReq) {
+                if (!serviceAddress) {
+                  serviceAddress =
+                    typeof linkedReq.address === "string"
+                      ? linkedReq.address
+                      : formatAddr(linkedReq.address) ||
+                        (linkedReq.city && linkedReq.state ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim() : linkedReq.city || undefined);
+                }
+                if (!customerName) customerName = linkedReq.customerName && linkedReq.customerName !== "Customer" ? linkedReq.customerName : undefined;
+                if (!foundCustomerId) foundCustomerId = linkedReq.customerId;
+              }
+            }
+
             return {
               ...item,
+              title: item.title && !item.title.startsWith("cal_") ? item.title : task.number || `TSK-${task.id.slice(-4).toUpperCase()}`,
               category: category || item.category || undefined,
-              notes: task.notes || task.description || item.notes || undefined,
-              detail: taskName || item.detail,
-              customerName: item.customerName || task.customerName || undefined,
+              notes: task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description ? String(task.note || (task as unknown as Record<string, unknown>).notes || (task as unknown as Record<string, unknown>).description) : item.notes || undefined,
+              detail: taskName || task.title || item.detail,
+              customerName: customerName || undefined,
+              serviceAddress: serviceAddress || item.serviceAddress || undefined,
+              dueDate: task.dueAt || item.dueDate || undefined,
+            };
+          }
+        } else if (item.kind === "invoice" && item.recordId) {
+          const inv = invoiceMap.get(item.recordId);
+          if (inv) {
+            const rawInvTotal =
+              inv.total ??
+              inv.balance ??
+              (Array.isArray(inv.items)
+                ? inv.items.reduce(
+                    (s: number, it) =>
+                      s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) || 0),
+                    0,
+                  )
+                : 0);
+            const invNum = Number(rawInvTotal);
+            const price =
+              item.price ||
+              (!Number.isNaN(invNum) && invNum > 0 ? `$${invNum.toFixed(2)}` : undefined);
+            const invName = inv.subject || inv.title || inv.items?.[0]?.description || undefined;
+            const category = item.category || invName || (inv.status ? `Invoice · ${inv.status}` : "Invoice");
+            const addr = item.serviceAddress || formatAddr(inv.address);
+            return {
+              ...item,
+              title: item.title && !item.title.startsWith("cal_") ? item.title : inv.number || `INV-${inv.id.slice(-4).toUpperCase()}`,
+              serviceAddress: addr || item.serviceAddress || undefined,
+              price: price || item.price || undefined,
+              category: category || item.category || undefined,
+              notes: inv.notes || item.notes || undefined,
+              detail: invName || item.detail,
+              customerName: item.customerName || inv.customerName || undefined,
+              dueDate: inv.dueAt || item.dueDate || undefined,
             };
           }
         }

@@ -339,40 +339,31 @@ export function EventCalendar({
     });
   }, [employeeFilter, localEvents, kindFilter, lockEmployeeId, serverFiltered]);
 
-  const monthWeekdays = useMemo(() => {
-    const firstWeekday = new Date(cursor.year, cursor.month, 1).getDay();
-    return Array.from({ length: 7 }, (_, index) => WEEKDAYS[(firstWeekday + index) % 7]);
-  }, [cursor.month, cursor.year]);
-
   const cells = useMemo(() => {
-    const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
-    const monthDays = Array.from({ length: daysInMonth }, (_, index) => {
-      const day = index + 1;
-      const date = new Date(cursor.year, cursor.month, day);
+    const first = new Date(cursor.year, cursor.month, 1);
+    const gridStart = new Date(first);
+    gridStart.setDate(1 - first.getDay());
+    const all = Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + index);
       const iso = toIso(date);
       return {
         iso,
-        day,
-        inMonth: true,
+        day: date.getDate(),
+        inMonth: date.getMonth() === cursor.month,
         events: visible.filter((item) => eventCovers(item, iso)),
       };
     });
 
-    // Pad only the trailing end of the last week so the grid stays 7 columns.
-    // Leading empty weekday cells are intentionally omitted — the 1st starts in column 0.
-    const remainder = monthDays.length % 7;
-    const trailing = remainder === 0 ? 0 : 7 - remainder;
-    const trailingCells = Array.from({ length: trailing }, (_, index) => {
-      const date = new Date(cursor.year, cursor.month, daysInMonth + index + 1);
-      return {
-        iso: toIso(date),
-        day: date.getDate(),
-        inMonth: false,
-        events: [] as PortalCalendarEvent[],
-      };
-    });
-
-    return [...monthDays, ...trailingCells];
+    // Drop trailing weeks that are entirely outside the current month
+    let weekCount = 6;
+    while (weekCount > 4) {
+      const start = (weekCount - 1) * 7;
+      const week = all.slice(start, start + 7);
+      if (week.some((cell) => cell.inMonth)) break;
+      weekCount -= 1;
+    }
+    return all.slice(0, weekCount * 7);
   }, [cursor.month, cursor.year, visible]);
 
   const weekDays = useMemo(
@@ -695,7 +686,6 @@ export function EventCalendar({
         ) : view === "month" ? (
           <MonthGrid
             cells={cells}
-            weekdays={monthWeekdays}
             today={today}
             selectedDay={selectedDay}
             overDay={overDay}
@@ -873,7 +863,6 @@ export function EventCalendar({
 
 function MonthGrid({
   cells,
-  weekdays = WEEKDAYS,
   today,
   selectedDay,
   overDay,
@@ -887,8 +876,6 @@ function MonthGrid({
   onContextMenuDay,
 }: {
   cells: { iso: string; day: number; inMonth: boolean; events: PortalCalendarEvent[] }[];
-  /** Rotating weekday labels so the 1st of the month starts in the first column. */
-  weekdays?: string[];
   today: string;
   selectedDay: string;
   overDay: string | null;
@@ -901,27 +888,29 @@ function MonthGrid({
   onContextMenuCard?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
   onContextMenuDay?: (e: React.MouseEvent, iso: string) => void;
 }) {
-  const gridLine = "#c5ccd6";
+  const inMonthLine = "#94a3b8";
+  const outMonthLine = "#e2e8f0";
+  const outerLine = "#94a3b8";
 
   return (
     <div
       className="overflow-hidden rounded-sm bg-card"
-      style={{ border: `1px solid ${gridLine}` }}
+      style={{ border: `1px solid ${outerLine}` }}
     >
       <div
         className="grid grid-cols-7 bg-[#f7f8fa]"
-        style={{ borderBottom: `1px solid ${gridLine}` }}
+        style={{ borderBottom: `1px solid ${inMonthLine}` }}
       >
-        {weekdays.map((day, index) => {
-          const weekend = day === "Sun" || day === "Sat";
+        {WEEKDAYS.map((day, index) => {
+          const weekend = index === 0 || index === 6;
           return (
             <p
-              key={`${day}-${index}`}
+              key={day}
               className={cn(
                 "px-2 py-2.5 text-center text-[11px] font-semibold tracking-wide uppercase",
                 weekend ? "bg-[#c5ceda] text-slate-700" : "text-muted-foreground",
               )}
-              style={index < 6 ? { borderRight: `1px solid ${gridLine}` } : undefined}
+              style={index < 6 ? { borderRight: `1px solid ${inMonthLine}` } : undefined}
             >
               {day}
             </p>
@@ -930,29 +919,11 @@ function MonthGrid({
       </div>
       <div className="grid grid-cols-7">
         {cells.map((cell, index) => {
-          const isLastCol = index % 7 === 6;
+          const weekday = index % 7;
+          const weekend = weekday === 0 || weekday === 6;
+          const isLastCol = weekday === 6;
           const isLastRow = index >= cells.length - 7;
-          const cellWeekday = weekdays[index % 7] || "";
-          const weekend = cellWeekday === "Sun" || cellWeekday === "Sat";
-
-          if (!cell.inMonth) {
-            const next = index < cells.length - 1 ? cells[index + 1] : null;
-            // Merge adjacent out-of-month cells into one muted block (no internal lines)
-            const mergeWithNext = Boolean(next && !next.inMonth && !isLastCol);
-
-            return (
-              <div
-                key={cell.iso}
-                aria-hidden="true"
-                className="min-h-36 h-auto pointer-events-none bg-[#e8ebef]"
-                style={{
-                  borderRight:
-                    mergeWithNext || isLastCol ? undefined : `1px solid ${gridLine}`,
-                  borderBottom: isLastRow ? undefined : `1px solid ${gridLine}`,
-                }}
-              />
-            );
-          }
+          const line = cell.inMonth ? inMonthLine : outMonthLine;
 
           return (
             <div
@@ -967,19 +938,28 @@ function MonthGrid({
               onDrop={(drag) => onDrop(cell.iso, drag)}
               className={cn(
                 "min-h-36 h-auto p-1.5 flex flex-col justify-start",
-                weekend && "bg-[#d5dde8]",
-                selectedDay === cell.iso && "bg-secondary/55",
-                overDay === cell.iso && "bg-primary/15",
+                cell.inMonth
+                  ? weekend
+                    ? "bg-[#d5dde8]"
+                    : "bg-card"
+                  : "bg-[#f1f5f9]",
+                cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
+                cell.inMonth && overDay === cell.iso && "bg-primary/15",
+                !cell.inMonth && overDay === cell.iso && "bg-primary/10",
               )}
               style={{
-                borderRight: isLastCol ? undefined : `1px solid ${gridLine}`,
-                borderBottom: isLastRow ? undefined : `1px solid ${gridLine}`,
+                borderRight: isLastCol ? undefined : `1px solid ${line}`,
+                borderBottom: isLastRow ? undefined : `1px solid ${line}`,
               }}
             >
               <p
                 className={cn(
                   "mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium",
-                  weekend && cell.iso !== today && "font-semibold text-slate-600",
+                  cell.inMonth
+                    ? weekend && cell.iso !== today
+                      ? "font-semibold text-slate-700"
+                      : "text-foreground"
+                    : "text-slate-400",
                   cell.iso === today && "bg-primary text-primary-foreground",
                 )}
               >

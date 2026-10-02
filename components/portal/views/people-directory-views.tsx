@@ -1228,8 +1228,14 @@ function contractorColumns() {
       header: "License",
       sortValue: (row: PortalContractor) => row.license,
       searchValue: (row: PortalContractor) => row.license,
-      exportValue: (row: PortalContractor) => row.license,
-      cell: (row: PortalContractor) => row.license,
+      exportValue: (row: PortalContractor) => {
+        const license = String(row.license || "").trim();
+        return !license || /^pending$/i.test(license) ? "—" : license;
+      },
+      cell: (row: PortalContractor) => {
+        const license = String(row.license || "").trim();
+        return !license || /^pending$/i.test(license) ? "—" : license;
+      },
     },
     {
       id: "phone",
@@ -1254,23 +1260,6 @@ function contractorColumns() {
       searchValue: (row: PortalContractor) => `${row.city} ${row.zip}`,
       exportValue: (row: PortalContractor) => [row.city, row.zip].filter(Boolean).join(" "),
       cell: (row: PortalContractor) => [row.city, row.zip].filter(Boolean).join(" ") || "—",
-    },
-    {
-      id: "rate",
-      header: "Rate",
-      sortValue: (row: PortalContractor) => row.hourlyRate,
-      searchValue: (row: PortalContractor) => formatMoney(row.hourlyRate),
-      exportValue: (row: PortalContractor) => formatMoney(row.hourlyRate),
-      className: "tabular-nums",
-      cell: (row: PortalContractor) => `${formatMoney(row.hourlyRate)}/hr`,
-    },
-    {
-      id: "insurance",
-      header: "Insurance",
-      sortValue: (row: PortalContractor) => row.insuranceExpires,
-      searchValue: (row: PortalContractor) => formatDate(row.insuranceExpires),
-      exportValue: (row: PortalContractor) => formatDate(row.insuranceExpires),
-      cell: (row: PortalContractor) => formatDate(row.insuranceExpires),
     },
     {
       id: "status",

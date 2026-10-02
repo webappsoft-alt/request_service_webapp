@@ -809,8 +809,47 @@ export function publicProfessionalToProvider(
   const coords = Array.isArray(professional.location.coordinates)
     ? professional.location.coordinates
     : [];
-  const lng = toNumber(coords[0], 0);
-  const lat = toNumber(coords[1], 0);
+  let lng = toNumber(coords[0], NaN);
+  let lat = toNumber(coords[1], NaN);
+
+  // Many pros only have ServiceArea records (with location.coordinates) but no
+  // `professional.location.coordinates` on the office location — fall back to
+  // their coverage/city data so the map can still auto-zoom instead of
+  // defaulting to 0,0 (null island) and rendering a world-view.
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+    const neighborhoods = professional.coverage?.neighborhoods ?? [];
+    const cities = professional.coverage?.cities ?? [];
+
+    const candidates: { lat: number; lng: number }[] = [];
+    for (const n of neighborhoods) {
+      if (Array.isArray(n.coordinates) && n.coordinates.length >= 2) {
+        const nLng = toNumber(n.coordinates[0], NaN);
+        const nLat = toNumber(n.coordinates[1], NaN);
+        if (Number.isFinite(nLat) && Number.isFinite(nLng)) {
+          candidates.push({ lat: nLat, lng: nLng });
+        }
+      }
+    }
+    for (const c of cities) {
+      for (const area of c.areas ?? []) {
+        if (Number.isFinite(area.lat) && Number.isFinite(area.lng)) {
+          candidates.push({ lat: area.lat, lng: area.lng });
+        }
+      }
+    }
+
+    if (candidates.length) {
+      lat =
+        candidates.reduce((sum, point) => sum + point.lat, 0) /
+        candidates.length;
+      lng =
+        candidates.reduce((sum, point) => sum + point.lng, 0) /
+        candidates.length;
+    }
+  }
+
+  if (!Number.isFinite(lat)) lat = 0;
+  if (!Number.isFinite(lng)) lng = 0;
   const primary = professional.tradeDetails.primaryCategory;
   const categoryIds = professional.tradeDetails.categoryIds.length
     ? professional.tradeDetails.categoryIds

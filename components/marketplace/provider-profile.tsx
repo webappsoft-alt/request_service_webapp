@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { CalendarDays, CreditCard, Globe, Languages, Mail, MapPin, Phone, UserRound, Users, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -85,12 +85,33 @@ export function ProviderProfile({
     ? (live.relatedProviders ?? [])
     : getRelatedProviders(provider);
   const explore = getProfileExplore(provider, categories, place);
-  const areas =
-    live?.coverageAreas?.length
-      ? live.coverageAreas.map((area) => area.name)
-      : live?.areaLabels?.length
-        ? live.areaLabels
-        : getServiceAreaNames(provider.serviceArea);
+  const areaItems = useMemo<
+    { key: string; name: string; coverage?: ProviderCoverageAreaLink }[]
+  >(() => {
+    if (live?.coverageAreas?.length) {
+      return live.coverageAreas.map((area, index) => {
+        const key =
+          [area.zip, area.city, area.state, area.name, String(area.lat), String(area.lng)]
+            .filter(Boolean)
+            .join("|") || `${area.name}-${index}`;
+        return { key, name: area.name, coverage: area };
+      });
+    }
+    if (live?.areaLabels?.length) {
+      return live.areaLabels.map((name, index) => ({
+        key: `${name}-label-${index}`,
+        name,
+      }));
+    }
+    return getServiceAreaNames(provider.serviceArea).map((name, index) => {
+      const zip = provider.serviceArea[index];
+      return {
+        key: zip ? `${zip}|${name}` : `${name}-fallback-${index}`,
+        name,
+      };
+    });
+  }, [provider.serviceArea, live?.coverageAreas, live?.areaLabels]);
+
   const coverageByName = new Map(
     (live?.coverageAreas ?? []).map((area) => [area.name, area]),
   );
@@ -152,10 +173,6 @@ export function ProviderProfile({
               </div>
             ) : photos.length ? (
               <PortfolioGallery photos={photos} companyName={provider.companyName} />
-            ) : isLive ? (
-              <p className="rounded-xl border border-dashed border-input bg-card px-4 py-16 text-center text-sm text-muted-foreground">
-                Photos will appear here when this company adds a business gallery.
-              </p>
             ) : null}
 
             <div className="flex flex-col gap-4">
@@ -186,7 +203,7 @@ export function ProviderProfile({
             <ProviderProjects
               provider={provider}
               projects={projects}
-              keepVisible={isLive}
+              keepVisible={false}
               onBeforeNavigate={live?.onProjectBeforeNavigate}
             />
 
@@ -205,22 +222,22 @@ export function ProviderProfile({
               </p>
               <ServiceAreaMapLazy provider={provider} />
               <div className="flex flex-wrap gap-2">
-                {areas.length ? (
-                  areas.map((area) => {
-                    const coverage = coverageByName.get(area);
+                {areaItems.length ? (
+                  areaItems.map((item) => {
+                    const coverage = item.coverage ?? coverageByName.get(item.name);
                     const clickable = Boolean(
                       coverage && live?.onCoverageAreaSelect,
                     );
                     if (!clickable) {
                       return (
-                        <Badge key={area} variant="outline">
-                          {area}
+                        <Badge key={item.key} variant="outline">
+                          {item.name}
                         </Badge>
                       );
                     }
                     return (
                       <button
-                        key={area}
+                        key={item.key}
                         type="button"
                         className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => live?.onCoverageAreaSelect?.(coverage!)}
@@ -229,7 +246,7 @@ export function ProviderProfile({
                           variant="outline"
                           className="cursor-pointer transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
                         >
-                          {area}
+                          {item.name}
                         </Badge>
                       </button>
                     );

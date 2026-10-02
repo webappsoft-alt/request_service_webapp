@@ -321,6 +321,7 @@ export function ProfileView() {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [hours, setHours] = useState(() => cloneWorkingHours(officeHours));
   const [gallery, setGallery] = useState<BusinessGalleryImage[]>([]);
@@ -637,15 +638,15 @@ export function ProfileView() {
     return cityIds;
   }
 
-  async function saveProfile(): Promise<boolean> {
+  async function saveProfile(isUpdate = false): Promise<{ provider: AuthProviderRecord; user: AuthUser } | false> {
     const nextFirst = firstName.trim();
     const nextLast = lastName.trim();
-    if (!nextFirst || !nextLast) {
+    if (!isUpdate && (!nextFirst || !nextLast)) {
       toast.error("First and last name are required.");
       goTo("account");
       return false;
     }
-    if (!companyName.trim()) {
+    if (!isUpdate && !companyName.trim()) {
       toast.error("Company name is required.");
       goTo("business");
       return false;
@@ -743,7 +744,6 @@ export function ProfileView() {
       const fromApi = asAuthProvider(providerRes);
       const nextProvider = {
         ...(authProvider || {}),
-        ...(fromApi || {}),
         companyName: companyName.trim(),
         tagline: tagline.trim(),
         description: description.trim(),
@@ -751,12 +751,12 @@ export function ProfileView() {
         email: email.trim(),
         website: website.trim(),
         contactRole: normalizeProviderContactRole(contactRole),
-        location: location || fromApi?.location || authProvider?.location,
-        services: fromApi?.services || {
+        location: location || authProvider?.location,
+        services: {
           categoryIds,
           offeredJobs: jobs,
         },
-        profile: fromApi?.profile || {
+        profile: {
           ...(Number.isFinite(years) ? { yearsInBusiness: years } : {}),
           employeeCount:
             EMPLOYEE_TO_API[employeeCount] ||
@@ -767,12 +767,11 @@ export function ProfileView() {
           language: language || "",
           paymentMethods,
         },
-        coverage: fromApi?.coverage || {
+        coverage: {
           neighborhoods: coverageCityIds,
         },
-        businessGallery: Array.isArray(fromApi?.businessGallery)
-          ? fromApi.businessGallery
-          : gallery,
+        businessGallery: gallery,
+        ...(fromApi || {}),
       } as AuthProviderRecord;
 
       // Prefer API nested shape when present; otherwise keep what we just saved.
@@ -802,14 +801,14 @@ export function ProfileView() {
         }),
       );
 
-      return true;
+      return { provider: nextProvider, user: nextUser };
     } catch (error) {
       showApiErrorToast(error, "Could not update your business profile.");
       return false;
     }
   }
 
-  async function persistOfficeHours(): Promise<boolean> {
+  async function persistOfficeHours(baseProvider?: AuthProviderRecord, baseUser?: AuthUser): Promise<boolean> {
     const workingHours = cloneWorkingHours(hours).map((entry) => ({
       day: entry.day,
       open: entry.closed ? null : entry.open,
@@ -828,18 +827,20 @@ export function ProfileView() {
         : workingHours;
       saveOfficeHours(nextHours);
 
+      const currentProvider = baseProvider || authProvider;
+      const currentUser = baseUser || user;
       const nextProvider = {
-        ...(authProvider || {}),
+        ...(currentProvider || {}),
         settings: {
-          ...(authProvider?.settings || {}),
+          ...(currentProvider?.settings || {}),
           workingHours: nextHours,
         },
       };
 
-      if (user) {
+      if (currentUser) {
         dispatch(
           updateAuthUser({
-            user: { ...user, providerId: nextProvider },
+            user: { ...currentUser, providerId: nextProvider },
             provider: nextProvider,
           }),
         );
@@ -849,6 +850,22 @@ export function ProfileView() {
     } catch (error) {
       showApiErrorToast(error, "Could not save office hours.");
       return false;
+    }
+  }
+
+  async function onUpdate() {
+    setIsUpdating(true);
+    try {
+      const saved = await saveProfile(true);
+      if (!saved) return;
+
+      const hoursOk = await persistOfficeHours(saved.provider, saved.user);
+      if (!hoursOk) return;
+
+      toast.success("Business profile updated successfully");
+      router.push("/pro/dashboard/settings");
+    } finally {
+      setIsUpdating(false);
     }
   }
 
@@ -862,10 +879,10 @@ export function ProfileView() {
 
     setSaving(true);
     try {
-      const profileOk = await saveProfile();
-      if (!profileOk) return;
+      const saved = await saveProfile();
+      if (!saved) return;
 
-      const hoursOk = await persistOfficeHours();
+      const hoursOk = await persistOfficeHours(saved.provider, saved.user);
       if (!hoursOk) return;
 
       if (portfolioSubmitRef.current) {
@@ -919,7 +936,7 @@ export function ProfileView() {
     `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() ||
     displayName.charAt(0).toUpperCase();
 
-  const busy = saving || uploadingImage;
+  const busy = saving || isUpdating || uploadingImage;
 
   return (
     <PortalPage
@@ -1492,35 +1509,55 @@ export function ProfileView() {
             Back
           </Button>
 
-          {isLastStep ? (
+          <div className="flex items-center gap-3">
             <Button
               type="button"
               size="xl"
+              variant="outline"
               className="min-w-[7.5rem]"
               disabled={busy}
-              onClick={() => void onFinalSubmit()}
+              onClick={() => void onUpdate()}
             >
-              {saving ? (
+              {isUpdating ? (
                 <Spinner
                   size="sm"
-                  label="Submitting"
-                  className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
+                  label="Updating"
+                  className="[&>span]:border-foreground/25 [&>span]:border-t-foreground [&>span:last-of-type]:border-b-foreground/70"
                 />
               ) : (
-                "Submit"
+                "Update"
               )}
             </Button>
-          ) : (
-            <Button
-              type="button"
-              size="xl"
-              className="min-w-[7.5rem]"
-              disabled={busy}
-              onClick={onNext}
-            >
-              Next
-            </Button>
-          )}
+            {isLastStep ? (
+              <Button
+                type="button"
+                size="xl"
+                className="min-w-[7.5rem]"
+                disabled={busy}
+                onClick={() => void onFinalSubmit()}
+              >
+                {saving ? (
+                  <Spinner
+                    size="sm"
+                    label="Submitting"
+                    className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
+                  />
+                ) : (
+                  "Submit"
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="xl"
+                className="min-w-[7.5rem]"
+                disabled={busy}
+                onClick={onNext}
+              >
+                Next
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </PortalPage>

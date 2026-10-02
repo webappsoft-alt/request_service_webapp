@@ -132,3 +132,98 @@ export function getServiceAreaPoints(provider: Provider) {
       return true;
     });
 }
+
+function distanceDegrees(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+) {
+  const dLat = a.lat - b.lat;
+  const dLng = a.lng - b.lng;
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+
+export interface ServiceAreaClusterPoint {
+  lat: number;
+  lng: number;
+  name?: string;
+  zip?: string;
+  id?: string;
+}
+
+export function getPrimaryServiceAreaCluster(
+  points: ServiceAreaClusterPoint[],
+  thresholdDegrees = 1.8,
+): ServiceAreaClusterPoint[] {
+  if (!points.length) return [];
+
+  const clusters: number[][] = [];
+  const assigned = new Map<number, number>();
+
+  for (let i = 0; i < points.length; i += 1) {
+    let clusterIdx = assigned.get(i);
+    if (clusterIdx === undefined) {
+      clusterIdx = clusters.length;
+      clusters.push([i]);
+      assigned.set(i, clusterIdx);
+    }
+
+    for (let j = i + 1; j < points.length; j += 1) {
+      if (distanceDegrees(points[i], points[j]) <= thresholdDegrees) {
+        const existing = assigned.get(j);
+        if (existing === undefined) {
+          assigned.set(j, clusterIdx);
+          clusters[clusterIdx].push(j);
+        } else if (existing !== clusterIdx) {
+          const smaller = Math.min(existing, clusterIdx);
+          const larger = Math.max(existing, clusterIdx);
+          for (const idx of clusters[larger]) {
+            assigned.set(idx, smaller);
+            clusters[smaller].push(idx);
+          }
+          clusters[larger] = [];
+        }
+      }
+    }
+  }
+
+  const nonEmpty = clusters.filter((arr) => arr.length > 0);
+  if (!nonEmpty.length) return points;
+
+  nonEmpty.sort((a, b) => b.length - a.length);
+  const primary = nonEmpty[0];
+
+  return primary.map((idx) => points[idx]);
+}
+
+export function selectFitBoundsPoints(
+  serviceAreaPoints: ServiceAreaClusterPoint[],
+  office: { lat: number; lng: number },
+  officeThresholdDegrees = 2.0,
+): { lat: number; lng: number }[] {
+  const primaryCluster = getPrimaryServiceAreaCluster(serviceAreaPoints);
+  const cluster = primaryCluster.length ? primaryCluster : serviceAreaPoints;
+
+  if (!cluster.length) {
+    return [office];
+  }
+
+  let clusterCenterLat = 0;
+  let clusterCenterLng = 0;
+  for (const point of cluster) {
+    clusterCenterLat += point.lat;
+    clusterCenterLng += point.lng;
+  }
+  clusterCenterLat /= cluster.length;
+  clusterCenterLng /= cluster.length;
+
+  const distToOffice = distanceDegrees(
+    { lat: clusterCenterLat, lng: clusterCenterLng },
+    office,
+  );
+
+  if (distToOffice <= officeThresholdDegrees) {
+    return [...cluster, office];
+  }
+
+  return cluster;
+}

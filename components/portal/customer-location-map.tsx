@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
-import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
+import { Marker, Popup, Circle } from "react-leaflet";
 import L from "leaflet";
+import {
+  LeafletMap,
+  FitMapBounds,
+  RecenterMap,
+} from "@/components/shared/leaflet-map";
 import { getServiceAreaPoints } from "@/lib/data/provider-media";
 import { formatLocation } from "@/lib/format";
-import { getMapTileLayerProps } from "@/lib/maps";
 import type { Provider, ServiceAddress } from "@/lib/types";
-import "leaflet/dist/leaflet.css";
-
-const mapTiles = getMapTileLayerProps();
 
 export function getCustomerMapPoint(provider: Provider, address: ServiceAddress) {
   const zipPoint =
@@ -23,17 +24,6 @@ export function getCustomerMapPoint(provider: Provider, address: ServiceAddress)
     lat: zipPoint.lat + ((streetNumber % 17) - 8) * 0.00032 + ((hash % 7) - 3) * 0.0001,
     lng: zipPoint.lng + ((streetNumber % 13) - 6) * 0.00038 + ((hash % 5) - 2) * 0.00012,
   };
-}
-
-function Recenter({ lat, lng }: { lat: number; lng: number }) {
-  const map = useMap();
-
-  useEffect(() => {
-    map.invalidateSize();
-    map.setView([lat, lng], 16, { animate: false });
-  }, [lat, lng, map]);
-
-  return null;
 }
 
 function addressIcon() {
@@ -64,6 +54,23 @@ export function CustomerLocationMap({
   const point = getCustomerMapPoint(provider, address);
   const line = `${address.street}${address.unit ? `, ${address.unit}` : ""}, ${formatLocation(address.city, address.state, address.zip)}`;
 
+  const MapNode = (
+    <LeafletMap
+      center={[point.lat, point.lng]}
+      zoom={16}
+      showZoom
+      zoomPosition="bottomright"
+    >
+      <RecenterMap lat={point.lat} lng={point.lng} zoom={16} />
+      <Marker position={[point.lat, point.lng]} icon={addressIcon()}>
+        <Popup>
+          <p className="text-sm font-semibold">{name}</p>
+          <p className="text-xs text-muted-foreground">{line}</p>
+        </Popup>
+      </Marker>
+    </LeafletMap>
+  );
+
   if (plain) {
     return (
       <section className="space-y-3">
@@ -71,25 +78,7 @@ export function CustomerLocationMap({
           <p className="text-[11px] font-medium text-muted-foreground">Location</p>
           <p className="mt-1 text-sm font-medium text-foreground">{line}</p>
         </div>
-        <div className="rs-map h-72 overflow-hidden rounded-xl">
-          <MapContainer
-            center={[point.lat, point.lng]}
-            zoom={16}
-            zoomControl={false}
-            scrollWheelZoom={false}
-            className="h-full w-full"
-          >
-            <TileLayer attribution={mapTiles.attribution} url={mapTiles.url} />
-            <ZoomControl position="bottomright" />
-            <Recenter lat={point.lat} lng={point.lng} />
-            <Marker position={[point.lat, point.lng]} icon={addressIcon()}>
-              <Popup>
-                <p className="text-sm font-semibold">{name}</p>
-                <p className="text-xs text-muted-foreground">{line}</p>
-              </Popup>
-            </Marker>
-          </MapContainer>
-        </div>
+        <div className="rs-map h-72 overflow-hidden rounded-xl">{MapNode}</div>
       </section>
     );
   }
@@ -111,28 +100,7 @@ export function CustomerLocationMap({
           <p className="text-sm font-medium text-foreground">{line}</p>
         </div>
       ) : null}
-      <div className="rs-map h-72">
-        <MapContainer
-          center={[point.lat, point.lng]}
-          zoom={16}
-          zoomControl={false}
-          scrollWheelZoom={false}
-          className="h-full w-full"
-        >
-          <TileLayer
-            attribution={mapTiles.attribution}
-            url={mapTiles.url}
-          />
-          <ZoomControl position="bottomright" />
-          <Recenter lat={point.lat} lng={point.lng} />
-          <Marker position={[point.lat, point.lng]} icon={addressIcon()}>
-            <Popup>
-              <p className="text-sm font-semibold">{name}</p>
-              <p className="text-xs text-muted-foreground">{line}</p>
-            </Popup>
-          </Marker>
-        </MapContainer>
-      </div>
+      <div className="rs-map h-72">{MapNode}</div>
     </section>
   );
 }

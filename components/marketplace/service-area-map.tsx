@@ -1,32 +1,16 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from "react-leaflet";
+import { useMemo } from "react";
+import { Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-import { getServiceAreaPoints } from "@/lib/data/provider-media";
+import { LeafletMap } from "@/components/shared/leaflet-map";
+import {
+  getServiceAreaPoints,
+  selectFitBoundsPoints,
+  getPrimaryServiceAreaCluster,
+} from "@/lib/data/provider-media";
 import { formatLocation } from "@/lib/format";
-import { getMapTileLayerProps } from "@/lib/maps";
 import type { Provider } from "@/lib/types";
-import "leaflet/dist/leaflet.css";
-
-const mapTiles = getMapTileLayerProps();
-
-function FitBounds({
-  points,
-}: {
-  points: { lat: number; lng: number }[];
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    map.invalidateSize();
-    if (!points.length) return;
-    const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng]));
-    map.fitBounds(bounds.pad(0.28), { animate: false });
-  }, [map, points]);
-
-  return null;
-}
 
 function areaIcon(label: string, office = false) {
   const width = Math.max(office ? 64 : 72, label.length * 7.2 + 22);
@@ -41,26 +25,41 @@ function areaIcon(label: string, office = false) {
 
 export function ServiceAreaMap({ provider }: { provider: Provider }) {
   const points = useMemo(() => getServiceAreaPoints(provider), [provider]);
-  const allPoints = useMemo(
-    () => [{ lat: provider.lat, lng: provider.lng, zip: provider.zip, office: true }, ...points],
-    [points, provider.lat, provider.lng, provider.zip]
+  const officePoint = useMemo(
+    () => ({ lat: provider.lat, lng: provider.lng }),
+    [provider.lat, provider.lng],
   );
+
+  const fitBoundsPoints = useMemo(
+    () => selectFitBoundsPoints(points, officePoint),
+    [points, officePoint],
+  );
+
+  const defaultCenter = useMemo<[number, number]>(() => {
+    const primaryCluster = getPrimaryServiceAreaCluster(points);
+    const refPoints = primaryCluster.length ? primaryCluster : points;
+    if (refPoints.length) {
+      let latSum = 0;
+      let lngSum = 0;
+      for (const p of refPoints) {
+        latSum += p.lat;
+        lngSum += p.lng;
+      }
+      return [latSum / refPoints.length, lngSum / refPoints.length];
+    }
+    return [provider.lat, provider.lng];
+  }, [points, provider.lat, provider.lng]);
 
   return (
     <div className="rs-map h-80 overflow-hidden rounded-xl border border-input">
-      <MapContainer
-        center={[provider.lat, provider.lng]}
+      <LeafletMap
+        center={defaultCenter}
         zoom={12}
-        zoomControl={false}
-        scrollWheelZoom={false}
-        className="h-full w-full"
+        fitBoundsPoints={fitBoundsPoints}
+        fitBoundsPadding={0.28}
+        fitBoundsMaxZoom={13}
+        fitBoundsMinZoom={10}
       >
-        <TileLayer
-          attribution={mapTiles.attribution}
-          url={mapTiles.url}
-        />
-        <ZoomControl position="bottomright" />
-        <FitBounds points={allPoints} />
         <Marker position={[provider.lat, provider.lng]} icon={areaIcon("Office", true)}>
           <Popup>
             <p className="text-sm font-semibold">{provider.companyName}</p>
@@ -80,7 +79,7 @@ export function ServiceAreaMap({ provider }: { provider: Provider }) {
             </Popup>
           </Marker>
         ))}
-      </MapContainer>
+      </LeafletMap>
     </div>
   );
 }

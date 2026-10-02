@@ -112,12 +112,12 @@ export function ProviderProjectCard({
 export function ProviderProjects({
   provider,
   projects,
-  keepVisible = false,
+  keepVisible: _keepVisible = false,
   onBeforeNavigate,
 }: {
   provider: Provider;
   projects: ProviderProject[];
-  /** Keep the Portfolio section shell visible even when there are no projects. */
+  /** @deprecated Section is now hidden whenever there are no portfolio images to show. */
   keepVisible?: boolean;
   onBeforeNavigate?: () => void;
 }) {
@@ -157,76 +157,75 @@ export function ProviderProjects({
     [onBeforeNavigate, provider.slug, router],
   );
 
-  if (!projects.length && !keepVisible) return null;
+  if (!slides.length) return null;
 
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-2xl font-semibold">Portfolio</h2>
-      {slides.length ? (
-        <div className="relative">
-          <ul
-            ref={(node) => {
-              scrollerRef.current = node;
-              if (node) {
-                requestAnimationFrame(updateScrollState);
-              }
-            }}
-            onScroll={updateScrollState}
-            className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-1"
-            aria-label={`${provider.companyName} portfolio photos`}
-          >
-            {slides.map((slide) => {
-              return (
-                <li
-                  key={slide.key}
-                  data-portfolio-slide
-                  className="w-[min(100%,18.5rem)] shrink-0 snap-start sm:w-[min(48%,20rem)] lg:w-[min(42%,22rem)]"
-                >
-                  <div className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-input bg-muted">
-                    <button
-                      type="button"
-                      className="absolute inset-0 z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openProjectLightbox(slide);
-                      }}
-                      aria-label={`Open ${slide.projectTitle} gallery`}
-                    >
-                      <Image
-                        src={slide.src}
-                        alt={slide.alt}
-                        fill
-                        sizes="(min-width: 1024px) 22rem, (min-width: 640px) 45vw, 92vw"
-                        className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-                        unoptimized={slide.src.startsWith("http")}
-                      />
-                    </button>
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] bg-gradient-to-t from-black/70 via-black/35 to-transparent px-3 pt-8 pb-2.5">
-                      <p className="line-clamp-1 text-sm font-semibold text-white">
-                        {slide.projectTitle}
+      <div className="relative">
+        <ul
+          ref={(node) => {
+            scrollerRef.current = node;
+            if (node) {
+              requestAnimationFrame(updateScrollState);
+            }
+          }}
+          onScroll={updateScrollState}
+          className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-1"
+          aria-label={`${provider.companyName} portfolio photos`}
+        >
+          {slides.map((slide) => {
+            return (
+              <li
+                key={slide.key}
+                data-portfolio-slide
+                className="w-[min(100%,18.5rem)] shrink-0 snap-start sm:w-[min(48%,20rem)] lg:w-[min(42%,22rem)]"
+              >
+                <div className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-input bg-muted">
+                  <button
+                    type="button"
+                    className="absolute inset-0 z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openProjectLightbox(slide);
+                    }}
+                    aria-label={`Open ${slide.projectTitle} gallery`}
+                  >
+                    <Image
+                      src={slide.src}
+                      alt={slide.alt}
+                      fill
+                      sizes="(min-width: 1024px) 22rem, (min-width: 640px) 45vw, 92vw"
+                      className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                      unoptimized={slide.src.startsWith("http")}
+                    />
+                  </button>
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] bg-gradient-to-t from-black/70 via-black/35 to-transparent px-3 pt-8 pb-2.5">
+                    <p className="line-clamp-1 text-sm font-semibold text-white">
+                      {slide.projectTitle}
+                    </p>
+                    {[slide.projectCategory, slide.projectSubcategory]
+                      .filter(Boolean)
+                      .length ? (
+                      <p className="mt-0.5 line-clamp-1 text-[11px] text-white/85">
+                        {[slide.projectCategory, slide.projectSubcategory]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
-                      {[slide.projectCategory, slide.projectSubcategory]
-                        .filter(Boolean)
-                        .length ? (
-                        <p className="mt-0.5 line-clamp-1 text-[11px] text-white/85">
-                          {[slide.projectCategory, slide.projectSubcategory]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      ) : null}
-                    </div>
+                    ) : null}
                   </div>
-                </li>
-              );
-            })}
-          </ul>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
 
-          {slides.length > 1 ? (
-            <>
-              <button
-                type="button"
-                className={cn(
+        {slides.length > 1 ? (
+          <>
+            <button
+              type="button"
+              className={cn(
                   "absolute top-1/2 left-0 z-20 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-input bg-white text-foreground shadow-md transition-[opacity,transform] hover:scale-105 hover:bg-white md:size-11",
                   canScrollPrev
                     ? "opacity-100"
@@ -253,11 +252,6 @@ export function ProviderProjects({
             </>
           ) : null}
         </div>
-      ) : (
-        <p className="rounded-xl border border-dashed border-input bg-card px-4 py-8 text-sm text-muted-foreground">
-          Photos of completed work will appear here.
-        </p>
-      )}
     </section>
   );
 }

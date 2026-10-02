@@ -287,17 +287,7 @@ export function ServiceAreasView() {
                 return row.location.zip || "—";
               },
             },
-            {
-              id: "coords",
-              header: "Coordinates",
-              sortValue: (row) => row.location.coordinates[0],
-              searchValue: (row) => row.location.coordinates.join(" "),
-              exportValue: (row) =>
-                `${row.location.coordinates[0]}, ${row.location.coordinates[1]}`,
-              className: "tabular-nums",
-              cell: (row) =>
-                `${row.location.coordinates[0]}, ${row.location.coordinates[1]}`,
-            },
+          
             {
               id: "status",
               header: "Status",

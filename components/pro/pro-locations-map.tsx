@@ -1,12 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
-import { Circle, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { Circle, Marker } from "react-leaflet";
 import L from "leaflet";
-import { getMapTileLayerProps } from "@/lib/maps";
-import "leaflet/dist/leaflet.css";
-
-const mapTiles = getMapTileLayerProps();
+import { LeafletMap } from "@/components/shared/leaflet-map";
 
 export const locationShops = [
   {
@@ -43,18 +39,6 @@ const jobPins = [
   { shop: 2, price: "$2,180", job: "Panel upgrade", lat: 39.726, lng: -105.016 },
 ] as const;
 
-function FitShops() {
-  const map = useMap();
-
-  useEffect(() => {
-    map.invalidateSize();
-    const bounds = L.latLngBounds(locationShops.map((shop) => [shop.lat, shop.lng]));
-    map.fitBounds(bounds.pad(0.38), { animate: false });
-  }, [map]);
-
-  return null;
-}
-
 function shopIcon(label: string, active: boolean) {
   const width = Math.max(86, label.length * 7.4 + 28);
   return L.divIcon({
@@ -86,18 +70,16 @@ export function ProLocationsMap({
 
   return (
     <div className="rs-map h-[268px] w-full">
-      <MapContainer
+      <LeafletMap
         center={[39.73, -104.96]}
         zoom={11}
-        zoomControl={false}
-        scrollWheelZoom={false}
+        showZoom={false}
         dragging={false}
         doubleClickZoom={false}
         attributionControl={false}
-        className="h-full w-full"
+        fitBoundsPoints={[...locationShops]}
+        fitBoundsPadding={0.38}
       >
-        <TileLayer url={mapTiles.url} attribution={mapTiles.attribution} />
-        <FitShops />
         <Circle
           center={[shop.lat, shop.lng]}
           radius={4200}
@@ -130,7 +112,7 @@ export function ProLocationsMap({
             }}
           />
         ))}
-      </MapContainer>
+      </LeafletMap>
     </div>
   );
 }

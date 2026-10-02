@@ -90,7 +90,10 @@ export type PortalContractor = {
   license: string;
   city: string;
   state: string;
+  street?: string;
   zip: string;
+  latitude?: number | null;
+  longitude?: number | null;
   status: CrmDirectoryStatus;
   hourlyRate: number;
   overtimeRate?: number;

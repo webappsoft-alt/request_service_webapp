@@ -227,6 +227,7 @@ export function FixedServiceOrderDialog({
   }
 
   async function onConfirm() {
+    if (checkoutLoading) return;
     if (!selectedSlot?.isAvailable) {
       toast.error("Please select an available time slot.");
       return;
@@ -292,17 +293,23 @@ export function FixedServiceOrderDialog({
       clearPendingFixedOrder();
       dispatch(clearPendingOrderDraft());
       invalidatePublicCatalog();
-      void dispatch(fetchCustomerOrders({ page: 1, limit: 50 }));
 
       toast.success(
         result.order.orderNumber
           ? `${result.message} (${result.order.orderNumber})`
           : result.message,
       );
-      onOpenChange(false);
+
       if (result.order.id) {
-        router.push(customerPaths.order(result.order.id));
+        const orderHref = customerPaths.order(result.order.id);
+        onOpenChange(false);
+        router.push(orderHref);
+        void dispatch(fetchCustomerOrders({ page: 1, limit: 50 }));
+        return;
       }
+
+      onOpenChange(false);
+      void dispatch(fetchCustomerOrders({ page: 1, limit: 50 }));
     } catch (error) {
       toast.error(
         typeof error === "string"
@@ -519,11 +526,14 @@ export function FixedServiceOrderDialog({
           <Button
             type="button"
             onClick={() => void onConfirm()}
-            disabled={checkoutLoading}
-            className="min-w-[9.5rem]"
+            aria-disabled={checkoutLoading}
+            className="min-w-[9.5rem] disabled:opacity-100"
           >
             {checkoutLoading ? (
-              <Spinner size="sm" label="Placing order" />
+              <>
+                <Spinner size="sm" label="Placing order" />
+                <span className="opacity-80">Placing order…</span>
+              </>
             ) : (
               "Confirm booking"
             )}

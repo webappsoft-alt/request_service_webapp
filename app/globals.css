@@ -1359,14 +1359,19 @@
 /* Google Places Autocomplete dropdown — above dialogs / modals (GOOGLE_AUTOCOMPLETE.md). */
 .pac-container {
   z-index: 200000 !important;
+  pointer-events: auto !important;
   border-radius: 0.5rem;
   border: 1px solid var(--input);
   box-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.35);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   margin-top: 4px;
 }
-.pac-item {
+.pac-item,
+.pac-item * {
+  pointer-events: auto !important;
   cursor: pointer;
+}
+.pac-item {
   font-size: 0.8125rem;
   line-height: 1.35;
   padding: 0.55rem 0.75rem;
@@ -1377,6 +1382,18 @@
 }
 .pac-item-query {
   font-size: 0.8125rem;
+}
+
+/* React-owned Google address autocomplete menu (data-google-address-menu).
+   Same pointer-event guarantees as .pac-container so clicks always register
+   inside Radix dialogs / focus-trapped modals. */
+[data-google-address-menu="true"],
+[data-google-address-menu="true"] * {
+  pointer-events: auto !important;
+}
+[data-google-address-menu="true"] button[role="option"],
+[data-google-address-menu="true"] button[role="option"] * {
+  cursor: pointer !important;
 }
 
 

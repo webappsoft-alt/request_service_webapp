@@ -563,7 +563,7 @@ export function PublicProfessionalDetail({
       try {
         const response = await getData(
           publicApi.professionalPortfolio(professionalSlug),
-          { page: 1, limit: 12 },
+          { page: 1, limit: 10 },
           { silent: true },
         );
         if (cancelled) return;

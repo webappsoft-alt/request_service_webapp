@@ -1,21 +1,25 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 /**
  * Single shared Google Places Autocomplete component.
  *
- * Canonical implementation for the whole app — import this (or the
- * `AddressAutocomplete` re-export) wherever address autocomplete is needed.
- * Behavior follows binsapp `GOOGLE_AUTOCOMPLETE.md`:
- * - Client-side `google.maps.places.Autocomplete` (no REST for the UI)
- * - No `types` filter, no country restriction
- * - Existing `.env` key via `getGoogleMapsApiKey()` / `loadGoogleMapsScript()`
- * - On select: street/place line only in the input; city / state / ZIP / lat / lng
- *   returned separately via `onSelect` for the surrounding form
- *
- * Does not touch API routes or request payloads.
+ * Uses AutocompleteService + PlacesService with a React-owned dropdown
+ * (not Google's .pac-container) so suggestion clicks work inside Radix
+ * dialogs / sheets everywhere in the app.
  */
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import { Loader2, LocateFixed, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -49,9 +53,11 @@ type GooglePlaceResult = {
   geometry?: { location?: { lat: () => number; lng: () => number } };
 };
 
-type GoogleAutocomplete = {
-  addListener: (event: string, handler: () => void) => { remove: () => void };
-  getPlace: () => GooglePlaceResult;
+type Prediction = {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
 };
 
 type GoogleAutocompleteService = {
@@ -68,6 +74,13 @@ type GoogleAutocompleteService = {
       }> | null,
       status: string,
     ) => void,
+  ) => void;
+};
+
+type GooglePlacesService = {
+  getDetails: (
+    request: { placeId: string; fields: string[] },
+    callback: (place: GooglePlaceResult | null, status: string) => void,
   ) => void;
 };
 
@@ -115,12 +128,6 @@ function logParsedFields(parsed: PlaceAddress, source: string) {
     Longitude: parsed.longitude,
     FormattedAddress: parsed.formattedAddress,
   });
-  console.log(`${LOG} Parsed Address:`, parsed.streetAddress);
-  console.log(`${LOG} Parsed City:`, parsed.city);
-  console.log(`${LOG} Parsed State:`, parsed.state);
-  console.log(`${LOG} Parsed ZIP:`, parsed.zipCode);
-  console.log(`${LOG} Latitude:`, parsed.latitude);
-  console.log(`${LOG} Longitude:`, parsed.longitude);
 }
 
 /**
@@ -144,13 +151,16 @@ export function GoogleAddressAutocomplete({
   preferCityZipDisplay = false,
   "aria-invalid": ariaInvalid,
 }: GoogleAddressAutocompleteProps) {
+  const listboxId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<GoogleAutocomplete | null>(null);
+  const sessionTokenRef = useRef<unknown>(null);
   const autocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
-  const listenerRef = useRef<{ remove: () => void } | null>(null);
-  const predictionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const placesServiceRef = useRef<GooglePlacesService | null>(null);
+  const placesAttrRef = useRef<HTMLDivElement | null>(null);
+  const predictionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blurCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectingRef = useRef(false);
   const preferCityRef = useRef(preferCityDisplay);
   const preferCityZipRef = useRef(preferCityZipDisplay);
   const onChangeRef = useRef(onChange);
@@ -158,14 +168,33 @@ export function GoogleAddressAutocomplete({
 
   const [mapsReady, setMapsReady] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [selecting, setSelecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Prediction[]>([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
 
   preferCityRef.current = preferCityDisplay;
   preferCityZipRef.current = preferCityZipDisplay;
   onChangeRef.current = onChange;
   onSelectRef.current = onSelect;
 
-  // Load Maps JS + Places once (existing NEXT_PUBLIC_GOOGLE_* key only).
+  const updateMenuPosition = useCallback(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const rect = input.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: Math.max(rect.width, 240),
+      zIndex: 300000,
+    });
+  }, []);
+
+  // Load Maps JS + Places once.
   useEffect(() => {
     let cancelled = false;
     if (!getGoogleMapsApiKey()) {
@@ -188,171 +217,276 @@ export function GoogleAddressAutocomplete({
     };
   }, []);
 
-  // Keep the DOM input in sync with external value without blocking typing
-  // (fully controlled `value=` fights Google's Autocomplete).
+  // Init Places services (no native Autocomplete widget / .pac-container).
   useEffect(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    if (document.activeElement === input) return;
-    if (input.value !== value) input.value = value;
-  }, [value]);
-
-  // Attach native Autocomplete — no `types`, no country restriction (MD §6).
-  useEffect(() => {
-    if (!mapsReady || !inputRef.current) return;
+    if (!mapsReady) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const googleMaps = (window as any).google?.maps;
-    if (!googleMaps?.places?.Autocomplete) return;
+    if (!googleMaps?.places) return;
 
     if (!autocompleteServiceRef.current && googleMaps.places.AutocompleteService) {
       autocompleteServiceRef.current =
         new googleMaps.places.AutocompleteService() as GoogleAutocompleteService;
     }
 
-    if (autocompleteRef.current) return;
-
-    const autocomplete = new googleMaps.places.Autocomplete(inputRef.current, {
-      fields: ["formatted_address", "address_components", "geometry", "name", "place_id"],
-    }) as GoogleAutocomplete;
-    autocompleteRef.current = autocomplete;
-
-    listenerRef.current = autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
-      console.log(`${LOG} Place selected (raw Google place):`, place);
-      console.log(`${LOG} Complete selected Google place data:`, {
-        name: place.name,
-        place_id: place.place_id,
-        formatted_address: place.formatted_address,
-        address_components: place.address_components,
-        geometry: place.geometry
-          ? {
-              lat: place.geometry.location?.lat?.(),
-              lng: place.geometry.location?.lng?.(),
-            }
-          : null,
-      });
-
-      const parsed = placeAddressFromGooglePlace(place);
-      if (!parsed) {
-        console.log(`${LOG} Could not parse selected place — missing geometry.`);
-        setError("Could not read that place — try another suggestion.");
-        return;
+    if (!placesServiceRef.current && googleMaps.places.PlacesService) {
+      if (!placesAttrRef.current) {
+        const el = document.createElement("div");
+        el.setAttribute("aria-hidden", "true");
+        el.style.display = "none";
+        document.body.appendChild(el);
+        placesAttrRef.current = el;
       }
+      placesServiceRef.current = new googleMaps.places.PlacesService(
+        placesAttrRef.current,
+      ) as GooglePlacesService;
+    }
 
-      logParsedFields(parsed, "place_changed");
-
-      const streetLine = streetDisplayFromParsed(parsed);
-      const display = preferCityRef.current
-        ? placeCityLabel(parsed) ||
-          [parsed.city, parsed.state].filter(Boolean).join(", ") ||
-          streetLine ||
-          parsed.formattedAddress
-        : streetLine;
-
-      console.log(`${LOG} Input display value after select:`, display);
-
-      if (inputRef.current) {
-        inputRef.current.value = display;
-      }
-      onChangeRef.current(display);
-
-      const payload: PlaceAddress = {
-        ...parsed,
-        streetAddress: parsed.streetAddress || streetLine,
-      };
-      console.log(`${LOG} onSelect payload returned to form:`, payload);
-      onSelectRef.current(payload);
-
-      setError(
-        parsed.zipCode
-          ? null
-          : "No postal code found for this place — please enter it manually if needed.",
-      );
-    });
+    if (googleMaps.places.AutocompleteSessionToken) {
+      sessionTokenRef.current = new googleMaps.places.AutocompleteSessionToken();
+    }
 
     return () => {
-      listenerRef.current?.remove();
-      listenerRef.current = null;
-      autocompleteRef.current = null;
+      if (placesAttrRef.current?.parentNode) {
+        placesAttrRef.current.parentNode.removeChild(placesAttrRef.current);
+        placesAttrRef.current = null;
+      }
+      placesServiceRef.current = null;
+      autocompleteServiceRef.current = null;
     };
   }, [mapsReady]);
 
   useEffect(() => {
     return () => {
-      if (predictionsTimerRef.current) {
-        clearTimeout(predictionsTimerRef.current);
-      }
+      if (predictionsTimerRef.current) clearTimeout(predictionsTimerRef.current);
+      if (blurCloseTimerRef.current) clearTimeout(blurCloseTimerRef.current);
     };
   }, []);
 
-  function logSuggestionsForQuery(query: string) {
-    const service = autocompleteServiceRef.current;
-    if (!service || query.trim().length < 2) {
-      if (query.trim().length < 2) {
-        console.log(`${LOG} Suggestions: (query too short)`, []);
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    const onReposition = () => updateMenuPosition();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, suggestions.length, updateMenuPosition]);
+
+  // Close when clicking outside input + menu.
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rootRef.current?.contains(target)) return;
+      const menu = document.getElementById(listboxId);
+      if (menu?.contains(target)) return;
+      setOpen(false);
+      setActiveIndex(-1);
+    }
+    function onMenuClick(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const btn = target.closest<HTMLButtonElement>(`button[data-place-id]`);
+      if (!btn) return;
+      const placeId = btn.getAttribute("data-place-id");
+      if (!placeId) return;
+      const item = suggestions.find((s) => s.placeId === placeId);
+      if (item) {
+        event.preventDefault();
+        event.stopPropagation();
+        void selectPrediction(item);
       }
-      return;
     }
+    function onMenuMouseDown(event: MouseEvent) {
+      if (!(event.target instanceof Node)) return;
+      const menu = document.getElementById(listboxId);
+      if (menu?.contains(event.target)) {
+        if (blurCloseTimerRef.current) {
+          clearTimeout(blurCloseTimerRef.current);
+          blurCloseTimerRef.current = null;
+        }
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown, true);
+    const menu = document.getElementById(listboxId);
+    if (menu) {
+      menu.addEventListener("click", onMenuClick, true);
+      menu.addEventListener("mousedown", onMenuMouseDown, true);
+    }
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      const m = document.getElementById(listboxId);
+      if (m) {
+        m.removeEventListener("click", onMenuClick, true);
+        m.removeEventListener("mousedown", onMenuMouseDown, true);
+      }
+    };
+  }, [open, listboxId, suggestions]);
 
-    service.getPlacePredictions({ input: query }, (predictions, status) => {
-      console.log(`${LOG} Suggestions status:`, status);
-      console.log(
-        `${LOG} Suggestions Google returned:`,
-        (predictions ?? []).map((item) => ({
-          description: item.description,
-          place_id: item.place_id,
-          main_text: item.structured_formatting?.main_text,
-          secondary_text: item.structured_formatting?.secondary_text,
-        })),
+  function displayFromParsed(parsed: PlaceAddress): string {
+    const streetLine = streetDisplayFromParsed(parsed);
+    if (preferCityZipRef.current) {
+      const cityZip = [parsed.city, parsed.zipCode].filter(Boolean).join(", ");
+      return (
+        cityZip ||
+        placeCityLabel(parsed) ||
+        streetLine ||
+        parsed.formattedAddress
       );
-    });
-  }
-
-  function handleInputChange(next: string) {
-    console.log(`${LOG} User typing:`, next);
-    onChange(next);
-
-    if (predictionsTimerRef.current) {
-      clearTimeout(predictionsTimerRef.current);
     }
-    predictionsTimerRef.current = setTimeout(() => {
-      logSuggestionsForQuery(next);
-    }, 250);
+    if (preferCityRef.current) {
+      return (
+        placeCityLabel(parsed) ||
+        [parsed.city, parsed.state].filter(Boolean).join(", ") ||
+        streetLine ||
+        parsed.formattedAddress
+      );
+    }
+    return streetLine;
   }
 
   function applyResolvedAddress(address: PlaceAddress, source: string) {
     console.log(`${LOG} Resolved address (${source}):`, address);
     logParsedFields(address, source);
 
-    const streetLine = streetDisplayFromParsed(address);
-    const cityZip = [address.city, address.zipCode].filter(Boolean).join(", ");
-    const display = preferCityZipRef.current
-      ? cityZip ||
-        placeCityLabel(address) ||
-        streetLine ||
-        address.formattedAddress
-      : preferCityRef.current
-        ? placeCityLabel(address) ||
-          [address.city, address.state].filter(Boolean).join(", ") ||
-          streetLine ||
-          address.formattedAddress
-        : streetLine;
-
+    const display = displayFromParsed(address);
     if (inputRef.current) inputRef.current.value = display;
-    onChange(display);
+    onChangeRef.current(display);
 
     const payload: PlaceAddress = {
       ...address,
-      streetAddress: address.streetAddress.trim() || streetLine,
+      streetAddress: address.streetAddress.trim() || streetDisplayFromParsed(address),
     };
-    console.log(`${LOG} onSelect payload returned to form:`, payload);
-    onSelect(payload);
+    onSelectRef.current(payload);
 
+    setOpen(false);
+    setSuggestions([]);
+    setActiveIndex(-1);
     setError(
       address.zipCode
         ? null
         : "No postal code found for this place — please enter it manually if needed.",
     );
+  }
+
+  function fetchSuggestions(query: string) {
+    const service = autocompleteServiceRef.current;
+    const trimmed = query.trim();
+    if (!service || trimmed.length < 2) {
+      setSuggestions([]);
+      setOpen(false);
+      setLoadingSuggestions(false);
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const request: any = { input: trimmed };
+    if (sessionTokenRef.current) {
+      request.sessionToken = sessionTokenRef.current;
+    }
+
+    service.getPlacePredictions(request, (predictions, status) => {
+      setLoadingSuggestions(false);
+      console.log(`${LOG} Suggestions status:`, status);
+      if (status !== "OK" || !predictions?.length) {
+        setSuggestions([]);
+        setOpen(trimmed.length >= 2);
+        setActiveIndex(-1);
+        return;
+      }
+
+      const next = predictions
+        .map((item) => ({
+          placeId: String(item.place_id || "").trim(),
+          description: String(item.description || "").trim(),
+          mainText: String(item.structured_formatting?.main_text || item.description || "").trim(),
+          secondaryText: String(item.structured_formatting?.secondary_text || "").trim(),
+        }))
+        .filter((item) => item.placeId);
+
+      setSuggestions(next);
+      setOpen(next.length > 0);
+      setActiveIndex(next.length ? 0 : -1);
+      updateMenuPosition();
+    });
+  }
+
+  function handleInputChange(next: string) {
+    console.log(`${LOG} User typing:`, next);
+    onChange(next);
+    setError(null);
+
+    if (predictionsTimerRef.current) clearTimeout(predictionsTimerRef.current);
+    predictionsTimerRef.current = setTimeout(() => {
+      fetchSuggestions(next);
+    }, 220);
+  }
+
+  async function selectPrediction(prediction: Prediction) {
+    if (!prediction.placeId || selectingRef.current || selecting) return;
+    selectingRef.current = true;
+    if (blurCloseTimerRef.current) {
+      clearTimeout(blurCloseTimerRef.current);
+      blurCloseTimerRef.current = null;
+    }
+    setSelecting(true);
+    setError(null);
+    console.log(`${LOG} Suggestion clicked:`, prediction);
+
+    try {
+      const place = await new Promise<GooglePlaceResult>((resolve, reject) => {
+        const service = placesServiceRef.current;
+        if (!service) {
+          reject(new Error("Places service is not ready."));
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const request: any = {
+          placeId: prediction.placeId,
+          fields: [
+            "formatted_address",
+            "address_components",
+            "geometry",
+            "name",
+            "place_id",
+          ],
+        };
+        if (sessionTokenRef.current) {
+          request.sessionToken = sessionTokenRef.current;
+        }
+        service.getDetails(request, (result, status) => {
+          if (status === "OK" && result) resolve(result);
+          else reject(new Error(`Could not load place details (${status}).`));
+        });
+      });
+
+      // Refresh session token after a successful details fetch.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const googleMaps = (window as any).google?.maps;
+      if (googleMaps?.places?.AutocompleteSessionToken) {
+        sessionTokenRef.current = new googleMaps.places.AutocompleteSessionToken();
+      }
+
+      const parsed = placeAddressFromGooglePlace(place);
+      if (!parsed) {
+        setError("Could not read that place — try another suggestion.");
+        return;
+      }
+      applyResolvedAddress(parsed, "suggestion_select");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not select that address.";
+      console.log(`${LOG} Select error:`, message, err);
+      setError(message);
+    } finally {
+      selectingRef.current = false;
+      setSelecting(false);
+    }
   }
 
   async function useCurrentLocation() {
@@ -363,7 +497,7 @@ export function GoogleAddressAutocomplete({
 
     setLocating(true);
     setError(null);
-    console.log(`${LOG} Use current location requested.`);
+    setOpen(false);
 
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -375,9 +509,7 @@ export function GoogleAddressAutocomplete({
       });
 
       const { latitude, longitude } = position.coords;
-      console.log(`${LOG} Geolocation coords:`, { latitude, longitude });
 
-      // Prefer JS Geocoder when Maps is ready (MD §10); else REST proxy.
       if (isGoogleMapsReady()) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const geocoder = new (window as any).google.maps.Geocoder();
@@ -406,7 +538,6 @@ export function GoogleAddressAutocomplete({
         const picked =
           results.find((item) => item.geometry?.location_type === "ROOFTOP") ??
           results[0];
-        console.log(`${LOG} Reverse-geocode result:`, picked);
         const parsed = placeAddressFromGooglePlace({
           formatted_address: picked?.formatted_address,
           name: picked?.name,
@@ -435,44 +566,115 @@ export function GoogleAddressAutocomplete({
           : err instanceof Error
             ? err.message
             : "Could not get your current location.";
-      console.log(`${LOG} Current location error:`, message, err);
       setError(message);
     } finally {
       setLocating(false);
     }
   }
 
-  // Keep Google Places dropdown usable inside Radix dialogs (focus trap /
-  // dismissable layer otherwise swallows pac-item clicks).
-  useEffect(() => {
-    function isPacTarget(target: EventTarget | null) {
-      return (
-        target instanceof Element &&
-        Boolean(target.closest(".pac-container, .pac-item"))
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!open || !suggestions.length) {
+      if (event.key === "Escape") setOpen(false);
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => (index + 1) % suggestions.length);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) =>
+        index <= 0 ? suggestions.length - 1 : index - 1,
       );
+      return;
     }
-
-    function onPointerDown(event: PointerEvent) {
-      if (!isPacTarget(event.target)) return;
-      // Stop dialog dismiss / focus-out from cancelling the suggestion click.
-      event.stopPropagation();
+    if (event.key === "Enter" && activeIndex >= 0 && suggestions[activeIndex]) {
+      event.preventDefault();
+      void selectPrediction(suggestions[activeIndex]);
+      return;
     }
-
-    function onMouseDown(event: MouseEvent) {
-      if (!isPacTarget(event.target)) return;
-      event.stopPropagation();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      setActiveIndex(-1);
     }
+  }
 
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("mousedown", onMouseDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("mousedown", onMouseDown, true);
-    };
-  }, []);
+  const menu =
+    open && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            id={listboxId}
+            role="listbox"
+            data-google-address-menu="true"
+            style={menuStyle}
+            className="overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-lg"
+            onMouseDown={(event) => {
+              // Keep input focus; selection is handled on pointer/click.
+              event.preventDefault();
+            }}
+          >
+            {loadingSuggestions && !suggestions.length ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Searching addresses…
+              </div>
+            ) : null}
+
+            {suggestions.map((item, index) => {
+              const active = index === activeIndex;
+              return (
+                <button
+                  key={item.placeId}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  data-place-id={item.placeId}
+                  className={cn(
+                    "flex w-full items-start gap-2 px-3 py-2.5 text-left text-sm transition-colors",
+                    active ? "bg-muted" : "hover:bg-muted/70",
+                  )}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                  }}
+                  onClick={() => {
+                    void selectPrediction(item);
+                  }}
+                >
+                  <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 leading-snug">
+                    <span className="block font-medium text-foreground">
+                      {item.mainText}
+                    </span>
+                    {item.secondaryText ? (
+                      <span className="block text-xs text-muted-foreground">
+                        {item.secondaryText}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+
+            {!loadingSuggestions && suggestions.length === 0 ? (
+              <div className="px-3 py-2.5 text-xs text-muted-foreground">
+                No matching addresses. Try a fuller street address.
+              </div>
+            ) : null}
+
+            <div className="border-t border-input px-3 py-1.5 text-[10px] text-muted-foreground">
+              Address suggestions powered by Google
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
-    <div className={cn("relative", className)}>
+    <div ref={rootRef} className={cn("relative", className)}>
       <div className="relative">
         <MapPin
           className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
@@ -482,18 +684,36 @@ export function GoogleAddressAutocomplete({
           ref={inputRef}
           id={id}
           name={name}
-          defaultValue={value}
-          onChange={(event) => {
-            handleInputChange(event.target.value);
+          value={value}
+          onChange={(event) => handleInputChange(event.target.value)}
+          onFocus={() => {
+            if (blurCloseTimerRef.current) {
+              clearTimeout(blurCloseTimerRef.current);
+              blurCloseTimerRef.current = null;
+            }
+            if (value.trim().length >= 2) {
+              fetchSuggestions(value);
+            }
           }}
+          onBlur={() => {
+            blurCloseTimerRef.current = setTimeout(() => {
+              setOpen(false);
+              setActiveIndex(-1);
+            }, 260);
+          }}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           autoComplete={autoComplete || "off"}
           required={required}
-          disabled={disabled || locating}
+          disabled={disabled || locating || selecting}
           aria-invalid={ariaInvalid || undefined}
+          aria-autocomplete="list"
+          aria-controls={listboxId}
+          aria-expanded={open}
+          role="combobox"
           className={cn("pr-10 pl-8", inputClassName)}
         />
-        {locating ? (
+        {locating || selecting ? (
           <Loader2
             className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
             aria-hidden="true"
@@ -511,6 +731,8 @@ export function GoogleAddressAutocomplete({
           </button>
         )}
       </div>
+
+      {menu}
 
       {!hideStatus && error ? (
         <p className="mt-1.5 text-xs text-muted-foreground" role="status">

@@ -90,7 +90,7 @@ export function PublicProjectDetailView({
       try {
         const response = await getData(
           publicApi.professionalPortfolio(providerSlug),
-          { page: 1, limit: 12 },
+          { page: 1, limit: 10 },
           { silent: true },
         );
         if (cancelled) return;

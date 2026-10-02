@@ -92,7 +92,7 @@ export function AcceptOrderModal({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -195,7 +195,7 @@ export function RejectOrderModal({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -512,7 +512,7 @@ export function TransitOrderModal({
           ) : null}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -747,7 +747,7 @@ export function ArriveOrderModal({
           ) : null}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -815,7 +815,7 @@ export function StartWorkOrderModal({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -1049,7 +1049,7 @@ export function ChangeOrderModal({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -1267,7 +1267,7 @@ export function CompleteWorkModal({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
@@ -1344,7 +1344,7 @@ export function CancelOrderModal({
           />
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-3 sm:gap-3">
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Back
           </Button>

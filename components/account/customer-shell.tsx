@@ -323,7 +323,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
     try {
       const result = await fetchNotifications({
         page: 1,
-        limit: 12,
+        limit: 10,
         status: "all",
         silent: true,
         force: true,

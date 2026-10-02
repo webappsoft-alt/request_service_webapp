@@ -43,15 +43,36 @@ export function FeaturedProvidersSection() {
 
   useEffect(() => {
     if (customerLocation.detecting) return;
+
+    const usable = hasLocation(customerLocation);
     void dispatch(
       fetchPublicProfessionals({
         query: {
           sortBy: "newest",
           sortOrder: "desc",
+          zipCode:
+            usable &&
+            !(
+              customerLocation.latitude != null &&
+              customerLocation.longitude != null
+            )
+              ? customerLocation.zip || undefined
+              : undefined,
+          lat: usable ? customerLocation.latitude ?? undefined : undefined,
+          lng: usable ? customerLocation.longitude ?? undefined : undefined,
+          locationToken: usable
+            ? [
+                customerLocation.zip || "",
+                customerLocation.city || "",
+                String(customerLocation.latitude ?? ""),
+                String(customerLocation.longitude ?? ""),
+              ].join("|")
+            : "all",
         },
       }),
     );
   }, [
+    customerLocation.address,
     customerLocation.city,
     customerLocation.detecting,
     customerLocation.latitude,
@@ -98,18 +119,24 @@ export function FeaturedProvidersSection() {
           className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
           aria-busy={showSkeleton || undefined}
         >
-          {showSkeleton
-            ? Array.from({ length: PROVIDER_SKELETON_COUNT }, (_, index) => (
-                <ProviderCardSkeleton key={`provider-skeleton-${index}`} />
-              ))
-            : providers.map((provider, index) => (
-                <ProviderCard
-                  key={provider.id}
-                  provider={provider}
-                  visual
-                  hideCredentials={index === 1 || index === 2}
-                />
-              ))}
+          {showSkeleton ? (
+            Array.from({ length: PROVIDER_SKELETON_COUNT }, (_, index) => (
+              <ProviderCardSkeleton key={`provider-skeleton-${index}`} />
+            ))
+          ) : providers.length > 0 ? (
+            providers.map((provider, index) => (
+              <ProviderCard
+                key={provider.id}
+                provider={provider}
+                visual
+                hideCredentials={index === 1 || index === 2}
+              />
+            ))
+          ) : (
+            <div className="col-span-full py-12 text-center text-muted-foreground">
+              No professionals found in this location yet. Try exploring nearby areas.
+            </div>
+          )}
         </div>
       </Container>
     </Section>

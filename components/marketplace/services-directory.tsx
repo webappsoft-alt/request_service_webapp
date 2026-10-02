@@ -796,22 +796,7 @@ export function ServicesDirectory({
       }
     }
 
-    const source = displayServices;
-    const ids = new Set(
-      source
-        .map((service) => service.provider?.id)
-        .filter((id): id is string => Boolean(id)),
-    );
-    const slugs = new Set(
-      source
-        .map((service) => service.provider?.slug)
-        .filter((slug): slug is string => Boolean(slug)),
-    );
-
-    // Prefer professionals API records (avatarUrl, specialties, startingPrice).
-    const fromProfessionalsApi = professionalsForAvatars
-      .filter((pro) => ids.has(pro.id) || (pro.slug && slugs.has(pro.slug)))
-      .map(publicProfessionalToProvider);
+    const fromProfessionalsApi = professionalsForAvatars.map(publicProfessionalToProvider);
 
     if (fromProfessionalsApi.length) {
       return uniqueProviders(fromProfessionalsApi);
@@ -826,7 +811,7 @@ export function ServicesDirectory({
       if (pro.slug) avatarByKey.set(pro.slug, url);
     }
     return uniqueProviders(
-      source
+      displayServices
         .map((service) => providerFromService(service, avatarByKey))
         .filter((item): item is Provider => Boolean(item)),
     );
@@ -893,6 +878,10 @@ export function ServicesDirectory({
       void dispatch(
         fetchPublicProfessionals({
           query: {
+            search: apiQueryRef.current.search,
+            category: apiQueryRef.current.category?.[0],
+            subCategory: apiQueryRef.current.subCategory,
+            minRating: apiQueryRef.current.rating,
             // Prefer lat/lng when present (resolvePublicProfessionalsQuery also enforces this).
             zipCode:
               usable &&

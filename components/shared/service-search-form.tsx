@@ -167,11 +167,6 @@ export function ServiceSearchForm({
   async function goToResults(match: ServiceMatch | undefined, nextQuery: string) {
     const nextZip = customerLocation.zip;
     const nextLocation = locationLabel || customerLocation.address || nextZip;
-    if (!nextQuery.trim() && !nextZip && !nextLocation.trim()) {
-      setError("Tell us what you need or the city / ZIP.");
-      return;
-    }
-
     setError("");
     const intent = resolveSearchIntent({
       query: nextQuery,

@@ -407,6 +407,28 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
     payload.insuranceExpires = contractor.insuranceExpires || new Date().toISOString();
   }
   if (contractor.workingHours !== undefined) payload.workingHours = contractor.workingHours;
+  const hasLocationFields =
+    contractor.street !== undefined ||
+    contractor.city !== undefined ||
+    contractor.state !== undefined ||
+    contractor.zip !== undefined ||
+    contractor.latitude !== undefined ||
+    contractor.longitude !== undefined;
+  if (hasLocationFields) {
+    const location = mapJobLocationForApi({
+      id: "contractor_loc",
+      street: contractor.street || "",
+      city: contractor.city || "",
+      state: contractor.state || "",
+      zip: contractor.zip || "",
+      country: "US",
+      latitude: contractor.latitude ?? null,
+      longitude: contractor.longitude ?? null,
+    });
+    payload.location = location;
+    payload.city = location.city || "";
+    payload.state = location.state || "";
+  }
   return payload;
 }
 

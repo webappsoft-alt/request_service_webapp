@@ -556,6 +556,12 @@ export function CreateContractorDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [license, setLicense] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   function reset() {
@@ -566,6 +572,12 @@ export function CreateContractorDialog({
     setEmail("");
     setPhone("");
     setLicense("");
+    setStreet("");
+    setCity("");
+    setState("");
+    setZip("");
+    setLatitude(null);
+    setLongitude(null);
     setSaving(false);
   }
 
@@ -582,8 +594,23 @@ export function CreateContractorDialog({
     setEmail(contractor.email);
     setPhone(contractor.phone);
     setLicense(contractor.license);
+    setStreet(contractor.street || "");
+    setCity(contractor.city || "");
+    setState(contractor.state || "");
+    setZip(contractor.zip || "");
+    setLatitude(contractor.latitude ?? null);
+    setLongitude(contractor.longitude ?? null);
     setSaving(false);
   }, [open, contractor]);
+
+  function applyContractorAddress(address: PlaceAddress) {
+    setStreet(address.streetAddress.trim());
+    setCity(address.city || "");
+    setState(normalizeUsStateCode(address.state) || "");
+    if (address.zipCode) setZip(address.zipCode);
+    setLatitude(address.latitude);
+    setLongitude(address.longitude);
+  }
 
   async function save() {
     if (saving) return;
@@ -595,6 +622,12 @@ export function CreateContractorDialog({
       phone: phone.trim() || "(000) 000-0000",
       trade: trade.trim() || "General",
       license: license.trim() || "Pending",
+      street: street.trim(),
+      city: city.trim() || provider.city,
+      state: state.trim() || provider.state,
+      zip: zip.trim() || (provider.serviceArea[0] ?? ""),
+      latitude,
+      longitude,
     };
     if (!patch.firstName || !patch.lastName) return;
 
@@ -615,9 +648,6 @@ export function CreateContractorDialog({
           id: `con_${provider.id}_new_${Date.now()}`,
           number: `VNDC-${220 + contractors.length}`,
           ...patch,
-          city: provider.city,
-          state: provider.state,
-          zip: provider.serviceArea[0] ?? "",
           status: "active",
           hourlyRate: 75,
           insuranceExpires: "2027-01-01",
@@ -696,6 +726,28 @@ export function CreateContractorDialog({
             <FieldLabel htmlFor="con-lic">License</FieldLabel>
             <Input id="con-lic" value={license} onChange={(change) => setLicense(change.target.value)} placeholder="LIC-12345" />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="con-location">Location</FieldLabel>
+            <GoogleAddressAutocomplete
+              id="con-location"
+              value={street}
+              onChange={setStreet}
+              onSelect={applyContractorAddress}
+              placeholder="Start typing a street address…"
+            />
+          </Field>
+          <CityStateZipFields
+            idPrefix="con"
+            value={{ city, state, zip }}
+            onChange={(next) => {
+              setCity(next.city);
+              setState(next.state);
+              setZip(next.zip);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            City, state, and ZIP fill in when you pick an address.
+          </p>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>

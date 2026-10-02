@@ -878,6 +878,13 @@ export function mapPortalContractor(raw: unknown): PortalContractor | null {
   const id = crmIdOf(record);
   if (!id) return null;
 
+  const location = asRecord(record.location);
+  const coordinates = Array.isArray(location?.coordinates)
+    ? location.coordinates
+    : null;
+  const lng = coordinates && Number.isFinite(Number(coordinates[0])) ? Number(coordinates[0]) : null;
+  const lat = coordinates && Number.isFinite(Number(coordinates[1])) ? Number(coordinates[1]) : null;
+
   return {
     id,
     number: trimmed(record.number) || `CON-${id.slice(-4).toUpperCase()}`,
@@ -888,9 +895,12 @@ export function mapPortalContractor(raw: unknown): PortalContractor | null {
     phone: trimmed(record.phone),
     trade: trimmed(record.trade),
     license: trimmed(record.license),
-    city: trimmed(record.city),
-    state: trimmed(record.state),
-    zip: trimmed(record.zip),
+    city: trimmed(location?.city) || trimmed(record.city),
+    state: trimmed(location?.state) || trimmed(record.state),
+    street: trimmed(location?.address) || trimmed(record.street) || undefined,
+    zip: trimmed(location?.zip) || trimmed(record.zip),
+    latitude: lat ?? numberValue(record.latitude, null),
+    longitude: lng ?? numberValue(record.longitude, null),
     status:
       trimmed(record.status) === "inactive" || trimmed(record.status) === "on_stop"
         ? (trimmed(record.status) as PortalContractor["status"])

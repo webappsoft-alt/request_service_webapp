@@ -378,38 +378,34 @@ function mapPublicEstimateToSnapshot(
     companySignatureDataUrl: companySignatureDataUrl || undefined,
     siteVisit,
     customerUpdates: Array.isArray(estimate.customerUpdates)
-      ? estimate.customerUpdates
-          .map((entry) => {
-            const row = asRecord(entry) || {};
-            const summary =
-              stringValue(row.summary) ||
-              stringValue(row.title) ||
-              stringValue(row.details);
-            if (!summary) return null;
-            return {
-              summary,
-              details: stringValue(row.details) || undefined,
-              totalBefore:
-                row.totalBefore == null || row.totalBefore === ""
-                  ? null
-                  : numberValue(row.totalBefore),
-              totalAfter:
-                row.totalAfter == null || row.totalAfter === ""
-                  ? null
-                  : numberValue(row.totalAfter),
-              at:
-                toIso(row.at) ||
-                toIso(row.timestamp) ||
-                toIso(row.createdAt) ||
-                new Date().toISOString(),
-            };
-          })
-          .filter(
-            (
-              item,
-            ): item is NonNullable<EstimateShareSnapshot["customerUpdates"]>[number] =>
-              Boolean(item),
-          )
+      ? estimate.customerUpdates.flatMap((entry) => {
+          const row = asRecord(entry) || {};
+          const summary =
+            stringValue(row.summary) ||
+            stringValue(row.title) ||
+            stringValue(row.details);
+          if (!summary) return [];
+          const update: NonNullable<
+            EstimateShareSnapshot["customerUpdates"]
+          >[number] = {
+            summary,
+            details: stringValue(row.details) || undefined,
+            totalBefore:
+              row.totalBefore == null || row.totalBefore === ""
+                ? null
+                : numberValue(row.totalBefore),
+            totalAfter:
+              row.totalAfter == null || row.totalAfter === ""
+                ? null
+                : numberValue(row.totalAfter),
+            at:
+              toIso(row.at) ||
+              toIso(row.timestamp) ||
+              toIso(row.createdAt) ||
+              new Date().toISOString(),
+          };
+          return [update];
+        })
       : undefined,
   };
 

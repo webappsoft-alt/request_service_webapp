@@ -203,7 +203,10 @@ export function EstimatePdfDocument({
         <div className="mt-4 ml-auto w-56 text-[12px]">
           <Row label="Subtotal" value={formatMoney(snapshot.subtotal)} />
           {Number(snapshot.discount) > 0 ? (
-            <Row label="Discount" value={`-${formatMoney(snapshot.discount)}`} />
+            <Row
+              label="Discount"
+              value={`-${formatMoney(Number(snapshot.discount) || 0)}`}
+            />
           ) : null}
           <Row
             label={`Tax (${formatTaxRatePercent(snapshot.taxRatePercent)}%)`}

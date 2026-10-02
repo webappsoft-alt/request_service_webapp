@@ -149,6 +149,7 @@ export function SiteVisitsPanel({
   const { employees: liveEmployees } = usePortalCrew();
   const [selectedId, setSelectedId] = useState<string>("");
   const [detailOpen, setDetailOpen] = useState(true);
+  const [visitsCollapsed, setVisitsCollapsed] = useState(false);
   const [locallyRemovedIds, setLocallyRemovedIds] = useState<string[]>([]);
   const sortedVisits = useMemo(
     () =>
@@ -569,6 +570,60 @@ export function SiteVisitsPanel({
     }
   }
 
+  async function handleBuildEstimate() {
+    setDetailOpen(false);
+    setVisitsCollapsed(true);
+    await onBuildEstimate?.();
+  }
+
+  if (visitsCollapsed) {
+    const completedCount = sortedVisits.filter((visit) => visit.status === "completed").length;
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-[#94a3b8] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              aria-expanded={false}
+              onClick={() => setVisitsCollapsed(false)}
+              className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <span
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-[#94a3b8] bg-[#f1f5f9] text-slate-700 transition-colors group-hover:border-slate-400 group-hover:bg-slate-200"
+                aria-hidden="true"
+              >
+                <ChevronDown className="size-4 -rotate-90 stroke-[2.5]" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold tracking-tight text-slate-900">
+                  Site visits
+                </p>
+                <p className="text-xs text-slate-500">
+                  {sortedVisits.length
+                    ? `${sortedVisits.length} visit${sortedVisits.length === 1 ? "" : "s"}${
+                        completedCount ? ` · ${completedCount} completed` : ""
+                      } — expand to manage`
+                    : "No visits yet — expand to schedule"}
+                </p>
+              </div>
+            </button>
+            {showBuildEstimate && onBuildEstimate ? (
+              <Button
+                size="sm"
+                disabled={saving}
+                onClick={() => {
+                  void handleBuildEstimate();
+                }}
+              >
+                {hasEstimate ? "View estimate" : "Build estimate"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -704,8 +759,7 @@ export function SiteVisitsPanel({
                   size="sm"
                   disabled={saving}
                   onClick={() => {
-                    setDetailOpen(false);
-                    void onBuildEstimate();
+                    void handleBuildEstimate();
                   }}
                 >
                   {hasEstimate ? "View estimate" : "Build estimate"}

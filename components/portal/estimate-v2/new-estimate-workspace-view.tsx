@@ -821,7 +821,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     behavior: "smooth",
                     block: "start",
                   });
-                }, 120);
+                }, 180);
               }}
             />
           ) : null}

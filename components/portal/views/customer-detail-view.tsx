@@ -912,7 +912,7 @@ function CustomerEstimatesPanel({
         }
         rows={rows}
         rowKey={(row) => row.id}
-        rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+        rowHref={(row) => `/pro/dashboard/new-estimate/${row.id}`}
         columns={[
           {
             id: "number",
@@ -921,7 +921,7 @@ function CustomerEstimatesPanel({
             searchValue: (row) => row.number,
             exportValue: (row) => row.number,
             cell: (row) => (
-              <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-medium text-primary hover:underline">
+              <Link href={`/pro/dashboard/new-estimate/${row.id}`} className="font-medium text-primary hover:underline">
                 {row.number}
               </Link>
             ),
@@ -1000,12 +1000,12 @@ function CustomerEstimatesPanel({
           // Prefer API flag — local archive store can be stale and show Restore wrongly.
           const archived = Boolean(row.isArchived ?? row.isArchieved);
           return [
-            { label: "Open", href: `/pro/dashboard/estimates/${row.id}` },
+            { label: "Open", href: `/pro/dashboard/new-estimate/${row.id}` },
             {
               label: "Edit",
               onSelect: () => setEditEstimate(row),
             },
-            { label: "Convert to job", href: `/pro/dashboard/estimates/${row.id}` },
+            { label: "Convert to job", href: `/pro/dashboard/new-estimate/${row.id}` },
             archived
               ? {
                   label: restoringId === row.id ? "Restoring…" : "Restore",
@@ -2536,7 +2536,7 @@ function buildCustomerHistory({
       title: item.number,
       detail: `${estimateStatusLabel(item.status)} · ${formatMoney(item.total)}`,
       at: item.issuedAt,
-      href: `/pro/dashboard/estimates/${item.id}`,
+      href: `/pro/dashboard/new-estimate/${item.id}`,
     })),
     ...jobs.map((item) => ({
       id: `hist_${item.id}`,

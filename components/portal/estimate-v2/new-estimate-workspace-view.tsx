@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Plus } from "lucide-react";
+import { Check, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,11 +21,12 @@ import { PortalPage } from "@/components/portal/portal-page";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import {
   createEmptyLine,
-  LineItemsEditor,
 } from "@/components/portal/line-items-editor";
 import { SendApprovalDialog } from "@/components/portal/send-approval-dialog";
+import { shareUrlFor } from "@/components/portal/use-estimate-share";
 import { SiteVisitsPanel } from "@/components/portal/estimate-v2/site-visits-panel";
 import { ExistingInformationPanel } from "@/components/portal/estimate-v2/existing-information-panel";
+import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
 import { workItemsToJobCostLines } from "@/components/portal/estimate-v2/work-items-editor";
 import {
   jobCostMix,
@@ -37,7 +38,15 @@ import {
   todayISO,
 } from "@/components/portal/work-builders";
 import {
+  estimateStatusLabel,
+  estimateStatusToneDistinct,
+  opportunityStatusForEstimateStatus,
+  opportunityStatusLabel,
+  opportunityStatusTone,
+} from "@/lib/data/estimate-v2-status";
+import {
   getEstimateV2Opportunity,
+  getOpportunityByEstimateId,
   updateEstimateV2Opportunity,
   createEstimateV2SiteAssessment,
   createEstimateV2Estimate,
@@ -52,12 +61,14 @@ import {
 import {
   finalizeEstimate,
   getEstimate,
+  shareEstimate,
   updateEstimate,
 } from "@/lib/api/crm-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Estimate } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
+import { estimateCanShare } from "@/lib/data/portal";
 
 const PREP_OPTIONS = [
   {
@@ -90,23 +101,6 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-function opportunityStatusTone(status: string) {
-  const key = status.toLowerCase();
-  if (key.includes("accepted") || key.includes("completed") || key.includes("converted")) {
-    return "bg-emerald-50 text-emerald-800 ring-emerald-200/80";
-  }
-  if (key.includes("sent") || key.includes("scheduled") || key.includes("assessment")) {
-    return "bg-sky-50 text-sky-800 ring-sky-200/80";
-  }
-  if (key.includes("reject") || key.includes("cancel") || key.includes("expired")) {
-    return "bg-rose-50 text-rose-800 ring-rose-200/80";
-  }
-  if (key.includes("draft") || key.includes("new")) {
-    return "bg-slate-100 text-slate-700 ring-slate-200/80";
-  }
-  return "bg-amber-50 text-amber-900 ring-amber-200/80";
-}
-
 function customerNameFromOpportunity(opportunity: EstimateV2Opportunity) {
   const c = opportunity.customerId;
   if (!c || typeof c === "string") return "Customer";
@@ -134,6 +128,33 @@ function estimateItemKind(type: string | undefined): JobCostLine["kind"] {
   return "labor";
 }
 
+/** Stamp workspace section/images onto saved estimate items for the send preview. */
+function withWorkspaceLineMeta(estimate: Estimate, lines: JobCostLine[]): Estimate {
+  return {
+    ...estimate,
+    items: estimate.items.map((item) => {
+      const match =
+        lines.find((line) => line.id === item.id) ||
+        lines.find(
+          (line) =>
+            (line.description || "").trim() === (item.description || "").trim() &&
+            line.kind === estimateItemKind(item.type),
+        );
+      if (!match) return item;
+      const section = String(match.section || item.section || "").trim();
+      const images =
+        match.kind === "materials"
+          ? (match.images || item.images || []).filter((src) => Boolean(String(src || "").trim()))
+          : item.images;
+      return {
+        ...item,
+        ...(section ? { section } : { section: undefined }),
+        ...(images?.length ? { images } : {}),
+      };
+    }),
+  };
+}
+
 function estimateToLines(estimate: Estimate | null): JobCostLine[] {
   if (!estimate?.items?.length) return [createEmptyLine("labor")];
   return estimate.items.map((item) => {
@@ -147,6 +168,9 @@ function estimateToLines(estimate: Estimate | null): JobCostLine[] {
       unitPrice: Number(item.unitPrice) || 0,
       ...(kind === "materials"
         ? { images: Array.isArray(item.images) ? item.images : [] }
+        : {}),
+      ...(String(item.section || "").trim()
+        ? { section: String(item.section).trim() }
         : {}),
     };
   });
@@ -172,6 +196,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [saving, setSaving] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
+  /** Fresh estimate for the send dialog (avoids stale React state after save/finalize). */
+  const [sendEstimate, setSendEstimate] = useState<Estimate | null>(null);
 
   const [scopeOfWork, setScopeOfWork] = useState("");
   const [terms, setTerms] = useState("Proposal valid for 30 calendar days from issue date.");
@@ -185,12 +211,27 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [prepAttachments, setPrepAttachments] = useState<OpportunityAttachment[]>([]);
   const [prepWorkItems, setPrepWorkItems] = useState<AssessmentWorkItem[]>([]);
   const prepInfoRef = useRef<HTMLDivElement>(null);
+  /** When Existing info / Site visits is expanded, hide the estimate builder underneath. */
+  const [prepPanelOpen, setPrepPanelOpen] = useState(false);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
     if (!silent) setLoading(true);
     try {
-      const data = await getEstimateV2Opportunity(opportunityId);
+      let data: EstimateV2Opportunity;
+      try {
+        data = await getEstimateV2Opportunity(opportunityId);
+      } catch {
+        // Deep links may still carry a classic Estimate id — resolve to opportunity.
+        const byEstimate = await getOpportunityByEstimateId(opportunityId, {
+          silent: true,
+        });
+        if (byEstimate?.id && byEstimate.id !== opportunityId) {
+          router.replace(`/pro/dashboard/new-estimate/${byEstimate.id}`);
+          return;
+        }
+        throw new Error("Estimate not found.");
+      }
       setOpportunity(data);
       setFollowUpAt(
         data.followUpAt ? new Date(data.followUpAt).toISOString().slice(0, 10) : "",
@@ -239,13 +280,14 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       );
 
       const linked = data.estimates?.[0] || null;
+      let freshEstimate: Estimate | null = null;
       if (linked?.id) {
-        const fresh = (await getEstimate(linked.id)) || linked;
-        setEstimate(fresh);
-        setScopeOfWork(fresh.notes || data.description || data.prepFindings || "");
-        setTerms(fresh.terms || "Proposal valid for 30 calendar days from issue date.");
-        setDiscount(Number(fresh.discount) || 0);
-        const fromEstimate = estimateToLines(fresh);
+        freshEstimate = (await getEstimate(linked.id)) || linked;
+        setEstimate(freshEstimate);
+        setScopeOfWork(freshEstimate.notes || data.description || data.prepFindings || "");
+        setTerms(freshEstimate.terms || "Proposal valid for 30 calendar days from issue date.");
+        setDiscount(Number(freshEstimate.discount) || 0);
+        const fromEstimate = estimateToLines(freshEstimate);
         const estimateHasContent = fromEstimate.some(
           (line) => line.description.trim() && line.description !== "Labour",
         );
@@ -254,6 +296,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         } else {
           const fromWork = collectStartingLines(data);
           setLines(fromWork.length ? fromWork : [createEmptyLine("labor")]);
+        }
+
+        // Heal drift: opportunity pipeline status must follow the linked estimate.
+        const expected = opportunityStatusForEstimateStatus(freshEstimate.status);
+        if (expected && data.status !== expected) {
+          try {
+            await updateEstimateV2Opportunity(data.id, { status: expected });
+            data = { ...data, status: expected };
+            setOpportunity(data);
+          } catch {
+            /* non-blocking */
+          }
         }
       } else {
         setEstimate(null);
@@ -266,12 +320,21 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
       const rate = await fetchTaxRatePercent(data.propertyAddress?.state);
       setTaxRatePercent(rate);
+
+      // Full load only: open prep path when no estimate yet; never fight silent refreshes.
+      if (!silent) {
+        const needsPrep =
+          data.prepChoice === "have_information" ||
+          data.prepChoice === "schedule_assessment";
+        const hasEst = Boolean(data.estimates?.[0]?.id);
+        setPrepPanelOpen(needsPrep && !hasEst);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load estimate.");
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [opportunityId]);
+  }, [opportunityId, router]);
 
   useEffect(() => {
     void load();
@@ -350,6 +413,68 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   const showPrepInfo = opportunity?.prepChoice === "have_information";
 
+  const activityTimeline = useMemo(() => {
+    type TimelineItem = {
+      key: string;
+      action: string;
+      details?: string;
+      at: string;
+    };
+    const items: TimelineItem[] = [];
+
+    for (const [index, item] of (opportunity?.activities || []).entries()) {
+      if (!item?.action) continue;
+      items.push({
+        key: `opp-${item.at || index}-${item.action}`,
+        action: item.action,
+        details: item.details || undefined,
+        at: item.at || "",
+      });
+    }
+
+    for (const [index, item] of (estimate?.activities || []).entries()) {
+      if (!item?.title) continue;
+      items.push({
+        key: `est-act-${item.id || index}-${item.title}`,
+        action: item.title,
+        details: item.description || undefined,
+        at: item.createdAt || "",
+      });
+    }
+
+    for (const [index, item] of (estimate?.logs || []).entries()) {
+      if (!item?.action) continue;
+      // Prefer higher-level activities for share/status noise when both exist.
+      if (
+        item.action === "Status set" ||
+        item.action === "Estimate shared" ||
+        item.action === "Updated estimate shared"
+      ) {
+        continue;
+      }
+      items.push({
+        key: `est-log-${item.id || index}-${item.action}`,
+        action: item.action,
+        details: item.details || undefined,
+        at: item.timestamp || "",
+      });
+    }
+
+    const seen = new Set<string>();
+    return items
+      .sort(
+        (a, b) =>
+          new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime(),
+      )
+      .filter((item) => {
+        const dedupe = `${item.action}|${item.details || ""}|${String(item.at || "").slice(0, 16)}`;
+        if (seen.has(dedupe)) return false;
+        seen.add(dedupe);
+        return true;
+      })
+      .slice(0, 14);
+  }, [opportunity?.activities, estimate?.activities, estimate?.logs]);
+
   const informationSourceLabel = useMemo(() => {
     if (!opportunity) return null;
     if (opportunity.prepChoice === "have_information") {
@@ -381,9 +506,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     opportunity?.status === "estimate_sent" ||
     opportunity?.status === "won";
 
-  /** On the visit path, keep the long builder hidden until Build estimate creates a draft. */
+  /** On visit / existing-info paths, hide the estimate while that panel is expanded. */
   const showEstimateSection =
-    Boolean(estimate) || !showVisits || !canBuildEstimate;
+    opportunity?.prepChoice === "create_now" ||
+    (!showVisits && !showPrepInfo) ||
+    !prepPanelOpen;
 
   async function ensureEstimate() {
     if (!opportunity) return null;
@@ -432,13 +559,17 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       toast.success("Preparation path updated.");
 
       if (prepChoice === "create_now") {
+        setPrepPanelOpen(false);
         window.setTimeout(() => {
           estimateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 80);
-      } else if (prepChoice === "have_information") {
-        window.setTimeout(() => {
-          prepInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 80);
+      } else if (prepChoice === "have_information" || prepChoice === "schedule_assessment") {
+        setPrepPanelOpen(true);
+        if (prepChoice === "have_information") {
+          window.setTimeout(() => {
+            prepInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 80);
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not update preparation path.");
@@ -458,7 +589,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         workItems: prepWorkItems.filter((item) => String(item.description || "").trim()),
       });
       await load();
+      setPrepPanelOpen(false);
       toast.success("Existing information saved.");
+      window.setTimeout(() => {
+        estimateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save information.");
     } finally {
@@ -492,6 +627,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       );
       await load();
       window.setTimeout(() => {
+        setPrepPanelOpen(false);
         estimateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
     } catch (err) {
@@ -501,8 +637,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     }
   }
 
-  async function saveEstimateDraft() {
-    if (!opportunity) return;
+  async function saveEstimateDraft(): Promise<Estimate | null> {
+    if (!opportunity) return null;
     setSaving(true);
     try {
       let current = estimate;
@@ -553,30 +689,129 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         discount: Number(discount) || 0,
         items: linesToEstimateItems(current.id, filled, taxRatePercent),
       });
-      setEstimate(saved || draft);
-      toast.success("Estimate draft saved.");
-      await load();
+      const next = saved || draft;
+      setEstimate(next);
+      toast.success(
+        next.status === "draft" ? "Estimate draft saved." : "Estimate saved.",
+      );
+      await load({ silent: true });
+      return next;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save estimate.");
+      return null;
     } finally {
       setSaving(false);
     }
   }
 
   async function openSendDialog() {
-    await saveEstimateDraft();
-    let current = estimate;
+    const saved = await saveEstimateDraft();
+    let current = saved || estimate;
     if (!current?.id) current = await ensureEstimate();
     if (!current?.id) return;
     try {
-      if (current.status === "draft" || current.status === "site_visit" || current.status === "inspected") {
-        await finalizeEstimate(current.id, current);
-        const refreshed = await getEstimate(current.id);
-        setEstimate(refreshed || { ...current, status: "finalized" });
+      if (
+        current.status === "draft" ||
+        current.status === "site_visit" ||
+        current.status === "inspected"
+      ) {
+        const finalized = await finalizeEstimate(current.id, current);
+        const refreshed = finalized || (await getEstimate(current.id));
+        current = refreshed || { ...current, status: "finalized" };
+        setEstimate(current);
+        const expected = opportunityStatusForEstimateStatus(current.status);
+        if (expected && opportunity && opportunity.status !== expected) {
+          try {
+            await updateEstimateV2Opportunity(opportunity.id, { status: expected });
+            setOpportunity({ ...opportunity, status: expected });
+          } catch {
+            /* non-blocking */
+          }
+        }
       }
+      // Preview uses live workspace sections/images even if an older API omitted them.
+      const forSend = withWorkspaceLineMeta(current, lines);
+      setEstimate(forSend);
+      setSendEstimate(forSend);
       setSendOpen(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not prepare estimate for send.");
+    }
+  }
+
+  /**
+   * Public customer link `/e/{shareToken}` — works for registered and outside customers.
+   * Creates the token (without emailing) when needed, then copies to clipboard.
+   */
+  async function copyShareLink() {
+    try {
+      // Persist latest line items / notes before minting a public link.
+      const saved = await saveEstimateDraft();
+      let current = saved || estimate;
+      if (!current?.id) current = await ensureEstimate();
+      if (!current?.id) {
+        toast.error("Save the estimate first.");
+        return;
+      }
+
+      setSaving(true);
+      let token = String(current.shareToken || "").trim();
+
+      if (!token) {
+        if (
+          current.status === "draft" ||
+          current.status === "site_visit" ||
+          current.status === "inspected"
+        ) {
+          const finalized = await finalizeEstimate(current.id, current);
+          current = finalized || { ...current, status: "finalized" };
+          setEstimate(current);
+        }
+
+        if (!estimateCanShare(current.status) && current.status !== "finalized") {
+          toast.error("Finalize or send the estimate before sharing a customer link.");
+          return;
+        }
+
+        const shared = await shareEstimate(current.id, { skipEmail: true });
+        token = String(shared.shareToken || "").trim();
+        if (!token) {
+          toast.error("Could not create a customer share link.");
+          return;
+        }
+        const nextStatus =
+          (shared.status as Estimate["status"]) ||
+          (current.status === "finalized" ? "sent" : current.status);
+        current = {
+          ...current,
+          shareToken: token,
+          status: nextStatus,
+        };
+        setEstimate(current);
+        const expected = opportunityStatusForEstimateStatus(current.status);
+        if (expected && opportunity && opportunity.status !== expected) {
+          try {
+            await updateEstimateV2Opportunity(opportunity.id, { status: expected });
+            setOpportunity({ ...opportunity, status: expected });
+          } catch {
+            /* non-blocking */
+          }
+        }
+      }
+
+      const linkUrl = shareUrlFor(token);
+      if (!linkUrl) {
+        toast.error("Could not create a customer share link.");
+        return;
+      }
+      await navigator.clipboard.writeText(linkUrl);
+      toast.success("Customer link copied — send it to anyone. No account needed.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not copy the customer link.",
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -650,20 +885,45 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     estimate?.status === "rejected" ||
     estimate?.status === "expired";
 
+  const alreadyShared =
+    Boolean(estimate?.shareToken) ||
+    estimate?.status === "sent" ||
+    estimate?.status === "changes_requested" ||
+    estimate?.status === "accepted" ||
+    estimate?.status === "converted_to_job";
+
+  const sendButtonLabel =
+    estimate?.status === "changes_requested"
+      ? "Preview & send update"
+      : alreadyShared
+        ? "Send again"
+        : "Preview & send";
+
   return (
     <PortalPage
       eyebrow="Work / Estimate"
       title={`${opportunity.number} · ${opportunity.title}`}
       description={`${customerNameFromOpportunity(opportunity)} · ${propertyLine(opportunity)}`}
       badge={
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ring-1 ring-inset",
-            opportunityStatusTone(opportunity.status),
-          )}
-        >
-          {opportunity.status.replace(/_/g, " ")}
-        </span>
+        estimate?.status ? (
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+              estimateStatusToneDistinct(estimate.status),
+            )}
+          >
+            {estimateStatusLabel(estimate.status)}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+              opportunityStatusTone(opportunity.status),
+            )}
+          >
+            {opportunityStatusLabel(opportunity.status)}
+          </span>
+        )
       }
       actions={
         <Button variant="outline" size="sm" asChild>
@@ -749,7 +1009,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           </div>
 
           {(estimate?.status === "sent" ||
-            estimate?.status === "finalized" ||
             opportunity.status === "estimate_sent") && (
             <div className={RAIL_CARD}>
               <SectionLabel>Follow-up</SectionLabel>
@@ -771,27 +1030,26 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             </div>
           )}
 
-          {opportunity.activities?.length ? (
+          {activityTimeline.length ? (
             <div className={RAIL_CARD}>
               <SectionLabel>Activity</SectionLabel>
               <ol className="relative mt-3 space-y-0 border-l border-[#b4becc] pl-4">
-                {[...opportunity.activities]
-                  .reverse()
-                  .slice(0, 10)
-                  .map((item, index) => (
-                    <li key={`${item.at}-${index}`} className="relative pb-4 last:pb-0">
-                      <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full border-2 border-primary bg-white" />
-                      <p className="text-sm font-medium text-slate-900">{item.action}</p>
-                      {item.details ? (
-                        <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{item.details}</p>
-                      ) : null}
-                      {item.at ? (
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          {formatDate(item.at)}
-                        </p>
-                      ) : null}
-                    </li>
-                  ))}
+                {activityTimeline.map((item) => (
+                  <li key={item.key} className="relative pb-4 last:pb-0">
+                    <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full border-2 border-primary bg-white" />
+                    <p className="text-sm font-medium text-slate-900">{item.action}</p>
+                    {item.details ? (
+                      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                        {item.details}
+                      </p>
+                    ) : null}
+                    {item.at ? (
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {formatDate(item.at)}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
               </ol>
             </div>
           ) : null}
@@ -812,7 +1070,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               onSavingChange={setSaving}
               showBuildEstimate={canBuildEstimate}
               hasEstimate={Boolean(estimate?.id)}
+              collapsed={!prepPanelOpen}
+              onCollapsedChange={(collapsed) => setPrepPanelOpen(!collapsed)}
               onBuildEstimate={async () => {
+                setPrepPanelOpen(false);
                 if (!estimate?.id) {
                   await ensureEstimate();
                 }
@@ -838,6 +1099,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                 workItems={prepWorkItems}
                 onWorkItemsChange={setPrepWorkItems}
                 saving={saving}
+                collapsed={!prepPanelOpen}
+                onCollapsedChange={(collapsed) => setPrepPanelOpen(!collapsed)}
+                hasEstimate={Boolean(estimate?.id)}
                 onSave={savePrepInfo}
                 onContinue={continueToEstimate}
               />
@@ -854,8 +1118,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                       Estimate{estimate?.number ? ` · ${estimate.number}` : ""}
                     </h2>
-                    <p className="mt-0.5 text-sm capitalize text-slate-500">
-                      {estimate?.status?.replace(/_/g, " ") || "Ready to build"}
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      {estimate?.status
+                        ? estimateStatusLabel(estimate.status)
+                        : "Ready to build"}
                     </p>
                     {informationSourceLabel ? (
                       <p className="mt-1.5 text-xs text-slate-500">
@@ -864,11 +1130,50 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       </p>
                     ) : null}
                   </div>
-                  {!estimate && !showVisits ? (
-                    <Button size="sm" disabled={saving} onClick={() => void ensureEstimate()}>
-                      Build estimate
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {!estimate && !showVisits ? (
+                      <Button size="sm" disabled={saving} onClick={() => void ensureEstimate()}>
+                        Build estimate
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={saving || estimateLocked}
+                      onClick={() => void saveEstimateDraft()}
+                    >
+                      Save draft
                     </Button>
-                  ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={saving || !estimate?.id}
+                      onClick={() => void copyShareLink()}
+                    >
+                      <Link2 className="size-3.5" />
+                      Copy share link
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={saving || estimateLocked}
+                      onClick={() => void openSendDialog()}
+                    >
+                      {sendButtonLabel}
+                    </Button>
+                    {(estimate?.status === "sent" ||
+                      estimate?.status === "accepted") ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={saving}
+                        onClick={() => setAcceptOpen(true)}
+                      >
+                        {estimate.status === "accepted"
+                          ? "Create job…"
+                          : "Customer accepted…"}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-5 space-y-5">
@@ -890,39 +1195,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       <div>
                         <Label>Line items</Label>
                         <p className="text-xs text-slate-500">
-                          Labour, materials, equipment — qty × unit price
+                          Group by trade or stage (Plumbing, Electrical…) — qty × unit price
                         </p>
                       </div>
-                      {!estimateLocked ? (
-                        <div className="flex gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setLines((prev) => [...prev, createEmptyLine("labor")])}
-                          >
-                            <Plus className="size-3.5" />
-                            Labour
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setLines((prev) => [...prev, createEmptyLine("materials")])}
-                          >
-                            <Plus className="size-3.5" />
-                            Material
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setLines((prev) => [...prev, createEmptyLine("equipment")])}
-                          >
-                            <Plus className="size-3.5" />
-                            Equipment
-                          </Button>
-                        </div>
-                      ) : null}
                     </div>
-                    <LineItemsEditor lines={lines} onChange={setLines} locked={estimateLocked} />
+                    <SectionedLineItemsEditor
+                      lines={lines}
+                      onChange={setLines}
+                      locked={estimateLocked}
+                    />
                   </div>
 
                   <div className="overflow-hidden rounded-xl border border-[#b4becc] bg-[#f8fafc]">
@@ -1045,36 +1326,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       </p>
                     </div>
                   ) : null}
-
-                  <div className="flex flex-wrap gap-2 border-t border-[#d8dee8] pt-4">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={saving || estimateLocked}
-                      onClick={() => void saveEstimateDraft()}
-                    >
-                      Save draft
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={saving || estimateLocked}
-                      onClick={() => void openSendDialog()}
-                    >
-                      Preview & send
-                    </Button>
-                    {(estimate?.status === "sent" ||
-                      estimate?.status === "accepted" ||
-                      estimate?.status === "finalized") ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={saving}
-                        onClick={() => setAcceptOpen(true)}
-                      >
-                        Customer accepted…
-                      </Button>
-                    ) : null}
-                  </div>
                 </div>
               </>
             ) : (
@@ -1111,23 +1362,41 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         </section>
       </div>
 
-      {estimate ? (
+      {sendEstimate || estimate ? (
         <SendApprovalDialog
           open={sendOpen}
-          onOpenChange={setSendOpen}
-          estimate={estimate}
+          onOpenChange={(open) => {
+            setSendOpen(open);
+            if (!open) setSendEstimate(null);
+          }}
+          estimate={sendEstimate || estimate!}
           customerLabel={customerNameFromOpportunity(opportunity)}
-          onSent={async () => {
-            toast.success("Estimate sent to customer.");
+          mode={
+            (sendEstimate || estimate)?.status === "changes_requested"
+              ? "update"
+              : alreadyShared
+                ? "resend"
+                : "send"
+          }
+          onSent={async (result) => {
             setSendOpen(false);
+            setSendEstimate(null);
+            if (estimate) {
+              setEstimate({
+                ...estimate,
+                status: (result.status as Estimate["status"]) || "sent",
+                shareToken: result.token || estimate.shareToken,
+              });
+            }
             try {
               await updateEstimateV2Opportunity(opportunity.id, {
                 status: "estimate_sent",
               });
+              setOpportunity({ ...opportunity, status: "estimate_sent" });
             } catch {
-              /* non-blocking */
+              /* backend share also syncs; non-blocking */
             }
-            await load();
+            await load({ silent: true });
           }}
         />
       ) : null}

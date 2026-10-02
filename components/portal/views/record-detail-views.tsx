@@ -454,7 +454,7 @@ export function EstimateDetailView({ id }: { id: string }) {
         <Loader2 className="size-8 animate-spin text-primary" />
       </div>
     ) : (
-      <Missing title="Estimate not found" href="/pro/dashboard/estimates" />
+      <Missing title="Estimate not found" href="/pro/dashboard/new-estimate" />
     );
   }
 
@@ -533,7 +533,7 @@ export function EstimateDetailView({ id }: { id: string }) {
     startMinutes: event?.startMinutes ?? visitWindow.startMinutes,
     endMinutes: event?.endMinutes ?? visitWindow.endMinutes,
     employeeId: assignedTechId,
-    href: `/pro/dashboard/estimates/${estimate.id}`,
+    href: `/pro/dashboard/new-estimate/${estimate.id}`,
     status: estimate.status,
   };
 
@@ -882,7 +882,7 @@ export function EstimateDetailView({ id }: { id: string }) {
   return (
     <>
       <RecordWorkspace
-        href={`/pro/dashboard/estimates/${estimate.id}`}
+        href={`/pro/dashboard/new-estimate/${estimate.id}`}
         label={estimate.number}
         kind="estimate"
         tabs={[
@@ -1099,7 +1099,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                   </Button>
                 ) : estimate.status === "site_visit" ? (
                   <Button size="sm" variant="outline" className="h-8" asChild>
-                    <Link href={`/pro/dashboard/estimates/${estimate.id}?tab=visit`}>
+                    <Link href={`/pro/dashboard/new-estimate/${estimate.id}?tab=visit`}>
                       Complete site visit
                     </Link>
                   </Button>
@@ -2690,7 +2690,7 @@ export function JobDetailView({ id }: { id: string }) {
                       <p className="mt-1 text-sm text-muted-foreground">
                         Created from{" "}
                         <Link
-                          href={`/pro/dashboard/estimates/${estimate.id}`}
+                          href={`/pro/dashboard/new-estimate/${estimate.id}`}
                           className="font-semibold text-primary underline"
                         >
                           {estimate.number}

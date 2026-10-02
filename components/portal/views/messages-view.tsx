@@ -628,7 +628,7 @@ export function MessagesView() {
                           asChild
                         >
                           <Link
-                            href={`/pro/dashboard/estimates/new?request=${selected.requestId}`}
+                            href={`/pro/dashboard/new-estimate/new?request=${selected.requestId}`}
                           >
                             <FilePlus2 className="size-3.5" />
                             <span className="hidden sm:inline">Write</span> Estimate

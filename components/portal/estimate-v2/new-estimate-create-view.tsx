@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,15 +22,17 @@ import {
   type AddressFieldsValue,
 } from "@/components/shared/address-fields";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CenteredSpinner } from "@/components/ui/spinner";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { getServiceCategoryById } from "@/lib/data/services";
 import {
   createEstimateV2Opportunity,
   updateEstimateV2Opportunity,
   createEstimateV2SiteAssessment,
+  listEstimateV2Opportunities,
   type PrepChoice,
 } from "@/lib/api/estimate-v2-client";
-import { updateCustomer } from "@/lib/api/crm-client";
+import { getRequest, updateCustomer } from "@/lib/api/crm-client";
 import type { ServiceAddress } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthProvider, selectAuthUser } from "@/store/authSlice";
@@ -79,6 +81,9 @@ function addressLine(addr: {
 
 export function NewEstimateCreateView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestParam = String(searchParams.get("request") || "").trim();
+  const customerParam = String(searchParams.get("customer") || "").trim();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
@@ -107,9 +112,11 @@ export function NewEstimateCreateView() {
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
+  const [resolvingLead, setResolvingLead] = useState(Boolean(requestParam));
   const [localCustomers, setLocalCustomers] = useState<PortalCustomerCrm[]>([]);
+  const [linkedRequestId, setLinkedRequestId] = useState(requestParam);
 
-  const [customerId, setCustomerId] = useState("");
+  const [customerId, setCustomerId] = useState(customerParam);
   const [customerQuery, setCustomerQuery] = useState("");
   const [addressId, setAddressId] = useState("");
 
@@ -130,6 +137,56 @@ export function NewEstimateCreateView() {
     if (!useApi) return;
     void dispatch(fetchCustomers({ force: true, limit: 100 }));
   }, [dispatch, useApi]);
+
+  // Reuse existing opportunity for this lead, otherwise prefill from the request.
+  useEffect(() => {
+    if (!useApi || !requestParam) {
+      setResolvingLead(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const existing = await listEstimateV2Opportunities({
+          requestId: requestParam,
+          limit: 1,
+          page: 1,
+        });
+        const first = existing.items[0];
+        if (!cancelled && first?.id) {
+          router.replace(`/pro/dashboard/new-estimate/${first.id}`);
+          return;
+        }
+        const request = await getRequest(requestParam, { silent: true });
+        if (cancelled || !request) {
+          setResolvingLead(false);
+          return;
+        }
+        setLinkedRequestId(request.id);
+        if (request.customerId) setCustomerId(request.customerId);
+        if (request.serviceName) setCategoryName(request.serviceName);
+        const requestTitle =
+          String(request.serviceName || "").trim() ||
+          String(request.number || "").trim() ||
+          "Work request";
+        setTitle(requestTitle);
+        const notes = String(request.notes || request.description || "").trim();
+        if (notes) setDescription(notes);
+        setStep("customer");
+      } catch {
+        /* allow manual create */
+      } finally {
+        if (!cancelled) setResolvingLead(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [useApi, requestParam, router]);
+
+  useEffect(() => {
+    if (customerParam && !customerId) setCustomerId(customerParam);
+  }, [customerParam, customerId]);
 
   useEffect(() => {
     if (!useApi || !customerQuery.trim()) return;
@@ -310,7 +367,8 @@ export function NewEstimateCreateView() {
         title: title.trim(),
         description: description.trim(),
         categoryName: categoryName.trim(),
-        source: "manual",
+        source: linkedRequestId ? "lead" : "manual",
+        requestId: linkedRequestId || undefined,
         internalNotes: internalNotes.trim(),
       });
 
@@ -351,6 +409,13 @@ export function NewEstimateCreateView() {
         </Button>
       }
     >
+      {resolvingLead ? (
+        <div className="flex min-h-[30vh] flex-col items-center justify-center gap-3 py-12">
+          <CenteredSpinner />
+          <p className="text-sm text-muted-foreground">Opening estimate from lead…</p>
+        </div>
+      ) : null}
+      <div className={cn(resolvingLead && "hidden")}>
       <div className="flex flex-wrap gap-2 border-b border-input pb-3">
         {(
           [
@@ -681,6 +746,7 @@ export function NewEstimateCreateView() {
           </Button>
         </section>
       ) : null}
+      </div>
 
       <CreateCustomerDialog
         open={createCustomerOpen}

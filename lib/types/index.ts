@@ -147,6 +147,8 @@ export interface EstimateItem {
   total: number;
   /** Optional material photos (URLs). Ignored for labor lines. */
   images?: string[];
+  /** Named work section (e.g. Plumbing, Electrical). Empty = General. */
+  section?: string;
 }
 
 export interface EstimateSitePhoto {
@@ -217,8 +219,19 @@ export interface Estimate {
   isArchieved?: boolean;
   logs?: EstimateLog[];
   activities?: EstimateActivity[];
+  /** Customer-visible notices when the pro revises a shared estimate. */
+  customerUpdates?: EstimateCustomerUpdate[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EstimateCustomerUpdate {
+  id?: string;
+  summary: string;
+  details?: string;
+  totalBefore?: number | null;
+  totalAfter?: number | null;
+  at: string;
 }
 
 export interface EstimateLog {
@@ -283,6 +296,8 @@ export interface JobItem {
   kind?: "labor" | "materials" | "equipment";
   /** Optional material photos (URLs). Ignored for labor lines. */
   images?: string[];
+  /** Named work section (e.g. Plumbing). Empty = General. */
+  section?: string;
 }
 
 export interface ChangeOrder {

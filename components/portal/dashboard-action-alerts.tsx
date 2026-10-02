@@ -49,7 +49,7 @@ export function DashboardActionAlerts() {
       id: "estimates",
       count: inbox.pendingEstimates,
       label: `You have ${inbox.pendingEstimates} new ${plural(inbox.pendingEstimates, "estimate request", "estimate requests")}`,
-      href: "/pro/dashboard/estimates?status=changes_requested",
+      href: "/pro/dashboard/new-estimate?status=changes_requested",
       cta: plural(inbox.pendingEstimates, "View Request", "View Requests"),
       icon: FileText,
     });

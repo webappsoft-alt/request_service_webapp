@@ -103,7 +103,7 @@ export function NewEstimateView() {
             </Button>
           ) : (
             <Button asChild variant="outline" size="sm">
-              <Link href="/pro/dashboard/estimates">
+              <Link href="/pro/dashboard/new-estimate">
                 <ArrowLeft className="size-3.5" />
                 All estimates
               </Link>
@@ -216,7 +216,7 @@ export function NewEstimateView() {
         onOpenChange={(nextOpen) => {
           setDialogOpen(nextOpen);
           if (!nextOpen && !request) {
-            router.push("/pro/dashboard/estimates");
+            router.push("/pro/dashboard/new-estimate");
           }
         }}
         requestId={request?.id || requestId || undefined}
@@ -235,7 +235,7 @@ export function NewEstimateView() {
             : undefined
         }
         onCreated={(saved) => {
-          router.push(`/pro/dashboard/estimates/${saved.id}`);
+          router.push(`/pro/dashboard/new-estimate/${saved.id}`);
         }}
       />
     </PortalPage>

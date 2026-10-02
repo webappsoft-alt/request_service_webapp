@@ -71,6 +71,9 @@ export function linesToEstimateItems(
           ),
         }
       : {}),
+    ...(String(line.section || "").trim()
+      ? { section: String(line.section).trim() }
+      : {}),
   }));
 }
 
@@ -91,6 +94,9 @@ export function linesToJobItems(jobId: string, lines: JobCostLine[]): JobItem[] 
             Boolean(String(src || "").trim()),
           ),
         }
+      : {}),
+    ...(String(line.section || "").trim()
+      ? { section: String(line.section).trim() }
       : {}),
   }));
 }
@@ -186,6 +192,9 @@ export function estimateAsJob(estimate: Estimate): Job {
             : ("materials" as const),
       ...(item.type === "materials"
         ? { images: Array.isArray(item.images) ? item.images : [] }
+        : {}),
+      ...(String(item.section || "").trim()
+        ? { section: String(item.section).trim() }
         : {}),
     })),
     changeOrders: [],

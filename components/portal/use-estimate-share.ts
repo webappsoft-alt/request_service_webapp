@@ -18,6 +18,8 @@ export type EstimateShareLine = {
   total: number;
   /** Optional material photos shown to the customer. */
   images?: string[];
+  /** Named work section (e.g. Plumbing). */
+  section?: string;
 };
 
 export type EstimateSiteVisitPhoto = {
@@ -70,6 +72,8 @@ export type EstimateShareSnapshot = {
   terms?: string;
   items: EstimateShareLine[];
   subtotal: number;
+  /** Optional dollar discount applied before tax. */
+  discount?: number;
   tax: number;
   /** Sales tax percent used for this quote (e.g. 3). */
   taxRatePercent?: number;
@@ -80,6 +84,14 @@ export type EstimateShareSnapshot = {
   companySignedAt?: string;
   companySignatureDataUrl?: string;
   siteVisit?: EstimateShareSiteVisit;
+  /** Pro revisions visible to the customer on the same shared estimate. */
+  customerUpdates?: Array<{
+    summary: string;
+    details?: string;
+    totalBefore?: number | null;
+    totalAfter?: number | null;
+    at: string;
+  }>;
 };
 
 export type EstimateApproval = {
@@ -166,23 +178,53 @@ export function buildEstimateSnapshot(
   },
 ): EstimateShareSnapshot {
   const token = extras.token || estimate.shareToken || shareTokenFor(estimate.id);
+  // Share/PDF must use estimate items (with section). Local cost cache often
+  // predates section support and would flatten everything into one table.
+  const fromEstimate = estimate.items.map((item) => ({
+    id: item.id,
+    description: item.description,
+    kind:
+      item.type === "labor"
+        ? ("labor" as const)
+        : item.type === "equipment"
+          ? ("equipment" as const)
+          : ("materials" as const),
+    quantity: item.quantity,
+    unit: item.unit,
+    unitPrice: item.unitPrice,
+    ...(item.images?.length ? { images: item.images } : {}),
+    ...(String(item.section || "").trim()
+      ? { section: String(item.section).trim() }
+      : {}),
+  }));
   const stored = readCostLines(extras.email, estimateAsJob(estimate));
-  const lines = stored.length
-    ? stored
-    : estimate.items.map((item) => ({
-        id: item.id,
-        description: item.description,
-        kind:
-          item.type === "labor"
-            ? ("labor" as const)
-            : item.type === "equipment"
-              ? ("equipment" as const)
-              : ("materials" as const),
-        quantity: item.quantity,
-        unit: item.unit,
-        unitPrice: item.unitPrice,
-        ...(item.images?.length ? { images: item.images } : {}),
-      }));
+  const lines = fromEstimate.length
+    ? fromEstimate.map((item) => {
+        const match =
+          stored.find((line) => line.id === item.id) ||
+          stored.find(
+            (line) =>
+              (line.description || "").trim() === (item.description || "").trim() &&
+              line.kind === item.kind,
+          );
+        if (!match) return item;
+        // Keep section from the saved estimate; allow local qty/price edits.
+        return {
+          ...item,
+          quantity: match.quantity,
+          unit: match.unit || item.unit,
+          unitPrice: match.unitPrice,
+          ...(match.kind === "materials" && match.images?.length
+            ? { images: match.images }
+            : {}),
+          ...(item.section
+            ? { section: item.section }
+            : match.section
+              ? { section: match.section }
+              : {}),
+        };
+      })
+    : stored;
   const taxRatePercent = Math.max(
     0,
     Number(estimate.items?.[0]?.taxRate) || 0,
@@ -232,12 +274,14 @@ export function buildEstimateSnapshot(
       quantity: line.quantity,
       unit: line.unit,
       unitPrice: line.unitPrice,
-      total: Math.round(line.quantity * line.unitPrice),
+      total: Math.round(line.quantity * line.unitPrice * 100) / 100,
       ...(line.kind === "materials" && line.images?.length
         ? { images: line.images }
         : {}),
+      ...(line.section ? { section: line.section } : {}),
     })),
     subtotal: estimate.subtotal ?? money.subtotal,
+    discount: Math.max(0, Number(estimate.discount) || 0) || undefined,
     tax: estimate.tax ?? money.tax,
     taxRatePercent,
     total: estimate.total ?? money.total,

@@ -127,6 +127,9 @@ type SiteVisitsPanelProps = {
   showBuildEstimate?: boolean;
   hasEstimate?: boolean;
   onBuildEstimate?: () => void | Promise<void>;
+  /** Controlled collapse — when open, parent should hide the estimate builder. */
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 };
 
 export function SiteVisitsPanel({
@@ -142,6 +145,8 @@ export function SiteVisitsPanel({
   showBuildEstimate = false,
   hasEstimate = false,
   onBuildEstimate,
+  collapsed,
+  onCollapsedChange,
 }: SiteVisitsPanelProps) {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const dispatch = useAppDispatch();
@@ -149,7 +154,13 @@ export function SiteVisitsPanel({
   const { employees: liveEmployees } = usePortalCrew();
   const [selectedId, setSelectedId] = useState<string>("");
   const [detailOpen, setDetailOpen] = useState(true);
-  const [visitsCollapsed, setVisitsCollapsed] = useState(false);
+  const [internalCollapsed, setInternalCollapsed] = useState(Boolean(hasEstimate));
+  const visitsCollapsed = collapsed ?? internalCollapsed;
+
+  function setVisitsCollapsed(next: boolean) {
+    setInternalCollapsed(next);
+    onCollapsedChange?.(next);
+  }
   const [locallyRemovedIds, setLocallyRemovedIds] = useState<string[]>([]);
   const sortedVisits = useMemo(
     () =>
@@ -397,6 +408,9 @@ export function SiteVisitsPanel({
             : "Visit saved.",
       );
       await onRefresh({ silent: true });
+      if (patch.complete) {
+        setVisitsCollapsed(true);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save visit.");
     } finally {
@@ -635,17 +649,27 @@ export function SiteVisitsPanel({
               follow-up creates a new visit.
             </p>
           </div>
-          <Button
-            size="sm"
-            disabled={saving}
-            onClick={() => {
-              setFollowUpType(sortedVisits.length ? "follow_up_assessment" : "initial_assessment");
-              setFollowUpOpen(true);
-            }}
-          >
-            <Plus className="size-3.5" />
-            Schedule {sortedVisits.length ? "follow-up" : ""} visit
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={saving}
+              onClick={() => setVisitsCollapsed(true)}
+            >
+              Collapse
+            </Button>
+            <Button
+              size="sm"
+              disabled={saving}
+              onClick={() => {
+                setFollowUpType(sortedVisits.length ? "follow_up_assessment" : "initial_assessment");
+                setFollowUpOpen(true);
+              }}
+            >
+              <Plus className="size-3.5" />
+              Schedule {sortedVisits.length ? "follow-up" : ""} visit
+            </Button>
+          </div>
         </div>
 
         {sortedVisits.length ? (

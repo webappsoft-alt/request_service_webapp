@@ -227,7 +227,7 @@ export function usePortalCrew() {
                       startMinutes: fallbackWindow.startMinutes,
                       endMinutes: fallbackWindow.endMinutes,
                       employeeId: assignment.employeeId,
-                      href: `/pro/dashboard/estimates/${estimate.id}`,
+                      href: `/pro/dashboard/new-estimate/${estimate.id}`,
                       status: estimate.status,
                     }
                   : undefined;

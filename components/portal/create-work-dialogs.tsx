@@ -202,6 +202,19 @@ export function CreateEstimateDialog({
   const all = records.mergeEstimates(estimates);
   const first = customers[0];
   const isEdit = Boolean(estimate?.id);
+
+  // New estimates go through estimate-v2 — do not create classic estimates here.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    const qs = new URLSearchParams();
+    if (customerId) qs.set("customer", customerId);
+    if (requestId) qs.set("request", requestId);
+    onOpenChange(false);
+    router.push(
+      `/pro/dashboard/new-estimate/new${qs.toString() ? `?${qs}` : ""}`,
+    );
+  }, [open, isEdit, customerId, requestId, onOpenChange, router]);
+
   const [tab, setTab] = useState<EstimateTab>("customer");
   const [path, setPath] = useState<EstimatePath>("");
   const [name, setName] = useState("");
@@ -834,7 +847,7 @@ export function CreateEstimateDialog({
       onOpenChange(false);
       toast.success(`${saved.number || "Estimate"} created.`);
       router.push(
-        `/pro/dashboard/estimates/${saved.id}${path === "site_visit" ? "?tab=visit" : ""}`,
+        `/pro/dashboard/new-estimate/${saved.id}${path === "site_visit" ? "?tab=visit" : ""}`,
       );
     } catch (error) {
       toast.error(
@@ -1838,7 +1851,7 @@ export function CreateJobDialog({
                   addLabel="Create estimate"
                   onAdd={() => {
                     onOpenChange(false);
-                    router.push("/pro/dashboard/estimates");
+                    router.push("/pro/dashboard/new-estimate");
                   }}
                   onChange={(id) => void pickSource(id)}
                 />

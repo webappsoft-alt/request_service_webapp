@@ -545,7 +545,7 @@ export function RequestsView() {
             : undefined;
 
           const estimateHref = relatedEstimate
-            ? `/pro/dashboard/estimates/${relatedEstimate.id}`
+            ? `/pro/dashboard/new-estimate/${relatedEstimate.id}`
             : `/pro/dashboard/requests/${row.id}?tab=estimates`;
           const jobHref = relatedJob
             ? `/pro/dashboard/jobs/${relatedJob.id}`
@@ -681,7 +681,7 @@ export function RequestsView() {
                 {
                   label: "Convert to Job",
                   href: relatedEstimate
-                    ? `/pro/dashboard/estimates/${relatedEstimate.id}`
+                    ? `/pro/dashboard/new-estimate/${relatedEstimate.id}`
                     : `/pro/dashboard/requests/${row.id}?tab=jobs`,
                   icon: <Briefcase className="size-3.5 text-[#003F7D]" />,
                 },
@@ -704,7 +704,7 @@ export function RequestsView() {
                 {
                   label: "Convert to Job",
                   href: relatedEstimate
-                    ? `/pro/dashboard/estimates/${relatedEstimate.id}`
+                    ? `/pro/dashboard/new-estimate/${relatedEstimate.id}`
                     : `/pro/dashboard/requests/${row.id}?tab=jobs`,
                   icon: <Briefcase className="size-3.5 text-[#003F7D]" />,
                 },

@@ -20,6 +20,8 @@ import {
   providerDisplayId,
   workingHoursFromProvider,
 } from "@/lib/auth/provider-profile";
+import { galleryBanner, normalizeBusinessGallery } from "@/lib/business-gallery";
+import { getUserAvatarSrc } from "@/store/authSlice";
 import type {
   Estimate,
   Invoice,
@@ -114,7 +116,7 @@ function computeActivity(
       title: "Estimate updated",
       detail: item.number,
       at: item.updatedAt || item.issuedAt,
-      href: `/pro/dashboard/estimates/${item.id}`,
+      href: `/pro/dashboard/new-estimate/${item.id}`,
     })),
     ...jobs.map((item) => ({
       id: `job:${item.id}`,
@@ -281,16 +283,26 @@ export function usePortalWorkspace() {
         .slice(0, 2)
         .map((part) => part[0]?.toUpperCase() ?? "")
         .join("");
+      const gallery = normalizeBusinessGallery(authProvider?.businessGallery);
+      const banner = galleryBanner(gallery);
+      // Pro logo = profile avatar only — never the business gallery banner.
+      const logoUrl =
+        getUserAvatarSrc(user) ||
+        (typeof authProvider?.avatarUrl === "string" && authProvider.avatarUrl.trim()) ||
+        (typeof authProvider?.avatar === "string" && authProvider.avatar.trim()) ||
+        (typeof authProvider?.logoUrl === "string" && authProvider.logoUrl.trim()) ||
+        undefined;
       return {
         id: resolvedProviderId || "provider",
         slug: String(authProvider?.slug || ""),
         companyName,
         logoInitials: initials || "RS",
-        logoUrl: typeof authProvider?.logoUrl === "string" ? authProvider.logoUrl : undefined,
-        coverImage: typeof authProvider?.coverImage === "string" ? authProvider.coverImage : undefined,
-        images: Array.isArray(authProvider?.images)
-          ? authProvider.images.filter((item): item is string => typeof item === "string")
-          : [],
+        logoUrl: logoUrl || undefined,
+        coverImage:
+          (typeof authProvider?.coverImage === "string" && authProvider.coverImage.trim()) ||
+          banner?.url ||
+          undefined,
+        images: gallery.map((item) => item.url),
         tagline: String(authProvider?.tagline || ""),
         description: String(authProvider?.description || ""),
         rating: 0,
@@ -328,7 +340,7 @@ export function usePortalWorkspace() {
           role: String(authProvider?.contactRole || "Business owner"),
         },
         workingHours: hours,
-        gallery: [],
+        gallery: gallery.map((item) => item.url),
         foundedYear: new Date().getFullYear(),
         employeeCount: String(authProvider?.profile?.employeeCount || ""),
         reviews: [],

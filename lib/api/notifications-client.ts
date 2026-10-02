@@ -295,7 +295,7 @@ export function notificationHref(
         : "/pro/dashboard/messages";
     }
     if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
-      return "/pro/dashboard/estimates";
+      return "/pro/dashboard/new-estimate";
     }
     if (type.includes("PAYMENT")) return "/pro/dashboard/payments";
     if (type.includes("INVOICE")) return "/pro/dashboard/invoices";

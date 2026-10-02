@@ -18,14 +18,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { extractUploadedUrl, uploadDoc, uploadFile } from "@/components/api/uploadFile";
+import { PhotoLightbox } from "@/components/marketplace/portfolio-lightbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatAttachment, ChatMessage, ChatRole } from "@/lib/booking/chat-store";
 import {
@@ -96,9 +91,9 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<{ id: string; file: File; url: string }[]>([]);
   const [optimisticList, setOptimisticList] = useState<OptimisticMessage[]>([]);
-  const [lightboxAttachment, setLightboxAttachment] = useState<{
-    url: string;
-    name: string;
+  const [lightbox, setLightbox] = useState<{
+    photos: { src: string; alt: string }[];
+    index: number;
   } | null>(null);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -462,52 +457,63 @@ export function ChatPanel({
                             message.text && "mt-2.5 pt-1",
                           )}
                         >
-                          {message.attachments.map((file) => (
-                            <div key={file.id} className="overflow-hidden">
-                              {file.type.startsWith("image/") ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setLightboxAttachment({
-                                      url: file.url,
-                                      name: file.name,
-                                    })
-                                  }
-                                  className="group/img relative block overflow-hidden rounded-xl border border-input shadow-xs transition-transform hover:scale-[1.02]"
-                                  aria-label={`View photo: ${file.name}`}
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={file.url}
-                                    alt={file.name}
-                                    className="max-h-56 w-auto max-w-full rounded-xl object-cover"
-                                  />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 backdrop-blur-xs transition-opacity group-hover/img:opacity-100">
-                                    <span className="flex items-center gap-1.5 rounded-full bg-black/65 px-3 py-1.5 text-xs font-medium text-white shadow-sm">
-                                      <Maximize2 className="size-3.5" />
-                                      Zoom
-                                    </span>
-                                  </div>
-                                </button>
-                              ) : (
-                                <a
-                                  href={file.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className={cn(
-                                    "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
-                                    mine
-                                      ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
-                                      : "border-border bg-muted/60 text-foreground hover:bg-muted",
-                                  )}
-                                >
-                                  <FileText className="size-4 shrink-0" aria-hidden="true" />
-                                  <span className="max-w-44 truncate">{file.name}</span>
-                                  <Download className="size-3.5 shrink-0 opacity-70" />
-                                </a>
-                              )}
-                            </div>
-                          ))}
+                          {message.attachments.map((file) => {
+                            const imageAttachments = message.attachments.filter(
+                              (item) => item.type.startsWith("image/"),
+                            );
+                            const imageIndex = imageAttachments.findIndex(
+                              (item) => item.id === file.id,
+                            );
+                            return (
+                              <div key={file.id} className="overflow-hidden">
+                                {file.type.startsWith("image/") ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setLightbox({
+                                        photos: imageAttachments.map((item) => ({
+                                          src: item.url,
+                                          alt: item.name,
+                                        })),
+                                        index: Math.max(0, imageIndex),
+                                      })
+                                    }
+                                    className="group/img relative block overflow-hidden rounded-xl border border-input shadow-xs transition-transform hover:scale-[1.02]"
+                                    aria-label={`View photo: ${file.name}`}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={file.url}
+                                      alt={file.name}
+                                      className="max-h-56 w-auto max-w-full rounded-xl object-cover"
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 backdrop-blur-xs transition-opacity group-hover/img:opacity-100">
+                                      <span className="flex items-center gap-1.5 rounded-full bg-black/65 px-3 py-1.5 text-xs font-medium text-white shadow-sm">
+                                        <Maximize2 className="size-3.5" />
+                                        Zoom
+                                      </span>
+                                    </div>
+                                  </button>
+                                ) : (
+                                  <a
+                                    href={file.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className={cn(
+                                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+                                      mine
+                                        ? "border-white/20 bg-white/10 text-white hover:bg-white/20"
+                                        : "border-border bg-muted/60 text-foreground hover:bg-muted",
+                                    )}
+                                  >
+                                    <FileText className="size-4 shrink-0" aria-hidden="true" />
+                                    <span className="max-w-44 truncate">{file.name}</span>
+                                    <Download className="size-3.5 shrink-0 opacity-70" />
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>
@@ -688,43 +694,18 @@ export function ChatPanel({
         ) : null}
       </div>
 
-      {/* Lightbox Image Preview Dialog */}
-      <Dialog
-        open={Boolean(lightboxAttachment)}
-        onOpenChange={(open) => !open && setLightboxAttachment(null)}
-      >
-        <DialogContent className="max-w-4xl border-input bg-background/95 p-3 backdrop-blur-md sm:p-5">
-          <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b">
-            <DialogTitle className="max-w-[70%] truncate text-sm font-semibold">
-              {lightboxAttachment?.name}
-            </DialogTitle>
-            {lightboxAttachment ? (
-              <Button size="sm" variant="outline" asChild>
-                <a
-                  href={lightboxAttachment.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download={lightboxAttachment.name}
-                >
-                  <Download className="mr-1.5 size-3.5" />
-                  Download
-                </a>
-              </Button>
-            ) : null}
-          </DialogHeader>
-
-          {lightboxAttachment ? (
-            <div className="flex max-h-[75vh] items-center justify-center overflow-hidden p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={lightboxAttachment.url}
-                alt={lightboxAttachment.name}
-                className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain shadow-lg"
-              />
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <PhotoLightbox
+        photos={lightbox?.photos ?? []}
+        title="Chat photo"
+        open={Boolean(lightbox?.photos.length)}
+        onOpenChange={(open) => {
+          if (!open) setLightbox(null);
+        }}
+        index={lightbox?.index ?? 0}
+        onIndexChange={(index) =>
+          setLightbox((prev) => (prev ? { ...prev, index } : prev))
+        }
+      />
     </div>
   );
 }

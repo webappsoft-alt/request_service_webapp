@@ -85,16 +85,17 @@ export type LineItemsEditorProps = {
 function colWidths(wide: boolean) {
   if (wide) {
     return {
-      type: "w-[8.25rem]",
-      qty: "w-12",
-      unit: "w-14",
-      price: "w-16",
+      // Fixed widths — table-fixed + w-px collapses Type into Qty.
+      type: "w-[6.75rem]",
+      qty: "w-14",
+      unit: "w-[4.75rem]",
+      price: "w-[4.75rem]",
       total: "w-[4.75rem]",
       remove: "w-8",
     };
   }
   return {
-    type: "w-32",
+    type: "w-28",
     qty: "w-24",
     unit: "w-36",
     price: "w-28",
@@ -400,7 +401,7 @@ function LineItemRow({
             size="sm"
             className={cn(
               softField,
-              "w-full min-w-0 justify-between gap-1 py-0 pl-2.5 pr-1.5 text-xs [&_svg:not([class*='size-'])]:size-3.5 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate",
+              "w-full min-w-0 justify-between gap-1 px-1.5 py-0 text-xs [&_svg:not([class*='size-'])]:size-3.5",
             )}
           >
             <SelectValue placeholder="Type">
@@ -409,8 +410,8 @@ function LineItemRow({
           </SelectTrigger>
           <SelectContent
             position="popper"
-            align="center"
-            className="z-[100] w-[var(--radix-select-trigger-width)]"
+            align="start"
+            className="z-[100] min-w-[var(--radix-select-trigger-width)]"
           >
             <SelectItem value="labor">Labour</SelectItem>
             <SelectItem value="materials">Material</SelectItem>

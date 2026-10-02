@@ -140,7 +140,7 @@ export function ReportsView() {
           label="Estimate conversion"
           value={`${conversion}%`}
           note={`${accepted} of ${sent} written estimates accepted`}
-          href="/pro/dashboard/estimates"
+          href="/pro/dashboard/new-estimate"
         />
         <Kpi
           label="Active jobs"
@@ -206,8 +206,8 @@ export function ReportsView() {
               ? pipeline
               : [
                   { id: "requests", label: "Leads", value: 0, href: "/pro/dashboard/requests" },
-                  { id: "estimates_sent", label: "Estimates sent", value: 0, href: "/pro/dashboard/estimates" },
-                  { id: "accepted", label: "Accepted", value: 0, href: "/pro/dashboard/estimates?status=accepted" },
+                  { id: "estimates_sent", label: "Estimates sent", value: 0, href: "/pro/dashboard/new-estimate" },
+                  { id: "accepted", label: "Accepted", value: 0, href: "/pro/dashboard/new-estimate?status=accepted" },
                   { id: "jobs", label: "Jobs", value: 0, href: "/pro/dashboard/jobs" },
                   { id: "invoices_paid", label: "Invoices paid", value: 0, href: "/pro/dashboard/invoices?status=paid" },
                 ]

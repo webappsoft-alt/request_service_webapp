@@ -1362,7 +1362,7 @@ export function RequestDetailView({ id }: { id: string }) {
               </Button>
             ) : estimate ? (
               <Button size="sm" asChild>
-                <Link href={`/pro/dashboard/estimates/${estimate.id}`}>
+                <Link href={`/pro/dashboard/new-estimate/${estimate.id}`}>
                   {estimate.number ? `Open ${estimate.number}` : "Open estimate"}
                 </Link>
               </Button>
@@ -1676,7 +1676,7 @@ export function RequestDetailView({ id }: { id: string }) {
                         loading={estimatesLoading && !hasEstimatesData}
                         rows={relatedEstimates}
                         rowKey={(row) => row.id}
-                        rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+                        rowHref={(row) => `/pro/dashboard/new-estimate/${row.id}`}
                         columns={[
                           {
                             id: "number",
@@ -1685,7 +1685,7 @@ export function RequestDetailView({ id }: { id: string }) {
                             searchValue: (row) => row.number,
                             exportValue: (row) => row.number,
                             cell: (row) => (
-                              <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
+                              <Link href={`/pro/dashboard/new-estimate/${row.id}`} className="font-semibold text-primary hover:underline">
                                 {row.number}
                               </Link>
                             ),
@@ -2360,7 +2360,7 @@ export function RequestDetailView({ id }: { id: string }) {
                         className="gap-1.5 bg-[#003F7D] text-white hover:bg-[#003264] text-xs font-medium"
                         asChild
                       >
-                        <Link href={`/pro/dashboard/estimates/new?request=${request.id}`}>
+                        <Link href={`/pro/dashboard/new-estimate/new?request=${request.id}`}>
                           <FilePlus2 className="size-3.5" />
                           <span className="hidden sm:inline">Write</span> Estimate
                         </Link>

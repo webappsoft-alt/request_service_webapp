@@ -1236,7 +1236,7 @@ function ContractorEstimatesTab({
       empty="No estimate visits assigned to this contractor yet."
       rows={rows}
       rowKey={(row) => row.id}
-      rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+      rowHref={(row) => `/pro/dashboard/new-estimate/${row.id}`}
       columns={[
         {
           id: "number",
@@ -1246,7 +1246,7 @@ function ContractorEstimatesTab({
           exportValue: (row) => row.number,
           cell: (row) => (
             <Link
-              href={`/pro/dashboard/estimates/${row.id}`}
+              href={`/pro/dashboard/new-estimate/${row.id}`}
               className="font-semibold text-primary hover:underline"
             >
               {row.number}

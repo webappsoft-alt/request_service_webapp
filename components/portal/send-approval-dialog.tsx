@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   EstimatePdfDocument,
   SignaturePadField,
-  typedSignature,
   useSignPad,
 } from "@/components/estimate/estimate-pdf";
 import {
@@ -32,6 +31,7 @@ import type { PortalCustomerCrm } from "@/lib/data/crm-people";
 import type { Estimate } from "@/lib/types";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
+import { cn } from "@/lib/utils";
 
 export type SendApprovalResult = {
   viaApi: boolean;
@@ -47,6 +47,7 @@ export function SendApprovalDialog({
   estimate,
   customer,
   customerLabel,
+  mode = "send",
   onSent,
 }: {
   open: boolean;
@@ -54,6 +55,8 @@ export function SendApprovalDialog({
   estimate: Estimate;
   customer?: PortalCustomerCrm;
   customerLabel: string;
+  /** First send vs resend / post-change update. */
+  mode?: "send" | "resend" | "update";
   onSent: (result: SendApprovalResult) => void;
 }) {
   const crm = useCrmApiData();
@@ -66,6 +69,25 @@ export function SendApprovalDialog({
     crm.enabled ||
     Boolean(auth.token) ||
     (typeof window !== "undefined" && Boolean(getAuthToken()));
+
+  const dialogTitle =
+    mode === "update"
+      ? `Send updated ${estimate.number}`
+      : mode === "resend"
+        ? `Send ${estimate.number} again`
+        : `Send ${estimate.number} for approval`;
+  const dialogDescription =
+    mode === "update"
+      ? "Review the revised estimate, sign for the company, then send the update on the same customer link."
+      : mode === "resend"
+        ? "Review the current estimate and send it again. Changes are recorded in activity and shown on the customer link."
+        : "Review the estimate as the customer will see it. Sign for the company on page 2, then send. This creates the customer review link.";
+  const confirmLabel =
+    mode === "update"
+      ? "Send update"
+      : mode === "resend"
+        ? "Send again"
+        : "Send for approval";
 
   const snapshot = useMemo(
     () =>
@@ -98,12 +120,8 @@ export function SendApprovalDialog({
         showCloseButton
       >
         <DialogHeader className="border-b border-input px-5 py-4">
-          <DialogTitle>Send {estimate.number} for approval</DialogTitle>
-          <DialogDescription>
-            Review the estimate as the customer will see it. Sign for the
-            company on page 2, then send. This calls the CRM share API so the
-            customer can open, revise, or sign the live estimate.
-          </DialogDescription>
+          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
         {open ? (
           <ApprovalPreview
@@ -115,7 +133,8 @@ export function SendApprovalDialog({
             }
             ready={ready}
             apiReady={apiReady}
-            busyLabel="Sending…"
+            busyLabel={mode === "update" ? "Sending update…" : "Sending…"}
+            confirmLabel={confirmLabel}
             onCancel={() => onOpenChange(false)}
             onSend={async (signed) => {
               if (!apiReady) {
@@ -162,22 +181,28 @@ export function SendApprovalDialog({
                   href: url,
                   status: nextStatus,
                 });
+                const sentVerb =
+                  mode === "update"
+                    ? "update sent"
+                    : mode === "resend"
+                      ? "sent again"
+                      : "sent";
                 if (shared.emailSent) {
                   toast.success(
                     shared.emailTo
-                      ? `Estimate has been sent to ${shared.emailTo}.`
-                      : "Estimate has been sent.",
+                      ? `Estimate ${sentVerb} to ${shared.emailTo}.`
+                      : `Estimate ${sentVerb}.`,
                   );
                 } else if (shared.emailSkippedReason) {
                   toast.success(
-                    "Estimate has been sent. Link copied — email skipped (no customer email).",
+                    `Estimate ${sentVerb}. Link copied — email skipped (no customer email).`,
                   );
                 } else if (shared.emailError) {
                   toast.success(
-                    "Estimate has been sent. Link copied — email could not be delivered.",
+                    `Estimate ${sentVerb}. Link copied — email could not be delivered.`,
                   );
                 } else {
-                  toast.success("Estimate has been sent.");
+                  toast.success(`Estimate ${sentVerb}.`);
                 }
                 onOpenChange(false);
               } catch (error) {
@@ -202,6 +227,7 @@ function ApprovalPreview({
   ready,
   apiReady,
   busyLabel,
+  confirmLabel = "Send for approval",
   onCancel,
   onSend,
 }: {
@@ -210,6 +236,7 @@ function ApprovalPreview({
   ready: boolean;
   apiReady: boolean;
   busyLabel?: string;
+  confirmLabel?: string;
   onCancel: () => void;
   onSend: (
     snapshot: ReturnType<typeof buildEstimateSnapshot>,
@@ -218,21 +245,54 @@ function ApprovalPreview({
   const companyPad = useSignPad();
   const [signer, setSigner] = useState(defaultSigner);
   const [busy, setBusy] = useState(false);
+  const [signatureHighlight, setSignatureHighlight] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const signatureRef = useRef<HTMLDivElement>(null);
+
+  function focusCompanySignature() {
+    const target = signatureRef.current;
+    const scroller = scrollRef.current;
+    if (target && scroller) {
+      const scrollerTop = scroller.getBoundingClientRect().top;
+      const targetTop = target.getBoundingClientRect().top;
+      scroller.scrollTo({
+        top: scroller.scrollTop + (targetTop - scrollerTop) - 24,
+        behavior: "smooth",
+      });
+    } else {
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setSignatureHighlight(true);
+    window.setTimeout(() => setSignatureHighlight(false), 2200);
+    toast.error("Sign for the company on page 2 before sending.");
+  }
 
   return (
     <>
-      <div className="max-h-[68vh] overflow-y-auto bg-[#eef1f5] px-4 py-5">
+      <div
+        ref={scrollRef}
+        className="max-h-[68vh] overflow-y-auto bg-[#eef1f5] px-4 py-5"
+      >
         <EstimatePdfDocument
           snapshot={snapshot}
           companySlot={
-            <SignaturePadField
-              name={signer}
-              onName={setSigner}
-              pad={companyPad}
-              showNameInput
-              caption="Authorized company signature"
-              date={new Date().toISOString()}
-            />
+            <div
+              ref={signatureRef}
+              className={cn(
+                "rounded-md transition-[box-shadow,background-color] duration-300",
+                signatureHighlight &&
+                  "bg-amber-50/80 ring-2 ring-amber-400 ring-offset-2 ring-offset-white",
+              )}
+            >
+              <SignaturePadField
+                name={signer}
+                onName={setSigner}
+                pad={companyPad}
+                showNameInput
+                caption="Authorized company signature (required)"
+                date={new Date().toISOString()}
+              />
+            </div>
           }
         />
       </div>
@@ -253,15 +313,13 @@ function ApprovalPreview({
           data-action="confirm-send-approval"
           disabled={!ready || !apiReady || busy}
           onClick={() => {
-            if (!signer.trim()) {
-              toast.error("Enter the company signer name.");
+            if (!signer.trim() || !companyPad.dirty) {
+              focusCompanySignature();
               return;
             }
-            const image = companyPad.dirty
-              ? companyPad.toImage()
-              : typedSignature(signer.trim());
+            const image = companyPad.toImage();
             if (!image) {
-              toast.error("Add the company signature on page 2.");
+              focusCompanySignature();
               return;
             }
             setBusy(true);
@@ -275,7 +333,7 @@ function ApprovalPreview({
             ).finally(() => setBusy(false));
           }}
         >
-          {busy && busyLabel ? busyLabel : "Send for approval"}
+          {busy && busyLabel ? busyLabel : confirmLabel}
         </Button>
       </DialogFooter>
     </>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2, Plus, Trash2, Upload } from "lucide-react";
+import { ChevronDown, ImagePlus, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
 import { WorkItemsEditor } from "@/components/portal/estimate-v2/work-items-editor";
@@ -61,6 +61,10 @@ type ExistingInformationPanelProps = {
   workItems: AssessmentWorkItem[];
   onWorkItemsChange: (items: AssessmentWorkItem[]) => void;
   saving?: boolean;
+  /** When true, show a compact summary so the estimate can take the main column. */
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
+  hasEstimate?: boolean;
   onSave: () => void | Promise<void>;
   onContinue: () => void | Promise<void>;
 };
@@ -75,6 +79,9 @@ export function ExistingInformationPanel({
   workItems,
   onWorkItemsChange,
   saving = false,
+  collapsed = false,
+  onCollapsedChange,
+  hasEstimate = false,
   onSave,
   onContinue,
 }: ExistingInformationPanelProps) {
@@ -84,6 +91,73 @@ export function ExistingInformationPanel({
   const [measurementLabel, setMeasurementLabel] = useState("");
   const [measurementValue, setMeasurementValue] = useState("");
   const [measurementUnit, setMeasurementUnit] = useState("sq ft");
+
+  const workCount = workItems.filter((item) => String(item.description || "").trim()).length;
+  const summaryBits = [
+    attachments.length
+      ? `${attachments.length} attachment${attachments.length === 1 ? "" : "s"}`
+      : null,
+    measurements.length
+      ? `${measurements.length} measurement${measurements.length === 1 ? "" : "s"}`
+      : null,
+    workCount ? `${workCount} work item${workCount === 1 ? "" : "s"}` : null,
+    findings.trim() ? "notes saved" : null,
+  ].filter(Boolean);
+
+  async function handleSave() {
+    await onSave();
+    onCollapsedChange?.(true);
+  }
+
+  async function handleContinue() {
+    await onContinue();
+    onCollapsedChange?.(true);
+  }
+
+  if (collapsed) {
+    return (
+      <div className="rounded-2xl border border-[#94a3b8] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            aria-expanded={false}
+            onClick={() => onCollapsedChange?.(false)}
+            className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <span
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-[#94a3b8] bg-[#f1f5f9] text-slate-700 transition-colors group-hover:border-slate-400 group-hover:bg-slate-200"
+              aria-hidden="true"
+            >
+              <ChevronDown className="size-4 -rotate-90 stroke-[2.5]" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-tight text-slate-900">
+                Existing information
+              </p>
+              <p className="text-xs text-slate-500">
+                {summaryBits.length
+                  ? `${summaryBits.join(" · ")} — expand to edit`
+                  : "No details yet — expand to add"}
+              </p>
+            </div>
+          </button>
+          <Button
+            size="sm"
+            disabled={saving}
+            onClick={() => {
+              if (hasEstimate) {
+                onCollapsedChange?.(true);
+                return;
+              }
+              void handleContinue();
+            }}
+          >
+            {hasEstimate ? "View estimate" : "Continue to estimate"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   async function uploadFiles(files: FileList | File[] | null) {
     if (!files?.length || saving) return;
@@ -146,12 +220,25 @@ export function ExistingInformationPanel({
 
   return (
     <div className="rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <div className="border-b border-[#d8dee8] pb-4">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-900">Existing information</h2>
-        <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
-          Capture what you already know — no site visit required. Work items become the starting
-          line items on the estimate.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#d8dee8] pb-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900">Existing information</h2>
+          <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
+            Capture what you already know — no site visit required. Work items become the starting
+            line items on the estimate.
+          </p>
+        </div>
+        {onCollapsedChange ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={saving}
+            onClick={() => onCollapsedChange(true)}
+          >
+            Collapse
+          </Button>
+        ) : null}
       </div>
 
       <div className="mt-5">
@@ -391,10 +478,10 @@ export function ExistingInformationPanel({
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2 border-t border-[#d8dee8] pt-4">
-        <Button size="sm" variant="outline" disabled={saving} onClick={() => void onSave()}>
+        <Button size="sm" variant="outline" disabled={saving} onClick={() => void handleSave()}>
           Save information
         </Button>
-        <Button size="sm" disabled={saving} onClick={() => void onContinue()}>
+        <Button size="sm" disabled={saving} onClick={() => void handleContinue()}>
           Continue to estimate
         </Button>
       </div>

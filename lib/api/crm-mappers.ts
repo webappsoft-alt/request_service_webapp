@@ -36,6 +36,7 @@ import type {
   Estimate,
   EstimateActivity,
   EstimateAttachmentItem,
+  EstimateCustomerUpdate,
   EstimateItem,
   EstimateItemType,
   EstimateLog,
@@ -306,7 +307,7 @@ function makeHref(kind: PortalEventKind, recordId: string): string {
     case "fixed_service":
       return `/pro/dashboard/orders/${recordId}`;
     case "estimate":
-      return `/pro/dashboard/estimates/${recordId}`;
+      return `/pro/dashboard/new-estimate/${recordId}`;
     case "request":
       return `/pro/dashboard/requests/${recordId}`;
     case "invoice":
@@ -1073,6 +1074,7 @@ function mapEstimateItems(estimateId: string, value: unknown): EstimateItem[] {
       if (!record) return null;
       const type = mapEstimateItemType(record.kind ?? record.type);
       const images = normalizeMaterialImages(record.images);
+      const section = trimmed(record.section);
       return {
         id: crmIdOf(record) || `${estimateId}_item_${index + 1}`,
         estimateId,
@@ -1085,6 +1087,7 @@ function mapEstimateItems(estimateId: string, value: unknown): EstimateItem[] {
         discount: numberValue(record.discount, 0),
         total: numberValue(record.total),
         ...(type !== "labor" ? { images } : {}),
+        ...(section ? { section } : {}),
       } satisfies EstimateItem;
     })
     .filter((item): item is EstimateItem => Boolean(item));
@@ -1268,8 +1271,37 @@ export function mapEstimate(raw: unknown): Estimate | null {
     activities: asArray(record.activities)
       .map(mapEstimateActivity)
       .filter((item): item is EstimateActivity => Boolean(item)),
+    customerUpdates: asArray(record.customerUpdates)
+      .map((entry, idx) => mapEstimateCustomerUpdate(entry, idx))
+      .filter((item): item is EstimateCustomerUpdate => Boolean(item)),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
+  };
+}
+
+export function mapEstimateCustomerUpdate(
+  raw: unknown,
+  index: number,
+): EstimateCustomerUpdate | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const summary = trimmed(record.summary || record.title || record.details);
+  if (!summary) return null;
+  return {
+    id: crmIdOf(record) || `customer_update_${index + 1}`,
+    summary,
+    details: trimmed(record.details || record.description) || undefined,
+    totalBefore:
+      record.totalBefore == null || record.totalBefore === ""
+        ? null
+        : numberValue(record.totalBefore),
+    totalAfter:
+      record.totalAfter == null || record.totalAfter === ""
+        ? null
+        : numberValue(record.totalAfter),
+    at:
+      toIsoString(record.at || record.timestamp || record.createdAt) ||
+      new Date().toISOString(),
   };
 }
 

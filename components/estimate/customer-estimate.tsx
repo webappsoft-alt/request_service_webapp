@@ -190,6 +190,7 @@ function mapPublicEstimateToSnapshot(
       )
         .map((src) => stringValue(src))
         .filter(Boolean);
+      const section = stringValue(item.section).trim();
       return {
         description: stringValue(item.description) || "Line item",
         kind: (isEquipment
@@ -200,8 +201,9 @@ function mapPublicEstimateToSnapshot(
         quantity,
         unit: stringValue(item.unit) || (kindRaw === "labor" ? "hr" : "ea"),
         unitPrice,
-        total: numberValue(item.total, Math.round(quantity * unitPrice)),
+        total: numberValue(item.total, Math.round(quantity * unitPrice * 100) / 100),
         ...(isMaterial && images.length ? { images } : {}),
+        ...(section ? { section } : {}),
       };
     },
   );
@@ -285,19 +287,39 @@ function mapPublicEstimateToSnapshot(
     }
   }
 
+  const providerUser =
+    asRecord(provider.userId) ?? asRecord(provider.user) ?? {};
+  const providerAvatar =
+    stringValue(provider.logoUrl) ||
+    stringValue(provider.avatarUrl) ||
+    stringValue(provider.avatar) ||
+    stringValue(providerUser.avatarUrl) ||
+    stringValue(asRecord(providerUser.profile)?.avatar) ||
+    stringValue(providerUser.avatar) ||
+    "";
+  const companyName = stringValue(provider.companyName) || "Service company";
+  const logoInitials = companyName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "SC";
+
   const snapshot: EstimateShareSnapshot = {
     token,
     estimateId,
     number:
       stringValue(estimate.number) ||
       `EST-${estimateId.slice(-4).toUpperCase()}`,
-    companyName: stringValue(provider.companyName) || "Service company",
+    companyName,
     companyEmail: stringValue(provider.email),
     companyPhone: stringValue(provider.phone),
-    companyStreet: stringValue(location.address),
+    companyStreet: stringValue(location.address) || stringValue(location.street),
     companyCity: stringValue(location.city),
     companyState: stringValue(location.state),
     companyZip: stringValue(location.zip),
+    logoUrl: providerAvatar || undefined,
+    logoInitials,
     licensed: Boolean(
       asRecord(provider.profile)?.licensed ?? provider.licensed,
     ),
@@ -321,7 +343,11 @@ function mapPublicEstimateToSnapshot(
       stringValue(snapshotCustomer.phone) ||
       stringValue(estimate.customerPhone) ||
       undefined,
-    street: stringValue(address.street),
+    street:
+      stringValue(address.street) ||
+      stringValue(address.address) ||
+      stringValue(address.line1) ||
+      "",
     city: stringValue(address.city),
     state: stringValue(address.state),
     zip: stringValue(address.zip),
@@ -334,6 +360,7 @@ function mapPublicEstimateToSnapshot(
     terms: stringValue(estimate.terms) || undefined,
     items,
     subtotal: numberValue(estimate.subtotal),
+    discount: Math.max(0, numberValue(estimate.discount)) || undefined,
     tax: numberValue(estimate.tax),
     taxRatePercent: Math.max(
       0,
@@ -350,6 +377,40 @@ function mapPublicEstimateToSnapshot(
     companySignedAt: companySignedAt || undefined,
     companySignatureDataUrl: companySignatureDataUrl || undefined,
     siteVisit,
+    customerUpdates: Array.isArray(estimate.customerUpdates)
+      ? estimate.customerUpdates
+          .map((entry) => {
+            const row = asRecord(entry) || {};
+            const summary =
+              stringValue(row.summary) ||
+              stringValue(row.title) ||
+              stringValue(row.details);
+            if (!summary) return null;
+            return {
+              summary,
+              details: stringValue(row.details) || undefined,
+              totalBefore:
+                row.totalBefore == null || row.totalBefore === ""
+                  ? null
+                  : numberValue(row.totalBefore),
+              totalAfter:
+                row.totalAfter == null || row.totalAfter === ""
+                  ? null
+                  : numberValue(row.totalAfter),
+              at:
+                toIso(row.at) ||
+                toIso(row.timestamp) ||
+                toIso(row.createdAt) ||
+                new Date().toISOString(),
+            };
+          })
+          .filter(
+            (
+              item,
+            ): item is NonNullable<EstimateShareSnapshot["customerUpdates"]>[number] =>
+              Boolean(item),
+          )
+      : undefined,
   };
 
   const signedAt =
@@ -379,9 +440,58 @@ function isMongoObjectId(value: string) {
 
 function canCustomerSignStatus(status?: string) {
   const value = String(status || "").toLowerCase();
-  // Customer may accept once a proposal exists (draft/finalized/sent).
-  // Site-visit / inspected still wait for the pro to finalize & send.
+  // Shared proposals are signable when sent (or still office-finalized before send).
+  // After the customer requests changes, they wait until the pro sends an update.
   return value === "sent" || value === "finalized" || value === "draft";
+}
+
+function customerStatusLabel(status?: string, hasUpdates = false) {
+  const value = String(status || "").toLowerCase();
+  switch (value) {
+    case "accepted":
+    case "converted_to_job":
+      return "Approved";
+    case "rejected":
+      return "Declined";
+    case "expired":
+      return "Expired";
+    case "changes_requested":
+      return "Changes requested";
+    case "sent":
+      return hasUpdates ? "Updated — ready for review" : "Ready for review";
+    case "finalized":
+      return "Ready for review";
+    case "inspected":
+      return "Site inspected";
+    case "site_visit":
+    case "scheduled":
+      return "Site visit in progress";
+    case "draft":
+      return "In progress";
+    default:
+      return hasUpdates ? "Updated" : "In progress";
+  }
+}
+
+function customerStatusTone(status?: string) {
+  const value = String(status || "").toLowerCase();
+  switch (value) {
+    case "accepted":
+    case "converted_to_job":
+      return "bg-emerald-50 text-emerald-700";
+    case "rejected":
+    case "expired":
+      return "bg-red-50 text-red-700";
+    case "changes_requested":
+      return "bg-amber-50 text-amber-800";
+    case "sent":
+    case "finalized":
+      return "bg-amber-50 text-amber-700";
+    case "inspected":
+      return "bg-blue-50 text-blue-700";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
 }
 
 export function CustomerEstimatePage({
@@ -556,6 +666,11 @@ export function CustomerEstimatePage({
         snapshot.siteVisit.measurements ||
         snapshot.status === "inspected"),
   );
+  const customerUpdates = [...(snapshot?.customerUpdates || [])].sort(
+    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  );
+  const latestCustomerUpdate = customerUpdates[0] || null;
+  const hasProUpdates = customerUpdates.length > 0;
 
   useEffect(() => {
     if (!wantAccept || !canSign || loading) return;
@@ -763,25 +878,16 @@ export function CustomerEstimatePage({
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
                 <CheckCircle2 className="size-3.5" /> Approved
               </span>
-            ) : snapshot.status === "rejected" ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
-                Rejected
-              </span>
-            ) : snapshot.status === "changes_requested" ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
-                Changes requested
-              </span>
-            ) : snapshot.status === "inspected" ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-                <ShieldCheck className="size-3.5" /> Site Inspected
-              </span>
-            ) : preparing ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                In progress
-              </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
-                <ShieldCheck className="size-3.5" /> Ready for review
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${customerStatusTone(snapshot.status)}`}
+              >
+                {(snapshot.status === "sent" ||
+                  snapshot.status === "finalized") &&
+                !preparing ? (
+                  <ShieldCheck className="size-3.5" />
+                ) : null}
+                {customerStatusLabel(snapshot.status, hasProUpdates)}
               </span>
             )}
           </div>
@@ -957,6 +1063,26 @@ export function CustomerEstimatePage({
           <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 print:hidden">
             Your change request was sent. Waiting for the professional to revise
             and re-share this estimate.
+          </div>
+        ) : null}
+
+        {latestCustomerUpdate &&
+        snapshot.status !== "changes_requested" &&
+        !approval ? (
+          <div className="rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 print:hidden">
+            <p className="font-semibold">
+              {snapshot.status === "sent"
+                ? "This estimate was updated"
+                : "Update from your professional"}
+            </p>
+            <p className="mt-1 leading-relaxed">{latestCustomerUpdate.summary}</p>
+            {customerUpdates.length > 1 ? (
+              <ul className="mt-2 space-y-1 text-xs text-sky-900/80">
+                {customerUpdates.slice(1, 4).map((update, index) => (
+                  <li key={`${update.at}-${index}`}>• {update.summary}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         ) : null}
 

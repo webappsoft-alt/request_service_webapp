@@ -17,6 +17,8 @@ export type JobCostLine = {
   unitPrice: number;
   /** Optional material photos (URLs). Cleared when kind is labor. */
   images?: string[];
+  /** Named work section (e.g. Plumbing). Empty = General / unsectioned. */
+  section?: string;
 };
 
 type CostingStore = Record<string, JobCostLine[]>;
@@ -101,6 +103,7 @@ function toCostLine(item: JobItem): JobCostLine {
           .map((src) => String(src || "").trim())
           .filter(Boolean)
       : [];
+  const section = String(item.section || "").trim();
   return {
     id: item.id,
     description: item.description,
@@ -109,6 +112,7 @@ function toCostLine(item: JobItem): JobCostLine {
     unit: item.unit,
     unitPrice: item.unitPrice,
     ...(kind === "materials" ? { images } : {}),
+    ...(section ? { section } : {}),
   };
 }
 

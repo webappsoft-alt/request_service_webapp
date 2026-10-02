@@ -140,7 +140,7 @@ export function WorkItemsEditor({
               <TableHead className="h-8 min-w-0 bg-[#f8fafc] px-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Description
               </TableHead>
-              <TableHead className="h-8 w-[8.25rem] bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              <TableHead className="h-8 w-px whitespace-nowrap bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Type
               </TableHead>
               <TableHead className="h-8 w-12 bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
@@ -194,7 +194,7 @@ export function WorkItemsEditor({
                         className={cn(softField, "w-full min-w-0 text-sm")}
                       />
                     </TableCell>
-                    <TableCell className="w-[8.25rem] align-top px-1 py-2">
+                    <TableCell className="w-px whitespace-nowrap align-top px-1 py-2">
                       <Select
                         value={type}
                         disabled={disabled}
@@ -207,15 +207,15 @@ export function WorkItemsEditor({
                           size="sm"
                           className={cn(
                             softField,
-                            "w-full min-w-0 justify-between gap-1 py-0 pl-2.5 pr-1.5 text-xs [&_svg:not([class*='size-'])]:size-3.5 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate",
+                            "w-auto justify-between gap-1 px-2 py-0 text-xs [&_svg:not([class*='size-'])]:size-3.5",
                           )}
                         >
                           <SelectValue placeholder="Type" />
                         </SelectTrigger>
                         <SelectContent
                           position="popper"
-                          align="center"
-                          className="z-[100] w-[var(--radix-select-trigger-width)]"
+                          align="start"
+                          className="z-[100] min-w-[var(--radix-select-trigger-width)]"
                         >
                           {WORK_ITEM_TYPES.map((option) => (
                             <SelectItem key={option.value} value={option.value}>

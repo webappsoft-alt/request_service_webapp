@@ -858,7 +858,7 @@ export function getPortalActivity(provider: Provider): PortalActivity[] {
           title: "Estimate sent",
           detail: estimates.find((item) => item.status === "sent")?.number ?? "",
           at: estimates.find((item) => item.status === "sent")?.issuedAt ?? "",
-          href: `/pro/dashboard/estimates/${estimates.find((item) => item.status === "sent")?.id}`,
+          href: `/pro/dashboard/new-estimate/${estimates.find((item) => item.status === "sent")?.id}`,
         }
       : null,
     estimates.find((item) => item.status === "accepted")
@@ -867,7 +867,7 @@ export function getPortalActivity(provider: Provider): PortalActivity[] {
           title: "Estimate approved",
           detail: estimates.find((item) => item.status === "accepted")?.number ?? "",
           at: estimates.find((item) => item.status === "accepted")?.updatedAt ?? "",
-          href: `/pro/dashboard/estimates/${estimates.find((item) => item.status === "accepted")?.id}`,
+          href: `/pro/dashboard/new-estimate/${estimates.find((item) => item.status === "accepted")?.id}`,
         }
       : null,
     jobs.find((item) => item.status === "completed")
@@ -1061,7 +1061,7 @@ export function getPortalCalendarEvents(provider: Provider): PortalCalendarEvent
         timeWindow,
         ...minutesForWindow(timeWindow, index),
         employeeId: estimator.id,
-        href: `/pro/dashboard/estimates/${estimate.id}`,
+        href: `/pro/dashboard/new-estimate/${estimate.id}`,
         status: estimate.status,
       } satisfies PortalCalendarEvent;
     });
@@ -1264,13 +1264,13 @@ export function estimateStatusTone(status: EstimateStatus) {
     case "inspected":
       return "bg-teal-50 text-teal-800";
     case "draft":
-      return "bg-slate-100 text-slate-700";
+      return "bg-amber-50 text-amber-900";
     case "scheduled":
-      return "bg-sky-50 text-sky-800";
+      return "bg-violet-50 text-violet-800";
     case "finalized":
-      return "bg-[#e8eef5] text-[#003F7D]";
+      return "bg-cyan-50 text-cyan-900";
     case "sent":
-      return "bg-sky-50 text-sky-800";
+      return "bg-[#e8eef5] text-[#003F7D]";
     case "accepted":
       return "bg-emerald-50 text-emerald-800";
     case "rejected":
@@ -1280,7 +1280,7 @@ export function estimateStatusTone(status: EstimateStatus) {
     case "changes_requested":
       return "bg-amber-50 text-amber-900";
     case "converted_to_job":
-      return "bg-emerald-50 text-emerald-900";
+      return "bg-green-50 text-green-900";
     default: {
       const _never: never = status;
       return _never;

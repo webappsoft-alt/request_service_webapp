@@ -115,7 +115,8 @@ function linesEqual(a: JobCostLine[], b: JobCostLine[]) {
       left.quantity !== right.quantity ||
       (left.unit || "") !== (right.unit || "") ||
       left.unitPrice !== right.unitPrice ||
-      JSON.stringify(left.images ?? []) !== JSON.stringify(right.images ?? [])
+      JSON.stringify(left.images ?? []) !== JSON.stringify(right.images ?? []) ||
+      String(left.section || "").trim() !== String(right.section || "").trim()
     ) {
       return false;
     }

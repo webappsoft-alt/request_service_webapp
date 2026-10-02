@@ -23,7 +23,7 @@ import {
   PeriodBar,
   type DashboardPeriod,
 } from "@/components/portal/dashboard-widgets";
-import { CreateEstimateDialog, CreateJobDialog, CreateLeadDialog } from "@/components/portal/create-work-dialogs";
+import { CreateJobDialog, CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { CreateTaskDialog } from "@/components/portal/create-person-dialogs";
 import { PortalPage } from "@/components/portal/portal-page";
 import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
@@ -42,6 +42,14 @@ import {
   type ReminderSubjectKind,
 } from "@/lib/data/crm-people";
 import { jobStatusTone } from "@/lib/data/portal";
+import {
+  opportunityStatusLabel,
+  opportunityStatusTone,
+} from "@/lib/data/estimate-v2-status";
+import {
+  listEstimateV2Opportunities,
+  type EstimateV2Opportunity,
+} from "@/lib/api/estimate-v2-client";
 import type { JobStatus, RequestStatus } from "@/lib/types";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -70,16 +78,37 @@ export function DashboardView() {
   const setup = profileSetupProgress(setupItems);
   const [period, setPeriod] = useState<DashboardPeriod>("month");
   const [leadOpen, setLeadOpen] = useState(false);
-  const [estimateOpen, setEstimateOpen] = useState(false);
   const [jobOpen, setJobOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [recentChatRows, setRecentChatRows] = useState<RecentMessageRow[]>([]);
   const [recentChatsLoading, setRecentChatsLoading] = useState(true);
   const [chatRefreshKey, setChatRefreshKey] = useState(0);
+  const [opportunityRows, setOpportunityRows] = useState<EstimateV2Opportunity[]>([]);
+  const [opportunityTotal, setOpportunityTotal] = useState(0);
 
   useEffect(() => {
     void dispatch(fetchProviderDashboard({ force: true, silent: true }));
   }, [dispatch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listEstimateV2Opportunities({ page: 1, limit: 6 });
+        if (cancelled) return;
+        setOpportunityRows(result.items);
+        setOpportunityTotal(result.total);
+      } catch {
+        if (!cancelled) {
+          setOpportunityRows([]);
+          setOpportunityTotal(0);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -583,40 +612,61 @@ export function DashboardView() {
 
         {/* Money + people row */}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <DashPanel title="Estimates" href="/pro/dashboard/estimates" hrefLabel="All">
+          <DashPanel title="Estimates" href="/pro/dashboard/new-estimate" hrefLabel="All">
             <div className="grid grid-cols-2 gap-1">
               <MetricTile
                 label="Open"
-                value={String(estimates?.openCount ?? 0)}
+                value={String(opportunityTotal || estimates?.openCount || 0)}
                 note={formatMoney(estimates?.pendingValue ?? 0)}
-                href="/pro/dashboard/estimates"
+                href="/pro/dashboard/new-estimate"
                 accent
               />
               <MetricTile
                 label="Awaiting sign"
-                value={String(estimates?.awaitingSignature ?? 0)}
+                value={String(
+                  opportunityRows.filter((row) => row.status === "estimate_sent").length ||
+                    estimates?.awaitingSignature ||
+                    0,
+                )}
                 note="Sent to customer"
-                href="/pro/dashboard/estimates?status=sent"
+                href="/pro/dashboard/new-estimate"
               />
             </div>
-            {(estimates?.latest?.length ?? 0) > 0 ? (
+            {opportunityRows.length > 0 ? (
               <ul className="mt-3 space-y-0 border-t border-input/60">
-                {(estimates?.latest ?? []).slice(0, 4).map((estimate) => (
-                  <li key={estimate.id}>
-                    <Link
-                      href={`/pro/dashboard/estimates/${estimate.id}`}
-                      className="flex items-center justify-between gap-2 py-2 text-[13px] transition-colors hover:text-primary"
-                    >
-                      <span className="truncate">
-                        {estimate.number}
-                        <span className="text-muted-foreground"> · {estimate.customerName}</span>
-                      </span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {formatMoney(estimate.total)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+                {opportunityRows.slice(0, 4).map((row) => {
+                  const customer =
+                    typeof row.customerId === "object" && row.customerId
+                      ? String(
+                          row.customerId.companyName ||
+                            [row.customerId.firstName, row.customerId.lastName]
+                              .filter(Boolean)
+                              .join(" ") ||
+                            "Customer",
+                        )
+                      : "Customer";
+                  return (
+                    <li key={row.id}>
+                      <Link
+                        href={`/pro/dashboard/new-estimate/${row.id}`}
+                        className="flex items-center justify-between gap-2 py-2 text-[13px] transition-colors hover:text-primary"
+                      >
+                        <span className="min-w-0 truncate">
+                          {row.number}
+                          <span className="text-muted-foreground"> · {customer}</span>
+                        </span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset",
+                            opportunityStatusTone(row.status),
+                          )}
+                        >
+                          {opportunityStatusLabel(row.status)}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
           </DashPanel>
@@ -795,8 +845,8 @@ export function DashboardView() {
             <Button size="sm" variant="outline" onClick={() => setLeadOpen(true)}>
               Create lead
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setEstimateOpen(true)}>
-              Create estimate
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/pro/dashboard/new-estimate/new">Create estimate</Link>
             </Button>
             <Button size="sm" variant="outline" onClick={() => setJobOpen(true)}>
               Create job
@@ -812,7 +862,6 @@ export function DashboardView() {
       </div>
 
       <CreateLeadDialog open={leadOpen} onOpenChange={setLeadOpen} />
-      <CreateEstimateDialog open={estimateOpen} onOpenChange={setEstimateOpen} />
       <CreateJobDialog open={jobOpen} onOpenChange={setJobOpen} />
       <CreateTaskDialog open={taskOpen} onOpenChange={setTaskOpen} />
     </PortalPage>

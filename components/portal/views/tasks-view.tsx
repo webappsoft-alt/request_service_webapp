@@ -1413,7 +1413,7 @@ export function TaskDetailView({ id }: { id: string }) {
                         </p>
                       </div>
                       <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 shrink-0 border-border-soft">
-                        <Link href={`/pro/dashboard/estimates/${subject.id}`}>
+                        <Link href={`/pro/dashboard/new-estimate/${subject.id}`}>
                           Open estimate
                           <ExternalLink className="size-3.5" />
                         </Link>

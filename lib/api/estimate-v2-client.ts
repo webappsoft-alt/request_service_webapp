@@ -74,6 +74,7 @@ export type EstimateV2Opportunity = {
   title: string;
   description?: string;
   source?: string;
+  requestId?: string | null;
   status: OpportunityStatus;
   prepChoice?: PrepChoice | null;
   /** Captured for have_information / create_now (no visit). */
@@ -189,6 +190,7 @@ export async function listEstimateV2Opportunities(params?: {
   status?: string;
   search?: string;
   customerId?: string;
+  requestId?: string;
 }) {
   const response = await getData(providerCrmApi.estimateV2Opportunities, params || {});
   const data = unwrapData<{
@@ -207,6 +209,21 @@ export async function listEstimateV2Opportunities(params?: {
     limit: Number(data.limit) || 20,
     totalPages: Number(data.totalPages) || 1,
   };
+}
+
+export async function getOpportunityByEstimateId(
+  estimateId: string,
+  options?: { force?: boolean; silent?: boolean },
+) {
+  const response = await getData(
+    providerCrmApi.estimateV2OpportunityByEstimate(estimateId),
+    undefined,
+    {
+      force: options?.force ?? true,
+      silent: options?.silent,
+    },
+  );
+  return normalizeOpportunity(unwrapData<EstimateV2Opportunity>(response));
 }
 
 export async function getEstimateV2Opportunity(
@@ -228,6 +245,7 @@ export async function createEstimateV2Opportunity(input: {
   categoryId?: string;
   categoryName?: string;
   source?: string;
+  requestId?: string;
   internalNotes?: string;
 }) {
   const response = await postData(providerCrmApi.estimateV2Opportunities, input);

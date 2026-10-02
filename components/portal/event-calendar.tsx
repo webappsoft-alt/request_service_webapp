@@ -35,7 +35,7 @@ export function getEventDetailUrl(event: PortalCalendarEvent): string {
     case "fixed_service":
       return `/pro/dashboard/orders/${id}`;
     case "estimate":
-      return `/pro/dashboard/estimates/${id}`;
+      return `/pro/dashboard/new-estimate/${id}`;
     case "request":
       return `/pro/dashboard/requests/${id}`;
     case "invoice":
@@ -908,7 +908,7 @@ function MonthGrid({
               key={day}
               className={cn(
                 "px-2 py-2.5 text-center text-[11px] font-semibold tracking-wide uppercase",
-                weekend ? "bg-[#c5ceda] text-slate-700" : "text-muted-foreground",
+                weekend ? "bg-[#fef2f2] text-[#b91c1c]/80" : "text-muted-foreground",
               )}
               style={index < 6 ? { borderRight: `1px solid ${inMonthLine}` } : undefined}
             >
@@ -924,6 +924,11 @@ function MonthGrid({
           const isLastCol = weekday === 6;
           const isLastRow = index >= cells.length - 7;
           const line = cell.inMonth ? inMonthLine : outMonthLine;
+          const cellAbove = index >= 7 ? cells[index - 7] : null;
+          const cellBelow = index < cells.length - 7 ? cells[index + 7] : null;
+          const needsTopBorder = Boolean(cell.inMonth && cellAbove && !cellAbove.inMonth);
+          const skipBottom =
+            isLastRow || Boolean(!cell.inMonth && cellBelow?.inMonth);
 
           return (
             <div
@@ -940,16 +945,17 @@ function MonthGrid({
                 "min-h-36 h-auto p-1.5 flex flex-col justify-start",
                 cell.inMonth
                   ? weekend
-                    ? "bg-[#d5dde8]"
+                    ? "bg-[#fef2f2]"
                     : "bg-card"
-                  : "bg-[#f1f5f9]",
+                  : "bg-[#f8fafc]",
                 cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
                 cell.inMonth && overDay === cell.iso && "bg-primary/15",
                 !cell.inMonth && overDay === cell.iso && "bg-primary/10",
               )}
               style={{
+                borderTop: needsTopBorder ? `1px solid ${inMonthLine}` : undefined,
                 borderRight: isLastCol ? undefined : `1px solid ${line}`,
-                borderBottom: isLastRow ? undefined : `1px solid ${line}`,
+                borderBottom: skipBottom ? undefined : `1px solid ${line}`,
               }}
             >
               <p
@@ -957,7 +963,7 @@ function MonthGrid({
                   "mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium",
                   cell.inMonth
                     ? weekend && cell.iso !== today
-                      ? "font-semibold text-slate-700"
+                      ? "text-[#dc2626]/70"
                       : "text-foreground"
                     : "text-slate-400",
                   cell.iso === today && "bg-primary text-primary-foreground",

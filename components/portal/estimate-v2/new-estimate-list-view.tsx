@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Plus, Trash2 } from "lucide-react";
+import { Eye, Link2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,11 +14,19 @@ import {
 } from "@/components/ui/dialog";
 import { PortalPage } from "@/components/portal/portal-page";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { shareUrlFor } from "@/components/portal/use-estimate-share";
 import {
   deleteEstimateV2Opportunity,
   listEstimateV2Opportunities,
   type EstimateV2Opportunity,
 } from "@/lib/api/estimate-v2-client";
+import { shareEstimate } from "@/lib/api/crm-client";
+import {
+  estimateStatusLabel,
+  opportunityStatusLabel,
+  opportunityStatusTone,
+} from "@/lib/data/estimate-v2-status";
+import { estimateCanShare } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -40,10 +48,6 @@ function propertyLabel(opportunity: EstimateV2Opportunity) {
     .map((part) => part.trim())
     .filter((part) => part.length > 1);
   return parts.join(", ") || "—";
-}
-
-function statusLabel(status: string) {
-  return status.replace(/_/g, " ");
 }
 
 export function NewEstimateListView() {
@@ -94,6 +98,37 @@ export function NewEstimateListView() {
     }
   }
 
+  async function copyCustomerShareLink(row: EstimateV2Opportunity) {
+    const linked = row.estimates?.[0];
+    const estimateId = linked?.id || row.estimateIds?.[0];
+    if (!estimateId) {
+      toast.error("Open the estimate and build pricing before sharing a link.");
+      return;
+    }
+    if (linked?.status && !estimateCanShare(linked.status)) {
+      toast.error("Finalize the estimate before sharing a customer link.");
+      return;
+    }
+    try {
+      let token = String(linked?.shareToken || "").trim();
+      if (!token) {
+        // Mints `/e/{shareToken}` without emailing — works for outside customers.
+        const shared = await shareEstimate(estimateId, { skipEmail: true });
+        token = String(shared.shareToken || "").trim();
+      }
+      if (!token) {
+        toast.error("Could not create a customer share link.");
+        return;
+      }
+      await navigator.clipboard.writeText(shareUrlFor(token));
+      toast.success("Customer link copied — send it to anyone. No account needed.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not copy the customer link.",
+      );
+    }
+  }
+
   return (
     <PortalPage
       eyebrow="Work / Estimate"
@@ -135,6 +170,17 @@ export function NewEstimateListView() {
             icon: <Eye className="size-3.5" />,
             quick: true,
           },
+          ...(row.estimates?.[0]?.id || row.estimateIds?.length
+            ? [
+                {
+                  label: "Copy share link",
+                  icon: <Link2 className="size-3.5" />,
+                  onSelect: () => {
+                    void copyCustomerShareLink(row);
+                  },
+                },
+              ]
+            : []),
           {
             label: "Delete",
             variant: "destructive",
@@ -214,8 +260,8 @@ export function NewEstimateListView() {
                 return (
                   <div>
                     <p className="text-sm font-medium">{est.number}</p>
-                    <p className="text-[11px] capitalize text-muted-foreground">
-                      {String(est.status || "").replace(/_/g, " ")}
+                    <p className="text-[11px] text-muted-foreground">
+                      {estimateStatusLabel(String(est.status || "draft"))}
                     </p>
                   </div>
                 );
@@ -238,11 +284,11 @@ export function NewEstimateListView() {
             cell: (row) => (
               <span
                 className={cn(
-                  "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
-                  "bg-slate-100 text-slate-700",
+                  "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                  opportunityStatusTone(row.status),
                 )}
               >
-                {statusLabel(row.status)}
+                {opportunityStatusLabel(row.status)}
               </span>
             ),
           },

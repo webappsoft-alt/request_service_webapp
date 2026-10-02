@@ -9,7 +9,6 @@ import {
   ConfirmArchiveDialog,
 } from "@/components/portal/archive-control";
 import {
-  CreateEstimateDialog,
   CreateJobDialog,
 } from "@/components/portal/create-work-dialogs";
 import { buildEstimateSnapshot } from "@/components/portal/share-estimate-panel";
@@ -137,7 +136,6 @@ export function EstimatesView() {
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const share = useEstimateShare();
-  const [createOpen, setCreateOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<EstimateRow | null>(null);
@@ -411,14 +409,13 @@ export function EstimatesView() {
       title={`Estimates (${useApi ? total : rows.length})`}
       description="Site visit or write in the office, finalize, send for signature, then start the job."
       actions={
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          + Create estimate
+        <Button size="sm" asChild>
+          <Link href="/pro/dashboard/new-estimate/new">+ Create estimate</Link>
         </Button>
       }
     >
-      <CreateEstimateDialog open={createOpen} onOpenChange={setCreateOpen} />
       <FilterTabs
-        baseHref="/pro/dashboard/estimates"
+        baseHref="/pro/dashboard/new-estimate"
         value={statusParam}
         options={withArchiveFilter(ESTIMATE_STATUS_FILTERS).map((opt) =>
           opt.value === "changes_requested"
@@ -446,7 +443,7 @@ export function EstimatesView() {
         }
         rows={rows}
         rowKey={(row) => row.id}
-        rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+        rowHref={(row) => `/pro/dashboard/new-estimate/${row.id}`}
         empty={
           statusParam && statusParam !== "archived"
             ? "No estimates match this status."
@@ -461,7 +458,7 @@ export function EstimatesView() {
             exportValue: (row) => row.number,
             cell: (row) => (
               <Link
-                href={`/pro/dashboard/estimates/${row.id}`}
+                href={`/pro/dashboard/new-estimate/${row.id}`}
                 className="font-medium text-primary hover:underline"
               >
                 {row.number}
@@ -476,7 +473,7 @@ export function EstimatesView() {
             exportValue: (row) => estimateDisplayName(row),
             cell: (row) => (
               <Link
-                href={`/pro/dashboard/estimates/${row.id}`}
+                href={`/pro/dashboard/new-estimate/${row.id}`}
                 className="text-primary hover:underline"
               >
                 {estimateDisplayName(row)}
@@ -593,12 +590,12 @@ export function EstimatesView() {
           const isRejected = row.status === "rejected";
 
           return [
-            { label: "View", href: `/pro/dashboard/estimates/${row.id}` },
+            { label: "View", href: `/pro/dashboard/new-estimate/${row.id}` },
             ...(row.status === "site_visit"
               ? [
                   {
                     label: "Open site visit",
-                    href: `/pro/dashboard/estimates/${row.id}?tab=visit`,
+                    href: `/pro/dashboard/new-estimate/${row.id}?tab=visit`,
                   },
                 ]
               : []),
@@ -783,7 +780,7 @@ export function EstimatesView() {
               ? [
                   {
                     label: "Convert to job",
-                    href: `/pro/dashboard/estimates/${row.id}`,
+                    href: `/pro/dashboard/new-estimate/${row.id}`,
                   },
                   {
                     label:

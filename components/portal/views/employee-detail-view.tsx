@@ -1269,7 +1269,7 @@ function EmployeeEstimatesTab({
       empty="No estimate visits assigned to this employee."
       rows={rows}
       rowKey={(row) => row.id}
-      rowHref={(row) => `/pro/dashboard/estimates/${row.id}`}
+      rowHref={(row) => `/pro/dashboard/new-estimate/${row.id}`}
       columns={[
         {
           id: "number",
@@ -1278,7 +1278,7 @@ function EmployeeEstimatesTab({
           searchValue: (row) => row.number,
           exportValue: (row) => row.number,
           cell: (row) => (
-            <Link href={`/pro/dashboard/estimates/${row.id}`} className="font-semibold text-primary hover:underline">
+            <Link href={`/pro/dashboard/new-estimate/${row.id}`} className="font-semibold text-primary hover:underline">
               {row.number}
             </Link>
           ),

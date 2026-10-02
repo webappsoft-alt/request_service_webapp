@@ -1,10 +1,37 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import type { EstimateApproval, EstimateShareSnapshot } from "@/components/portal/use-estimate-share";
+import type {
+  EstimateApproval,
+  EstimateShareLine,
+  EstimateShareSnapshot,
+} from "@/components/portal/use-estimate-share";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
 import { formatTaxRatePercent } from "@/lib/tax/state-tax";
 import { cn } from "@/lib/utils";
+
+function groupShareLinesBySection(items: EstimateShareLine[]) {
+  const order: string[] = [];
+  const map = new Map<string, EstimateShareLine[]>();
+  for (const item of items) {
+    const key = String(item.section || "").trim();
+    if (!map.has(key)) {
+      map.set(key, []);
+      order.push(key);
+    }
+    map.get(key)!.push(item);
+  }
+  // Always label sections (including General) so the customer preview matches the pro editor.
+  return order.map((key) => {
+    const rows = map.get(key) || [];
+    return {
+      key,
+      label: key || "General",
+      rows,
+      total: rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0),
+    };
+  });
+}
 
 export const DEFAULT_ESTIMATE_TERMS = [
   {
@@ -53,10 +80,8 @@ export function EstimatePdfDocument({
             label="Prepared by"
             name={snapshot.companyName}
             lines={[
-              snapshot.companyStreet,
-              snapshot.companyCity ? formatLocation(snapshot.companyCity, snapshot.companyState ?? "", snapshot.companyZip) : undefined,
-              snapshot.companyPhone,
-              snapshot.companyEmail,
+              `Issued ${formatDate(snapshot.issuedAt)}`,
+              `Expires ${snapshot.expiresAt ? formatDate(snapshot.expiresAt) : "30 days"}`,
             ]}
           />
           <PdfParty
@@ -65,11 +90,14 @@ export function EstimatePdfDocument({
             lines={[snapshot.customerPhone, snapshot.customerEmail, snapshot.street, formatLocation(snapshot.city, snapshot.state, snapshot.zip)]}
           />
         </div>
-        <div className="mt-6 grid grid-cols-3 gap-3 border border-input bg-[#f8fafc] px-3 py-2.5 text-[11px] print:bg-transparent">
-          <Meta label="Estimate" value={snapshot.number} />
-          <Meta label="Issued" value={formatDate(snapshot.issuedAt)} />
-          <Meta label="Expires" value={snapshot.expiresAt ? formatDate(snapshot.expiresAt) : "30 days"} />
-        </div>
+        {snapshot.notes ? (
+          <div className="mt-5">
+            <p className="text-[10px] font-semibold tracking-[0.16em] text-slate-700 uppercase">Notes</p>
+            <p className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-5 text-slate-800">
+              {snapshot.notes}
+            </p>
+          </div>
+        ) : null}
         <div className="mt-6">
           <p className="text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Work details</p>
           <table className="mt-2 w-full table-fixed border-collapse text-[12px]">
@@ -81,7 +109,7 @@ export function EstimatePdfDocument({
               <col className="w-[10%]" />
             </colgroup>
             <thead>
-              <tr className="border-y border-input bg-[#e8eef5] text-[10px] tracking-[0.12em] text-[#003F7D] uppercase print:bg-transparent">
+              <tr className="border-y border-[#003F7D]/30 bg-[#003F7D] text-[10px] tracking-[0.12em] text-white uppercase print:bg-[#003F7D]">
                 <th className="px-2 py-2 text-left font-semibold">Description</th>
                 <th className="px-1.5 py-2 text-center font-semibold">Type</th>
                 <th className="px-1.5 py-2 text-center font-semibold">Qty</th>
@@ -90,61 +118,93 @@ export function EstimatePdfDocument({
               </tr>
             </thead>
             <tbody>
-              {snapshot.items.map((row, index) => (
-                <tr key={`${row.description}-${index}`} className="border-b border-input">
-                  <td className="px-2 py-2 break-words font-medium align-top">
-                    <div className="whitespace-pre-wrap">
-                      {row.description ||
-                        (row.kind === "labor"
-                          ? "Labour"
+              {groupShareLinesBySection(snapshot.items).flatMap((group) => {
+                const rows = [];
+                if (group.label) {
+                  rows.push(
+                    <tr
+                      key={`section-${group.key || "general"}`}
+                      className="border-b border-[#d7dee8] bg-[#f1f5f9] print:bg-[#f1f5f9]"
+                    >
+                      <td
+                        colSpan={5}
+                        className="px-2 py-2 text-[11px] font-semibold tracking-[0.1em] text-slate-700 uppercase"
+                      >
+                        {group.label}
+                      </td>
+                    </tr>,
+                  );
+                }
+                for (const [index, row] of group.rows.entries()) {
+                  const materialImage =
+                    row.kind === "materials" && row.images?.length
+                      ? row.images[0]
+                      : null;
+                  rows.push(
+                    <tr key={`${group.key}-${row.description}-${index}`} className="border-b border-input">
+                      <td className="px-2 py-2 break-words font-medium align-middle">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="min-w-0 flex-1 whitespace-pre-wrap leading-snug">
+                            {row.description ||
+                              (row.kind === "labor"
+                                ? "Labour"
+                                : row.kind === "equipment"
+                                  ? "Equipment"
+                                  : "Material")}
+                          </div>
+                          {materialImage ? (
+                            <span className="relative inline-block h-6 w-8 shrink-0 overflow-hidden rounded border border-input bg-[#f8fafc]">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={materialImage}
+                                alt=""
+                                className="size-full object-cover"
+                              />
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-1.5 py-2 capitalize whitespace-nowrap text-center text-muted-foreground align-top">
+                        {row.kind === "materials"
+                          ? "Material"
                           : row.kind === "equipment"
                             ? "Equipment"
-                            : "Material")}
-                    </div>
-                    {row.kind === "materials" && row.images?.length ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {row.images.map((src, imgIndex) => (
-                          <span
-                            key={`${src}-${imgIndex}`}
-                            className="relative inline-block h-12 w-14 overflow-hidden rounded border border-input"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={src}
-                              alt={`Material for ${row.description || "line item"}`}
-                              className="size-full object-cover"
-                            />
-                            <span className="absolute inset-x-0 bottom-0 bg-black/55 px-0.5 py-px text-[8px] font-medium text-white text-center">
-                              Material
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-1.5 py-2 capitalize whitespace-nowrap text-center text-muted-foreground align-top">
-                    {row.kind === "materials"
-                      ? "Material"
-                      : row.kind === "equipment"
-                        ? "Equipment"
-                        : "Labour"}
-                  </td>
-                  <td className="px-1.5 py-2 text-center tabular-nums whitespace-nowrap text-muted-foreground align-top">
-                    {row.quantity} {row.unit}
-                  </td>
-                  <td className="px-1.5 py-2 text-center tabular-nums whitespace-nowrap align-top">
-                    {formatMoney(row.unitPrice)}
-                  </td>
-                  <td className="px-2 py-2 text-center font-medium tabular-nums whitespace-nowrap align-middle">
-                    {formatMoney(row.total)}
-                  </td>
-                </tr>
-              ))}
+                            : "Labour"}
+                      </td>
+                      <td className="px-1.5 py-2 text-center tabular-nums whitespace-nowrap text-muted-foreground align-top">
+                        {row.quantity} {row.unit}
+                      </td>
+                      <td className="px-1.5 py-2 text-center tabular-nums whitespace-nowrap align-top">
+                        {formatMoney(row.unitPrice)}
+                      </td>
+                      <td className="px-2 py-2 text-center font-medium tabular-nums whitespace-nowrap align-top">
+                        {formatMoney(row.total)}
+                      </td>
+                    </tr>,
+                  );
+                }
+                if (group.label) {
+                  rows.push(
+                    <tr key={`total-${group.key || "general"}`} className="border-b border-input bg-[#fafbfc]">
+                      <td colSpan={4} className="px-2 py-2 text-right text-[11px] font-semibold text-slate-500">
+                        {group.label} total
+                      </td>
+                      <td className="px-2 py-2 text-center font-semibold tabular-nums text-slate-800">
+                        {formatMoney(group.total)}
+                      </td>
+                    </tr>,
+                  );
+                }
+                return rows;
+              })}
             </tbody>
           </table>
         </div>
         <div className="mt-4 ml-auto w-56 text-[12px]">
           <Row label="Subtotal" value={formatMoney(snapshot.subtotal)} />
+          {Number(snapshot.discount) > 0 ? (
+            <Row label="Discount" value={`-${formatMoney(snapshot.discount)}`} />
+          ) : null}
           <Row
             label={`Tax (${formatTaxRatePercent(snapshot.taxRatePercent)}%)`}
             value={formatMoney(snapshot.tax)}
@@ -154,12 +214,6 @@ export function EstimatePdfDocument({
             <span className="tabular-nums">{formatMoney(snapshot.total)}</span>
           </div>
         </div>
-        {snapshot.notes ? (
-          <div className="mt-6">
-            <p className="text-[10px] font-semibold tracking-[0.16em] text-[#003F7D] uppercase">Notes</p>
-            <p className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-5">{snapshot.notes}</p>
-          </div>
-        ) : null}
       </PdfPage>
 
       <PdfPage n={2} of={2} snapshot={snapshot}>
@@ -271,10 +325,22 @@ function PdfHeader({ snapshot, compact = false }: { snapshot: EstimateShareSnaps
   );
 }
 
-function CompanyMark({ snapshot }: { snapshot: EstimateShareSnapshot }) {
+function CompanyMark({
+  snapshot,
+  size = "md",
+}: {
+  snapshot: EstimateShareSnapshot;
+  size?: "sm" | "md";
+}) {
   const initials = snapshot.logoInitials || snapshot.companyName.slice(0, 2).toUpperCase();
+  const box = size === "sm" ? "size-10 text-[11px]" : "size-14 text-[13px]";
   return (
-    <span className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-input bg-[#003F7D] text-[13px] font-semibold text-white">
+    <span
+      className={cn(
+        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-input bg-[#003F7D] font-semibold text-white",
+        box,
+      )}
+    >
       {snapshot.logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img alt="" src={snapshot.logoUrl} className="size-full object-cover" />
@@ -285,25 +351,29 @@ function CompanyMark({ snapshot }: { snapshot: EstimateShareSnapshot }) {
   );
 }
 
-function PdfParty({ label, name, lines }: { label: string; name: string; lines: Array<string | undefined> }) {
+function PdfParty({
+  label,
+  name,
+  lines,
+  mark,
+}: {
+  label: string;
+  name: string;
+  lines: Array<string | undefined>;
+  mark?: ReactNode;
+}) {
   return (
-    <div>
-      <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">{label}</p>
-      <p className="mt-1 text-[13px] font-semibold">{name}</p>
-      {lines.filter(Boolean).map((line) => (
-        <p key={line} className="text-[11px] leading-4 text-muted-foreground">
-          {line}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
-      <p className="mt-0.5 font-semibold">{value}</p>
+    <div className="flex min-w-0 items-start gap-2.5">
+      {mark}
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">{label}</p>
+        <p className="mt-1 text-[13px] font-semibold">{name}</p>
+        {lines.filter(Boolean).map((line) => (
+          <p key={line} className="text-[11px] leading-4 text-muted-foreground">
+            {line}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }

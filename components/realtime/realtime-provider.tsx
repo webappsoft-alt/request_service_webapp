@@ -425,12 +425,12 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
             {
               href: payload?.href
                 ? String(payload.href)
-                : "/pro/dashboard/estimates?status=changes_requested",
+                : "/pro/dashboard/new-estimate?status=changes_requested",
               onOpen: () =>
                 router.push(
                   payload?.href
                     ? String(payload.href)
-                    : "/pro/dashboard/estimates?status=changes_requested",
+                    : "/pro/dashboard/new-estimate?status=changes_requested",
                 ),
             },
           );

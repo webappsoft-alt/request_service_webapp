@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CreateEstimateDialog, CreateLeadDialog } from "@/components/portal/create-work-dialogs";
+import { CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
 import {
   BoardCard,
@@ -37,7 +37,6 @@ export function SalesDashboardView() {
   const user = useAppSelector(selectAuthUser);
   const [scale, setScale] = useState<SalesScale>("month");
   const [leadOpen, setLeadOpen] = useState(false);
-  const [estimateOpen, setEstimateOpen] = useState(false);
   const today = new Date();
   const firstName = user?.name?.split(" ")[0] ?? "there";
 
@@ -91,7 +90,7 @@ export function SalesDashboardView() {
               label="Estimates awaiting signature"
               value={String(attention?.estimatesAwaitingSignature.count ?? 0)}
               note={`${formatMoney(attention?.estimatesAwaitingSignature.totalOut ?? 0)} out`}
-              href="/pro/dashboard/estimates?status=sent"
+              href="/pro/dashboard/new-estimate?status=sent"
             />
           </div>
         </DashboardSection>
@@ -133,11 +132,11 @@ export function SalesDashboardView() {
         </DashboardSection>
 
         <DashboardSection title="Estimates" description="Quotes sent and waiting.">
-          <BoardCard title="Latest estimates" href="/pro/dashboard/estimates" hrefLabel="All estimates">
+          <BoardCard title="Latest estimates" href="/pro/dashboard/new-estimate" hrefLabel="All estimates">
             {(estimates?.latest ?? []).map((estimate) => (
               <Link
                 key={estimate.id}
-                href={`/pro/dashboard/estimates/${estimate.id}`}
+                href={`/pro/dashboard/new-estimate/${estimate.id}`}
                 className="flex items-center justify-between gap-3 px-(--card-spacing) py-3 hover:bg-muted/40"
               >
                 <div className="min-w-0">
@@ -313,8 +312,8 @@ export function SalesDashboardView() {
             <Button size="sm" variant="outline" onClick={() => setLeadOpen(true)}>
               Create lead
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setEstimateOpen(true)}>
-              Create estimate
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/pro/dashboard/new-estimate/new">Create estimate</Link>
             </Button>
             <Button size="sm" variant="outline" asChild>
               <Link href="/pro/dashboard/invoices">Open invoices</Link>
@@ -324,7 +323,6 @@ export function SalesDashboardView() {
       </div>
 
       <CreateLeadDialog open={leadOpen} onOpenChange={setLeadOpen} />
-      <CreateEstimateDialog open={estimateOpen} onOpenChange={setEstimateOpen} />
     </PortalPage>
   );
 }

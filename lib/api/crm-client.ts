@@ -268,6 +268,9 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
         taxRate,
         total: Number(item.total) || quantity * unitPrice,
         ...(images.length ? { images } : {}),
+        ...(String(item.section || "").trim()
+          ? { section: String(item.section).trim() }
+          : {}),
       };
     });
 }
@@ -1679,28 +1682,29 @@ export type ShareEstimateInput = {
   companySignedBy?: string;
   companySignedAt?: string;
   companySignatureDataUrl?: string;
+  /** Generate the public link without emailing the customer. */
+  skipEmail?: boolean;
 };
 
 export async function shareEstimate(id: string, input?: ShareEstimateInput) {
   const image = String(input?.companySignatureDataUrl || "").trim();
   const signedBy = String(input?.companySignedBy || "").trim();
   const signedAt = input?.companySignedAt || new Date().toISOString();
-  const body =
-    image || signedBy
-      ? {
-          companySignature: {
-            signedBy,
-            ...(image ? { signatureImageBase64: image } : {}),
-            signedAt,
-          },
-          companySignedBy: signedBy || undefined,
-          ...(image ? { companySignatureDataUrl: image } : {}),
-          companySignedAt: signedAt,
-        }
-      : undefined;
+  const body: Record<string, unknown> = {};
+  if (image || signedBy) {
+    body.companySignature = {
+      signedBy,
+      ...(image ? { signatureImageBase64: image } : {}),
+      signedAt,
+    };
+    body.companySignedBy = signedBy || undefined;
+    if (image) body.companySignatureDataUrl = image;
+    body.companySignedAt = signedAt;
+  }
+  if (input?.skipEmail) body.skipEmail = true;
   const response = await postData(
     providerCrmApi.estimateShare(id),
-    body,
+    Object.keys(body).length ? body : undefined,
     { silent: false },
   );
   const raw = ((response as { data?: unknown })?.data ?? response) as Record<string, unknown> | null;
@@ -2468,7 +2472,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
           timeWindow: "all_day",
           startMinutes: 540,
           endMinutes: 570,
-          href: `/pro/dashboard/estimates/${est.id}`,
+          href: `/pro/dashboard/new-estimate/${est.id}`,
           status: est.status || "draft",
           price,
           category: est.status ? `Estimate · ${est.status}` : "Estimate",

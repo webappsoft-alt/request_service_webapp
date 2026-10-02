@@ -309,6 +309,8 @@ export interface Job {
   assignedTo?: string;
   /** First assigned crew member id from API (when available). */
   assignedEmployeeId?: string;
+  /** Convenience label when API embeds customer. */
+  customerName?: string;
   scheduledAt?: string;
   dueAt?: string;
   status: JobStatus;
@@ -367,6 +369,11 @@ export interface Invoice {
   total: number;
   amountPaid: number;
   balanceDue: number;
+  /** Alias some API payloads use for remaining balance. */
+  balance?: number;
+  /** Optional display title/subject from older or alternate payloads. */
+  subject?: string;
+  title?: string;
   items: InvoiceItem[];
   address?: ServiceAddress;
   notes?: string;

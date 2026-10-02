@@ -2123,7 +2123,7 @@ export function JobDetailView({ id }: { id: string }) {
     let cancelled = false;
     void getInvoiceWithPayments(invoiceId)
       .then((result) => {
-        if (!cancelled && result.invoice) setResolvedInvoice(result.invoice);
+        if (!cancelled && result?.invoice) setResolvedInvoice(result.invoice);
       })
       .catch(() => {
         if (!cancelled) setResolvedInvoice(null);

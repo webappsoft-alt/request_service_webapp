@@ -40,6 +40,12 @@ export type PortalRequest = ServiceRequest & {
   categoryName: string;
   neighborhood: string;
   answers?: QuoteAnswer[];
+  /** Optional CRM / calendar enrichment fields from live payloads. */
+  serviceId?: string;
+  fixedServiceId?: string;
+  notes?: string;
+  description?: string;
+  address?: string | ServiceAddress;
   source?:
     | "quote_request"
     | "profile_view"
@@ -265,7 +271,7 @@ export type PortalEventKind =
   | "task"
   | "visit";
 
-export type PortalTimeWindow = "morning" | "afternoon" | "all_day";
+export type PortalTimeWindow = "morning" | "afternoon" | "all_day" | "custom";
 
 export type PortalCalendarEvent = {
   id: string;
@@ -980,6 +986,7 @@ export function minutesForWindow(window: PortalTimeWindow, index = 0) {
       return { startMinutes: start, endMinutes: start + 90 };
     }
     case "all_day":
+    case "custom":
       return { startMinutes: 8 * 60, endMinutes: 17 * 60 };
     default: {
       const _never: never = window;
@@ -1525,6 +1532,8 @@ export function timeWindowLabel(window: PortalTimeWindow) {
       return "Afternoon";
     case "all_day":
       return "All day";
+    case "custom":
+      return "Custom";
     default: {
       const _never: never = window;
       return _never;

@@ -190,7 +190,7 @@ export const fetchInvoiceDetail = createAsyncThunk<
       return rejectWithValue("Invoice not found.");
     }
     const result = await getInvoiceWithPayments(id);
-    if (!result.invoice) return rejectWithValue("Invoice not found.");
+    if (!result?.invoice) return rejectWithValue("Invoice not found.");
     return { invoice: result.invoice, payments: result.payments };
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));
@@ -239,7 +239,7 @@ export const sendInvoiceRecord = createAsyncThunk<
     if (mapped) return { invoice: mapped };
 
     const detail = await getInvoiceWithPayments(id);
-    if (!detail.invoice) {
+    if (!detail?.invoice) {
       return rejectWithValue("Invoice was sent but could not be read.");
     }
     return { invoice: detail.invoice, payments: detail.payments };

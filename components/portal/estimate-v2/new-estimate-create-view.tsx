@@ -25,6 +25,7 @@ import {
   type PrepChoice,
 } from "@/lib/api/estimate-v2-client";
 import { updateCustomer } from "@/lib/api/crm-client";
+import type { ServiceAddress } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { fetchCustomers } from "@/store/customersSlice";
@@ -158,7 +159,7 @@ export function NewEstimateCreateView() {
     }
     setSavingAddress(true);
     try {
-      const nextAddress = {
+      const nextAddress: ServiceAddress = {
         id: `addr_${Date.now().toString(36)}`,
         label: "Service location",
         address: newStreet.trim(),

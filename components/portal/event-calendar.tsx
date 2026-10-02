@@ -146,6 +146,8 @@ function windowShort(window: PortalTimeWindow) {
       return "PM";
     case "all_day":
       return "Day";
+    case "custom":
+      return "Custom";
     default: {
       const _never: never = window;
       return _never;

@@ -1005,8 +1005,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     </Button>
                     {(estimate?.status === "sent" ||
                       estimate?.status === "accepted" ||
-                      estimate?.status === "finalized") &&
-                    estimate?.status !== "converted_to_job" ? (
+                      estimate?.status === "finalized") ? (
                       <Button
                         size="sm"
                         variant="secondary"

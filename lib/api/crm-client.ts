@@ -2151,7 +2151,7 @@ export async function sendInvoice(id: string) {
     return mapInvoice(data.invoice);
   }
   const detail = await getInvoiceWithPayments(invoiceRef);
-  return detail.invoice;
+  return detail?.invoice ?? null;
 }
 
 export async function getInvoiceWithPayments(id: string) {

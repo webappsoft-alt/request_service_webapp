@@ -53,7 +53,9 @@ export function CustomerEventCalendar({
     <EventCalendar
       events={events}
       employeeLabel={employeeLabel}
-      onMove={moveEvent}
+      onMove={async (event, move) => {
+        await moveEvent(event, move);
+      }}
     />
   );
 }

@@ -27,6 +27,7 @@ import {
   formatClock,
   windowFromMinutes,
 } from "@/lib/data/portal";
+import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchTeam } from "@/store/teamSlice";
@@ -261,9 +262,9 @@ export function ScheduleView() {
           if (!detail || detail === event.title) detail = reqName || detail;
           if (!serviceAddress) {
             serviceAddress =
-              typeof req.address === "string" && req.address
-                ? req.address
-                : formatAddrObj(req.address) ||
+              typeof req.address === "string"
+                ? req.address || undefined
+                : formatAddrObj(typeof req.address === "object" ? req.address : null) ||
                   (req.city && req.state
                     ? `${req.city}, ${req.state} ${req.zip || ""}`.trim()
                     : req.city || undefined);
@@ -314,7 +315,7 @@ export function ScheduleView() {
                 const cust = crm.customers.find(
                   (c) => c.id === linkedJob.customerId,
                 );
-                if (cust) customerName = cust.name || cust.displayName;
+                if (cust) customerName = crmCustomerName(cust);
               }
             }
           }
@@ -334,7 +335,7 @@ export function ScheduleView() {
                 const cust = crm.customers.find(
                   (c) => c.id === linkedJob.customerId,
                 );
-                if (cust) customerName = cust.name || cust.displayName;
+                if (cust) customerName = crmCustomerName(cust);
               }
             }
           } else if (task.subjectKind === "estimate" && task.subjectId) {
@@ -350,7 +351,7 @@ export function ScheduleView() {
                   const cust = crm.customers.find(
                     (c) => c.id === linkedEst.customerId,
                   );
-                  if (cust) customerName = cust.name || cust.displayName;
+                  if (cust) customerName = crmCustomerName(cust);
                 }
                 if (!customerName && linkedEst.customerName)
                   customerName = linkedEst.customerName;
@@ -361,9 +362,9 @@ export function ScheduleView() {
             if (linkedReq) {
               if (!serviceAddress) {
                 serviceAddress =
-                  typeof linkedReq.address === "string" && linkedReq.address
-                    ? linkedReq.address
-                    : formatAddrObj(linkedReq.address) ||
+                  typeof linkedReq.address === "string"
+                  ? linkedReq.address || undefined
+                  : formatAddrObj(typeof linkedReq.address === "object" ? linkedReq.address : null) ||
                       (linkedReq.city && linkedReq.state
                         ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim()
                         : linkedReq.city || undefined);
@@ -374,7 +375,7 @@ export function ScheduleView() {
                   const cust = crm.customers.find(
                     (c) => c.id === linkedReq.customerId,
                   );
-                  if (cust) customerName = cust.name || cust.displayName;
+                  if (cust) customerName = crmCustomerName(cust);
                 }
                 if (
                   !customerName &&
@@ -429,7 +430,7 @@ export function ScheduleView() {
       // If customerName is still missing, fallback to found customer profile
       if ((!customerName || customerName === "Customer") && foundCustomerId) {
         const cust = crm.customers.find((c) => c.id === foundCustomerId);
-        if (cust) customerName = cust.name || cust.displayName;
+        if (cust) customerName = crmCustomerName(cust);
       }
 
       // If serviceAddress is still missing, fallback to customer profile primary address
@@ -439,10 +440,7 @@ export function ScheduleView() {
           : customerName
             ? crm.customers.find(
                 (c) =>
-                  (c.name &&
-                    c.name.toLowerCase() === customerName.toLowerCase()) ||
-                  (c.displayName &&
-                    c.displayName.toLowerCase() === customerName.toLowerCase()),
+                  crmCustomerName(c).toLowerCase() === customerName.toLowerCase(),
               )
             : undefined;
         if (cust?.addresses?.[0]) {
@@ -565,9 +563,9 @@ export function ScheduleView() {
           if (linkedReq) {
             if (!serviceAddress) {
               serviceAddress =
-                typeof linkedReq.address === "string" && linkedReq.address
-                  ? linkedReq.address
-                  : formatAddrObj(linkedReq.address) ||
+                typeof linkedReq.address === "string"
+                  ? linkedReq.address || undefined
+                  : formatAddrObj(typeof linkedReq.address === "object" ? linkedReq.address : null) ||
                     (linkedReq.city && linkedReq.state
                       ? `${linkedReq.city}, ${linkedReq.state} ${linkedReq.zip || ""}`.trim()
                       : linkedReq.city || undefined);
@@ -586,7 +584,7 @@ export function ScheduleView() {
         if (foundCustomerId) {
           const cust = crm.customers.find((c) => c.id === foundCustomerId);
           if (cust) {
-            if (!taskCustName) taskCustName = cust.name || cust.displayName;
+            if (!taskCustName) taskCustName = crmCustomerName(cust);
             if (!serviceAddress && cust.addresses?.[0]) {
               serviceAddress = formatAddrObj(cust.addresses[0]);
             }
@@ -666,13 +664,13 @@ export function ScheduleView() {
               const cust = crm.customers.find(
                 (c) => c.id === linkedJob.customerId,
               );
-              if (cust) customerName = cust.name || cust.displayName;
+              if (cust) customerName = crmCustomerName(cust);
             }
           }
         }
         if (!customerName && foundCustomerId) {
           const cust = crm.customers.find((c) => c.id === foundCustomerId);
-          if (cust) customerName = cust.name || cust.displayName;
+          if (cust) customerName = crmCustomerName(cust);
         }
         if (!serviceAddress && foundCustomerId) {
           const cust = crm.customers.find((c) => c.id === foundCustomerId);

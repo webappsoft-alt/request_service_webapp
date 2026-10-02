@@ -146,6 +146,16 @@ export const providerCrmApi = {
   estimateActivity: (id: string, activityId: string) => `provider/estimates/${id}/activities/${activityId}`,
   estimateShare: (id: string) => `provider/estimates/${id}/share`,
   estimateConvertToJob: (id: string) => `provider/estimates/${id}/convert-to-job`,
+  /** Isolated estimate-v2 (Opportunity / Site Assessment). Removable with New estimate UI. */
+  estimateV2Opportunities: "provider/estimate-v2/opportunities",
+  estimateV2Opportunity: (id: string) => `provider/estimate-v2/opportunities/${id}`,
+  estimateV2OpportunityAssessments: (id: string) =>
+    `provider/estimate-v2/opportunities/${id}/site-assessments`,
+  estimateV2OpportunityEstimates: (id: string) =>
+    `provider/estimate-v2/opportunities/${id}/estimates`,
+  estimateV2ResolveAcceptance: (id: string) =>
+    `provider/estimate-v2/opportunities/${id}/resolve-acceptance`,
+  estimateV2Assessment: (id: string) => `provider/estimate-v2/site-assessments/${id}`,
   jobs: "provider/jobs",
   job: (id: string) => `provider/jobs/${id}`,
   jobStatus: (id: string) => `provider/jobs/${id}/status`,

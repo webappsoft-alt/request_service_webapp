@@ -42,13 +42,25 @@ export function getEventDetailUrl(event: PortalCalendarEvent): string {
       return `/pro/dashboard/invoices/${id}`;
     case "task":
       return `/pro/dashboard/tasks/${id}`;
-    default:
-      return `/pro/dashboard/jobs/${id}`;
+    case "visit":
+      return `/pro/dashboard/new-estimate/${id}`;
+    default: {
+      const _never: never = event.kind;
+      return _never;
+    }
   }
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const KINDS: PortalEventKind[] = ["job", "fixed_service", "estimate", "request", "invoice", "task"];
+const KINDS: PortalEventKind[] = [
+  "job",
+  "fixed_service",
+  "estimate",
+  "visit",
+  "request",
+  "invoice",
+  "task",
+];
 const VIEWS = ["month", "week", "day"] as const;
 const DAY_START = 6 * 60;   // 6:00 AM
 const DAY_END = 24 * 60;    // midnight (00:00 next day)

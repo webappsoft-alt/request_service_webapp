@@ -11,7 +11,7 @@ const RECORDS_EVENT = "rs-portal-records";
 
 export type EstimateShareLine = {
   description: string;
-  kind: "labor" | "materials";
+  kind: "labor" | "materials" | "equipment";
   quantity: number;
   unit: string;
   unitPrice: number;
@@ -172,7 +172,12 @@ export function buildEstimateSnapshot(
     : estimate.items.map((item) => ({
         id: item.id,
         description: item.description,
-        kind: item.type === "labor" ? ("labor" as const) : ("materials" as const),
+        kind:
+          item.type === "labor"
+            ? ("labor" as const)
+            : item.type === "equipment"
+              ? ("equipment" as const)
+              : ("materials" as const),
         quantity: item.quantity,
         unit: item.unit,
         unitPrice: item.unitPrice,

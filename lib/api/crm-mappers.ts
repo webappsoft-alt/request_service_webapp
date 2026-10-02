@@ -280,7 +280,8 @@ function mapEventTimeWindow(value: unknown): PortalTimeWindow {
 function mapEstimateItemType(value: unknown): EstimateItemType {
   const raw = trimmed(value).toLowerCase();
   if (raw === "material" || raw === "materials") return "materials";
-  if (raw === "services") return "services";
+  if (raw === "equipment") return "equipment";
+  if (raw === "services" || raw === "service") return "labor";
   if (raw === "miscellaneous" || raw === "misc") return "miscellaneous";
   return "labor";
 }
@@ -312,6 +313,8 @@ function makeHref(kind: PortalEventKind, recordId: string): string {
       return `/pro/dashboard/invoices/${recordId}`;
     case "task":
       return `/pro/dashboard/tasks/${recordId}`;
+    case "visit":
+      return `/pro/dashboard/new-estimate/${recordId}`;
     default: {
       const _never: never = kind;
       return _never;
@@ -2069,7 +2072,8 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
   const kind: PortalEventKind =
     kindRaw === "estimate" ||
     kindRaw === "invoice" ||
-    kindRaw === "task"
+    kindRaw === "task" ||
+    kindRaw === "visit"
       ? (kindRaw as PortalEventKind)
       : kindRaw === "request"
         ? (hasFixedIndicator ? "fixed_service" : "request")

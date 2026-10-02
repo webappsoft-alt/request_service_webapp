@@ -244,6 +244,8 @@ export function CustomerDetailView({ id }: { id: string }) {
         return relatedInvoices.some((invoice) => invoice.id === event.recordId);
       case "task":
         return relatedTasks.some((task) => task.id === event.recordId);
+      case "visit":
+        return true;
       default: {
         const _never: never = event.kind;
         return _never;

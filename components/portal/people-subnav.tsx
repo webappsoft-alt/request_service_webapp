@@ -52,7 +52,7 @@ export function WorkSubnav() {
             ? inbox.newLeads
             : item.href === "/pro/dashboard/messages"
               ? inbox.unreadChats
-              : item.href === "/pro/dashboard/estimates"
+              : item.href === "/pro/dashboard/new-estimate"
                 ? inbox.pendingEstimates
                 : item.href === "/pro/dashboard/orders"
                   ? inbox.pendingOrders

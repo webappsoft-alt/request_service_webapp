@@ -51,7 +51,12 @@ export function linesToEstimateItems(
   return lines.map((line) => ({
     id: line.id,
     estimateId,
-    type: line.kind === "labor" ? "labor" : "materials",
+    type:
+      line.kind === "labor"
+        ? "labor"
+        : line.kind === "equipment"
+          ? "equipment"
+          : "materials",
     description: line.description,
     quantity: line.quantity,
     unit: line.unit,
@@ -173,8 +178,13 @@ export function estimateAsJob(estimate: Estimate): Job {
       unit: item.unit,
       unitPrice: item.unitPrice,
       total: item.total,
-      kind: item.type === "labor" ? ("labor" as const) : ("materials" as const),
-      ...(item.type !== "labor"
+      kind:
+        item.type === "labor"
+          ? ("labor" as const)
+          : item.type === "equipment"
+            ? ("equipment" as const)
+            : ("materials" as const),
+      ...(item.type === "materials"
         ? { images: Array.isArray(item.images) ? item.images : [] }
         : {}),
     })),

@@ -6,7 +6,7 @@ import type { Job, JobItem } from "@/lib/types";
 
 const EVENT = "rs-job-costing";
 
-export type JobCostKind = "labor" | "materials";
+export type JobCostKind = "labor" | "materials" | "equipment";
 
 export type JobCostLine = {
   id: string;
@@ -62,12 +62,15 @@ function subscribe(onStoreChange: () => void) {
 }
 
 export function classifyJobLine(item: JobItem): JobCostKind {
-  if (item.kind === "labor" || item.kind === "materials") return item.kind;
+  if (item.kind === "labor" || item.kind === "materials" || item.kind === "equipment") {
+    return item.kind;
+  }
   if (item.source === "change_order") return "materials";
   const text = item.description.toLowerCase();
   // Match US "labor" and UK "labour" (e.g. "LABOUR WORK").
   if (text.includes("labor") || text.includes("labour")) return "labor";
   if (String(item.unit || "").trim().toLowerCase() === "hr") return "labor";
+  if (text.includes("equipment")) return "equipment";
   return "materials";
 }
 
@@ -123,23 +126,32 @@ export function jobCostMix(lines: JobCostLine[]) {
       const total = lineTotal(line);
       acc.total += total;
       if (line.kind === "labor") acc.labor += total;
+      else if (line.kind === "equipment") acc.equipment += total;
       else acc.materials += total;
       return acc;
     },
-    { labor: 0, materials: 0, total: 0 },
+    { labor: 0, materials: 0, equipment: 0, total: 0 },
   );
 }
 
 export function jobMoneySheet(
-  mix: { labor: number; materials: number; total: number },
+  mix: { labor: number; materials: number; total: number; equipment?: number },
   /** Sales tax percent (e.g. 8.25). 0 = no tax. */
   taxRatePercent = 0,
 ) {
-  const subtotal = mix.labor + mix.materials;
+  const equipment = Number(mix.equipment) || 0;
+  const subtotal = mix.labor + mix.materials + equipment;
   const rate = Math.max(0, Number(taxRatePercent) || 0);
   // Match backend calculateTotals: cents-correct rounding.
   const tax = Math.round(((subtotal * rate) / 100) * 100) / 100;
-  return { labor: mix.labor, materials: mix.materials, subtotal, tax, total: subtotal + tax };
+  return {
+    labor: mix.labor,
+    materials: mix.materials,
+    equipment,
+    subtotal,
+    tax,
+    total: subtotal + tax,
+  };
 }
 
 export function jobCostKindLabel(kind: JobCostKind) {
@@ -148,6 +160,8 @@ export function jobCostKindLabel(kind: JobCostKind) {
       return "Labour";
     case "materials":
       return "Material";
+    case "equipment":
+      return "Equipment";
     default: {
       const _never: never = kind;
       return _never;

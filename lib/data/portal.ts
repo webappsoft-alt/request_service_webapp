@@ -256,7 +256,14 @@ export type PortalEmployeeDetail = {
   activeAssignments: PortalEmployeeActiveAssignments;
 };
 
-export type PortalEventKind = "job" | "fixed_service" | "estimate" | "request" | "invoice" | "task";
+export type PortalEventKind =
+  | "job"
+  | "fixed_service"
+  | "estimate"
+  | "request"
+  | "invoice"
+  | "task"
+  | "visit";
 
 export type PortalTimeWindow = "morning" | "afternoon" | "all_day";
 
@@ -1438,6 +1445,25 @@ export function calendarEventStatusLabel(kind: PortalEventKind, status: string) 
         default:
           return status;
       }
+    case "visit":
+      switch (status) {
+        case "scheduled":
+          return "Scheduled";
+        case "confirmed":
+          return "Confirmed";
+        case "rescheduled":
+          return "Rescheduled";
+        case "in_progress":
+          return "In progress";
+        case "completed":
+          return "Completed";
+        case "cancelled":
+          return "Cancelled";
+        case "no_show":
+          return "No show";
+        default:
+          return status || "Scheduled";
+      }
     default: {
       const _never: never = kind;
       return _never;
@@ -1459,6 +1485,8 @@ export function calendarEventKindLabel(kind: PortalEventKind) {
       return "Invoice";
     case "task":
       return "Task";
+    case "visit":
+      return "Site visit";
     default: {
       const _never: never = kind;
       return _never;
@@ -1480,6 +1508,8 @@ export function calendarEventTone(kind: PortalEventKind) {
       return "bg-[#047857] text-white";
     case "task":
       return "bg-[#6d28d9] text-white";
+    case "visit":
+      return "bg-[#0369a1] text-white";
     default: {
       const _never: never = kind;
       return _never;

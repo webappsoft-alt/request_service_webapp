@@ -7,7 +7,6 @@ import {
   CalendarDays,
   ClipboardList,
   CreditCard,
-  FileText,
   Handshake,
   Images,
   Inbox,
@@ -57,7 +56,9 @@ export const portalNavGroups: PortalNavGroup[] = [
     items: [
       { href: "/pro/dashboard/requests", label: "Leads", icon: Inbox },
       { href: "/pro/dashboard/messages", label: "Messages", icon: MessageCircle },
-      { href: "/pro/dashboard/estimates", label: "Estimates", icon: FileText },
+      // Classic estimates — hidden for demo; use /new-estimate (labeled "Estimate") instead.
+      // { href: "/pro/dashboard/estimates", label: "Estimates", icon: FileText },
+      { href: "/pro/dashboard/new-estimate", label: "Estimate", icon: ClipboardList },
       { href: "/pro/dashboard/jobs", label: "Jobs", icon: Briefcase },
       { href: "/pro/dashboard/tasks", label: "Tasks", icon: ListTodo },
       { href: "/pro/dashboard/schedule", label: "Schedules", icon: CalendarDays },
@@ -109,7 +110,9 @@ export const peopleSubnav: { href: string; label: string }[] = [
 export const workSubnav: { href: string; label: string }[] = [
   { href: "/pro/dashboard/requests", label: "Leads" },
   { href: "/pro/dashboard/messages", label: "Messages" },
-  { href: "/pro/dashboard/estimates", label: "Estimates" },
+  // Classic estimates — hidden for demo; use /new-estimate (labeled "Estimate") instead.
+  // { href: "/pro/dashboard/estimates", label: "Estimates" },
+  { href: "/pro/dashboard/new-estimate", label: "Estimate" },
   { href: "/pro/dashboard/jobs", label: "Jobs" },
   { href: "/pro/dashboard/tasks", label: "Tasks" },
   { href: "/pro/dashboard/schedule", label: "Schedules" },

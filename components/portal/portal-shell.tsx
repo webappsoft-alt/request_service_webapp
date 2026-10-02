@@ -40,7 +40,8 @@ function NavLinks({
   function badgeFor(href: string) {
     if (href === "/pro/dashboard/requests") return inbox.newLeads;
     if (href === "/pro/dashboard/messages") return inbox.unreadChats;
-    if (href === "/pro/dashboard/estimates") return inbox.pendingEstimates;
+    // Classic estimates nav is hidden; badge follows the new Estimate path.
+    if (href === "/pro/dashboard/new-estimate") return inbox.pendingEstimates;
     if (href === "/pro/dashboard/orders") return inbox.pendingOrders;
     return 0;
   }
@@ -85,7 +86,7 @@ function NavLinks({
                       <span
                         className={cn(
                           "absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]",
-                          item.href === "/pro/dashboard/estimates" &&
+                          item.href === "/pro/dashboard/new-estimate" &&
                             "animate-pulse ring-2 ring-amber-300",
                         )}
                       >
@@ -98,7 +99,7 @@ function NavLinks({
                     <span
                       className={cn(
                         "ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]",
-                        item.href === "/pro/dashboard/estimates" &&
+                        item.href === "/pro/dashboard/new-estimate" &&
                           "animate-pulse ring-2 ring-amber-300 ring-offset-1 ring-offset-[#003F7D]",
                       )}
                     >

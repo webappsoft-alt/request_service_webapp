@@ -132,7 +132,7 @@ export type EstimateStatus =
   | "changes_requested"
   | "converted_to_job";
 
-export type EstimateItemType = "labor" | "materials" | "services" | "miscellaneous";
+export type EstimateItemType = "labor" | "materials" | "equipment" | "services" | "miscellaneous";
 
 export interface EstimateItem {
   id: string;
@@ -280,7 +280,7 @@ export interface JobItem {
   unitPrice: number;
   total: number;
   /** When known (e.g. from EstimateItem.type). Prefer over description heuristics. */
-  kind?: "labor" | "materials";
+  kind?: "labor" | "materials" | "equipment";
   /** Optional material photos (URLs). Ignored for labor lines. */
   images?: string[];
 }

@@ -184,6 +184,7 @@ function mapPublicEstimateToSnapshot(
       const quantity = Math.max(0, numberValue(item.quantity, 1));
       const unitPrice = numberValue(item.unitPrice);
       const isMaterial = kindRaw === "material" || kindRaw === "materials";
+      const isEquipment = kindRaw === "equipment";
       const images = (
         Array.isArray(item.images) ? item.images : []
       )
@@ -191,7 +192,11 @@ function mapPublicEstimateToSnapshot(
         .filter(Boolean);
       return {
         description: stringValue(item.description) || "Line item",
-        kind: (isMaterial ? "materials" : "labor") as "labor" | "materials",
+        kind: (isEquipment
+          ? "equipment"
+          : isMaterial
+            ? "materials"
+            : "labor") as "labor" | "materials" | "equipment",
         quantity,
         unit: stringValue(item.unit) || (kindRaw === "labor" ? "hr" : "ea"),
         unitPrice,

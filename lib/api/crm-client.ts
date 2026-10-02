@@ -245,23 +245,29 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
       const quantity = Math.max(minQuantity, Number(item.quantity) || 1);
       const unitPrice = Math.max(0, Number(item.unitPrice) || 0);
       const taxRate = Math.max(0, Number(item.taxRate) || 0);
-      const itemType = String(item.type);
-      const isMaterial = itemType === "materials" || itemType === "material";
-      const images = isMaterial
-        ? (Array.isArray(item.images) ? item.images : [])
-            .map((src) => String(src || "").trim())
-            .filter(Boolean)
-        : [];
+      const itemType = String(item.type).toLowerCase();
+      const kind =
+        itemType === "materials" || itemType === "material"
+          ? "material"
+          : itemType === "equipment"
+            ? "equipment"
+            : "labor";
+      const images =
+        kind === "material"
+          ? (Array.isArray(item.images) ? item.images : [])
+              .map((src) => String(src || "").trim())
+              .filter(Boolean)
+          : [];
       return {
         id: item.id,
         _id: item.id,
         description: String(item.description).trim(),
-        kind: isMaterial ? "material" : "labor",
+        kind,
         quantity,
         unitPrice,
         taxRate,
         total: Number(item.total) || quantity * unitPrice,
-        ...(isMaterial ? { images } : {}),
+        ...(images.length ? { images } : {}),
       };
     });
 }

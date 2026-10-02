@@ -52,6 +52,21 @@ export function createEmptyLine(kind: JobCostKind): JobCostLine {
   };
 }
 
+function placeholderForKind(kind: JobCostKind) {
+  switch (kind) {
+    case "labor":
+      return "Labour description";
+    case "equipment":
+      return "Equipment description";
+    case "materials":
+      return "Material description";
+    default: {
+      const _never: never = kind;
+      return _never;
+    }
+  }
+}
+
 export type LineItemsEditorProps = {
   lines: JobCostLine[];
   onChange: (lines: JobCostLine[]) => void;
@@ -104,7 +119,7 @@ export function LineItemsEditor({
       lines.map((line) => {
         if (line.id !== id) return line;
         const merged = { ...line, ...next };
-        if (merged.kind === "labor") {
+        if (merged.kind !== "materials") {
           const { images: _drop, ...rest } = merged;
           return { ...rest, images: undefined };
         }
@@ -195,7 +210,7 @@ export function LineItemsEditor({
           ) : (
             <TableRow>
               <TableCell colSpan={colSpan} className="py-8 text-center text-sm text-muted-foreground">
-                No line items yet. Add labour or material above.
+                No line items yet. Add labour, material, or equipment above.
               </TableCell>
             </TableRow>
           )}
@@ -275,9 +290,7 @@ function LineItemRow({
             <Input
               aria-label="Description"
               disabled={locked}
-              placeholder={
-                line.kind === "labor" ? "Labour description" : "Material description"
-              }
+              placeholder={placeholderForKind(line.kind)}
               value={line.description}
               onChange={(event) => onChange(line.id, { description: event.target.value })}
               className={cn(
@@ -376,9 +389,9 @@ function LineItemRow({
             onChange(line.id, {
               kind,
               unit,
-              ...(kind === "labor"
-                ? { images: undefined }
-                : { images: (line.images ?? []).slice(0, MAX_MATERIAL_IMAGES) }),
+              ...(kind === "materials"
+                ? { images: (line.images ?? []).slice(0, MAX_MATERIAL_IMAGES) }
+                : { images: undefined }),
             });
           }}
         >
@@ -401,6 +414,7 @@ function LineItemRow({
           >
             <SelectItem value="labor">Labour</SelectItem>
             <SelectItem value="materials">Material</SelectItem>
+            <SelectItem value="equipment">Equipment</SelectItem>
           </SelectContent>
         </Select>
       </TableCell>
@@ -532,12 +546,14 @@ export function LineItemsActions({
   saving,
   onAddLabor,
   onAddMaterial,
+  onAddEquipment,
   className,
 }: {
   locked?: boolean;
   saving?: boolean;
   onAddLabor: () => void;
   onAddMaterial: () => void;
+  onAddEquipment?: () => void;
   className?: string;
 }) {
   return (
@@ -564,6 +580,19 @@ export function LineItemsActions({
         <Plus />
         Add material
       </Button>
+      {onAddEquipment ? (
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          disabled={locked || saving}
+          onClick={onAddEquipment}
+          className="h-8 border-border-soft"
+        >
+          <Plus />
+          Add equipment
+        </Button>
+      ) : null}
     </div>
   );
 }

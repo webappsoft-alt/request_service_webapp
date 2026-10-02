@@ -899,8 +899,8 @@ export function mapPortalContractor(raw: unknown): PortalContractor | null {
     state: trimmed(location?.state) || trimmed(record.state),
     street: trimmed(location?.address) || trimmed(record.street) || undefined,
     zip: trimmed(location?.zip) || trimmed(record.zip),
-    latitude: lat ?? numberValue(record.latitude, null),
-    longitude: lng ?? numberValue(record.longitude, null),
+    latitude: lat ?? (record.latitude == null || record.latitude === "" ? null : numberValue(record.latitude)),
+    longitude: lng ?? (record.longitude == null || record.longitude === "" ? null : numberValue(record.longitude)),
     status:
       trimmed(record.status) === "inactive" || trimmed(record.status) === "on_stop"
         ? (trimmed(record.status) as PortalContractor["status"])

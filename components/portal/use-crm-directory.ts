@@ -260,51 +260,48 @@ export function useCrmDirectory() {
 
   const addCustomer = useCallback(
     (customer: PortalCustomerCrm) => {
-      // Authenticated provider — always POST; never fake-create in localStorage.
-      if (crm.enabled || Boolean(session)) {
-        return (async () => {
-          const created = await createCustomerApi(customer);
-          void dispatch(fetchCustomers({ force: true, limit: 100 }));
-          if (crm.ready) {
-            await crm.refresh({ silent: true });
-          }
-          return created;
-        })();
+      // Authenticated provider — always POST to the API. Never invent local-only customers.
+      if (!(crm.enabled || Boolean(session))) {
+        throw new Error("Sign in as a provider to create customers.");
       }
-      const current = readStore(key);
-      writeStore(key, { ...current, customers: [...current.customers, customer] });
-      return customer;
+      return (async () => {
+        const created = await createCustomerApi(customer);
+        if (!created?.id) {
+          throw new Error("Customer was created but the server response could not be read.");
+        }
+        await dispatch(fetchCustomers({ force: true, limit: 100 }));
+        if (crm.ready) {
+          await crm.refresh({ silent: true });
+        }
+        return created;
+      })();
     },
-    [crm, dispatch, key, session],
+    [crm, dispatch, session],
   );
 
   const updateCustomer = useCallback(
     (id: string, patch: Partial<PortalCustomerCrm>) => {
-      // Authenticated provider — always PUT; do not wait for full CRM snapshot.
-      if (crm.enabled || Boolean(session)) {
-        return (async () => {
-          const currentCustomer =
-            customers.find((item) => item.id === id) ||
-            reduxCustomers.find((item) => item.id === id);
-          if (!currentCustomer) throw new Error("Customer not found");
-          const updated = await updateCustomerApi(id, { ...currentCustomer, ...patch });
-          void dispatch(fetchCustomers({ force: true, limit: 100 }));
-          if (crm.ready) {
-            await crm.refresh({ silent: true });
-          }
-          return updated;
-        })();
+      // Authenticated provider — always PUT; do not write local-only patches.
+      if (!(crm.enabled || Boolean(session))) {
+        throw new Error("Sign in as a provider to update customers.");
       }
-      const current = readStore(key);
-      const extra = current.customers.find((item) => item.id === id);
-      writeStore(key, {
-        ...current,
-        customers: extra
-          ? current.customers.map((item) => (item.id === id ? { ...item, ...patch } : item))
-          : current.customers,
-      });
+      return (async () => {
+        const currentCustomer =
+          customers.find((item) => item.id === id) ||
+          reduxCustomers.find((item) => item.id === id);
+        if (!currentCustomer) throw new Error("Customer not found");
+        const updated = await updateCustomerApi(id, { ...currentCustomer, ...patch });
+        if (!updated?.id) {
+          throw new Error("Customer was updated but the server response could not be read.");
+        }
+        await dispatch(fetchCustomers({ force: true, limit: 100 }));
+        if (crm.ready) {
+          await crm.refresh({ silent: true });
+        }
+        return updated;
+      })();
     },
-    [crm, customers, dispatch, key, reduxCustomers, session],
+    [crm, customers, dispatch, reduxCustomers, session],
   );
 
   const addContractor = useCallback(

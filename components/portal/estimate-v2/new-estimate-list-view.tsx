@@ -3,12 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, ArrowRight } from "lucide-react";
+import { Eye, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PortalPage } from "@/components/portal/portal-page";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import {
+  deleteEstimateV2Opportunity,
   listEstimateV2Opportunities,
   type EstimateV2Opportunity,
 } from "@/lib/api/estimate-v2-client";
@@ -46,6 +53,8 @@ export function NewEstimateListView() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<EstimateV2Opportunity | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +79,21 @@ export function NewEstimateListView() {
 
   const rows = useMemo(() => items, [items]);
 
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteEstimateV2Opportunity(deleteTarget.id);
+      toast.success(`${deleteTarget.number} deleted.`);
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete estimate.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <PortalPage
       eyebrow="Work / Estimate"
@@ -85,9 +109,10 @@ export function NewEstimateListView() {
       <PortalDataTable
         filename="estimates"
         countLabel="Estimates"
-        searchPlaceholder="Search estimates"
+        searchPlaceholder="Search by Est #, customer, or property"
         loading={loading}
         pageSize={20}
+        busyRowIds={deleting && deleteTarget ? [deleteTarget.id] : []}
         serverPagination={{
           page,
           pageSize: 20,
@@ -103,6 +128,20 @@ export function NewEstimateListView() {
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/new-estimate/${row.id}`}
+        actions={(row) => [
+          {
+            label: "Open",
+            href: `/pro/dashboard/new-estimate/${row.id}`,
+            icon: <Eye className="size-3.5" />,
+            quick: true,
+          },
+          {
+            label: "Delete",
+            variant: "destructive",
+            icon: <Trash2 className="size-3.5" />,
+            onSelect: () => setDeleteTarget(row),
+          },
+        ]}
         columns={[
           {
             id: "number",
@@ -214,20 +253,52 @@ export function NewEstimateListView() {
             cell: (row) =>
               row.updatedAt ? formatDate(row.updatedAt) : "—",
           },
-          {
-            id: "open",
-            header: "",
-            cell: (row) => (
-              <Link
-                href={`/pro/dashboard/new-estimate/${row.id}`}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-              >
-                Open <ArrowRight className="size-3" />
-              </Link>
-            ),
-          },
         ]}
       />
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(next) => {
+          if (!next && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={!deleting}
+          shell={false}
+          className="gap-0 overflow-hidden p-0 sm:max-w-md"
+        >
+          <div className="space-y-2 px-4 pt-4 pb-3 pr-12">
+            <DialogTitle>Delete estimate?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This permanently removes ${deleteTarget.number}${
+                    deleteTarget.title ? ` (“${deleteTarget.title}”)` : ""
+                  }, including site visits and any linked draft estimate.`
+                : "This permanently removes this estimate and its site visits."}
+            </DialogDescription>
+          </div>
+          <div className="flex flex-col-reverse gap-2 border-t border-input px-4 py-3 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => {
+                void confirmDelete();
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PortalPage>
   );
 }

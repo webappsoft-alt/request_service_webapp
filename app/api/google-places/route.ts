@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
-import type { PlaceAddress, PlaceSuggestion } from "@/lib/google-places";
+import {
+  parseGoogleAddressComponents,
+  type PlaceSuggestion,
+} from "@/lib/google-places";
 
 type AddressComponent = {
   long_name?: string;
@@ -15,97 +18,6 @@ function googlePlacesKey(): string {
     process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() ||
     ""
   );
-}
-
-function componentName(
-  components: AddressComponent[] | undefined,
-  type: string,
-  short = false,
-): string {
-  const match = (components ?? []).find((item) => item.types?.includes(type));
-  if (!match) return "";
-  return String((short ? match.short_name : match.long_name) || "").trim();
-}
-
-function parseAddress(
-  formattedAddress: string | undefined,
-  components: AddressComponent[] | undefined,
-  latitude: number | null,
-  longitude: number | null,
-): PlaceAddress {
-  const city =
-    componentName(components, "locality") ||
-    componentName(components, "postal_town") ||
-    componentName(components, "administrative_area_level_2");
-  const stateShort = componentName(components, "administrative_area_level_1", true);
-  const stateLong = componentName(components, "administrative_area_level_1");
-  const state = stateShort || stateLong;
-  const zipCode = componentName(components, "postal_code");
-  const countryShort = componentName(components, "country", true);
-  const countryLong = componentName(components, "country");
-  const formatted = formattedAddress?.trim() || "";
-
-  const dropExact = new Set(
-    [city, stateShort, stateLong, countryShort, countryLong, zipCode]
-      .map((part) => part.trim().toLowerCase())
-      .filter(Boolean),
-  );
-  const stateTokens = [stateShort, stateLong]
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-  const zipLower = zipCode.trim().toLowerCase();
-
-  function shouldDropSegment(segment: string): boolean {
-    const lower = segment.trim().toLowerCase();
-    if (!lower) return true;
-    if (dropExact.has(lower)) return true;
-    const tokens = lower.split(/\s+/).filter(Boolean);
-    const hasZip = Boolean(
-      zipLower &&
-        tokens.some(
-          (token) =>
-            token === zipLower || token.startsWith(`${zipLower}-`),
-        ),
-    );
-    const hasState = stateTokens.some((token) => tokens.includes(token));
-    if (hasZip && (hasState || tokens.length <= 2)) return true;
-    return false;
-  }
-
-  let streetAddress = "";
-  if (formatted) {
-    streetAddress = formatted
-      .split(",")
-      .map((part) => part.trim())
-      .filter((part) => part && !shouldDropSegment(part))
-      .join(", ")
-      .trim();
-  }
-
-  if (!streetAddress) {
-    const streetNumber = componentName(components, "street_number");
-    const route = componentName(components, "route");
-    const fromStreet = [streetNumber, route].filter(Boolean).join(" ").trim();
-    const localName =
-      [
-        componentName(components, "premise"),
-        componentName(components, "neighborhood"),
-        componentName(components, "sublocality_level_1"),
-        componentName(components, "sublocality"),
-      ].find((part) => part && !dropExact.has(part.toLowerCase())) || "";
-    streetAddress = [fromStreet, localName].filter(Boolean).join(", ").trim();
-  }
-
-  return {
-    formattedAddress: formatted || streetAddress,
-    streetAddress,
-    city,
-    state,
-    zipCode,
-    country: countryShort,
-    latitude,
-    longitude,
-  };
 }
 
 async function googleJson(url: URL): Promise<Record<string, unknown>> {
@@ -213,11 +125,11 @@ export async function GET(request: NextRequest) {
       const lng = typeof location.lng === "number" ? location.lng : null;
 
       return Response.json({
-        address: parseAddress(
+        address: parseGoogleAddressComponents(
+          result.address_components as AddressComponent[] | undefined,
           typeof result.formatted_address === "string"
             ? result.formatted_address
             : undefined,
-          result.address_components as AddressComponent[] | undefined,
           lat,
           lng,
         ),
@@ -261,11 +173,11 @@ export async function GET(request: NextRequest) {
       const location = (geometry.location || {}) as Record<string, unknown>;
 
       return Response.json({
-        address: parseAddress(
+        address: parseGoogleAddressComponents(
+          result.address_components as AddressComponent[] | undefined,
           typeof result.formatted_address === "string"
             ? result.formatted_address
             : undefined,
-          result.address_components as AddressComponent[] | undefined,
           typeof location.lat === "number" ? location.lat : lat,
           typeof location.lng === "number" ? location.lng : lng,
         ),

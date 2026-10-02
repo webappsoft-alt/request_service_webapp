@@ -105,26 +105,33 @@ export function usePortalCrew() {
   // must not trigger the full CRM snapshot. Schedule/dashboard call it explicitly.
 
   const employees = useMemo(() => {
-    if (reduxTeam && reduxTeam.length > 0) {
-      return reduxTeam
-        .filter((item) => !store.removedIds.includes(item.id))
-        .map((item) => ({ ...item, ...store.patches[item.id] }));
+    const byId = new Map<string, PortalEmployee>();
+    const merge = (list: PortalEmployee[]) => {
+      for (const item of list) {
+        if (!item.id || store.removedIds.includes(item.id)) continue;
+        // Never surface local fake employees when signed in — team comes from API.
+        if (canCallApi && String(item.id).startsWith("emp_custom_")) continue;
+        byId.set(item.id, { ...item, ...store.patches[item.id] });
+      }
+    };
+
+    merge(reduxTeam);
+    merge(crm.employees);
+    merge(store.extras);
+
+    if (byId.size > 0) {
+      return Array.from(byId.values());
     }
-    if (crm.employees && crm.employees.length > 0) {
-      return crm.employees
-        .filter((item) => !store.removedIds.includes(item.id))
-        .map((item) => ({ ...item, ...store.patches[item.id] }));
+
+    if (apiReady || suppressSeedData) {
+      return [];
     }
-    if (apiReady) {
-      return crm.employees
-        .filter((item) => !store.removedIds.includes(item.id))
-        .map((item) => ({ ...item, ...store.patches[item.id] }));
-    }
-    if (suppressSeedData) return [];
-    const seeded = workspace.employees.filter((item) => !store.removedIds.includes(item.id));
-    return [...seeded, ...store.extras].map((item) => ({ ...item, ...store.patches[item.id] }));
+
+    merge(workspace.employees.filter((item) => !store.removedIds.includes(item.id)));
+    return Array.from(byId.values());
   }, [
     apiReady,
+    canCallApi,
     crm.employees,
     reduxTeam,
     store.extras,
@@ -420,7 +427,8 @@ export function usePortalCrew() {
       phone: string;
       trade: string;
     }) => {
-      if (apiReady) {
+      // Prefer live API whenever the user is authenticated — never invent local fake ids.
+      if (canCallApi) {
         return (async () => {
           const created = await createEmployeeApi({
             firstName: input.firstName.trim(),
@@ -431,25 +439,18 @@ export function usePortalCrew() {
             trade: input.trade.trim() || "General",
             active: true,
           });
-          await crm.refresh();
+          if (!created?.id) {
+            throw new Error("Employee was created but could not be read.");
+          }
+          if (apiReady) {
+            await crm.refresh({ silent: true });
+          }
           return created;
         })();
       }
-      const current = readStore(key);
-      const employee: PortalEmployee = {
-        id: `emp_custom_${Date.now()}`,
-        firstName: input.firstName.trim(),
-        lastName: input.lastName.trim(),
-        role: input.role,
-        email: input.email.trim(),
-        phone: input.phone.trim(),
-        trade: input.trade.trim() || "General",
-        active: true,
-      };
-      writeStore(key, { ...current, extras: [...current.extras, employee] });
-      return employee;
+      throw new Error("Sign in to create team members on the server.");
     },
-    [apiReady, crm, key],
+    [apiReady, canCallApi, crm],
   );
 
   const removeEmployee = useCallback(

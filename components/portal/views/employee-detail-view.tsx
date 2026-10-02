@@ -338,7 +338,7 @@ export function TeamMemberView({ id }: { id: string }) {
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-foreground">Employee settings</p>
                   <p className="text-xs text-muted-foreground">
-                    Name, role, trade, and contact. Changes apply across jobs and the calendar.
+                    Name, role, expertise, and contact. Changes apply across jobs and the calendar.
                   </p>
                 </div>
                 <Button
@@ -711,7 +711,7 @@ function EmployeeSettingsTab({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Employee settings</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">Name, role, trade, and contact. Changes apply across jobs and the calendar.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Name, role, expertise, and contact. Changes apply across jobs and the calendar.</p>
           </div>
           <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
             {saving ? (
@@ -749,7 +749,7 @@ function EmployeeSettingsTab({
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Trade">
+        <Field label="Expertise">
           <Input value={draft.trade} onChange={(event) => setDraft({ ...draft, trade: event.target.value })} />
         </Field>
         <Field label="Email">

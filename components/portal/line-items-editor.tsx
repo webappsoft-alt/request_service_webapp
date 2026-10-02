@@ -85,11 +85,11 @@ export type LineItemsEditorProps = {
 function colWidths(wide: boolean) {
   if (wide) {
     return {
-      type: "w-[5.5rem]",
+      type: "w-[8.25rem]",
       qty: "w-12",
       unit: "w-14",
       price: "w-16",
-      total: "w-16",
+      total: "w-[4.75rem]",
       remove: "w-8",
     };
   }
@@ -138,7 +138,7 @@ export function LineItemsEditor({
   const cols = colWidths(wideDescription);
 
   return (
-    <div className={cn("w-full overflow-x-auto rounded-lg border border-border-soft bg-card", className)}>
+    <div className={cn("w-full overflow-x-auto rounded-lg border border-[#94a3b8] bg-card", className)}>
       <Table className="w-full min-w-0 table-fixed">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -277,7 +277,7 @@ function LineItemRow({
   }
 
   const softField =
-    "h-8 border-border-soft bg-[#fafbfc] shadow-none focus-visible:bg-card";
+    "h-8 border-[#94a3b8] bg-[#fafbfc] shadow-none focus-visible:bg-card";
   const numberField =
     "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
   const compact = wideDescription;
@@ -304,7 +304,7 @@ function LineItemRow({
                 <div className="relative shrink-0">
                   <button
                     type="button"
-                    className="relative block h-6 w-8 overflow-hidden rounded border border-border-soft bg-white text-left"
+                    className="relative block h-6 w-8 overflow-hidden rounded border border-[#94a3b8] bg-white text-left"
                     title="View full image"
                     onClick={() => setLightboxOpen(true)}
                   >
@@ -400,7 +400,7 @@ function LineItemRow({
             size="sm"
             className={cn(
               softField,
-              "w-full min-w-0 justify-center gap-0.5 px-1.5 text-xs *:data-[slot=select-value]:line-clamp-none",
+              "w-full min-w-0 justify-between gap-1 py-0 pl-2.5 pr-1.5 text-xs [&_svg:not([class*='size-'])]:size-3.5 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate",
             )}
           >
             <SelectValue placeholder="Type">
@@ -458,7 +458,7 @@ function LineItemRow({
               size="sm"
               className={cn(
                 softField,
-                "w-full min-w-0 justify-center gap-0.5 px-1 text-xs *:data-[slot=select-value]:line-clamp-none",
+                "w-full min-w-0 justify-between gap-1 py-0 pl-2.5 pr-1.5 text-xs [&_svg:not([class*='size-'])]:size-3.5 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:truncate",
               )}
             >
               <SelectValue placeholder="Unit" />
@@ -515,26 +515,31 @@ function LineItemRow({
         </div>
       </TableCell>
       <TableCell
-        className={cn(
-          cols.total,
-          "whitespace-nowrap align-middle px-0.5 py-2 text-center font-medium tabular-nums",
-          compact ? "text-xs" : "text-sm",
-        )}
+        className={cn(cols.total, "align-top px-0.5 py-2 text-center")}
       >
-        {formatMoney(lineTotal(line))}
+        <div
+          className={cn(
+            "flex h-8 items-center justify-center self-start whitespace-nowrap leading-none font-medium tabular-nums",
+            compact ? "text-xs" : "text-sm",
+          )}
+        >
+          {formatMoney(lineTotal(line))}
+        </div>
       </TableCell>
       <TableCell className={cn(cols.remove, "align-top px-0 py-2 text-center")}>
         {canRemove ? (
-          <Button
-            aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            size="icon-sm"
-            variant="ghost"
-            type="button"
-            onClick={onRemove}
-          >
-            <Trash2 />
-          </Button>
+          <div className="flex h-8 items-center justify-center self-start">
+            <Button
+              aria-label={`Remove ${line.description || jobCostKindLabel(line.kind)}`}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              size="icon-sm"
+              variant="ghost"
+              type="button"
+              onClick={onRemove}
+            >
+              <Trash2 />
+            </Button>
+          </div>
         ) : null}
       </TableCell>
     </TableRow>
@@ -564,7 +569,7 @@ export function LineItemsActions({
         type="button"
         disabled={locked || saving}
         onClick={onAddLabor}
-        className="h-8 border-border-soft"
+        className="h-8 border-[#94a3b8]"
       >
         <Plus />
         Add labour
@@ -575,7 +580,7 @@ export function LineItemsActions({
         type="button"
         disabled={locked || saving}
         onClick={onAddMaterial}
-        className="h-8 border-border-soft"
+        className="h-8 border-[#94a3b8]"
       >
         <Plus />
         Add material
@@ -587,7 +592,7 @@ export function LineItemsActions({
           type="button"
           disabled={locked || saving}
           onClick={onAddEquipment}
-          className="h-8 border-border-soft"
+          className="h-8 border-[#94a3b8]"
         >
           <Plus />
           Add equipment

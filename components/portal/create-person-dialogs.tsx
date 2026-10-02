@@ -104,7 +104,7 @@ export function CreateCustomerDialog({
   /** Fired after a successful create/update — not when the dialog is dismissed. */
   onSaved?: (customer: PortalCustomerCrm) => void;
 }) {
-  const { addCustomer, updateCustomer, provider, customers } = useCrmDirectory();
+  const { addCustomer, updateCustomer, provider } = useCrmDirectory();
   const isEdit = Boolean(customer);
   const [saving, setSaving] = useState(false);
   const [entityKind, setEntityKind] = useState<CrmEntityKind>("individual");
@@ -195,10 +195,14 @@ export function CreateCustomerDialog({
     if (saving) return;
 
     if (isEdit && customer) {
+      if (!street.trim() || !city.trim() || !state.trim() || !zip.trim()) {
+        toast.error("Street, city, state, and ZIP are required.");
+        return;
+      }
       setSaving(true);
       const existingAddress = customer.addresses[0];
       try {
-        await Promise.resolve(
+        const updated = await Promise.resolve(
           updateCustomer(customer.id, {
             firstName: firstName.trim() || companyName.trim() || customer.firstName,
             lastName: lastName.trim() || customer.lastName,
@@ -214,13 +218,13 @@ export function CreateCustomerDialog({
             addresses: [
               {
                 id: existingAddress?.id ?? `addr_${customer.id}`,
-                address: street.trim() || existingAddress?.address || existingAddress?.street || "Address pending",
-                street: street.trim() || existingAddress?.street || existingAddress?.address || "Address pending",
-                city: city.trim() || provider.city,
-                state: state.trim() || provider.state,
-                zip: zip.trim() || provider.serviceArea[0] || "00000",
+                address: street.trim(),
+                street: street.trim(),
+                city: city.trim(),
+                state: state.trim(),
+                zip: zip.trim(),
                 country: existingAddress?.country ?? "US",
-                label: existingAddress?.label,
+                label: existingAddress?.label || "Primary",
                 unit: existingAddress?.unit,
                 latitude: lat,
                 longitude: lng,
@@ -230,25 +234,14 @@ export function CreateCustomerDialog({
             ],
           }),
         );
+        if (!updated?.id) {
+          throw new Error("Customer was updated but the server response could not be read.");
+        }
         toast.success(
           `${companyName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim() || "Customer"} updated.`,
         );
-        const saved: PortalCustomerCrm = {
-          ...customer,
-          firstName: firstName.trim() || companyName.trim() || customer.firstName,
-          lastName: lastName.trim() || customer.lastName,
-          email: email.trim() || customer.email,
-          phone: phone.trim() || undefined,
-          entityKind,
-          customerType,
-          source,
-          companyName: entityKind === "company" ? companyName.trim() : "",
-          ein: ein.trim() || undefined,
-          website: website.trim() || undefined,
-          notes: notes.trim(),
-        };
         reset();
-        onSaved?.(saved);
+        onSaved?.(updated);
         onOpenChange(false);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not update this customer.");
@@ -258,40 +251,45 @@ export function CreateCustomerDialog({
       return;
     }
 
-    const id = `cust_${provider.id}_new_${Date.now()}`;
-    const createdAt = new Date().toISOString().slice(0, 10);
-    const hasAddressInput =
-      Boolean(street.trim()) ||
-      Boolean(city.trim()) ||
-      Boolean(state.trim()) ||
-      Boolean(zip.trim());
+    const streetLine = street.trim();
+    const cityLine = city.trim();
+    const stateLine = state.trim();
+    const zipLine = zip.trim();
+    if (!streetLine || !cityLine || !stateLine || !zipLine) {
+      toast.error("Add a full service address (street, city, state, and ZIP) before saving.");
+      return;
+    }
+    if (!firstName.trim() && !companyName.trim()) {
+      toast.error("Add a first name or company name.");
+      return;
+    }
+
     const nextCustomer: PortalCustomerCrm = {
-      id,
-      userId: `user_${id}`,
+      id: "",
+      userId: "",
       firstName: firstName.trim() || companyName.trim() || "New",
-      lastName: lastName.trim() || "Customer",
-      email: email.trim() || `${id}@office.local`,
+      lastName: lastName.trim() || (entityKind === "company" ? "" : "Customer"),
+      email: email.trim(),
       phone: phone.trim() || undefined,
-      addresses: hasAddressInput
-        ? [
-            {
-              id: `addr_${id}`,
-              address: street.trim() || "Address pending",
-              street: street.trim() || "Address pending",
-              city: city.trim() || provider.city || "Unknown",
-              state: state.trim() || provider.state || "NA",
-              zip: zip.trim() || provider.serviceArea[0] || "00000",
-              country: "US",
-              latitude: lat,
-              longitude: lng,
-              lat,
-              lng,
-            },
-          ]
-        : [],
-      createdAt,
-      updatedAt: createdAt,
-      customerNumber: String(1000001 + customers.length).padStart(7, "0"),
+      addresses: [
+        {
+          id: "addr_primary",
+          label: "Primary",
+          address: streetLine,
+          street: streetLine,
+          city: cityLine,
+          state: stateLine,
+          zip: zipLine,
+          country: "US",
+          latitude: lat,
+          longitude: lng,
+          lat,
+          lng,
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      customerNumber: "",
       entityKind,
       customerType,
       source,
@@ -310,10 +308,12 @@ export function CreateCustomerDialog({
     };
     setSaving(true);
     try {
-      const created = await Promise.resolve(addCustomer(nextCustomer));
-      const saved = created ?? nextCustomer;
+      const saved = await Promise.resolve(addCustomer(nextCustomer));
+      if (!saved?.id) {
+        throw new Error("Customer was created but the server response could not be read.");
+      }
       toast.success(
-        `${saved.companyName ?? `${saved.firstName} ${saved.lastName}`} added to the directory.`,
+        `${saved.companyName ?? `${saved.firstName} ${saved.lastName}`.trim()} added to the directory.`,
       );
       reset();
       onSaved?.(saved);
@@ -486,13 +486,14 @@ export function CreateCustomerDialog({
             </div>
           ) : null}
           <Field>
-            <FieldLabel htmlFor="cust-street">Address</FieldLabel>
+            <FieldLabel htmlFor="cust-street">Service address</FieldLabel>
             <GoogleAddressAutocomplete
               id="cust-street"
               value={street}
               onChange={setStreet}
               onSelect={applyAddress}
               placeholder="Start typing your address…"
+              required
             />
           </Field>
           <CityStateZipFields
@@ -503,8 +504,11 @@ export function CreateCustomerDialog({
               setState(next.state);
               setZip(next.zip);
             }}
+            required
           />
-          <p className="text-xs text-muted-foreground">City, state, and ZIP fill in when you pick an address.</p>
+          <p className="text-xs text-muted-foreground">
+            Required. Street stays in Address; city, state, and ZIP fill below (no country).
+          </p>
           <Field>
             <FieldLabel htmlFor="cust-notes">Notes</FieldLabel>
             <Textarea

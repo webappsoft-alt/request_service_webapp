@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarClock,
   Check,
+  ChevronDown,
   ImagePlus,
   Loader2,
   Plus,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
+import { CreateEmployeeDialog } from "@/components/portal/create-employee-dialog";
+import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import {
   createEstimateV2SiteAssessment,
+  deleteEstimateV2SiteAssessment,
   updateEstimateV2SiteAssessment,
   type AssessmentWorkItem,
   type EstimateV2SiteAssessment,
@@ -43,6 +46,9 @@ import { WorkItemsEditor } from "@/components/portal/estimate-v2/work-items-edit
 import { employeeName, type PortalEmployee } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuth } from "@/store/authSlice";
+import { fetchTeam } from "@/store/teamSlice";
 
 const MEASUREMENT_UNITS = [
   { value: "sq ft", label: "sq ft (area)" },
@@ -76,6 +82,16 @@ const VISIT_TYPE_OPTIONS: Array<{ value: VisitType; label: string }> = [
   { value: "other", label: "Other" },
 ];
 
+function statusTone(status: string) {
+  const key = status.toLowerCase();
+  if (key.includes("completed")) return "bg-emerald-50 text-emerald-800 ring-emerald-200/70";
+  if (key.includes("scheduled") || key.includes("rescheduled") || key.includes("progress")) {
+    return "bg-sky-50 text-sky-800 ring-sky-200/70";
+  }
+  if (key.includes("cancel")) return "bg-rose-50 text-rose-800 ring-rose-200/70";
+  return "bg-slate-100 text-slate-700 ring-slate-200/70";
+}
+
 function visitTypeLabel(visit: EstimateV2SiteAssessment) {
   return (
     visit.visitTypeLabel ||
@@ -99,34 +115,52 @@ function toLocalInput(value?: string | null) {
 type SiteVisitsPanelProps = {
   opportunityId: string;
   opportunityTitle?: string;
+  /** From estimate create — used to prefill initial assessment fields when visit copies are empty. */
+  opportunityDescription?: string;
+  opportunityInternalNotes?: string;
   visits: EstimateV2SiteAssessment[];
   employees: PortalEmployee[];
   saving: boolean;
-  onRefresh: () => Promise<void>;
+  onRefresh: (options?: { silent?: boolean }) => Promise<void>;
   onSavingChange: (value: boolean) => void;
+  /** Show Build / View estimate in the visit header. */
+  showBuildEstimate?: boolean;
+  hasEstimate?: boolean;
+  onBuildEstimate?: () => void | Promise<void>;
 };
 
 export function SiteVisitsPanel({
   opportunityId,
   opportunityTitle,
+  opportunityDescription = "",
+  opportunityInternalNotes = "",
   visits,
   employees,
   saving,
   onRefresh,
   onSavingChange,
+  showBuildEstimate = false,
+  hasEstimate = false,
+  onBuildEstimate,
 }: SiteVisitsPanelProps) {
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const { employees: liveEmployees } = usePortalCrew();
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [detailOpen, setDetailOpen] = useState(true);
+  const [locallyRemovedIds, setLocallyRemovedIds] = useState<string[]>([]);
   const sortedVisits = useMemo(
     () =>
-      [...visits].sort(
-        (a, b) =>
-          (a.sequenceNumber || 0) - (b.sequenceNumber || 0) ||
-          String(a.createdAt || "").localeCompare(String(b.createdAt || "")),
-      ),
-    [visits],
+      [...visits]
+        .filter((item) => !locallyRemovedIds.includes(item.id))
+        .sort(
+          (a, b) =>
+            (a.sequenceNumber || 0) - (b.sequenceNumber || 0) ||
+            String(a.createdAt || "").localeCompare(String(b.createdAt || "")),
+        ),
+    [visits, locallyRemovedIds],
   );
-
-  const [selectedId, setSelectedId] = useState<string>("");
   const selected =
     sortedVisits.find((item) => item.id === selectedId) ||
     sortedVisits[sortedVisits.length - 1] ||
@@ -146,11 +180,24 @@ export function SiteVisitsPanel({
     }
   }, [sortedVisits, selectedId]);
 
+  useEffect(() => {
+    setDetailOpen(true);
+  }, [selected?.id]);
+
+  useEffect(() => {
+    if (!locallyRemovedIds.length) return;
+    const liveIds = new Set(visits.map((item) => item.id));
+    setLocallyRemovedIds((prev) => prev.filter((id) => liveIds.has(id)));
+  }, [visits, locallyRemovedIds.length]);
+
   const [employeeId, setEmployeeId] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [findings, setFindings] = useState("");
   const [customerRequirements, setCustomerRequirements] = useState("");
   const [workItems, setWorkItems] = useState<AssessmentWorkItem[]>([]);
+  const [measurements, setMeasurements] = useState<
+    Array<{ label: string; value?: string; unit?: string }>
+  >([]);
   const [measurementLabel, setMeasurementLabel] = useState("");
   const [measurementValue, setMeasurementValue] = useState("");
   const [measurementUnit, setMeasurementUnit] = useState("sq ft");
@@ -167,8 +214,61 @@ export function SiteVisitsPanel({
   const [rescheduleAt, setRescheduleAt] = useState("");
   const [rescheduleReason, setRescheduleReason] = useState("");
 
-  const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [createEmployeeOpen, setCreateEmployeeOpen] = useState(false);
+  const [createEmployeeTarget, setCreateEmployeeTarget] = useState<"visit" | "followUp">("visit");
+  const [createdEmployees, setCreatedEmployees] = useState<PortalEmployee[]>([]);
+  const [savedVisitIds, setSavedVisitIds] = useState<string[]>([]);
+
+  const assignableEmployees = useMemo(() => {
+    const byId = new Map<string, PortalEmployee>();
+    for (const item of [...employees, ...liveEmployees, ...createdEmployees]) {
+      if (!item?.id) continue;
+      if (item.active === false) continue;
+      // Ignore legacy local-only fake ids — technicians must come from the team API.
+      if (String(item.id).startsWith("emp_custom_")) continue;
+      byId.set(String(item.id), item);
+    }
+    return Array.from(byId.values()).sort((a, b) =>
+      employeeName(a).localeCompare(employeeName(b)),
+    );
+  }, [createdEmployees, employees, liveEmployees]);
+
+  const showTechnicianDropdown = assignableEmployees.length > 0;
+
+  function openCreateEmployee(target: "visit" | "followUp") {
+    setCreateEmployeeTarget(target);
+    setCreateEmployeeOpen(true);
+  }
+
+  function handleEmployeeCreated(created: PortalEmployee) {
+    const id = String(created?.id || "").trim();
+    if (!id || id.startsWith("emp_custom_")) {
+      toast.error("Technician was not saved to the server. Try again.");
+      return;
+    }
+    const next = { ...created, id, active: created.active !== false };
+    setCreatedEmployees((prev) =>
+      prev.some((item) => String(item.id) === id) ? prev : [...prev, next],
+    );
+    if (createEmployeeTarget === "followUp") {
+      setFollowUpEmployeeId(id);
+    } else {
+      setEmployeeId(id);
+    }
+  }
+
+  useEffect(() => {
+    if (!auth.token) return;
+    void dispatch(fetchTeam({ force: true, limit: 100 }));
+  }, [auth.token, dispatch]);
+
+  // Drop any previously cached local fake technicians from this panel.
+  useEffect(() => {
+    setCreatedEmployees((prev) => prev.filter((item) => !String(item.id).startsWith("emp_custom_")));
+    setEmployeeId((prev) => (String(prev).startsWith("emp_custom_") ? "" : prev));
+    setFollowUpEmployeeId((prev) => (String(prev).startsWith("emp_custom_") ? "" : prev));
+  }, []);
 
   useEffect(() => {
     if (!selected) {
@@ -177,12 +277,35 @@ export function SiteVisitsPanel({
       setFindings("");
       setCustomerRequirements("");
       setWorkItems([]);
+      setMeasurements([]);
       return;
     }
+
+    const isInitialVisit =
+      selected.visitType === "initial_assessment" ||
+      Number(selected.sequenceNumber || 0) <= 1;
+    const defaultRequirements = String(opportunityDescription || "").trim();
+    const defaultFindings =
+      String(opportunityInternalNotes || "").trim() || defaultRequirements;
+
     setEmployeeId(String(selected.assignedEmployeeId || ""));
     setScheduledAt(toLocalInput(selected.scheduledAt));
-    setFindings(selected.findings || "");
-    setCustomerRequirements(selected.customerRequirements || "");
+    // Prefer visit-owned copies; fall back to estimate-create text for initial visits only.
+    setFindings(
+      String(selected.findings || "").trim()
+        ? String(selected.findings)
+        : isInitialVisit
+          ? defaultFindings
+          : "",
+    );
+    setCustomerRequirements(
+      String(selected.customerRequirements || "").trim()
+        ? String(selected.customerRequirements)
+        : isInitialVisit
+          ? defaultRequirements
+          : "",
+    );
+    setMeasurements(selected.measurements || []);
     setWorkItems(
       (selected.workItems || []).map((item, index) => {
         const typeRaw = String(item.type || "labor").toLowerCase();
@@ -203,7 +326,7 @@ export function SiteVisitsPanel({
         };
       }),
     );
-  }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.id, opportunityDescription, opportunityInternalNotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canEditCapture =
     Boolean(selected) && !["cancelled", "no_show"].includes(selected?.status || "");
@@ -212,34 +335,67 @@ export function SiteVisitsPanel({
     Boolean(selected) &&
     ["scheduled", "rescheduled", "in_progress"].includes(selected?.status || "");
 
-  const canCancel =
-    Boolean(selected) &&
-    ["scheduled", "rescheduled", "in_progress"].includes(selected?.status || "");
-
   async function saveVisit(patch: { complete?: boolean } = {}) {
     if (!selected) return;
     onSavingChange(true);
     try {
-      const employee = employees.find((item) => item.id === employeeId);
-      await updateEstimateV2SiteAssessment(selected.id, {
-        assignedEmployeeId: employeeId || null,
-        assignedEmployeeName: employee
-          ? employeeName(employee)
-          : selected.assignedEmployeeName,
-        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+      const employee = assignableEmployees.find((item) => item.id === employeeId);
+      const rawEmployeeId = String(employeeId || "").trim();
+      const validEmployeeId = /^[a-f\d]{24}$/i.test(rawEmployeeId) ? rawEmployeeId : null;
+      if (rawEmployeeId && !validEmployeeId) {
+        throw new Error(
+          "Selected technician is not a saved team member. Create them again — they must be stored on the server.",
+        );
+      }
+
+      let nextScheduledAt: string | null = null;
+      if (scheduledAt) {
+        const parsed = new Date(scheduledAt);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new Error("Enter a valid date / time for the visit.");
+        }
+        nextScheduledAt = parsed.toISOString();
+      }
+
+      const payload: Parameters<typeof updateEstimateV2SiteAssessment>[1] = {
+        assignedEmployeeId: validEmployeeId,
+        assignedEmployeeName: validEmployeeId
+          ? employee
+            ? employeeName(employee)
+            : selected.assignedEmployeeName || ""
+          : "",
+        scheduledAt: nextScheduledAt,
         findings,
         customerRequirements,
-        measurements: selected.measurements || [],
+        measurements,
         workItems: workItems.filter((item) => String(item.description || "").trim()),
         photos: selected.photos || [],
-        status: patch.complete
-          ? "completed"
-          : selected.status === "completed"
-            ? "completed"
-            : "in_progress",
-      });
-      toast.success(patch.complete ? "Visit completed." : "Visit saved.");
-      await onRefresh();
+      };
+
+      if (patch.complete) {
+        payload.status = "completed";
+      } else if (
+        selected.status === "scheduled" ||
+        selected.status === "rescheduled" ||
+        selected.status === "in_progress"
+      ) {
+        payload.status = "in_progress";
+      }
+
+      await updateEstimateV2SiteAssessment(selected.id, payload);
+      setSavedVisitIds((prev) =>
+        prev.includes(selected.id) ? prev : [...prev, selected.id],
+      );
+      toast.success(
+        patch.complete
+          ? "Visit completed."
+          : savedVisitIds.includes(selected.id) ||
+              selected.status === "in_progress" ||
+              selected.status === "completed"
+            ? "Visit updated."
+            : "Visit saved.",
+      );
+      await onRefresh({ silent: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save visit.");
     } finally {
@@ -257,42 +413,39 @@ export function SiteVisitsPanel({
       toast.error("Enter the numeric value (e.g. 1800).");
       return;
     }
-    onSavingChange(true);
+
+    const previous = measurements;
+    const next = [
+      ...measurements,
+      {
+        label: measurementLabel.trim(),
+        value: measurementValue.trim(),
+        unit: measurementUnit.trim(),
+      },
+    ];
+    // Append locally + persist quietly — do not reload the whole estimate workspace.
+    setMeasurements(next);
+    setMeasurementLabel("");
+    setMeasurementValue("");
+
     try {
-      await updateEstimateV2SiteAssessment(selected.id, {
-        measurements: [
-          ...(selected.measurements || []),
-          {
-            label: measurementLabel.trim(),
-            value: measurementValue.trim(),
-            unit: measurementUnit.trim(),
-          },
-        ],
-      });
-      setMeasurementLabel("");
-      setMeasurementValue("");
-      setMeasurementUnit("sq ft");
-      await onRefresh();
-      toast.success("Measurement added.");
+      await updateEstimateV2SiteAssessment(selected.id, { measurements: next });
     } catch (err) {
+      setMeasurements(previous);
       toast.error(err instanceof Error ? err.message : "Could not add measurement.");
-    } finally {
-      onSavingChange(false);
     }
   }
 
   async function removeMeasurement(index: number) {
     if (!selected) return;
-    onSavingChange(true);
+    const previous = measurements;
+    const next = measurements.filter((_, i) => i !== index);
+    setMeasurements(next);
     try {
-      await updateEstimateV2SiteAssessment(selected.id, {
-        measurements: (selected.measurements || []).filter((_, i) => i !== index),
-      });
-      await onRefresh();
+      await updateEstimateV2SiteAssessment(selected.id, { measurements: next });
     } catch (err) {
+      setMeasurements(previous);
       toast.error(err instanceof Error ? err.message : "Could not remove measurement.");
-    } finally {
-      onSavingChange(false);
     }
   }
 
@@ -343,7 +496,7 @@ export function SiteVisitsPanel({
     }
     onSavingChange(true);
     try {
-      const employee = employees.find((item) => item.id === followUpEmployeeId);
+      const employee = assignableEmployees.find((item) => item.id === followUpEmployeeId);
       const created = await createEstimateV2SiteAssessment(opportunityId, {
         visitType: followUpType,
         visitTypeLabel: VISIT_TYPE_OPTIONS.find((item) => item.value === followUpType)?.label,
@@ -395,20 +548,22 @@ export function SiteVisitsPanel({
     }
   }
 
-  async function confirmCancel() {
+  async function confirmDeleteVisit() {
     if (!selected) return;
+    const deletedId = selected.id;
+    const label = `Visit #${selected.sequenceNumber || "—"}`;
     onSavingChange(true);
     try {
-      await updateEstimateV2SiteAssessment(selected.id, {
-        status: "cancelled",
-        cancellationReason: cancelReason.trim() || "Cancelled",
-      });
-      setCancelOpen(false);
-      setCancelReason("");
-      await onRefresh();
-      toast.success("Visit cancelled.");
+      await deleteEstimateV2SiteAssessment(deletedId);
+      setDeleteOpen(false);
+      setLocallyRemovedIds((prev) =>
+        prev.includes(deletedId) ? prev : [...prev, deletedId],
+      );
+      setSelectedId("");
+      await onRefresh({ silent: true });
+      toast.success(`${label} deleted.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not cancel visit.");
+      toast.error(err instanceof Error ? err.message : "Could not delete visit.");
     } finally {
       onSavingChange(false);
     }
@@ -416,18 +571,17 @@ export function SiteVisitsPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-input bg-card p-5">
+      <div className="rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold">Site visits</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-tight text-slate-900">Site visits</h2>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
               One estimate can have many visits. Reschedule changes the same appointment;
               follow-up creates a new visit.
             </p>
           </div>
           <Button
             size="sm"
-            variant="outline"
             disabled={saving}
             onClick={() => {
               setFollowUpType(sortedVisits.length ? "follow_up_assessment" : "initial_assessment");
@@ -459,23 +613,32 @@ export function SiteVisitsPanel({
                   type="button"
                   onClick={() => setSelectedId(visit.id)}
                   className={cn(
-                    "w-full rounded-lg border px-3 py-3 text-left transition",
+                    "w-full rounded-xl border px-3.5 py-3 text-left transition",
                     active
-                      ? "border-primary bg-primary/5 shadow-[inset_0_0_0_1px_hsl(var(--primary))]"
-                      : "border-input hover:border-primary/40 hover:bg-secondary/40",
+                      ? "border-primary bg-primary/[0.05] ring-1 ring-primary/25"
+                      : "border-[#94a3b8] bg-[#fafbfc] hover:border-primary/40 hover:bg-white",
                   )}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Visit #{visit.sequenceNumber || "—"} · {visitTypeLabel(visit)}
-                      </p>
-                      <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-                        {statusLabel(visit.status)}
-                        {visit.scheduledAt ? ` · ${formatDate(visit.scheduledAt)}` : ""}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold tracking-tight text-slate-900">
+                          Visit #{visit.sequenceNumber || "—"} · {visitTypeLabel(visit)}
+                        </p>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ring-1 ring-inset",
+                            statusTone(visit.status),
+                          )}
+                        >
+                          {statusLabel(visit.status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {visit.scheduledAt ? formatDate(visit.scheduledAt) : "No time set"}
                         {visit.assignedEmployeeName ? ` · ${visit.assignedEmployeeName}` : ""}
                       </p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="mt-1.5 text-[11px] text-slate-400">
                         {photoCount} photo{photoCount === 1 ? "" : "s"} · {noteBits} note
                         {noteBits === 1 ? "" : "s"} · {measureCount} measurement
                         {measureCount === 1 ? "" : "s"} · {workCount} work item
@@ -495,7 +658,7 @@ export function SiteVisitsPanel({
             })}
           </div>
         ) : (
-          <p className="mt-4 rounded-lg border border-dashed border-input px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="mt-4 rounded-xl border border-dashed border-[#94a3b8] bg-[#fafbfc] px-4 py-8 text-center text-sm text-slate-500">
             No visits yet. Schedule an initial assessment or skip visits and build the estimate from
             known details.
           </p>
@@ -503,17 +666,51 @@ export function SiteVisitsPanel({
       </div>
 
       {selected ? (
-        <div className="rounded-xl border border-input bg-card p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold">
-                Visit #{selected.sequenceNumber || "—"} · {visitTypeLabel(selected)}
-              </h2>
-              <p className="text-xs capitalize text-muted-foreground">
-                {selected.number} · {statusLabel(selected.status)}
-              </p>
-            </div>
+        <div className="rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#d8dee8] pb-4">
+            <button
+              type="button"
+              aria-expanded={detailOpen}
+              onClick={() => setDetailOpen((open) => !open)}
+              className="group flex min-w-0 flex-1 items-start gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <span
+                className={cn(
+                  "mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-[#94a3b8] bg-[#f1f5f9] text-slate-700 transition-colors",
+                  "group-hover:border-slate-400 group-hover:bg-slate-200",
+                )}
+                aria-hidden="true"
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-4 stroke-[2.5] transition-transform duration-200",
+                    detailOpen ? "rotate-0" : "-rotate-90",
+                  )}
+                />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+                  Visit #{selected.sequenceNumber || "—"} · {visitTypeLabel(selected)}
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  {selected.number} ·{" "}
+                  <span className="capitalize">{statusLabel(selected.status)}</span>
+                </p>
+              </div>
+            </button>
             <div className="flex flex-wrap gap-1.5">
+              {showBuildEstimate && onBuildEstimate ? (
+                <Button
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => {
+                    setDetailOpen(false);
+                    void onBuildEstimate();
+                  }}
+                >
+                  {hasEstimate ? "View estimate" : "Build estimate"}
+                </Button>
+              ) : null}
               {canReschedule ? (
                 <Button
                   size="sm"
@@ -528,36 +725,72 @@ export function SiteVisitsPanel({
                   Reschedule
                 </Button>
               ) : null}
-              {canCancel ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={saving}
-                  onClick={() => setCancelOpen(true)}
-                >
-                  <X className="size-3.5" />
-                  Cancel
-                </Button>
-              ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-3.5" />
+                Delete
+              </Button>
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {!detailOpen ? (
+            <p className="mt-4 text-sm leading-relaxed text-slate-500">
+              {[
+                selected.assignedEmployeeName || (employeeId ? "Technician assigned" : "Unassigned"),
+                selected.scheduledAt ? formatDate(selected.scheduledAt) : null,
+                `${selected.photos?.length || 0} photos`,
+                `${(selected.workItems || []).filter((item) => String(item.description || "").trim()).length} work items`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              <span className="text-slate-400"> — expand to edit visit details</span>
+            </p>
+          ) : (
+            <>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Assigned technician</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                value={employeeId}
-                disabled={!canEditCapture || saving}
-                onChange={(e) => setEmployeeId(e.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {employees.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {employeeName(item)}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Assigned technician</Label>
+                {showTechnicianDropdown ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-primary hover:underline"
+                    disabled={!canEditCapture || saving}
+                    onClick={() => openCreateEmployee("visit")}
+                  >
+                    + Create new
+                  </button>
+                ) : null}
+              </div>
+              {!showTechnicianDropdown ? (
+                <button
+                  type="button"
+                  disabled={!canEditCapture || saving}
+                  onClick={() => openCreateEmployee("visit")}
+                  className="flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-[#94a3b8] bg-[#fafbfc] px-3 text-sm font-medium text-primary transition hover:border-primary/50 hover:bg-primary/[0.04] disabled:opacity-60"
+                >
+                  No technicians yet — create one
+                </button>
+              ) : (
+                <select
+                  className="flex h-10 w-full rounded-lg border border-[#b4becc] bg-[#fafbfc] px-3 text-sm"
+                  value={employeeId}
+                  disabled={!canEditCapture || saving}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {assignableEmployees.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {employeeName(item)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="visit-when">Date / time</Label>
@@ -567,8 +800,9 @@ export function SiteVisitsPanel({
                 value={scheduledAt}
                 disabled={!canEditCapture || saving}
                 onChange={(e) => setScheduledAt(e.target.value)}
+                className="bg-[#fafbfc]"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] leading-relaxed text-slate-400">
                 Use Reschedule to change time with a reason and keep history on this visit.
               </p>
             </div>
@@ -581,6 +815,7 @@ export function SiteVisitsPanel({
                 disabled={!canEditCapture || saving}
                 onChange={(e) => setFindings(e.target.value)}
                 placeholder="What the technician discovered on site…"
+                className="bg-[#fafbfc]"
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
@@ -592,18 +827,19 @@ export function SiteVisitsPanel({
                 disabled={!canEditCapture || saving}
                 onChange={(e) => setCustomerRequirements(e.target.value)}
                 placeholder="What the customer wants (efficiency, finish date, preferences)…"
+                className="bg-[#fafbfc]"
               />
             </div>
           </div>
 
-          <div className="mt-5">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="mt-6 border-t border-[#d8dee8] pt-5">
+            <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
               Photos
             </h3>
             <div
               className={cn(
-                "mt-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition",
-                photoDragOver ? "border-primary bg-primary/5" : "border-input bg-secondary/20",
+                "mt-2.5 rounded-xl border-2 border-dashed px-4 py-7 text-center transition",
+                photoDragOver ? "border-primary bg-primary/5" : "border-[#94a3b8] bg-[#fafbfc]",
                 (!canEditCapture || uploadingPhoto) && "opacity-70",
               )}
               onDragEnter={(e) => {
@@ -632,17 +868,17 @@ export function SiteVisitsPanel({
                 className="hidden"
                 onChange={(e) => void uploadPhotos(e.target.files)}
               />
-              <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-input bg-background">
+              <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-[#b4becc] bg-white">
                 {uploadingPhoto ? (
-                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  <Loader2 className="size-4 animate-spin text-slate-400" />
                 ) : (
-                  <Upload className="size-4 text-muted-foreground" />
+                  <Upload className="size-4 text-slate-400" />
                 )}
               </div>
-              <p className="mt-2 text-sm font-medium">
+              <p className="mt-2 text-sm font-medium text-slate-800">
                 {uploadingPhoto ? "Uploading…" : "Drag & drop photos here"}
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-xs text-slate-500">
                 Photos stay on this visit only — not shared with other visits
               </p>
               <Button
@@ -662,7 +898,7 @@ export function SiteVisitsPanel({
                 {selected.photos?.map((photo) => (
                   <div
                     key={photo.url}
-                    className="group relative aspect-square overflow-hidden rounded-lg border border-input bg-secondary/30"
+                    className="group relative aspect-square overflow-hidden rounded-xl border border-[#b4becc] bg-[#f1f5f9]"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -686,23 +922,23 @@ export function SiteVisitsPanel({
             ) : null}
           </div>
 
-          <div className="mt-5">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="mt-6 border-t border-[#d8dee8] pt-5">
+            <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
               Measurements
             </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
               What = the thing measured · Value = the number · Unit = how it is measured
             </p>
-            {(selected.measurements?.length || 0) > 0 ? (
-              <ul className="mt-3 divide-y divide-input rounded-lg border border-input">
-                {selected.measurements?.map((item, index) => (
+            {(measurements.length || 0) > 0 ? (
+              <ul className="mt-3 divide-y divide-[#eef1f5] overflow-hidden rounded-xl border border-[#b4becc] bg-[#fafbfc]">
+                {measurements.map((item, index) => (
                   <li
-                    key={`${item.label}-${index}`}
-                    className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                    key={`${item.label}-${item.value}-${item.unit}-${index}`}
+                    className="flex items-start justify-between gap-2 bg-white px-3.5 py-2.5 text-sm"
                   >
-                    <span>
+                    <span className="min-w-0 flex-1 break-words whitespace-normal leading-relaxed text-slate-900">
                       <span className="font-medium">{item.label}</span>
-                      <span className="text-muted-foreground">
+                      <span className="text-slate-500">
                         {" · "}
                         {item.value}
                         {item.unit ? ` ${item.unit}` : ""}
@@ -711,7 +947,7 @@ export function SiteVisitsPanel({
                     {canEditCapture ? (
                       <button
                         type="button"
-                        className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        className="mt-0.5 shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                         onClick={() => void removeMeasurement(index)}
                         aria-label="Remove measurement"
                       >
@@ -723,27 +959,41 @@ export function SiteVisitsPanel({
               </ul>
             ) : null}
             {canEditCapture ? (
-              <div className="mt-3 grid gap-2 sm:grid-cols-[1.2fr_0.7fr_0.9fr_auto]">
-                <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">What are you measuring?</Label>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_8.5rem_auto] sm:items-center">
+                <div className="min-w-0 space-y-1">
+                  <Label className="text-[11px] text-slate-500">What are you measuring?</Label>
                   <Input
                     placeholder="e.g. Square footage, Pipe length, System tonnage"
                     value={measurementLabel}
                     onChange={(e) => setMeasurementLabel(e.target.value)}
+                    className="h-9 bg-[#fafbfc]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void addMeasurement();
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Value (number)</Label>
+                  <Label className="text-[11px] text-slate-500">Value</Label>
                   <Input
-                    placeholder="e.g. 1800"
+                    placeholder="1800"
                     value={measurementValue}
                     onChange={(e) => setMeasurementValue(e.target.value)}
+                    className="h-9 bg-[#fafbfc]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void addMeasurement();
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Unit</Label>
+                  <Label className="text-[11px] text-slate-500">Unit</Label>
                   <Select value={measurementUnit} onValueChange={setMeasurementUnit}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9 bg-[#fafbfc]">
                       <SelectValue placeholder="Unit" />
                     </SelectTrigger>
                     <SelectContent>
@@ -755,47 +1005,45 @@ export function SiteVisitsPanel({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={saving}
-                    onClick={() => void addMeasurement()}
-                  >
-                    <Plus className="size-3.5" />
-                    Add
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void addMeasurement()}
+                  className="mt-5 h-8 px-2.5 text-xs"
+                >
+                  <Plus className="size-3" />
+                  Add more
+                </Button>
               </div>
             ) : null}
           </div>
 
-          <div className="mt-5 border-t border-input pt-5">
+          <div className="mt-6 border-t border-[#d8dee8] pt-5">
             <WorkItemsEditor
               items={workItems}
               onChange={setWorkItems}
               disabled={!canEditCapture || saving}
             />
             {canEditCapture ? (
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
                 Save or complete the visit to persist work items. They seed the estimate automatically.
               </p>
             ) : null}
           </div>
 
           {(selected.scheduleHistory?.length || 0) > 0 ? (
-            <div className="mt-5 rounded-lg border border-input bg-secondary/20 px-3 py-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="mt-6 rounded-xl border border-[#b4becc] bg-[#f8fafc] px-4 py-3.5">
+              <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                 Visit schedule history
               </h3>
-              <ol className="mt-2 space-y-1.5">
+              <ol className="mt-2.5 space-y-2">
                 {[...(selected.scheduleHistory || [])]
                   .slice()
                   .reverse()
                   .slice(0, 6)
                   .map((item, index) => (
-                    <li key={`${item.at}-${index}`} className="text-xs text-muted-foreground">
-                      <span className="font-medium capitalize text-foreground">
+                    <li key={`${item.at}-${index}`} className="text-xs leading-relaxed text-slate-500">
+                      <span className="font-medium capitalize text-slate-800">
                         {(item.action || "update").replace(/_/g, " ")}
                       </span>
                       {item.fromScheduledAt || item.toScheduledAt
@@ -811,25 +1059,40 @@ export function SiteVisitsPanel({
           ) : null}
 
           {canEditCapture ? (
-            <div className="mt-5 flex flex-wrap gap-2 border-t border-input pt-4">
-              <Button size="sm" variant="outline" disabled={saving} onClick={() => void saveVisit()}>
-                Save visit
+            <div className="mt-6 flex flex-wrap gap-2 border-t border-[#d8dee8] pt-4">
+              <Button
+                size="sm"
+                disabled={saving}
+                onClick={() => void saveVisit()}
+              >
+                {savedVisitIds.includes(selected.id) ||
+                selected.status === "in_progress" ||
+                selected.status === "completed"
+                  ? "Update visit"
+                  : "Save visit"}
               </Button>
               {selected.status !== "completed" ? (
-                <Button size="sm" disabled={saving} onClick={() => void saveVisit({ complete: true })}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void saveVisit({ complete: true })}
+                >
                   Complete visit
                 </Button>
               ) : null}
             </div>
           ) : null}
           {selected.completedAt ? (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-xs text-slate-500">
               Completed {formatDate(selected.completedAt)}
             </p>
           ) : null}
           {selected.cancellationReason ? (
             <p className="mt-2 text-xs text-amber-700">Cancelled: {selected.cancellationReason}</p>
           ) : null}
+            </>
+          )}
         </div>
       ) : null}
 
@@ -872,19 +1135,42 @@ export function SiteVisitsPanel({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Technician</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                value={followUpEmployeeId}
-                onChange={(e) => setFollowUpEmployeeId(e.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {employees.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {employeeName(item)}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Technician</Label>
+                {showTechnicianDropdown ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-primary hover:underline"
+                    disabled={saving}
+                    onClick={() => openCreateEmployee("followUp")}
+                  >
+                    + Create new
+                  </button>
+                ) : null}
+              </div>
+              {!showTechnicianDropdown ? (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => openCreateEmployee("followUp")}
+                  className="flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-[#94a3b8] bg-[#fafbfc] px-3 text-sm font-medium text-primary transition hover:border-primary/50 hover:bg-primary/[0.04] disabled:opacity-60"
+                >
+                  No technicians yet — create one
+                </button>
+              ) : (
+                <select
+                  className="flex h-10 w-full rounded-lg border border-[#b4becc] bg-[#fafbfc] px-3 text-sm"
+                  value={followUpEmployeeId}
+                  onChange={(e) => setFollowUpEmployeeId(e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {assignableEmployees.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {employeeName(item)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Instructions</Label>
@@ -945,32 +1231,56 @@ export function SiteVisitsPanel({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cancel visit</DialogTitle>
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(next) => {
+          if (!next && !saving) setDeleteOpen(false);
+        }}
+      >
+        <DialogContent
+          showCloseButton={!saving}
+          shell={false}
+          className="gap-0 overflow-hidden p-0 sm:max-w-md"
+        >
+          <div className="space-y-2 px-4 pt-4 pb-3 pr-12">
+            <DialogTitle>Delete visit?</DialogTitle>
             <DialogDescription>
-              Cancels this visit only. Other visits and the estimate stay unchanged.
+              {selected
+                ? `This permanently removes Visit #${selected.sequenceNumber || "—"} (${
+                    selected.number || visitTypeLabel(selected)
+                  }), including its photos, measurements, and calendar event.`
+                : "This permanently removes this visit and its calendar event."}
             </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-1.5 py-2">
-            <Label>Reason</Label>
-            <Input
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Customer cancelled, no access…"
-            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelOpen(false)}>
-              Back
+          <div className="flex flex-col-reverse gap-2 border-t border-input px-4 py-3 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={() => setDeleteOpen(false)}
+            >
+              Keep visit
             </Button>
-            <Button variant="destructive" disabled={saving} onClick={() => void confirmCancel()}>
-              Cancel visit
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={saving}
+              onClick={() => {
+                void confirmDeleteVisit();
+              }}
+            >
+              {saving ? "Deleting…" : "Delete visit"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
+
+      <CreateEmployeeDialog
+        open={createEmployeeOpen}
+        onOpenChange={setCreateEmployeeOpen}
+        defaultRole="technician"
+        onCreated={handleEmployeeCreated}
+      />
     </div>
   );
 }

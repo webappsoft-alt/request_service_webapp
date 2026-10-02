@@ -1,4 +1,10 @@
-import { getData, patchData, postData } from "@/components/api/apiFuntions";
+import {
+  deleteData,
+  getData,
+  invalidateGetCache,
+  patchData,
+  postData,
+} from "@/components/api/apiFuntions";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 import { mapEstimate } from "@/lib/api/crm-mappers";
 import type { Estimate } from "@/lib/types";
@@ -158,6 +164,10 @@ function unwrapData<T>(response: unknown): T {
   return (root.data ?? root) as T;
 }
 
+function bustEstimateV2Cache() {
+  invalidateGetCache("provider/estimate-v2");
+}
+
 function mapOpportunityEstimates(raw: unknown): Estimate[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -199,8 +209,14 @@ export async function listEstimateV2Opportunities(params?: {
   };
 }
 
-export async function getEstimateV2Opportunity(id: string) {
-  const response = await getData(providerCrmApi.estimateV2Opportunity(id));
+export async function getEstimateV2Opportunity(
+  id: string,
+  options?: { force?: boolean; silent?: boolean },
+) {
+  const response = await getData(providerCrmApi.estimateV2Opportunity(id), undefined, {
+    force: options?.force ?? true,
+    silent: options?.silent,
+  });
   return normalizeOpportunity(unwrapData<EstimateV2Opportunity>(response));
 }
 
@@ -241,6 +257,14 @@ export async function updateEstimateV2Opportunity(
   return normalizeOpportunity(unwrapData<EstimateV2Opportunity>(response));
 }
 
+export async function deleteEstimateV2Opportunity(id: string) {
+  const response = await deleteData(providerCrmApi.estimateV2Opportunity(id), {
+    silent: false,
+  });
+  bustEstimateV2Cache();
+  return unwrapData<{ id: string; number?: string; deleted: boolean }>(response);
+}
+
 export async function createEstimateV2SiteAssessment(
   opportunityId: string,
   input: {
@@ -250,6 +274,8 @@ export async function createEstimateV2SiteAssessment(
     durationMinutes?: number;
     instructions?: string;
     internalNotes?: string;
+    findings?: string;
+    customerRequirements?: string;
     visitType?: VisitType;
     visitTypeLabel?: string;
     reason?: string;
@@ -260,6 +286,7 @@ export async function createEstimateV2SiteAssessment(
     providerCrmApi.estimateV2OpportunityAssessments(opportunityId),
     input,
   );
+  bustEstimateV2Cache();
   return unwrapData<EstimateV2SiteAssessment>(response);
 }
 
@@ -275,7 +302,16 @@ export async function updateEstimateV2SiteAssessment(
     providerCrmApi.estimateV2Assessment(assessmentId),
     patch,
   );
+  bustEstimateV2Cache();
   return unwrapData<EstimateV2SiteAssessment>(response);
+}
+
+export async function deleteEstimateV2SiteAssessment(assessmentId: string) {
+  const response = await deleteData(providerCrmApi.estimateV2Assessment(assessmentId), {
+    silent: false,
+  });
+  bustEstimateV2Cache();
+  return unwrapData<{ id: string; number?: string; deleted: boolean }>(response);
 }
 
 export async function createEstimateV2Estimate(

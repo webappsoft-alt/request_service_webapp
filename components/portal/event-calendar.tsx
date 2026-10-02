@@ -324,12 +324,13 @@ export function EventCalendar({
   }, [employees, memberOptions]);
 
   const visible = useMemo(() => {
-    if (serverFiltered) return localEvents;
     const locked = lockEmployeeId.trim();
     const employeeId = locked || employeeFilter.trim();
     const kind = kindFilter;
     return localEvents.filter((item) => {
       if (kind && item.kind !== kind) return false;
+      // Parent already applied member filter via API — skip again unless locked locally.
+      if (serverFiltered && !locked) return true;
       if (employeeId) {
         const eventEmployeeId = String(item.employeeId || "").trim();
         if (eventEmployeeId !== employeeId) return false;
@@ -338,31 +339,40 @@ export function EventCalendar({
     });
   }, [employeeFilter, localEvents, kindFilter, lockEmployeeId, serverFiltered]);
 
+  const monthWeekdays = useMemo(() => {
+    const firstWeekday = new Date(cursor.year, cursor.month, 1).getDay();
+    return Array.from({ length: 7 }, (_, index) => WEEKDAYS[(firstWeekday + index) % 7]);
+  }, [cursor.month, cursor.year]);
+
   const cells = useMemo(() => {
-    const first = new Date(cursor.year, cursor.month, 1);
-    const gridStart = new Date(first);
-    gridStart.setDate(1 - first.getDay());
-    const all = Array.from({ length: 42 }, (_, index) => {
-      const date = new Date(gridStart);
-      date.setDate(gridStart.getDate() + index);
+    const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
+    const monthDays = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const date = new Date(cursor.year, cursor.month, day);
       const iso = toIso(date);
       return {
         iso,
-        day: date.getDate(),
-        inMonth: date.getMonth() === cursor.month,
+        day,
+        inMonth: true,
         events: visible.filter((item) => eventCovers(item, iso)),
       };
     });
 
-    // Drop trailing weeks that are entirely outside the current month
-    let weekCount = 6;
-    while (weekCount > 4) {
-      const start = (weekCount - 1) * 7;
-      const week = all.slice(start, start + 7);
-      if (week.some((cell) => cell.inMonth)) break;
-      weekCount -= 1;
-    }
-    return all.slice(0, weekCount * 7);
+    // Pad only the trailing end of the last week so the grid stays 7 columns.
+    // Leading empty weekday cells are intentionally omitted — the 1st starts in column 0.
+    const remainder = monthDays.length % 7;
+    const trailing = remainder === 0 ? 0 : 7 - remainder;
+    const trailingCells = Array.from({ length: trailing }, (_, index) => {
+      const date = new Date(cursor.year, cursor.month, daysInMonth + index + 1);
+      return {
+        iso: toIso(date),
+        day: date.getDate(),
+        inMonth: false,
+        events: [] as PortalCalendarEvent[],
+      };
+    });
+
+    return [...monthDays, ...trailingCells];
   }, [cursor.month, cursor.year, visible]);
 
   const weekDays = useMemo(
@@ -607,16 +617,17 @@ export function EventCalendar({
         <Select
           value={kindFilter || "__all__"}
           onValueChange={(value) => {
-            setKindFilter(
+            const next =
               value === "job" ||
-                value === "fixed_service" ||
-                value === "estimate" ||
-                value === "request" ||
-                value === "invoice" ||
-                value === "task"
+              value === "fixed_service" ||
+              value === "estimate" ||
+              value === "visit" ||
+              value === "request" ||
+              value === "invoice" ||
+              value === "task"
                 ? value
-                : "",
-            );
+                : "";
+            setKindFilter(next);
           }}
         >
           <SelectTrigger size="sm" className="h-8 w-40 border-border-soft bg-card">
@@ -684,6 +695,7 @@ export function EventCalendar({
         ) : view === "month" ? (
           <MonthGrid
             cells={cells}
+            weekdays={monthWeekdays}
             today={today}
             selectedDay={selectedDay}
             overDay={overDay}
@@ -861,6 +873,7 @@ export function EventCalendar({
 
 function MonthGrid({
   cells,
+  weekdays = WEEKDAYS,
   today,
   selectedDay,
   overDay,
@@ -874,6 +887,8 @@ function MonthGrid({
   onContextMenuDay,
 }: {
   cells: { iso: string; day: number; inMonth: boolean; events: PortalCalendarEvent[] }[];
+  /** Rotating weekday labels so the 1st of the month starts in the first column. */
+  weekdays?: string[];
   today: string;
   selectedDay: string;
   overDay: string | null;
@@ -897,11 +912,11 @@ function MonthGrid({
         className="grid grid-cols-7 bg-[#f7f8fa]"
         style={{ borderBottom: `1px solid ${gridLine}` }}
       >
-        {WEEKDAYS.map((day, index) => {
-          const weekend = index === 0 || index === 6;
+        {weekdays.map((day, index) => {
+          const weekend = day === "Sun" || day === "Sat";
           return (
             <p
-              key={day}
+              key={`${day}-${index}`}
               className={cn(
                 "px-2 py-2.5 text-center text-[11px] font-semibold tracking-wide uppercase",
                 weekend ? "bg-[#c5ceda] text-slate-700" : "text-muted-foreground",
@@ -915,15 +930,15 @@ function MonthGrid({
       </div>
       <div className="grid grid-cols-7">
         {cells.map((cell, index) => {
-          const weekday = index % 7;
-          const weekend = weekday === 0 || weekday === 6;
-          const isLastCol = weekday === 6;
+          const isLastCol = index % 7 === 6;
           const isLastRow = index >= cells.length - 7;
+          const cellWeekday = weekdays[index % 7] || "";
+          const weekend = cellWeekday === "Sun" || cellWeekday === "Sat";
 
           if (!cell.inMonth) {
             const next = index < cells.length - 1 ? cells[index + 1] : null;
             // Merge adjacent out-of-month cells into one muted block (no internal lines)
-            const mergeWithNext = Boolean(next && !next.inMonth && weekday < 6);
+            const mergeWithNext = Boolean(next && !next.inMonth && !isLastCol);
 
             return (
               <div

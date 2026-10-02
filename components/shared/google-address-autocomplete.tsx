@@ -275,7 +275,9 @@ export function GoogleAddressAutocomplete({
     };
   }, [open, suggestions.length, updateMenuPosition]);
 
-  // Close when clicking outside input + menu.
+  // Close when interacting outside input + menu. Selection itself is handled on
+  // the option's pointerdown — preventDefault there suppresses the later click
+  // event, so we must not rely on click for choosing a suggestion.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: PointerEvent) {
@@ -283,49 +285,46 @@ export function GoogleAddressAutocomplete({
       if (!(target instanceof Node)) return;
       if (rootRef.current?.contains(target)) return;
       const menu = document.getElementById(listboxId);
-      if (menu?.contains(target)) return;
-      setOpen(false);
-      setActiveIndex(-1);
-    }
-    function onMenuClick(event: MouseEvent) {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const btn = target.closest<HTMLButtonElement>(`button[data-place-id]`);
-      if (!btn) return;
-      const placeId = btn.getAttribute("data-place-id");
-      if (!placeId) return;
-      const item = suggestions.find((s) => s.placeId === placeId);
-      if (item) {
-        event.preventDefault();
-        event.stopPropagation();
-        void selectPrediction(item);
-      }
-    }
-    function onMenuMouseDown(event: MouseEvent) {
-      if (!(event.target instanceof Node)) return;
-      const menu = document.getElementById(listboxId);
-      if (menu?.contains(event.target)) {
+      if (menu?.contains(target)) {
         if (blurCloseTimerRef.current) {
           clearTimeout(blurCloseTimerRef.current);
           blurCloseTimerRef.current = null;
         }
+        return;
       }
+      setOpen(false);
+      setActiveIndex(-1);
     }
     document.addEventListener("pointerdown", onPointerDown, true);
-    const menu = document.getElementById(listboxId);
-    if (menu) {
-      menu.addEventListener("click", onMenuClick, true);
-      menu.addEventListener("mousedown", onMenuMouseDown, true);
-    }
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
-      const m = document.getElementById(listboxId);
-      if (m) {
-        m.removeEventListener("click", onMenuClick, true);
-        m.removeEventListener("mousedown", onMenuMouseDown, true);
-      }
     };
-  }, [open, listboxId, suggestions]);
+  }, [open, listboxId]);
+
+  // Keep the portaled menu interactive inside Radix dialogs (body can get
+  // pointer-events:none / inert while the modal is open).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    let raf = 0;
+    const unlock = () => {
+      if (cancelled) return;
+      const menu = document.getElementById(listboxId);
+      if (menu) {
+        menu.removeAttribute("inert");
+        menu.removeAttribute("aria-hidden");
+        if (menu.style.pointerEvents !== "auto") {
+          menu.style.pointerEvents = "auto";
+        }
+      }
+      raf = window.requestAnimationFrame(unlock);
+    };
+    raf = window.requestAnimationFrame(unlock);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+    };
+  }, [open, listboxId]);
 
   function displayFromParsed(parsed: PlaceAddress): string {
     const streetLine = streetDisplayFromParsed(parsed);
@@ -612,7 +611,7 @@ export function GoogleAddressAutocomplete({
             style={menuStyle}
             className="overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-lg"
             onMouseDown={(event) => {
-              // Keep input focus; selection is handled on pointer/click.
+              // Keep input focus so blur doesn't close the menu mid-select.
               event.preventDefault();
             }}
           >
@@ -633,14 +632,19 @@ export function GoogleAddressAutocomplete({
                   aria-selected={active}
                   data-place-id={item.placeId}
                   className={cn(
-                    "flex w-full items-start gap-2 px-3 py-2.5 text-left text-sm transition-colors",
+                    "flex w-full cursor-pointer items-start gap-2 px-3 py-2.5 text-left text-sm transition-colors",
                     active ? "bg-muted" : "hover:bg-muted/70",
                   )}
                   onMouseEnter={() => setActiveIndex(index)}
                   onPointerDown={(event) => {
+                    // preventDefault keeps focus on the input (no blur), but that
+                    // also suppresses the subsequent click — select here instead.
                     event.preventDefault();
-                  }}
-                  onClick={() => {
+                    event.stopPropagation();
+                    if (blurCloseTimerRef.current) {
+                      clearTimeout(blurCloseTimerRef.current);
+                      blurCloseTimerRef.current = null;
+                    }
                     void selectPrediction(item);
                   }}
                 >

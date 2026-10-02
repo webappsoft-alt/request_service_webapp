@@ -53,7 +53,12 @@ export function TeamView() {
   const useApi =
     auth.hydrated &&
     Boolean(auth.token) &&
-    (user?.role === "provider" || auth.role === "provider");
+    (user?.role === "provider" ||
+      user?.role === "pro" ||
+      user?.role === "admin" ||
+      auth.role === "provider" ||
+      auth.role === "pro" ||
+      auth.role === "admin");
 
   const slice = useAppSelector((state) => state.team);
   const {
@@ -223,7 +228,7 @@ export function TeamView() {
           },
           {
             id: "trade",
-            header: "Trade",
+            header: "Expertise",
             sortValue: (row) => row.trade,
             searchValue: (row) => row.trade,
             exportValue: (row) => row.trade,
@@ -346,7 +351,7 @@ function EmployeeFormDialog({
   employee?: PortalEmployee | null;
 }) {
   const dispatch = useAppDispatch();
-  const { addEmployee, updateEmployee } = usePortalCrew();
+  const { updateEmployee } = usePortalCrew();
   const mutating = useAppSelector((state) => state.team?.mutating ?? false);
   const isEdit = Boolean(employee);
   const [firstName, setFirstName] = useState("");
@@ -409,11 +414,11 @@ function EmployeeFormDialog({
         }
       } else if (useApi) {
         const created = await dispatch(createTeamMember(input)).unwrap();
+        await dispatch(fetchTeam({ force: true }));
         toast.success(`${created.firstName} ${created.lastName} added. Assign them from Schedule.`);
       } else {
-        const created = await Promise.resolve(addEmployee(input));
-        if (!created) return;
-        toast.success(`${created.firstName} ${created.lastName} added. Assign them from Schedule.`);
+        toast.error("Sign in as a provider to create employees on the server.");
+        return;
       }
       reset();
       onOpenChange(false);
@@ -486,11 +491,11 @@ function EmployeeFormDialog({
             </Select>
           </Field>
           <Field>
-            <FieldLabel htmlFor="emp-trade">Trade</FieldLabel>
+            <FieldLabel htmlFor="emp-trade">Expertise</FieldLabel>
             <Input
               id="emp-trade"
               value={trade}
-              placeholder="Plumbing, HVAC, General…"
+              placeholder="Plumbing, HVAC, Electrical…"
               onChange={(change) => setTrade(change.target.value)}
             />
           </Field>

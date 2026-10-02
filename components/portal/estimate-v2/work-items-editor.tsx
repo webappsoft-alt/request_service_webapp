@@ -110,10 +110,10 @@ export function WorkItemsEditor({
     <div className={cn("space-y-3", className)}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
             {title}
           </h3>
-          <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p>
         </div>
         {!disabled ? (
           <div className="flex flex-wrap gap-1.5">
@@ -133,29 +133,29 @@ export function WorkItemsEditor({
         ) : null}
       </div>
 
-      <div className="w-full overflow-x-auto rounded-lg border border-border-soft bg-card">
+      <div className="w-full overflow-x-auto rounded-xl border border-[#94a3b8] bg-white">
         <Table className="w-full min-w-0 table-fixed">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="h-8 min-w-0 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <TableHead className="h-8 min-w-0 bg-[#f8fafc] px-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Description
               </TableHead>
-              <TableHead className="h-8 w-[5.5rem] bg-[#f7f8fa] px-1 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <TableHead className="h-8 w-[8.25rem] bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Type
               </TableHead>
-              <TableHead className="h-8 w-12 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <TableHead className="h-8 w-12 bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Qty
               </TableHead>
-              <TableHead className="h-8 w-14 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <TableHead className="h-8 w-14 bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Unit
               </TableHead>
-              <TableHead className="h-8 w-16 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <TableHead className="h-8 w-16 bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Price
               </TableHead>
-              <TableHead className="h-8 w-16 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <TableHead className="h-8 w-[4.75rem] bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Total
               </TableHead>
-              <TableHead className="h-8 w-8 bg-[#f7f8fa]">
+              <TableHead className="h-8 w-8 bg-[#f8fafc]">
                 <span className="sr-only">Remove</span>
               </TableHead>
             </TableRow>
@@ -172,7 +172,7 @@ export function WorkItemsEditor({
                       ? item.unit
                       : "ea";
                 const softField =
-                  "h-8 border-border-soft bg-[#fafbfc] shadow-none focus-visible:bg-card";
+                  "h-8 border-[#94a3b8] bg-[#fafbfc] shadow-none focus-visible:bg-card";
                 const numberField =
                   "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
@@ -194,7 +194,7 @@ export function WorkItemsEditor({
                         className={cn(softField, "w-full min-w-0 text-sm")}
                       />
                     </TableCell>
-                    <TableCell className="w-[5.5rem] align-top px-1 py-2">
+                    <TableCell className="w-[8.25rem] align-top px-1 py-2">
                       <Select
                         value={type}
                         disabled={disabled}
@@ -207,7 +207,7 @@ export function WorkItemsEditor({
                           size="sm"
                           className={cn(
                             softField,
-                            "w-full min-w-0 justify-center gap-0.5 px-1.5 text-xs *:data-[slot=select-value]:line-clamp-none",
+                            "w-full min-w-0 justify-between gap-1 py-0 pl-2.5 pr-1.5 text-xs [&_svg:not([class*='size-'])]:size-3.5 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate",
                           )}
                         >
                           <SelectValue placeholder="Type" />
@@ -254,7 +254,7 @@ export function WorkItemsEditor({
                           size="sm"
                           className={cn(
                             softField,
-                            "w-full min-w-0 justify-center gap-0.5 px-1 text-xs *:data-[slot=select-value]:line-clamp-none",
+                            "w-full min-w-0 justify-between gap-1 py-0 pl-2.5 pr-1.5 text-xs [&_svg:not([class*='size-'])]:size-3.5 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:truncate",
                           )}
                         >
                           <SelectValue placeholder="Unit" />
@@ -303,21 +303,25 @@ export function WorkItemsEditor({
                         />
                       </div>
                     </TableCell>
-                    <TableCell className="w-16 whitespace-nowrap align-middle px-0.5 py-2 text-center text-xs font-medium tabular-nums">
-                      {formatMoney(lineTotal(item))}
+                    <TableCell className="w-[4.75rem] whitespace-nowrap align-top px-0.5 py-2 text-center text-xs font-medium tabular-nums">
+                      <div className="flex h-8 items-center justify-center self-start leading-none">
+                        {formatMoney(lineTotal(item))}
+                      </div>
                     </TableCell>
                     <TableCell className="w-8 align-top px-0 py-2 text-center">
                       {!disabled ? (
-                        <Button
-                          aria-label={`Remove ${item.description || "work item"}`}
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          size="icon-sm"
-                          variant="ghost"
-                          type="button"
-                          onClick={() => remove(index)}
-                        >
-                          <Trash2 />
-                        </Button>
+                        <div className="flex h-8 items-center justify-center self-start">
+                          <Button
+                            aria-label={`Remove ${item.description || "work item"}`}
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            size="icon-sm"
+                            variant="ghost"
+                            type="button"
+                            onClick={() => remove(index)}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
                       ) : null}
                     </TableCell>
                   </TableRow>

@@ -27,6 +27,26 @@ type AddressComponent = {
   types?: string[];
 };
 
+/** Common formatted-address spellings that differ from Google's country short_name. */
+const COUNTRY_ALIASES: Record<string, string[]> = {
+  us: [
+    "us",
+    "usa",
+    "u.s.",
+    "u.s.a.",
+    "u.s.a",
+    "united states",
+    "united states of america",
+  ],
+  gb: ["gb", "uk", "u.k.", "united kingdom", "great britain"],
+  ca: ["ca", "canada"],
+  au: ["au", "australia"],
+  nz: ["nz", "new zealand"],
+  pk: ["pk", "pakistan"],
+  in: ["in", "india"],
+  mx: ["mx", "mexico"],
+};
+
 function componentLong(components: AddressComponent[] | undefined, type: string): string {
   const match = (components ?? []).find((item) => item.types?.includes(type));
   if (!match) return "";
@@ -39,11 +59,29 @@ function componentShort(components: AddressComponent[] | undefined, type: string
   return String(match.short_name || match.shortText || match.long_name || match.longText || "").trim();
 }
 
+function countryAliasTokens(countryShort: string, countryLong: string): string[] {
+  const seeds = [countryShort, countryLong]
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  const out = new Set<string>(seeds);
+  for (const seed of seeds) {
+    const byCode = COUNTRY_ALIASES[seed];
+    if (byCode) {
+      for (const alias of byCode) out.add(alias);
+    }
+    for (const [code, aliases] of Object.entries(COUNTRY_ALIASES)) {
+      if (aliases.includes(seed)) {
+        out.add(code);
+        for (const alias of aliases) out.add(alias);
+      }
+    }
+  }
+  return Array.from(out);
+}
+
 /**
- * Address field value: everything from Google's formatted address except
- * city, state, ZIP, and country — e.g.
- * "C422+752, 1 1 Batala Colony, Faisalabad, 38000, Pakistan"
- * → "C422+752, 1 1 Batala Colony"
+ * Address field value: street / place line only — never city, state, ZIP, or country.
+ * Prefer Google's street_number + route when present (e.g. "1041 Galapago St").
  */
 function streetLineFromParts(
   components: AddressComponent[] | undefined,
@@ -61,9 +99,33 @@ function streetLineFromParts(
   const zip =
     componentLong(components, "postal_code") ||
     componentShort(components, "postal_code");
+  const zipSuffix = componentLong(components, "postal_code_suffix");
+
+  const streetNumber =
+    componentShort(components, "street_number") ||
+    componentLong(components, "street_number");
+  const route =
+    componentShort(components, "route") || componentLong(components, "route");
+  const fromStreet = [streetNumber, route].filter(Boolean).join(" ").trim();
+  if (fromStreet) {
+    const unit =
+      componentShort(components, "subpremise") ||
+      componentLong(components, "subpremise");
+    return unit ? `${fromStreet} #${unit}` : fromStreet;
+  }
 
   const dropExact = new Set(
-    [city, stateShort, stateLong, countryShort, countryLong, zip]
+    [
+      city,
+      stateShort,
+      stateLong,
+      countryShort,
+      countryLong,
+      zip,
+      zipSuffix,
+      zip && zipSuffix ? `${zip}-${zipSuffix}` : "",
+      ...countryAliasTokens(countryShort, countryLong),
+    ]
       .map((part) => part.trim().toLowerCase())
       .filter(Boolean),
   );
@@ -78,6 +140,9 @@ function streetLineFromParts(
     if (!lower) return true;
     if (dropExact.has(lower)) return true;
 
+    // Lone country alias even when Google's short_name was "US" but text says "USA".
+    if (countryAliasTokens(countryShort, countryLong).includes(lower)) return true;
+
     const tokens = lower.split(/\s+/).filter(Boolean);
     const hasZip = Boolean(
       zipLower &&
@@ -88,8 +153,10 @@ function streetLineFromParts(
     );
     const hasState = stateTokens.some((token) => tokens.includes(token));
 
-    // "CA 90210", "IL 62701-1234", or a lone ZIP segment
+    // "CA 90210", "IL 62701-1234", "Denver CO", or a lone ZIP segment
     if (hasZip && (hasState || tokens.length <= 2)) return true;
+    if (hasState && tokens.length === 1) return true;
+    if (hasState && hasZip) return true;
     return false;
   }
 
@@ -102,10 +169,7 @@ function streetLineFromParts(
     if (joined) return joined;
   }
 
-  // Fallback when formatted address is missing: street + local name.
-  const streetNumber = componentLong(components, "street_number");
-  const route = componentLong(components, "route");
-  const fromStreet = [streetNumber, route].filter(Boolean).join(" ").trim();
+  // Fallback when formatted address is missing: premise / neighborhood / name.
   const localName =
     [
       componentLong(components, "premise"),
@@ -117,12 +181,12 @@ function streetLineFromParts(
       .map((part) => part.trim())
       .find((part) => part && !dropExact.has(part.toLowerCase())) || "";
 
-  return [fromStreet, localName].filter(Boolean).join(", ").trim();
+  return localName;
 }
 
 /**
  * Canonical parser from GOOGLE_AUTOCOMPLETE.md / binsapp `parseAddressComponents`.
- * Address field = formatted address minus city / state / ZIP / country.
+ * Address field = street / place line only (never city / state / ZIP / country).
  */
 export function parseGoogleAddressComponents(
   components: AddressComponent[] | undefined,

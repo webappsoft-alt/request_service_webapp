@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
@@ -76,6 +76,36 @@ const PREP_OPTIONS = [
     body: "On-site or ready to price immediately.",
   },
 ] as const;
+
+const RAIL_CARD =
+  "rounded-2xl border border-[#94a3b8] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+const MAIN_CARD =
+  "rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
+      {children}
+    </h2>
+  );
+}
+
+function opportunityStatusTone(status: string) {
+  const key = status.toLowerCase();
+  if (key.includes("accepted") || key.includes("completed") || key.includes("converted")) {
+    return "bg-emerald-50 text-emerald-800 ring-emerald-200/80";
+  }
+  if (key.includes("sent") || key.includes("scheduled") || key.includes("assessment")) {
+    return "bg-sky-50 text-sky-800 ring-sky-200/80";
+  }
+  if (key.includes("reject") || key.includes("cancel") || key.includes("expired")) {
+    return "bg-rose-50 text-rose-800 ring-rose-200/80";
+  }
+  if (key.includes("draft") || key.includes("new")) {
+    return "bg-slate-100 text-slate-700 ring-slate-200/80";
+  }
+  return "bg-amber-50 text-amber-900 ring-amber-200/80";
+}
 
 function customerNameFromOpportunity(opportunity: EstimateV2Opportunity) {
   const c = opportunity.customerId;
@@ -156,8 +186,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [prepWorkItems, setPrepWorkItems] = useState<AssessmentWorkItem[]>([]);
   const prepInfoRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) setLoading(true);
     try {
       const data = await getEstimateV2Opportunity(opportunityId);
       setOpportunity(data);
@@ -238,7 +269,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load estimate.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [opportunityId]);
 
@@ -350,6 +381,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     opportunity?.status === "estimate_sent" ||
     opportunity?.status === "won";
 
+  /** On the visit path, keep the long builder hidden until Build estimate creates a draft. */
+  const showEstimateSection =
+    Boolean(estimate) || !showVisits || !canBuildEstimate;
+
   async function ensureEstimate() {
     if (!opportunity) return null;
     if (estimate?.id) return estimate;
@@ -382,10 +417,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     try {
       await updateEstimateV2Opportunity(opportunity.id, { prepChoice });
       if (prepChoice === "schedule_assessment" && visits.length === 0) {
+        const customerDescription = String(opportunity.description || "").trim();
+        const officeNotes = String(opportunity.internalNotes || "").trim();
         await createEstimateV2SiteAssessment(opportunity.id, {
           status: "scheduled",
           visitType: "initial_assessment",
-          instructions: opportunity.description || opportunity.title,
+          instructions: customerDescription || opportunity.title,
+          // Copies from estimate create — edits on the visit stay on the assessment only.
+          customerRequirements: customerDescription,
+          findings: officeNotes || customerDescription,
         });
       }
       await load();
@@ -616,7 +656,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       title={`${opportunity.number} · ${opportunity.title}`}
       description={`${customerNameFromOpportunity(opportunity)} · ${propertyLine(opportunity)}`}
       badge={
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium capitalize text-slate-700">
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ring-1 ring-inset",
+            opportunityStatusTone(opportunity.status),
+          )}
+        >
           {opportunity.status.replace(/_/g, " ")}
         </span>
       }
@@ -626,42 +671,38 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         </Button>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.55fr)_minmax(0,2.45fr)]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.58fr)_minmax(0,2.42fr)]">
         {/* Left rail */}
-        <section className="space-y-3 lg:sticky lg:top-4 lg:self-start">
-          <div className="rounded-xl border border-input bg-card p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Customer & property
-            </h2>
-            <p className="mt-2 text-sm font-semibold text-foreground">
+        <section className="space-y-3.5 lg:sticky lg:top-4 lg:self-start">
+          <div className={RAIL_CARD}>
+            <SectionLabel>Customer & property</SectionLabel>
+            <p className="mt-2.5 text-[15px] font-semibold tracking-tight text-slate-900">
               {customerNameFromOpportunity(opportunity)}
             </p>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">
               {propertyLine(opportunity)}
             </p>
           </div>
 
-          <div className="rounded-xl border border-input bg-card p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Work request
-            </h2>
+          <div className={RAIL_CARD}>
+            <SectionLabel>Work request</SectionLabel>
             {opportunity.categoryName ? (
-              <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
+              <p className="mt-2.5 inline-flex rounded-md bg-primary/8 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-primary uppercase">
                 {opportunity.categoryName}
               </p>
             ) : null}
-            <p className="mt-1 text-sm font-semibold">{opportunity.title}</p>
+            <p className="mt-2 text-[15px] font-semibold tracking-tight text-slate-900">
+              {opportunity.title}
+            </p>
             {opportunity.description ? (
-              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
                 {opportunity.description}
               </p>
             ) : null}
           </div>
 
-          <div className="rounded-xl border border-input bg-card p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              How will this estimate be prepared?
-            </h2>
+          <div className={RAIL_CARD}>
+            <SectionLabel>How will this estimate be prepared?</SectionLabel>
             <div className="mt-3 grid gap-2">
               {PREP_OPTIONS.map((option) => {
                 const selected = opportunity.prepChoice === option.id;
@@ -672,10 +713,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     disabled={saving}
                     onClick={() => void setPrepChoice(option.id)}
                     className={cn(
-                      "flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition",
+                      "flex w-full items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition",
                       selected
-                        ? "border-primary bg-primary/8 shadow-[inset_0_0_0_1px_hsl(var(--primary))]"
-                        : "border-input hover:border-primary/40 hover:bg-secondary/50",
+                        ? "border-primary bg-primary/[0.06] ring-1 ring-primary/30"
+                        : "border-[#94a3b8] bg-[#fafbfc] hover:border-primary/50 hover:bg-white",
                     )}
                   >
                     <span
@@ -683,16 +724,21 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
                         selected
                           ? "border-primary bg-primary text-primary-foreground"
-                          : "border-input bg-background",
+                          : "border-slate-300 bg-white",
                       )}
                     >
                       {selected ? <Check className="size-2.5 stroke-[3]" /> : null}
                     </span>
                     <span className="min-w-0">
-                      <span className={cn("block text-sm", selected ? "font-semibold" : "font-medium")}>
+                      <span
+                        className={cn(
+                          "block text-sm tracking-tight",
+                          selected ? "font-semibold text-slate-900" : "font-medium text-slate-800",
+                        )}
+                      >
                         {option.title}
                       </span>
-                      <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                      <span className="mt-0.5 block text-xs leading-snug text-slate-500">
                         {option.body}
                       </span>
                     </span>
@@ -705,11 +751,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           {(estimate?.status === "sent" ||
             estimate?.status === "finalized" ||
             opportunity.status === "estimate_sent") && (
-            <div className="rounded-xl border border-input bg-card p-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Follow-up
-              </h2>
-              <p className="mt-1 text-xs text-muted-foreground">
+            <div className={RAIL_CARD}>
+              <SectionLabel>Follow-up</SectionLabel>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
                 Customer hasn&apos;t accepted yet — set a follow-up.
               </p>
               <div className="mt-3 grid gap-2">
@@ -728,23 +772,21 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           )}
 
           {opportunity.activities?.length ? (
-            <div className="rounded-xl border border-input bg-card p-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Activity
-              </h2>
-              <ol className="relative mt-3 space-y-0 border-l border-input pl-4">
+            <div className={RAIL_CARD}>
+              <SectionLabel>Activity</SectionLabel>
+              <ol className="relative mt-3 space-y-0 border-l border-[#b4becc] pl-4">
                 {[...opportunity.activities]
                   .reverse()
                   .slice(0, 10)
                   .map((item, index) => (
                     <li key={`${item.at}-${index}`} className="relative pb-4 last:pb-0">
-                      <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full border-2 border-primary bg-background" />
-                      <p className="text-sm font-medium text-foreground">{item.action}</p>
+                      <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full border-2 border-primary bg-white" />
+                      <p className="text-sm font-medium text-slate-900">{item.action}</p>
                       {item.details ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{item.details}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{item.details}</p>
                       ) : null}
                       {item.at ? (
-                        <p className="mt-1 text-[11px] text-muted-foreground/80">
+                        <p className="mt-1 text-[11px] text-slate-400">
                           {formatDate(item.at)}
                         </p>
                       ) : null}
@@ -761,11 +803,26 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             <SiteVisitsPanel
               opportunityId={opportunity.id}
               opportunityTitle={opportunity.title}
+              opportunityDescription={opportunity.description || ""}
+              opportunityInternalNotes={opportunity.internalNotes || ""}
               visits={visits}
               employees={employees}
               saving={saving}
               onRefresh={load}
               onSavingChange={setSaving}
+              showBuildEstimate={canBuildEstimate}
+              hasEstimate={Boolean(estimate?.id)}
+              onBuildEstimate={async () => {
+                if (!estimate?.id) {
+                  await ensureEstimate();
+                }
+                window.setTimeout(() => {
+                  estimateSectionRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }, 120);
+              }}
             />
           ) : null}
 
@@ -787,33 +844,34 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             </div>
           ) : null}
 
-          {/* Estimate builder */}
-          <div ref={estimateSectionRef} className="rounded-xl border border-input bg-card p-5">
+          {/* Estimate builder — hidden on visit path until Build estimate creates a draft */}
+          {showEstimateSection ? (
+          <div ref={estimateSectionRef} className={MAIN_CARD}>
             {canBuildEstimate ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#d8dee8] pb-4">
                   <div>
-                    <h2 className="text-base font-semibold">
+                    <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                       Estimate{estimate?.number ? ` · ${estimate.number}` : ""}
                     </h2>
-                    <p className="text-xs capitalize text-muted-foreground">
+                    <p className="mt-0.5 text-sm capitalize text-slate-500">
                       {estimate?.status?.replace(/_/g, " ") || "Ready to build"}
                     </p>
                     {informationSourceLabel ? (
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="mt-1.5 text-xs text-slate-500">
                         Information source ·{" "}
-                        <span className="font-medium text-foreground">{informationSourceLabel}</span>
+                        <span className="font-medium text-slate-800">{informationSourceLabel}</span>
                       </p>
                     ) : null}
                   </div>
-                  {!estimate ? (
+                  {!estimate && !showVisits ? (
                     <Button size="sm" disabled={saving} onClick={() => void ensureEstimate()}>
                       Build estimate
                     </Button>
                   ) : null}
                 </div>
 
-                <div className="mt-4 space-y-4">
+                <div className="mt-5 space-y-5">
                   <div className="space-y-1.5">
                     <Label htmlFor="scope">Scope of work</Label>
                     <Textarea
@@ -823,14 +881,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       disabled={estimateLocked}
                       onChange={(e) => setScopeOfWork(e.target.value)}
                       placeholder="Customer-facing description of the work…"
+                      className="min-h-[88px] resize-y bg-[#fafbfc]"
                     />
                   </div>
 
                   <div>
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <Label>Line items</Label>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-xs text-slate-500">
                           Labour, materials, equipment — qty × unit price
                         </p>
                       </div>
@@ -866,12 +925,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     <LineItemsEditor lines={lines} onChange={setLines} locked={estimateLocked} />
                   </div>
 
-                  <div className="overflow-hidden rounded-lg border border-border-soft bg-card">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-border-soft bg-[#f7f8fa] px-3 py-2">
-                      <h3 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <div className="overflow-hidden rounded-xl border border-[#b4becc] bg-[#f8fafc]">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-[#b4becc] px-4 py-2.5">
+                      <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                         Estimate summary
                       </h3>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-slate-500">
                         {[
                           estimate?.number,
                           opportunity.categoryName,
@@ -884,41 +943,41 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       </p>
                     </div>
 
-                    <div className="grid gap-6 p-4 sm:grid-cols-2">
-                      <div className="space-y-2 text-sm">
+                    <div className="grid gap-6 bg-white p-4 sm:grid-cols-2">
+                      <div className="space-y-2.5 text-sm">
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">Labour</span>
-                          <span className="font-medium tabular-nums">{formatMoney(mix.labor)}</span>
+                          <span className="text-slate-500">Labour</span>
+                          <span className="font-medium tabular-nums text-slate-900">{formatMoney(mix.labor)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">Material</span>
-                          <span className="font-medium tabular-nums">{formatMoney(mix.materials)}</span>
+                          <span className="text-slate-500">Material</span>
+                          <span className="font-medium tabular-nums text-slate-900">{formatMoney(mix.materials)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">Equipment</span>
-                          <span className="font-medium tabular-nums">{formatMoney(mix.equipment)}</span>
+                          <span className="text-slate-500">Equipment</span>
+                          <span className="font-medium tabular-nums text-slate-900">{formatMoney(mix.equipment)}</span>
                         </div>
                       </div>
 
-                      <div className="space-y-2 text-sm sm:border-l sm:border-border-soft sm:pl-6">
+                      <div className="space-y-2.5 text-sm sm:border-l sm:border-[#d8dee8] sm:pl-6">
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">Subtotal</span>
-                          <span className="tabular-nums">{formatMoney(subtotal)}</span>
+                          <span className="text-slate-500">Subtotal</span>
+                          <span className="tabular-nums text-slate-900">{formatMoney(subtotal)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <Label htmlFor="discount" className="text-muted-foreground">
+                          <Label htmlFor="discount" className="text-slate-500">
                             Discount
                           </Label>
                           <div className="relative w-24">
                             <span
                               aria-hidden="true"
-                              className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs text-muted-foreground"
+                              className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs text-slate-400"
                             >
                               $
                             </span>
                             <Input
                               id="discount"
-                              className="h-8 border-border-soft bg-[#fafbfc] pl-4 pr-1 text-right text-xs tabular-nums shadow-none"
+                              className="h-8 border-[#b4becc] bg-[#fafbfc] pl-4 pr-1 text-right text-xs tabular-nums shadow-none"
                               type="number"
                               min={0}
                               step="0.01"
@@ -928,24 +987,24 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                             />
                           </div>
                         </div>
-                        <div className="flex items-center justify-between gap-4 text-muted-foreground">
+                        <div className="flex items-center justify-between gap-4 text-slate-500">
                           <span>Tax ({taxRatePercent}%)</span>
                           <span className="tabular-nums">{formatMoney(taxAmount)}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-4 border-t border-border-soft pt-2 text-base font-semibold">
+                        <div className="flex items-center justify-between gap-4 border-t border-[#d8dee8] pt-2.5 text-base font-semibold text-slate-900">
                           <span>Total</span>
                           <span className="tabular-nums">{formatMoney(grandTotal)}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-border-soft px-3 py-3">
-                      <Label htmlFor="terms" className="text-[11px] text-muted-foreground">
+                    <div className="border-t border-[#b4becc] bg-white px-4 py-3">
+                      <Label htmlFor="terms" className="text-[11px] text-slate-500">
                         Terms
                       </Label>
                       <Input
                         id="terms"
-                        className="mt-1 h-8 border-border-soft bg-[#fafbfc] shadow-none"
+                        className="mt-1 h-8 border-[#b4becc] bg-[#fafbfc] shadow-none"
                         value={terms}
                         disabled={estimateLocked}
                         onChange={(e) => setTerms(e.target.value)}
@@ -958,11 +1017,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     visitSupportSummary.noteCount > 0 ||
                     visitSupportSummary.measurementCount > 0 ||
                     visitSupportSummary.workItemCount > 0) ? (
-                    <div className="rounded-lg border border-dashed border-input px-4 py-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div className="rounded-xl border border-dashed border-[#b4becc] bg-[#fafbfc] px-4 py-3.5">
+                      <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                         Supporting information
                       </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
+                      <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
                         {visitSupportSummary.fromExistingInformation
                           ? "From existing information"
                           : `From ${visitSupportSummary.visitCount || 0} site visit${
@@ -981,13 +1040,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           ? ` · ${visitSupportSummary.measurementCount} measurement(s)`
                           : ""}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-slate-500">
                         Measurements stay informational. Work items seed the line items above — edit freely.
                       </p>
                     </div>
                   ) : null}
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 border-t border-[#d8dee8] pt-4">
                     <Button
                       size="sm"
                       variant="outline"
@@ -1020,13 +1079,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               </>
             ) : (
               <>
-                <h2 className="text-base font-semibold">Estimate</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Choose <span className="font-medium text-foreground">Create estimate now</span> or{" "}
-                  <span className="font-medium text-foreground">I already have the information</span>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900">Estimate</h2>
+                <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-slate-600">
+                  Choose <span className="font-medium text-slate-900">Create estimate now</span> or{" "}
+                  <span className="font-medium text-slate-900">I already have the information</span>
                   , or complete a site visit first.
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     disabled={saving}
@@ -1046,6 +1105,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               </>
             )}
           </div>
+          ) : (
+            <div ref={estimateSectionRef} className="h-0 overflow-hidden" aria-hidden />
+          )}
         </section>
       </div>
 

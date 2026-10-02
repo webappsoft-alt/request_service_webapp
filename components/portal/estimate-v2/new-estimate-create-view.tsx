@@ -17,7 +17,13 @@ import {
 import { PortalPage } from "@/components/portal/portal-page";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import {
+  AddressFields,
+  type AddressFieldsValue,
+} from "@/components/shared/address-fields";
+import { Checkbox } from "@/components/ui/checkbox";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
+import { getServiceCategoryById } from "@/lib/data/services";
 import {
   createEstimateV2Opportunity,
   updateEstimateV2Opportunity,
@@ -27,19 +33,34 @@ import {
 import { updateCustomer } from "@/lib/api/crm-client";
 import type { ServiceAddress } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { selectAuth, selectAuthUser } from "@/store/authSlice";
+import { selectAuth, selectAuthProvider, selectAuthUser } from "@/store/authSlice";
 import { fetchCustomers } from "@/store/customersSlice";
 import { cn } from "@/lib/utils";
 
-const SERVICE_CATEGORIES = [
-  "HVAC",
-  "Plumbing",
-  "Electrical",
-  "Painting",
-  "Remodeling",
-  "Roofing",
-  "Other",
-];
+const EMPTY_PROPERTY: AddressFieldsValue = {
+  address: "",
+  city: "",
+  state: "",
+  zip: "",
+  lat: null,
+  lng: null,
+};
+
+const SETUP_CATEGORIES_VALUE = "__setup_service_categories__";
+const PROFILE_CATEGORIES_HREF = "/pro/dashboard/profile?step=categories";
+
+function serviceAddressToFields(addr?: ServiceAddress | null): AddressFieldsValue {
+  if (!addr) return EMPTY_PROPERTY;
+  const street = String(addr.address || addr.street || "").trim();
+  return {
+    address: street,
+    city: String(addr.city || "").trim(),
+    state: String(addr.state || "").trim(),
+    zip: String(addr.zip || "").trim(),
+    lat: addr.lat ?? addr.latitude ?? null,
+    lng: addr.lng ?? addr.longitude ?? null,
+  };
+}
 
 type Step = "customer" | "request" | "prep";
 
@@ -61,9 +82,26 @@ export function NewEstimateCreateView() {
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
+  const authProvider = useAppSelector(selectAuthProvider);
   const reduxCustomers = useAppSelector((state) => state.customers?.items || []);
   const customersLoading = useAppSelector((state) => Boolean(state.customers?.loading));
   const { customers: directoryCustomers } = useCrmDirectory();
+
+  const providerCategories = useMemo(() => {
+    const ids = Array.isArray(authProvider?.services?.categoryIds)
+      ? authProvider.services.categoryIds
+      : [];
+    const seen = new Set<string>();
+    const list: Array<{ id: string; name: string }> = [];
+    for (const id of ids) {
+      const category = getServiceCategoryById(id);
+      const name = (category?.name || category?.shortName || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      list.push({ id, name });
+    }
+    return list;
+  }, [authProvider?.services?.categoryIds]);
 
   const [step, setStep] = useState<Step>("customer");
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
@@ -75,10 +113,8 @@ export function NewEstimateCreateView() {
   const [customerQuery, setCustomerQuery] = useState("");
   const [addressId, setAddressId] = useState("");
 
-  const [newStreet, setNewStreet] = useState("");
-  const [newCity, setNewCity] = useState("");
-  const [newState, setNewState] = useState("");
-  const [newZip, setNewZip] = useState("");
+  const [newProperty, setNewProperty] = useState<AddressFieldsValue>(EMPTY_PROPERTY);
+  const [sameAsCustomerAddress, setSameAsCustomerAddress] = useState(false);
 
   const [categoryName, setCategoryName] = useState("");
   const [title, setTitle] = useState("");
@@ -141,6 +177,11 @@ export function NewEstimateCreateView() {
   const addresses = selectedCustomer?.addresses || [];
 
   useEffect(() => {
+    setSameAsCustomerAddress(false);
+    setNewProperty(EMPTY_PROPERTY);
+  }, [selectedCustomer?.id]);
+
+  useEffect(() => {
     if (!selectedCustomer) {
       setAddressId("");
       return;
@@ -149,12 +190,40 @@ export function NewEstimateCreateView() {
     setAddressId((prev) => (prev && addresses.some((a) => a.id === prev) ? prev : preferred));
   }, [selectedCustomer?.id, addresses]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!sameAsCustomerAddress || !selectedCustomer) return;
+    const primary = selectedCustomer.addresses?.[0];
+    if (!primary) {
+      setSameAsCustomerAddress(false);
+      toast.error("This customer has no saved address to copy.");
+      return;
+    }
+    setNewProperty(serviceAddressToFields(primary));
+    if (primary.id) setAddressId(primary.id);
+  }, [sameAsCustomerAddress, selectedCustomer]);
+
   const selectedAddress = addresses.find((item) => item.id === addressId) || addresses[0];
+
+  useEffect(() => {
+    if (!categoryName) return;
+    const stillValid = providerCategories.some(
+      (item) => item.name.toLowerCase() === categoryName.trim().toLowerCase(),
+    );
+    if (!stillValid) setCategoryName("");
+  }, [providerCategories, categoryName]);
 
   async function addPropertyToCustomer() {
     if (!selectedCustomer) return;
-    if (!newStreet.trim() || !newCity.trim()) {
-      toast.error("Street and city are required for the property.");
+    if (!selectedCustomer.id || !/^[a-f\d]{24}$/i.test(selectedCustomer.id)) {
+      toast.error("Customer is not saved on the server yet. Create the customer again.");
+      return;
+    }
+    const street = newProperty.address.trim();
+    const city = newProperty.city.trim();
+    const state = newProperty.state.trim();
+    const zip = newProperty.zip.trim();
+    if (!street || !city || !state || !zip) {
+      toast.error("Street, city, state, and ZIP are required for the property.");
       return;
     }
     setSavingAddress(true);
@@ -162,37 +231,34 @@ export function NewEstimateCreateView() {
       const nextAddress: ServiceAddress = {
         id: `addr_${Date.now().toString(36)}`,
         label: "Service location",
-        address: newStreet.trim(),
-        street: newStreet.trim(),
-        city: newCity.trim(),
-        state: newState.trim(),
-        zip: newZip.trim(),
+        address: street,
+        street,
+        city,
+        state,
+        zip,
         country: "US",
-        lat: null,
-        lng: null,
-        latitude: null,
-        longitude: null,
+        lat: newProperty.lat,
+        lng: newProperty.lng,
+        latitude: newProperty.lat,
+        longitude: newProperty.lng,
       };
-      const updated = await updateCustomer(selectedCustomer.id, {
+      const saved = await updateCustomer(selectedCustomer.id, {
         ...selectedCustomer,
         addresses: [...(selectedCustomer.addresses || []), nextAddress],
       });
-      const saved = updated || {
-        ...selectedCustomer,
-        addresses: [...(selectedCustomer.addresses || []), nextAddress],
-      };
+      if (!saved?.id) {
+        throw new Error("Property was saved but the server response could not be read.");
+      }
       setLocalCustomers((prev) => {
         const others = prev.filter((item) => item.id !== saved.id);
         return [...others, saved];
       });
       setCustomerId(saved.id);
       setAddressId(saved.addresses?.[saved.addresses.length - 1]?.id || nextAddress.id);
-      setNewStreet("");
-      setNewCity("");
-      setNewState("");
-      setNewZip("");
+      setNewProperty(EMPTY_PROPERTY);
+      setSameAsCustomerAddress(false);
       toast.success("Property added.");
-      void dispatch(fetchCustomers({ force: true, limit: 100 }));
+      void dispatch(fetchCustomers({ force: true, limit: 100, page: 1, search: "" }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add property.");
     } finally {
@@ -204,6 +270,16 @@ export function NewEstimateCreateView() {
     if (!selectedCustomer || !selectedAddress) {
       toast.error("Select a customer and property first.");
       setStep("customer");
+      return;
+    }
+    if (!providerCategories.length) {
+      toast.error("Set your service categories in Business profile first.");
+      router.push(PROFILE_CATEGORIES_HREF);
+      return;
+    }
+    if (!categoryName.trim()) {
+      toast.error("Select a service category.");
+      setStep("request");
       return;
     }
     if (!title.trim()) {
@@ -241,9 +317,15 @@ export function NewEstimateCreateView() {
       await updateEstimateV2Opportunity(opportunity.id, { prepChoice });
 
       if (prepChoice === "schedule_assessment") {
+        const customerDescription = description.trim();
+        const officeNotes = internalNotes.trim();
         await createEstimateV2SiteAssessment(opportunity.id, {
           status: "scheduled",
-          instructions: description.trim() || title.trim(),
+          visitType: "initial_assessment",
+          instructions: customerDescription || title.trim(),
+          // Copies from estimate create — edits on the visit stay on the assessment only.
+          customerRequirements: customerDescription,
+          findings: officeNotes || customerDescription,
         });
         toast.success("Estimate created. Schedule the site assessment next.");
       } else {
@@ -357,37 +439,23 @@ export function NewEstimateCreateView() {
                 <p className="text-sm text-muted-foreground">
                   This customer has no saved addresses yet. Add a property here to continue.
                 </p>
-                <div className="grid gap-2">
-                  <Input
-                    placeholder="Street address"
-                    value={newStreet}
-                    onChange={(e) => setNewStreet(e.target.value)}
-                  />
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      placeholder="City"
-                      value={newCity}
-                      onChange={(e) => setNewCity(e.target.value)}
-                    />
-                    <Input
-                      placeholder="State"
-                      value={newState}
-                      onChange={(e) => setNewState(e.target.value)}
-                    />
-                    <Input
-                      placeholder="ZIP"
-                      value={newZip}
-                      onChange={(e) => setNewZip(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={savingAddress}
-                    onClick={() => void addPropertyToCustomer()}
-                  >
-                    {savingAddress ? "Saving…" : "Add property"}
-                  </Button>
-                </div>
+                <AddressFields
+                  idPrefix="new-est-property-empty"
+                  value={newProperty}
+                  onChange={(next) => {
+                    setSameAsCustomerAddress(false);
+                    setNewProperty(next);
+                  }}
+                  disabled={savingAddress}
+                  addressPlaceholder="Start typing a street address…"
+                />
+                <Button
+                  size="sm"
+                  disabled={savingAddress}
+                  onClick={() => void addPropertyToCustomer()}
+                >
+                  {savingAddress ? "Saving…" : "Add property"}
+                </Button>
               </div>
             ) : (
               <div className="mt-3 space-y-2">
@@ -409,29 +477,29 @@ export function NewEstimateCreateView() {
                 ))}
                 <div className="rounded-md border border-dashed border-input p-3">
                   <p className="text-xs font-medium text-muted-foreground">Add another property</p>
-                  <div className="mt-2 grid gap-2">
-                    <Input
-                      placeholder="Street address"
-                      value={newStreet}
-                      onChange={(e) => setNewStreet(e.target.value)}
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={sameAsCustomerAddress}
+                      onCheckedChange={(checked) => {
+                        const on = checked === true;
+                        setSameAsCustomerAddress(on);
+                        if (!on) setNewProperty(EMPTY_PROPERTY);
+                      }}
+                      disabled={savingAddress || !selectedCustomer.addresses?.[0]}
                     />
-                    <div className="grid grid-cols-3 gap-2">
-                      <Input
-                        placeholder="City"
-                        value={newCity}
-                        onChange={(e) => setNewCity(e.target.value)}
-                      />
-                      <Input
-                        placeholder="State"
-                        value={newState}
-                        onChange={(e) => setNewState(e.target.value)}
-                      />
-                      <Input
-                        placeholder="ZIP"
-                        value={newZip}
-                        onChange={(e) => setNewZip(e.target.value)}
-                      />
-                    </div>
+                    <span>Same as customer address</span>
+                  </label>
+                  <div className="mt-2 space-y-3">
+                    <AddressFields
+                      idPrefix="new-est-property-add"
+                      value={newProperty}
+                      onChange={(next) => {
+                        setSameAsCustomerAddress(false);
+                        setNewProperty(next);
+                      }}
+                      disabled={savingAddress || sameAsCustomerAddress}
+                      addressPlaceholder="Start typing a street address…"
+                    />
                     <Button
                       size="sm"
                       variant="outline"
@@ -466,18 +534,51 @@ export function NewEstimateCreateView() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Service category</Label>
-              <Select value={categoryName || undefined} onValueChange={setCategoryName}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+              <Select
+                value={categoryName || undefined}
+                onValueChange={(value) => {
+                  if (value === SETUP_CATEGORIES_VALUE) {
+                    router.push(PROFILE_CATEGORIES_HREF);
+                    return;
+                  }
+                  setCategoryName(value);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={
+                      providerCategories.length
+                        ? "Select category"
+                        : "Set your service categories"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {SERVICE_CATEGORIES.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
+                  {providerCategories.map((item) => (
+                    <SelectItem key={item.id} value={item.name}>
+                      {item.name}
                     </SelectItem>
                   ))}
+                  <SelectItem value={SETUP_CATEGORIES_VALUE}>
+                    {providerCategories.length
+                      ? "Manage service categories…"
+                      : "Set your service categories…"}
+                  </SelectItem>
                 </SelectContent>
               </Select>
+              {!providerCategories.length ? (
+                <p className="text-xs text-muted-foreground">
+                  No categories on your business profile yet.{" "}
+                  <button
+                    type="button"
+                    className="font-medium text-primary underline-offset-2 hover:underline"
+                    onClick={() => router.push(PROFILE_CATEGORIES_HREF)}
+                  >
+                    Set them in Business profile
+                  </button>
+                  .
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="opp-title">Request title</Label>
@@ -513,7 +614,22 @@ export function NewEstimateCreateView() {
             <Button variant="outline" size="sm" onClick={() => setStep("customer")}>
               Back
             </Button>
-            <Button size="sm" disabled={!title.trim()} onClick={() => setStep("prep")}>
+            <Button
+              size="sm"
+              disabled={!title.trim() || !categoryName.trim()}
+              onClick={() => {
+                if (!providerCategories.length) {
+                  toast.error("Set your service categories in Business profile first.");
+                  router.push(PROFILE_CATEGORIES_HREF);
+                  return;
+                }
+                if (!categoryName.trim()) {
+                  toast.error("Select a service category.");
+                  return;
+                }
+                setStep("prep");
+              }}
+            >
               Continue
             </Button>
           </div>
@@ -570,16 +686,18 @@ export function NewEstimateCreateView() {
         open={createCustomerOpen}
         onOpenChange={setCreateCustomerOpen}
         onSaved={(customer) => {
-          if (customer?.id) {
-            setLocalCustomers((prev) => {
-              const others = prev.filter((item) => item.id !== customer.id);
-              return [...others, customer];
-            });
-            setCustomerId(customer.id);
-            setCustomerQuery(crmCustomerName(customer));
-            void dispatch(fetchCustomers({ force: true, limit: 100 }));
+          if (!customer?.id) {
+            toast.error("Customer was not saved to the server.");
+            return;
           }
-          toast.success("Customer created. Select a property to continue.");
+          setLocalCustomers((prev) => {
+            const others = prev.filter((item) => item.id !== customer.id);
+            return [...others, customer];
+          });
+          setCustomerId(customer.id);
+          // Keep the search box empty so list fetch isn't filtered away from the new customer.
+          setCustomerQuery("");
+          void dispatch(fetchCustomers({ force: true, limit: 100, page: 1, search: "" }));
         }}
       />
     </PortalPage>

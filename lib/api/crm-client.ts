@@ -901,9 +901,6 @@ function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
   const payload: Record<string, unknown> = {};
   if (employee.firstName !== undefined) payload.firstName = employee.firstName || "";
   if (employee.lastName !== undefined) payload.lastName = employee.lastName || "";
-  if (employee.firstName !== undefined || employee.lastName !== undefined) {
-    payload.name = [employee.firstName || "", employee.lastName || ""].filter(Boolean).join(" ");
-  }
   if (employee.email !== undefined) payload.email = employee.email || "";
   if (employee.phone !== undefined) payload.phone = employee.phone || "";
   if (employee.role !== undefined) payload.role = employee.role || "technician";
@@ -937,7 +934,36 @@ export async function queryTeam(query: CrmListQuery = {}) {
 
 export async function createEmployee(employee: PortalEmployee | Parameters<typeof employeePayload>[0]) {
   const response = await postData(providerCrmApi.team, employeePayload(employee));
-  return mapCrmEntity(response, mapPortalEmployee);
+  const mapped = mapCrmEntity(response, mapPortalEmployee);
+  if (mapped?.id) return mapped;
+
+  // Some responses return a raw mongoose doc; normalize id from _id if needed.
+  const root = (response || {}) as Record<string, unknown>;
+  const data = (root.data ?? root) as Record<string, unknown>;
+  const rawId = data.id ?? data._id;
+  const id =
+    typeof rawId === "string"
+      ? rawId
+      : rawId && typeof rawId === "object" && "$oid" in (rawId as object)
+        ? String((rawId as { $oid: string }).$oid)
+        : rawId
+          ? String(rawId)
+          : "";
+  if (!id) {
+    throw new Error("Employee was created but could not be read from the server response.");
+  }
+  return (
+    mapPortalEmployee({ ...data, id, _id: id }) || {
+      id,
+      firstName: String(data.firstName || "").trim() || "Employee",
+      lastName: String(data.lastName || "").trim(),
+      role: (String(data.role || "technician") as PortalEmployee["role"]) || "technician",
+      email: String(data.email || "").trim(),
+      phone: String(data.phone || "").trim(),
+      trade: String(data.trade || "").trim(),
+      active: data.active !== false,
+    }
+  );
 }
 
 export async function getEmployee(id: string) {
@@ -2305,9 +2331,11 @@ export async function querySchedule(query: CrmListQuery = {}) {
   if (contractorId) params.contractorId = contractorId;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
-  // Do not send kind=fixed_service to the API — older backends reject it.
-  // Fetch unfiltered schedule rows, then filter / merge Fix Service client-side.
-  if (kind && kind !== "fixed_service") {
+  // Synthesis-backed kinds are merged from CRM lists after fetch. Sending `kind`
+  // to the API for those can return an empty schedule collection and hide the
+  // synthesized rows when the parent treats the response as authoritative.
+  const SYNTHESIS_KINDS = new Set(["invoice", "estimate", "task", "fixed_service"]);
+  if (kind && !SYNTHESIS_KINDS.has(kind)) {
     params.kind = kind;
   }
   const response = await getData(providerCrmApi.schedule, params, {
@@ -2321,9 +2349,6 @@ export async function querySchedule(query: CrmListQuery = {}) {
     (item) =>
       !(item.kind === "fixed_service" && String(item.status || "").toLowerCase() === "cancelled"),
   );
-  if (kind === "fixed_service") {
-    items = items.filter((item) => item.kind === "fixed_service");
-  }
 
   if (!kind || kind === "invoice") {
     try {
@@ -2366,6 +2391,67 @@ export async function querySchedule(query: CrmListQuery = {}) {
           price,
           category: inv.status ? `Invoice · ${inv.status}` : "Invoice",
         });
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  if (!kind || kind === "estimate") {
+    try {
+      const estList = await listEstimates({ silent: true });
+      const existingIds = new Set(items.map((it) => it.recordId || it.id));
+      estList.forEach((est) => {
+        if (!est.id || existingIds.has(est.id)) return;
+        if (est.isArchived || est.isArchieved) return;
+        const dateSource =
+          est.scheduledDate ||
+          est.siteVisit?.scheduledAt ||
+          est.siteVisits?.find((visit) => visit.scheduledAt)?.scheduledAt ||
+          est.issuedAt;
+        if (!dateSource) return;
+        const dateIso = String(dateSource).slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return;
+
+        const rawEstTotal =
+          est.total ??
+          est.subtotal ??
+          (Array.isArray(est.items)
+            ? est.items.reduce(
+                (s: number, it) =>
+                  s +
+                  (Number(it.total) ||
+                    (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0) ||
+                    0),
+                0,
+              )
+            : 0);
+        const estNum = Number(rawEstTotal);
+        const price =
+          !Number.isNaN(estNum) && estNum > 0 ? `$${estNum.toFixed(2)}` : undefined;
+        const estName =
+          est.title && est.title !== est.number
+            ? est.title
+            : est.items?.[0]?.description || undefined;
+
+        items.push({
+          id: `est_${est.id}`,
+          kind: "estimate",
+          recordId: est.id,
+          title: est.number || `EST-${est.id.slice(-4).toUpperCase()}`,
+          detail: estName || (est.status ? `Estimate · ${est.status}` : "Estimate"),
+          customerName: est.customerName || undefined,
+          date: dateIso,
+          dueDate: est.expiresAt ? est.expiresAt.slice(0, 10) : dateIso,
+          timeWindow: "all_day",
+          startMinutes: 540,
+          endMinutes: 570,
+          href: `/pro/dashboard/estimates/${est.id}`,
+          status: est.status || "draft",
+          price,
+          category: est.status ? `Estimate · ${est.status}` : "Estimate",
+        });
+        existingIds.add(est.id);
       });
     } catch {
       /* non-blocking */
@@ -2881,6 +2967,10 @@ export async function querySchedule(query: CrmListQuery = {}) {
     } catch {
       /* non-blocking */
     }
+  }
+
+  if (kind) {
+    items = items.filter((item) => item.kind === kind);
   }
 
   return items;

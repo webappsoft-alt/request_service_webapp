@@ -145,26 +145,26 @@ export function ExistingInformationPanel({
   }
 
   return (
-    <div className="rounded-xl border border-input bg-card p-5">
-      <div>
-        <h2 className="text-base font-semibold">Existing information</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+    <div className="rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="border-b border-[#d8dee8] pb-4">
+        <h2 className="text-lg font-semibold tracking-tight text-slate-900">Existing information</h2>
+        <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
           Capture what you already know — no site visit required. Work items become the starting
           line items on the estimate.
         </p>
       </div>
 
       <div className="mt-5">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
           Photos & attachments
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
           Optional. Customer photos, prior visit images, drawings, PDFs, or screenshots.
         </p>
         <div
           className={cn(
-            "mt-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition",
-            dragOver ? "border-primary bg-primary/5" : "border-input bg-secondary/20",
+            "mt-2.5 rounded-xl border-2 border-dashed px-4 py-7 text-center transition",
+            dragOver ? "border-primary bg-primary/5" : "border-[#94a3b8] bg-[#fafbfc]",
             (saving || uploading) && "opacity-70",
           )}
           onDragEnter={(e) => {
@@ -193,14 +193,14 @@ export function ExistingInformationPanel({
             className="hidden"
             onChange={(e) => void uploadFiles(e.target.files)}
           />
-          <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-input bg-background">
+          <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-[#b4becc] bg-white">
             {uploading ? (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              <Loader2 className="size-4 animate-spin text-slate-400" />
             ) : (
-              <Upload className="size-4 text-muted-foreground" />
+              <Upload className="size-4 text-slate-400" />
             )}
           </div>
-          <p className="mt-2 text-sm font-medium">
+          <p className="mt-2 text-sm font-medium text-slate-800">
             {uploading ? "Uploading…" : "Drag & drop photos or files here"}
           </p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -233,7 +233,7 @@ export function ExistingInformationPanel({
               return (
                 <div
                   key={item.url}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-input bg-secondary/30"
+                  className="group relative aspect-square overflow-hidden rounded-xl border border-[#b4becc] bg-[#f1f5f9]"
                 >
                   {image ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -244,8 +244,8 @@ export function ExistingInformationPanel({
                     />
                   ) : (
                     <div className="flex size-full flex-col items-center justify-center gap-1 p-2 text-center">
-                      <Upload className="size-4 text-muted-foreground" />
-                      <span className="line-clamp-3 text-[10px] leading-tight text-muted-foreground">
+                      <Upload className="size-4 text-slate-400" />
+                      <span className="line-clamp-3 text-[10px] leading-tight text-slate-500">
                         {item.name || "File"}
                       </span>
                     </div>
@@ -267,23 +267,23 @@ export function ExistingInformationPanel({
         ) : null}
       </div>
 
-      <div className="mt-5">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="mt-6 border-t border-[#d8dee8] pt-5">
+        <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
           Measurements
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
           Optional. What = the thing measured · Value = the number · Unit = how it is measured
         </p>
         {measurements.length ? (
-          <ul className="mt-3 divide-y divide-input rounded-lg border border-input">
+          <ul className="mt-3 divide-y divide-[#eef1f5] overflow-hidden rounded-xl border border-[#b4becc] bg-[#fafbfc]">
             {measurements.map((item, index) => (
               <li
                 key={`${item.label}-${index}`}
-                className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                className="flex items-start justify-between gap-2 bg-white px-3.5 py-2.5 text-sm"
               >
-                <span>
+                <span className="min-w-0 flex-1 break-words whitespace-normal leading-relaxed text-slate-900">
                   <span className="font-medium">{item.label}</span>
-                  <span className="text-muted-foreground">
+                  <span className="text-slate-500">
                     {" · "}
                     {item.value}
                     {item.unit ? ` ${item.unit}` : ""}
@@ -292,7 +292,7 @@ export function ExistingInformationPanel({
                 {!saving ? (
                   <button
                     type="button"
-                    className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    className="mt-0.5 shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                     onClick={() => removeMeasurement(index)}
                     aria-label="Remove measurement"
                   >
@@ -303,33 +303,47 @@ export function ExistingInformationPanel({
             ))}
           </ul>
         ) : null}
-        <div className="mt-3 grid gap-2 sm:grid-cols-[1.2fr_0.7fr_0.9fr_auto]">
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">What are you measuring?</Label>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_8.5rem_auto] sm:items-center">
+          <div className="min-w-0 space-y-1">
+            <Label className="text-[11px] text-slate-500">What are you measuring?</Label>
             <Input
               placeholder="e.g. Square footage, Pipe length, System tonnage"
               value={measurementLabel}
               disabled={saving}
               onChange={(e) => setMeasurementLabel(e.target.value)}
+              className="h-9 bg-[#fafbfc]"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addMeasurement();
+                }
+              }}
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">Value (number)</Label>
+            <Label className="text-[11px] text-slate-500">Value</Label>
             <Input
-              placeholder="e.g. 1800"
+              placeholder="1800"
               value={measurementValue}
               disabled={saving}
               onChange={(e) => setMeasurementValue(e.target.value)}
+              className="h-9 bg-[#fafbfc]"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addMeasurement();
+                }
+              }}
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">Unit</Label>
+            <Label className="text-[11px] text-slate-500">Unit</Label>
             <Select
               value={measurementUnit}
               disabled={saving}
               onValueChange={setMeasurementUnit}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-9 bg-[#fafbfc]">
                 <SelectValue placeholder="Unit" />
               </SelectTrigger>
               <SelectContent>
@@ -341,21 +355,20 @@ export function ExistingInformationPanel({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-end">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={saving}
-              onClick={addMeasurement}
-            >
-              <Plus className="size-3.5" />
-              Add
-            </Button>
-          </div>
+          <Button
+            type="button"
+            size="sm"
+            disabled={saving}
+            onClick={addMeasurement}
+            className="mt-5 h-8 px-2.5 text-xs"
+          >
+            <Plus className="size-3" />
+            Add more
+          </Button>
         </div>
       </div>
 
-      <div className="mt-5 space-y-1.5">
+      <div className="mt-6 space-y-1.5 border-t border-[#d8dee8] pt-5">
         <Label htmlFor="existing-findings">Information / notes</Label>
         <Textarea
           id="existing-findings"
@@ -364,10 +377,11 @@ export function ExistingInformationPanel({
           disabled={saving}
           onChange={(e) => onFindingsChange(e.target.value)}
           placeholder="What you already know about the job…"
+          className="bg-[#fafbfc]"
         />
       </div>
 
-      <div className="mt-5">
+      <div className="mt-6 border-t border-[#d8dee8] pt-5">
         <WorkItemsEditor
           items={workItems}
           onChange={onWorkItemsChange}
@@ -376,7 +390,7 @@ export function ExistingInformationPanel({
         />
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2 border-t border-input pt-4">
+      <div className="mt-6 flex flex-wrap gap-2 border-t border-[#d8dee8] pt-4">
         <Button size="sm" variant="outline" disabled={saving} onClick={() => void onSave()}>
           Save information
         </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import Image from "next/image";
 import {
   AlertTriangle,
@@ -535,8 +535,8 @@ export function TransitOrderModal({
 }
 
 // ==========================================
-// 4. ARRIVE (GEOFENCE) MODAL
-// ==========================================
+ // 4. ARRIVE (GEOFENCE) MODAL
+ // ==========================================
 export function ArriveOrderModal({
   order,
   isOpen,
@@ -551,28 +551,14 @@ export function ArriveOrderModal({
   loading?: boolean;
 }) {
   const propertyCoords = order?.address?.location?.coordinates;
-  const [lng, setLng] = useState<string>("");
-  const [lat, setLat] = useState<string>("");
+  const [coords, setCoords] = useState<[number, number] | null>(null);
+  const [locationSource, setLocationSource] = useState<"gps" | "property" | null>(
+    null,
+  );
   const [detectingGps, setDetectingGps] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      if (propertyCoords && propertyCoords.length === 2) {
-        setLng(String(propertyCoords[0]));
-        setLat(String(propertyCoords[1]));
-        setGpsError(null);
-      } else {
-        setLng("");
-        setLat("");
-        setGpsError(null);
-      }
-    }
-  }, [isOpen, propertyCoords]);
-
-  if (!order) return null;
-
-  const handleDetectGps = () => {
+  const detectGps = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       const msg = "Geolocation is not supported by your browser.";
       setGpsError(msg);
@@ -584,10 +570,10 @@ export function ArriveOrderModal({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setDetectingGps(false);
-        setLng(pos.coords.longitude.toFixed(6));
-        setLat(pos.coords.latitude.toFixed(6));
+        setCoords([pos.coords.longitude, pos.coords.latitude]);
+        setLocationSource("gps");
         setGpsError(null);
-        toast.success("Live GPS coordinates acquired.");
+        toast.success("Location verified.");
       },
       (err) => {
         setDetectingGps(false);
@@ -607,26 +593,45 @@ export function ArriveOrderModal({
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
-  };
+  }, []);
 
-  const handleUsePropertyCoords = () => {
-    if (propertyCoords) {
-      setLng(String(propertyCoords[0]));
-      setLat(String(propertyCoords[1]));
-      setGpsError(null);
-      toast.info("Filled customer property coordinates (valid for 200m geofence).");
+  useEffect(() => {
+    if (!isOpen) return;
+    setCoords(null);
+    setLocationSource(null);
+    setGpsError(null);
+    detectGps();
+  }, [isOpen, detectGps]);
+
+  if (!order) return null;
+
+  const handleUsePropertyLocation = () => {
+    if (!propertyCoords || propertyCoords.length !== 2) {
+      toast.error("Job address location is not available for this order.");
+      return;
     }
+    setCoords([Number(propertyCoords[0]), Number(propertyCoords[1])]);
+    setLocationSource("property");
+    setGpsError(null);
+    toast.info("Using job address for arrival verification.");
   };
 
   const handleSubmit = async () => {
-    const numLng = Number(lng);
-    const numLat = Number(lat);
-    if (!lng || !lat || !Number.isFinite(numLng) || !Number.isFinite(numLat)) {
-      toast.error("Please provide valid GPS coordinates to verify arrival.");
+    if (!coords) {
+      toast.error("Waiting for location. Tap Detect Location or use job address.");
       return;
     }
-    await onConfirm([numLng, numLat]);
+    await onConfirm(coords);
   };
+
+  const propertyAddress = [
+    order.address?.street,
+    order.address?.unit,
+    [order.address?.city, order.address?.state].filter(Boolean).join(", "),
+    order.address?.zip,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -639,93 +644,107 @@ export function ArriveOrderModal({
             Verify On-Site Arrival
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground flex flex-wrap items-center gap-1">
-            Verify presence within the 200m geofence to mark order as{" "}
+            Confirm you are within 200m of the job to mark order as{" "}
             <OrderStatusPill status="ARRIVED" />.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3.5 py-1">
+          <div className="rounded-xl border border-border/80 bg-muted/30 p-3.5 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="flex size-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 ring-4 ring-amber-50/80 shrink-0">
+                <Crosshair className="size-3.5" />
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5 space-y-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Your location
+                  </span>
+                  <button
+                    type="button"
+                    onClick={detectGps}
+                    disabled={detectingGps || loading}
+                    className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5"
+                  >
+                    <Crosshair className="size-2.5" /> Re-detect
+                  </button>
+                </div>
+                {detectingGps ? (
+                  <div className="flex items-center gap-2 text-xs text-amber-700 py-0.5">
+                    <Loader2 className="size-3.5 animate-spin shrink-0" />
+                    <span>Detecting your location…</span>
+                  </div>
+                ) : coords && locationSource === "gps" ? (
+                  <p className="text-xs font-semibold text-foreground">
+                    Live GPS location ready
+                  </p>
+                ) : coords && locationSource === "property" ? (
+                  <p className="text-xs font-semibold text-foreground">
+                    Using job address location
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Location not verified yet
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="flex size-7 items-center justify-center rounded-full bg-rose-100 text-rose-600 ring-4 ring-rose-50/80 shrink-0">
+                <MapPin className="size-3.5" />
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5 space-y-0.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Job destination
+                </span>
+                <p className="text-xs font-semibold text-foreground leading-relaxed">
+                  {propertyAddress || "Job property address"}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-900 space-y-1">
             <div className="font-semibold flex items-center gap-1.5">
-              <AlertTriangle className="size-3.5 text-amber-600" /> Geofence Rule
+              <AlertTriangle className="size-3.5 text-amber-600" /> Geofence check
             </div>
             <p className="text-[11px] leading-relaxed">
-              Ensure you are within 200m of the customer destination. If developing or testing off-site, click &ldquo;Use Property Coords&rdquo; below to satisfy the geofence check.
+              You must be within 200m of the customer destination to mark arrival.
             </p>
           </div>
 
           {gpsError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800 flex items-start gap-2">
-              <AlertTriangle className="size-4 text-red-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-red-700">{gpsError}</p>
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                Arrival Coordinates [Lng, Lat]
-              </Label>
-              <div className="flex gap-1">
-                {propertyCoords ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleUsePropertyCoords}
-                    disabled={loading}
-                    className="h-7 text-xs"
-                  >
-                    Use Property Coords
-                  </Button>
-                ) : null}
+            <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="size-4 text-red-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-red-700">{gpsError}</p>
+              </div>
+              {propertyCoords ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={handleDetectGps}
-                  disabled={detectingGps || loading}
-                  className="h-7 text-xs gap-1"
+                  onClick={handleUsePropertyLocation}
+                  disabled={loading}
+                  className="h-7 text-xs"
                 >
-                  {detectingGps ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : (
-                    <Crosshair className="size-3" />
-                  )}
-                  Detect GPS
+                  Use job address instead
                 </Button>
-              </div>
+              ) : null}
             </div>
+          ) : null}
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="arrive-lng" className="text-[11px] text-muted-foreground">
-                  Longitude
-                </Label>
-                <Input
-                  id="arrive-lng"
-                  value={lng}
-                  onChange={(e) => setLng(e.target.value)}
-                  placeholder="Auto-detected"
-                  className="font-mono text-xs"
-                  disabled={loading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="arrive-lat" className="text-[11px] text-muted-foreground">
-                  Latitude
-                </Label>
-                <Input
-                  id="arrive-lat"
-                  value={lat}
-                  onChange={(e) => setLat(e.target.value)}
-                  placeholder="Auto-detected"
-                  className="font-mono text-xs"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-          </div>
+          {!gpsError && propertyCoords ? (
+            <button
+              type="button"
+              onClick={handleUsePropertyLocation}
+              disabled={loading}
+              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+            >
+              Testing off-site? Use job address location
+            </button>
+          ) : null}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
@@ -734,11 +753,15 @@ export function ArriveOrderModal({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={loading || (!lng && !lat)}
+            disabled={loading || detectingGps || !coords}
             className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
           >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : null}
-            Verify & Mark Arrived
+            {loading || detectingGps ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <MapPin className="size-3.5" />
+            )}
+            {detectingGps ? "Detecting…" : "Verify & Mark Arrived"}
           </Button>
         </DialogFooter>
       </DialogContent>

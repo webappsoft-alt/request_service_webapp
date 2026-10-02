@@ -28,7 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
+import { putData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { ordersApi } from "@/components/api/ApiRoutesFile";
 import { PortalPage } from "@/components/portal/portal-page";
 import { Badge } from "@/components/ui/badge";
@@ -235,7 +235,7 @@ function CustomerOrderActions({
             onClick={() =>
               void run(
                 () =>
-                  postData(ordersApi.signOff(orderId), {
+                  putData(ordersApi.signOff(orderId), {
                     rating: Number(rating) || 5,
                     review: review.trim(),
                     tip: 0,
@@ -274,7 +274,7 @@ function CustomerOrderActions({
             onClick={() =>
               void run(
                 () =>
-                  postData(ordersApi.dispute(orderId), {
+                  putData(ordersApi.dispute(orderId), {
                     reason: disputeReason.trim(),
                   }),
                 "Issue submitted to support for review.",

@@ -1,4 +1,5 @@
 import type { DemoSession } from "@/lib/auth/demo-session";
+import { estimateStatusToneDistinct } from "@/lib/data/estimate-v2-status";
 import { getJobDetail } from "@/lib/data/jobs";
 import { getActivePlans } from "@/lib/data/plans";
 import { getJobImage } from "@/lib/data/provider-media";
@@ -268,6 +269,7 @@ export type PortalEventKind =
   | "estimate"
   | "request"
   | "invoice"
+  | "payment"
   | "task"
   | "visit";
 
@@ -298,6 +300,61 @@ export type PortalCalendarEvent = {
   /** Service category / type label */
   category?: string;
 };
+
+const MULTI_SCHEDULE_KINDS = new Set<PortalEventKind>(["estimate", "visit"]);
+
+export function isSyntheticCalendarId(id?: string | null) {
+  if (!id) return true;
+  return /^(cal_|inv_|pay_|est_|task_|fso_)/i.test(id);
+}
+
+/** One calendar card per job/invoice/payment/etc. Prefer assigned + real schedule ids. */
+export function dedupeCalendarEvents(events: PortalCalendarEvent[]): PortalCalendarEvent[] {
+  const kept: PortalCalendarEvent[] = [];
+  const indexByKey = new Map<string, number>();
+  const score = (event: PortalCalendarEvent) => {
+    let value = 0;
+    if (!isSyntheticCalendarId(event.id)) value += 4;
+    if (event.employeeId) value += 2;
+    if (event.technicianName) value += 1;
+    if (event.endDate && event.date && event.endDate > event.date) value += 1;
+    return value;
+  };
+  for (const event of events) {
+    if (MULTI_SCHEDULE_KINDS.has(event.kind) || !event.recordId) {
+      kept.push(event);
+      continue;
+    }
+    const key = `${event.kind}:${event.recordId}`;
+    const prevIdx = indexByKey.get(key);
+    if (prevIdx == null) {
+      indexByKey.set(key, kept.length);
+      kept.push(event);
+      continue;
+    }
+    const prev = kept[prevIdx];
+    if (score(event) >= score(prev)) {
+      kept[prevIdx] = {
+        ...prev,
+        ...event,
+        id: isSyntheticCalendarId(event.id) ? prev.id : event.id,
+        employeeId: event.employeeId || prev.employeeId,
+        technicianName: event.technicianName || prev.technicianName,
+        endDate: event.endDate || prev.endDate,
+      };
+    } else {
+      kept[prevIdx] = {
+        ...event,
+        ...prev,
+        id: isSyntheticCalendarId(prev.id) ? event.id : prev.id,
+        employeeId: prev.employeeId || event.employeeId,
+        technicianName: prev.technicianName || event.technicianName,
+        endDate: prev.endDate || event.endDate,
+      };
+    }
+  }
+  return kept;
+}
 
 export type PortalAssignment = {
   recordId: string;
@@ -1258,34 +1315,7 @@ export function estimateStatusLabel(status: EstimateStatus) {
 }
 
 export function estimateStatusTone(status: EstimateStatus) {
-  switch (status) {
-    case "site_visit":
-      return "bg-indigo-50 text-indigo-800";
-    case "inspected":
-      return "bg-teal-50 text-teal-800";
-    case "draft":
-      return "bg-amber-50 text-amber-900";
-    case "scheduled":
-      return "bg-violet-50 text-violet-800";
-    case "finalized":
-      return "bg-cyan-50 text-cyan-900";
-    case "sent":
-      return "bg-[#e8eef5] text-[#003F7D]";
-    case "accepted":
-      return "bg-emerald-50 text-emerald-800";
-    case "rejected":
-      return "bg-red-50 text-red-800";
-    case "expired":
-      return "bg-orange-50 text-orange-800";
-    case "changes_requested":
-      return "bg-amber-50 text-amber-900";
-    case "converted_to_job":
-      return "bg-green-50 text-green-900";
-    default: {
-      const _never: never = status;
-      return _never;
-    }
-  }
+  return estimateStatusToneDistinct(status);
 }
 
 export function estimateCanShare(status: EstimateStatus) {
@@ -1439,6 +1469,8 @@ export function calendarEventStatusLabel(kind: PortalEventKind, status: string) 
       return REQUEST_STATUSES.includes(status as RequestStatus) ? requestStatusLabel(status as RequestStatus) : status;
     case "invoice":
       return INVOICE_STATUSES.includes(status as InvoiceStatus) ? invoiceStatusLabel(status as InvoiceStatus) : status;
+    case "payment":
+      return status ? status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ") : "Due";
     case "task":
       switch (status) {
         case "open":
@@ -1490,6 +1522,8 @@ export function calendarEventKindLabel(kind: PortalEventKind) {
       return "Request";
     case "invoice":
       return "Invoice";
+    case "payment":
+      return "Payment";
     case "task":
       return "Task";
     case "visit":
@@ -1513,6 +1547,8 @@ export function calendarEventTone(kind: PortalEventKind) {
       return "bg-[#64748b] text-white";
     case "invoice":
       return "bg-[#047857] text-white";
+    case "payment":
+      return "bg-[#0f766e] text-white";
     case "task":
       return "bg-[#6d28d9] text-white";
     case "visit":

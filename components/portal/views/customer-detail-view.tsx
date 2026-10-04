@@ -242,6 +242,8 @@ export function CustomerDetailView({ id }: { id: string }) {
         return relatedRequests.some((request) => request.id === event.recordId);
       case "invoice":
         return relatedInvoices.some((invoice) => invoice.id === event.recordId);
+      case "payment":
+        return relatedPayments.some((payment) => payment.id === event.recordId);
       case "task":
         return relatedTasks.some((task) => task.id === event.recordId);
       case "visit":

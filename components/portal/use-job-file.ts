@@ -265,12 +265,12 @@ export function jobCostsLocked(invoice?: Invoice) {
   if (!invoice) return false;
   switch (invoice.status) {
     case "draft":
+    case "sent":
+    case "overdue":
     case "cancelled":
       return false;
-    case "sent":
     case "partially_paid":
     case "paid":
-    case "overdue":
       return true;
     default: {
       const _never: never = invoice.status;

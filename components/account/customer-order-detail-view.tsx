@@ -551,9 +551,11 @@ export function CustomerOrderDetailView({
                   : "To be scheduled"}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {activeOrder.createdAt
-                  ? `Ordered ${formatDate(activeOrder.createdAt)}`
-                  : "Active order"}
+                {activeOrder.booking?.endTime
+                  ? `Due ${formatOrderDateTime(activeOrder.booking.endTime)}`
+                  : activeOrder.createdAt
+                    ? `Ordered ${formatDate(activeOrder.createdAt)}`
+                    : "Active order"}
               </p>
             </div>
 
@@ -1145,14 +1147,21 @@ export function CustomerOrderDetailView({
                 </h3>
                 <div className="mt-3 space-y-2 text-xs">
                   <div>
-                    <span className="text-muted-foreground">Scheduled for:</span>
+                    <span className="text-muted-foreground">Start:</span>
                     <p className="font-medium text-foreground text-sm mt-0.5">
                       {activeOrder.booking?.startTime
-                        ? formatOrderWindow(
-                            activeOrder.booking.startTime,
-                            activeOrder.booking.endTime,
-                          )
+                        ? formatOrderDateTime(activeOrder.booking.startTime)
                         : "To be coordinated with provider"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Due:</span>
+                    <p className="font-medium text-foreground text-sm mt-0.5">
+                      {activeOrder.booking?.endTime
+                        ? formatOrderDateTime(activeOrder.booking.endTime)
+                        : activeOrder.booking?.startTime
+                          ? formatOrderDateTime(activeOrder.booking.startTime)
+                          : "To be coordinated with provider"}
                     </p>
                   </div>
                   {activeOrder.createdAt ? (

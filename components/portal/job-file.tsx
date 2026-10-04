@@ -521,6 +521,23 @@ export function JobSummaryTab({
               {jobStatusLabel(job.status)}
               {technician ? ` · ${technician}` : " · Unassigned"}
             </p>
+            {estimate ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                From estimate{" "}
+                <Link
+                  href={`/pro/dashboard/estimates/${estimate.id}`}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {estimate.number}
+                </Link>
+                {estimate.title ? ` · ${estimate.title}` : ""}
+              </p>
+            ) : null}
+            {estimate?.notes ? (
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                {estimate.notes}
+              </p>
+            ) : null}
           </div>
           <div className="rounded-md bg-secondary px-3 py-2 text-right">
             <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">

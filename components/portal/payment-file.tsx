@@ -181,11 +181,15 @@ export function PaymentSummaryTab({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MoneyStat label="Amount" value={formatMoney(payment.amount)} emphasize />
         <MoneyStat label="Method" value={paymentMethodLabel(payment.method)} />
         <MoneyStat label="Status" value={paymentStatusLabel(payment.status)} />
         <MoneyStat label="Date" value={formatDate(payment.paidAt ?? payment.createdAt)} />
+        <MoneyStat
+          label="Due date"
+          value={formatDate(payment.dueAt ?? payment.paidAt ?? payment.createdAt)}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

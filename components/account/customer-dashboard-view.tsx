@@ -10,6 +10,7 @@ import {
 } from "@/components/portal/dashboard-widgets";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, moneyTone } from "@/components/portal/status-pill";
+import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status";
 import { Button } from "@/components/ui/button";
 import { listPublicChatThreads } from "@/lib/api/chat-client";
 import { customerPaths } from "@/lib/customer-paths";
@@ -393,7 +394,7 @@ export function CustomerDashboardView() {
               <div className="flex items-center gap-3 shrink-0">
                 <StatusPill
                   label={estimateStatusLabel(item.status)}
-                  tone={moneyTone(item.status)}
+                  className={estimateStatusToneClass(item.status)}
                 />
                 <span className="font-semibold tabular-nums text-foreground">
                   {item.total ? formatMoney(item.total) : "—"}

@@ -1959,6 +1959,19 @@ export function JobDetailView({ id }: { id: string }) {
   const records = usePortalRecords();
   const settings = useJobSettings(id);
   const [assignOpen, setAssignOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("schedule") !== "1") return;
+    setAssignOpen(true);
+    params.delete("schedule");
+    const next = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      next ? `${window.location.pathname}?${next}` : window.location.pathname,
+    );
+  }, [id]);
   const [deleting, setDeleting] = useState(false);
   const [converting, setConverting] = useState(false);
   const [removingAssignee, setRemovingAssignee] = useState(false);
@@ -2178,20 +2191,27 @@ export function JobDetailView({ id }: { id: string }) {
         employeeLabel(item.id).trim().toLowerCase() ===
         String(job.assignedTo || "").trim().toLowerCase(),
     )?.id;
-  const jobAssignmentEvent: PortalCalendarEvent = event ?? {
-    id: `cal_${job.id}`,
-    kind: "job",
-    recordId: job.id,
-    title: job.number,
-    detail: service,
-    customerName: customerLabel,
+  const jobAssignmentEvent: PortalCalendarEvent = {
+    ...(event ?? {
+      id: `cal_${job.id}`,
+      kind: "job",
+      recordId: job.id,
+      title: job.number,
+      detail: service,
+      customerName: customerLabel,
+      timeWindow: "morning",
+      startMinutes: jobWindow.startMinutes,
+      endMinutes: jobWindow.endMinutes,
+      employeeId: resolvedEmployeeId || employees.find((item) => item.active)?.id,
+      href: `/pro/dashboard/jobs/${job.id}`,
+      status: job.status,
+    }),
     date: jobStartDate,
     endDate: jobEndDate,
-    timeWindow: "morning",
-    startMinutes: jobWindow.startMinutes,
-    endMinutes: jobWindow.endMinutes,
-    employeeId: resolvedEmployeeId || employees.find((item) => item.active)?.id,
-    href: `/pro/dashboard/jobs/${job.id}`,
+    employeeId:
+      resolvedEmployeeId ||
+      event?.employeeId ||
+      employees.find((item) => item.active)?.id,
     status: job.status,
   };
 

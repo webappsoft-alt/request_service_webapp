@@ -430,11 +430,13 @@ export async function resolveEstimateV2Acceptance(
   opportunityId: string,
   input: {
     estimateId?: string;
-    nextAction: "start_now" | "schedule_later" | "skip_job";
+    nextAction: "start_now" | "schedule_later" | "skip_job" | "invoice_now";
     markAccepted?: boolean;
     forceConvert?: boolean;
     signedBy?: string;
     title?: string;
+    dueAt?: string;
+    scheduledAt?: string;
   },
 ) {
   try {
@@ -446,17 +448,19 @@ export async function resolveEstimateV2Acceptance(
       opportunity: EstimateV2Opportunity;
       estimate: unknown;
       job: { id?: string; number?: string; status?: string } | null;
+      invoice: { id?: string; number?: string; status?: string } | null;
       nextAction: string;
     }>(response);
     return {
       opportunity: normalizeOpportunity(data.opportunity),
       estimate: mapEstimate(data.estimate),
       job: data.job,
+      invoice: data.invoice,
       nextAction: data.nextAction,
     };
   } catch (err) {
     if (!input.estimateId) throw err;
-    const { convertEstimateToJob, updateEstimateStatus } = await import(
+    const { convertEstimateToJob, convertEstimateToInvoice, updateEstimateStatus } = await import(
       "@/lib/api/crm-client"
     );
     if (input.markAccepted) {
@@ -466,12 +470,19 @@ export async function resolveEstimateV2Acceptance(
         /* may already be accepted */
       }
     }
-    const job =
-      input.nextAction === "skip_job"
-        ? null
-        : await convertEstimateToJob(input.estimateId, {
-            title: input.title,
-          } as never);
+    let job = null;
+    let invoice = null;
+    if (input.nextAction === "invoice_now") {
+      invoice = await convertEstimateToInvoice(input.estimateId, {
+        dueAt: input.dueAt,
+      });
+    } else if (input.nextAction !== "skip_job") {
+      job = await convertEstimateToJob(input.estimateId, {
+        title: input.title,
+        scheduledAt: input.scheduledAt,
+        dueAt: input.dueAt,
+      });
+    }
     try {
       await patchData(providerCrmApi.estimateV2Opportunity(opportunityId), {
         status: "won",
@@ -491,6 +502,9 @@ export async function resolveEstimateV2Acceptance(
       estimate: null,
       job: job
         ? { id: job.id, number: job.number, status: job.status }
+        : null,
+      invoice: invoice
+        ? { id: invoice.id, number: invoice.number, status: invoice.status }
         : null,
       nextAction: input.nextAction,
     };

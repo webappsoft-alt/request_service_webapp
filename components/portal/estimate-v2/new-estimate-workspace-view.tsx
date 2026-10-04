@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Link2 } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,10 +65,11 @@ import {
   updateEstimate,
 } from "@/lib/api/crm-client";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { Estimate } from "@/lib/types";
+import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
 import { estimateCanShare } from "@/lib/data/portal";
+import { stripChangeRequestLinesFromNotes } from "@/lib/data/estimate-change-requests";
 
 const PREP_OPTIONS = [
   {
@@ -90,6 +91,7 @@ const PREP_OPTIONS = [
 
 const RAIL_CARD =
   "rounded-2xl border border-[#94a3b8] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+const ACTIVITY_PREVIEW_COUNT = 4;
 const MAIN_CARD =
   "rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 
@@ -101,12 +103,131 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+function ChangeRequestsRail({
+  status,
+  changeRequests,
+  customerUpdates,
+}: {
+  status?: string;
+  changeRequests: EstimateChangeRequest[];
+  customerUpdates: EstimateCustomerUpdate[];
+}) {
+  const sorted = [...changeRequests].sort(
+    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  );
+  if (!sorted.length && !customerUpdates.length) return null;
+
+  const openCount = sorted.filter((row) => !row.addressedAt).length;
+  const waiting = status === "changes_requested" || openCount > 0;
+  const latest = sorted[0];
+  const older = sorted.slice(1);
+  const latestUpdate = [...customerUpdates].sort(
+    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  )[0];
+
+  return (
+    <div
+      className={cn(
+        RAIL_CARD,
+        waiting
+          ? "border-fuchsia-300 bg-fuchsia-50/80"
+          : "border-emerald-300 bg-emerald-50/70",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <SectionLabel>
+          {waiting ? "Customer requested changes" : "Changes addressed"}
+        </SectionLabel>
+        {!waiting ? (
+          <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
+        ) : null}
+      </div>
+      <p
+        className={cn(
+          "mt-2 text-xs leading-relaxed",
+          waiting ? "text-fuchsia-900/80" : "text-emerald-900/80",
+        )}
+      >
+        {waiting
+          ? "Revise the estimate, then use Preview & send update. The customer will see what changed on the same link."
+          : "You sent an update for these requests. New asks from the customer will show here again."}
+      </p>
+
+      {latest ? (
+        <div
+          className={cn(
+            "mt-3 rounded-lg border bg-white p-2.5",
+            waiting ? "border-fuchsia-200" : "border-emerald-200",
+          )}
+        >
+          <div className="flex items-start gap-2">
+            {waiting ? null : (
+              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm leading-snug text-slate-800">{latest.reason}</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {formatDate(latest.at)}
+                {waiting ? " · Latest" : " · Done"}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {older.length ? (
+        <ul className="mt-2 max-h-28 space-y-1.5 overflow-y-auto pr-0.5">
+          {older.map((row, index) => (
+            <li
+              key={row.id || `${row.at}-${index}`}
+              className="flex items-start gap-1.5 rounded-md bg-white/80 px-2 py-1.5"
+            >
+              {row.addressedAt || !waiting ? (
+                <CheckCircle2 className="mt-0.5 size-3 shrink-0 text-emerald-600" />
+              ) : (
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-fuchsia-400" />
+              )}
+              <div className="min-w-0">
+                <p className="line-clamp-2 text-xs leading-snug text-slate-700">
+                  {row.reason}
+                </p>
+                <p className="mt-0.5 text-[10px] text-slate-400">{formatDate(row.at)}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {sorted.length > 1 ? (
+        <p className="mt-1.5 text-[10px] text-slate-500">
+          {sorted.length} requests · newest first
+        </p>
+      ) : null}
+
+      {latestUpdate && !waiting ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-emerald-900/80">
+          Last sent: {latestUpdate.summary}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function customerNameFromOpportunity(opportunity: EstimateV2Opportunity) {
   const c = opportunity.customerId;
   if (!c || typeof c === "string") return "Customer";
   const company = String(c.companyName || "").trim();
   if (company) return company;
   return [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || c.email || "Customer";
+}
+
+function customerContactFromOpportunity(opportunity: EstimateV2Opportunity) {
+  const c = opportunity.customerId;
+  if (!c || typeof c === "string") return undefined;
+  const email = String(c.email || "").trim();
+  const phone = String(c.phone || "").trim();
+  if (!email && !phone) return undefined;
+  return { email, phone };
 }
 
 function customerIdOf(opportunity: EstimateV2Opportunity) {
@@ -196,8 +317,24 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [saving, setSaving] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
-  /** Fresh estimate for the send dialog (avoids stale React state after save/finalize). */
+  const [acceptStep, setAcceptStep] = useState<"choose" | "job" | "invoice">("choose");
+  const [jobStartAt, setJobStartAt] = useState("");
+  const [jobDueAt, setJobDueAt] = useState("");
+  const [invoiceDueAt, setInvoiceDueAt] = useState("");
   const [sendEstimate, setSendEstimate] = useState<Estimate | null>(null);
+  useEffect(() => {
+    if (!acceptOpen) {
+      setAcceptStep("choose");
+      return;
+    }
+    const today = todayISO();
+    setJobStartAt(today);
+    setJobDueAt(today);
+    const invoiceDue = new Date(`${today}T12:00:00`);
+    invoiceDue.setDate(invoiceDue.getDate() + 14);
+    setInvoiceDueAt(invoiceDue.toISOString().slice(0, 10));
+    setAcceptStep(estimate?.jobId ? "invoice" : "choose");
+  }, [acceptOpen, estimate?.jobId]);
 
   const [scopeOfWork, setScopeOfWork] = useState("");
   const [terms, setTerms] = useState("Proposal valid for 30 calendar days from issue date.");
@@ -213,6 +350,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const prepInfoRef = useRef<HTMLDivElement>(null);
   /** When Existing info / Site visits is expanded, hide the estimate builder underneath. */
   const [prepPanelOpen, setPrepPanelOpen] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
@@ -284,7 +422,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       if (linked?.id) {
         freshEstimate = (await getEstimate(linked.id)) || linked;
         setEstimate(freshEstimate);
-        setScopeOfWork(freshEstimate.notes || data.description || data.prepFindings || "");
+        setScopeOfWork(
+          stripChangeRequestLinesFromNotes(
+            freshEstimate.notes || data.description || data.prepFindings || "",
+          ),
+        );
         setTerms(freshEstimate.terms || "Proposal valid for 30 calendar days from issue date.");
         setDiscount(Number(freshEstimate.discount) || 0);
         const fromEstimate = estimateToLines(freshEstimate);
@@ -467,12 +609,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime(),
       )
       .filter((item) => {
-        const dedupe = `${item.action}|${item.details || ""}|${String(item.at || "").slice(0, 16)}`;
+        const day = String(item.at || "").slice(0, 10);
+        const dedupe = `${item.action}|${item.details || ""}|${day}`;
         if (seen.has(dedupe)) return false;
         seen.add(dedupe);
         return true;
-      })
-      .slice(0, 14);
+      });
   }, [opportunity?.activities, estimate?.activities, estimate?.logs]);
 
   const informationSourceLabel = useMemo(() => {
@@ -637,7 +779,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     }
   }
 
-  async function saveEstimateDraft(): Promise<Estimate | null> {
+  async function saveEstimateDraft(options?: {
+    silent?: boolean;
+  }): Promise<Estimate | null> {
     if (!opportunity) return null;
     setSaving(true);
     try {
@@ -691,9 +835,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       });
       const next = saved || draft;
       setEstimate(next);
-      toast.success(
-        next.status === "draft" ? "Estimate draft saved." : "Estimate saved.",
-      );
+      if (!options?.silent) {
+        toast.success(
+          next.status === "draft" ? "Estimate draft saved." : "Estimate saved.",
+        );
+      }
       await load({ silent: true });
       return next;
     } catch (err) {
@@ -705,7 +851,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   }
 
   async function openSendDialog() {
-    const saved = await saveEstimateDraft();
+    const saved = await saveEstimateDraft({ silent: true });
     let current = saved || estimate;
     if (!current?.id) current = await ensureEstimate();
     if (!current?.id) return;
@@ -832,30 +978,57 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     }
   }
 
-  async function handleAcceptance(nextAction: "start_now" | "schedule_later") {
+  async function handleAcceptance(
+    nextAction: "start_now" | "schedule_later" | "invoice_now",
+  ) {
     if (!opportunity || !estimate?.id) return;
+    if (nextAction === "invoice_now") {
+      if (!invoiceDueAt) {
+        toast.error("Set the invoice due date before creating it.");
+        return;
+      }
+    } else if (!jobStartAt || !jobDueAt) {
+      toast.error("Set the job start and due dates.");
+      return;
+    } else if (jobDueAt < jobStartAt) {
+      toast.error("Due date must be on or after the start date.");
+      return;
+    }
     setSaving(true);
     try {
       const result = await resolveEstimateV2Acceptance(opportunity.id, {
         estimateId: estimate.id,
         nextAction,
-        markAccepted: estimate.status !== "accepted" && estimate.status !== "converted_to_job",
+        markAccepted:
+          estimate.status !== "accepted" &&
+          estimate.status !== "converted_to_job",
         signedBy: "Customer (office)",
         title: opportunity.title,
+        dueAt: nextAction === "invoice_now" ? invoiceDueAt : jobDueAt,
+        scheduledAt: nextAction === "invoice_now" ? undefined : jobStartAt,
       });
-      toast.success(
-        nextAction === "start_now"
-          ? `${result.job?.number || "Job"} ready to start.`
-          : `${result.job?.number || "Job"} created — schedule when ready.`,
-      );
-      setAcceptOpen(false);
-      if (result.job?.id) {
-        router.push(`/pro/dashboard/jobs/${result.job.id}`);
-        return;
+      if (nextAction === "invoice_now") {
+        toast.success(
+          `${result.invoice?.number || "Invoice"} created from ${estimate.number}.`,
+        );
+        setAcceptOpen(false);
+        if (result.invoice?.id) {
+          router.push(`/pro/dashboard/invoices/${result.invoice.id}`);
+          return;
+        }
+      } else {
+        toast.success(`${result.job?.number || "Job"} created and scheduled.`);
+        setAcceptOpen(false);
+        if (result.job?.id) {
+          router.push(`/pro/dashboard/jobs/${result.job.id}`);
+          return;
+        }
       }
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not convert estimate.");
+      toast.error(
+        err instanceof Error ? err.message : "Could not continue from this estimate.",
+      );
     } finally {
       setSaving(false);
     }
@@ -933,7 +1106,17 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.58fr)_minmax(0,2.42fr)]">
         {/* Left rail */}
-        <section className="space-y-3.5 lg:sticky lg:top-4 lg:self-start">
+        <section className="space-y-3.5">
+          {(estimate?.changeRequests?.length || estimate?.customerUpdates?.length) ? (
+            <div className="lg:sticky lg:top-4 lg:z-10">
+              <ChangeRequestsRail
+                status={estimate?.status}
+                changeRequests={estimate?.changeRequests || []}
+                customerUpdates={estimate?.customerUpdates || []}
+              />
+            </div>
+          ) : null}
+
           <div className={RAIL_CARD}>
             <SectionLabel>Customer & property</SectionLabel>
             <p className="mt-2.5 text-[15px] font-semibold tracking-tight text-slate-900">
@@ -1009,7 +1192,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           </div>
 
           {(estimate?.status === "sent" ||
-            opportunity.status === "estimate_sent") && (
+            (opportunity.status === "estimate_sent" &&
+              estimate?.status !== "changes_requested")) && (
             <div className={RAIL_CARD}>
               <SectionLabel>Follow-up</SectionLabel>
               <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
@@ -1032,9 +1216,25 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
           {activityTimeline.length ? (
             <div className={RAIL_CARD}>
-              <SectionLabel>Activity</SectionLabel>
-              <ol className="relative mt-3 space-y-0 border-l border-[#b4becc] pl-4">
-                {activityTimeline.map((item) => (
+              <div className="flex items-baseline justify-between gap-2">
+                <SectionLabel>Activity</SectionLabel>
+                {activityTimeline.length > ACTIVITY_PREVIEW_COUNT ? (
+                  <span className="text-[10px] font-medium tabular-nums text-slate-400">
+                    {activityTimeline.length}
+                  </span>
+                ) : null}
+              </div>
+              <ol
+                className={
+                  activityExpanded && activityTimeline.length > ACTIVITY_PREVIEW_COUNT
+                    ? "relative mt-3 max-h-64 space-y-0 overflow-y-auto border-l border-[#b4becc] pl-4 pr-1"
+                    : "relative mt-3 space-y-0 border-l border-[#b4becc] pl-4"
+                }
+              >
+                {(activityExpanded
+                  ? activityTimeline
+                  : activityTimeline.slice(0, ACTIVITY_PREVIEW_COUNT)
+                ).map((item) => (
                   <li key={item.key} className="relative pb-4 last:pb-0">
                     <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full border-2 border-primary bg-white" />
                     <p className="text-sm font-medium text-slate-900">{item.action}</p>
@@ -1051,6 +1251,27 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   </li>
                 ))}
               </ol>
+              {activityTimeline.length > ACTIVITY_PREVIEW_COUNT ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="mt-1 h-7 w-full justify-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900"
+                  onClick={() => setActivityExpanded((open) => !open)}
+                >
+                  {activityExpanded ? (
+                    <>
+                      Show less
+                      <ChevronUp className="size-3" />
+                    </>
+                  ) : (
+                    <>
+                      Show {activityTimeline.length - ACTIVITY_PREVIEW_COUNT} more
+                      <ChevronDown className="size-3" />
+                    </>
+                  )}
+                </Button>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -1161,17 +1382,38 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       {sendButtonLabel}
                     </Button>
                     {(estimate?.status === "sent" ||
-                      estimate?.status === "accepted") ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={saving}
-                        onClick={() => setAcceptOpen(true)}
-                      >
-                        {estimate.status === "accepted"
-                          ? "Create job…"
-                          : "Customer accepted…"}
-                      </Button>
+                      estimate?.status === "accepted" ||
+                      estimate?.status === "converted_to_job") ? (
+                      <>
+                        {estimate.jobId ? (
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/pro/dashboard/jobs/${estimate.jobId}`}>
+                              Open job
+                            </Link>
+                          </Button>
+                        ) : null}
+                        {estimate.invoiceId ? (
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/pro/dashboard/invoices/${estimate.invoiceId}`}>
+                              Open invoice
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={saving}
+                            onClick={() => setAcceptOpen(true)}
+                          >
+                            {estimate.jobId
+                              ? "Create invoice…"
+                              : estimate.status === "accepted" ||
+                                  estimate.status === "converted_to_job"
+                                ? "Create job or invoice…"
+                                : "Customer accepted…"}
+                          </Button>
+                        )}
+                      </>
                     ) : null}
                   </div>
                 </div>
@@ -1370,6 +1612,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             if (!open) setSendEstimate(null);
           }}
           estimate={sendEstimate || estimate!}
+          customer={customerContactFromOpportunity(opportunity)}
           customerLabel={customerNameFromOpportunity(opportunity)}
           mode={
             (sendEstimate || estimate)?.status === "changes_requested"
@@ -1401,25 +1644,129 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         />
       ) : null}
 
-      <Dialog open={acceptOpen} onOpenChange={setAcceptOpen}>
+      <Dialog
+        open={acceptOpen}
+        onOpenChange={(open) => {
+          setAcceptOpen(open);
+          if (!open) setAcceptStep("choose");
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>What happens next?</DialogTitle>
+            <DialogTitle>
+              {acceptStep === "job"
+                ? "Schedule the job"
+                : acceptStep === "invoice"
+                  ? "Invoice due date"
+                  : estimate?.jobId
+                    ? "Create invoice"
+                    : "What happens next?"}
+            </DialogTitle>
             <DialogDescription>
-              Customer accepted the estimate. Start work now, or create the job and schedule it later.
+              {acceptStep === "job"
+                ? "Set when work starts and when it is due. The job shows on the calendar from start through due."
+                : acceptStep === "invoice"
+                  ? "Set when this invoice is due. That date is shown on the calendar and to the customer."
+                  : estimate?.jobId
+                    ? "Bill this work as an invoice from the current job and estimate line items."
+                    : "Convert to a job and pick start and due dates, or create an invoice with a due date."}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button disabled={saving} onClick={() => void handleAcceptance("start_now")}>
-              Start work now
-            </Button>
-            <Button
-              variant="outline"
-              disabled={saving}
-              onClick={() => void handleAcceptance("schedule_later")}
-            >
-              Schedule work later
-            </Button>
+          <DialogFooter className="-mt-4 flex-col gap-3 border-t-0 pt-4 sm:flex-col sm:justify-stretch">
+            {acceptStep === "choose" ? (
+              <>
+                <Button disabled={saving} onClick={() => setAcceptStep("job")}>
+                  Convert to job
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={saving}
+                  onClick={() => setAcceptStep("invoice")}
+                >
+                  Create invoice (skip job)
+                </Button>
+              </>
+            ) : null}
+            {acceptStep === "job" ? (
+              <>
+                <div className="grid w-full gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5 text-left">
+                    <Label htmlFor="job-start-at">Start date</Label>
+                    <Input
+                      id="job-start-at"
+                      type="date"
+                      value={jobStartAt}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setJobStartAt(next);
+                        if (jobDueAt && next && jobDueAt < next) setJobDueAt(next);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-left">
+                    <Label htmlFor="job-due-at">Due date</Label>
+                    <Input
+                      id="job-due-at"
+                      type="date"
+                      min={jobStartAt || undefined}
+                      value={jobDueAt}
+                      onChange={(event) => setJobDueAt(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex w-full gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    disabled={saving}
+                    onClick={() => setAcceptStep("choose")}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    disabled={saving || !jobStartAt || !jobDueAt || jobDueAt < jobStartAt}
+                    onClick={() => void handleAcceptance("schedule_later")}
+                  >
+                    {saving ? "Creating…" : "Create job"}
+                  </Button>
+                </div>
+              </>
+            ) : null}
+            {acceptStep === "invoice" ? (
+              <>
+                <div className="w-full space-y-1.5 text-left">
+                  <Label htmlFor="invoice-due-at">Due date</Label>
+                  <Input
+                    id="invoice-due-at"
+                    type="date"
+                    value={invoiceDueAt}
+                    onChange={(event) => setInvoiceDueAt(event.target.value)}
+                  />
+                </div>
+                <div className="flex w-full gap-2">
+                  {estimate?.jobId ? null : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      disabled={saving}
+                      onClick={() => setAcceptStep("choose")}
+                    >
+                      Back
+                    </Button>
+                  )}
+                  <Button
+                    className="flex-1"
+                    disabled={saving || !invoiceDueAt}
+                    onClick={() => void handleAcceptance("invoice_now")}
+                  >
+                    {saving ? "Creating…" : "Create invoice"}
+                  </Button>
+                </div>
+              </>
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>

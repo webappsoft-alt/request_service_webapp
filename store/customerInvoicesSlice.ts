@@ -20,6 +20,7 @@ export type CustomerInvoicePayment = {
   method: string;
   status: string;
   paidAt: string | null;
+  dueAt?: string | null;
   createdAt?: string | null;
   notes?: string;
   transactionReference?: string;
@@ -141,6 +142,7 @@ function mapInvoice(raw: unknown): CustomerInvoice | null {
           method: stringValue(entry.method) || "check",
           status: stringValue(entry.status) || "succeeded",
           paidAt: stringValue(entry.paidAt) || null,
+          dueAt: stringValue(entry.dueAt) || stringValue(entry.paidAt) || null,
           createdAt: stringValue(entry.createdAt) || null,
           notes: stringValue(entry.notes),
           transactionReference: stringValue(entry.transactionReference),

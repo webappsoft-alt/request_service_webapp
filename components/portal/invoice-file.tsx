@@ -50,6 +50,8 @@ import type { Estimate, Invoice, InvoiceStatus, Job, Payment, PaymentMethodType 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { recordInvoicePaymentRecord } from "@/store/invoicesSlice";
+import { updateInvoice } from "@/lib/api/crm-client";
+import { syncCalendarAssignment } from "@/lib/portal-schedule-sync";
 
 const PAYMENT_METHODS: PaymentMethodType[] = ["card", "ach", "check", "cash"];
 
@@ -217,6 +219,7 @@ export function ApplyPaymentDialog({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethodType>("check");
   const [paidAt, setPaidAt] = useState(todayISO());
+  const [dueAt, setDueAt] = useState(todayISO());
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -224,6 +227,7 @@ export function ApplyPaymentDialog({
     setAmount(invoice.balanceDue > 0 ? String(invoice.balanceDue) : "");
     setMethod("check");
     setPaidAt(todayISO());
+    setDueAt(invoice.dueAt ? invoice.dueAt.slice(0, 10) : todayISO());
     setSaving(false);
   }, [invoice, open]);
 
@@ -245,6 +249,7 @@ export function ApplyPaymentDialog({
       method,
       status: "succeeded",
       paidAt,
+      dueAt,
       createdAt: todayISO(),
     };
 
@@ -349,12 +354,24 @@ export function ApplyPaymentDialog({
               onChange={(change) => setPaidAt(change.target.value)}
             />
           </Field>
+          <Field label="Due date">
+            <Input
+              id="apply-pay-due"
+              type="date"
+              value={dueAt}
+              disabled={saving}
+              onChange={(change) => setDueAt(change.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              This payment appears on the schedule calendar on the due date. The customer sees it too.
+            </p>
+          </Field>
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={!invoice || !Number(amount) || saving} onClick={() => void save()}>
+          <Button disabled={!invoice || !Number(amount) || !dueAt || saving} onClick={() => void save()}>
             {saving ? "Applying…" : "Apply payment"}
           </Button>
         </DialogFooter>
@@ -790,9 +807,37 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
           size="sm"
           className="h-8"
           onClick={() => {
-            file.saveInvoiceSettings(draft);
-            records.setStatus("invoice", invoice.id, draft.status);
-            toast.success("Invoice settings saved.");
+            void (async () => {
+              if (!draft.dueAt) {
+                toast.error("Set a due date so this invoice appears on the calendar.");
+                return;
+              }
+              file.saveInvoiceSettings(draft);
+              records.setStatus("invoice", invoice.id, draft.status);
+              try {
+                await updateInvoice(invoice.id, {
+                  customerId: draft.customerId,
+                  issuedAt: draft.issuedAt,
+                  dueAt: draft.dueAt,
+                  status: draft.status,
+                });
+                await syncCalendarAssignment({
+                  kind: "invoice",
+                  recordId: invoice.id,
+                  title: invoice.number,
+                  date: draft.dueAt,
+                  endDate: draft.dueAt,
+                  status: draft.status === "paid" ? "completed" : "scheduled",
+                  linkOnly: true,
+                });
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "Could not save invoice dates.",
+                );
+                return;
+              }
+              toast.success("Invoice settings saved.");
+            })();
           }}
         >
           Save settings

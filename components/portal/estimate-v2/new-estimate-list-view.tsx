@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Link2, Plus, Trash2 } from "lucide-react";
+import { Briefcase, Eye, FileText, Link2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,11 +18,13 @@ import { shareUrlFor } from "@/components/portal/use-estimate-share";
 import {
   deleteEstimateV2Opportunity,
   listEstimateV2Opportunities,
+  resolveEstimateV2Acceptance,
   type EstimateV2Opportunity,
 } from "@/lib/api/estimate-v2-client";
 import { shareEstimate } from "@/lib/api/crm-client";
 import {
   estimateStatusLabel,
+  estimateStatusToneDistinct,
   opportunityStatusLabel,
   opportunityStatusTone,
 } from "@/lib/data/estimate-v2-status";
@@ -36,6 +38,14 @@ function customerLabel(opportunity: EstimateV2Opportunity) {
   const company = String(c.companyName || "").trim();
   if (company) return company;
   return [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || "Customer";
+}
+
+function linkedEstimate(row: EstimateV2Opportunity) {
+  return row.estimates?.[0] || null;
+}
+
+function rowStatus(row: EstimateV2Opportunity) {
+  return String(linkedEstimate(row)?.status || row.status || "");
 }
 
 function propertyLabel(opportunity: EstimateV2Opportunity) {
@@ -95,6 +105,50 @@ export function NewEstimateListView() {
       toast.error(err instanceof Error ? err.message : "Could not delete estimate.");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function convertRow(
+    row: EstimateV2Opportunity,
+    nextAction: "start_now" | "schedule_later" | "invoice_now",
+  ) {
+    const linked = linkedEstimate(row);
+    if (!linked?.id) {
+      toast.error("Open the estimate first.");
+      return;
+    }
+    try {
+      const result = await resolveEstimateV2Acceptance(row.id, {
+        estimateId: linked.id,
+        nextAction,
+        markAccepted:
+          linked.status !== "accepted" && linked.status !== "converted_to_job",
+        signedBy: "Customer (office)",
+        title: row.title,
+        dueAt: nextAction === "invoice_now"
+          ? (() => {
+              const next = new Date();
+              next.setDate(next.getDate() + 14);
+              return next.toISOString().slice(0, 10);
+            })()
+          : undefined,
+      });
+      if (nextAction === "invoice_now" && result.invoice?.id) {
+        toast.success(`${result.invoice.number || "Invoice"} created.`);
+        router.push(`/pro/dashboard/invoices/${result.invoice.id}`);
+        return;
+      }
+      if (result.job?.id) {
+        toast.success(`${result.job.number || "Job"} created — set start and due dates.`);
+        router.push(`/pro/dashboard/jobs/${result.job.id}?schedule=1`);
+        return;
+      }
+      toast.success("Estimate updated.");
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not convert this estimate.",
+      );
     }
   }
 
@@ -163,7 +217,15 @@ export function NewEstimateListView() {
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/new-estimate/${row.id}`}
-        actions={(row) => [
+        actions={(row) => {
+          const linked = linkedEstimate(row);
+          const status = String(linked?.status || "");
+          const canConvert =
+            Boolean(linked?.id) &&
+            ["sent", "accepted", "converted_to_job"].includes(status);
+          const jobId = linked?.jobId;
+          const invoiceId = linked?.invoiceId;
+          return [
           {
             label: "Open",
             href: `/pro/dashboard/new-estimate/${row.id}`,
@@ -181,34 +243,80 @@ export function NewEstimateListView() {
                 },
               ]
             : []),
+          ...(canConvert && !jobId
+            ? [
+                {
+                  label: "Convert to job",
+                  icon: <Briefcase className="size-3.5" />,
+                  onSelect: () => {
+                    void convertRow(row, "schedule_later");
+                  },
+                },
+              ]
+            : []),
+          ...(jobId
+            ? [
+                {
+                  label: "Open job",
+                  href: `/pro/dashboard/jobs/${jobId}`,
+                  icon: <Briefcase className="size-3.5" />,
+                },
+              ]
+            : []),
+          ...(canConvert && !invoiceId
+            ? [
+                {
+                  label: "Create invoice",
+                  icon: <FileText className="size-3.5" />,
+                  onSelect: () => {
+                    void convertRow(row, "invoice_now");
+                  },
+                },
+              ]
+            : []),
+          ...(invoiceId
+            ? [
+                {
+                  label: "Open invoice",
+                  href: `/pro/dashboard/invoices/${invoiceId}`,
+                  icon: <FileText className="size-3.5" />,
+                },
+              ]
+            : []),
           {
             label: "Delete",
-            variant: "destructive",
+            variant: "destructive" as const,
             icon: <Trash2 className="size-3.5" />,
             onSelect: () => setDeleteTarget(row),
           },
-        ]}
+        ];
+        }}
         columns={[
           {
             id: "number",
             header: "Estimate",
-            sortValue: (row) => row.number,
-            cell: (row) => (
-              <div>
-                <Link
-                  href={`/pro/dashboard/new-estimate/${row.id}`}
-                  className="font-medium text-primary hover:underline"
-                >
-                  {row.number}
-                </Link>
-                <p className="mt-0.5 text-xs font-medium text-foreground">{row.title}</p>
-                {row.categoryName ? (
-                  <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {row.categoryName}
-                  </p>
-                ) : null}
-              </div>
-            ),
+            sortValue: (row) => linkedEstimate(row)?.number || row.number,
+            searchValue: (row) =>
+              `${linkedEstimate(row)?.number || ""} ${row.number} ${row.title || ""}`,
+            cell: (row) => {
+              const number = linkedEstimate(row)?.number || row.number;
+              return (
+                <div>
+                  <Link
+                    href={`/pro/dashboard/new-estimate/${row.id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {number}
+                  </Link>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{row.title}</p>
+                  {row.categoryName ? (
+                    <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {row.categoryName}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            },
           },
           {
             id: "customer",
@@ -250,47 +358,34 @@ export function NewEstimateListView() {
             },
           },
           {
-            id: "estimate",
-            header: "Estimate",
-            sortValue: (row) =>
-              row.estimates?.[0]?.number || (row.estimateIds?.length ? "1" : ""),
+            id: "status",
+            header: "Status",
+            sortValue: (row) => rowStatus(row),
             cell: (row) => {
-              const est = row.estimates?.[0];
-              if (est?.number) {
+              const estimateStatus = linkedEstimate(row)?.status;
+              if (estimateStatus) {
                 return (
-                  <div>
-                    <p className="text-sm font-medium">{est.number}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {estimateStatusLabel(String(est.status || "draft"))}
-                    </p>
-                  </div>
-                );
-              }
-              const linked = row.estimateIds?.length || 0;
-              if (linked > 0 || row.status?.startsWith("estimate_") || row.status === "won") {
-                return (
-                  <span className="text-xs font-medium text-foreground">
-                    Linked
+                  <span
+                    className={cn(
+                      "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
+                      estimateStatusToneDistinct(String(estimateStatus)),
+                    )}
+                  >
+                    {estimateStatusLabel(String(estimateStatus))}
                   </span>
                 );
               }
-              return <span className="text-xs text-muted-foreground">—</span>;
+              return (
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                    opportunityStatusTone(row.status),
+                  )}
+                >
+                  {opportunityStatusLabel(row.status)}
+                </span>
+              );
             },
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortValue: (row) => row.status,
-            cell: (row) => (
-              <span
-                className={cn(
-                  "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
-                  opportunityStatusTone(row.status),
-                )}
-              >
-                {opportunityStatusLabel(row.status)}
-              </span>
-            ),
           },
           {
             id: "updated",

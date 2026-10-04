@@ -34,7 +34,7 @@ function normalizeScheduleStatus(value?: string): CrmScheduleStatus {
  * Silent on failure so create/update flows still succeed.
  */
 export async function syncCalendarAssignment(input: {
-  kind: "job" | "estimate" | "fixed_service";
+  kind: "job" | "estimate" | "fixed_service" | "invoice" | "payment";
   recordId: string;
   title: string;
   date?: string | null;
@@ -61,7 +61,9 @@ export async function syncCalendarAssignment(input: {
   const linkOnly =
     input.linkOnly === true ||
     input.kind === "estimate" ||
-    input.kind === "fixed_service";
+    input.kind === "fixed_service" ||
+    input.kind === "invoice" ||
+    input.kind === "payment";
 
   try {
     const existing = await querySchedule({

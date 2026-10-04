@@ -16,6 +16,7 @@ import {
   FileQuestion,
   FileText,
   Maximize2,
+  MessageSquareText,
   Printer,
   RotateCcw,
   Ruler,
@@ -60,6 +61,8 @@ import {
   fetchCustomerEstimates,
   fetchCustomerQuoteRequests,
 } from "@/store/customerQuotesSlice";
+import { splitEstimateNotesAndChangeRequests } from "@/lib/data/estimate-change-requests";
+import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -305,6 +308,29 @@ function mapPublicEstimateToSnapshot(
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "SC";
 
+  const mappedChangeRequests = Array.isArray(estimate.changeRequests)
+    ? estimate.changeRequests.flatMap((entry) => {
+        const row = asRecord(entry) || {};
+        const reason = stringValue(row.reason) || stringValue(row.details);
+        if (!reason) return [];
+        return [
+          {
+            reason,
+            at:
+              toIso(row.at) ||
+              toIso(row.timestamp) ||
+              toIso(row.createdAt) ||
+              new Date().toISOString(),
+            addressedAt: toIso(row.addressedAt) || null,
+          },
+        ];
+      })
+    : [];
+  const notesSplit = splitEstimateNotesAndChangeRequests(
+    stringValue(estimate.notes),
+    mappedChangeRequests,
+  );
+
   const snapshot: EstimateShareSnapshot = {
     token,
     estimateId,
@@ -356,7 +382,7 @@ function mapPublicEstimateToSnapshot(
       toIso(estimate.createdAt) ||
       new Date().toISOString(),
     expiresAt: toIso(estimate.expiresAt) || undefined,
-    notes: stringValue(estimate.notes) || undefined,
+    notes: notesSplit.notes || undefined,
     terms: stringValue(estimate.terms) || undefined,
     items,
     subtotal: numberValue(estimate.subtotal),
@@ -407,6 +433,7 @@ function mapPublicEstimateToSnapshot(
           return [update];
         })
       : undefined,
+    changeRequests: notesSplit.changeRequests,
   };
 
   const signedAt =
@@ -436,9 +463,12 @@ function isMongoObjectId(value: string) {
 
 function canCustomerSignStatus(status?: string) {
   const value = String(status || "").toLowerCase();
-  // Shared proposals are signable when sent (or still office-finalized before send).
-  // After the customer requests changes, they wait until the pro sends an update.
-  return value === "sent" || value === "finalized" || value === "draft";
+  return (
+    value === "sent" ||
+    value === "finalized" ||
+    value === "draft" ||
+    value === "changes_requested"
+  );
 }
 
 function customerStatusLabel(status?: string, hasUpdates = false) {
@@ -470,24 +500,7 @@ function customerStatusLabel(status?: string, hasUpdates = false) {
 }
 
 function customerStatusTone(status?: string) {
-  const value = String(status || "").toLowerCase();
-  switch (value) {
-    case "accepted":
-    case "converted_to_job":
-      return "bg-emerald-50 text-emerald-700";
-    case "rejected":
-    case "expired":
-      return "bg-red-50 text-red-700";
-    case "changes_requested":
-      return "bg-amber-50 text-amber-800";
-    case "sent":
-    case "finalized":
-      return "bg-amber-50 text-amber-700";
-    case "inspected":
-      return "bg-blue-50 text-blue-700";
-    default:
-      return "bg-slate-100 text-slate-700";
-  }
+  return estimateStatusToneClass(String(status || ""));
 }
 
 export function CustomerEstimatePage({
@@ -667,6 +680,14 @@ export function CustomerEstimatePage({
   );
   const latestCustomerUpdate = customerUpdates[0] || null;
   const hasProUpdates = customerUpdates.length > 0;
+  const changeRequests = [...(snapshot?.changeRequests || [])].sort(
+    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  );
+  const waitingOnRevision = snapshot?.status === "changes_requested";
+  const showConversationPanel =
+    Boolean(showChangeForm) ||
+    changeRequests.length > 0 ||
+    Boolean(latestCustomerUpdate && !approval);
 
   useEffect(() => {
     if (!wantAccept || !canSign || loading) return;
@@ -859,7 +880,7 @@ export function CustomerEstimatePage({
   }
 
   const documentContent = (
-    <div className="mx-auto w-full max-w-[8.5in] space-y-4 print:max-w-none print:space-y-0 print:p-0 print:m-0">
+    <div className="mx-auto w-full max-w-[72rem] space-y-4 print:max-w-none print:space-y-0 print:p-0 print:m-0">
       {/* Top bar with quick actions */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-xs print:hidden">
         <div className="flex items-center gap-2">
@@ -871,7 +892,7 @@ export function CustomerEstimatePage({
               {snapshot.number}
             </span>
             {approval ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200/80">
                 <CheckCircle2 className="size-3.5" /> Approved
               </span>
             ) : (
@@ -924,7 +945,9 @@ export function CustomerEstimatePage({
                   disabled={rejecting || requestingChanges}
                   onClick={() => setShowChangeForm((open) => !open)}
                 >
-                  Request changes
+                  {waitingOnRevision || changeRequests.length > 0
+                    ? "Request more changes"
+                    : "Request changes"}
                 </Button>
                 <Button
                   variant="outline"
@@ -1019,109 +1042,155 @@ export function CustomerEstimatePage({
           </div>
         ) : null}
 
-        {showChangeForm && canRequestChanges ? (
-          <div className="rounded-md border border-input bg-card p-4 print:hidden">
-            <p className="text-sm font-medium">What should be changed?</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The professional will update this same estimate and send it back
-              for your review.
-            </p>
-            <textarea
-              className="mt-3 w-full min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={changeReason}
-              onChange={(event) => setChangeReason(event.target.value)}
-              placeholder="Example: Please reduce labor hours and add materials for the kitchen repair."
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,8.5in)_minmax(16rem,20rem)]">
+          <div className="min-w-0 space-y-4">
+            {snapshot.status === "inspected" || snapshot.status === "site_visit" ? (
+              <CustomerSiteInspectionSection
+                siteVisit={snapshot.siteVisit}
+                status={snapshot.status}
+              />
+            ) : null}
+
+            <EstimatePdfDocument
+              snapshot={snapshot}
+              approval={approval}
+              customerSlot={
+                canSign ? (
+                  <CustomerSignSlot snapshot={snapshot} onSign={approve} />
+                ) : undefined
+              }
             />
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={requestingChanges || changeReason.trim().length < 3}
-                onClick={() => void submitChangeRequest()}
-              >
-                {requestingChanges ? "Sending…" : "Send change request"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={requestingChanges}
-                onClick={() => {
-                  setShowChangeForm(false);
-                  setChangeReason("");
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : null}
 
-        {snapshot.status === "changes_requested" ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 print:hidden">
-            Your change request was sent. Waiting for the professional to revise
-            and re-share this estimate.
-          </div>
-        ) : null}
+            {snapshot.status !== "inspected" && snapshot.status !== "site_visit" ? (
+              <CustomerSiteInspectionSection
+                siteVisit={snapshot.siteVisit}
+                status={snapshot.status}
+              />
+            ) : null}
 
-        {latestCustomerUpdate &&
-        snapshot.status !== "changes_requested" &&
-        !approval ? (
-          <div className="rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 print:hidden">
-            <p className="font-semibold">
-              {snapshot.status === "sent"
-                ? "This estimate was updated"
-                : "Update from your professional"}
-            </p>
-            <p className="mt-1 leading-relaxed">{latestCustomerUpdate.summary}</p>
-            {customerUpdates.length > 1 ? (
-              <ul className="mt-2 space-y-1 text-xs text-sky-900/80">
-                {customerUpdates.slice(1, 4).map((update, index) => (
-                  <li key={`${update.at}-${index}`}>• {update.summary}</li>
-                ))}
-              </ul>
+            {approval ? (
+              <div className="flex items-center gap-2.5 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 print:hidden">
+                <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+                <div className="text-xs sm:text-sm">
+                  <span className="font-semibold text-emerald-900">
+                    Signed & Approved
+                  </span>{" "}
+                  by {approval.signedBy} on{" "}
+                  {formatDate(approval.signedAt.slice(0, 10))}. The service company
+                  has received your approval and can proceed with scheduling.
+                </div>
+              </div>
             ) : null}
           </div>
-        ) : null}
 
-        {/* If status is inspected or site_visit, show the inspection section first */}
-        {snapshot.status === "inspected" || snapshot.status === "site_visit" ? (
-          <CustomerSiteInspectionSection
-            siteVisit={snapshot.siteVisit}
-            status={snapshot.status}
-          />
-        ) : null}
+          {showConversationPanel ? (
+            <aside className="order-first space-y-3 print:hidden lg:order-last lg:sticky lg:top-4">
+              {waitingOnRevision ? (
+                <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 p-4 text-sm text-fuchsia-950">
+                  <p className="font-semibold">Waiting on a revision</p>
+                  <p className="mt-1 text-xs leading-relaxed text-fuchsia-900/80">
+                    Your change request was sent. You can still accept this version,
+                    decline it, or add another request.
+                  </p>
+                </div>
+              ) : null}
 
-        {/* 2-page document preview with signature field on page 2 */}
-        <EstimatePdfDocument
-          snapshot={snapshot}
-          approval={approval}
-          customerSlot={
-            canSign ? (
-              <CustomerSignSlot snapshot={snapshot} onSign={approve} />
-            ) : undefined
-          }
-        />
+              {latestCustomerUpdate && !approval && !waitingOnRevision ? (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+                  <p className="font-semibold">
+                    {snapshot.status === "sent"
+                      ? "This estimate was updated"
+                      : "Update from your professional"}
+                  </p>
+                  <p className="mt-1 leading-relaxed">{latestCustomerUpdate.summary}</p>
+                  {customerUpdates.length > 1 ? (
+                    <ul className="mt-2 space-y-1 text-xs text-sky-900/80">
+                      {customerUpdates.slice(1, 4).map((update, index) => (
+                        <li key={`${update.at}-${index}`}>• {update.summary}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
 
-        {/* If status is not inspected / site_visit, show the inspection section after the proposal document */}
-        {snapshot.status !== "inspected" && snapshot.status !== "site_visit" ? (
-          <CustomerSiteInspectionSection
-            siteVisit={snapshot.siteVisit}
-            status={snapshot.status}
-          />
-        ) : null}
+              {changeRequests.length ? (
+                <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <MessageSquareText className="size-4 text-fuchsia-700" />
+                    <p className="text-sm font-semibold">Your change requests</p>
+                  </div>
+                  <div className="mt-3 rounded-lg border border-input bg-muted/30 p-3">
+                    <p className="text-sm leading-relaxed text-foreground">
+                      {changeRequests[0].reason}
+                    </p>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      {formatDate(changeRequests[0].at)}
+                      {changeRequests[0].addressedAt
+                        ? " · Addressed in a later update"
+                        : " · Latest"}
+                    </p>
+                  </div>
+                  {changeRequests.length > 1 ? (
+                    <ul className="mt-2 max-h-28 space-y-1.5 overflow-y-auto">
+                      {changeRequests.slice(1).map((row, index) => (
+                        <li key={`${row.at}-${index}`} className="px-1">
+                          <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+                            {row.reason}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-muted-foreground/80">
+                            {formatDate(row.at)}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
 
-        {approval ? (
-          <div className="mx-auto flex max-w-[8.5in] items-center gap-2.5 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 print:hidden">
-            <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
-            <div className="text-xs sm:text-sm">
-              <span className="font-semibold text-emerald-900">
-                Signed & Approved
-              </span>{" "}
-              by {approval.signedBy} on{" "}
-              {formatDate(approval.signedAt.slice(0, 10))}. The service company
-              has received your approval and can proceed with scheduling.
-            </div>
-          </div>
-        ) : null}
+              {latestCustomerUpdate && waitingOnRevision ? (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+                  <p className="font-semibold">Previous update</p>
+                  <p className="mt-1 leading-relaxed">{latestCustomerUpdate.summary}</p>
+                </div>
+              ) : null}
+
+              {showChangeForm && canRequestChanges ? (
+                <div className="rounded-xl border border-input bg-card p-4 shadow-xs">
+                  <p className="text-sm font-medium">What should be changed?</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This stays next to the estimate — it is not added to the proposal notes.
+                  </p>
+                  <textarea
+                    className="mt-3 w-full min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={changeReason}
+                    onChange={(event) => setChangeReason(event.target.value)}
+                    placeholder="Example: Please change the tile design in this estimate."
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={requestingChanges || changeReason.trim().length < 3}
+                      onClick={() => void submitChangeRequest()}
+                    >
+                      {requestingChanges ? "Sending…" : "Send change request"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={requestingChanges}
+                      onClick={() => {
+                        setShowChangeForm(false);
+                        setChangeReason("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </aside>
+          ) : null}
+        </div>
       </div>
   );
 

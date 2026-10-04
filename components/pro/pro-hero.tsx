@@ -32,7 +32,7 @@ export function ProHero() {
 
   return (
     <section className="relative isolate">
-      <div className="relative w-full overflow-hidden pt-12 pb-40 sm:pt-16 sm:pb-48 lg:pt-20 lg:pb-56">
+      <div className="relative w-full overflow-hidden pt-12 pb-32 sm:pt-16 sm:pb-40 lg:pt-20 lg:pb-44">
         <Image
           src={HERO_PRO_IMAGE}
           alt=""
@@ -117,15 +117,17 @@ export function ProHero() {
         </Container>
       </div>
 
-      <Container className="relative z-10 -mt-28 mb-20 sm:-mt-36 sm:mb-28 lg:-mt-44 lg:mb-36">
-        <ProScreenshot
-          name="dashboard-main"
-          alt="Request Services pro dashboard showing today's overview, lead pipeline, incoming requests, and revenue"
-          mobileName="m-dashboard-main"
-          mobileAlt="The same dashboard on a phone"
-          priority
-          sizes="(min-width: 1280px) 1200px, 100vw"
-        />
+      <Container className="relative z-10 -mt-24 mb-16 sm:-mt-28 sm:mb-20 lg:-mt-32 lg:mb-24">
+        <div className="mx-auto w-full max-w-4xl">
+          <ProScreenshot
+            name="dashboard-main"
+            alt="Request Services pro dashboard showing today's overview, lead pipeline, incoming requests, and revenue"
+            mobileName="m-dashboard-main"
+            mobileAlt="The same dashboard on a phone"
+            priority
+            sizes="(min-width: 1280px) 56rem, 100vw"
+          />
+        </div>
       </Container>
     </section>
   );

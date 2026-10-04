@@ -1183,7 +1183,6 @@ function TimeGrid({
                 <CalendarChip
                   key={item.id}
                   event={item}
-                  cellIso={iso}
                   onClick={onClickCard}
                   onContextMenu={onContextMenuCard}
                 />

@@ -1757,7 +1757,7 @@ export async function shareEstimate(id: string, input?: ShareEstimateInput) {
 
 export async function convertEstimateToJob(
   id: string,
-  extras?: Pick<Estimate, "items" | "title" | "siteVisit"> & {
+  extras?: Partial<Pick<Estimate, "items" | "title" | "siteVisit">> & {
     status?: "unscheduled" | "in_progress" | "scheduled";
     scheduledAt?: string;
     dueAt?: string;

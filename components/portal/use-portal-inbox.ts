@@ -121,10 +121,12 @@ export function usePortalInbox() {
         bumpPortalInboxCount("newLeads", 1);
         return;
       }
+      if (type === "LEAD_STATUS_UPDATED") {
+        requestProviderInboxCounts();
+        return;
+      }
       if (type === "LEADS_TAB_OPENED") {
         setPortalInboxCleared("leads", true);
-        clearPortalInboxCount("newLeads");
-        ackProviderInboxBadges(["leads"]);
         return;
       }
       if (type === "ORDERS_TAB_OPENED") {

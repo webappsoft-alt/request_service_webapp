@@ -35,6 +35,7 @@ import {
 import { NotesPanel } from "@/components/portal/notes-panel";
 import { ChatPanel } from "@/components/shared/chat-panel";
 import { useChatThreads } from "@/components/portal/use-chat-threads";
+import { QuoteAnswersCard, quoteNotesFromDetails } from "@/components/portal/quote-answers-card";
 import { ConvertLeadToEstimateDialog } from "@/components/portal/convert-lead-to-estimate-dialog";
 import { EventCalendar, EventCalendarSkeleton, type CalendarMove } from "@/components/portal/event-calendar";
 import { jobBoardColumns } from "@/components/portal/job-columns";
@@ -1607,36 +1608,14 @@ export function RequestDetailView({ id }: { id: string }) {
                         />
                       </div>
 
-                      {request.answers?.length ? (
-                        <div className="rounded-lg bg-[#f7f9fc] px-4 py-3.5">
-                          <p className="mb-3 text-[11px] font-semibold text-[#003F7D]">Quote answers</p>
-                          <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {request.answers.map((item) => (
-                              <div key={item.id} className="min-w-0">
-                                <dt className="text-[11px] font-medium text-muted-foreground">{item.label}</dt>
-                                <dd className="mt-1 text-sm font-medium text-foreground wrap-break-word">{item.value}</dd>
-                              </div>
-                            ))}
-                          </dl>
-                          {request.details?.split("\n\n")[0] && !request.details.startsWith("Answers") ? (
-                            <div className="mt-4 pt-3">
-                              <p className="text-[11px] font-medium text-muted-foreground">Notes</p>
-                              <p className="mt-1.5 text-sm leading-relaxed text-foreground">
-                                {request.details.split("\n\n")[0]}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      {request.details?.trim() && (!request.answers?.length || request.details.startsWith("Answers")) ? (
-                        <div className="rounded-lg bg-[#f7f9fc] px-4 py-3.5">
-                          <p className="mb-1.5 text-[11px] font-semibold text-[#003F7D]">What they asked for</p>
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground">
-                            {request.details}
-                          </p>
-                        </div>
-                      ) : null}
+                      <QuoteAnswersCard
+                        answers={request.answers}
+                        notes={
+                          quoteNotesFromDetails(request.details) ||
+                          (!request.answers?.length ? request.details : "")
+                        }
+                        photos={request.photos || request.photoUrls}
+                      />
                     </div>
                   </LeadCard>
 

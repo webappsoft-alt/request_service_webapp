@@ -57,6 +57,8 @@ export type PortalRequest = ServiceRequest & {
     | "external"
     | string;
   viewCount?: number;
+  /** Null until the provider opens the lead. Used for unseen badges. */
+  firstViewedAt?: string | null;
   lastInteractionAt?: string;
   chatThreadId?: string;
   unreadMessagesCount?: number;

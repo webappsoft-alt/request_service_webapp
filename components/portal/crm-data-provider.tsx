@@ -566,18 +566,6 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
       }
 
       if (detail?.type === "LEADS_TAB_OPENED") {
-        setState((current) => ({
-          ...current,
-          inboxSummary: {
-            ...current.inboxSummary,
-            newLeads: 0,
-            total:
-              (current.inboxSummary?.unreadChats || 0) +
-              (current.inboxSummary?.pendingOrders || 0) +
-              (current.inboxSummary?.pendingEstimates || 0),
-          },
-        }));
-        ackProviderInboxBadges(["leads"]);
         return;
       }
 

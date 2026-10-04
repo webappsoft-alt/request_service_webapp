@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { QuoteAnswersCard } from "@/components/portal/quote-answers-card";
 import { PortalPage } from "@/components/portal/portal-page";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import {
@@ -1141,6 +1142,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
                 {opportunity.description}
               </p>
+            ) : null}
+            {opportunity.quoteAnswers?.length ? (
+              <QuoteAnswersCard
+                className="mt-3"
+                compact
+                answers={opportunity.quoteAnswers}
+              />
             ) : null}
           </div>
 

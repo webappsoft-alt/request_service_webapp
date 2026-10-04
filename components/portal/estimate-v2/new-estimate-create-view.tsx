@@ -33,6 +33,8 @@ import {
   type PrepChoice,
 } from "@/lib/api/estimate-v2-client";
 import { getRequest, updateCustomer } from "@/lib/api/crm-client";
+import { QuoteAnswersCard, quoteNotesFromDetails } from "@/components/portal/quote-answers-card";
+import type { QuoteAnswer } from "@/lib/data/portal";
 import type { ServiceAddress } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthProvider, selectAuthUser } from "@/store/authSlice";
@@ -127,6 +129,7 @@ export function NewEstimateCreateView() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
+  const [leadAnswers, setLeadAnswers] = useState<QuoteAnswer[]>([]);
 
   const useApi =
     auth.hydrated &&
@@ -170,8 +173,13 @@ export function NewEstimateCreateView() {
           String(request.number || "").trim() ||
           "Work request";
         setTitle(requestTitle);
-        const notes = String(request.notes || request.description || "").trim();
+        const notes = quoteNotesFromDetails(request.details);
         if (notes) setDescription(notes);
+        setLeadAnswers(
+          (request.answers || []).filter(
+            (item) => String(item.label || "").trim() && String(item.value || "").trim(),
+          ),
+        );
         setStep("customer");
       } catch {
         /* allow manual create */
@@ -664,6 +672,11 @@ export function NewEstimateCreateView() {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
+            {leadAnswers.length ? (
+              <div className="sm:col-span-2">
+                <QuoteAnswersCard compact answers={leadAnswers} />
+              </div>
+            ) : null}
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="opp-notes">Internal notes</Label>
               <Textarea

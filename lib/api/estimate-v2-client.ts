@@ -75,6 +75,7 @@ export type EstimateV2Opportunity = {
   description?: string;
   source?: string;
   requestId?: string | null;
+  quoteAnswers?: Array<{ id?: string; label: string; value: string }>;
   status: OpportunityStatus;
   prepChoice?: PrepChoice | null;
   /** Captured for have_information / create_now (no visit). */
@@ -177,10 +178,20 @@ function mapOpportunityEstimates(raw: unknown): Estimate[] {
 }
 
 function normalizeOpportunity(raw: EstimateV2Opportunity): EstimateV2Opportunity {
+  const quoteAnswers = Array.isArray(raw.quoteAnswers)
+    ? raw.quoteAnswers
+        .map((item, index) => ({
+          id: String(item?.id || `ans_${index + 1}`),
+          label: String(item?.label || "").trim(),
+          value: String(item?.value || "").trim(),
+        }))
+        .filter((item) => item.label && item.value)
+    : [];
   return {
     ...raw,
     id: raw.id || String((raw as { _id?: string })._id || ""),
     estimates: mapOpportunityEstimates(raw.estimates),
+    quoteAnswers,
   };
 }
 

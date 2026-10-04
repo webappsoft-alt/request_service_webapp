@@ -627,7 +627,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
         value,
       } satisfies QuoteAnswer;
     })
-    .filter((item): item is QuoteAnswer => Boolean(item?.label));
+    .filter((item): item is QuoteAnswer => Boolean(item?.label && item?.value));
 
   const photos = toStringArray(record.photos ?? record.photoUrls);
   const chatThread = asRecord(record.chatThread);
@@ -657,6 +657,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     channel: trimmed(record.channel) === "marketplace" ? "marketplace" : "direct",
     source: trimmed(record.source) || "quote_request",
     viewCount: Math.max(1, numberValue(record.viewCount, 1)),
+    firstViewedAt: toIsoString(record.firstViewedAt) || null,
     lastInteractionAt:
       toIsoString(record.lastInteractionAt) ||
       toIsoString(record.updatedAt) ||

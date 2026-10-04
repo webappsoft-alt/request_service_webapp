@@ -32,6 +32,67 @@ import type {
   SubscriptionStatus,
 } from "@/lib/types";
 
+type CoveragePoint = NonNullable<Provider["coveragePoints"]>[number];
+
+function finiteOrNull(value: unknown): number | null {
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+/** `location.coordinates` is GeoJSON `[lng, lat]`. */
+function providerLatLng(location: unknown): { lat: number; lng: number } {
+  const coords =
+    location && typeof location === "object"
+      ? (location as { coordinates?: unknown }).coordinates
+      : undefined;
+  if (!Array.isArray(coords)) return { lat: 0, lng: 0 };
+  const lng = finiteOrNull(coords[0]);
+  const lat = finiteOrNull(coords[1]);
+  if (lat === null || lng === null || (lat === 0 && lng === 0)) return { lat: 0, lng: 0 };
+  return { lat, lng };
+}
+
+/** Real pins from populated coverage neighborhoods (`areas[]` or `coordinates`). */
+function coveragePointsFromNeighborhoods(neighborhoods: unknown): CoveragePoint[] {
+  if (!Array.isArray(neighborhoods)) return [];
+  const points: CoveragePoint[] = [];
+  for (const item of neighborhoods) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as {
+      title?: string;
+      zip?: string;
+      coordinates?: unknown;
+      areas?: Array<{ name?: string; lat?: unknown; lng?: unknown; zip?: string }>;
+    };
+    if (Array.isArray(record.areas)) {
+      for (const area of record.areas) {
+        const lat = finiteOrNull(area?.lat);
+        const lng = finiteOrNull(area?.lng);
+        if (lat === null || lng === null || (lat === 0 && lng === 0)) continue;
+        points.push({
+          zip: String(area.zip || area.name || ""),
+          name: String(area.name || record.title || "Area"),
+          lat,
+          lng,
+        });
+      }
+    }
+    if (Array.isArray(record.coordinates)) {
+      const lng = finiteOrNull(record.coordinates[0]);
+      const lat = finiteOrNull(record.coordinates[1]);
+      if (lat !== null && lng !== null && !(lat === 0 && lng === 0)) {
+        points.push({
+          zip: String(record.zip || record.title || ""),
+          name: String(record.title || record.zip || "Area"),
+          lat,
+          lng,
+        });
+      }
+    }
+  }
+  return points;
+}
+
 function isOverdue(date?: string): boolean {
   if (!date) return false;
   const due = new Date(date);
@@ -277,6 +338,10 @@ export function usePortalWorkspace() {
   const provider = useMemo((): Provider => {
     if (useLiveOnly) {
       const hours = workingHoursFromProvider(authProvider);
+      const liveLatLng = providerLatLng(authProvider?.location);
+      const liveCoveragePoints = coveragePointsFromNeighborhoods(
+        authProvider?.coverage?.neighborhoods,
+      );
       const initials = companyName
         .split(/\s+/)
         .filter(Boolean)
@@ -327,8 +392,9 @@ export function usePortalWorkspace() {
             "",
         ),
         zip: String(authProvider?.location?.zip || ""),
-        lat: 0,
-        lng: 0,
+        lat: liveLatLng.lat,
+        lng: liveLatLng.lng,
+        coveragePoints: liveCoveragePoints.length ? liveCoveragePoints : undefined,
         phone: String(
           (typeof user?.phone === "string" && user.phone) || authProvider?.phone || "",
         ),

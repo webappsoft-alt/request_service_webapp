@@ -13,20 +13,12 @@ import {
   selectIsAuthenticated,
 } from "@/store/authSlice";
 import { HERO_PRO_IMAGE } from "@/lib/site";
+import { ProScreenshot } from "@/components/pro/pro-screenshot";
 
-const deskSteps = [
-  {
-    title: "Request in your ZIP",
-    detail: "Matched to your trade and service area",
-  },
-  {
-    title: "You send the estimate",
-    detail: "They review the scope and sign",
-  },
-  {
-    title: "Schedule and invoice",
-    detail: "Same job file · no commission",
-  },
+const heroStats = [
+  { value: "Leads → paid", label: "One record, start to finish" },
+  { value: "0%", label: "Commission on the work you win" },
+  { value: "20+", label: "Tools in the pro portal" },
 ];
 
 export function ProHero() {
@@ -40,7 +32,7 @@ export function ProHero() {
 
   return (
     <section className="relative isolate">
-      <div className="relative h-[18rem] w-full overflow-hidden sm:h-[20rem] lg:h-[22rem] xl:h-[24rem]">
+      <div className="relative w-full overflow-hidden pt-12 pb-40 sm:pt-16 sm:pb-48 lg:pt-20 lg:pb-56">
         <Image
           src={HERO_PRO_IMAGE}
           alt=""
@@ -50,32 +42,28 @@ export function ProHero() {
           className="object-cover object-[62%_26%]"
         />
         <div
-          className="absolute inset-0 bg-[rgba(2,16,36,0.82)] lg:hidden"
-          aria-hidden="true"
-        />
-        <div
-          className="absolute inset-0 hidden bg-[linear-gradient(100deg,rgba(2,16,36,0.95)_0%,rgba(2,20,44,0.88)_34%,rgba(0,63,125,0.62)_58%,rgba(0,63,125,0.30)_78%,rgba(0,63,125,0.18)_100%)] lg:block"
+          className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,16,36,0.9)_0%,rgba(2,20,44,0.86)_55%,rgba(0,63,125,0.78)_100%)]"
           aria-hidden="true"
         />
 
-        <Container className="relative flex h-full items-center">
-          <div className="grid w-full items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,21rem)] lg:gap-8">
-            <div className="flex flex-col items-start gap-3 text-white">
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/85 ring-1 ring-white/20 backdrop-blur-sm">
-                <ShieldCheck className="size-3.5" aria-hidden="true" />
-                For licensed local companies
-              </span>
+        <Container className="relative">
+          <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 text-center text-white">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/85 ring-1 ring-white/20 backdrop-blur-sm">
+              <ShieldCheck className="size-3.5" aria-hidden="true" />
+              For licensed local companies
+            </span>
 
-              <h1 className="text-[1.85rem] leading-[1.08] tracking-tight text-white sm:text-[2.35rem] lg:text-[3rem]">
-                More local jobs.
-                <span className="block text-white/65">One system to run them.</span>
-              </h1>
+            <h1 className="text-[2rem] leading-[1.06] tracking-tight text-white sm:text-[2.6rem] lg:text-[3.4rem]">
+              More local jobs.
+              <span className="block text-white/65">One system to run them.</span>
+            </h1>
 
-              <p className="hidden max-w-lg text-sm text-white/80 sm:block md:text-base">
-                Matched requests land in your inbox. Quote, schedule, and invoice on one job file.
-              </p>
+            <p className="max-w-xl text-sm text-white/80 sm:text-base md:text-lg">
+              Leads, estimates, scheduling, jobs, invoices, payments, and your crew — the
+              whole office in one portal. No commission on the work you win.
+            </p>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row">
                 {isProvider ? (
                   <>
                     <Button size="lg" className="bg-white text-primary hover:bg-white/90" asChild>
@@ -112,45 +100,33 @@ export function ProHero() {
                   </>
                 )}
               </div>
-            </div>
 
-            <aside
-              className="relative hidden w-full lg:block lg:justify-self-end"
-              aria-hidden="true"
-            >
-              <div className="overflow-hidden rounded-2xl border border-white/15 bg-[rgba(6,18,36,0.72)] shadow-[0_24px_48px_rgba(2,16,36,0.45)] ring-1 ring-white/10 backdrop-blur-md">
-                <div className="flex items-end justify-between px-5 pt-4 pb-3">
-                  <div>
-                    <p className="text-[10px] font-medium tracking-[0.18em] text-white/50 uppercase">
-                      Any trade you run
-                    </p>
-                    <p className="mt-1 text-base font-semibold tracking-tight text-white">
-                      Your desk
-                    </p>
+              <dl className="mt-3 grid w-full max-w-2xl grid-cols-3 divide-x divide-white/15 rounded-xl bg-white/8 ring-1 ring-white/15 backdrop-blur-sm">
+                {heroStats.map((stat) => (
+                  <div key={stat.label} className="flex flex-col gap-0.5 px-3 py-3 sm:px-5">
+                    <dt className="order-2 text-[11px] leading-4 text-white/65 sm:text-xs">
+                      {stat.label}
+                    </dt>
+                    <dd className="order-1 text-base font-semibold tracking-tight text-white sm:text-lg">
+                      {stat.value}
+                    </dd>
                   </div>
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/80">
-                    One job file
-                  </span>
-                </div>
-                <ol className="relative mx-5 mb-4 border-l border-white/15 pl-5">
-                  {deskSteps.map((step, index) => (
-                    <li
-                      key={step.title}
-                      className={index < deskSteps.length - 1 ? "pb-3.5" : "pb-1"}
-                    >
-                      <span className="absolute -left-[9px] mt-0.5 flex size-[17px] items-center justify-center rounded-full bg-[#0a2744] text-[10px] font-semibold text-white ring-2 ring-white/70">
-                        {index + 1}
-                      </span>
-                      <p className="text-sm font-medium text-white">{step.title}</p>
-                      <p className="mt-0.5 text-[12px] leading-5 text-white/60">{step.detail}</p>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </aside>
+                ))}
+              </dl>
           </div>
         </Container>
       </div>
+
+      <Container className="relative z-10 -mt-28 mb-20 sm:-mt-36 sm:mb-28 lg:-mt-44 lg:mb-36">
+        <ProScreenshot
+          name="dashboard-main"
+          alt="Request Services pro dashboard showing today's overview, lead pipeline, incoming requests, and revenue"
+          mobileName="m-dashboard-main"
+          mobileAlt="The same dashboard on a phone"
+          priority
+          sizes="(min-width: 1280px) 1200px, 100vw"
+        />
+      </Container>
     </section>
   );
 }

@@ -8,10 +8,10 @@ import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 
 const beats = [
-  { id: "request", label: "Inbox", hint: "Matched or direct", active: false },
-  { id: "sign", label: "Estimate", hint: "They sign the scope", active: true },
-  { id: "crew", label: "Crew", hint: "On the calendar", active: false },
-  { id: "paid", label: "Invoice", hint: "Same job file", active: false },
+  { id: "request", label: "Lead", hint: "Matched or direct" },
+  { id: "sign", label: "Estimate", hint: "They accept the scope" },
+  { id: "crew", label: "Job", hint: "On the crew calendar" },
+  { id: "paid", label: "Invoice", hint: "Paid on the same record" },
 ] as const;
 
 export function ProProduct() {
@@ -25,49 +25,27 @@ export function ProProduct() {
           </h2>
           <p className="max-w-lg text-sm leading-7 text-muted-foreground">
             Inbox, estimate, crew, and invoice stay on the same record — HVAC, plumbing, or a
-            bath remodel. One desk, every trade you run.
+            bath remodel.
           </p>
         </div>
 
         <div className="w-full max-w-4xl rounded-2xl bg-primary/[0.06] p-3 sm:p-4">
           <div className="overflow-hidden rounded-xl border border-input bg-card text-left shadow-[0_22px_48px_-28px_rgba(0,63,125,0.45)]">
-            <div className="flex items-center justify-between gap-3 border-b border-input px-4 py-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="hidden items-center gap-1.5 sm:flex" aria-hidden="true">
-                  <span className="size-2 rounded-full bg-black/15" />
-                  <span className="size-2 rounded-full bg-black/15" />
-                  <span className="size-2 rounded-full bg-black/15" />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">Job file RS-2841</p>
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    One record · every trade
-                  </p>
-                </div>
-              </div>
-              <span className="hidden font-mono text-[10px] tracking-[0.14em] text-primary uppercase sm:inline">
-                Live
-              </span>
-            </div>
-
             <div className="grid grid-cols-2 border-b border-input sm:grid-cols-4">
-              {beats.map((beat) => (
+              {beats.map((beat, index) => (
                 <div
                   key={beat.id}
-                  className={cn(
-                    "border-input px-3 py-3 sm:border-l sm:first:border-l-0",
-                    beat.active && "bg-primary text-primary-foreground",
-                  )}
+                  className="flex items-center gap-2.5 border-input px-3 py-3 sm:border-l sm:first:border-l-0"
                 >
-                  <p
-                    className={cn(
-                      "text-[10px] font-medium tracking-wide uppercase",
-                      beat.active ? "text-white/65" : "text-muted-foreground",
-                    )}
-                  >
-                    {beat.label}
-                  </p>
-                  <p className="mt-0.5 text-[12px] font-semibold">{beat.hint}</p>
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-[10px] font-semibold text-primary-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                      {beat.label}
+                    </p>
+                    <p className="mt-0.5 truncate text-[12px] font-semibold">{beat.hint}</p>
+                  </div>
                 </div>
               ))}
             </div>

@@ -242,9 +242,12 @@ const DIAL_CODE_TO_ISO: Array<[string, string]> = [
 ];
 
 function toDigits(value: string) {
-  return String(value || "")
-    .replace(/^\+/, "")
-    .replace(/\D/g, "");
+  const raw = String(value || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  // National-format US/CA numbers like "(303) 555-0410" carry no dial code —
+  // without this they would be read as "+30…" (Greece).
+  if (!raw.startsWith("+") && digits.length === 10) return `1${digits}`;
+  return digits;
 }
 
 /** Default USA when empty; otherwise match dial code on the number. */

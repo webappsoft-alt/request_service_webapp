@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   fetchCustomers,
   upsertCustomerTask,
@@ -21,6 +21,7 @@ import {
   deleteReminder as deleteReminderApi,
   deleteTask as deleteTaskApi,
   deleteVendor as deleteVendorApi,
+  queryCustomers,
   updateContractor as updateContractorApi,
   updateReminderStatus as updateReminderStatusApi,
   updateTaskStatus as updateTaskStatusApi,
@@ -45,6 +46,32 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 const EVENT = "rs-crm-directory";
+
+/**
+ * Lightweight customer lookup used when a page (Jobs, Invoices, Schedule…) is opened
+ * directly and neither the CRM snapshot nor the Customers Redux slice has loaded yet.
+ * Kept out of Redux so it never disturbs the Customers page pagination.
+ */
+const LOOKUP_LIMIT = 100;
+const LOOKUP_EVENT = "rs-crm-directory-lookup";
+let lookupCustomers: PortalCustomerCrm[] | null = null;
+let lookupInFlight: Promise<void> | null = null;
+
+function ensureCustomerLookup() {
+  if (lookupCustomers || lookupInFlight) return lookupInFlight ?? Promise.resolve();
+  lookupInFlight = queryCustomers({ page: 1, limit: LOOKUP_LIMIT, silent: true })
+    .then((result) => {
+      lookupCustomers = result.items;
+      window.dispatchEvent(new Event(LOOKUP_EVENT));
+    })
+    .catch(() => {
+      // Leave the cache empty so a later mount can retry.
+    })
+    .finally(() => {
+      lookupInFlight = null;
+    });
+  return lookupInFlight;
+}
 
 type DirectoryStore = {
   customers: PortalCustomerCrm[];
@@ -160,15 +187,27 @@ export function useCrmDirectory() {
     [provider, suppressSeedData],
   );
 
+  const hasLoadedCustomers =
+    (crm.customers?.length ?? 0) > 0 || (reduxCustomers?.length ?? 0) > 0;
+  const [lookup, setLookup] = useState<PortalCustomerCrm[]>(() => lookupCustomers ?? []);
+  useEffect(() => {
+    if (!crm.enabled || hasLoadedCustomers) return;
+    const sync = () => setLookup(lookupCustomers ?? []);
+    window.addEventListener(LOOKUP_EVENT, sync);
+    void ensureCustomerLookup().then(sync);
+    return () => window.removeEventListener(LOOKUP_EVENT, sync);
+  }, [crm.enabled, hasLoadedCustomers]);
+
   const customers = useMemo(() => {
     if (crm.customers && crm.customers.length > 0) return crm.customers;
     if (reduxCustomers && reduxCustomers.length > 0) return reduxCustomers;
+    if (crm.enabled && lookup.length > 0) return lookup;
     const local = store.customers.filter((item) => !store.deleted.includes(`customer:${item.id}`));
     if (local.length > 0) return local;
     if (apiReady && crm.customers) return crm.customers;
     if (suppressSeedData) return local;
     return [...seedCustomers, ...local];
-  }, [apiReady, crm.customers, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
+  }, [apiReady, crm.customers, crm.enabled, lookup, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
 
   const loading = crm.enabled && customers.length === 0 && (reduxLoading || !crm.ready);
   const contractors = useMemo(

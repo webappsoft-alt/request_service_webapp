@@ -1380,24 +1380,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     >
                       {sendButtonLabel}
                     </Button>
-<<<<<<< HEAD
-                    {estimate?.status === "accepted" ? (
-                      <>
-                        <span className="flex h-9 items-center rounded-md bg-green-50 px-3 text-sm font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                          Customer Accepted
-                        </span>
-                        <Button
-                          size="sm"
-                          disabled={saving}
-                          onClick={() => setAcceptOpen(true)}
-                        >
-                          Create Job
-                        </Button>
-=======
                     {(estimate?.status === "sent" ||
                       estimate?.status === "accepted" ||
                       estimate?.status === "converted_to_job") ? (
                       <>
+                        {estimate.status === "accepted" ? (
+                          <span className="flex h-9 items-center rounded-md bg-green-50 px-3 text-sm font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                            Customer Accepted
+                          </span>
+                        ) : null}
                         {estimate.jobId ? (
                           <Button size="sm" variant="outline" asChild>
                             <Link href={`/pro/dashboard/jobs/${estimate.jobId}`}>
@@ -1426,7 +1417,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                                 : "Customer accepted…"}
                           </Button>
                         )}
->>>>>>> 718d4aa13fe96e92f8996291b3be6a20ebe3c498
                       </>
                     ) : null}
                   </div>

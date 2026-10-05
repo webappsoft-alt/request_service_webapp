@@ -225,13 +225,10 @@ export function ApplyPaymentDialog({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethodType>("check");
   const [paidAt, setPaidAt] = useState(todayISO());
-<<<<<<< HEAD
+  const [dueAt, setDueAt] = useState(todayISO());
   const [transactionReference, setTransactionReference] = useState("");
   const [notes, setNotes] = useState("");
   const [proofUrl, setProofUrl] = useState("");
-=======
-  const [dueAt, setDueAt] = useState(todayISO());
->>>>>>> 718d4aa13fe96e92f8996291b3be6a20ebe3c498
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -240,13 +237,10 @@ export function ApplyPaymentDialog({
     setAmount(invoice.balanceDue > 0 ? String(invoice.balanceDue) : "");
     setMethod("check");
     setPaidAt(todayISO());
-<<<<<<< HEAD
+    setDueAt(invoice.dueAt ? invoice.dueAt.slice(0, 10) : todayISO());
     setTransactionReference("");
     setNotes("");
     setProofUrl("");
-=======
-    setDueAt(invoice.dueAt ? invoice.dueAt.slice(0, 10) : todayISO());
->>>>>>> 718d4aa13fe96e92f8996291b3be6a20ebe3c498
     setSaving(false);
     setUploading(false);
   }, [invoice, open]);
@@ -396,7 +390,18 @@ export function ApplyPaymentDialog({
               onChange={(change) => setPaidAt(change.target.value)}
             />
           </Field>
-<<<<<<< HEAD
+          <Field label="Due date">
+            <Input
+              id="apply-pay-due"
+              type="date"
+              value={dueAt}
+              disabled={saving || uploading}
+              onChange={(change) => setDueAt(change.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              This payment appears on the schedule calendar on the due date. The customer sees it too.
+            </p>
+          </Field>
           {method === "card" || method === "ach" ? (
             <Field label="Transaction reference">
               <Input
@@ -446,31 +451,16 @@ export function ApplyPaymentDialog({
               disabled={saving || uploading}
               onChange={(e) => setNotes(e.target.value)}
             />
-=======
-          <Field label="Due date">
-            <Input
-              id="apply-pay-due"
-              type="date"
-              value={dueAt}
-              disabled={saving}
-              onChange={(change) => setDueAt(change.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              This payment appears on the schedule calendar on the due date. The customer sees it too.
-            </p>
->>>>>>> 718d4aa13fe96e92f8996291b3be6a20ebe3c498
           </Field>
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={saving || uploading} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-<<<<<<< HEAD
-          <Button disabled={!invoice || !Number(amount) || saving || uploading} onClick={() => void save()}>
-=======
-          <Button disabled={!invoice || !Number(amount) || !dueAt || saving} onClick={() => void save()}>
->>>>>>> 718d4aa13fe96e92f8996291b3be6a20ebe3c498
-            {saving ? "Applying…" : "Apply payment"}
+          <Button
+            disabled={!invoice || !Number(amount) || !dueAt || saving || uploading}
+            onClick={() => void save()}
+          >            {saving ? "Applying…" : "Apply payment"}
           </Button>
         </DialogFooter>
       </DialogContent>

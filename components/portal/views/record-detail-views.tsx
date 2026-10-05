@@ -1110,7 +1110,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                   className="h-8"
                   onClick={() => setChangeAssignOpen(true)}
                 >
-                  {hasVisitAssignment ? "Change assignment" : "Assign team member"}
+                  {hasVisitAssignment ? "New assignment" : "Assign team member"}
                 </Button>
               </>
             )}
@@ -2617,7 +2617,7 @@ export function JobDetailView({ id }: { id: string }) {
               className="h-8"
               onClick={() => setAssignOpen(true)}
             >
-              {technician ? "Change assignment" : "Assign team member"}
+              {technician ? "New assignment" : "Assign team member"}
             </Button>
             {technician ? (
               <Button
@@ -3051,10 +3051,10 @@ export function InvoiceDetailView({ id }: { id: string }) {
     ? detailPayments.length
       ? detailPayments
       : records.mergePayments(payments).filter(
-          (item) => item.invoiceId === invoiceRef || item.invoiceId === invoice?.id,
+          (item) => item.invoiceId === invoiceRef || item.invoiceId === invoice?.id || invoiceRef.replace(/^inv_/, "") === item.invoiceId,
         )
     : records.mergePayments(payments).filter(
-        (item) => item.invoiceId === invoiceRef || item.invoiceId === id,
+        (item) => item.invoiceId === invoiceRef || item.invoiceId === id || id?.replace(/^inv_/, "") === item.invoiceId,
       );
   const customer = customers.find((item) => item.id === invoice?.customerId);
   const customerLabel = (() => {
@@ -3145,6 +3145,9 @@ export function InvoiceDetailView({ id }: { id: string }) {
     if (result.payment) dispatch(upsertPaymentItem(result.payment));
     dispatch(invalidatePaymentsCache());
     void dispatch(fetchPayments({ force: true, silent: true }));
+    if (id && id !== "new") {
+      void dispatch(fetchInvoiceDetail(id));
+    }
   }
 
   useEffect(() => {

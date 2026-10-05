@@ -1621,8 +1621,10 @@ export function mapPayment(raw: unknown): Payment | null {
   const record = asRecord(raw);
   if (!record) return null;
 
-  const id = crmIdOf(record);
-  if (!id) return null;
+  const id =
+    crmIdOf(record) ||
+    (record.paymentNumber ? `pay_synth_${record.paymentNumber}` : "") ||
+    `pay_${Math.random().toString(36).slice(2, 9)}`;
 
   const methodRaw = trimmed(record.method);
   const method: PaymentMethodType =
@@ -1668,6 +1670,7 @@ export function mapPayment(raw: unknown): Payment | null {
     amount: numberValue(record.amount),
     method,
     status,
+    proofUrl: trimmed(record.proofUrl) || undefined,
     paidAt: toIsoString(record.paidAt) || undefined,
     createdAt: toIsoString(record.createdAt) || toIsoString(record.paidAt),
     isArchived: Boolean(record.isArchived),
@@ -1685,6 +1688,8 @@ export function mapPayment(raw: unknown): Payment | null {
     jobId: invoiceRec ? crmIdOf(invoiceRec.jobId) || undefined : undefined,
     notes: trimmed(record.notes) || undefined,
     transactionReference: trimmed(record.transactionReference) || undefined,
+    recordedBy: trimmed(record.recordedBy) === "customer" ? "customer" : "provider",
+    recordedByName: trimmed(record.recordedByName) || undefined,
   };
 }
 
@@ -2377,11 +2382,16 @@ export function mapInvoiceWithPayments(response: unknown): {
   invoice: Invoice | null;
   payments: Payment[];
 } {
-  const payload = asRecord(getEntityPayload(response)) ?? {};
-  return {
-    invoice: mapInvoice(payload.invoice ?? payload),
-    payments: asArray(payload.payments)
-      .map(mapPayment)
-      .filter((item): item is Payment => Boolean(item)),
-  };
+  let data = asRecord(response);
+  if (data && "data" in data) {
+    data = asRecord(data.data);
+  }
+  const payload = data ?? {};
+  
+  const invoice = mapInvoice(payload.invoice ?? payload);
+  const payments = asArray(payload.payments)
+    .map(mapPayment)
+    .filter((item): item is Payment => Boolean(item));
+
+  return { invoice, payments };
 }

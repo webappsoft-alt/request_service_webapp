@@ -2232,6 +2232,7 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
     scheduleId: payment.scheduleId || null,
     notes: payment.notes || "",
     transactionReference: payment.transactionReference || "",
+    proofUrl: payment.proofUrl || "",
     ...(payment.paidAt ? { paidAt: payment.paidAt } : {}),
   });
   invalidateGetCache(providerCrmApi.invoices);

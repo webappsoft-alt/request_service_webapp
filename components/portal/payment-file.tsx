@@ -154,6 +154,26 @@ export function PaymentSummaryTab({
     payment.customerEmail?.trim() ||
     invoice?.customerEmail?.trim() ||
     "";
+  // The invoice may not be in the loaded workspace yet; the payment itself carries its number.
+  const invoiceId = invoice?.id || payment.invoiceId;
+  const invoiceNumber = invoice?.number || payment.invoiceNumber;
+  const invoiceLink =
+    invoiceId && invoiceNumber ? (
+      <Link
+        href={`/pro/dashboard/invoices/${invoiceId}`}
+        className="font-semibold text-primary hover:underline"
+      >
+        {invoiceNumber}
+      </Link>
+    ) : (
+      "—"
+    );
+  const paidByCustomer = payment.recordedBy === "customer";
+  const recordedByLabel = paidByCustomer
+    ? `Customer${payment.recordedByName?.trim() ? ` · ${payment.recordedByName.trim()}` : ""} (paid online)`
+    : `Provider${payment.recordedByName?.trim() ? ` · ${payment.recordedByName.trim()}` : ""} (recorded manually)`;
+  const proofUrl = payment.proofUrl?.trim() || "";
+  const proofIsImage = /\.(png|jpe?g|gif|webp|bmp|svg|heic)(\?|$)/i.test(proofUrl);
 
   return (
     <div className="space-y-4">
@@ -224,21 +244,7 @@ export function PaymentSummaryTab({
         <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
           <h2 className="text-sm font-semibold">Applied to</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Detail
-              label="Invoice no."
-              value={
-                invoice ? (
-                  <Link
-                    href={`/pro/dashboard/invoices/${invoice.id}`}
-                    className="font-semibold text-primary hover:underline"
-                  >
-                    {invoice.number}
-                  </Link>
-                ) : (
-                  "—"
-                )
-              }
-            />
+            <Detail label="Invoice no." value={invoiceLink} />
             <Detail
               label="Job no."
               value={
@@ -281,6 +287,72 @@ export function PaymentSummaryTab({
         </section>
       </div>
 
+      <section className="overflow-hidden rounded-md border border-border-soft bg-card p-4">
+        <h2 className="text-sm font-semibold">Payment details</h2>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Detail label="Paid by" value={customerLabel} />
+          <Detail label="Recorded by" value={recordedByLabel} />
+          <Detail label="Method" value={paymentMethodLabel(payment.method)} />
+          {payment.method === "card" || payment.method === "ach" ? (
+            <Detail
+              label="Transaction reference"
+              value={
+                payment.transactionReference?.trim() ? (
+                  <span className="font-mono text-xs break-all">
+                    {payment.transactionReference.trim()}
+                  </span>
+                ) : (
+                  "—"
+                )
+              }
+            />
+          ) : null}
+          <div className="sm:col-span-2">
+            <Detail
+              label="Notes"
+              value={
+                payment.notes?.trim() ? (
+                  <span className="whitespace-pre-wrap font-normal">
+                    {payment.notes.trim()}
+                  </span>
+                ) : (
+                  <span className="font-normal text-muted-foreground">No notes added</span>
+                )
+              }
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Detail
+              label={payment.method === "check" ? "Check image" : "Attachment"}
+              value={
+                proofUrl ? (
+                  <a
+                    href={proofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-block"
+                    title="Open full-size file"
+                  >
+                    {proofIsImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={proofUrl}
+                        alt="Payment proof"
+                        className="max-h-48 w-auto rounded border border-input object-contain transition-colors group-hover:border-primary/60"
+                      />
+                    ) : (
+                      <span className="text-primary hover:underline">View attached file</span>
+                    )}
+                  </a>
+                ) : (
+                  <span className="font-normal text-muted-foreground">No file attached</span>
+                )
+              }
+            />
+          </div>
+        </dl>
+      </section>
+
       <section className="overflow-hidden rounded-md border border-border-soft bg-card">
         <div className="border-b border-border-soft px-4 py-3">
           <h2 className="text-sm font-semibold">Allocation</h2>
@@ -296,18 +368,7 @@ export function PaymentSummaryTab({
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell className="font-medium">
-                {invoice ? (
-                  <Link
-                    href={`/pro/dashboard/invoices/${invoice.id}`}
-                    className="text-primary hover:underline"
-                  >
-                    {invoice.number}
-                  </Link>
-                ) : (
-                  "—"
-                )}
-              </TableCell>
+              <TableCell className="font-medium">{invoiceLink}</TableCell>
               <TableCell>
                 {job ? (
                   <Link

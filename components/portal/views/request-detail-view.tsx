@@ -176,7 +176,7 @@ function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: bool
   if (status === "declined") return "They passed. Keep the file for history or reopen it if they call back.";
   if (status === "closed") return "Closed without a job.";
   if (status === "accepted") return "They accepted. Start the job from the signed estimate.";
-  if (status === "estimate_sent" || hasEstimate) return "A quote is on this lead. Follow up if they have not signed.";
+  if (status === "estimate_sent" || status === "converted_to_estimate" || hasEstimate) return "A quote is on this lead. Follow up if they have not signed.";
   if (status === "scheduled") return "Visit is on the calendar. Confirm details, then write or send the estimate.";
   if (status === "contacted") return "You spoke with them. Confirm the work, then write the estimate.";
   if (status === "viewed") return "Seen in the inbox. Call or text so this does not go cold.";
@@ -201,6 +201,7 @@ function leadStatusAlertClass(status: string) {
   switch (status) {
     case "contacted":
     case "estimate_sent":
+    case "converted_to_estimate":
       return "bg-amber-50 text-amber-950";
     case "accepted":
     case "converted_to_job":

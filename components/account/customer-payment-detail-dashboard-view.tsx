@@ -253,10 +253,39 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
                 </dd>
               </div>
             ) : null}
+            <div className="flex items-center justify-between border-b border-input pb-2.5">
+              <dt className="text-muted-foreground">Recorded by</dt>
+              <dd className="font-medium text-right">
+                {payment.recordedBy === "customer"
+                  ? "You (paid online)"
+                  : `${payment.recordedByName || companyName} (recorded by provider)`}
+              </dd>
+            </div>
             {payment.transactionReference ? (
               <div className="flex items-center justify-between border-b border-input pb-2.5">
                 <dt className="text-muted-foreground">Reference</dt>
                 <dd className="font-mono text-xs">{payment.transactionReference}</dd>
+              </div>
+            ) : null}
+            {payment.proofUrl ? (
+              <div className="flex items-start justify-between gap-4 border-b border-input pb-2.5">
+                <dt className="text-muted-foreground pt-1.5">Check image</dt>
+                <dd>
+                  <a
+                    href={payment.proofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-block"
+                    title="Open full-size check image"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={payment.proofUrl}
+                      alt="Check image proof"
+                      className="max-h-40 w-auto rounded border border-input object-contain group-hover:border-primary/60 transition-colors"
+                    />
+                  </a>
+                </dd>
               </div>
             ) : null}
             {payment.notes ? (

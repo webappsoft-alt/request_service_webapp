@@ -34,6 +34,7 @@ export function requestTone(status: string) {
       return "primary" as const;
     case "accepted":
     case "converted_to_job":
+    case "converted_to_estimate":
       return "success" as const;
     case "declined":
     case "closed":

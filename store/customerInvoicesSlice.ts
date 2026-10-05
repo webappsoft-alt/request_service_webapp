@@ -1,8 +1,9 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
-import { getData } from "@/components/api/sliceHttp";
+import { getData, postData } from "@/components/api/sliceHttp";
 import { userApi } from "@/components/api/ApiRoutesFile";
 import type { RootState } from "@/store";
+import type { Payment } from "@/lib/types";
 
 export type CustomerInvoiceItem = {
   id?: string;
@@ -23,6 +24,7 @@ export type CustomerInvoicePayment = {
   createdAt?: string | null;
   notes?: string;
   transactionReference?: string;
+  proofUrl?: string;
 };
 
 export type CustomerInvoice = {
@@ -144,6 +146,7 @@ function mapInvoice(raw: unknown): CustomerInvoice | null {
           createdAt: stringValue(entry.createdAt) || null,
           notes: stringValue(entry.notes),
           transactionReference: stringValue(entry.transactionReference),
+          proofUrl: stringValue(entry.proofUrl),
         };
         return [mapped];
       },
@@ -159,6 +162,37 @@ function mapInvoice(raw: unknown): CustomerInvoice | null {
           email: stringValue(provider.email),
         }
       : null,
+  };
+}
+
+function mapPayment(raw: unknown): CustomerInvoicePayment | null {
+  const entry = asRecord(raw);
+  if (!entry) return null;
+  const paymentId = stringValue(entry.id) || stringValue(entry._id);
+  if (!paymentId) return null;
+  const methodRaw = stringValue(entry.method).toLowerCase();
+  const method =
+    methodRaw === "card" || methodRaw === "ach" || methodRaw === "cash"
+      ? methodRaw
+      : methodRaw || "check";
+  const statusRaw = stringValue(entry.status).toLowerCase();
+  const status =
+    statusRaw === "pending" ||
+    statusRaw === "processing" ||
+    statusRaw === "failed" ||
+    statusRaw === "refunded"
+      ? statusRaw
+      : statusRaw || "succeeded";
+  return {
+    id: paymentId,
+    amount: numberValue(entry.amount),
+    method,
+    status,
+    paidAt: stringValue(entry.paidAt) || null,
+    createdAt: stringValue(entry.createdAt) || null,
+    notes: stringValue(entry.notes) || undefined,
+    transactionReference: stringValue(entry.transactionReference) || undefined,
+    proofUrl: stringValue(entry.proofUrl) || undefined,
   };
 }
 
@@ -196,6 +230,31 @@ export const fetchCustomerInvoiceDetail = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(
         extractErrorMessage(err) || "Could not load invoice.",
+      );
+    }
+  },
+);
+
+export const recordCustomerInvoicePayment = createAsyncThunk(
+  "customerInvoices/recordPayment",
+  async (
+    { invoiceId, payment }: { invoiceId: string; payment: Partial<Payment> },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await postData(userApi.recordInvoicePayment(invoiceId), payment);
+      const root = asRecord(response);
+      const data = asRecord(root?.data) ?? root;
+      const savedPayment = mapPayment(data?.payment ?? data);
+      if (!savedPayment) throw new Error("Invalid payment response");
+      return {
+        invoiceId,
+        payment: savedPayment,
+        invoice: mapInvoice(data?.invoice),
+      };
+    } catch (err) {
+      return rejectWithValue(
+        extractErrorMessage(err) || "Failed to record payment",
       );
     }
   },
@@ -248,6 +307,20 @@ const customerInvoicesSlice = createSlice({
           typeof action.payload === "string"
             ? action.payload
             : "Could not load invoice.";
+      })
+      .addCase(recordCustomerInvoicePayment.fulfilled, (state, action) => {
+        const { invoice, payment } = action.payload;
+        if (state.detail && state.detail.id === invoice?.id) {
+          state.detail = {
+            ...state.detail,
+            ...invoice,
+            payments: [payment, ...(state.detail.payments || [])],
+          };
+        }
+        const index = state.items.findIndex((item) => item.id === invoice?.id);
+        if (index !== -1 && invoice) {
+          state.items[index] = { ...state.items[index], ...invoice };
+        }
       });
   },
 });

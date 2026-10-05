@@ -13,6 +13,12 @@ import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-op
 import { useJobFile, type InvoiceSettingsDraft } from "@/components/portal/use-job-file";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { invoiceAsJob, todayISO } from "@/components/portal/work-builders";
+import {
+  uploadAnyFile,
+  extractUploadedUrl,
+  ATTACHMENT_ACCEPT_ATTRIBUTE,
+} from "@/components/api/uploadFile";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -217,14 +223,22 @@ export function ApplyPaymentDialog({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethodType>("check");
   const [paidAt, setPaidAt] = useState(todayISO());
+  const [transactionReference, setTransactionReference] = useState("");
+  const [notes, setNotes] = useState("");
+  const [proofUrl, setProofUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!open || !invoice) return;
     setAmount(invoice.balanceDue > 0 ? String(invoice.balanceDue) : "");
     setMethod("check");
     setPaidAt(todayISO());
+    setTransactionReference("");
+    setNotes("");
+    setProofUrl("");
     setSaving(false);
+    setUploading(false);
   }, [invoice, open]);
 
   async function save() {
@@ -246,6 +260,9 @@ export function ApplyPaymentDialog({
       status: "succeeded",
       paidAt,
       createdAt: todayISO(),
+      transactionReference: transactionReference.trim() || undefined,
+      notes: notes.trim() || undefined,
+      proofUrl: method === "check" ? proofUrl || undefined : undefined,
     };
 
     setSaving(true);
@@ -256,6 +273,25 @@ export function ApplyPaymentDialog({
         ).unwrap();
         toast.success(`${formatMoney(applied)} applied to ${invoice.number}.`);
         onPaid?.(result);
+        onOpenChange(false);
+        return;
+      }
+      
+      const customerUseApi =
+        auth.hydrated &&
+        Boolean(auth.token) &&
+        (user?.role === "customer" || auth.role === "customer");
+
+      if (customerUseApi) {
+        const { recordCustomerInvoicePayment } = await import("@/store/customerInvoicesSlice");
+        const result = await dispatch(
+          recordCustomerInvoicePayment({ invoiceId: invoice.id, payment }),
+        ).unwrap();
+        toast.success(`${formatMoney(applied)} applied to ${invoice.number}.`);
+        onPaid?.({
+          invoice: (result.invoice as Invoice | null) ?? null,
+          payment: (result.payment as Payment | null) ?? null,
+        });
         onOpenChange(false);
         return;
       }
@@ -345,16 +381,66 @@ export function ApplyPaymentDialog({
               id="apply-pay-date"
               type="date"
               value={paidAt}
-              disabled={saving}
+              disabled={saving || uploading}
               onChange={(change) => setPaidAt(change.target.value)}
+            />
+          </Field>
+          {method === "card" || method === "ach" ? (
+            <Field label="Transaction reference">
+              <Input
+                placeholder="e.g. tx_12345"
+                value={transactionReference}
+                disabled={saving || uploading}
+                onChange={(e) => setTransactionReference(e.target.value)}
+              />
+            </Field>
+          ) : null}
+          {method === "check" ? (
+            <Field label="Check image (Optional)">
+              <div className="flex flex-col gap-2">
+                <Input
+                  type="file"
+                  accept={ATTACHMENT_ACCEPT_ATTRIBUTE}
+                  disabled={saving || uploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    try {
+                      const response = await uploadAnyFile(file);
+                      const url = extractUploadedUrl(response.data);
+                      if (!url) throw new Error("Upload failed");
+                      setProofUrl(url);
+                      toast.success("Check image attached.");
+                    } catch (error) {
+                      toast.error("Could not upload check image.");
+                    } finally {
+                      setUploading(false);
+                    }
+                  }}
+                />
+                {proofUrl ? (
+                  <p className="text-xs text-muted-foreground text-emerald-600">
+                    ✓ Image uploaded
+                  </p>
+                ) : null}
+              </div>
+            </Field>
+          ) : null}
+          <Field label="Notes (Optional)">
+            <Input
+              placeholder="Internal notes"
+              value={notes}
+              disabled={saving || uploading}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </Field>
         </div>
         <DialogFooter>
-          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={saving || uploading} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={!invoice || !Number(amount) || saving} onClick={() => void save()}>
+          <Button disabled={!invoice || !Number(amount) || saving || uploading} onClick={() => void save()}>
             {saving ? "Applying…" : "Apply payment"}
           </Button>
         </DialogFooter>

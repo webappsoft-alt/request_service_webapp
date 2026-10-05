@@ -662,6 +662,7 @@ export function RequestsView() {
               break;
 
             case "estimate_sent":
+            case "converted_to_estimate":
               statusActions.push(
                 {
                   label: "View Estimate",

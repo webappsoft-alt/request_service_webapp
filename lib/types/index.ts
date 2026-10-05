@@ -94,6 +94,7 @@ export type RequestStatus =
   | "estimate_sent"
   | "accepted"
   | "declined"
+  | "converted_to_estimate"
   | "converted_to_job"
   | "closed";
 
@@ -426,6 +427,10 @@ export interface Payment {
   jobId?: string;
   notes?: string;
   transactionReference?: string;
+  proofUrl?: string;
+  /** Who entered the payment: provider (manual record) or customer (self-pay). */
+  recordedBy?: "provider" | "customer";
+  recordedByName?: string;
 }
 
 export type PaymentScheduleType = "upfront" | "completion" | "milestone";

@@ -13,6 +13,9 @@ export type CustomerPayment = {
   createdAt?: string | null;
   notes?: string;
   transactionReference?: string;
+  proofUrl?: string;
+  recordedBy?: "provider" | "customer";
+  recordedByName?: string;
   invoiceId: string | null;
   invoiceNumber: string | null;
   invoiceStatus?: string | null;
@@ -80,6 +83,9 @@ function mapPayment(raw: unknown): CustomerPayment | null {
     createdAt: stringValue(row.createdAt) || null,
     notes: stringValue(row.notes),
     transactionReference: stringValue(row.transactionReference),
+    proofUrl: stringValue(row.proofUrl),
+    recordedBy: stringValue(row.recordedBy) === "customer" ? "customer" : "provider",
+    recordedByName: stringValue(row.recordedByName),
     invoiceId: stringValue(row.invoiceId) || null,
     invoiceNumber: stringValue(row.invoiceNumber) || null,
     invoiceStatus: stringValue(row.invoiceStatus) || null,

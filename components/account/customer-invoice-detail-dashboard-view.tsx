@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,9 +22,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { StatusPill, moneyTone } from "@/components/portal/status-pill";
+import { ApplyPaymentDialog } from "@/components/portal/invoice-file";
+import { paymentMethodLabel } from "@/lib/data/portal";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { PaymentMethodType } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
 import {
@@ -86,6 +89,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
   const loading = useAppSelector(selectCustomerInvoiceDetailLoading);
   const error = useAppSelector(selectCustomerInvoiceDetailError);
   const invoiceId = String(id || "").trim();
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -220,6 +224,11 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
             <Printer className="size-3.5" />
             Print
           </Button>
+          {invoice.balanceDue > 0 ? (
+            <Button size="sm" onClick={() => setPaymentOpen(true)}>
+              Pay invoice
+            </Button>
+          ) : null}
           <Button asChild size="sm">
             <Link href={customerPaths.messages}>
               <MessageSquare className="size-3.5" />
@@ -486,7 +495,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                       </Link>
                       <p className="text-xs text-muted-foreground">
                         {payment.method
-                          ? `${payment.method.charAt(0).toUpperCase()}${payment.method.slice(1)}`
+                          ? paymentMethodLabel((payment.method || "check") as PaymentMethodType)
                           : "Payment"}
                         {payment.paidAt
                           ? ` · ${formatDate(payment.paidAt.slice(0, 10))}`
@@ -671,6 +680,11 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
           </div>
         </aside>
       </div>
+      <ApplyPaymentDialog
+        open={paymentOpen}
+        onOpenChange={setPaymentOpen}
+        invoice={invoice as any}
+      />
     </PortalPage>
   );
 }

@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PortalPage } from "@/components/portal/portal-page";
+import { CenteredSpinner } from "@/components/ui/spinner";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import {
   createEmptyLine,
@@ -611,20 +612,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         customerAttachments: prepAttachments,
         workItems: prepWorkItems.filter((item) => String(item.description || "").trim()),
       });
-      const created = await createEstimateV2Estimate(opportunity.id, {
-        title: opportunity.title,
-        notes: scopeOfWork || prepFindings || opportunity.description || "",
-        terms,
-        discount: Number(discount) || 0,
-        customerId: customerIdOf(opportunity),
-        propertyAddress: opportunity.propertyAddress,
-      });
-      if (!created.estimate?.id) throw new Error("Estimate was not created.");
-      toast.success(
-        created.reused
-          ? `${created.estimate.number} updated with work items.`
-          : `${created.estimate.number} created from work items.`,
-      );
+      
+      const saved = await saveEstimateDraft();
+      if (!saved) throw new Error("Could not save estimate.");
+
       await load();
       window.setTimeout(() => {
         setPrepPanelOpen(false);
@@ -863,8 +854,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   if (loading) {
     return (
-      <PortalPage eyebrow="Work / Estimate" title="Loading…">
-        <div className="h-40 animate-pulse rounded-xl border border-input bg-secondary/40" />
+      <PortalPage eyebrow="Work / Estimate" title="">
+        <CenteredSpinner className="min-h-64" />
       </PortalPage>
     );
   }
@@ -1160,18 +1151,19 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     >
                       {sendButtonLabel}
                     </Button>
-                    {(estimate?.status === "sent" ||
-                      estimate?.status === "accepted") ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={saving}
-                        onClick={() => setAcceptOpen(true)}
-                      >
-                        {estimate.status === "accepted"
-                          ? "Create job…"
-                          : "Customer accepted…"}
-                      </Button>
+                    {estimate?.status === "accepted" ? (
+                      <>
+                        <span className="flex h-9 items-center rounded-md bg-green-50 px-3 text-sm font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                          Customer Accepted
+                        </span>
+                        <Button
+                          size="sm"
+                          disabled={saving}
+                          onClick={() => setAcceptOpen(true)}
+                        >
+                          Create Job
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 </div>

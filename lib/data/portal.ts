@@ -324,6 +324,7 @@ const REQUEST_STATUSES: RequestStatus[] = [
   "estimate_sent",
   "accepted",
   "declined",
+  "converted_to_estimate",
   "converted_to_job",
   "closed",
 ];
@@ -1215,6 +1216,8 @@ export function requestStatusLabel(status: RequestStatus) {
       return "Accepted";
     case "declined":
       return "Declined";
+    case "converted_to_estimate":
+      return "Converted to estimate";
     case "converted_to_job":
       return "Converted to job";
     case "closed":

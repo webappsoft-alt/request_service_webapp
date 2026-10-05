@@ -94,9 +94,9 @@ export function JobChangeOrdersPanel({
     try {
       const next = await sendJobChangeOrder(job.id, co.id);
       toast.success(`Sent ${co.number} to the customer.`);
-      onJobUpdated?.(next);
+      if (next) onJobUpdated?.(next);
     } catch (err) {
-      toast.error(extractErrorMessage(err, "Could not send change order."));
+      toast.error(extractErrorMessage(err) || "Could not send change order.");
     } finally {
       setBusyId(null);
     }
@@ -111,9 +111,9 @@ export function JobChangeOrdersPanel({
         "cancelled",
       );
       toast.success(`${co.number} cancelled.`);
-      onJobUpdated?.(next);
+      if (next) onJobUpdated?.(next);
     } catch (err) {
-      toast.error(extractErrorMessage(err, "Could not cancel change order."));
+      toast.error(extractErrorMessage(err) || "Could not cancel change order.");
     } finally {
       setBusyId(null);
     }

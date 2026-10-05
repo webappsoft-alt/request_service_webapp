@@ -141,10 +141,10 @@ export function JobChangeOrderDialog({
           ? "Change order sent to the customer."
           : "Change order saved as draft.",
       );
-      onSaved?.(next);
+      if (next) onSaved?.(next);
       onOpenChange(false);
     } catch (err) {
-      toast.error(extractErrorMessage(err, "Could not save change order."));
+      toast.error(extractErrorMessage(err) || "Could not save change order.");
     } finally {
       setSaving(null);
     }

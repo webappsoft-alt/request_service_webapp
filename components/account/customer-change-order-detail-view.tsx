@@ -63,9 +63,7 @@ export function CustomerChangeOrderDetailView({
         approved ? "Change order approved." : "Change order rejected.",
       );
     } catch (err) {
-      toast.error(
-        extractErrorMessage(err, "Could not submit your response."),
-      );
+      toast.error(extractErrorMessage(err) || "Could not submit your response.");
     } finally {
       setSaving(null);
     }

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
 import {
   createEmptyLine,
   LineItemsActions,
-  LineItemsEditor,
 } from "@/components/portal/line-items-editor";
 import {
   jobCostMix,
@@ -454,7 +454,7 @@ export function JobCosting({
           />
         </div>
       )}
-      <LineItemsEditor
+      <SectionedLineItemsEditor
         lines={activeLines}
         onChange={changeLines}
         locked={locked}

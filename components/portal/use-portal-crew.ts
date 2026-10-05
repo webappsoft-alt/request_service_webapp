@@ -4,9 +4,9 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
-import { assignSchedule as assignScheduleApi, updateSchedule as updateScheduleApi, deleteSchedule as deleteScheduleApi, createEmployee as createEmployeeApi, updateEmployee as updateEmployeeApi, deleteEmployee as deleteEmployeeApi } from "@/lib/api/crm-client";
+import { assignSchedule as assignScheduleApi, updateSchedule as updateScheduleApi, deleteSchedule as deleteScheduleApi, createEmployee as createEmployeeApi, updateEmployee as updateEmployeeApi, deleteEmployee as deleteEmployeeApi, querySchedule } from "@/lib/api/crm-client";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
-import { employeeName, minutesForWindow } from "@/lib/data/portal";
+import { employeeName, isSyntheticCalendarId, minutesForWindow } from "@/lib/data/portal";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 
@@ -261,7 +261,7 @@ export function usePortalCrew() {
                       kind: "invoice",
                       recordId: invoice.id,
                       title: invoice.number,
-                      detail: "Invoice follow-up",
+                      detail: "Invoice due",
                       customerName: undefined,
                       date: assignment.date,
                       endDate: assignment.endDate,
@@ -273,6 +273,24 @@ export function usePortalCrew() {
                       status: invoice.status,
                     }
                   : undefined;
+              }
+              case "payment": {
+                return {
+                  id: `cal_${assignment.recordId}`,
+                  kind: "payment",
+                  recordId: assignment.recordId,
+                  title: assignment.title || "Payment",
+                  detail: "Payment due",
+                  customerName: undefined,
+                  date: assignment.date,
+                  endDate: assignment.endDate,
+                  timeWindow: assignment.timeWindow,
+                  startMinutes: fallbackWindow.startMinutes,
+                  endMinutes: fallbackWindow.endMinutes,
+                  employeeId: assignment.employeeId,
+                  href: `/pro/dashboard/payments/${assignment.recordId}`,
+                  status: assignment.status ?? "scheduled",
+                };
               }
               case "task": {
                 const task = tasks.find((item) => item.id === assignment.recordId);
@@ -367,19 +385,33 @@ export function usePortalCrew() {
             (item) =>
               item.kind === assignment.kind &&
               item.recordId === assignment.recordId &&
-              item.id &&
-              !String(item.id).startsWith("cal_"),
+              !isSyntheticCalendarId(item.id),
           ) ??
           workspace.calendarEvents.find(
             (item) =>
               item.kind === assignment.kind &&
               item.recordId === assignment.recordId &&
-              item.id &&
-              !String(item.id).startsWith("cal_"),
-          ) ??
-          workspace.calendarEvents.find(
-            (item) => item.kind === assignment.kind && item.recordId === assignment.recordId,
+              !isSyntheticCalendarId(item.id),
           );
+        let existingId = existingSchedule?.id;
+        if (!existingId && assignment.recordId) {
+          try {
+            const rows = await querySchedule({
+              kind: assignment.kind,
+              recordId: assignment.recordId,
+              force: true,
+              silent: true,
+            });
+            existingId = rows.find(
+              (item) =>
+                item.kind === assignment.kind &&
+                item.recordId === assignment.recordId &&
+                !isSyntheticCalendarId(item.id),
+            )?.id;
+          } catch {
+            existingId = undefined;
+          }
+        }
         const contractor = contractors.find((item) => item.id === assignment.employeeId);
         const startMinutes = assignment.startMinutes ?? resolvedEvent.startMinutes ?? fallbackWindow.startMinutes;
         const endMinutes = assignment.endMinutes ?? resolvedEvent.endMinutes ?? fallbackWindow.endMinutes;
@@ -400,8 +432,8 @@ export function usePortalCrew() {
         } as const;
 
         let savedEvent: PortalCalendarEvent | null = null;
-        if (existingSchedule && !String(existingSchedule.id).startsWith("cal_")) {
-          savedEvent = await updateScheduleApi(existingSchedule.id, payload);
+        if (existingId && !isSyntheticCalendarId(existingId)) {
+          savedEvent = await updateScheduleApi(existingId, payload);
         } else {
           savedEvent = await assignScheduleApi({
             recordId: assignment.recordId,

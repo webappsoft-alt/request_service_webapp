@@ -191,6 +191,7 @@ export interface Estimate {
   customerEmail?: string;
   requestId?: string;
   jobId?: string;
+  invoiceId?: string;
   serviceId?: string;
   propertyAddress: ServiceAddress;
   status: EstimateStatus;
@@ -220,10 +221,19 @@ export interface Estimate {
   isArchieved?: boolean;
   logs?: EstimateLog[];
   activities?: EstimateActivity[];
+  /** Customer revision requests — kept off the estimate document notes. */
+  changeRequests?: EstimateChangeRequest[];
   /** Customer-visible notices when the pro revises a shared estimate. */
   customerUpdates?: EstimateCustomerUpdate[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EstimateChangeRequest {
+  id?: string;
+  reason: string;
+  at: string;
+  addressedAt?: string | null;
 }
 
 export interface EstimateCustomerUpdate {
@@ -361,9 +371,11 @@ export interface InvoiceItem {
   unitPrice: number;
   total: number;
   /** When known from API `kind` / editor. Prefer over description heuristics. */
-  kind?: "labor" | "materials";
+  kind?: "labor" | "materials" | "equipment";
   /** Optional material photos (URLs). Ignored for labor lines. */
   images?: string[];
+  /** Named work section (e.g. Plumbing). Empty = General. */
+  section?: string;
 }
 
 export interface Invoice {
@@ -375,7 +387,8 @@ export interface Invoice {
   customerName?: string;
   customerPhone?: string;
   customerEmail?: string;
-  jobId: string;
+  jobId?: string;
+  estimateId?: string;
   status: InvoiceStatus;
   issuedAt: string;
   dueAt?: string;
@@ -415,6 +428,7 @@ export interface Payment {
   method: PaymentMethodType;
   status: PaymentStatus;
   paidAt?: string;
+  dueAt?: string;
   createdAt: string;
   /** Soft-archive on the provider Payments board. */
   isArchived?: boolean;

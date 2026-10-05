@@ -8,7 +8,7 @@ import type {
   PortalTask,
   PortalVendor,
 } from "@/lib/data/crm-people";
-import { employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
+import { dedupeCalendarEvents, employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
 import type { Estimate, EstimateActivity, EstimateSiteVisitRecord, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
@@ -277,31 +277,30 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
 
 function jobItemsToApi(items: Job["items"]) {
   return items.map((item) => {
-    const text = String(item.description || "").toLowerCase();
-    const isLabor =
-      item.kind === "labor" ||
-      (item.kind !== "materials" &&
-        (text.includes("labor") ||
-          text.includes("labour") ||
-          String(item.unit || "").toLowerCase() === "hr"));
+    const kind =
+      item.source === "change_order"
+        ? "material"
+        : item.kind === "equipment"
+          ? "equipment"
+          : item.kind === "labor"
+            ? "labor"
+            : "material";
     const images =
-      !isLabor && Array.isArray(item.images)
+      kind === "material" && Array.isArray(item.images)
         ? item.images.filter((src) => Boolean(String(src || "").trim()))
         : [];
     return {
       id: item.id,
       description: item.description,
-      kind:
-        item.source === "change_order"
-          ? "material"
-          : isLabor
-            ? "labor"
-            : "material",
+      kind,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       taxRate: 0,
       total: item.total,
       ...(images.length ? { images } : {}),
+      ...(String(item.section || "").trim()
+        ? { section: String(item.section).trim() }
+        : {}),
     };
   });
 }
@@ -314,9 +313,11 @@ function invoiceItemsToApi(items: Invoice["items"]) {
     const explicitKind =
       item.kind === "labor"
         ? "labor"
-        : item.kind === "materials"
-          ? "material"
-          : null;
+        : item.kind === "equipment"
+          ? "equipment"
+          : item.kind === "materials"
+            ? "material"
+            : null;
     const kind =
       item.source === "change_order"
         ? "fee"
@@ -339,6 +340,9 @@ function invoiceItemsToApi(items: Invoice["items"]) {
       taxRate: 0,
       total: item.total,
       ...(images.length && kind === "material" ? { images } : {}),
+      ...(String(item.section || "").trim()
+        ? { section: String(item.section).trim() }
+        : {}),
     };
   });
 }
@@ -1684,6 +1688,8 @@ export type ShareEstimateInput = {
   companySignatureDataUrl?: string;
   /** Generate the public link without emailing the customer. */
   skipEmail?: boolean;
+  /** Used when the estimate snapshot is missing an address. */
+  customerEmail?: string;
 };
 
 export async function shareEstimate(id: string, input?: ShareEstimateInput) {
@@ -1702,6 +1708,8 @@ export async function shareEstimate(id: string, input?: ShareEstimateInput) {
     body.companySignedAt = signedAt;
   }
   if (input?.skipEmail) body.skipEmail = true;
+  const customerEmail = String(input?.customerEmail || "").trim();
+  if (customerEmail) body.customerEmail = customerEmail;
   const response = await postData(
     providerCrmApi.estimateShare(id),
     Object.keys(body).length ? body : undefined,
@@ -1749,7 +1757,11 @@ export async function shareEstimate(id: string, input?: ShareEstimateInput) {
 
 export async function convertEstimateToJob(
   id: string,
-  extras?: Pick<Estimate, "items" | "title" | "siteVisit">,
+  extras?: Partial<Pick<Estimate, "items" | "title" | "siteVisit">> & {
+    status?: "unscheduled" | "in_progress" | "scheduled";
+    scheduledAt?: string;
+    dueAt?: string;
+  },
 ) {
   const response = await postData(
     providerCrmApi.estimateConvertToJob(id),
@@ -1758,6 +1770,9 @@ export async function convertEstimateToJob(
           title: extras.title || undefined,
           items: extras.items ? estimateItemsToApi(extras.items) : undefined,
           siteVisit: extras.siteVisit ? siteVisitPayload(extras.siteVisit) : undefined,
+          status: extras.status,
+          scheduledAt: extras.scheduledAt,
+          dueAt: extras.dueAt,
         }
       : undefined,
     { silent: false },
@@ -2013,6 +2028,18 @@ export async function updateJobArchive(id: string, isArchived: boolean) {
   return mapCrmEntity(response, mapJob);
 }
 
+export async function convertEstimateToInvoice(
+  id: string,
+  extras?: { dueAt?: string },
+) {
+  const response = await postData(
+    providerCrmApi.estimateConvertToInvoice(id),
+    extras?.dueAt ? { dueAt: extras.dueAt } : undefined,
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapInvoice);
+}
+
 export async function convertJobToInvoice(
   id: string,
   options?: { clientId?: string },
@@ -2234,6 +2261,7 @@ export async function recordInvoicePayment(invoiceId: string, payment: Payment) 
     transactionReference: payment.transactionReference || "",
     proofUrl: payment.proofUrl || "",
     ...(payment.paidAt ? { paidAt: payment.paidAt } : {}),
+    ...(payment.dueAt ? { dueAt: payment.dueAt } : {}),
   });
   invalidateGetCache(providerCrmApi.invoices);
   invalidateGetCache(providerCrmApi.invoice(invoiceRef));
@@ -2361,7 +2389,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
   // Synthesis-backed kinds are merged from CRM lists after fetch. Sending `kind`
   // to the API for those can return an empty schedule collection and hide the
   // synthesized rows when the parent treats the response as authoritative.
-  const SYNTHESIS_KINDS = new Set(["invoice", "estimate", "task", "fixed_service"]);
+  const SYNTHESIS_KINDS = new Set(["invoice", "payment", "estimate", "task", "fixed_service"]);
   if (kind && !SYNTHESIS_KINDS.has(kind)) {
     params.kind = kind;
   }
@@ -2418,6 +2446,43 @@ export async function querySchedule(query: CrmListQuery = {}) {
           price,
           category: inv.status ? `Invoice · ${inv.status}` : "Invoice",
         });
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  if (!kind || kind === "payment") {
+    try {
+      const payList = await listPayments({ silent: true });
+      const existingIds = new Set(items.map((it) => it.recordId || it.id));
+      payList.forEach((pay) => {
+        if (!pay.id || existingIds.has(pay.id)) return;
+        const dueOrPaid = pay.dueAt || pay.paidAt || pay.createdAt;
+        if (!dueOrPaid) return;
+        const dateIso = dueOrPaid.slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return;
+        const amount = Number(pay.amount) || 0;
+        items.push({
+          id: `pay_${pay.id}`,
+          kind: "payment",
+          recordId: pay.id,
+          title: pay.number || `PMT-${pay.id.slice(-6).toUpperCase()}`,
+          detail: pay.invoiceNumber
+            ? `${pay.invoiceNumber} · ${pay.status || "payment"}`
+            : pay.status || "Payment due",
+          customerName: pay.customerName || undefined,
+          date: dateIso,
+          dueDate: dateIso,
+          timeWindow: "all_day",
+          startMinutes: 540,
+          endMinutes: 570,
+          href: `/pro/dashboard/payments/${pay.id}`,
+          status: pay.status || "succeeded",
+          price: amount > 0 ? `$${amount.toFixed(2)}` : undefined,
+          category: "Payment",
+        });
+        existingIds.add(pay.id);
       });
     } catch {
       /* non-blocking */
@@ -3000,7 +3065,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
     items = items.filter((item) => item.kind === kind);
   }
 
-  return items;
+  return dedupeCalendarEvents(items);
 }
 
 export async function assignSchedule(schedule: CrmScheduleAssignment) {

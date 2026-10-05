@@ -10,6 +10,7 @@ export type CustomerPayment = {
   method: string;
   status: string;
   paidAt: string | null;
+  dueAt?: string | null;
   createdAt?: string | null;
   notes?: string;
   transactionReference?: string;
@@ -80,6 +81,7 @@ function mapPayment(raw: unknown): CustomerPayment | null {
     method: stringValue(row.method) || "check",
     status: stringValue(row.status) || "succeeded",
     paidAt: stringValue(row.paidAt) || null,
+    dueAt: stringValue(row.dueAt) || stringValue(row.paidAt) || null,
     createdAt: stringValue(row.createdAt) || null,
     notes: stringValue(row.notes),
     transactionReference: stringValue(row.transactionReference),

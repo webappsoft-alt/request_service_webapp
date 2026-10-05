@@ -26,6 +26,7 @@ import {
   employeeName,
   formatClock,
   windowFromMinutes,
+  dedupeCalendarEvents,
 } from "@/lib/data/portal";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate } from "@/lib/format";
@@ -722,12 +723,49 @@ export function ScheduleView() {
       });
     }
 
-    return [...scheduledEvents, ...taskEvents, ...invoiceEvents];
+    const existingPaymentIds = new Set(
+      scheduledEvents
+        .filter((e) => e.kind === "payment")
+        .map((e) => e.recordId || e.id),
+    );
+    const paymentEvents: PortalCalendarEvent[] = [];
+    if (!kindFilter || kindFilter === "payment") {
+      crm.payments.forEach((pay) => {
+        if (!pay.id || existingPaymentIds.has(pay.id)) return;
+        const dueOrPaid = pay.dueAt || pay.paidAt || pay.createdAt;
+        if (!dueOrPaid) return;
+        const dateIso = dueOrPaid.slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return;
+        const amount = Number(pay.amount) || 0;
+        paymentEvents.push({
+          id: `pay_${pay.id}`,
+          kind: "payment",
+          recordId: pay.id,
+          title: pay.number || `PMT-${pay.id.slice(-6).toUpperCase()}`,
+          detail: pay.invoiceNumber
+            ? `${pay.invoiceNumber} · payment`
+            : "Payment due",
+          customerName: pay.customerName || undefined,
+          date: dateIso,
+          dueDate: dateIso,
+          timeWindow: "all_day",
+          startMinutes: 540,
+          endMinutes: 570,
+          href: `/pro/dashboard/payments/${pay.id}`,
+          status: pay.status || "succeeded",
+          price: amount > 0 ? `$${amount.toFixed(2)}` : undefined,
+          category: "Payment",
+        });
+      });
+    }
+
+    return [...scheduledEvents, ...taskEvents, ...invoiceEvents, ...paymentEvents];
   }, [
     crm.customers,
     crm.estimates,
     crm.invoices,
     crm.jobs,
+    crm.payments,
     crm.requests,
     crm.tasks,
     events,
@@ -785,7 +823,7 @@ export function ScheduleView() {
           force: true,
           silent: true,
         });
-        setEvents(items);
+        setEvents(dedupeCalendarEvents(items));
       } catch (error) {
         toast.error(formatScheduleError(error));
         setEvents([]);

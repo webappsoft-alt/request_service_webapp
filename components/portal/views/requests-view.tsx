@@ -49,6 +49,7 @@ import {
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import type { RequestStatus } from "@/lib/types";
+import { visibleQuoteAnswers } from "@/components/portal/quote-answers-card";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -405,6 +406,11 @@ export function RequestsView() {
                   {row.number}
                 </Link>
                 <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                  {!row.firstViewedAt ? (
+                    <span className="inline-flex items-center rounded-full bg-[#003F7D] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      Unseen
+                    </span>
+                  ) : null}
                   <span className="text-xs text-muted-foreground capitalize">{row.channel}</span>
                   {row.source && row.source !== "quote_request" ? (
                     <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
@@ -491,7 +497,19 @@ export function RequestsView() {
             sortValue: (row) => row.serviceName,
             searchValue: (row) => row.serviceName,
             exportValue: (row) => row.serviceName,
-            cell: (row) => row.serviceName,
+            cell: (row) => {
+              const answerCount = visibleQuoteAnswers(row.answers).length;
+              return (
+                <div>
+                  <p>{row.serviceName || "—"}</p>
+                  {answerCount ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {answerCount} customer answer{answerCount === 1 ? "" : "s"}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            },
           },
           {
             id: "area",

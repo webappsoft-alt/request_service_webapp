@@ -81,6 +81,14 @@ export function paymentBoardColumns({
       cell: (row) => formatDate(row.paidAt ?? row.createdAt),
     },
     {
+      id: "due",
+      header: "Due",
+      sortValue: (row) => row.dueAt ?? row.paidAt ?? row.createdAt,
+      searchValue: (row) => formatDate(row.dueAt ?? row.paidAt ?? row.createdAt),
+      exportValue: (row) => formatDate(row.dueAt ?? row.paidAt ?? row.createdAt),
+      cell: (row) => formatDate(row.dueAt ?? row.paidAt ?? row.createdAt),
+    },
+    {
       id: "status",
       header: "Status",
       sortValue: (row) => row.status,

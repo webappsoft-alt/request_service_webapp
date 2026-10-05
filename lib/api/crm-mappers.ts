@@ -30,12 +30,14 @@ import {
   displayLeadCustomerName,
   displayLeadEmail,
 } from "@/lib/lead-display";
+import { splitEstimateNotesAndChangeRequests } from "@/lib/data/estimate-change-requests";
 import type {
   ChangeOrder,
   Customer,
   Estimate,
   EstimateActivity,
   EstimateAttachmentItem,
+  EstimateChangeRequest,
   EstimateCustomerUpdate,
   EstimateItem,
   EstimateItemType,
@@ -312,6 +314,8 @@ function makeHref(kind: PortalEventKind, recordId: string): string {
       return `/pro/dashboard/requests/${recordId}`;
     case "invoice":
       return `/pro/dashboard/invoices/${recordId}`;
+    case "payment":
+      return `/pro/dashboard/payments/${recordId}`;
     case "task":
       return `/pro/dashboard/tasks/${recordId}`;
     case "visit":
@@ -623,7 +627,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
         value,
       } satisfies QuoteAnswer;
     })
-    .filter((item): item is QuoteAnswer => Boolean(item?.label));
+    .filter((item): item is QuoteAnswer => Boolean(item?.label && item?.value));
 
   const photos = toStringArray(record.photos ?? record.photoUrls);
   const chatThread = asRecord(record.chatThread);
@@ -653,6 +657,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     channel: trimmed(record.channel) === "marketplace" ? "marketplace" : "direct",
     source: trimmed(record.source) || "quote_request",
     viewCount: Math.max(1, numberValue(record.viewCount, 1)),
+    firstViewedAt: toIsoString(record.firstViewedAt) || null,
     lastInteractionAt:
       toIsoString(record.lastInteractionAt) ||
       toIsoString(record.updatedAt) ||
@@ -1206,6 +1211,12 @@ export function mapEstimate(raw: unknown): Estimate | null {
     asRecord(record.address) ??
     {};
   const address = mapServiceAddress(addressSource, `addr_${id}`);
+  const changeRequestSplit = splitEstimateNotesAndChangeRequests(
+    trimmed(record.notes),
+    asArray(record.changeRequests)
+      .map((entry, idx) => mapEstimateChangeRequest(entry, idx))
+      .filter((item): item is EstimateChangeRequest => Boolean(item)),
+  );
 
   return {
     id,
@@ -1223,6 +1234,7 @@ export function mapEstimate(raw: unknown): Estimate | null {
     customerEmail: customerNameParts(record).email || undefined,
     requestId: crmIdOf(record.requestId) || undefined,
     jobId: crmIdOf(record.jobId) || undefined,
+    invoiceId: crmIdOf(record.invoiceId) || undefined,
     serviceId: crmIdOf(record.serviceId) || undefined,
     propertyAddress: address,
     status:
@@ -1240,7 +1252,7 @@ export function mapEstimate(raw: unknown): Estimate | null {
         : "draft",
     issuedAt: toIsoString(record.issuedAt) || toIsoString(record.createdAt),
     expiresAt: toIsoString(record.expiresAt) || undefined,
-    notes: trimmed(record.notes) || undefined,
+    notes: changeRequestSplit.notes || undefined,
     terms: trimmed(record.terms) || undefined,
     subtotal: numberValue(record.subtotal),
     discount: numberValue(record.discount),
@@ -1271,11 +1283,30 @@ export function mapEstimate(raw: unknown): Estimate | null {
     activities: asArray(record.activities)
       .map(mapEstimateActivity)
       .filter((item): item is EstimateActivity => Boolean(item)),
+    changeRequests: changeRequestSplit.changeRequests,
     customerUpdates: asArray(record.customerUpdates)
       .map((entry, idx) => mapEstimateCustomerUpdate(entry, idx))
       .filter((item): item is EstimateCustomerUpdate => Boolean(item)),
     createdAt: toIsoString(record.createdAt),
     updatedAt: toIsoString(record.updatedAt) || toIsoString(record.createdAt),
+  };
+}
+
+export function mapEstimateChangeRequest(
+  raw: unknown,
+  index: number,
+): EstimateChangeRequest | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const reason = trimmed(record.reason || record.message || record.details);
+  if (!reason) return null;
+  return {
+    id: crmIdOf(record) || `change_request_${index + 1}`,
+    reason,
+    at:
+      toIsoString(record.at || record.timestamp || record.createdAt) ||
+      new Date().toISOString(),
+    addressedAt: toIsoString(record.addressedAt) || null,
   };
 }
 
@@ -1325,8 +1356,9 @@ export function mapEstimateActivity(raw: unknown): EstimateActivity | null {
   const record = asRecord(raw);
   if (!record) return null;
 
-  const id = crmIdOf(record);
-  if (!id) return null;
+  const id =
+    crmIdOf(record) ||
+    `activity_${trimmed(record.title) || "item"}_${toIsoString(record.timestamp ?? record.createdAt ?? record.at) || "na"}`;
 
   return {
     id,
@@ -1352,11 +1384,17 @@ function mapJobItems(jobId: string, value: unknown): JobItem[] {
     .map((entry, index) => {
       const record = asRecord(entry);
       if (!record) return null;
+      const mappedType = mapEstimateItemType(record.kind);
       const kind: JobItem["kind"] =
-        mapEstimateItemType(record.kind) === "labor" ? "labor" : "materials";
+        mappedType === "labor"
+          ? "labor"
+          : mappedType === "equipment"
+            ? "equipment"
+            : "materials";
       const images = asArray(record.images)
         .map((src) => trimmed(src))
         .filter(Boolean);
+      const section = trimmed(record.section);
       const item: JobItem = {
         id: crmIdOf(record) || `${jobId}_item_${index + 1}`,
         jobId,
@@ -1368,6 +1406,7 @@ function mapJobItems(jobId: string, value: unknown): JobItem[] {
         total: numberValue(record.total),
         kind,
         ...(kind === "materials" && images.length ? { images } : {}),
+        ...(section ? { section } : {}),
       };
       return item;
     })
@@ -1545,7 +1584,12 @@ function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
         .filter(Boolean);
       const mappedType = mapEstimateItemType(record.kind);
       const kind: InvoiceItem["kind"] =
-        mappedType === "labor" ? "labor" : "materials";
+        mappedType === "labor"
+          ? "labor"
+          : mappedType === "equipment"
+            ? "equipment"
+            : "materials";
+      const section = trimmed(record.section);
       return {
         id: crmIdOf(record) || `${invoiceId}_item_${index + 1}`,
         invoiceId,
@@ -1557,6 +1601,7 @@ function mapInvoiceItems(invoiceId: string, value: unknown): InvoiceItem[] {
         total: numberValue(record.total),
         kind,
         ...(kind === "materials" && images.length ? { images } : {}),
+        ...(section ? { section } : {}),
       };
     })
     .filter((item): item is InvoiceItem => item != null);
@@ -1589,7 +1634,8 @@ export function mapInvoice(raw: unknown): Invoice | null {
     customerName: customer.name || undefined,
     customerPhone: customer.phone || undefined,
     customerEmail: customer.email || undefined,
-    jobId: crmIdOf(record.jobId),
+    jobId: crmIdOf(record.jobId) || undefined,
+    estimateId: crmIdOf(record.estimateId) || undefined,
     status:
       trimmed(record.status) === "sent" ||
       trimmed(record.status) === "partially_paid" ||
@@ -1672,6 +1718,7 @@ export function mapPayment(raw: unknown): Payment | null {
     status,
     proofUrl: trimmed(record.proofUrl) || undefined,
     paidAt: toIsoString(record.paidAt) || undefined,
+    dueAt: toIsoString(record.dueAt) || toIsoString(record.paidAt) || undefined,
     createdAt: toIsoString(record.createdAt) || toIsoString(record.paidAt),
     isArchived: Boolean(record.isArchived),
     customerId,
@@ -2119,6 +2166,7 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
   const kind: PortalEventKind =
     kindRaw === "estimate" ||
     kindRaw === "invoice" ||
+    kindRaw === "payment" ||
     kindRaw === "task" ||
     kindRaw === "visit"
       ? (kindRaw as PortalEventKind)

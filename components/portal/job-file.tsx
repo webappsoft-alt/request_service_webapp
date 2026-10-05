@@ -95,6 +95,7 @@ import { employeeName, jobStatusLabel, jobStatusTone, minutesForWindow } from "@
 import { formatDate, formatLocation, formatMoney, formatShortDate } from "@/lib/format";
 import type { Estimate, Invoice, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { QuoteAnswersCard } from "@/components/portal/quote-answers-card";
 import { StatusPill } from "@/components/portal/status-pill";
 
 export function JobFileChrome({
@@ -521,6 +522,23 @@ export function JobSummaryTab({
               {jobStatusLabel(job.status)}
               {technician ? ` · ${technician}` : " · Unassigned"}
             </p>
+            {estimate ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                From estimate{" "}
+                <Link
+                  href={`/pro/dashboard/estimates/${estimate.id}`}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {estimate.number}
+                </Link>
+                {estimate.title ? ` · ${estimate.title}` : ""}
+              </p>
+            ) : null}
+            {estimate?.notes ? (
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                {estimate.notes}
+              </p>
+            ) : null}
           </div>
           <div className="rounded-md bg-secondary px-3 py-2 text-right">
             <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
@@ -565,21 +583,7 @@ export function JobSummaryTab({
               </AccordionTrigger>
               <AccordionContent className="pb-0">
                 <div className="p-3">
-                  <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {quoteAnswers.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-md border border-border-soft bg-[#fafbfc] px-3 py-2.5"
-                      >
-                        <dt className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                          {item.label}
-                        </dt>
-                        <dd className="mt-1 text-sm font-medium wrap-break-word text-foreground">
-                          {item.value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
+                  <QuoteAnswersCard compact answers={quoteAnswers} />
                 </div>
               </AccordionContent>
             </AccordionItem>

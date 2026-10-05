@@ -73,36 +73,75 @@ export function estimateStatusLabel(status: EstimateStatus | string) {
   }
 }
 
-/** Ensure classic estimate statuses stay mutually distinct (scheduled ≠ sent). */
-export function estimateStatusToneDistinct(status: EstimateStatus) {
-  switch (status) {
+function canonicalEstimateStatus(status: string): EstimateStatus | "unknown" {
+  const value = String(status || "").toLowerCase().trim();
+  switch (value) {
     case "site_visit":
-      return "bg-indigo-50 text-indigo-800";
     case "inspected":
-      return "bg-teal-50 text-teal-800";
     case "draft":
-      return "bg-amber-50 text-amber-900";
     case "scheduled":
-      return "bg-violet-50 text-violet-800";
     case "finalized":
-      return "bg-cyan-50 text-cyan-900";
     case "sent":
-      return "bg-[#e8eef5] text-[#003F7D]";
     case "accepted":
-      return "bg-emerald-50 text-emerald-800";
     case "rejected":
-      return "bg-red-50 text-red-800";
     case "expired":
-      return "bg-orange-50 text-orange-800";
     case "changes_requested":
-      return "bg-amber-50 text-amber-900";
     case "converted_to_job":
-      return "bg-green-50 text-green-900";
-    default: {
-      const _never: never = status;
-      return _never;
-    }
+      return value;
+    case "preparing":
+    case "in_progress":
+    case "in progress":
+      return "draft";
+    case "almost_ready":
+    case "almost ready":
+      return "finalized";
+    case "estimate_sent":
+    case "ready_to_review":
+      return "sent";
+    case "approved":
+      return "accepted";
+    case "declined":
+      return "rejected";
+    default:
+      return "unknown";
   }
+}
+
+/**
+ * One distinct badge color per estimate status (pro + customer).
+ * draft ≠ changes_requested, accepted ≠ converted, rejected ≠ expired.
+ */
+export function estimateStatusToneDistinct(status: EstimateStatus | string) {
+  switch (canonicalEstimateStatus(String(status))) {
+    case "site_visit":
+      return "bg-indigo-50 text-indigo-800 ring-1 ring-inset ring-indigo-200/80";
+    case "inspected":
+      return "bg-teal-50 text-teal-800 ring-1 ring-inset ring-teal-200/80";
+    case "draft":
+      return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/80";
+    case "scheduled":
+      return "bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-200/80";
+    case "finalized":
+      return "bg-cyan-50 text-cyan-900 ring-1 ring-inset ring-cyan-200/80";
+    case "sent":
+      return "bg-[#e8eef5] text-[#003F7D] ring-1 ring-inset ring-[#003F7D]/25";
+    case "accepted":
+      return "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
+    case "rejected":
+      return "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200/80";
+    case "expired":
+      return "bg-orange-50 text-orange-800 ring-1 ring-inset ring-orange-200/80";
+    case "changes_requested":
+      return "bg-fuchsia-50 text-fuchsia-800 ring-1 ring-inset ring-fuchsia-200/80";
+    case "converted_to_job":
+      return "bg-lime-50 text-lime-800 ring-1 ring-inset ring-lime-200/80";
+    default:
+      return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/80";
+  }
+}
+
+export function estimateStatusToneClass(status: string) {
+  return estimateStatusToneDistinct(status);
 }
 
 /**

@@ -40,6 +40,8 @@ export function getEventDetailUrl(event: PortalCalendarEvent): string {
       return `/pro/dashboard/requests/${id}`;
     case "invoice":
       return `/pro/dashboard/invoices/${id}`;
+    case "payment":
+      return `/pro/dashboard/payments/${id}`;
     case "task":
       return `/pro/dashboard/tasks/${id}`;
     case "visit":
@@ -59,6 +61,7 @@ const KINDS: PortalEventKind[] = [
   "visit",
   "request",
   "invoice",
+  "payment",
   "task",
 ];
 const VIEWS = ["month", "week", "day"] as const;
@@ -351,7 +354,6 @@ export function EventCalendar({
         iso,
         day: date.getDate(),
         inMonth: date.getMonth() === cursor.month,
-        events: visible.filter((item) => eventCovers(item, iso)),
       };
     });
 
@@ -364,7 +366,7 @@ export function EventCalendar({
       weekCount -= 1;
     }
     return all.slice(0, weekCount * 7);
-  }, [cursor.month, cursor.year, visible]);
+  }, [cursor.month, cursor.year]);
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addIsoDays(weekStart(selectedDay), index)),
@@ -430,9 +432,10 @@ export function EventCalendar({
       visible.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId))) ??
       localEvents.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId)));
     if (!payload || !item) return;
+    const spanDays = Math.max(1, payload.span || diffDays(item.date || iso, eventEndDate(item) || iso) + 1);
     applyMove(item, {
       date: iso,
-      endDate: undefined,
+      endDate: spanDays > 1 ? addIsoDays(iso, spanDays - 1) : undefined,
       startMinutes: eventTimes(item).start,
       endMinutes: eventTimes(item).end,
     });
@@ -615,6 +618,7 @@ export function EventCalendar({
               value === "visit" ||
               value === "request" ||
               value === "invoice" ||
+              value === "payment" ||
               value === "task"
                 ? value
                 : "";
@@ -686,6 +690,7 @@ export function EventCalendar({
         ) : view === "month" ? (
           <MonthGrid
             cells={cells}
+            events={visible}
             today={today}
             selectedDay={selectedDay}
             overDay={overDay}
@@ -861,8 +866,63 @@ export function EventCalendar({
   );
 }
 
+type MonthCell = { iso: string; day: number; inMonth: boolean };
+
+type WeekLaneItem = {
+  event: PortalCalendarEvent;
+  startCol: number;
+  span: number;
+  continuesLeft: boolean;
+  continuesRight: boolean;
+};
+
+function layoutWeekEvents(weekIsos: string[], events: PortalCalendarEvent[]): WeekLaneItem[][] {
+  const items: WeekLaneItem[] = [];
+  const weekStartIso = weekIsos[0];
+  const weekEndIso = weekIsos[6];
+  if (!weekStartIso || !weekEndIso) return [];
+  for (const event of events) {
+    if (!event.date) continue;
+    const start = event.date;
+    const end = eventEndDate(event) ?? start;
+    if (end < weekStartIso || start > weekEndIso) continue;
+    const visStart = start < weekStartIso ? weekStartIso : start;
+    const visEnd = end > weekEndIso ? weekEndIso : end;
+    const startCol = weekIsos.indexOf(visStart);
+    const endCol = weekIsos.indexOf(visEnd);
+    if (startCol < 0 || endCol < 0) continue;
+    items.push({
+      event,
+      startCol,
+      span: endCol - startCol + 1,
+      continuesLeft: start < weekStartIso,
+      continuesRight: end > weekEndIso,
+    });
+  }
+  items.sort((a, b) => a.startCol - b.startCol || b.span - a.span);
+  const lanes: WeekLaneItem[][] = [];
+  for (const item of items) {
+    const itemEnd = item.startCol + item.span - 1;
+    let placed = false;
+    for (const lane of lanes) {
+      const conflict = lane.some((other) => {
+        const otherEnd = other.startCol + other.span - 1;
+        return item.startCol <= otherEnd && itemEnd >= other.startCol;
+      });
+      if (!conflict) {
+        lane.push(item);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) lanes.push([item]);
+  }
+  return lanes;
+}
+
 function MonthGrid({
   cells,
+  events,
   today,
   selectedDay,
   overDay,
@@ -875,7 +935,8 @@ function MonthGrid({
   onContextMenuCard,
   onContextMenuDay,
 }: {
-  cells: { iso: string; day: number; inMonth: boolean; events: PortalCalendarEvent[] }[];
+  cells: MonthCell[];
+  events: PortalCalendarEvent[];
   today: string;
   selectedDay: string;
   overDay: string | null;
@@ -891,6 +952,10 @@ function MonthGrid({
   const inMonthLine = "#94a3b8";
   const outMonthLine = "#e2e8f0";
   const outerLine = "#94a3b8";
+  const weeks: MonthCell[][] = [];
+  for (let index = 0; index < cells.length; index += 7) {
+    weeks.push(cells.slice(index, index + 7));
+  }
 
   return (
     <div
@@ -917,77 +982,123 @@ function MonthGrid({
           );
         })}
       </div>
-      <div className="grid grid-cols-7">
-        {cells.map((cell, index) => {
-          const weekday = index % 7;
-          const weekend = weekday === 0 || weekday === 6;
-          const isLastCol = weekday === 6;
-          const isLastRow = index >= cells.length - 7;
-          const line = cell.inMonth ? inMonthLine : outMonthLine;
-          const cellAbove = index >= 7 ? cells[index - 7] : null;
-          const cellBelow = index < cells.length - 7 ? cells[index + 7] : null;
-          const needsTopBorder = Boolean(cell.inMonth && cellAbove && !cellAbove.inMonth);
-          const skipBottom =
-            isLastRow || Boolean(!cell.inMonth && cellBelow?.inMonth);
-
-          return (
-            <div
-              key={cell.iso}
-              onClick={() => onSelect(cell.iso)}
-              onContextMenu={(e) => onContextMenuDay?.(e, cell.iso)}
-              onDragOver={(drag) => {
-                drag.preventDefault();
-                onOver(cell.iso);
-              }}
-              onDragLeave={() => onOver(null)}
-              onDrop={(drag) => onDrop(cell.iso, drag)}
-              className={cn(
-                "min-h-36 h-auto p-1.5 flex flex-col justify-start",
-                cell.inMonth
-                  ? weekend
-                    ? "bg-[#fef2f2]"
-                    : "bg-card"
-                  : "bg-[#f8fafc]",
-                cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
-                cell.inMonth && overDay === cell.iso && "bg-primary/15",
-                !cell.inMonth && overDay === cell.iso && "bg-primary/10",
-              )}
-              style={{
-                borderTop: needsTopBorder ? `1px solid ${inMonthLine}` : undefined,
-                borderRight: isLastCol ? undefined : `1px solid ${line}`,
-                borderBottom: skipBottom ? undefined : `1px solid ${line}`,
-              }}
-            >
-              <p
-                className={cn(
-                  "mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium",
-                  cell.inMonth
-                    ? weekend && cell.iso !== today
-                      ? "text-[#dc2626]/70"
-                      : "text-foreground"
-                    : "text-slate-400",
-                  cell.iso === today && "bg-primary text-primary-foreground",
-                )}
-              >
-                {cell.day}
-              </p>
-              <div className="flex flex-col gap-1">
-                {cell.events.map((item) => (
-                  <CalendarChip
-                    key={item.id}
-                    event={item}
-                    cellIso={cell.iso}
-                    employeeLabel={employeeLabel}
-                    isCut={cutEventId === item.id}
-                    onClick={onClickCard}
-                    onContextMenu={onContextMenuCard}
-                  />
+      {weeks.map((week, weekIndex) => {
+        const weekIsos = week.map((cell) => cell.iso);
+        const lanes = layoutWeekEvents(weekIsos, events);
+        const isLastRow = weekIndex === weeks.length - 1;
+        return (
+          <div
+            key={weekIsos[0]}
+            className="relative"
+            style={{
+              borderBottom: isLastRow ? undefined : `1px solid ${inMonthLine}`,
+            }}
+          >
+            <div className="grid grid-cols-7">
+              {week.map((cell, weekday) => {
+                const weekend = weekday === 0 || weekday === 6;
+                const isLastCol = weekday === 6;
+                const line = cell.inMonth ? inMonthLine : outMonthLine;
+                return (
+                  <div
+                    key={cell.iso}
+                    className={cn(
+                      "px-1.5 pt-1.5",
+                      cell.inMonth
+                        ? weekend
+                          ? "bg-[#fef2f2]"
+                          : "bg-card"
+                        : "bg-[#f8fafc]",
+                      cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
+                      cell.inMonth && overDay === cell.iso && "bg-primary/15",
+                      !cell.inMonth && overDay === cell.iso && "bg-primary/10",
+                    )}
+                    style={{
+                      borderRight: isLastCol ? undefined : `1px solid ${line}`,
+                    }}
+                  >
+                    <p
+                      className={cn(
+                        "flex size-6 items-center justify-center rounded-full text-xs font-medium",
+                        cell.inMonth
+                          ? weekend && cell.iso !== today
+                            ? "text-[#dc2626]/70"
+                            : "text-foreground"
+                          : "text-slate-400",
+                        cell.iso === today && "bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {cell.day}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="relative min-h-24">
+              <div className="absolute inset-0 grid grid-cols-7">
+                {week.map((cell, weekday) => {
+                  const weekend = weekday === 0 || weekday === 6;
+                  const isLastCol = weekday === 6;
+                  const line = cell.inMonth ? inMonthLine : outMonthLine;
+                  return (
+                    <div
+                      key={`${cell.iso}-drop`}
+                      onClick={() => onSelect(cell.iso)}
+                      onContextMenu={(event) => onContextMenuDay?.(event, cell.iso)}
+                      onDragOver={(drag) => {
+                        drag.preventDefault();
+                        onOver(cell.iso);
+                      }}
+                      onDragLeave={() => onOver(null)}
+                      onDrop={(drag) => onDrop(cell.iso, drag)}
+                      className={cn(
+                        cell.inMonth
+                          ? weekend
+                            ? "bg-[#fef2f2]"
+                            : "bg-card"
+                          : "bg-[#f8fafc]",
+                        cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
+                        cell.inMonth && overDay === cell.iso && "bg-primary/15",
+                        !cell.inMonth && overDay === cell.iso && "bg-primary/10",
+                      )}
+                      style={{
+                        borderRight: isLastCol ? undefined : `1px solid ${line}`,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <div className="relative z-10 flex flex-col gap-1 px-1 pb-2 pt-1">
+                {lanes.map((lane, laneIndex) => (
+                  <div key={laneIndex} className="grid grid-cols-7 gap-1">
+                    {lane.map((item) => (
+                      <div
+                        key={item.event.id}
+                        className={cn(
+                          "min-w-0",
+                          item.continuesLeft && "-ml-1",
+                          item.continuesRight && "-mr-1",
+                        )}
+                        style={{
+                          gridColumn: `${item.startCol + 1} / span ${item.span}`,
+                        }}
+                      >
+                        <CalendarChip
+                          event={item.event}
+                          employeeLabel={employeeLabel}
+                          isCut={cutEventId === item.event.id}
+                          onClick={onClickCard}
+                          onContextMenu={onContextMenuCard}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1072,7 +1183,6 @@ function TimeGrid({
                 <CalendarChip
                   key={item.id}
                   event={item}
-                  cellIso={iso}
                   onClick={onClickCard}
                   onContextMenu={onContextMenuCard}
                 />
@@ -1257,7 +1367,7 @@ function TimedBar({
     drag.dataTransfer.effectAllowed = "move";
   }
 
-  const isInvoice = event.kind === "invoice";
+  const isDueEvent = event.kind === "invoice" || event.kind === "payment";
   const dueDateDisplay = event.dueDate || event.date;
   const resolvedLabel = event.employeeId && employeeLabel ? employeeLabel(event.employeeId) : "";
   const techName =
@@ -1352,7 +1462,7 @@ function TimedBar({
             <span className="truncate">{formatDate(event.date)}</span>
           ) : <span />}
           <span className="shrink-0">
-            {isInvoice && dueDateDisplay
+            {isDueEvent && dueDateDisplay
               ? `Due: ${formatDate(dueDateDisplay)}`
               : `${formatClock(times.start)} – ${formatClock(end)}`}
           </span>
@@ -1402,31 +1512,38 @@ function TimedBar({
 
 function CalendarChip({
   event,
-  cellIso,
   employeeLabel,
   isCut,
   onClick,
   onContextMenu,
 }: {
   event: PortalCalendarEvent;
-  cellIso?: string;
   employeeLabel?: (id?: string) => string;
   isCut?: boolean;
   onClick?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
   onContextMenu?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
 }) {
   const times = eventTimes(event);
+  const endDate = eventEndDate(event) ?? event.date;
+  const isMultiDay = Boolean(event.date && endDate && endDate > event.date);
+  const span = isMultiDay && event.date && endDate ? diffDays(event.date, endDate) + 1 : 1;
 
   function startDrag(drag: DragEvent) {
     drag.stopPropagation();
     drag.dataTransfer.setData(
       "text/plain",
-      JSON.stringify({ id: event.id, mode: "move", span: 1, duration: times.end - times.start, dayOffset: 0 } satisfies DragPayload),
+      JSON.stringify({
+        id: event.id,
+        mode: "move",
+        span,
+        duration: times.end - times.start,
+        dayOffset: 0,
+      } satisfies DragPayload),
     );
     drag.dataTransfer.effectAllowed = "move";
   }
 
-  const isInvoice = event.kind === "invoice";
+  const isDueEvent = event.kind === "invoice" || event.kind === "payment";
   const dueDateDisplay = event.dueDate || event.date;
   const resolvedLabel = event.employeeId && employeeLabel ? employeeLabel(event.employeeId) : "";
   const techName =
@@ -1510,10 +1627,14 @@ function CalendarChip({
         {/* Bottom: date + time */}
         <div className="mt-1 pt-0.5 border-t border-white/20 flex items-center justify-between gap-1 text-[9px] font-semibold tracking-tight uppercase opacity-90">
           {event.date ? (
-            <span className="truncate">{formatDate(event.date)}</span>
+            <span className="truncate">
+              {isMultiDay && endDate
+                ? `${formatDate(event.date)} – ${formatDate(endDate)}`
+                : formatDate(event.date)}
+            </span>
           ) : <span />}
           <span className="shrink-0">
-            {isInvoice && dueDateDisplay ? (
+            {isDueEvent && dueDateDisplay ? (
               <span className="text-amber-200">Due: {formatDate(dueDateDisplay)}</span>
             ) : (
               <span>{isAllDay(event) ? windowShort(event.timeWindow) : `${formatClock(times.start)} – ${formatClock(times.end)}`}</span>

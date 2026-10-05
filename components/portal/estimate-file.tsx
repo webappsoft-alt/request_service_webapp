@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { updateEstimateSettings as updateEstimateSettingsApi } from "@/lib/api/crm-client";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
-import { estimateStatusLabel } from "@/lib/data/portal";
+import { estimateStatusLabel, estimateStatusTone } from "@/lib/data/portal";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { formatDate, formatLocation } from "@/lib/format";
 import type { Estimate, Job } from "@/lib/types";
@@ -118,7 +118,12 @@ export function EstimateFileChrome({
         <Detail
           label="Status"
           value={
-            <span className="capitalize">
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize",
+                estimateStatusTone(estimate.status),
+              )}
+            >
               {estimateStatusLabel(estimate.status)}
             </span>
           }

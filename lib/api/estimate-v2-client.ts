@@ -75,6 +75,7 @@ export type EstimateV2Opportunity = {
   description?: string;
   source?: string;
   requestId?: string | null;
+  quoteAnswers?: Array<{ id?: string; label: string; value: string }>;
   status: OpportunityStatus;
   prepChoice?: PrepChoice | null;
   /** Captured for have_information / create_now (no visit). */
@@ -177,10 +178,20 @@ function mapOpportunityEstimates(raw: unknown): Estimate[] {
 }
 
 function normalizeOpportunity(raw: EstimateV2Opportunity): EstimateV2Opportunity {
+  const quoteAnswers = Array.isArray(raw.quoteAnswers)
+    ? raw.quoteAnswers
+        .map((item, index) => ({
+          id: String(item?.id || `ans_${index + 1}`),
+          label: String(item?.label || "").trim(),
+          value: String(item?.value || "").trim(),
+        }))
+        .filter((item) => item.label && item.value)
+    : [];
   return {
     ...raw,
     id: raw.id || String((raw as { _id?: string })._id || ""),
     estimates: mapOpportunityEstimates(raw.estimates),
+    quoteAnswers,
   };
 }
 
@@ -430,11 +441,13 @@ export async function resolveEstimateV2Acceptance(
   opportunityId: string,
   input: {
     estimateId?: string;
-    nextAction: "start_now" | "schedule_later" | "skip_job";
+    nextAction: "start_now" | "schedule_later" | "skip_job" | "invoice_now";
     markAccepted?: boolean;
     forceConvert?: boolean;
     signedBy?: string;
     title?: string;
+    dueAt?: string;
+    scheduledAt?: string;
   },
 ) {
   try {
@@ -446,17 +459,19 @@ export async function resolveEstimateV2Acceptance(
       opportunity: EstimateV2Opportunity;
       estimate: unknown;
       job: { id?: string; number?: string; status?: string } | null;
+      invoice: { id?: string; number?: string; status?: string } | null;
       nextAction: string;
     }>(response);
     return {
       opportunity: normalizeOpportunity(data.opportunity),
       estimate: mapEstimate(data.estimate),
       job: data.job,
+      invoice: data.invoice,
       nextAction: data.nextAction,
     };
   } catch (err) {
     if (!input.estimateId) throw err;
-    const { convertEstimateToJob, updateEstimateStatus } = await import(
+    const { convertEstimateToJob, convertEstimateToInvoice, updateEstimateStatus } = await import(
       "@/lib/api/crm-client"
     );
     if (input.markAccepted) {
@@ -466,12 +481,19 @@ export async function resolveEstimateV2Acceptance(
         /* may already be accepted */
       }
     }
-    const job =
-      input.nextAction === "skip_job"
-        ? null
-        : await convertEstimateToJob(input.estimateId, {
-            title: input.title,
-          } as never);
+    let job = null;
+    let invoice = null;
+    if (input.nextAction === "invoice_now") {
+      invoice = await convertEstimateToInvoice(input.estimateId, {
+        dueAt: input.dueAt,
+      });
+    } else if (input.nextAction !== "skip_job") {
+      job = await convertEstimateToJob(input.estimateId, {
+        title: input.title,
+        scheduledAt: input.scheduledAt,
+        dueAt: input.dueAt,
+      });
+    }
     try {
       await patchData(providerCrmApi.estimateV2Opportunity(opportunityId), {
         status: "won",
@@ -491,6 +513,9 @@ export async function resolveEstimateV2Acceptance(
       estimate: null,
       job: job
         ? { id: job.id, number: job.number, status: job.status }
+        : null,
+      invoice: invoice
+        ? { id: invoice.id, number: invoice.number, status: invoice.status }
         : null,
       nextAction: input.nextAction,
     };

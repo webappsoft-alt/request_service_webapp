@@ -170,7 +170,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
         </div>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Amount
@@ -212,6 +212,19 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">Payment date</p>
         </div>
+        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+          <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+            Due date
+          </p>
+          <p className="mt-3 text-lg font-semibold text-foreground">
+            {payment.dueAt
+              ? formatDate(payment.dueAt.slice(0, 10))
+              : payment.paidAt
+                ? formatDate(payment.paidAt.slice(0, 10))
+                : "—"}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">Shown on the schedule</p>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -240,6 +253,14 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
                 ) : (
                   "—"
                 )}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between border-b border-input pb-2.5">
+              <dt className="text-muted-foreground">Due date</dt>
+              <dd className="font-medium">
+                {payment.dueAt
+                  ? formatDate(payment.dueAt.slice(0, 10))
+                  : "—"}
               </dd>
             </div>
             {payment.invoiceStatus ? (

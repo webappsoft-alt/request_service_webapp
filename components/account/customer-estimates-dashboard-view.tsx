@@ -7,7 +7,7 @@ import { ExternalLink, Eye, MessageSquare, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
-import { StatusPill, moneyTone, requestTone } from "@/components/portal/status-pill";
+import { StatusPill, requestTone } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CenteredSpinner } from "@/components/ui/spinner";
@@ -22,6 +22,7 @@ import {
 } from "@/lib/booking/customer-estimates-store";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate, formatMoney } from "@/lib/format";
+import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
@@ -584,7 +585,7 @@ export function CustomerEstimatesDashboardView({
               cell: (row) => (
                 <StatusPill
                   label={statusLabel(row.status, row.jobNumber)}
-                  tone={moneyTone(row.status)}
+                  className={estimateStatusToneClass(row.status)}
                 />
               ),
             },

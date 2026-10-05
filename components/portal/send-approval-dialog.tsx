@@ -53,7 +53,7 @@ export function SendApprovalDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   estimate: Estimate;
-  customer?: PortalCustomerCrm;
+  customer?: Pick<PortalCustomerCrm, "email" | "phone"> | PortalCustomerCrm;
   customerLabel: string;
   /** First send vs resend / post-change update. */
   mode?: "send" | "resend" | "update";
@@ -89,6 +89,7 @@ export function SendApprovalDialog({
         ? "Send again"
         : "Send for approval";
 
+  const localSnapshot = share.snapshotForEstimate(estimate.id);
   const snapshot = useMemo(
     () =>
       buildEstimateSnapshot(estimate, {
@@ -109,8 +110,22 @@ export function SendApprovalDialog({
         customerName: customerLabel,
         customerEmail: customer?.email,
         customerPhone: customer?.phone,
+        companySignedBy:
+          estimate.companySignature?.signedBy ||
+          localSnapshot?.companySignedBy,
+        companySignedAt:
+          estimate.companySignature?.signedAt ||
+          localSnapshot?.companySignedAt,
+        companySignatureDataUrl:
+          estimate.companySignature?.imageBase64 ||
+          (
+            estimate.companySignature as
+              | { signatureImageBase64?: string }
+              | undefined
+          )?.signatureImageBase64 ||
+          localSnapshot?.companySignatureDataUrl,
       }),
-    [customer, customerLabel, estimate, provider, session?.email],
+    [customer, customerLabel, estimate, localSnapshot, provider, session?.email],
   );
 
   return (
@@ -148,6 +163,7 @@ export function SendApprovalDialog({
                   companySignedBy: signed.companySignedBy,
                   companySignedAt: signed.companySignedAt,
                   companySignatureDataUrl: signed.companySignatureDataUrl,
+                  customerEmail: customer?.email,
                 });
                 const token = String(shared.shareToken || "").trim();
                 if (!token) {
@@ -191,15 +207,15 @@ export function SendApprovalDialog({
                   toast.success(
                     shared.emailTo
                       ? `Estimate ${sentVerb} to ${shared.emailTo}.`
-                      : `Estimate ${sentVerb}.`,
+                      : `Estimate ${sentVerb} and emailed the customer.`,
                   );
                 } else if (shared.emailSkippedReason) {
-                  toast.success(
-                    `Estimate ${sentVerb}. Link copied — email skipped (no customer email).`,
+                  toast.error(
+                    `Estimate ${sentVerb}, but email was skipped: ${shared.emailSkippedReason}`,
                   );
                 } else if (shared.emailError) {
-                  toast.success(
-                    `Estimate ${sentVerb}. Link copied — email could not be delivered.`,
+                  toast.error(
+                    `Estimate ${sentVerb}, but email could not be delivered.`,
                   );
                 } else {
                   toast.success(`Estimate ${sentVerb}.`);
@@ -243,7 +259,12 @@ function ApprovalPreview({
   ) => void | Promise<void>;
 }) {
   const companyPad = useSignPad();
-  const [signer, setSigner] = useState(defaultSigner);
+  const [signer, setSigner] = useState(
+    snapshot.companySignedBy || defaultSigner,
+  );
+  const [keptImage, setKeptImage] = useState(
+    snapshot.companySignatureDataUrl || "",
+  );
   const [busy, setBusy] = useState(false);
   const [signatureHighlight, setSignatureHighlight] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -288,9 +309,13 @@ function ApprovalPreview({
                 name={signer}
                 onName={setSigner}
                 pad={companyPad}
+                image={keptImage}
+                onClearImage={() => setKeptImage("")}
                 showNameInput
                 caption="Authorized company signature (required)"
-                date={new Date().toISOString()}
+                date={
+                  snapshot.companySignedAt || new Date().toISOString()
+                }
               />
             </div>
           }
@@ -313,12 +338,10 @@ function ApprovalPreview({
           data-action="confirm-send-approval"
           disabled={!ready || !apiReady || busy}
           onClick={() => {
-            if (!signer.trim() || !companyPad.dirty) {
-              focusCompanySignature();
-              return;
-            }
-            const image = companyPad.toImage();
-            if (!image) {
+            const image = companyPad.dirty
+              ? companyPad.toImage()
+              : keptImage;
+            if (!signer.trim() || !image) {
               focusCompanySignature();
               return;
             }
@@ -327,7 +350,10 @@ function ApprovalPreview({
               onSend({
                 ...snapshot,
                 companySignedBy: signer.trim(),
-                companySignedAt: new Date().toISOString(),
+                companySignedAt:
+                  companyPad.dirty || !snapshot.companySignedAt
+                    ? new Date().toISOString()
+                    : snapshot.companySignedAt,
                 companySignatureDataUrl: image,
               }),
             ).finally(() => setBusy(false));

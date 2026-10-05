@@ -118,6 +118,9 @@ export function linesToInvoiceItems(invoiceId: string, lines: JobCostLine[]): In
       ...(kind === "materials" && line.images?.length
         ? { images: line.images.filter((src) => Boolean(String(src || "").trim())) }
         : {}),
+      ...(String(line.section || "").trim()
+        ? { section: String(line.section).trim() }
+        : {}),
     };
   });
 }
@@ -132,12 +135,12 @@ export function invoiceAsJob(invoice: Invoice, job?: Job): Job {
     number: invoice.number,
     providerId: invoice.providerId,
     customerId: invoice.customerId,
-    estimateId: job?.estimateId ?? "",
+    estimateId: invoice.estimateId || job?.estimateId || "",
     address: job?.address ?? { id: `addr_${invoice.id}`, street: "", city: "", state: "", zip: "", country: "US" },
     status: invoice.status === "paid" ? "paid" : invoice.status === "cancelled" ? "cancelled" : "invoiced",
     items: invoice.items.map((item) => {
       const kind: JobItem["kind"] =
-        item.kind === "labor" || item.kind === "materials"
+        item.kind === "labor" || item.kind === "materials" || item.kind === "equipment"
           ? item.kind
           : String(item.unit || "").trim().toLowerCase() === "hr"
             ? "labor"
@@ -156,6 +159,9 @@ export function invoiceAsJob(invoice: Invoice, job?: Job): Job {
         ...(kind ? { kind } : {}),
         ...(kind !== "labor" && item.images?.length
           ? { images: [...item.images] }
+          : {}),
+        ...(String(item.section || "").trim()
+          ? { section: String(item.section).trim() }
           : {}),
       };
     }),

@@ -547,6 +547,8 @@ export function SignaturePadField({
   showName = false,
   caption,
   date,
+  image,
+  onClearImage,
 }: {
   name?: string;
   onName?: (value: string) => void;
@@ -555,26 +557,42 @@ export function SignaturePadField({
   showName?: boolean;
   caption?: string;
   date?: string;
+  /** Existing saved signature — shown until the pad is cleared or redrawn. */
+  image?: string;
+  onClearImage?: () => void;
 }) {
+  const showSaved = Boolean(image) && !pad.dirty;
+
   return (
     <div className="mt-2">
       <div className="relative">
         <button
           type="button"
           className="absolute -top-5 right-0 text-[11px] font-medium text-[#003F7D] hover:underline z-10 print:hidden cursor-pointer"
-          onClick={pad.clear}
+          onClick={() => {
+            pad.clear();
+            onClearImage?.();
+          }}
         >
           Clear
         </button>
-        <canvas
-          ref={pad.ref}
-          style={{ touchAction: "none" }}
-          className="h-20 w-full cursor-crosshair border-b border-input bg-transparent"
-          onPointerDown={pad.start}
-          onPointerMove={pad.move}
-          onPointerUp={pad.end}
-          onPointerLeave={pad.end}
-        />
+        {showSaved ? (
+          <img
+            src={image}
+            alt="Saved company signature"
+            className="h-20 w-full border-b border-input bg-transparent object-contain object-left"
+          />
+        ) : (
+          <canvas
+            ref={pad.ref}
+            style={{ touchAction: "none" }}
+            className="h-20 w-full cursor-crosshair border-b border-input bg-transparent"
+            onPointerDown={pad.start}
+            onPointerMove={pad.move}
+            onPointerUp={pad.end}
+            onPointerLeave={pad.end}
+          />
+        )}
       </div>
       {caption ? <p className="mt-2 text-[11px] text-muted-foreground">{caption}</p> : null}
       {showNameInput && onName ? (

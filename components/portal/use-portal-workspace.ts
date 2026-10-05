@@ -13,7 +13,7 @@ import {
 import type { DemoSession } from "@/lib/auth/demo-session";
 import { coverageNeighborhoodLabels, formatServiceAreaCoverageLabels } from "@/lib/coverage-areas";
 import type { PortalActivity, PortalRevenuePoint } from "@/lib/data/portal";
-import { getPortalWorkspace } from "@/lib/data/portal";
+import { dedupeCalendarEvents, getPortalWorkspace } from "@/lib/data/portal";
 import { getActivePlans } from "@/lib/data/plans";
 import { getServiceCategoryById } from "@/lib/data/services";
 import {
@@ -31,6 +31,67 @@ import type {
   Subscription,
   SubscriptionStatus,
 } from "@/lib/types";
+
+type CoveragePoint = NonNullable<Provider["coveragePoints"]>[number];
+
+function finiteOrNull(value: unknown): number | null {
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+/** `location.coordinates` is GeoJSON `[lng, lat]`. */
+function providerLatLng(location: unknown): { lat: number; lng: number } {
+  const coords =
+    location && typeof location === "object"
+      ? (location as { coordinates?: unknown }).coordinates
+      : undefined;
+  if (!Array.isArray(coords)) return { lat: 0, lng: 0 };
+  const lng = finiteOrNull(coords[0]);
+  const lat = finiteOrNull(coords[1]);
+  if (lat === null || lng === null || (lat === 0 && lng === 0)) return { lat: 0, lng: 0 };
+  return { lat, lng };
+}
+
+/** Real pins from populated coverage neighborhoods (`areas[]` or `coordinates`). */
+function coveragePointsFromNeighborhoods(neighborhoods: unknown): CoveragePoint[] {
+  if (!Array.isArray(neighborhoods)) return [];
+  const points: CoveragePoint[] = [];
+  for (const item of neighborhoods) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as {
+      title?: string;
+      zip?: string;
+      coordinates?: unknown;
+      areas?: Array<{ name?: string; lat?: unknown; lng?: unknown; zip?: string }>;
+    };
+    if (Array.isArray(record.areas)) {
+      for (const area of record.areas) {
+        const lat = finiteOrNull(area?.lat);
+        const lng = finiteOrNull(area?.lng);
+        if (lat === null || lng === null || (lat === 0 && lng === 0)) continue;
+        points.push({
+          zip: String(area.zip || area.name || ""),
+          name: String(area.name || record.title || "Area"),
+          lat,
+          lng,
+        });
+      }
+    }
+    if (Array.isArray(record.coordinates)) {
+      const lng = finiteOrNull(record.coordinates[0]);
+      const lat = finiteOrNull(record.coordinates[1]);
+      if (lat !== null && lng !== null && !(lat === 0 && lng === 0)) {
+        points.push({
+          zip: String(record.zip || record.title || ""),
+          name: String(record.title || record.zip || "Area"),
+          lat,
+          lng,
+        });
+      }
+    }
+  }
+  return points;
+}
 
 function isOverdue(date?: string): boolean {
   if (!date) return false;
@@ -247,11 +308,34 @@ export function usePortalWorkspace() {
   const invoices = (apiReady || crm.invoices.length > 0) ? crm.invoices : useLiveOnly ? [] : demoWorkspace!.invoices;
   const payments = (apiReady || crm.payments.length > 0) ? crm.payments : useLiveOnly ? [] : demoWorkspace!.payments;
   const employees = (apiReady || crm.employees.length > 0) ? crm.employees : useLiveOnly ? [] : demoWorkspace!.employees;
-  const calendarEvents = (apiReady || crm.schedule.length > 0)
+  const calendarSource = (apiReady || crm.schedule.length > 0)
     ? crm.schedule
     : useLiveOnly
       ? []
       : demoWorkspace!.calendarEvents;
+  const calendarEvents = dedupeCalendarEvents(
+    calendarSource.map((event) => {
+    if (event.kind !== "job") return event;
+    const job = jobs.find((item) => item.id === event.recordId);
+    if (!job) return event;
+    const start = (event.date || job.scheduledAt || "").slice(0, 10);
+    const due = (event.endDate || job.dueAt || "").slice(0, 10);
+    const employeeId = event.employeeId || job.assignedEmployeeId || undefined;
+    if (
+      (!start || start === event.date) &&
+      (!due || due === event.endDate) &&
+      employeeId === event.employeeId
+    ) {
+      return event;
+    }
+    return {
+      ...event,
+      date: start || event.date,
+      endDate: due || event.endDate,
+      employeeId,
+    };
+    }),
+  );
   const services = useLiveOnly ? [] : demoWorkspace!.services;
   const stats = apiReady
     ? computeStats(requests, estimates, jobs, invoices, payments)
@@ -277,6 +361,10 @@ export function usePortalWorkspace() {
   const provider = useMemo((): Provider => {
     if (useLiveOnly) {
       const hours = workingHoursFromProvider(authProvider);
+      const liveLatLng = providerLatLng(authProvider?.location);
+      const liveCoveragePoints = coveragePointsFromNeighborhoods(
+        authProvider?.coverage?.neighborhoods,
+      );
       const initials = companyName
         .split(/\s+/)
         .filter(Boolean)
@@ -327,8 +415,9 @@ export function usePortalWorkspace() {
             "",
         ),
         zip: String(authProvider?.location?.zip || ""),
-        lat: 0,
-        lng: 0,
+        lat: liveLatLng.lat,
+        lng: liveLatLng.lng,
+        coveragePoints: liveCoveragePoints.length ? liveCoveragePoints : undefined,
         phone: String(
           (typeof user?.phone === "string" && user.phone) || authProvider?.phone || "",
         ),

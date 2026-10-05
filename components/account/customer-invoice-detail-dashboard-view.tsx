@@ -498,7 +498,10 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                           ? paymentMethodLabel((payment.method || "check") as PaymentMethodType)
                           : "Payment"}
                         {payment.paidAt
-                          ? ` · ${formatDate(payment.paidAt.slice(0, 10))}`
+                          ? ` · Paid ${formatDate(payment.paidAt.slice(0, 10))}`
+                          : ""}
+                        {payment.dueAt
+                          ? ` · Due ${formatDate(payment.dueAt.slice(0, 10))}`
                           : ""}
                       </p>
                     </div>

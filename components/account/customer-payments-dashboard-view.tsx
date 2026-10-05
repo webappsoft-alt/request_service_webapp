@@ -150,6 +150,20 @@ export function CustomerPaymentsDashboardView() {
             cell: (row) => methodLabel(row.method),
           },
           {
+            id: "due",
+            header: "Due",
+            sortValue: (row) => row.dueAt || row.paidAt || "",
+            cell: (row) => (
+              <span className="text-muted-foreground">
+                {row.dueAt
+                  ? formatDate(row.dueAt.slice(0, 10))
+                  : row.paidAt
+                    ? formatDate(row.paidAt.slice(0, 10))
+                    : "—"}
+              </span>
+            ),
+          },
+          {
             id: "amount",
             header: "Amount",
             className: "text-right",

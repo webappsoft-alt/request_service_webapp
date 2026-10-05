@@ -44,6 +44,7 @@ import {
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate, formatMoney } from "@/lib/format";
+import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -96,7 +97,12 @@ function isRejectedStatus(status: string) {
 
 function isSignableStatus(status: string) {
   const clean = String(status || "").toLowerCase();
-  return clean === "sent" || clean === "finalized" || clean === "draft";
+  return (
+    clean === "sent" ||
+    clean === "finalized" ||
+    clean === "draft" ||
+    clean === "changes_requested"
+  );
 }
 
 function estimateHref(est: { id?: string; shareToken?: string }) {
@@ -783,7 +789,6 @@ export function CustomerQuoteRequestDetailView() {
                   const isRejected =
                     isRejectedStatus(est.status) ||
                     (batchHasAccepted && !isAccepted);
-                  const isChanges = est.status === "changes_requested";
                   const canSign =
                     isSignableStatus(est.status) && !batchHasAccepted;
                   const href = estimateHref(est);
@@ -813,21 +818,10 @@ export function CustomerQuoteRequestDetailView() {
                               {est.providerName}
                             </span>
                             <Badge
-                              variant={
-                                isAccepted
-                                  ? "default"
-                                  : isRejected
-                                    ? "secondary"
-                                    : isChanges
-                                      ? "secondary"
-                                      : "outline"
-                              }
+                              variant="outline"
                               className={cn(
-                                isAccepted && "bg-emerald-600 text-white",
-                                isRejected &&
-                                  "bg-muted text-muted-foreground border-input",
-                                isChanges &&
-                                  "bg-amber-100 text-amber-900 border-amber-300",
+                                "border-transparent",
+                                estimateStatusToneClass(displayStatus),
                               )}
                             >
                               {isAccepted

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { readCostLines } from "@/components/portal/use-job-costing";
 import { estimateAsJob, moneyFromLines } from "@/components/portal/work-builders";
+import { stripChangeRequestLinesFromNotes } from "@/lib/data/estimate-change-requests";
 import type { Estimate } from "@/lib/types";
 
 const EVENT = "rs-estimate-share";
@@ -91,6 +92,11 @@ export type EstimateShareSnapshot = {
     totalBefore?: number | null;
     totalAfter?: number | null;
     at: string;
+  }>;
+  changeRequests?: Array<{
+    reason: string;
+    at: string;
+    addressedAt?: string | null;
   }>;
 };
 
@@ -266,7 +272,7 @@ export function buildEstimateSnapshot(
     zip: estimate.propertyAddress.zip,
     issuedAt: estimate.issuedAt,
     expiresAt: estimate.expiresAt,
-    notes: estimate.notes,
+    notes: stripChangeRequestLinesFromNotes(estimate.notes) || undefined,
     terms: estimate.terms,
     items: lines.map((line) => ({
       description: line.description,
@@ -309,6 +315,18 @@ export function buildEstimateSnapshot(
           })),
         }
       : undefined,
+    changeRequests: (estimate.changeRequests || []).map((row) => ({
+      reason: row.reason,
+      at: row.at,
+      addressedAt: row.addressedAt || null,
+    })),
+    customerUpdates: (estimate.customerUpdates || []).map((row) => ({
+      summary: row.summary,
+      details: row.details,
+      totalBefore: row.totalBefore ?? null,
+      totalAfter: row.totalAfter ?? null,
+      at: row.at,
+    })),
   };
 }
 

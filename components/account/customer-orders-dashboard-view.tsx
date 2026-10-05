@@ -185,7 +185,10 @@ export function CustomerOrdersDashboardView() {
             cell: (row) => (
               <span className="text-muted-foreground">
                 {row.booking?.startTime
-                  ? formatOrderDateTime(row.booking.startTime)
+                  ? row.booking.endTime &&
+                    row.booking.endTime.slice(0, 10) !== row.booking.startTime.slice(0, 10)
+                    ? `${formatOrderDateTime(row.booking.startTime)} – ${formatOrderDateTime(row.booking.endTime)}`
+                    : formatOrderDateTime(row.booking.startTime)
                   : "—"}
               </span>
             ),

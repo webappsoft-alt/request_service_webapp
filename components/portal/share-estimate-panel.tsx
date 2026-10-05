@@ -109,16 +109,19 @@ export function EstimateShareTab({
         "";
       const shared = await shareEstimateApi(
         estimate.id,
-        existingSig || existingBy
-          ? {
-              companySignedBy: existingBy || undefined,
-              companySignedAt:
-                estimate.companySignature?.signedAt ||
-                snapshot?.companySignedAt ||
-                new Date().toISOString(),
-              companySignatureDataUrl: existingSig || undefined,
-            }
-          : undefined,
+        {
+          ...(existingSig || existingBy
+            ? {
+                companySignedBy: existingBy || undefined,
+                companySignedAt:
+                  estimate.companySignature?.signedAt ||
+                  snapshot?.companySignedAt ||
+                  new Date().toISOString(),
+                companySignatureDataUrl: existingSig || undefined,
+              }
+            : {}),
+          customerEmail: customer?.email,
+        },
       );
       const token = String(shared.shareToken || "").trim();
       if (!token) {

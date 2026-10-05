@@ -200,11 +200,22 @@ export function AssignEventDialog({
 
   /** Leads & estimates use a single scheduled date (no start/end span). */
   const useSingleScheduledDate =
-    selected?.kind === "request" || selected?.kind === "estimate";
+    selected?.kind === "request" ||
+    selected?.kind === "estimate" ||
+    selected?.kind === "invoice" ||
+    selected?.kind === "payment";
+  const requireDueDate = selected?.kind === "job";
 
   async function handleSave() {
     if (!selected || !date) return;
-    const assigneeRequired = selected.kind !== "estimate";
+    if (requireDueDate && (!endDate || endDate < date)) {
+      toast.error("Pick a due date on or after the start date.");
+      return;
+    }
+    const assigneeRequired =
+      selected.kind !== "estimate" &&
+      selected.kind !== "invoice" &&
+      selected.kind !== "payment";
     if (assigneeRequired && !employeeId) return;
     setSaving(true);
     const slot =
@@ -222,9 +233,7 @@ export function AssignEventDialog({
         date,
         endDate: useSingleScheduledDate
           ? undefined
-          : endDate && endDate > date
-            ? endDate
-            : undefined,
+          : endDate || date,
         timeWindow,
         startMinutes: slot.startMinutes,
         endMinutes: slot.endMinutes,
@@ -246,14 +255,18 @@ export function AssignEventDialog({
           <DialogTitle>
             {event?.kind === "estimate"
               ? "Schedule site visit"
-              : event
-                ? "Assign on calendar"
-                : "Schedule a visit"}
+              : event?.kind === "job"
+                ? "Schedule this job"
+                : event
+                  ? "Assign on calendar"
+                  : "Schedule a visit"}
           </DialogTitle>
           <DialogDescription>
             {event?.kind === "estimate"
               ? "Set or update the site-visit date and time. Technician is optional for estimates."
-              : "Put a job, estimate visit, or request on the calendar and assign it to a team member or contractor."}
+              : event?.kind === "job"
+                ? "Set the start date and due date. The job shows on the calendar from start through due."
+                : "Put a job, estimate visit, or request on the calendar and assign it to a team member or contractor."}
           </DialogDescription>
         </DialogHeader>
         <FieldGroup className="gap-4">
@@ -293,7 +306,11 @@ export function AssignEventDialog({
           )}
           {useSingleScheduledDate ? (
             <Field>
-              <FieldLabel htmlFor="crew-scheduled-date">Scheduled date</FieldLabel>
+              <FieldLabel htmlFor="crew-scheduled-date">
+                {selected?.kind === "invoice" || selected?.kind === "payment"
+                  ? "Due date"
+                  : "Scheduled date"}
+              </FieldLabel>
               <Input
                 id="crew-scheduled-date"
                 type="date"
@@ -302,25 +319,37 @@ export function AssignEventDialog({
               />
             </Field>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="crew-date">Start</FieldLabel>
-                <Input
-                  id="crew-date"
-                  type="date"
-                  value={date}
-                  onChange={(change) => setDate(change.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="crew-end">End</FieldLabel>
-                <Input
-                  id="crew-end"
-                  type="date"
-                  value={endDate}
-                  onChange={(change) => setEndDate(change.target.value)}
-                />
-              </Field>
+            <div className="grid gap-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="crew-date">Start date</FieldLabel>
+                  <Input
+                    id="crew-date"
+                    type="date"
+                    value={date}
+                    onChange={(change) => {
+                      const next = change.target.value;
+                      setDate(next);
+                      if (endDate && next && endDate < next) setEndDate(next);
+                    }}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="crew-end">Due date</FieldLabel>
+                  <Input
+                    id="crew-end"
+                    type="date"
+                    min={date || undefined}
+                    value={endDate}
+                    onChange={(change) => setEndDate(change.target.value)}
+                  />
+                </Field>
+              </div>
+              {requireDueDate ? (
+                <p className="text-xs text-muted-foreground">
+                  The calendar shows this job from the start date through the due date.
+                </p>
+              ) : null}
             </div>
           )}
           <Field>
@@ -360,7 +389,9 @@ export function AssignEventDialog({
               value={employeeId}
               selectedLabel={employeeLabel}
               options={
-                selected?.kind === "estimate"
+                selected?.kind === "estimate" ||
+                selected?.kind === "invoice" ||
+                selected?.kind === "payment"
                   ? [
                       { id: "", label: "Assign later (optional)" },
                       ...technicianOptions,
@@ -368,7 +399,9 @@ export function AssignEventDialog({
                   : technicianOptions
               }
               placeholder={
-                selected?.kind === "estimate"
+                selected?.kind === "estimate" ||
+                selected?.kind === "invoice" ||
+                selected?.kind === "payment"
                   ? "Assign later (optional)"
                   : "Select person"
               }
@@ -407,7 +440,11 @@ export function AssignEventDialog({
             disabled={
               !selected ||
               !date ||
-              (selected.kind !== "estimate" && !employeeId) ||
+              (requireDueDate && (!endDate || endDate < date)) ||
+              (selected.kind !== "estimate" &&
+                selected.kind !== "invoice" &&
+                selected.kind !== "payment" &&
+                !employeeId) ||
               saving
             }
           >

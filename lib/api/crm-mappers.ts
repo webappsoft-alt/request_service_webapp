@@ -681,6 +681,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
       trimmed(record.status) === "estimate_sent" ||
       trimmed(record.status) === "accepted" ||
       trimmed(record.status) === "declined" ||
+      trimmed(record.status) === "converted_to_estimate" ||
       trimmed(record.status) === "converted_to_job" ||
       trimmed(record.status) === "closed"
         ? (trimmed(record.status) as PortalRequest["status"])

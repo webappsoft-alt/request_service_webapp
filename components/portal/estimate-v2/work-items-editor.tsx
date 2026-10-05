@@ -134,28 +134,28 @@ export function WorkItemsEditor({
       </div>
 
       <div className="w-full overflow-x-auto rounded-xl border border-[#94a3b8] bg-white">
-        <Table className="w-full min-w-0 table-fixed">
+        <Table className="w-full min-w-[42rem] table-fixed">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className="h-8 min-w-0 bg-[#f8fafc] px-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Description
               </TableHead>
-              <TableHead className="h-8 w-px whitespace-nowrap bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              <TableHead className="h-8 w-28 whitespace-nowrap bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Type
               </TableHead>
-              <TableHead className="h-8 w-12 bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              <TableHead className="h-8 w-16 bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Qty
               </TableHead>
-              <TableHead className="h-8 w-14 bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              <TableHead className="h-8 w-24 bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Unit
               </TableHead>
-              <TableHead className="h-8 w-16 bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              <TableHead className="h-8 w-24 bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Price
               </TableHead>
-              <TableHead className="h-8 w-[4.75rem] bg-[#f8fafc] px-0.5 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              <TableHead className="h-8 w-20 bg-[#f8fafc] px-1 text-center text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
                 Total
               </TableHead>
-              <TableHead className="h-8 w-8 bg-[#f8fafc]">
+              <TableHead className="h-8 w-10 bg-[#f8fafc]">
                 <span className="sr-only">Remove</span>
               </TableHead>
             </TableRow>
@@ -194,7 +194,7 @@ export function WorkItemsEditor({
                         className={cn(softField, "w-full min-w-0 text-sm")}
                       />
                     </TableCell>
-                    <TableCell className="w-px whitespace-nowrap align-top px-1 py-2">
+                    <TableCell className="w-28 align-top px-1 py-2">
                       <Select
                         value={type}
                         disabled={disabled}
@@ -207,7 +207,7 @@ export function WorkItemsEditor({
                           size="sm"
                           className={cn(
                             softField,
-                            "w-auto justify-between gap-1 px-2 py-0 text-xs [&_svg:not([class*='size-'])]:size-3.5",
+                            "w-full min-w-0 justify-between gap-1 px-2 py-0 text-xs [&_svg:not([class*='size-'])]:size-3.5",
                           )}
                         >
                           <SelectValue placeholder="Type" />
@@ -225,7 +225,7 @@ export function WorkItemsEditor({
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="w-12 align-top px-0.5 py-2">
+                    <TableCell className="w-16 align-top px-1 py-2">
                       <Input
                         aria-label="Quantity"
                         className={cn(softField, numberField, "w-full px-1 text-center text-xs tabular-nums")}
@@ -243,7 +243,7 @@ export function WorkItemsEditor({
                         }}
                       />
                     </TableCell>
-                    <TableCell className="w-14 align-top px-0.5 py-2">
+                    <TableCell className="w-24 align-top px-1 py-2">
                       <Select
                         disabled={disabled}
                         value={currentUnit}
@@ -272,11 +272,11 @@ export function WorkItemsEditor({
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="w-16 align-top px-0.5 py-2">
+                    <TableCell className="w-24 align-top px-1 py-2">
                       <div className="relative mx-auto w-full">
                         <span
                           aria-hidden="true"
-                          className="pointer-events-none absolute top-1/2 left-1 -translate-y-1/2 text-xs text-muted-foreground"
+                          className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-muted-foreground"
                         >
                           $
                         </span>
@@ -285,7 +285,7 @@ export function WorkItemsEditor({
                           className={cn(
                             softField,
                             numberField,
-                            "w-full pl-4 pr-0.5 text-center text-xs tabular-nums",
+                            "w-full pl-5 pr-1.5 text-right text-xs tabular-nums",
                           )}
                           disabled={disabled}
                           inputMode="decimal"
@@ -303,12 +303,12 @@ export function WorkItemsEditor({
                         />
                       </div>
                     </TableCell>
-                    <TableCell className="w-[4.75rem] whitespace-nowrap align-top px-0.5 py-2 text-center text-xs font-medium tabular-nums">
+                    <TableCell className="w-20 whitespace-nowrap align-top px-1 py-2 text-center text-xs font-medium tabular-nums">
                       <div className="flex h-8 items-center justify-center self-start leading-none">
                         {formatMoney(lineTotal(item))}
                       </div>
                     </TableCell>
-                    <TableCell className="w-8 align-top px-0 py-2 text-center">
+                    <TableCell className="w-10 align-top px-0 py-2 text-center">
                       {!disabled ? (
                         <div className="flex h-8 items-center justify-center self-start">
                           <Button

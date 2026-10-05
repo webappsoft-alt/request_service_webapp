@@ -522,9 +522,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           );
           return sum + bits.length;
         }, 0);
-    const measurementCount = fromExisting
-      ? opportunity?.prepMeasurements?.length || 0
-      : activeVisits.reduce((sum, visit) => sum + (visit.measurements?.length || 0), 0);
+    const measurements = (
+      fromExisting
+        ? opportunity?.prepMeasurements || []
+        : activeVisits.flatMap((visit) => visit.measurements || [])
+    ).filter((item) => String(item.label || "").trim());
+    const measurementCount = measurements.length;
     const workItemCount = fromExisting ? oppWorkCount : visitWorkCount + oppWorkCount;
     if (!activeVisits.length && !workItemCount && !measurementCount && !photoCount && !noteCount) {
       return null;
@@ -534,6 +537,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       photoCount,
       noteCount,
       measurementCount,
+      measurements,
       workItemCount,
       fromExistingInformation: fromExisting,
     };
@@ -1567,7 +1571,27 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           ? ` · ${visitSupportSummary.measurementCount} measurement(s)`
                           : ""}
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      {visitSupportSummary.measurements.length ? (
+                        <div className="mt-3">
+                          <h4 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+                            Measurements
+                          </h4>
+                          <ul className="mt-1.5 divide-y divide-[#e2e8f0] overflow-hidden rounded-lg border border-[#e2e8f0] bg-white">
+                            {visitSupportSummary.measurements.map((item, index) => (
+                              <li
+                                key={`${item.label}-${index}`}
+                                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                              >
+                                <span className="min-w-0 truncate text-slate-700">{item.label}</span>
+                                <span className="shrink-0 font-medium tabular-nums text-slate-900">
+                                  {[item.value, item.unit].filter((part) => String(part || "").trim()).join(" ") || "—"}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      <p className="mt-2 text-xs text-slate-500">
                         Measurements stay informational. Work items seed the line items above — edit freely.
                       </p>
                     </div>

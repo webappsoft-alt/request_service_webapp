@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Featured Pros marketplace cards for the customer home page.
+ * Temporarily unused — restore via `app/(marketing)/page.tsx` when needed.
+ */
+
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";

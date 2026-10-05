@@ -140,7 +140,7 @@ export function WorkflowSection() {
 
   return (
     <Section className="relative bg-white">
-      {/* Soft lift from Featured Pros — no ornament over the cards */}
+      {/* Soft lift from the assurance / trust band above */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 z-0"
@@ -164,7 +164,7 @@ export function WorkflowSection() {
           <div className="flex items-center gap-3">
             <span className="h-px w-8 bg-primary/40" aria-hidden="true" />
             <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground uppercase">
-              · 03 / How it works
+              · 04 / How it works
             </p>
           </div>
           <h2

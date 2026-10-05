@@ -8,81 +8,118 @@ import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 
 const beats = [
-  { id: "request", label: "Lead", hint: "Matched or direct" },
-  { id: "sign", label: "Estimate", hint: "They accept the scope" },
-  { id: "crew", label: "Job", hint: "On the crew calendar" },
-  { id: "paid", label: "Invoice", hint: "Paid on the same record" },
+  {
+    id: "lead",
+    label: "Lead",
+    title: "Request lands in your inbox",
+    body: "Matched by ZIP and trade — or sent straight to your company by name.",
+  },
+  {
+    id: "estimate",
+    label: "Estimate",
+    title: "Scope they can accept",
+    body: "Line items, totals, and a share link. They approve or ask for changes online.",
+  },
+  {
+    id: "job",
+    label: "Job",
+    title: "Work on the calendar",
+    body: "The signed estimate becomes the job — assigned, scheduled, and tracked.",
+  },
+  {
+    id: "invoice",
+    label: "Invoice",
+    title: "Paid on the same file",
+    body: "Deposits and balance stay on the record they already approved.",
+  },
 ] as const;
 
 export function ProProduct() {
   return (
     <Section id="process" density="tight" className="scroll-mt-24">
-      <Container className="flex flex-col items-center gap-10 text-center">
-        <div className="flex max-w-2xl flex-col items-center gap-3">
+      <Container className="flex flex-col gap-12 lg:gap-14">
+        <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
           <p className="eyebrow text-primary">Made for home service teams</p>
-          <h2 className="text-3xl font-semibold tracking-tight md:text-[2.5rem]">
+          <h2 className="text-3xl font-semibold tracking-tight md:text-[2.5rem] md:leading-[1.12]">
             One job file, across every trade you run.
           </h2>
           <p className="max-w-lg text-sm leading-7 text-muted-foreground">
-            Inbox, estimate, crew, and invoice stay on the same record — HVAC, plumbing, or a
-            bath remodel.
+            Inbox, estimate, crew, and invoice stay on the same record — whether you run HVAC,
+            plumbing, or a bath remodel.
           </p>
         </div>
 
-        <div className="w-full max-w-4xl rounded-2xl bg-primary/[0.06] p-3 sm:p-4">
-          <div className="overflow-hidden rounded-xl border border-input bg-card text-left shadow-[0_22px_48px_-28px_rgba(0,63,125,0.45)]">
-            <div className="grid grid-cols-2 border-b border-input sm:grid-cols-4">
-              {beats.map((beat, index) => (
-                <div
-                  key={beat.id}
-                  className="flex items-center gap-2.5 border-input px-3 py-3 sm:border-l sm:first:border-l-0"
-                >
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-[10px] font-semibold text-primary-foreground">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                      {beat.label}
-                    </p>
-                    <p className="mt-0.5 truncate text-[12px] font-semibold">{beat.hint}</p>
-                  </div>
-                </div>
-              ))}
+        {/* Pipeline — open, no outer box */}
+        <ol className="relative mx-auto grid w-full max-w-5xl gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+          {/* Connector line (desktop) */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-[1.125rem] right-[12.5%] left-[12.5%] hidden h-px bg-[#d7e2ef] lg:block"
+          />
+
+          {beats.map((beat, index) => (
+            <li key={beat.id} className="relative flex flex-col items-center gap-3 text-center lg:items-start lg:text-left">
+              <span className="relative z-10 flex size-9 items-center justify-center rounded-full border border-[#d7e2ef] bg-white font-mono text-[11px] font-semibold text-primary shadow-[0_6px_16px_-10px_rgba(0,63,125,0.45)]">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-primary uppercase">
+                  {beat.label}
+                </p>
+                <p className="text-[15px] font-semibold tracking-tight text-foreground">
+                  {beat.title}
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">{beat.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        {/* Trades — editorial directory, not a centered icon grid */}
+        <div className="mx-auto w-full max-w-5xl border-t border-[#e6edf5] pt-10">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)] lg:items-start lg:gap-14">
+            <div className="flex flex-col gap-3 lg:pt-1">
+              <p className="eyebrow text-primary">Trades</p>
+              <p className="text-xl font-semibold tracking-tight text-foreground md:text-[1.35rem]">
+                Built for the trades you already run
+              </p>
+              <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+                Same desk for every crew — one inbox, one estimate, one invoice file,
+                whether you fix pipes or roofs.
+              </p>
+              <Link
+                href={`${proPaths.home}#product`}
+                className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                See everything in the portal
+                <ArrowUpRight className="size-3.5" aria-hidden="true" />
+              </Link>
             </div>
 
-            <div className="-mb-px -mr-px grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+            <ul className="grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2">
               {serviceCategories.map((category) => (
-                <div
-                  key={category.id}
-                  className="flex items-center gap-2.5 border-r border-b border-input px-4 py-4"
-                >
+                <li key={category.id} className="flex items-center gap-3 py-2.5">
                   <span
                     className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-lg",
+                      "flex size-10 shrink-0 items-center justify-center rounded-lg",
                       serviceAccents[category.slug],
                     )}
                   >
                     <CategoryIcon slug={category.slug} className="size-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-semibold">{category.name}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
+                    <span className="block text-[14px] font-semibold tracking-tight text-foreground">
+                      {category.name}
+                    </span>
+                    <span className="block text-[12px] leading-5 text-muted-foreground">
                       {category.tagline}
                     </span>
                   </span>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
-
-        <Link
-          href={`${proPaths.home}#product`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-        >
-          See everything in the portal
-          <ArrowUpRight className="size-3.5" aria-hidden="true" />
-        </Link>
       </Container>
     </Section>
   );

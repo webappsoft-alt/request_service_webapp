@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Plus, Send } from "lucide-react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
@@ -67,14 +67,26 @@ export function JobChangeOrdersPanel({
   invoiceId?: string;
   onJobUpdated?: (job: Job) => void;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const consumedCreateParam = useRef(false);
   const orders = job.changeOrders || [];
 
+  /** Open once from ?create=1, then strip it so the tab never reopens the modal. */
   useEffect(() => {
-    if (searchParams.get("create") === "1") setOpen(true);
-  }, [searchParams]);
+    if (searchParams.get("create") !== "1") return;
+    if (!consumedCreateParam.current) {
+      consumedCreateParam.current = true;
+      setOpen(true);
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("create");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router]);
 
   const approved = useMemo(
     () => sumByStatus(orders, "approved"),

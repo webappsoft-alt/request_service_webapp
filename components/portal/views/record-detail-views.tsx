@@ -70,6 +70,7 @@ import {
   JobSettingsTab,
   JobSummaryTab,
 } from "@/components/portal/job-file";
+import { JobChangeOrderDialog } from "@/components/portal/job-change-order-dialog";
 import { JobChangeOrdersPanel } from "@/components/portal/job-change-orders-panel";
 import {
   costingHint,
@@ -3125,6 +3126,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const [archiving, setArchiving] = useState(false);
   const [resolvingStale, setResolvingStale] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [changeOrderOpen, setChangeOrderOpen] = useState(false);
   const [materialsActions, setMaterialsActions] =
     useState<JobCostingActions | null>(null);
   const onMaterialsActionsChange = useCallback(
@@ -3453,12 +3455,12 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   Open {job.number}
                 </Link>
               </Button>
-              <Button size="sm" className="h-8" asChild>
-                <Link
-                  href={`/pro/dashboard/jobs/${job.id}?tab=change-orders&create=1`}
-                >
-                  Create change order
-                </Link>
+              <Button
+                size="sm"
+                className="h-8"
+                onClick={() => setChangeOrderOpen(true)}
+              >
+                Create change order
               </Button>
             </>
           ) : null}
@@ -3622,6 +3624,22 @@ export function InvoiceDetailView({ id }: { id: string }) {
       subjectKind="invoice"
       subjectId={invoice.id}
     />
+    {job ? (
+      <JobChangeOrderDialog
+        job={{
+          ...job,
+          customerName: job.customerName || customerLabel,
+        }}
+        open={changeOrderOpen}
+        onOpenChange={setChangeOrderOpen}
+        invoiceId={invoice.id}
+        onSaved={(next) => {
+          dispatch(upsertJobItem(next));
+          records.cacheJob(next);
+          toast.success("Change order saved on the job.");
+        }}
+      />
+    ) : null}
     </>
   );
 }

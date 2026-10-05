@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { StatusDot, moneyTone } from "@/components/portal/status-pill";
+import { StatusDot, StatusPill, moneyTone } from "@/components/portal/status-pill";
 import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
@@ -742,6 +742,68 @@ export function InvoiceSummaryTab({
           </dl>
         </section>
       </div>
+
+      {job && (job.changeOrders?.length || 0) > 0 ? (
+        <section className="overflow-hidden rounded-md border border-input bg-card p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Related change orders</h2>
+              <p className="text-xs text-muted-foreground">
+                Stay on the job — they do not change this invoice total (
+                {formatMoney(money.total)}).
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="h-8" asChild>
+              <Link href={`/pro/dashboard/jobs/${job.id}?tab=change-orders`}>
+                View on {job.number}
+              </Link>
+            </Button>
+          </div>
+          <ul className="mt-3 divide-y divide-border-soft rounded-md border border-border-soft">
+            {job.changeOrders.map((co) => (
+              <li
+                key={co.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{co.number}</span>
+                    <StatusPill
+                      label={
+                        co.status === "pending_approval"
+                          ? "Pending approval"
+                          : co.status === "approved"
+                            ? "Approved"
+                            : co.status === "rejected"
+                              ? "Rejected"
+                              : co.status === "cancelled"
+                                ? "Cancelled"
+                                : "Draft"
+                      }
+                      tone={
+                        co.status === "approved"
+                          ? "success"
+                          : co.status === "pending_approval"
+                            ? "warning"
+                            : co.status === "rejected" ||
+                                co.status === "cancelled"
+                              ? "danger"
+                              : "neutral"
+                      }
+                    />
+                  </div>
+                  <p className="truncate text-muted-foreground">
+                    {co.title || co.description}
+                  </p>
+                </div>
+                <span className="shrink-0 font-semibold tabular-nums">
+                  +{formatMoney(co.total)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="overflow-hidden rounded-md border border-input bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="border-b border-input bg-[#e8eef5] px-4 py-2.5">

@@ -126,6 +126,8 @@ export function RecordWorkspace({
     const params = new URLSearchParams(searchParams.toString());
     if (next === tabs[0]?.id) params.delete("tab");
     else params.set("tab", next);
+    // One-shot deep-link flags — do not keep reopening modals on tab revisit.
+    params.delete("create");
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }

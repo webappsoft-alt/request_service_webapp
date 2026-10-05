@@ -297,6 +297,18 @@ export function notificationHref(
     if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
       return "/pro/dashboard/new-estimate";
     }
+    if (type.includes("CHANGE_ORDER")) {
+      const jobId = data.jobId ? String(data.jobId) : "";
+      const changeOrderId = data.changeOrderId
+        ? String(data.changeOrderId)
+        : "";
+      if (jobId) {
+        return `/pro/dashboard/jobs/${jobId}?tab=change-orders${
+          changeOrderId ? `&co=${changeOrderId}` : ""
+        }`;
+      }
+      return "/pro/dashboard/jobs";
+    }
     if (type.includes("PAYMENT")) return "/pro/dashboard/payments";
     if (type.includes("INVOICE")) return "/pro/dashboard/invoices";
     if (type.includes("ORDER") || type.includes("BOOKING") || type.includes("WORK_")) {
@@ -318,10 +330,24 @@ export function notificationHref(
   if (type.startsWith("ESTIMATE") || type.includes("ESTIMATE")) {
     return "/account/dashboard/estimates";
   }
+  if (type.includes("CHANGE_ORDER")) {
+    const jobId = data.jobId ? String(data.jobId) : "";
+    const changeOrderId = data.changeOrderId
+      ? String(data.changeOrderId)
+      : "";
+    if (jobId && changeOrderId) {
+      return `/account/dashboard/change-orders/${jobId}/${changeOrderId}`;
+    }
+    return "/account/dashboard/change-orders";
+  }
   if (type.includes("PAYMENT")) return "/account/dashboard/payments";
   if (type.includes("INVOICE")) return "/account/dashboard/invoices";
   if (type.includes("ORDER") || type.includes("BOOKING") || type.includes("WORK_")) {
     return "/account/dashboard/orders";
   }
   return "/account/dashboard";
+}
+
+export function isChangeOrderNotification(item: AppNotification) {
+  return /CHANGE_ORDER/i.test(item.type);
 }

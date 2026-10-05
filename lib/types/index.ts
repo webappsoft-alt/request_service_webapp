@@ -311,14 +311,34 @@ export interface JobItem {
   section?: string;
 }
 
+export type ChangeOrderStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
 export interface ChangeOrder {
   id: string;
   jobId: string;
   number: string;
+  /** Short reason / summary title from the API. */
+  title?: string;
   description: string;
-  status: "draft" | "pending_approval" | "approved" | "rejected";
+  status: ChangeOrderStatus;
   items: JobItem[];
   total: number;
+  customerNotes?: string;
+  internalNotes?: string;
+  customerNote?: string;
+  attachments?: string[];
+  estimateId?: string;
+  invoiceId?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  sentAt?: string;
   createdAt: string;
   updatedAt: string;
 }

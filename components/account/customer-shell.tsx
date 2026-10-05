@@ -40,6 +40,7 @@ import { customerPaths } from "@/lib/customer-paths";
 import { listPublicChatThreads } from "@/lib/api/chat-client";
 import {
   fetchNotifications,
+  isChangeOrderNotification,
   isEstimateNotification,
   isInvoiceNotification,
   isOrderNotification,
@@ -66,14 +67,16 @@ function countUnreadByKind(items: AppNotification[]) {
   let invoices = 0;
   let payments = 0;
   let orders = 0;
+  let changeOrders = 0;
   for (const item of items) {
     if (item.isRead) continue;
-    if (isEstimateNotification(item)) estimates += 1;
+    if (isChangeOrderNotification(item)) changeOrders += 1;
+    else if (isEstimateNotification(item)) estimates += 1;
     else if (isPaymentNotification(item)) payments += 1;
     else if (isInvoiceNotification(item)) invoices += 1;
     else if (isOrderNotification(item)) orders += 1;
   }
-  return { estimates, invoices, payments, orders };
+  return { estimates, invoices, payments, orders, changeOrders };
 }
 
 function RecordTab({
@@ -130,6 +133,9 @@ function getCurrentCustomerSection(pathname: string) {
   if (pathname.startsWith(customerPaths.estimates)) {
     return { href: customerPaths.estimates, label: "Estimates" };
   }
+  if (pathname.startsWith(customerPaths.changeOrders)) {
+    return { href: customerPaths.changeOrders, label: "Change Orders" };
+  }
   if (pathname.startsWith(customerPaths.invoices)) {
     return { href: customerPaths.invoices, label: "Invoices" };
   }
@@ -150,6 +156,7 @@ function NavLinks({
   closeOnNavigate = false,
   unreadMessages = 0,
   unreadEstimates = 0,
+  unreadChangeOrders = 0,
   unreadInvoices = 0,
   unreadPayments = 0,
   unreadOrders = 0,
@@ -158,6 +165,7 @@ function NavLinks({
   closeOnNavigate?: boolean;
   unreadMessages?: number;
   unreadEstimates?: number;
+  unreadChangeOrders?: number;
   unreadInvoices?: number;
   unreadPayments?: number;
   unreadOrders?: number;
@@ -167,6 +175,7 @@ function NavLinks({
   function badgeFor(href: string) {
     if (href === customerPaths.messages) return unreadMessages;
     if (href === customerPaths.estimates) return unreadEstimates;
+    if (href === customerPaths.changeOrders) return unreadChangeOrders;
     if (href === customerPaths.invoices) return unreadInvoices;
     if (href === customerPaths.payments) return unreadPayments;
     if (href === customerPaths.orders) return unreadOrders;
@@ -271,12 +280,14 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   /** Sidebar badges — independent of header mark-all-read. */
   const [sidebarBase, setSidebarBase] = useState({
     estimates: 0,
+    changeOrders: 0,
     invoices: 0,
     payments: 0,
     orders: 0,
   });
   const [sidebarBump, setSidebarBump] = useState({
     estimates: 0,
+    changeOrders: 0,
     invoices: 0,
     payments: 0,
     orders: 0,
@@ -343,6 +354,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         estimates: clearState.estimates
           ? prev.estimates
           : Math.max(prev.estimates, counts.estimates),
+        changeOrders: clearState.changeOrders
+          ? prev.changeOrders
+          : Math.max(prev.changeOrders, counts.changeOrders),
         invoices: clearState.invoices
           ? prev.invoices
           : Math.max(prev.invoices, counts.invoices),
@@ -381,6 +395,17 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_ESTIMATES_TAB_OPENED" } }),
       );
       void markUnreadNotificationsWhere(isEstimateNotification).catch(() => undefined);
+      return;
+    }
+    if (pathname.startsWith(customerPaths.changeOrders)) {
+      if (clearedTabRef.current === "changeOrders") return;
+      clearedTabRef.current = "changeOrders";
+      setCustomerInboxCleared("changeOrders", true);
+      setSidebarBump((current) => ({ ...current, changeOrders: 0 }));
+      setSidebarBase((current) => ({ ...current, changeOrders: 0 }));
+      void markUnreadNotificationsWhere(isChangeOrderNotification).catch(
+        () => undefined,
+      );
       return;
     }
     if (pathname.startsWith(customerPaths.invoices)) {
@@ -475,7 +500,13 @@ export function CustomerShell({ children }: { children: ReactNode }) {
           });
           if (!mapped.isRead && !(isChatMsg && viewingThisChat)) {
             setUnreadNotifications((count) => count + 1);
-            if (isEstimateNotification(mapped)) {
+            if (isChangeOrderNotification(mapped)) {
+              reopenCustomerInboxBadge("changeOrders");
+              setSidebarBump((current) => ({
+                ...current,
+                changeOrders: current.changeOrders + 1,
+              }));
+            } else if (isEstimateNotification(mapped)) {
               reopenCustomerInboxBadge("estimates");
               setSidebarBump((current) => ({
                 ...current,
@@ -579,6 +610,15 @@ export function CustomerShell({ children }: { children: ReactNode }) {
         void refreshNotifications();
         return;
       }
+      if (type === "CHANGE_ORDER_REQUESTED") {
+        reopenCustomerInboxBadge("changeOrders");
+        setSidebarBump((current) => ({
+          ...current,
+          changeOrders: current.changeOrders + 1,
+        }));
+        void refreshNotifications();
+        return;
+      }
       if (type === "INVOICE_SENT") {
         reopenCustomerInboxBadge("invoices");
         setSidebarBump((current) => ({
@@ -611,6 +651,9 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const unreadEstimates = clears.estimates
     ? sidebarBump.estimates
     : Math.max(sidebarBase.estimates, sidebarBump.estimates);
+  const unreadChangeOrders = clears.changeOrders
+    ? sidebarBump.changeOrders
+    : Math.max(sidebarBase.changeOrders, sidebarBump.changeOrders);
   const unreadInvoices = clears.invoices
     ? sidebarBump.invoices
     : Math.max(sidebarBase.invoices, sidebarBump.invoices);
@@ -689,6 +732,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             collapsed={collapsed}
             unreadMessages={unreadMessages}
             unreadEstimates={unreadEstimates}
+            unreadChangeOrders={unreadChangeOrders}
             unreadInvoices={unreadInvoices}
             unreadPayments={unreadPayments}
             unreadOrders={unreadOrders}
@@ -737,6 +781,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
                     closeOnNavigate
                     unreadMessages={unreadMessages}
                     unreadEstimates={unreadEstimates}
+                    unreadChangeOrders={unreadChangeOrders}
                     unreadInvoices={unreadInvoices}
                     unreadPayments={unreadPayments}
                     unreadOrders={unreadOrders}

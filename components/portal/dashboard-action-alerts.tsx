@@ -1,11 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowRight, ClipboardList, FileText, Inbox } from "lucide-react";
+import { ArrowRight, ClipboardList, FileDiff, FileText, Inbox } from "lucide-react";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
+import { usePortalRecords } from "@/components/portal/use-portal-records";
+import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { cn } from "@/lib/utils";
 
-type AlertTone = "leads" | "estimates" | "orders";
+type AlertTone = "leads" | "estimates" | "orders" | "changeOrders";
 
 type AlertRow = {
   id: AlertTone;
@@ -20,6 +23,7 @@ const toneClass: Record<AlertTone, string> = {
   leads: "dashboard-alert--leads",
   estimates: "dashboard-alert--estimates",
   orders: "dashboard-alert--orders",
+  changeOrders: "dashboard-alert--estimates",
 };
 
 function plural(count: number, singular: string, pluralLabel: string) {
@@ -32,6 +36,17 @@ function plural(count: number, singular: string, pluralLabel: string) {
  */
 export function DashboardActionAlerts() {
   const inbox = usePortalInbox();
+  const { jobs } = usePortalWorkspace();
+  const records = usePortalRecords();
+  const pendingChangeOrders = useMemo(() => {
+    const allJobs = records.mergeJobs(jobs);
+    return allJobs.reduce((count, job) => {
+      const pending = (job.changeOrders || []).filter(
+        (co) => co.status === "pending_approval",
+      ).length;
+      return count + pending;
+    }, 0);
+  }, [jobs, records]);
 
   const rows: AlertRow[] = [];
   if (inbox.newLeads > 0) {
@@ -62,6 +77,16 @@ export function DashboardActionAlerts() {
       href: "/pro/dashboard/orders?status=BOOKING_REQUESTED",
       cta: plural(inbox.pendingOrders, "View Booking", "View Bookings"),
       icon: ClipboardList,
+    });
+  }
+  if (pendingChangeOrders > 0) {
+    rows.push({
+      id: "changeOrders",
+      count: pendingChangeOrders,
+      label: `You have ${pendingChangeOrders} change ${plural(pendingChangeOrders, "order", "orders")} awaiting customer approval`,
+      href: "/pro/dashboard/jobs",
+      cta: plural(pendingChangeOrders, "View Job", "View Jobs"),
+      icon: FileDiff,
     });
   }
 

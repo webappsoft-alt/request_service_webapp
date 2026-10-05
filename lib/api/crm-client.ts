@@ -64,6 +64,10 @@ function putData(...args: Parameters<typeof import("@/components/api/apiFuntions
   return http().putData(...args);
 }
 
+function patchData(...args: Parameters<typeof import("@/components/api/apiFuntions").patchData>) {
+  return http().patchData(...args);
+}
+
 function deleteData<T = unknown>(
   endpoint: string,
   options?: Parameters<typeof import("@/components/api/apiFuntions").deleteData>[1],
@@ -2056,6 +2060,76 @@ export async function convertJobToInvoice(
     { silent: false },
   );
   return mapCrmEntity(response, mapInvoice);
+}
+
+export type JobChangeOrderInput = {
+  title: string;
+  description?: string;
+  amount?: number;
+  items?: Array<{
+    description: string;
+    kind?: "labor" | "material" | "equipment" | "service" | "fee" | "other";
+    quantity?: number;
+    unitPrice?: number;
+    taxRate?: number;
+    total?: number;
+    unit?: string;
+    section?: string;
+  }>;
+  customerNotes?: string;
+  internalNotes?: string;
+  attachments?: string[];
+  invoiceId?: string;
+  send?: boolean;
+  status?: "draft" | "pending";
+};
+
+export async function createJobChangeOrder(
+  jobId: string,
+  input: JobChangeOrderInput,
+) {
+  const response = await postData(
+    providerCrmApi.jobChangeOrders(jobId),
+    input,
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapJob);
+}
+
+export async function updateJobChangeOrder(
+  jobId: string,
+  orderId: string,
+  input: Partial<JobChangeOrderInput>,
+) {
+  const response = await patchData(
+    providerCrmApi.jobChangeOrder(jobId, orderId),
+    input,
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapJob);
+}
+
+export async function sendJobChangeOrder(jobId: string, orderId: string) {
+  const response = await postData(
+    providerCrmApi.jobChangeOrderSend(jobId, orderId),
+    {},
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapJob);
+}
+
+export async function updateJobChangeOrderStatus(
+  jobId: string,
+  orderId: string,
+  status: "approved" | "rejected" | "cancelled",
+  approvedBy = "",
+) {
+  const response = await putData(
+    providerCrmApi.jobChangeOrder(jobId, orderId),
+    { status, approvedBy },
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapJob);
 }
 
 export async function listTasks(options?: CrmRequestOptions) {

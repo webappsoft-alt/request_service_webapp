@@ -1414,6 +1414,81 @@ function mapJobItems(jobId: string, value: unknown): JobItem[] {
     .filter((item): item is JobItem => Boolean(item));
 }
 
+function mapChangeOrderStatus(raw: unknown): ChangeOrder["status"] {
+  const status = trimmed(raw).toLowerCase();
+  switch (status) {
+    case "draft":
+      return "draft";
+    case "approved":
+      return "approved";
+    case "rejected":
+      return "rejected";
+    case "cancelled":
+    case "canceled":
+      return "cancelled";
+    case "pending":
+    case "pending_approval":
+    default:
+      return "pending_approval";
+  }
+}
+
+function mapChangeOrderItems(
+  jobId: string,
+  coId: string,
+  value: unknown,
+  fallbackTitle: string,
+  fallbackAmount: number,
+): JobItem[] {
+  const rows = asArray(value);
+  if (rows.length === 0) {
+    return [
+      {
+        id: `${coId}_item`,
+        jobId,
+        source: "change_order",
+        description: fallbackTitle,
+        quantity: 1,
+        unit: "ea",
+        unitPrice: fallbackAmount,
+        total: fallbackAmount,
+        kind: "materials",
+      },
+    ];
+  }
+  return rows
+    .map<JobItem | null>((entry, index) => {
+      const record = asRecord(entry);
+      if (!record) return null;
+      const id = crmIdOf(record) || `${coId}_item_${index + 1}`;
+      const quantity = numberValue(record.quantity, 1) || 1;
+      const unitPrice = numberValue(record.unitPrice);
+      const total =
+        numberValue(record.total) ||
+        Math.round(quantity * unitPrice * 100) / 100;
+      const kindRaw = trimmed(record.kind).toLowerCase();
+      const kind =
+        kindRaw === "labor"
+          ? ("labor" as const)
+          : kindRaw === "equipment"
+            ? ("equipment" as const)
+            : ("materials" as const);
+      return {
+        id,
+        jobId,
+        source: "change_order",
+        description: trimmed(record.description) || fallbackTitle,
+        quantity,
+        unit: trimmed(record.unit) || "ea",
+        unitPrice,
+        total,
+        kind,
+        ...(trimmed(record.section) ? { section: trimmed(record.section) } : {}),
+      };
+    })
+    .filter((item): item is JobItem => item !== null);
+}
+
 function mapChangeOrders(jobId: string, value: unknown): ChangeOrder[] {
   return asArray(value)
     .map<ChangeOrder | null>((entry, index) => {
@@ -1423,32 +1498,41 @@ function mapChangeOrders(jobId: string, value: unknown): ChangeOrder[] {
       const amount = numberValue(record.amount ?? record.total);
       const title = trimmed(record.title) || "Change order";
       const description = trimmed(record.description);
+      const number =
+        trimmed(record.number) || `CO-${String(index + 1).padStart(3, "0")}`;
       return {
         id,
         jobId,
-        number: `CO-${String(index + 1).padStart(2, "0")}`,
-        description: [title, description].filter(Boolean).join(" - "),
-        status:
-          trimmed(record.status) === "approved"
-            ? "approved"
-            : trimmed(record.status) === "rejected"
-              ? "rejected"
-              : "pending_approval",
-        items: [
-          {
-            id: `${id}_item`,
-            jobId,
-            source: "change_order",
-            description: title,
-            quantity: 1,
-            unit: "ea",
-            unitPrice: amount,
-            total: amount,
-          },
-        ],
+        number,
+        title,
+        description: description || title,
+        status: mapChangeOrderStatus(record.status),
+        items: mapChangeOrderItems(jobId, id, record.items, title, amount),
         total: amount,
+        customerNotes: trimmed(record.customerNotes) || undefined,
+        internalNotes: trimmed(record.internalNotes) || undefined,
+        customerNote: trimmed(record.customerNote) || undefined,
+        attachments: asArray(record.attachments)
+          .map((url) => trimmed(url))
+          .filter(Boolean),
+        estimateId: trimmed(record.estimateId) || undefined,
+        invoiceId: trimmed(record.invoiceId) || undefined,
+        approvedBy: trimmed(record.approvedBy) || undefined,
+        approvedAt: record.approvedAt
+          ? toIsoString(record.approvedAt)
+          : undefined,
+        rejectedBy: trimmed(record.rejectedBy) || undefined,
+        rejectedAt: record.rejectedAt
+          ? toIsoString(record.rejectedAt)
+          : undefined,
+        sentAt: record.sentAt ? toIsoString(record.sentAt) : undefined,
         createdAt: toIsoString(record.requestedAt ?? record.createdAt),
-        updatedAt: toIsoString(record.approvedAt ?? record.updatedAt ?? record.requestedAt),
+        updatedAt: toIsoString(
+          record.approvedAt ??
+            record.rejectedAt ??
+            record.updatedAt ??
+            record.requestedAt,
+        ),
       } satisfies ChangeOrder;
     })
     .filter((item): item is ChangeOrder => item !== null);

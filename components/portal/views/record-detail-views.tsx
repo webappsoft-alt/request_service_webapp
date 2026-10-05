@@ -70,6 +70,7 @@ import {
   JobSettingsTab,
   JobSummaryTab,
 } from "@/components/portal/job-file";
+import { JobChangeOrdersPanel } from "@/components/portal/job-change-orders-panel";
 import {
   costingHint,
   type JobCostingActions,
@@ -2459,6 +2460,10 @@ export function JobDetailView({ id }: { id: string }) {
   const jobTabs = [
     { id: "summary", label: "Summary" },
     { id: "materials", label: "Labour & Material" },
+    {
+      id: "change-orders",
+      label: `Change Orders (${currentJob.changeOrders?.length || 0})`,
+    },
     ...(alreadyInvoiced
       ? [{ id: "invoice", label: invoice?.number || "Invoice" }]
       : []),
@@ -2631,6 +2636,11 @@ export function JobDetailView({ id }: { id: string }) {
                 {converting ? "Converting…" : "Convert to invoice"}
               </Button>
             )}
+            <Button size="sm" variant="outline" className="h-8" asChild>
+              <Link href={`/pro/dashboard/jobs/${job.id}?tab=change-orders&create=1`}>
+                Create change order
+              </Link>
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -2830,6 +2840,21 @@ export function JobDetailView({ id }: { id: string }) {
                           writeCostLines(session?.email, job.id, lines);
                         }
                   }
+                />
+              );
+            case "change-orders":
+              return (
+                <JobChangeOrdersPanel
+                  job={job}
+                  originalAmount={(job.items || []).reduce(
+                    (sum, item) => sum + (Number(item.total) || 0),
+                    0,
+                  )}
+                  invoiceId={invoice?.id || job.invoiceId}
+                  onJobUpdated={(next) => {
+                    dispatch(upsertJobItem(next));
+                    records.cacheJob(next);
+                  }}
                 />
               );
             case "logs":
@@ -3422,11 +3447,20 @@ export function InvoiceDetailView({ id }: { id: string }) {
             {sending ? "Sending…" : "Send invoice"}
           </Button>
           {job ? (
-            <Button size="sm" variant="outline" className="h-8" asChild>
-              <Link href={`/pro/dashboard/jobs/${job.id}`}>
-                Open {job.number}
-              </Link>
-            </Button>
+            <>
+              <Button size="sm" variant="outline" className="h-8" asChild>
+                <Link href={`/pro/dashboard/jobs/${job.id}`}>
+                  Open {job.number}
+                </Link>
+              </Button>
+              <Button size="sm" className="h-8" asChild>
+                <Link
+                  href={`/pro/dashboard/jobs/${job.id}?tab=change-orders&create=1`}
+                >
+                  Create change order
+                </Link>
+              </Button>
+            </>
           ) : null}
           <Button
             size="sm"

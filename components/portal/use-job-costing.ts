@@ -90,9 +90,8 @@ export function repairCostLineKind(line: JobCostLine): JobCostLine {
 }
 
 export function seedJobLines(job: Job): JobCostLine[] {
-  const fromJob = job.items.map(toCostLine);
-  const fromOrders = job.changeOrders.flatMap((order) => order.items.map(toCostLine));
-  return [...fromJob, ...fromOrders];
+  // Original job lines only — change orders stay in their own section.
+  return job.items.map(toCostLine);
 }
 
 function toCostLine(item: JobItem): JobCostLine {

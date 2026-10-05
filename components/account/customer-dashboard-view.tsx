@@ -40,6 +40,10 @@ import {
   selectCustomerInvoices,
   selectCustomerInvoicesLoading,
 } from "@/store/customerInvoicesSlice";
+import {
+  listCustomerChangeOrders,
+  type CustomerChangeOrder,
+} from "@/lib/api/customer-change-orders";
 
 function batchKey(batch: CustomerQuoteBatch) {
   return (
@@ -238,6 +242,24 @@ export function CustomerDashboardView() {
     [invoices],
   );
 
+  const [pendingChangeOrders, setPendingChangeOrders] = useState<
+    CustomerChangeOrder[]
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listCustomerChangeOrders("pending")
+      .then((rows) => {
+        if (!cancelled) setPendingChangeOrders(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingChangeOrders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <PortalPage
       eyebrow="Overview"
@@ -260,6 +282,34 @@ export function CustomerDashboardView() {
         </div>
       }
     >
+      {pendingChangeOrders.length > 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-950">
+            Action required — change order
+            {pendingChangeOrders.length === 1 ? "" : "s"} need your approval
+          </p>
+          <ul className="mt-2 space-y-2">
+            {pendingChangeOrders.slice(0, 3).map((co) => (
+              <li
+                key={`${co.jobId}-${co.id}`}
+                className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-950"
+              >
+                <span>
+                  {co.number} · Job {co.jobNumber || "—"} · +
+                  {formatMoney(co.amount)}
+                </span>
+                <Button size="sm" className="h-8" asChild>
+                  <Link href={customerPaths.changeOrder(co.jobId, co.id)}>
+                    Review change order
+                    <ArrowRight className="size-3.5" />
+                  </Link>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* Provider Portal StatCell Row */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCell

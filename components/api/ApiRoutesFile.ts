@@ -43,6 +43,14 @@ export const userApi = {
   payment: (id: string) => `user/payments/${id}`,
   /** POST customer payment for an invoice */
   recordInvoicePayment: (id: string) => `user/invoices/${id}/payments`,
+  /** GET CRM job change orders for this customer */
+  changeOrders: "user/change-orders",
+  /** GET one CRM job change order */
+  changeOrder: (jobId: string, orderId: string) =>
+    `user/change-orders/${jobId}/${orderId}`,
+  /** POST approve/reject CRM job change order */
+  changeOrderRespond: (jobId: string, orderId: string) =>
+    `user/change-orders/${jobId}/${orderId}/respond`,
 } as const;
 
 /** Customer bookings & orders (Bearer JWT, role: customer). */
@@ -166,6 +174,11 @@ export const providerCrmApi = {
   job: (id: string) => `provider/jobs/${id}`,
   jobStatus: (id: string) => `provider/jobs/${id}/status`,
   jobConvertToInvoice: (id: string) => `provider/jobs/${id}/convert-to-invoice`,
+  jobChangeOrders: (id: string) => `provider/jobs/${id}/change-orders`,
+  jobChangeOrder: (id: string, orderId: string) =>
+    `provider/jobs/${id}/change-orders/${orderId}`,
+  jobChangeOrderSend: (id: string, orderId: string) =>
+    `provider/jobs/${id}/change-orders/${orderId}/send`,
   jobActivities: (id: string) => `provider/jobs/${id}/activities`,
   jobActivity: (id: string, activityId: string) =>
     `provider/jobs/${id}/activities/${activityId}`,

@@ -11,7 +11,7 @@ export function PortalPage({
 }: {
   eyebrow?: string;
   title: ReactNode;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   badge?: ReactNode;
@@ -32,7 +32,7 @@ export function PortalPage({
             {badge}
           </div>
           {description ? (
-            <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-500">{description}</p>
+            <div className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-500">{description}</div>
           ) : null}
         </div>
         {actions ? <div className={cn("flex flex-wrap gap-2")}>{actions}</div> : null}

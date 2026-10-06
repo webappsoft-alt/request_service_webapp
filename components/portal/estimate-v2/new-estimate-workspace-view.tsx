@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, Link2 } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, Link2, MapPin } from "lucide-react";
+import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -311,8 +313,10 @@ function collectStartingLines(data: EstimateV2Opportunity): JobCostLine[] {
 export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: string }) {
   const router = useRouter();
   const { employees } = usePortalCrew();
+  const { provider } = usePortalWorkspace();
   const estimateSectionRef = useRef<HTMLDivElement>(null);
 
+  const [mapOpen, setMapOpen] = useState(false);
   const [opportunity, setOpportunity] = useState<EstimateV2Opportunity | null>(null);
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1074,9 +1078,34 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     <PortalPage
       eyebrow="Work / Estimate"
       title={`${opportunity.number} · ${opportunity.title}`}
-      description={`${customerNameFromOpportunity(opportunity)} · ${propertyLine(opportunity)}`}
+      description={
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
+          <span className="font-medium text-slate-700">
+            {customerNameFromOpportunity(opportunity)}
+          </span>
+          <span>·</span>
+          <button
+            type="button"
+            onClick={() => setMapOpen(true)}
+            className="inline-flex items-center gap-1 font-medium text-sky-600 hover:text-sky-700 hover:underline cursor-pointer"
+            title="Click to view on map"
+          >
+            <MapPin className="size-3.5 shrink-0 text-sky-600" />
+            <span>{propertyLine(opportunity)}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapOpen(true)}
+            className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 hover:bg-sky-100 hover:text-sky-800 transition-colors cursor-pointer"
+            title="View route and distance on map"
+          >
+            <MapPin className="size-3 text-sky-600" />
+            View on map
+          </button>
+        </div>
+      }
       badge={
-        estimate?.status ? (
+        estimate?.status && estimate.status !== "converted_to_job" ? (
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
@@ -1085,7 +1114,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           >
             {estimateStatusLabel(estimate.status)}
           </span>
-        ) : (
+        ) : !estimate?.status ? (
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
@@ -1094,7 +1123,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           >
             {opportunityStatusLabel(opportunity.status)}
           </span>
-        )
+        ) : null
       }
       actions={
         <Button variant="outline" size="sm" asChild>
@@ -1120,9 +1149,27 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             <p className="mt-2.5 text-[15px] font-semibold tracking-tight text-slate-900">
               {customerNameFromOpportunity(opportunity)}
             </p>
-            <p className="mt-1 text-sm leading-relaxed text-slate-600">
-              {propertyLine(opportunity)}
-            </p>
+            <button
+              type="button"
+              onClick={() => setMapOpen(true)}
+              className="mt-1 flex items-start gap-1.5 text-left text-sm leading-relaxed font-medium text-sky-600 hover:text-sky-700 hover:underline cursor-pointer group"
+              title="Click to view on map"
+            >
+              <MapPin className="size-4 shrink-0 mt-0.5 text-sky-600 group-hover:text-sky-700" />
+              <span className="underline decoration-sky-300 underline-offset-2">
+                {propertyLine(opportunity)}
+              </span>
+            </button>
+            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setMapOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100 hover:text-sky-800 transition-colors cursor-pointer"
+              >
+                <MapPin className="size-3 text-sky-600" />
+                View on map
+              </button>
+            </div>
           </div>
 
           <div className={RAIL_CARD}>
@@ -1344,11 +1391,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                       Estimate{estimate?.number ? ` · ${estimate.number}` : ""}
                     </h2>
-                    <p className="mt-0.5 text-sm text-slate-500">
-                      {estimate?.status
-                        ? estimateStatusLabel(estimate.status)
-                        : "Ready to build"}
-                    </p>
+                    {estimate?.status && estimate.status !== "converted_to_job" ? (
+                      <p className="mt-0.5 text-sm text-slate-500">
+                        {estimateStatusLabel(estimate.status)}
+                      </p>
+                    ) : !estimate?.status ? (
+                      <p className="mt-0.5 text-sm text-slate-500">Ready to build</p>
+                    ) : null}
                     {informationSourceLabel ? (
                       <p className="mt-1.5 text-xs text-slate-500">
                         Information source ·{" "}
@@ -1357,6 +1406,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      onClick={() => setMapOpen(true)}
+                    >
+                      <MapPin className="size-3.5 text-sky-600" />
+                      View on map
+                    </Button>
                     {!estimate && !showVisits ? (
                       <Button size="sm" disabled={saving} onClick={() => void ensureEstimate()}>
                         Build estimate
@@ -1795,6 +1853,38 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {opportunity ? (
+        <RouteLocationMapDialog
+          open={mapOpen}
+          onOpenChange={setMapOpen}
+          recordType="estimate"
+          recordNumber={estimate?.number || opportunity.number}
+          provider={provider}
+          customerName={customerNameFromOpportunity(opportunity)}
+          customerAddress={propertyLine(opportunity)}
+          customerCoords={
+            opportunity.propertyAddress?.lat && opportunity.propertyAddress?.lng
+              ? {
+                  lat: opportunity.propertyAddress.lat,
+                  lng: opportunity.propertyAddress.lng,
+                }
+              : null
+          }
+          serviceAddress={
+            opportunity.propertyAddress?.street || opportunity.propertyAddress?.address
+              ? {
+                  street:
+                    opportunity.propertyAddress.street ||
+                    opportunity.propertyAddress.address ||
+                    "",
+                  city: opportunity.propertyAddress.city || "",
+                  state: opportunity.propertyAddress.state || "",
+                  zip: opportunity.propertyAddress.zip || "",
+                }
+              : null
+          }
+        />
+      ) : null}
     </PortalPage>
   );
 }

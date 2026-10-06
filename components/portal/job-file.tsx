@@ -268,6 +268,7 @@ export function JobSummaryTab({
   quoteTotal,
   onActivitiesChange,
   onEditEstimate,
+  onOpenMap,
   notice,
 }: {
   job: Job;
@@ -281,6 +282,7 @@ export function JobSummaryTab({
   quoteTotal?: number;
   onActivitiesChange?: (next: Estimate["activities"]) => void;
   onEditEstimate?: () => void;
+  onOpenMap?: () => void;
   notice?: ReactNode;
 }) {
   const dispatch = useAppDispatch();
@@ -413,9 +415,21 @@ export function JobSummaryTab({
           {(siteAddress || jobSiteAddress) ? (
             <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
               <span className="text-muted-foreground">Site:</span>
-              <span className="truncate font-medium text-foreground">
-                {siteAddress || jobSiteAddress}
-              </span>
+              {onOpenMap ? (
+                <button
+                  type="button"
+                  onClick={onOpenMap}
+                  className="inline-flex items-center gap-1 font-medium text-sky-600 hover:text-sky-700 hover:underline cursor-pointer text-left"
+                  title="View on map"
+                >
+                  <MapPin className="size-3 shrink-0 text-sky-600" />
+                  <span className="truncate">{siteAddress || jobSiteAddress}</span>
+                </button>
+              ) : (
+                <span className="truncate font-medium text-sky-600">
+                  {siteAddress || jobSiteAddress}
+                </span>
+              )}
             </span>
           ) : null}
           <span className="inline-flex items-center gap-1">
@@ -459,9 +473,21 @@ export function JobSummaryTab({
           {siteAddress ? (
             <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
               <span className="text-muted-foreground">Site:</span>
-              <span className="truncate font-medium text-foreground">
-                {siteAddress}
-              </span>
+              {onOpenMap ? (
+                <button
+                  type="button"
+                  onClick={onOpenMap}
+                  className="inline-flex items-center gap-1 font-medium text-sky-600 hover:text-sky-700 hover:underline cursor-pointer text-left"
+                  title="View on map"
+                >
+                  <MapPin className="size-3 shrink-0 text-sky-600" />
+                  <span className="truncate">{siteAddress}</span>
+                </button>
+              ) : (
+                <span className="truncate font-medium text-sky-600">
+                  {siteAddress}
+                </span>
+              )}
             </span>
           ) : null}
           <span className="inline-flex items-center gap-1">

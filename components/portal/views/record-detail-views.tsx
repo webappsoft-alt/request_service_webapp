@@ -7,9 +7,11 @@ import {
   ChevronDown,
   Clock3,
   Loader2,
+  MapPin,
   Pencil,
   Share2,
 } from "lucide-react";
+import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { toast } from "sonner";
 import { ArchiveBadge, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import {
@@ -318,6 +320,7 @@ export function EstimateDetailView({ id }: { id: string }) {
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [fetched, setFetched] = useState<Estimate | null>(null);
   const [fetching, setFetching] = useState(false);
   const [materialsActions, setMaterialsActions] =
@@ -1019,7 +1022,7 @@ export function EstimateDetailView({ id }: { id: string }) {
               label={estimateStatusLabel(estimate.status)}
               className={estimateStatusTone(estimate.status)}
             />
-            {job || estimate.status === "converted_to_job" ? (
+            {job && estimate.status !== "converted_to_job" ? (
               <StatusPill
                 label={
                   job?.number
@@ -1040,6 +1043,15 @@ export function EstimateDetailView({ id }: { id: string }) {
         }
         actions={
           <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              onClick={() => setMapOpen(true)}
+            >
+              <MapPin className="size-3.5 text-sky-600" />
+              View on map
+            </Button>
             {job ? (
               <>
                 {!(
@@ -1205,6 +1217,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     locked={signed}
                     customerLabel={customerLabel}
                     siteAddress={siteAddress}
+                    onOpenMap={() => setMapOpen(true)}
                     quoteTotal={quoteTotal}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
@@ -1218,15 +1231,17 @@ export function EstimateDetailView({ id }: { id: string }) {
                       );
                     }}
                     notice={
+                      (estimate.status as string) !== "converted_to_job" && (
                       signed ||
                       estimate.status === "accepted" ||
                       canConvert ||
-                      job ? (
+                      job) ? (
                         <>
-                          {signed ||
-                          estimate.status === "accepted" ||
-                          canConvert ||
-                          job ? (
+                          {(estimate.status as string) !== "converted_to_job" && (
+                            signed ||
+                            estimate.status === "accepted" ||
+                            canConvert ||
+                            job) ? (
                             <EstimateStageBanner
                               status={estimate.status}
                               signed={signed}
@@ -1407,6 +1422,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     technician=""
                     noun="estimate"
                     locked={signed}
+                    onOpenMap={() => setMapOpen(true)}
                     onActivitiesChange={(next) => {
                       setFetched((prev) =>
                         prev ? { ...prev, activities: next } : prev,
@@ -1948,6 +1964,15 @@ export function EstimateDetailView({ id }: { id: string }) {
           }
         }}
       />
+      <RouteLocationMapDialog
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        recordType="estimate"
+        recordNumber={estimate.number}
+        provider={provider}
+        customerName={customerLabel}
+        customerAddress={siteAddress}
+      />
     </>
   );
 }
@@ -1983,6 +2008,7 @@ export function JobDetailView({ id }: { id: string }) {
     employeeId: string;
     name: string;
   } | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -2666,6 +2692,15 @@ export function JobDetailView({ id }: { id: string }) {
                 {removingAssignee ? "Removing…" : "Remove assignee"}
               </Button>
             ) : null}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              onClick={() => setMapOpen(true)}
+            >
+              <MapPin className="size-3.5 text-primary" />
+              View on map
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8">
@@ -2674,6 +2709,9 @@ export function JobDetailView({ id }: { id: string }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem onSelect={() => setMapOpen(true)}>
+                  View on map
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/pro/dashboard/schedule">Open calendar</Link>
                 </DropdownMenuItem>
@@ -2793,6 +2831,7 @@ export function JobDetailView({ id }: { id: string }) {
                     invoice={invoice}
                     technician={technician}
                     customerLabel={customerLabel}
+                    onOpenMap={() => setMapOpen(true)}
                     siteAddress={[
                       job.address?.street,
                       formatLocation(
@@ -3015,6 +3054,7 @@ export function JobDetailView({ id }: { id: string }) {
                   invoice={invoice}
                   technician={technician}
                   customerLabel={customerLabel}
+                  onOpenMap={() => setMapOpen(true)}
                   siteAddress={[
                     job.address?.street,
                     formatLocation(
@@ -3120,6 +3160,39 @@ export function JobDetailView({ id }: { id: string }) {
         onOpenChange={setNoteOpen}
         subjectKind="job"
         subjectId={job.id}
+      />
+      <RouteLocationMapDialog
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        recordType="job"
+        recordNumber={job.number}
+        provider={provider}
+        customerName={customerLabel}
+        customerAddress={[
+          job.address?.street,
+          formatLocation(
+            job.address?.city || "",
+            job.address?.state || "",
+            job.address?.zip,
+          ),
+        ]
+          .filter(Boolean)
+          .join(", ")}
+        customerCoords={
+          job.address?.lat && job.address?.lng
+            ? { lat: job.address.lat, lng: job.address.lng }
+            : null
+        }
+        serviceAddress={
+          job.address?.street
+            ? {
+                street: job.address.street,
+                city: job.address.city || "",
+                state: job.address.state || "",
+                zip: job.address.zip || "",
+              }
+            : null
+        }
       />
     </>
   );

@@ -42,6 +42,10 @@ export type RouteLocationMapDialogProps = RouteLocationMapInnerProps & {
   onOpenChange: (open: boolean) => void;
   recordType?: "job" | "estimate";
   recordNumber?: string;
+  /** Origin heading — "Business (Origin)" for the office, "Your location" for technicians. */
+  originLabel?: string;
+  /** Subtitle under the title. */
+  description?: string;
 };
 
 export function RouteLocationMapDialog({
@@ -49,6 +53,8 @@ export function RouteLocationMapDialog({
   onOpenChange,
   recordType = "job",
   recordNumber,
+  originLabel = "Business (Origin)",
+  description = "Direction and distance from provider business location to customer job site.",
   provider,
   businessName,
   businessAddress,
@@ -98,7 +104,7 @@ export function RouteLocationMapDialog({
                 </span>
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-xs text-slate-500">
-                Direction and distance from provider business location to customer job site.
+                {description}
               </DialogDescription>
             </div>
 
@@ -123,7 +129,7 @@ export function RouteLocationMapDialog({
               <div className="flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-sky-600" />
                 <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                  Business (Origin)
+                  {originLabel}
                 </span>
               </div>
               <p className="truncate text-xs font-semibold text-slate-800">

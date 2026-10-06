@@ -243,7 +243,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
   const company = useAppSelector((state) => state.technician.profile.data?.provider?.name || "");
   const businessAddress = useAppSelector((state) => state.technician.profile.data?.provider?.address || "");
   const businessCoords = useAppSelector((state) => state.technician.profile.data?.provider?.coordinates ?? null);
-  // Route map origin = the company's business location (same as the office sees).
+  // Route map starts from the technician's current location; the business is only the fallback.
   const routeOrigin = useRouteOrigin({ businessName: company, businessAddress, businessCoords });
   const profileLoaded = useAppSelector((state) => Boolean(state.technician.profile.data));
   useEffect(() => {
@@ -296,7 +296,9 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
         </header>
         <main key={pathname} id="main-content" className="page-enter px-3 py-3 sm:px-4">
           <div className="mx-auto w-full max-w-7xl">
-            <RouteMapProvider origin={routeOrigin}>{children}</RouteMapProvider>
+            <RouteMapProvider origin={routeOrigin} currentLocation>
+              {children}
+            </RouteMapProvider>
           </div>
         </main>
       </div>

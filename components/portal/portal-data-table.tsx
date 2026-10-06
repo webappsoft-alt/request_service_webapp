@@ -63,13 +63,14 @@ export function PortalDataTable<T>({
   toolbar,
   letters,
   letterValue,
-  pageSize = 20,
+  pageSize = 10,
   countLabel,
   serverPagination,
   loading = false,
   busyRowIds,
   isRowBusy,
   rowClassName,
+  hideSearch = false,
 }: {
   rows: T[];
   rowKey: (row: T) => string;
@@ -94,6 +95,8 @@ export function PortalDataTable<T>({
   isRowBusy?: (row: T) => boolean;
   /** Optional per-row highlight (e.g. rows that need the customer's attention). */
   rowClassName?: (row: T) => string | undefined;
+  /** Hide the search box (tables whose API has no search). */
+  hideSearch?: boolean;
 }) {
   const router = useRouter();
   const isServer = Boolean(serverPagination);
@@ -233,7 +236,7 @@ export function PortalDataTable<T>({
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-h-8 flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-72">
+          <div className={cn("relative w-full sm:w-72", hideSearch && "hidden")}>
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={isServer ? (serverPagination?.search ?? "") : query}

@@ -2908,17 +2908,20 @@ export function JobDetailView({ id }: { id: string }) {
                   scopeKey={`job:${job.id}`}
                   jobId={job.id}
                   defaultRange={{ preset: "all" }}
+                  defaultView="payments"
                   showEmployee
-                  showByEmployee
+                  canPay
                   allowStop
                   hrefFor={(kind, recordId) =>
                     kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/new-estimate/${recordId}`
                   }
                   header={
                     <div>
-                      <p className="text-sm font-bold text-foreground">Technician time tracking</p>
+                      <p className="text-sm font-bold text-foreground">Technician time &amp; pay</p>
                       <p className="text-xs text-muted-foreground">
-                        Clock-in / clock-out sessions recorded on {job.number} by assigned technicians.
+                        Assigned technician:{" "}
+                        <span className="font-semibold text-foreground">{technician || "Unassigned"}</span>
+                        {" · "}Time worked on {job.number}, pay earned, paid and remaining, and payout history.
                       </p>
                     </div>
                   }

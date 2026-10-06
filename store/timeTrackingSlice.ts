@@ -3,11 +3,18 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import {
   clockIn,
   clockOut,
+  EMPTY_LEDGER,
+  getProviderLedger,
   getTechnicianActiveEntry,
+  getTechnicianLedger,
+  recordTechnicianPayment,
   listProviderTimeEntries,
   listTechnicianTimeEntries,
   providerStopTimeEntry,
   type ClockTarget,
+  type RecordTechnicianPaymentInput,
+  type TechnicianLedger,
+  type TechnicianPaymentRecord,
   type ProviderTimeQuery,
   type TimeEntriesPage,
 } from "@/lib/api/technician-client";
@@ -33,8 +40,31 @@ export type TimeListState = {
   error: string | null;
 };
 
+export type LedgerState = {
+  filterKey: string;
+  data: TechnicianLedger;
+  loading: boolean;
+  loaded: boolean;
+  error: string | null;
+};
+
+export type LedgerQuery = {
+  technician?: boolean;
+  employeeId?: string;
+  employeeIds?: string[];
+  jobId?: string;
+  paymentsPage?: number;
+  paymentsLimit?: number;
+  kinds?: ("job" | "estimate")[];
+};
+
 export type TimeTrackingState = {
   lists: Record<string, TimeListState>;
+  /** Technician pay ledgers (earned / paid / remaining) keyed like `lists`. */
+  ledgers: Record<string, LedgerState>;
+  paying: boolean;
+  /** Bumped after every technician payout so open ledgers refetch. */
+  paymentVersion: number;
   /** Technician's running timer (persisted server-side; survives refresh). */
   active: TimeEntry | null;
   activeLoaded: boolean;
@@ -48,6 +78,9 @@ export type TimeTrackingState = {
 
 const initialState: TimeTrackingState = {
   lists: {},
+  ledgers: {},
+  paying: false,
+  paymentVersion: 0,
   active: null,
   activeLoaded: false,
   clocking: false,
@@ -72,7 +105,14 @@ function emptyList(filterKey = ""): TimeListState {
 }
 
 export function timeFilterKey(query: ProviderTimeQuery) {
-  return [query.from || "", query.to || "", query.page || 1, query.limit || 20].join("|");
+  return [
+    query.from || "",
+    query.to || "",
+    query.page || 1,
+    query.limit || 20,
+    (query.kinds || []).join(","),
+    (query.employeeIds || []).join(","),
+  ].join("|");
 }
 
 type RootLike = { timeTracking: TimeTrackingState };
@@ -139,6 +179,58 @@ export const clockOutThunk = createAsyncThunk<TimeEntry | null, { target: ClockT
   },
 );
 
+function ledgerKey(query: LedgerQuery) {
+  return [
+    query.technician ? "tech" : "pro",
+    query.employeeId || "",
+    (query.employeeIds || []).join(","),
+    query.jobId || "",
+    query.paymentsPage || 1,
+    query.paymentsLimit || 10,
+    (query.kinds || []).join(","),
+  ].join("|");
+}
+
+export const fetchLedger = createAsyncThunk<
+  { scopeKey: string; filterKey: string; data: TechnicianLedger },
+  { scopeKey: string; query: LedgerQuery; force?: boolean },
+  { state: RootLike; rejectValue: string }
+>(
+  "timeTracking/fetchLedger",
+  async ({ scopeKey, query }, { rejectWithValue }) => {
+    try {
+      const history = { paymentsPage: query.paymentsPage, paymentsLimit: query.paymentsLimit, kinds: query.kinds };
+      const data = query.technician
+        ? await getTechnicianLedger(history)
+        : await getProviderLedger({ employeeId: query.employeeId, employeeIds: query.employeeIds, jobId: query.jobId, ...history });
+      return { scopeKey, filterKey: ledgerKey(query), data };
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+  {
+    condition: ({ scopeKey, query, force }, { getState }) => {
+      const ledger = getState().timeTracking?.ledgers[scopeKey];
+      if (!ledger || force) return true;
+      if (ledger.filterKey !== ledgerKey(query)) return true;
+      return !ledger.loading && !ledger.loaded;
+    },
+  },
+);
+
+/** Provider → technician payout (separate from customer payments). */
+export const recordTechnicianPaymentThunk = createAsyncThunk<
+  TechnicianPaymentRecord,
+  RecordTechnicianPaymentInput,
+  { rejectValue: string }
+>("timeTracking/recordPayment", async (input, { rejectWithValue }) => {
+  try {
+    return await recordTechnicianPayment(input);
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
 /** Provider: stop a technician's forgotten timer. */
 export const stopTimeEntryThunk = createAsyncThunk<TimeEntry | null, string, { rejectValue: string }>(
   "timeTracking/providerStop",
@@ -177,6 +269,10 @@ const timeTrackingSlice = createSlice({
     },
     clearTimeList(state, action: PayloadAction<string>) {
       delete state.lists[action.payload];
+    },
+    /** Socket TECHNICIAN_PAYMENT_UPDATED (payout recorded elsewhere). */
+    technicianPaymentReceived(state) {
+      state.paymentVersion += 1;
     },
   },
   extraReducers: (builder) => {
@@ -250,16 +346,59 @@ const timeTrackingSlice = createSlice({
       })
       .addCase(stopTimeEntryThunk.fulfilled, (state, action) => {
         if (action.payload) applyEntry(state, action.payload, { technician: false });
+      })
+      .addCase(fetchLedger.pending, (state, action) => {
+        const { scopeKey, query } = action.meta.arg;
+        const key = ledgerKey(query);
+        const ledger = state.ledgers[scopeKey];
+        // Keep the previous numbers on screen while a new history page loads.
+        state.ledgers[scopeKey] = ledger
+          ? { ...ledger, filterKey: key, loading: true, error: null }
+          : { filterKey: key, data: EMPTY_LEDGER, loading: true, loaded: false, error: null };
+      })
+      .addCase(fetchLedger.fulfilled, (state, action) => {
+        const { scopeKey, filterKey, data } = action.payload;
+        if (state.ledgers[scopeKey]?.filterKey !== filterKey) return;
+        state.ledgers[scopeKey] = { filterKey, data, loading: false, loaded: true, error: null };
+      })
+      .addCase(fetchLedger.rejected, (state, action) => {
+        const ledger = state.ledgers[action.meta.arg.scopeKey];
+        if (!ledger) return;
+        ledger.loading = false;
+        ledger.loaded = true;
+        ledger.error = action.payload || "Could not load technician pay.";
+      })
+      .addCase(recordTechnicianPaymentThunk.pending, (state) => {
+        state.paying = true;
+      })
+      .addCase(recordTechnicianPaymentThunk.fulfilled, (state) => {
+        state.paying = false;
+        state.paymentVersion += 1;
+      })
+      .addCase(recordTechnicianPaymentThunk.rejected, (state) => {
+        state.paying = false;
       });
   },
 });
 
-export const { timeEntryReceived, clearTimeList } = timeTrackingSlice.actions;
+export const { timeEntryReceived, clearTimeList, technicianPaymentReceived } = timeTrackingSlice.actions;
 
 const EMPTY_LIST = emptyList();
 
 export function selectTimeList(state: RootLike, scopeKey: string): TimeListState {
   return state.timeTracking?.lists[scopeKey] ?? EMPTY_LIST;
+}
+
+const EMPTY_LEDGER_STATE: LedgerState = {
+  filterKey: "",
+  data: EMPTY_LEDGER,
+  loading: false,
+  loaded: false,
+  error: null,
+};
+
+export function selectLedger(state: RootLike, scopeKey: string): LedgerState {
+  return state.timeTracking?.ledgers?.[scopeKey] ?? EMPTY_LEDGER_STATE;
 }
 
 export default timeTrackingSlice.reducer;

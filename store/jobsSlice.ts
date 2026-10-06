@@ -18,7 +18,7 @@ import type { Invoice, Job } from "@/lib/types";
 import type { PortalEmployee } from "@/lib/data/portal";
 
 /** Default page size for GET /api/provider/jobs */
-export const JOBS_DEFAULT_LIMIT = 20;
+export const JOBS_DEFAULT_LIMIT = 10;
 
 /** Board filter from URL — empty means all active (non-archived). */
 export type JobListStatus = "" | Job["status"] | "archived";

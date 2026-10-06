@@ -1928,7 +1928,7 @@ export function RequestDetailView({ id }: { id: string }) {
                       rows={displayedTasks}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/tasks/${row.id}`}
-                      pageSize={20}
+                      pageSize={10}
                       busyRowIds={busyTaskRowIds}
                       empty="No tasks match this filter."
                       columns={[
@@ -2123,7 +2123,7 @@ export function RequestDetailView({ id }: { id: string }) {
                       rows={displayedReminders}
                       rowKey={(row) => row.id}
                       rowHref={(row) => `/pro/dashboard/reminders/${row.id}`}
-                      pageSize={20}
+                      pageSize={10}
                       busyRowIds={busyReminderRowIds}
                       empty="No reminders match this filter."
                       columns={[

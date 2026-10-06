@@ -538,7 +538,8 @@ export function TeamMemberView({ id }: { id: string }) {
                   scopeKey={`employee:${employee.id}`}
                   employeeId={employee.id}
                   payRate={employee.hourlyRate ?? 0}
-                  includeOverall
+                  defaultRange={{ preset: "week" }}
+                  canPay
                   allowStop
                   hrefFor={(kind, recordId) =>
                     kind === "job" ? `/pro/dashboard/jobs/${recordId}?tab=time` : `/pro/dashboard/new-estimate/${recordId}`
@@ -547,7 +548,7 @@ export function TeamMemberView({ id }: { id: string }) {
                     <div>
                       <p className="text-sm font-bold text-foreground">Time tracking</p>
                       <p className="text-xs text-muted-foreground">
-                        Clock-in / clock-out sessions recorded by {name} in the technician portal.
+                        Clock-in / clock-out sessions recorded by {name}, with pay earned, paid and remaining.
                       </p>
                     </div>
                   }

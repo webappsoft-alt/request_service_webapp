@@ -31,6 +31,7 @@ import {
 import { estimateCanShare } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { LocationCell } from "@/components/portal/location-cell";
 
 function customerLabel(opportunity: EstimateV2Opportunity) {
   const c = opportunity.customerId;
@@ -47,6 +48,9 @@ function linkedEstimate(row: EstimateV2Opportunity) {
 function rowStatus(row: EstimateV2Opportunity) {
   return String(linkedEstimate(row)?.status || row.status || "");
 }
+
+/** Rows per page — every list in the portal pages 10 at a time. */
+const ESTIMATES_PAGE_SIZE = 10;
 
 function propertyLabel(opportunity: EstimateV2Opportunity) {
   const p = opportunity.propertyAddress || {};
@@ -75,7 +79,7 @@ export function NewEstimateListView() {
     try {
       const result = await listEstimateV2Opportunities({
         page,
-        limit: 20,
+        limit: ESTIMATES_PAGE_SIZE,
         search: search.trim() || undefined,
       });
       setItems(result.items);
@@ -200,13 +204,13 @@ export function NewEstimateListView() {
         countLabel="Estimates"
         searchPlaceholder="Search by Est #, customer, or property"
         loading={loading}
-        pageSize={20}
+        pageSize={ESTIMATES_PAGE_SIZE}
         busyRowIds={deleting && deleteTarget ? [deleteTarget.id] : []}
         serverPagination={{
           page,
-          pageSize: 20,
+          pageSize: ESTIMATES_PAGE_SIZE,
           total,
-          totalPages: Math.max(1, Math.ceil(total / 20)),
+          totalPages: Math.max(1, Math.ceil(total / ESTIMATES_PAGE_SIZE)),
           onPageChange: setPage,
           search,
           onSearchChange: (value) => {
@@ -333,10 +337,13 @@ export function NewEstimateListView() {
           },
           {
             id: "property",
-            header: "Property",
+            header: "Location",
             sortValue: (row) => propertyLabel(row),
             cell: (row) => (
-              <span className="text-sm text-muted-foreground">{propertyLabel(row)}</span>
+              <LocationCell
+                candidates={[row.propertyAddress]}
+                map={{ recordType: "estimate", recordNumber: row.number, customerName: customerLabel(row) }}
+              />
             ),
           },
           {

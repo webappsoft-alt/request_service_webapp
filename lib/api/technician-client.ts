@@ -192,7 +192,15 @@ export type TechProfile = {
     emergencyPhone?: string;
     username?: string;
   };
-  provider: { id: string; name: string; phone?: string; email?: string } | null;
+  provider: {
+    id: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    /** Business location — origin of the route map. */
+    address?: string;
+    coordinates?: { lat: number; lng: number } | null;
+  } | null;
 };
 
 export type Paginated<T> = {
@@ -481,14 +489,20 @@ export type TimeEntriesQuery = {
   to?: string;
   page?: number;
   limit?: number;
+  /** Record type filter: "job", "estimate" or both (omit for all). */
+  kinds?: ("job" | "estimate")[];
 };
+
+function kindsParam(kinds?: ("job" | "estimate")[]) {
+  return kinds && kinds.length === 1 ? kinds.join(",") : undefined;
+}
 
 export async function listTechnicianTimeEntries(query: TimeEntriesQuery): Promise<TimeEntriesPage> {
   const page = query.page ?? 1;
   const limit = query.limit ?? 20;
   const response = await getData(
     technicianApi.timeEntries,
-    { page, limit, from: query.from, to: query.to, tz: browserTimeZone() },
+    { page, limit, from: query.from, to: query.to, kinds: kindsParam(query.kinds), tz: browserTimeZone() },
     quiet,
   );
   return mapEntriesPage(response, page, limit);
@@ -538,6 +552,8 @@ export async function changeTechnicianPassword(body: { currentPassword: string; 
 
 export type ProviderTimeQuery = TimeEntriesQuery & {
   employeeId?: string;
+  /** Global timesheet: several technicians at once. */
+  employeeIds?: string[];
   jobId?: string;
   estimateId?: string;
   includeOverall?: boolean;
@@ -550,6 +566,8 @@ export async function listProviderTimeEntries(query: ProviderTimeQuery): Promise
     providerCrmApi.timeEntries,
     {
       employeeId: query.employeeId,
+      employeeIds: !query.employeeId && query.employeeIds?.length ? query.employeeIds.join(",") : undefined,
+      kinds: kindsParam(query.kinds),
       jobId: query.jobId,
       estimateId: query.estimateId,
       from: query.from,
@@ -609,17 +627,33 @@ export type LedgerSummary = {
   remaining: number;
 };
 
+export type LedgerPagination = { page: number; limit: number; total: number; totalPages: number };
+
 export type TechnicianLedger = {
   summary: LedgerSummary;
   byJob: LedgerRow[];
+  /** One page of payment history (server-paginated). */
   payments: TechnicianPaymentRecord[];
+  paymentsPagination: LedgerPagination;
 };
 
 export const EMPTY_LEDGER: TechnicianLedger = {
   summary: { totalSeconds: 0, sessions: 0, earned: 0, paid: 0, remaining: 0 },
   byJob: [],
   payments: [],
+  paymentsPagination: { page: 1, limit: 10, total: 0, totalPages: 1 },
 };
+
+/** Payment-history paging + Jobs / Estimates filter for ledger requests. */
+export type LedgerHistoryQuery = { paymentsPage?: number; paymentsLimit?: number; kinds?: ("job" | "estimate")[] };
+
+function historyParams(query: LedgerHistoryQuery) {
+  return {
+    paymentsPage: query.paymentsPage || 1,
+    paymentsLimit: query.paymentsLimit || 10,
+    kinds: query.kinds && query.kinds.length === 1 ? query.kinds.join(",") : undefined,
+  };
+}
 
 function mapRef(value: unknown) {
   const row = asRecord(value);
@@ -684,15 +718,43 @@ function mapLedger(value: unknown): TechnicianLedger {
       };
     }),
     payments: (Array.isArray(data.payments) ? data.payments : []).map(mapTechnicianPayment),
+    paymentsPagination: (() => {
+      const p = asRecord(data.paymentsPagination);
+      const limit = Number(p.limit) || 10;
+      const total = Number(p.total) || 0;
+      return {
+        page: Number(p.page) || 1,
+        limit,
+        total,
+        totalPages: Number(p.pages) || Math.max(1, Math.ceil(total / limit)),
+      };
+    })(),
   };
 }
 
-export async function getTechnicianLedger(): Promise<TechnicianLedger> {
-  return mapLedger(await getData(technicianApi.payments, undefined, quiet));
+export async function getTechnicianLedger(query: LedgerHistoryQuery = {}): Promise<TechnicianLedger> {
+  return mapLedger(await getData(technicianApi.payments, historyParams(query), quiet));
 }
 
-export async function getProviderLedger(query: { employeeId?: string; jobId?: string }): Promise<TechnicianLedger> {
-  return mapLedger(await getData(providerCrmApi.technicianPayments, query, quiet));
+export async function getProviderLedger(
+  query: {
+    employeeId?: string;
+    employeeIds?: string[];
+    jobId?: string;
+  } & LedgerHistoryQuery,
+): Promise<TechnicianLedger> {
+  return mapLedger(
+    await getData(
+      providerCrmApi.technicianPayments,
+      {
+        employeeId: query.employeeId,
+        employeeIds: !query.employeeId && query.employeeIds?.length ? query.employeeIds.join(",") : undefined,
+        jobId: query.jobId,
+        ...historyParams(query),
+      },
+      quiet,
+    ),
+  );
 }
 
 export type RecordTechnicianPaymentInput = {
@@ -710,8 +772,25 @@ export async function recordTechnicianPayment(input: RecordTechnicianPaymentInpu
   return mapTechnicianPayment(dataOf(await postData(providerCrmApi.technicianPayments, input, { silent: true })));
 }
 
-/** Persist a nav-section badge reset (marks that section's notifications read). */
-export async function markTechnicianSectionRead(section: string): Promise<{ unreadCount: number }> {
+export type TechBadges = { jobs: number; estimates: number; schedule: number; payments: number };
+
+function mapBadges(value: unknown): TechBadges {
+  const row = asRecord(value);
+  return {
+    jobs: Number(row.jobs) || 0,
+    estimates: Number(row.estimates) || 0,
+    schedule: Number(row.schedule) || 0,
+    payments: Number(row.payments) || 0,
+  };
+}
+
+/** Sidebar badge counts (new since each section was last opened). */
+export async function getTechnicianBadges(): Promise<TechBadges> {
+  return mapBadges(dataOf(await getData(technicianApi.badges, undefined, { ...quiet, force: true })));
+}
+
+/** Reset one section's sidebar badge on the server; bell notifications are untouched. */
+export async function markTechnicianSectionRead(section: string): Promise<TechBadges> {
   const data = asRecord(dataOf(await putData(technicianApi.sectionRead, { section }, { silent: true })));
-  return { unreadCount: Number(data.unreadCount) || 0 };
+  return mapBadges(data.badges);
 }

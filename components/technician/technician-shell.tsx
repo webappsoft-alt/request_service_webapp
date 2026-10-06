@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   UserRound,
+  Wallet,
 } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { LiveTimer } from "@/components/time-tracking/time-tracking-ui";
@@ -28,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
 import { technicianPaths } from "@/lib/technician-paths";
 import { cn } from "@/lib/utils";
 import { selectAuthUser } from "@/store/authSlice";
@@ -53,6 +55,7 @@ const NAV: NavItem[] = [
   { href: technicianPaths.estimates, label: "Estimates", icon: FileText, section: "estimates" },
   { href: technicianPaths.schedule, label: "Schedule", icon: CalendarDays, section: "schedule" },
   { href: technicianPaths.time, label: "Time Tracking", icon: Clock3 },
+  { href: technicianPaths.payments, label: "Payments", icon: Wallet, section: "payments" },
   { href: technicianPaths.profile, label: "Profile", icon: UserRound },
 ];
 
@@ -238,6 +241,10 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const dispatch = useAppDispatch();
   const company = useAppSelector((state) => state.technician.profile.data?.provider?.name || "");
+  const businessAddress = useAppSelector((state) => state.technician.profile.data?.provider?.address || "");
+  const businessCoords = useAppSelector((state) => state.technician.profile.data?.provider?.coordinates ?? null);
+  // Route map origin = the company's business location (same as the office sees).
+  const routeOrigin = useRouteOrigin({ businessName: company, businessAddress, businessCoords });
   const profileLoaded = useAppSelector((state) => Boolean(state.technician.profile.data));
   useEffect(() => {
     if (!profileLoaded) void dispatch(fetchTechProfile());
@@ -288,7 +295,9 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main key={pathname} id="main-content" className="page-enter px-3 py-3 sm:px-4">
-          <div className="mx-auto w-full max-w-7xl">{children}</div>
+          <div className="mx-auto w-full max-w-7xl">
+            <RouteMapProvider origin={routeOrigin}>{children}</RouteMapProvider>
+          </div>
         </main>
       </div>
     </div>

@@ -1224,6 +1224,8 @@ export function JobsView() {
               ? crmCustomerName(match)
               : getPortalCustomerName(provider, customerId);
           },
+          customerAddress: (customerId) =>
+            customers.find((item) => item.id === customerId)?.addresses?.[0],
         })}
         actions={(row) => {
           const archived = Boolean(row.isArchived) || records.isArchived("job", row.id);
@@ -1761,6 +1763,8 @@ export function InvoicesView() {
               ? crmCustomerName(match)
               : getPortalCustomerName(provider, customerId);
           },
+          customerAddress: (customerId) =>
+            customers.find((item) => item.id === customerId)?.addresses?.[0],
         })}
         actions={(row) => {
           const archived =

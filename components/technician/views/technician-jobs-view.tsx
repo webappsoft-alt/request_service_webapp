@@ -9,15 +9,12 @@ import {
   LocationBlock,
   customerName,
 } from "@/components/technician/tech-ui";
+import { useTechSectionSeen } from "@/components/technician/use-tech-section-seen";
 import { formatDate } from "@/lib/format";
 import { technicianPaths } from "@/lib/technician-paths";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  TECH_PAGE_SIZE,
-  fetchTechJobs,
-  markTechSectionRead,
-} from "@/store/technicianSlice";
+import { TECH_PAGE_SIZE, fetchTechJobs } from "@/store/technicianSlice";
 
 const SCOPES = [
   { id: "open", label: "Open" },
@@ -34,17 +31,18 @@ export function TechnicianJobsView() {
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    void dispatch(markTechSectionRead("jobs"));
-  }, [dispatch]);
+  useTechSectionSeen("jobs");
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebounced(search), 300);
     return () => window.clearTimeout(id);
   }, [search]);
 
+  // Always pull fresh data when the tab opens (or a socket refresh lands); the
+  // cached page stays on screen meanwhile, so the spinner only shows when
+  // there is nothing to show yet or the search / filter / page changed.
   useEffect(() => {
-    void dispatch(fetchTechJobs({ page, limit: TECH_PAGE_SIZE, search: debounced, scope, force: version > 0 }));
+    void dispatch(fetchTechJobs({ page, limit: TECH_PAGE_SIZE, search: debounced, scope, force: true }));
   }, [dispatch, page, debounced, scope, version]);
 
   const rows = data?.items ?? [];
@@ -60,7 +58,7 @@ export function TechnicianJobsView() {
         filename="my-jobs"
         countLabel="Jobs"
         searchPlaceholder="Search job #, customer, address"
-        loading={loading}
+        loading={loading && !data}
         empty={debounced ? "No jobs match your search." : "No jobs assigned to you here yet."}
         rows={rows}
         rowKey={(row) => row.id}
@@ -139,10 +137,13 @@ export function TechnicianJobsView() {
             header: "Location",
             exportValue: (row) => String(row.location?.address || ""),
             className: "min-w-56",
+            // Directions links inside keep their own click; the rest of the cell opens the job.
             cell: (row) => (
-              <div onClick={(event) => event.stopPropagation()}>
-                <LocationBlock location={row.location} compact />
-              </div>
+              <LocationBlock
+                location={row.location}
+                compact
+                record={{ recordType: "job", recordNumber: row.number, customerName: customerName(row.customer, row.customerSnapshot) }}
+              />
             ),
           },
           {

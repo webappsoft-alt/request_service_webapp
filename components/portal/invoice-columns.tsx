@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LocationCell, locationText, type AddressLike } from "@/components/portal/location-cell";
 import type { PortalTableColumn } from "@/components/portal/portal-data-table";
 import { StatusDot, moneyTone } from "@/components/portal/status-pill";
 import {
@@ -19,19 +20,24 @@ export function invoiceBoardColumns({
   estimates,
   requests,
   customerName,
+  customerAddress,
   hideCustomer = false,
 }: {
   jobs: Job[];
   estimates: Estimate[];
   requests: PortalRequest[];
   customerName: (customerId: string) => string;
+  /** Fallback when neither the invoice nor its job has an address. */
+  customerAddress?: (customerId: string) => AddressLike;
   hideCustomer?: boolean;
 }): PortalTableColumn<Invoice>[] {
   const jobOf = (invoice: Invoice) => jobs.find((item) => item.id === invoice.jobId);
-  const siteOf = (invoice: Invoice) => {
-    const job = jobOf(invoice);
-    return job ? job.address.street : "";
-  };
+  const siteCandidates = (invoice: Invoice): AddressLike[] => [
+    invoice.address,
+    jobOf(invoice)?.address,
+    customerAddress?.(invoice.customerId),
+  ];
+  const siteOf = (invoice: Invoice) => locationText(...siteCandidates(invoice));
   const jobNameOf = (invoice: Invoice) => {
     const job = jobOf(invoice);
     if (job) return jobServiceLabel(job, estimates, requests);
@@ -130,14 +136,16 @@ export function invoiceBoardColumns({
   columns.push(
     {
       id: "site",
-      header: "Site",
+      header: "Location",
       sortValue: (row) => siteOf(row),
-      searchValue: (row) => {
-        const job = jobOf(row);
-        return job ? `${job.address.street} ${job.address.city} ${job.address.zip}` : "";
-      },
+      searchValue: (row) => siteOf(row),
       exportValue: (row) => siteOf(row),
-      cell: (row) => siteOf(row) || "—",
+      cell: (row) => (
+        <LocationCell
+          candidates={siteCandidates(row)}
+          map={{ recordType: "job", recordNumber: jobOf(row)?.number || row.number, customerName: customerName(row.customerId) }}
+        />
+      ),
     },
     {
       id: "price",

@@ -16,6 +16,7 @@ import {
   MessageCircle,
   Receipt,
   Store,
+  Timer,
   UserRound,
   Users,
   Wallet,
@@ -45,6 +46,7 @@ export const portalNavGroups: PortalNavGroup[] = [
     items: [
       { href: "/pro/dashboard/customers", label: "Customers", icon: Users },
       { href: "/pro/dashboard/team", label: "Employees", icon: UserRound },
+      { href: "/pro/dashboard/timesheets", label: "Timesheets", icon: Timer },
       { href: "/pro/dashboard/contractors", label: "Contractors", icon: Handshake },
       { href: "/pro/dashboard/vendors", label: "Vendors", icon: Building2 },
       { href: "/pro/dashboard/reminders", label: "Reminders", icon: Bell },
@@ -102,6 +104,7 @@ export const portalNav: PortalNavItem[] = portalNavGroups.flatMap((group) => gro
 export const peopleSubnav: { href: string; label: string }[] = [
   { href: "/pro/dashboard/customers", label: "Customers" },
   { href: "/pro/dashboard/team", label: "Employees" },
+  { href: "/pro/dashboard/timesheets", label: "Timesheets" },
   { href: "/pro/dashboard/contractors", label: "Contractors" },
   { href: "/pro/dashboard/vendors", label: "Vendors" },
   { href: "/pro/dashboard/reminders", label: "Reminders" },

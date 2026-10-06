@@ -7,6 +7,7 @@ export const technicianPaths = {
   estimate: (id: string) => `/technical/estimates/${id}`,
   schedule: "/technical/schedule",
   time: "/technical/time-tracking",
+  payments: "/technical/payments",
   profile: "/technical/profile",
 } as const;
 

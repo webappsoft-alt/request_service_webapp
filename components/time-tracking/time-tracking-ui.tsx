@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { CalendarRange, Clock3, Loader2 } from "lucide-react";
-import { PortalPagination } from "@/components/portal/portal-pagination";
+import { CalendarRange, Clock3 } from "lucide-react";
+import { PortalDataTable, type PortalTableColumn } from "@/components/portal/portal-data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,7 @@ import {
   formatClockTime,
   formatDuration,
   formatEntryDate,
+  formatExactDuration,
   formatHours,
   formatTimer,
   liveSeconds,
@@ -50,6 +51,7 @@ export function LiveTimer({ entry, className }: { entry: Pick<TimeEntry, "status
 const PRESETS: { id: TimeRangePreset; label: string }[] = [
   { id: "today", label: "Today" },
   { id: "week", label: "This week" },
+  { id: "lastWeek", label: "Last week" },
   { id: "month", label: "This month" },
   { id: "custom", label: "Custom" },
   { id: "all", label: "All time" },
@@ -207,106 +209,142 @@ export function TimeEntriesTable({
   showEmployee?: boolean;
   hrefFor?: (kind: "job" | "estimate", id: string) => string;
   empty?: string;
+  /** Server pagination (API page / limit). Without it the table pages locally, 10 per page. */
   pagination?: { page: number; pageSize: number; total: number; totalPages: number; onPageChange: (page: number) => void };
   /** Provider only: stop a running timer. */
   onStop?: (entry: TimeEntry) => void;
   stoppingId?: string | null;
 }) {
   const now = useNow(entries.some((entry) => entry.status === "active"));
+  const secondsOf = (entry: TimeEntry) => liveSeconds(entry, now);
+  const payOf = (entry: TimeEntry) =>
+    entry.status === "active" ? Math.round((secondsOf(entry) / 3600) * entry.payRate * 100) / 100 : entry.pay;
+  const refText = (ref: TimeEntry["job"]) => (ref ? [ref.number, ref.title].filter(Boolean).join(" · ") : "");
+
+  const columns: PortalTableColumn<TimeEntry>[] = [
+    ...(showEmployee
+      ? [
+          {
+            id: "technician",
+            header: "Technician",
+            sortValue: (row: TimeEntry) => row.employee?.name || "",
+            exportValue: (row: TimeEntry) => row.employee?.name || "",
+            cell: (row: TimeEntry) => <span className="font-medium">{row.employee?.name || "—"}</span>,
+          },
+        ]
+      : []),
+    {
+      id: "job",
+      header: "Job",
+      sortValue: (row) => row.job?.number || "",
+      exportValue: (row) => refText(row.job),
+      cell: (row) => recordLink(row, "job", hrefFor),
+    },
+    {
+      id: "estimate",
+      header: "Estimate",
+      sortValue: (row) => row.estimate?.number || "",
+      exportValue: (row) => refText(row.estimate),
+      cell: (row) => recordLink(row, "estimate", hrefFor),
+    },
+    {
+      id: "date",
+      header: "Date",
+      sortValue: (row) => row.clockInAt,
+      exportValue: (row) => formatEntryDate(row.clockInAt),
+      className: "whitespace-nowrap",
+      cell: (row) => formatEntryDate(row.clockInAt),
+    },
+    {
+      id: "in",
+      header: "Clock in",
+      sortValue: (row) => row.clockInAt,
+      exportValue: (row) => formatClockTime(row.clockInAt),
+      className: "whitespace-nowrap",
+      cell: (row) => formatClockTime(row.clockInAt),
+    },
+    {
+      id: "out",
+      header: "Clock out",
+      sortValue: (row) => row.clockOutAt || "",
+      exportValue: (row) => (row.status === "active" ? "Running" : formatClockTime(row.clockOutAt)),
+      className: "whitespace-nowrap",
+      cell: (row) =>
+        row.status === "active" ? (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+            <span className="size-1.5 animate-pulse rounded-full bg-emerald-600" aria-hidden />
+            Running
+          </span>
+        ) : (
+          formatClockTime(row.clockOutAt)
+        ),
+    },
+    {
+      id: "duration",
+      header: "Total duration",
+      sortValue: (row) => secondsOf(row),
+      exportValue: (row) => formatExactDuration(secondsOf(row)),
+      className: "whitespace-nowrap tabular-nums",
+      cell: (row) => (row.status === "active" ? formatTimer(secondsOf(row)) : formatExactDuration(secondsOf(row))),
+    },
+    {
+      id: "rate",
+      header: "Pay rate",
+      sortValue: (row) => row.payRate,
+      exportValue: (row) => `${formatMoney(row.payRate)}/hr`,
+      className: "whitespace-nowrap tabular-nums",
+      cell: (row) => `${formatMoney(row.payRate)}/hr`,
+    },
+    {
+      id: "pay",
+      header: "Total pay",
+      sortValue: (row) => payOf(row),
+      exportValue: (row) => formatMoney(payOf(row)),
+      className: "font-medium tabular-nums",
+      cell: (row) => formatMoney(payOf(row)),
+    },
+    ...(onStop
+      ? [
+          {
+            id: "action",
+            header: "Action",
+            cell: (row: TimeEntry) =>
+              row.status === "active" ? (
+                <Button size="xs" variant="outline" disabled={stoppingId === row.id} onClick={() => onStop(row)}>
+                  {stoppingId === row.id ? "Stopping…" : "Clock out"}
+                </Button>
+              ) : null,
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="overflow-hidden rounded-md border border-border-soft bg-card">
-      <div className="relative overflow-x-auto">
-        {loading ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/60">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" aria-label="Loading" />
-          </div>
-        ) : null}
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-secondary text-[11px] tracking-[0.12em] uppercase">
-              {showEmployee ? <TableHead>Technician</TableHead> : null}
-              <TableHead>Job</TableHead>
-              <TableHead>Estimate</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Clock in</TableHead>
-              <TableHead>Clock out</TableHead>
-              <TableHead className="text-right">Duration</TableHead>
-              <TableHead className="text-right">Rate</TableHead>
-              <TableHead className="text-right">Pay</TableHead>
-              {onStop ? <TableHead className="text-right">Action</TableHead> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={showEmployee ? 10 : 9} className="py-8 text-center text-sm text-muted-foreground">
-                  {loading ? "Loading time entries…" : empty}
-                </TableCell>
-              </TableRow>
-            ) : (
-              entries.map((entry) => {
-                const seconds = liveSeconds(entry, now);
-                const running = entry.status === "active";
-                const pay = running ? Math.round((seconds / 3600) * entry.payRate * 100) / 100 : entry.pay;
-                return (
-                  <TableRow key={entry.id} className={cn(running && "bg-emerald-50/60")}>
-                    {showEmployee ? (
-                      <TableCell className="font-medium">{entry.employee?.name || "—"}</TableCell>
-                    ) : null}
-                    <TableCell>{recordLink(entry, "job", hrefFor)}</TableCell>
-                    <TableCell>{recordLink(entry, "estimate", hrefFor)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatEntryDate(entry.clockInAt)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{formatClockTime(entry.clockInAt)}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {running ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                          <span className="size-1.5 animate-pulse rounded-full bg-emerald-600" aria-hidden />
-                          Running
-                        </span>
-                      ) : (
-                        formatClockTime(entry.clockOutAt)
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap tabular-nums">
-                      {running ? formatTimer(seconds) : formatDuration(seconds)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatMoney(entry.payRate)}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{formatMoney(pay)}</TableCell>
-                    {onStop ? (
-                      <TableCell className="text-right">
-                        {running ? (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            disabled={stoppingId === entry.id}
-                            onClick={() => onStop(entry)}
-                          >
-                            {stoppingId === entry.id ? "Stopping…" : "Clock out"}
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                    ) : null}
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      {pagination ? (
-        <div className="px-2 pb-2">
-          <PortalPagination
-            page={pagination.page}
-            pageSize={pagination.pageSize}
-            total={pagination.total}
-            totalPages={pagination.totalPages}
-            onPageChange={pagination.onPageChange}
-            itemName="sessions"
-          />
-        </div>
-      ) : null}
-    </div>
+    <PortalDataTable
+      filename="time-entries"
+      countLabel="Sessions"
+      hideSearch
+      rows={entries}
+      rowKey={(row) => row.id}
+      columns={columns}
+      loading={Boolean(loading)}
+      empty={empty}
+      pageSize={pagination?.pageSize ?? 10}
+      rowClassName={(row) => (row.status === "active" ? "bg-emerald-50/60" : undefined)}
+      serverPagination={
+        pagination
+          ? {
+              page: pagination.page,
+              pageSize: pagination.pageSize,
+              total: pagination.total,
+              totalPages: pagination.totalPages,
+              onPageChange: pagination.onPageChange,
+              search: "",
+              onSearchChange: () => undefined,
+            }
+          : undefined
+      }
+    />
   );
 }
 

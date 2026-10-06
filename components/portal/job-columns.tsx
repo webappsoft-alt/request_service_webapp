@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LocationCell, locationText, type AddressLike } from "@/components/portal/location-cell";
 import type { PortalTableColumn } from "@/components/portal/portal-data-table";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export function jobBoardColumns({
   events,
   employeeLabel,
   customerName,
+  customerAddress,
   onChangeStatus,
 }: {
   estimates: Estimate[];
@@ -33,6 +35,8 @@ export function jobBoardColumns({
   events: PortalCalendarEvent[];
   employeeLabel: (id?: string) => string;
   customerName: (customerId: string) => string;
+  /** Fallback when the job has no site address of its own. */
+  customerAddress?: (customerId: string) => AddressLike;
   onChangeStatus?: (job: Job) => void;
 }): PortalTableColumn<Job>[] {
   const eventFor = (job: Job) => events.find((item) => item.kind === "job" && item.recordId === job.id);
@@ -77,17 +81,15 @@ export function jobBoardColumns({
     },
     {
       id: "address",
-      header: "Job address",
-      sortValue: (row) => `${row.address.street} ${row.address.city}`,
-      searchValue: (row) => `${row.address.street} ${row.address.city} ${row.address.zip}`,
-      exportValue: (row) => `${row.address.street}, ${row.address.city}`,
+      header: "Location",
+      sortValue: (row) => locationText(row.address, customerAddress?.(row.customerId)),
+      searchValue: (row) => locationText(row.address, customerAddress?.(row.customerId)),
+      exportValue: (row) => locationText(row.address, customerAddress?.(row.customerId)),
       cell: (row) => (
-        <span>
-          {row.address.street}
-          <span className="block text-muted-foreground">
-            {row.address.city}, {row.address.state} {row.address.zip}
-          </span>
-        </span>
+        <LocationCell
+          candidates={[row.address, customerAddress?.(row.customerId)]}
+          map={{ recordType: "job", recordNumber: row.number, customerName: customerName(row.customerId) }}
+        />
       ),
     },
     {

@@ -19,6 +19,12 @@ export type RealtimeEvents = {
   TIME_ENTRY_UPDATED: {
     entry?: Record<string, unknown>;
   };
+  /** Provider room: a technician payout was recorded. */
+  TECHNICIAN_PAYMENT_UPDATED: {
+    payment?: Record<string, unknown>;
+    employeeId?: string;
+    jobId?: string | null;
+  };
   "socket:ready": {
     ok: boolean;
     role?: string;

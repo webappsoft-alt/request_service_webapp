@@ -16,7 +16,7 @@ import type { PortalReminder } from "@/lib/data/crm-people";
 import { deleteCustomerReminder } from "./customersSlice";
 
 /** List page size for GET /provider/reminders */
-export const REMINDERS_DEFAULT_LIMIT = 20;
+export const REMINDERS_DEFAULT_LIMIT = 10;
 
 export type ReminderListFilter = "" | "open" | "done" | "overdue" | "archived";
 

@@ -310,6 +310,7 @@ export const technicianApi = {
   payments: "technician/payments",
   /** PUT { section } — mark a nav section's notifications read (persists badge reset) */
   sectionRead: "technician/notifications/read-section",
+  badges: "technician/notifications/badges",
 } as const;
 
 /** Authenticated in-app notifications (customer + provider + technician). */

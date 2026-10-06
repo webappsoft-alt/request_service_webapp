@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Loader2, MapPin, Navigation, Play, Square } from "lucide-react";
 import { toast } from "sonner";
+import { useRouteMap } from "@/components/portal/route-map-provider";
 import { StatusPill } from "@/components/portal/status-pill";
 import { LiveTimer } from "@/components/time-tracking/time-tracking-ui";
 import { Button } from "@/components/ui/button";
@@ -93,26 +94,71 @@ export function directionsUrl(location?: TechLocation | Record<string, unknown> 
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }
 
+export type MapRecord = { recordType?: "job" | "estimate"; recordNumber?: string; customerName?: string };
+
 export function LocationBlock({
   location,
   compact = false,
+  record,
 }: {
   location?: TechLocation | Record<string, unknown> | null;
   compact?: boolean;
+  /** Labels for the route map dialog. */
+  record?: MapRecord;
 }) {
   const line = addressLine(location);
   const url = directionsUrl(location);
   if (!line && !url) return <span className="text-sm text-muted-foreground">No address on file</span>;
+  const coords = coordinatesOf(location);
   return (
     <div className={cn("flex items-start gap-2", compact && "items-center")}>
       <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className={cn("min-w-0 flex-1 text-sm", compact && "truncate")}>{line || "Pinned location"}</span>
-      {url ? <DirectionsButton url={url} compact={compact} /> : null}
+      {url ? (
+        <DirectionsButton
+          url={url}
+          compact={compact}
+          target={{
+            ...record,
+            customerAddress: line,
+            customerCoords: coords ? { lat: coords[0], lng: coords[1] } : null,
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-export function DirectionsButton({ url, compact = false }: { url: string; compact?: boolean }) {
+/**
+ * Opens the project's route map dialog (business → job site); falls back to an
+ * external directions link only outside a portal shell.
+ */
+export function DirectionsButton({
+  url,
+  compact = false,
+  target,
+}: {
+  url: string;
+  compact?: boolean;
+  target?: MapRecord & { customerAddress: string; customerCoords?: { lat: number; lng: number } | null };
+}) {
+  const openMap = useRouteMap();
+  if (openMap && target) {
+    return (
+      <Button
+        type="button"
+        size={compact ? "icon-sm" : "sm"}
+        variant="outline"
+        className={cn("shrink-0", !compact && "h-8")}
+        title="View route on map"
+        aria-label="View route on map"
+        onClick={() => openMap(target)}
+      >
+        <Navigation className="size-3.5" aria-hidden />
+        {compact ? null : "Directions"}
+      </Button>
+    );
+  }
   return (
     <Button
       asChild

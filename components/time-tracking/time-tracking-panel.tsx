@@ -2,28 +2,46 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { CalendarDays, List, Wallet } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
+  fetchLedger,
   fetchTimeEntries,
+  selectLedger,
   selectTimeList,
   stopTimeEntryThunk,
 } from "@/store/timeTrackingSlice";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
-import { formatMoney } from "@/lib/format";
-import { formatDuration, formatHours, resolveTimeRange, type TimeEntry, type TimeRange } from "@/lib/time-tracking";
+import { resolveTimeRange, type TimeEntry, type TimeRange } from "@/lib/time-tracking";
+import type { LedgerRow } from "@/lib/api/technician-client";
+import { TimeEntriesTable, TimeRangeFilter } from "@/components/time-tracking/time-tracking-ui";
 import {
-  TimeByDayTable,
-  TimeByEmployeeTable,
-  TimeEntriesTable,
-  TimeRangeFilter,
-  TimeStat,
-  TimeSummaryCards,
-} from "@/components/time-tracking/time-tracking-ui";
+  LedgerTable,
+  PayTechnicianDialog,
+  PaymentHistoryTable,
+  RecordTypeFilter,
+  TechnicianMultiSelect,
+  TimesheetKpis,
+  WeekBoard,
+  ledgerRowKey,
+  ledgerRowKind,
+  sumLedger,
+  usePayDialog,
+  type EmployeeOption,
+  type HrefFor,
+  type RecordKind,
+} from "@/components/time-tracking/timesheet-ui";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
+/** The week board loads every session in range (the API caps this at 500). */
+const BOARD_LIMIT = 500;
+
+export type TimesheetView = "board" | "sessions" | "payments";
 
 export type TimeTrackingPanelProps = {
-  /** Slice cache key, e.g. `tech`, `employee:<id>`, `job:<id>`. */
+  /** Slice cache key, e.g. `tech`, `employee:<id>`, `job:<id>`, `timesheets`. */
   scopeKey: string;
   /** Technician portal (own data) vs provider portal (scoped by ids below). */
   technician?: boolean;
@@ -31,81 +49,169 @@ export type TimeTrackingPanelProps = {
   jobId?: string;
   estimateId?: string;
   defaultRange?: TimeRange;
+  defaultView?: TimesheetView;
   payRate?: number;
-  /** Provider employee view: show all-time totals beside the filtered totals. */
-  includeOverall?: boolean;
+  /** Global timesheet: technician multi-select (hidden when scoped to one employee). */
+  employeeOptions?: EmployeeOption[];
+  /** Show the technician name on cards / rows. */
   showEmployee?: boolean;
-  showByEmployee?: boolean;
-  showByDay?: boolean;
+  /** Provider only: record technician payouts. */
+  canPay?: boolean;
   /** Provider only: allow stopping a technician's running timer. */
   allowStop?: boolean;
-  hrefFor?: (kind: "job" | "estimate", id: string) => string;
+  hrefFor?: HrefFor;
   header?: ReactNode;
 };
 
+const VIEWS: { id: TimesheetView; label: string; icon: typeof List }[] = [
+  { id: "board", label: "Week board", icon: CalendarDays },
+  { id: "sessions", label: "Sessions", icon: List },
+  { id: "payments", label: "Payments", icon: Wallet },
+];
+
+/**
+ * One timesheet used everywhere (global Timesheets page, employee detail, job
+ * detail, technician portal): filters → KPI ribbon → week board / sessions
+ * table / pay ledger. Hours, pay and payouts all come from the same entries.
+ */
 export function TimeTrackingPanel({
   scopeKey,
   technician = false,
   employeeId,
   jobId,
   estimateId,
-  defaultRange = { preset: "month" },
+  defaultRange = { preset: "week" },
+  defaultView = "board",
   payRate,
-  includeOverall = false,
+  employeeOptions,
   showEmployee = false,
-  showByEmployee = false,
-  showByDay = true,
+  canPay = false,
   allowStop = false,
   hrefFor,
   header,
 }: TimeTrackingPanelProps) {
   const dispatch = useAppDispatch();
   const [range, setRange] = useState<TimeRange>(defaultRange);
+  const [view, setView] = useState<TimesheetView>(defaultView);
+  const [kinds, setKinds] = useState<RecordKind[]>(["job", "estimate"]);
+  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsTab, setPaymentsTab] = useState<"balances" | "history">("balances");
   const [stoppingId, setStoppingId] = useState<string | null>(null);
-  const list = useAppSelector((state) => selectTimeList(state, scopeKey));
-  const version = useAppSelector((state) => state.timeTracking?.version ?? 0);
-  const resolved = useMemo(() => resolveTimeRange(range), [range]);
+  const pay = usePayDialog();
 
+  const resolved = useMemo(() => resolveTimeRange(range), [range]);
+  const listScope = view === "sessions" ? scopeKey : `${scopeKey}:board`;
+  const list = useAppSelector((state) => selectTimeList(state, listScope));
+  const ledgerState = useAppSelector((state) => selectLedger(state, scopeKey));
+  const version = useAppSelector((state) => state.timeTracking?.version ?? 0);
+  const paymentVersion = useAppSelector((state) => state.timeTracking?.paymentVersion ?? 0);
+
+  const kindsKey = kinds.join(",");
+  const employeeKey = employeeIds.join(",");
   const query = useMemo(
     () => ({
       employeeId,
+      employeeIds: employeeId || !employeeKey ? undefined : employeeKey.split(","),
       jobId,
       estimateId,
+      kinds: kindsKey.split(",") as RecordKind[],
       from: resolved.from,
       to: resolved.to,
-      page,
-      limit: PAGE_SIZE,
-      includeOverall,
+      page: view === "sessions" ? page : 1,
+      limit: view === "sessions" ? PAGE_SIZE : BOARD_LIMIT,
     }),
-    [employeeId, jobId, estimateId, resolved.from, resolved.to, page, includeOverall],
+    [employeeId, employeeKey, jobId, estimateId, kindsKey, resolved.from, resolved.to, page, view],
+  );
+  // Payment history is paged + filtered by the API; earned / remaining per job always cover everything.
+  const ledgerQuery = useMemo(
+    () => ({
+      technician,
+      employeeId,
+      employeeIds: employeeId || !employeeKey ? undefined : employeeKey.split(","),
+      jobId,
+      paymentsPage,
+      paymentsLimit: PAGE_SIZE,
+      kinds: kindsKey.split(",") as RecordKind[],
+    }),
+    [technician, employeeId, employeeKey, jobId, paymentsPage, kindsKey],
   );
 
   useEffect(() => {
-    void dispatch(fetchTimeEntries({ scopeKey, query, technician }));
-  }, [dispatch, scopeKey, query, technician]);
+    void dispatch(fetchTimeEntries({ scopeKey: listScope, query, technician }));
+  }, [dispatch, listScope, query, technician]);
 
-  // A clock-in/out anywhere (this tab, another device, or the office) refreshes totals.
+  useEffect(() => {
+    void dispatch(fetchLedger({ scopeKey, query: ledgerQuery }));
+  }, [dispatch, scopeKey, ledgerQuery]);
+
+  // A clock-in/out anywhere (this tab, another device, or the office) refreshes hours and pay.
   useEffect(() => {
     if (!version) return;
-    void dispatch(fetchTimeEntries({ scopeKey, query, technician, force: true }));
+    void dispatch(fetchTimeEntries({ scopeKey: listScope, query, technician, force: true }));
+    void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when version bumps
   }, [version]);
+
+  // A payout (here or from another device) refreshes paid / remaining immediately.
+  useEffect(() => {
+    if (!paymentVersion) return;
+    void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when a payout lands
+  }, [paymentVersion]);
 
   // Provider pages do not mount the technician bridge, so listen for socket updates here.
   useEffect(() => {
     if (technician) return;
     return subscribeRealtime((detail) => {
-      if (detail?.type !== "TIME_ENTRY_UPDATED") return;
-      // Entry refs may be ids or populated objects — match on the serialized payload.
-      const entry = (detail.payload as { entry?: unknown } | undefined)?.entry;
-      const text = entry ? JSON.stringify(entry) : "";
+      const type = detail?.type;
+      if (type !== "TIME_ENTRY_UPDATED" && type !== "TECHNICIAN_PAYMENT_UPDATED") return;
+      // Refs may be ids or populated objects — match on the serialized payload.
+      const text = detail.payload ? JSON.stringify(detail.payload) : "";
       const ids = [employeeId, jobId, estimateId].filter(Boolean) as string[];
-      if (!entry || ids.some((id) => text.includes(id))) {
-        void dispatch(fetchTimeEntries({ scopeKey, query, technician, force: true }));
+      if (ids.length && !ids.some((id) => text.includes(id))) return;
+      if (type === "TIME_ENTRY_UPDATED") {
+        void dispatch(fetchTimeEntries({ scopeKey: listScope, query, technician, force: true }));
       }
+      void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
     });
-  }, [dispatch, technician, scopeKey, query, employeeId, jobId, estimateId]);
+  }, [dispatch, technician, scopeKey, listScope, query, ledgerQuery, employeeId, jobId, estimateId]);
+
+  // Ledger rows follow the Jobs / Estimates toggles; totals are re-added from the visible rows.
+  const ledgerRows = useMemo(
+    () => ledgerState.data.byJob.filter((row) => kinds.includes(ledgerRowKind(row))),
+    [ledgerState.data.byJob, kinds],
+  );
+  const ledgerSummary = useMemo(() => sumLedger(ledgerRows), [ledgerRows]);
+  const ledgerByKey = useMemo(
+    () => new Map<string, LedgerRow>(ledgerRows.map((row) => [ledgerRowKey(row.employeeId, row.jobId, row.estimateId), row])),
+    [ledgerRows],
+  );
+  const payments = ledgerState.data.payments;
+  const paymentsPagination = ledgerState.data.paymentsPagination;
+
+  const hasError = Boolean(list.error || ledgerState.error);
+  function retry() {
+    void dispatch(fetchTimeEntries({ scopeKey: listScope, query, technician, force: true }));
+    void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
+  }
+
+  // After a dropped connection (e.g. the API restarting), retry when the tab regains focus or the network returns.
+  useEffect(() => {
+    if (!hasError) return;
+    const onBack = () => {
+      if (document.visibilityState === "hidden") return;
+      void dispatch(fetchTimeEntries({ scopeKey: listScope, query, technician, force: true }));
+      void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
+    };
+    window.addEventListener("online", onBack);
+    window.addEventListener("focus", onBack);
+    return () => {
+      window.removeEventListener("online", onBack);
+      window.removeEventListener("focus", onBack);
+    };
+  }, [hasError, dispatch, listScope, query, technician, scopeKey, ledgerQuery]);
 
   async function stop(entry: TimeEntry) {
     setStoppingId(entry.id);
@@ -118,12 +224,16 @@ export function TimeTrackingPanel({
     }
   }
 
-  const overall = list.overall;
+  const onPay = canPay ? (row: LedgerRow) => pay.start(row) : undefined;
+  const onStop = allowStop ? (entry: TimeEntry) => void stop(entry) : undefined;
+  const showTechFilter = Boolean(employeeOptions && !employeeId);
+  const loadingFirst = list.loading && !list.items.length;
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {header ?? <div />}
+      {header}
+
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border-soft bg-card p-2">
         <TimeRangeFilter
           value={range}
           onChange={(next) => {
@@ -131,40 +241,99 @@ export function TimeTrackingPanel({
             setPage(1);
           }}
         />
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {showTechFilter ? (
+            <TechnicianMultiSelect
+              options={employeeOptions ?? []}
+              value={employeeIds}
+              onChange={(next) => {
+                setEmployeeIds(next);
+                setPage(1);
+                setPaymentsPage(1);
+              }}
+            />
+          ) : null}
+          {!jobId && !estimateId ? (
+            <RecordTypeFilter
+              value={kinds}
+              onChange={(next) => {
+                setKinds(next);
+                setPage(1);
+                setPaymentsPage(1);
+              }}
+            />
+          ) : null}
+        </div>
       </div>
 
-      <TimeSummaryCards summary={list.summary} payRate={payRate} />
+      <TimesheetKpis summary={list.summary} ledger={ledgerSummary} payRate={payRate} />
 
-      {includeOverall && overall ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <TimeStat label="All-time hours" value={formatHours(overall.totalSeconds)} hint={formatDuration(overall.totalSeconds)} />
-          <TimeStat label="All-time pay" value={formatMoney(overall.totalPay)} hint="Tracked hours × rate" />
-          <TimeStat label="All-time sessions" value={overall.sessions} />
-          <TimeStat label="Jobs / estimates" value={`${overall.jobs} / ${overall.estimates}`} />
+      {hasError ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <span>{list.error || ledgerState.error}</span>
+          <Button size="xs" variant="outline" className="h-7 border-red-300 bg-white" onClick={retry} disabled={list.loading}>
+            {list.loading ? "Retrying…" : "Retry"}
+          </Button>
         </div>
       ) : null}
 
-      {list.error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{list.error}</p>
-      ) : null}
 
-      {showByEmployee && list.summary.byEmployee.length ? (
-        <section className="space-y-1.5">
-          <h3 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">By technician</h3>
-          <TimeByEmployeeTable rows={list.summary.byEmployee} />
-        </section>
-      ) : null}
+      <div className="inline-flex rounded-md border border-input bg-card p-0.5" role="tablist" aria-label="Timesheet view">
+        {VIEWS.map((item) => {
+          const Icon = item.icon;
+          const active = view === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setView(item.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-medium transition-colors",
+                active ? "bg-[#003F7D] text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Icon className="size-3.5" aria-hidden />
+              {item.label}
+              {item.id === "payments" && ledgerSummary.remaining > 0 ? (
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                    active ? "bg-white/20" : "bg-amber-100 text-amber-800",
+                  )}
+                >
+                  {ledgerRows.filter((row) => row.remaining > 0).length}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
 
-      <section className="space-y-1.5">
-        <h3 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-          Sessions ({list.total})
-        </h3>
-        <TimeEntriesTable
+      {view === "board" ? (
+        <WeekBoard
           entries={list.items}
+          from={resolved.from}
+          to={resolved.to}
           loading={list.loading}
           showEmployee={showEmployee}
           hrefFor={hrefFor}
-          onStop={allowStop ? (entry) => void stop(entry) : undefined}
+          ledgerByKey={ledgerByKey}
+          onPay={onPay}
+          onStop={onStop}
+          stoppingId={stoppingId}
+        />
+      ) : null}
+
+      {view === "sessions" ? (
+        <TimeEntriesTable
+          entries={list.items}
+          loading={list.loading}
+          empty={loadingFirst ? "Loading time entries…" : "No time tracked in this period."}
+          showEmployee={showEmployee}
+          hrefFor={hrefFor}
+          onStop={onStop}
           stoppingId={stoppingId}
           pagination={{
             page: list.page,
@@ -174,14 +343,82 @@ export function TimeTrackingPanel({
             onPageChange: setPage,
           }}
         />
-      </section>
-
-      {showByDay && list.summary.byDay.length ? (
-        <section className="space-y-1.5">
-          <h3 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Daily breakdown</h3>
-          <TimeByDayTable rows={list.summary.byDay} />
-        </section>
       ) : null}
+
+      {view === "payments" ? (
+        <div className="space-y-3">
+          {/* Inner tabs: balances to pay vs. payouts already made. */}
+          <div className="flex gap-1 border-b border-[#94a3b8] dark:border-border" role="tablist" aria-label="Payments">
+            {[
+              {
+                id: "balances" as const,
+                label: `Payement  remaining by ${jobId ? "technician" : "job"}`,
+                count: ledgerRows.length,
+                owed: ledgerRows.filter((row) => row.remaining > 0).length,
+              },
+              { id: "history" as const, label: "Payment history", count: paymentsPagination.total, owed: 0 },
+            ].map((tab) => {
+              const active = paymentsTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setPaymentsTab(tab.id)}
+                  className={cn(
+                    "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                    active
+                      ? "border-[#003F7D] text-[#003F7D] dark:text-blue-200"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tab.label}
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
+                      active ? "bg-[#e8eef5] text-[#003F7D]" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                  {tab.owed ? (
+                    <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">
+                      {tab.owed} unpaid
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          {paymentsTab === "balances" ? (
+            <LedgerTable
+              rows={ledgerRows}
+              loading={ledgerState.loading && !ledgerState.loaded}
+              showEmployee={showEmployee}
+              hrefFor={hrefFor}
+              onPay={onPay}
+            />
+          ) : (
+            <PaymentHistoryTable
+              payments={payments}
+              showEmployee={showEmployee}
+              hrefFor={hrefFor}
+              loading={ledgerState.loading}
+              pagination={{
+                page: paymentsPagination.page,
+                pageSize: PAGE_SIZE,
+                total: paymentsPagination.total,
+                totalPages: paymentsPagination.totalPages,
+                onPageChange: setPaymentsPage,
+              }}
+            />
+          )}
+        </div>
+      ) : null}
+
+      {canPay ? <PayTechnicianDialog key={pay.key} row={pay.row} open={pay.open} onOpenChange={pay.setOpen} /> : null}
     </div>
   );
 }

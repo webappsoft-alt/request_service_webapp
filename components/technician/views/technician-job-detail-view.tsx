@@ -14,7 +14,8 @@ import {
   LocationBlock,
   customerName,
 } from "@/components/technician/tech-ui";
-import { TimeEntriesTable, TimeSummaryCards } from "@/components/time-tracking/time-tracking-ui";
+import { TimeEntriesTable } from "@/components/time-tracking/time-tracking-ui";
+import { PaymentHistoryTable, TimesheetKpis } from "@/components/time-tracking/timesheet-ui";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -81,10 +82,10 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
   const entry = useAppSelector((state) => state.technician.jobDetails[id]);
   const version = useAppSelector((state) => state.technician.versions.jobs);
   const timeVersion = useAppSelector((state) => state.timeTracking.version);
-
+  const paymentVersion = useAppSelector((state) => state.timeTracking.paymentVersion);
   useEffect(() => {
     void dispatch(fetchTechJob(id));
-  }, [dispatch, id, version, timeVersion]);
+  }, [dispatch, id, version, timeVersion, paymentVersion]);
 
   const data = entry?.data;
   const items = useMemo(() => data?.job.items ?? [], [data]);
@@ -110,7 +111,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
     );
   }
 
-  const { job, schedule, timeEntries, timeSummary } = data;
+  const { job, schedule, timeEntries, timeSummary, payments } = data;
   const customer = job.customerId;
   const snapshot = (job.customerSnapshot || {}) as Record<string, unknown>;
   const estimate = (job.estimateId || null) as Record<string, unknown> | null;
@@ -160,7 +161,10 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
         </DetailCard>
 
         <DetailCard title="Job location" className="lg:col-span-2">
-          <LocationBlock location={location} />
+          <LocationBlock
+            location={location}
+            record={{ recordType: "job", recordNumber: job.number, customerName: customerName(customer, snapshot) }}
+          />
         </DetailCard>
       </div>
 
@@ -271,8 +275,46 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
 
       <DetailCard title="My time on this job">
         <div className="space-y-3">
-          <TimeSummaryCards summary={timeSummary} />
-          <TimeEntriesTable entries={timeEntries} empty="You have not clocked in on this job yet." />
+          <TimesheetKpis summary={timeSummary} ledger={payments.summary} />
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              Clock-in history ({timeEntries.length} session{timeEntries.length === 1 ? "" : "s"})
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Every clock-in starts a new session — finished sessions stay here with their duration and pay.
+            </p>
+            <TimeEntriesTable entries={timeEntries} empty="You have not clocked in on this job yet." />
+          </div>
+        </div>
+      </DetailCard>
+
+      <DetailCard title={job.status === "completed" ? "My payment for this job" : "My pay on this job"}>
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2 rounded-md border border-border-soft bg-muted/30 px-3 py-2.5 text-sm">
+            <div>
+              <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Earned</p>
+              <p className="text-lg font-semibold tabular-nums">{formatMoney(payments.summary.earned)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Paid</p>
+              <p className="text-lg font-semibold text-emerald-700 tabular-nums">{formatMoney(payments.summary.paid)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Remaining</p>
+              <p className={`text-lg font-semibold tabular-nums ${payments.summary.remaining > 0 ? "text-amber-700" : "text-muted-foreground"}`}>
+                {formatMoney(payments.summary.remaining)}
+              </p>
+            </div>
+          </div>
+          {job.status !== "completed" && payments.summary.earned > 0 ? (
+            <p className="text-xs text-muted-foreground">Earned from your completed sessions so far. The office can pay you any time.</p>
+          ) : null}
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              Payment history ({payments.history.length})
+            </h3>
+            <PaymentHistoryTable payments={payments.history} empty="No payments for this job yet." />
+          </div>
         </div>
       </DetailCard>
     </PortalPage>

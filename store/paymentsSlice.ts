@@ -11,7 +11,7 @@ import {
 } from "@/lib/api/crm-client";
 import type { Payment } from "@/lib/types";
 
-export const PAYMENTS_DEFAULT_LIMIT = 20;
+export const PAYMENTS_DEFAULT_LIMIT = 10;
 
 export type PaymentsState = {
   items: Payment[];

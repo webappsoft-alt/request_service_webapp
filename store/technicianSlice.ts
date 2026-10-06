@@ -9,7 +9,10 @@ import {
   listTechnicianEstimates,
   listTechnicianJobs,
   listTechnicianSchedule,
+  getTechnicianBadges,
+  markTechnicianSectionRead,
   updateTechnicianProfile,
+  type TechBadges,
   type Paginated,
   type TechDashboard,
   type TechEstimateDetail,
@@ -27,13 +30,14 @@ import {
   type AppNotification,
 } from "@/lib/api/notifications-client";
 
-export const TECH_PAGE_SIZE = 20;
+export const TECH_PAGE_SIZE = 10;
 
 /** Sections with their own nav badge, and the notification types that feed each. */
 export const TECH_SECTION_TYPES = {
   jobs: ["JOB_ASSIGNED", "JOB_UPDATED"],
   estimates: ["ESTIMATE_ASSIGNED", "ESTIMATE_UPDATED"],
   schedule: ["SCHEDULE_UPDATED"],
+  payments: ["TECHNICIAN_PAYMENT"],
 } as const;
 export type TechSection = keyof typeof TECH_SECTION_TYPES;
 export type TechRefreshScope = TechSection | "dashboard";
@@ -56,6 +60,8 @@ export type TechnicianState = {
   schedule: { key: string; items: TechScheduleRow[]; loading: boolean; loaded: boolean; error: string | null };
   profile: { data: TechProfile | null; loading: boolean; saving: boolean; error: string | null };
   notifications: { items: AppNotification[]; unread: number; loaded: boolean; loading: boolean };
+  /** Sidebar badges — separate from the bell; reset when a section is opened. */
+  badges: TechBadges & { loaded: boolean };
   /** Bumped by socket `technician:refresh` so mounted views refetch only what changed. */
   versions: Record<TechRefreshScope, number>;
 };
@@ -71,7 +77,8 @@ const initialState: TechnicianState = {
   schedule: { key: "", items: [], loading: false, loaded: false, error: null },
   profile: { data: null, loading: false, saving: false, error: null },
   notifications: { items: [], unread: 0, loaded: false, loading: false },
-  versions: { dashboard: 0, jobs: 0, estimates: 0, schedule: 0 },
+  badges: { jobs: 0, estimates: 0, schedule: 0, payments: 0, loaded: false },
+  versions: { dashboard: 0, jobs: 0, estimates: 0, schedule: 0, payments: 0 },
 };
 
 type RootLike = { technician: TechnicianState };
@@ -260,24 +267,35 @@ export const markAllTechNotificationsRead = createAsyncThunk<void, void, { rejec
   },
 );
 
+export const fetchTechBadges = createAsyncThunk<TechBadges, void, { rejectValue: string }>(
+  "technician/badges",
+  async (_arg, { rejectWithValue }) => {
+    try {
+      return await getTechnicianBadges();
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
 /**
- * Opening a section (Jobs / Estimates / Schedule) clears that section's badge,
- * mirroring the provider "Leads tab opened" behaviour.
+ * Opening a section (Jobs / Estimates / Schedule / Payments) resets its sidebar
+ * badge. The "last opened" time is saved on the server, so a refresh never
+ * brings old counts back — only new events raise it. The bell is untouched.
  */
-export const markTechSectionRead = createAsyncThunk<string[], TechSection, { state: RootLike }>(
+export const markTechSectionRead = createAsyncThunk<TechBadges, TechSection, { state: RootLike; rejectValue: string }>(
   "technician/markSectionRead",
-  async (section, { getState }) => {
-    const types = TECH_SECTION_TYPES[section] as readonly string[];
-    const ids = getState()
-      .technician.notifications.items.filter((item) => !item.isRead && types.includes(item.type))
-      .map((item) => item.id);
-    await Promise.allSettled(ids.map((id) => markNotificationRead(id)));
-    return ids;
+  async (section, { rejectWithValue }) => {
+    try {
+      return await markTechnicianSectionRead(section);
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
   },
   {
     condition: (section, { getState }) => {
-      const types = TECH_SECTION_TYPES[section] as readonly string[];
-      return getState().technician.notifications.items.some((item) => !item.isRead && types.includes(item.type));
+      const badges = getState().technician?.badges;
+      return Boolean(badges?.loaded && badges[section] > 0);
     },
   },
 );
@@ -305,6 +323,9 @@ const technicianSlice = createSlice({
       if (state.notifications.items.some((row) => row.id === item.id)) return;
       state.notifications.items = [item, ...state.notifications.items].slice(0, 50);
       if (!item.isRead) state.notifications.unread += 1;
+      for (const [section, types] of Object.entries(TECH_SECTION_TYPES)) {
+        if ((types as readonly string[]).includes(item.type)) state.badges[section as TechSection] += 1;
+      }
     },
     /** Socket `technician:refresh` — bump versions so mounted views refetch. */
     techRefreshRequested(state, action: PayloadAction<string[] | undefined>) {
@@ -461,22 +482,27 @@ const technicianSlice = createSlice({
         );
         state.notifications.unread = 0;
       })
+      .addCase(fetchTechBadges.fulfilled, (state, action) => {
+        state.badges = { ...action.payload, loaded: true };
+      })
+      .addCase(fetchTechBadges.rejected, (state) => {
+        state.badges.loaded = true;
+      })
       .addCase(markTechSectionRead.pending, (state, action) => {
-        const types = TECH_SECTION_TYPES[action.meta.arg] as readonly string[];
-        markRead(
-          state,
-          state.notifications.items.filter((item) => types.includes(item.type)).map((item) => item.id),
-        );
+        state.badges[action.meta.arg] = 0;
+      })
+      .addCase(markTechSectionRead.fulfilled, (state, action) => {
+        // Keep the open section at 0 even if an event raced in.
+        state.badges = { ...action.payload, [action.meta.arg]: 0, loaded: true };
       });
   },
 });
 
 export const { techNotificationReceived, techRefreshRequested } = technicianSlice.actions;
 
-/** Unread notification count for a nav section badge. */
+/** Sidebar badge for a section (new since last opened — independent of the bell). */
 export function selectTechSectionBadge(state: RootLike, section: TechSection) {
-  const types = TECH_SECTION_TYPES[section] as readonly string[];
-  return state.technician?.notifications.items.filter((item) => !item.isRead && types.includes(item.type)).length ?? 0;
+  return state.technician?.badges?.[section] ?? 0;
 }
 
 export default technicianSlice.reducer;

@@ -215,6 +215,22 @@ export function formatDuration(seconds: number) {
   return total > 0 ? "<1m" : "0m";
 }
 
+/** Exact "38h 30m 12s" — used where pay must visibly match tracked time. */
+export function formatExactDuration(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+}
+
+/** Compact "38.5 hrs" for KPI tiles. */
+export function formatHoursShort(seconds: number) {
+  const hours = Math.max(0, seconds) / 3600;
+  const text = hours >= 100 ? hours.toFixed(0) : hours.toFixed(hours % 1 === 0 ? 0 : 1);
+  return `${text} hrs`;
+}
+
 export function formatHours(seconds: number) {
   return `${(Math.max(0, seconds) / 3600).toFixed(2)} hrs`;
 }
@@ -241,7 +257,7 @@ export function browserTimeZone() {
   }
 }
 
-export type TimeRangePreset = "today" | "week" | "month" | "all" | "custom";
+export type TimeRangePreset = "today" | "week" | "lastWeek" | "month" | "all" | "custom";
 
 export type TimeRange = {
   preset: TimeRangePreset;
@@ -249,6 +265,19 @@ export type TimeRange = {
   fromDate?: string;
   toDate?: string;
 };
+
+/** Local yyyy-mm-dd key for bucketing sessions into calendar days. */
+export function dateKey(value: Date | string) {
+  return localDateInput(typeof value === "string" ? new Date(value) : value);
+}
+
+/** Monday 00:00 (local) of the week containing `value`. */
+export function startOfWeek(value: Date | string) {
+  const date = typeof value === "string" ? new Date(value) : new Date(value);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return date;
+}
 
 function localDateInput(date: Date) {
   const y = date.getFullYear();
@@ -277,6 +306,14 @@ export function resolveTimeRange(range: TimeRange): { from?: string; to?: string
       const weekStart = new Date(start);
       weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
       return { from: weekStart.toISOString(), to: end.toISOString(), label: "This week" };
+    }
+    case "lastWeek": {
+      const weekStart = startOfWeek(now);
+      weekStart.setDate(weekStart.getDate() - 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      return { from: weekStart.toISOString(), to: weekEnd.toISOString(), label: "Last week" };
     }
     case "month": {
       const base = range.fromDate ? parseLocalDate(range.fromDate) : now;

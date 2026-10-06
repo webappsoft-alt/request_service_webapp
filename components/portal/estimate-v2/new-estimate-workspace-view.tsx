@@ -1087,19 +1087,19 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           <button
             type="button"
             onClick={() => setMapOpen(true)}
-            className="inline-flex items-center gap-1 font-medium text-sky-600 hover:text-sky-700 hover:underline cursor-pointer"
+            className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80 cursor-pointer"
             title="Click to view on map"
           >
-            <MapPin className="size-3.5 shrink-0 text-sky-600" />
+            <MapPin className="size-3.5 shrink-0 text-primary" />
             <span>{propertyLine(opportunity)}</span>
           </button>
           <button
             type="button"
             onClick={() => setMapOpen(true)}
-            className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 hover:bg-sky-100 hover:text-sky-800 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 rounded-md border border-primary/25 bg-primary/5 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
             title="View route and distance on map"
           >
-            <MapPin className="size-3 text-sky-600" />
+            <MapPin className="size-3 text-primary" />
             View on map
           </button>
         </div>
@@ -1152,21 +1152,19 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             <button
               type="button"
               onClick={() => setMapOpen(true)}
-              className="mt-1 flex items-start gap-1.5 text-left text-sm leading-relaxed font-medium text-sky-600 hover:text-sky-700 hover:underline cursor-pointer group"
+              className="mt-1 flex items-start gap-1.5 text-left text-sm leading-relaxed font-medium text-primary hover:text-primary/80 cursor-pointer"
               title="Click to view on map"
             >
-              <MapPin className="size-4 shrink-0 mt-0.5 text-sky-600 group-hover:text-sky-700" />
-              <span className="underline decoration-sky-300 underline-offset-2">
-                {propertyLine(opportunity)}
-              </span>
+              <MapPin className="size-4 shrink-0 mt-0.5 text-primary" />
+              <span>{propertyLine(opportunity)}</span>
             </button>
             <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setMapOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100 hover:text-sky-800 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
               >
-                <MapPin className="size-3 text-sky-600" />
+                <MapPin className="size-3 text-primary" />
                 View on map
               </button>
             </div>
@@ -1412,7 +1410,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       className="gap-1.5"
                       onClick={() => setMapOpen(true)}
                     >
-                      <MapPin className="size-3.5 text-sky-600" />
+                      <MapPin className="size-3.5 text-primary" />
                       View on map
                     </Button>
                     {!estimate && !showVisits ? (

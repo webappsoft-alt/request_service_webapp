@@ -18,7 +18,7 @@ import {
 import type { Invoice, InvoiceStatus, Payment } from "@/lib/types";
 
 /** Default page size for GET /api/provider/invoices */
-export const INVOICES_DEFAULT_LIMIT = 20;
+export const INVOICES_DEFAULT_LIMIT = 10;
 
 /** Board / API status filter — empty means all active (non-archived). */
 export type InvoiceListStatus =

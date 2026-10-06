@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Bell, Briefcase, CalendarDays, Clock3, FileText } from "lucide-react";
+import { ArrowRight, Bell, Briefcase, CalendarDays, Clock3, FileText, Wallet } from "lucide-react";
 import { PortalPage } from "@/components/portal/portal-page";
 import {
   ClockControl,
@@ -21,6 +21,9 @@ import { formatDuration, formatHours } from "@/lib/time-tracking";
 import { selectAuthUser } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchTechDashboard } from "@/store/technicianSlice";
+import { fetchLedger, selectLedger } from "@/store/timeTrackingSlice";
+
+const LEDGER_QUERY = { technician: true } as const;
 
 function greeting() {
   const hour = new Date().getHours();
@@ -37,10 +40,16 @@ export function TechnicianDashboardView() {
   const timeVersion = useAppSelector((state) => state.timeTracking.version);
   const active = useAppSelector((state) => state.timeTracking.active);
   const unread = useAppSelector((state) => state.technician.notifications.unread);
+  const paymentVersion = useAppSelector((state) => state.timeTracking.paymentVersion);
+  const pay = useAppSelector((state) => selectLedger(state, "tech")).data.summary;
 
   useEffect(() => {
     void dispatch(fetchTechDashboard());
   }, [dispatch, version, timeVersion]);
+
+  useEffect(() => {
+    void dispatch(fetchLedger({ scopeKey: "tech", query: LEDGER_QUERY, force: timeVersion + paymentVersion > 0 }));
+  }, [dispatch, timeVersion, paymentVersion]);
 
   const firstName = typeof user?.firstName === "string" ? user.firstName : "";
 
@@ -103,6 +112,32 @@ export function TechnicianDashboardView() {
         <TimeStat label="Estimates" value={data.counts.estimates} hint="Assigned visits" />
         <TimeStat label="Visits today" value={data.counts.todayVisits} hint={`Pay rate ${formatMoney(data.payRate)}/hr`} />
       </div>
+
+      <Link
+        href={technicianPaths.payments}
+        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-border-soft bg-card px-4 py-3 hover:bg-muted/40"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <Wallet className="size-4 text-muted-foreground" aria-hidden /> Payments
+        </span>
+        <span className="text-sm tabular-nums">
+          <span className="text-muted-foreground">Earned </span>
+          <span className="font-semibold">{formatMoney(pay.earned)}</span>
+        </span>
+        <span className="text-sm tabular-nums">
+          <span className="text-muted-foreground">Paid </span>
+          <span className="font-semibold text-emerald-700">{formatMoney(pay.paid)}</span>
+        </span>
+        <span className="text-sm tabular-nums">
+          <span className="text-muted-foreground">Remaining </span>
+          <span className={pay.remaining > 0 ? "font-semibold text-amber-700" : "font-semibold text-muted-foreground"}>
+            {formatMoney(pay.remaining)}
+          </span>
+        </span>
+        <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-primary">
+          View payments <ArrowRight className="size-3.5" aria-hidden />
+        </span>
+      </Link>
 
       <div className="grid gap-3 lg:grid-cols-3">
         {/* Today's schedule */}
@@ -232,7 +267,11 @@ function JobList({
                 <JobStatusPill status={job.status} />
               </div>
               <p className="text-xs text-muted-foreground">{customerName(job.customer, job.customerSnapshot)}</p>
-              <LocationBlock location={job.location} compact />
+              <LocationBlock
+                location={job.location}
+                compact
+                record={{ recordType: "job", recordNumber: job.number, customerName: customerName(job.customer, job.customerSnapshot) }}
+              />
             </div>
           ))
         ) : (

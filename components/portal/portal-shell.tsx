@@ -1,5 +1,6 @@
 "use client";
 
+import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -137,6 +138,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { provider, session } = usePortalWorkspace();
+  const routeOrigin = useRouteOrigin({ provider, businessName: provider?.companyName });
   const authUser = useAppSelector(selectAuthUser);
   const { records, closeRecord } = useOpenRecords();
   const [collapsed, setCollapsed] = useState(false);
@@ -245,7 +247,9 @@ export function PortalShell({ children }: { children: ReactNode }) {
           {showWork ? <WorkSubnav /> : null}
         </header>
         <main key={pathname} id="main-content" className="page-enter px-3 py-3 sm:px-4">
-          <div className="mx-auto w-full">{children}</div>
+          <div className="mx-auto w-full">
+            <RouteMapProvider origin={routeOrigin}>{children}</RouteMapProvider>
+          </div>
         </main>
       </div>
     </div>

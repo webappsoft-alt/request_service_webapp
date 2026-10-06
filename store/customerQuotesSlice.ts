@@ -4,7 +4,7 @@ import { getData } from "@/components/api/sliceHttp";
 import { userApi } from "@/components/api/ApiRoutesFile";
 import type { RootState } from "@/store";
 
-export const CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT = 20;
+export const CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT = 10;
 
 export type CustomerQuoteProfessional = {
   requestId: string;

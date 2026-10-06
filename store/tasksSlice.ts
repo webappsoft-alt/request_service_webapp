@@ -15,7 +15,7 @@ import {
 import type { PortalTask } from "@/lib/data/crm-people";
 
 /** List page size for GET /provider/tasks */
-export const TASKS_DEFAULT_LIMIT = 20;
+export const TASKS_DEFAULT_LIMIT = 10;
 
 type TasksState = {
   items: PortalTask[];

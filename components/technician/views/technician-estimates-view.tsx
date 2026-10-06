@@ -16,6 +16,7 @@ import {
   customerName,
 } from "@/components/technician/tech-ui";
 import { LineItemsTable } from "@/components/technician/views/technician-job-detail-view";
+import { useTechSectionSeen } from "@/components/technician/use-tech-section-seen";
 import { TimeEntriesTable, TimeSummaryCards } from "@/components/time-tracking/time-tracking-ui";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
@@ -27,7 +28,6 @@ import {
   TECH_PAGE_SIZE,
   fetchTechEstimate,
   fetchTechEstimates,
-  markTechSectionRead,
 } from "@/store/technicianSlice";
 
 export function TechnicianEstimatesView() {
@@ -38,9 +38,7 @@ export function TechnicianEstimatesView() {
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    void dispatch(markTechSectionRead("estimates"));
-  }, [dispatch]);
+  useTechSectionSeen("estimates");
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebounced(search), 300);
@@ -48,7 +46,8 @@ export function TechnicianEstimatesView() {
   }, [search]);
 
   useEffect(() => {
-    void dispatch(fetchTechEstimates({ page, limit: TECH_PAGE_SIZE, search: debounced, force: version > 0 }));
+    // Fresh data on every visit; cached rows stay visible while it loads.
+    void dispatch(fetchTechEstimates({ page, limit: TECH_PAGE_SIZE, search: debounced, force: true }));
   }, [dispatch, page, debounced, version]);
 
   return (
@@ -62,7 +61,7 @@ export function TechnicianEstimatesView() {
         filename="my-estimates"
         countLabel="Estimates"
         searchPlaceholder="Search estimate # or customer"
-        loading={loading}
+        loading={loading && !data}
         empty={debounced ? "No estimates match your search." : "No estimates assigned to you yet."}
         rows={data?.items ?? []}
         rowKey={(row) => row.id}
@@ -107,9 +106,11 @@ export function TechnicianEstimatesView() {
             className: "min-w-56",
             exportValue: (row) => String(row.propertyAddress?.address || ""),
             cell: (row) => (
-              <div onClick={(event) => event.stopPropagation()}>
-                <LocationBlock location={row.propertyAddress} compact />
-              </div>
+              <LocationBlock
+                location={row.propertyAddress}
+                compact
+                record={{ recordType: "estimate", recordNumber: row.number, customerName: customerName(row.customer, row.customerSnapshot) }}
+              />
             ),
           },
           {
@@ -207,7 +208,10 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
           </div>
         </DetailCard>
         <DetailCard title="Property" className="lg:col-span-2">
-          <LocationBlock location={location} />
+          <LocationBlock
+            location={location}
+            record={{ recordType: "estimate", recordNumber: estimate.number, customerName: customerName(customer, snapshot) }}
+          />
         </DetailCard>
       </div>
 

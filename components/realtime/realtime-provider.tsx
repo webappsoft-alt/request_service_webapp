@@ -392,6 +392,9 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("TIME_ENTRY_UPDATED", (payload) => {
         broadcastRealtime({ type: "TIME_ENTRY_UPDATED", payload });
       }),
+      onSocketEvent("TECHNICIAN_PAYMENT_UPDATED", (payload) => {
+        broadcastRealtime({ type: "TECHNICIAN_PAYMENT_UPDATED", payload });
+      }),
       onSocketEvent("LEAD_CREATED", (payload) => {
         broadcastRealtime({ type: "LEAD_CREATED", payload });
         showNotificationToast(

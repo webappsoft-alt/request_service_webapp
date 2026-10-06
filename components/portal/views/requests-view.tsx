@@ -50,6 +50,7 @@ import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib
 import { formatDate } from "@/lib/format";
 import type { RequestStatus } from "@/lib/types";
 import { visibleQuoteAnswers } from "@/components/portal/quote-answers-card";
+import { LocationCell, locationText } from "@/components/portal/location-cell";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -513,15 +514,16 @@ export function RequestsView() {
           },
           {
             id: "area",
-            header: "Area",
-            sortValue: (row) => row.neighborhood,
-            searchValue: (row) => `${row.neighborhood} ${row.zip}`,
-            exportValue: (row) => `${row.neighborhood} ${row.zip}`,
+            header: "Location",
+            sortValue: (row) => locationText(row.address, { city: row.city || row.neighborhood, state: row.state, zip: row.zip }),
+            searchValue: (row) =>
+              `${locationText(row.address, { city: row.city || row.neighborhood, state: row.state, zip: row.zip })} ${row.neighborhood}`,
+            exportValue: (row) => locationText(row.address, { city: row.city || row.neighborhood, state: row.state, zip: row.zip }),
             cell: (row) => (
-              <div>
-                {row.neighborhood || row.city || "—"}
-                {row.zip ? <p className="text-xs text-muted-foreground">{row.zip}</p> : null}
-              </div>
+              <LocationCell
+                candidates={[row.address, { city: row.city || row.neighborhood, state: row.state, zip: row.zip }]}
+                map={{ recordType: "estimate", recordNumber: row.number, customerName: row.customerName }}
+              />
             ),
           },
           {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import Link from "next/link";
 import {
   ChevronDown,
+  Clock3,
   Eye,
   FileText,
   Film,
@@ -21,6 +22,11 @@ import {
   validateAttachmentFile,
 } from "@/components/api/uploadFile";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { PasswordInput } from "@/components/auth/password-input";
+import { validateTechnicianCredentials } from "@/components/portal/create-employee-dialog";
+import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
+import { TimeStat } from "@/components/time-tracking/time-tracking-ui";
+import { formatDuration, formatHours } from "@/lib/time-tracking";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import {
   CreateReminderDialog,
@@ -322,6 +328,7 @@ export function TeamMemberView({ id }: { id: string }) {
           { id: "settings", label: "Settings" },
           { id: "availability", label: "Availability" },
           { id: "pay", label: "Pay rate" },
+          { id: "time", label: "Time tracking", icon: Clock3 },
           { id: "schedule", label: "Schedule" },
           { id: "jobs", label: "Jobs" },
           { id: "estimates", label: "Estimates" },
@@ -390,9 +397,9 @@ export function TeamMemberView({ id }: { id: string }) {
             return (
               <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-foreground">Per hour price</p>
+                  <p className="text-sm font-bold text-foreground">Pay rate</p>
                   <p className="text-xs text-muted-foreground">
-                    Labor rate for this employee on jobs, estimates, and overtime.
+                    Hourly pay rate. Tracked clock-in hours × this rate = pay.
                   </p>
                 </div>
                 <Button
@@ -523,6 +530,27 @@ export function TeamMemberView({ id }: { id: string }) {
                   onSave={saveEmployee}
                   hideHeader
                   onActionsChange={onPayActionsChange}
+                />
+              );
+            case "time":
+              return (
+                <TimeTrackingPanel
+                  scopeKey={`employee:${employee.id}`}
+                  employeeId={employee.id}
+                  payRate={employee.hourlyRate ?? 0}
+                  includeOverall
+                  allowStop
+                  hrefFor={(kind, recordId) =>
+                    kind === "job" ? `/pro/dashboard/jobs/${recordId}?tab=time` : `/pro/dashboard/new-estimate/${recordId}`
+                  }
+                  header={
+                    <div>
+                      <p className="text-sm font-bold text-foreground">Time tracking</p>
+                      <p className="text-xs text-muted-foreground">
+                        Clock-in / clock-out sessions recorded by {name} in the technician portal.
+                      </p>
+                    </div>
+                  }
                 />
               );
             case "schedule":
@@ -798,6 +826,86 @@ function EmployeeSettingsTab({
           />
         </Field>
       </div>
+      <TechnicianLoginCard key={`${employee.id}:${employee.username ?? ""}`} employee={employee} onSave={onSave} />
+    </div>
+  );
+}
+
+/** Provider-issued technician portal credentials (username + password). */
+function TechnicianLoginCard({
+  employee,
+  onSave,
+}: {
+  employee: PortalEmployee;
+  onSave: (patch: Partial<PortalEmployee>) => void | Promise<unknown>;
+}) {
+  const [username, setUsername] = useState(employee.username ?? "");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  // Remounted (via key) when the employee or saved username changes, so no sync effect is needed.
+  const enabled = Boolean(employee.loginEnabled && employee.username);
+
+  async function save() {
+    if (saving) return;
+    const handle = username.trim().toLowerCase();
+    if (!handle && !password) {
+      toast.error("Enter a username and password.");
+      return;
+    }
+    // Existing logins can change the username alone; a new login needs both.
+    const error = validateTechnicianCredentials(handle, password, { requirePassword: !enabled });
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setSaving(true);
+    try {
+      await Promise.resolve(onSave({ username: handle, ...(password ? { password } : {}) }));
+      setPassword("");
+      toast.success(enabled ? "Technician login updated." : "Technician login created.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save technician login.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-border-soft p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-foreground">Technician portal login</p>
+          <p className="text-xs text-muted-foreground">
+            {enabled
+              ? `Signs in on the Pro login as @${employee.username}. They only see their own jobs, estimates, schedule, and time.`
+              : "Create a username and password so this employee can clock in and see their assigned work."}
+          </p>
+        </div>
+        <StatusPill label={enabled ? "Login enabled" : "No login"} tone={enabled ? "success" : "neutral"} />
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <Field label="Username">
+          <Input
+            value={username}
+            autoComplete="off"
+            autoCapitalize="none"
+            placeholder="first.last"
+            onChange={(event) => setUsername(event.target.value.toLowerCase())}
+          />
+        </Field>
+        <Field label={enabled ? "New password (leave blank to keep)" : "Password"}>
+          <PasswordInput
+            value={password}
+            autoComplete="new-password"
+            placeholder="At least 8 characters"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </Field>
+        <Button size="sm" className="h-9" disabled={saving} onClick={() => void save()}>
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {enabled ? "Update login" : "Create login"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -1071,6 +1179,32 @@ export function EmployeePayTab({
         <PayStat label="Typical week" value={`${weekHours} hrs`} hint="From availability" />
         <PayStat label="Weekly labor" value={formatMoney(pay.hourlyRate * weekHours)} hint="Hours × rate" />
       </div>
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Tracked time (all time)</p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <TimeStat
+            label="Hours worked"
+            value={formatHours(employee.timeTotals?.totalSeconds ?? 0)}
+            hint={formatDuration(employee.timeTotals?.totalSeconds ?? 0)}
+            accent
+          />
+          <TimeStat
+            label="Total pay"
+            value={formatMoney(employee.timeTotals?.totalPay ?? 0)}
+            hint="Each session × its pay rate"
+            accent
+          />
+          <TimeStat label="Sessions" value={employee.timeTotals?.sessions ?? 0} hint="Clock-in / out" />
+          <TimeStat
+            label="At current rate"
+            value={formatMoney(((employee.timeTotals?.totalSeconds ?? 0) / 3600) * pay.hourlyRate)}
+            hint={`Hours × ${formatMoney(pay.hourlyRate)}`}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          A new rate applies to new sessions; past sessions keep the rate they were clocked at.
+        </p>
+      </div>
     </div>
   );
 }
@@ -1097,7 +1231,9 @@ function EmployeeScheduleTab({
 
   const apiRows = selectTeamTabRows(tab, employee.id, filterKey, []);
   const fallback = events.filter((item) => item.employeeId === employee.id);
-  const assigned = (apiRows.length ? apiRows : fallback).map((item) => ({
+  const assigned = (apiRows.length ? apiRows : fallback)
+    .filter((item) => !item.employeeId || item.employeeId === employee.id)
+    .map((item) => ({
     ...item,
     // API list is already scoped; ensure client filters can match this employee.
     employeeId: item.employeeId || employee.id,

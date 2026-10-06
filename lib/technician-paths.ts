@@ -1,0 +1,19 @@
+/** Technician (employee) portal routes. Technicians sign in on the Pro login. */
+export const technicianPaths = {
+  dashboard: "/technical",
+  jobs: "/technical/jobs",
+  job: (id: string) => `/technical/jobs/${id}`,
+  estimates: "/technical/estimates",
+  estimate: (id: string) => `/technical/estimates/${id}`,
+  schedule: "/technical/schedule",
+  time: "/technical/time-tracking",
+  profile: "/technical/profile",
+} as const;
+
+export function isTechnicianPath(pathname: string): boolean {
+  return pathname === "/technical" || pathname.startsWith("/technical/");
+}
+
+export function isTechnicianRole(role: string | null | undefined): boolean {
+  return String(role || "").toLowerCase() === "technician";
+}

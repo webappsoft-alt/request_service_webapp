@@ -256,6 +256,9 @@ function applyDetail(state: TeamState, payload: PortalEmployeeDetail) {
           payload.employee.attachments !== undefined
             ? payload.employee.attachments
             : cached.attachments,
+        username: payload.employee.username ?? cached.username,
+        loginEnabled: payload.employee.loginEnabled ?? cached.loginEnabled,
+        timeTotals: payload.employee.timeTotals ?? cached.timeTotals,
       }
     : payload.employee;
   state.detail = employee;

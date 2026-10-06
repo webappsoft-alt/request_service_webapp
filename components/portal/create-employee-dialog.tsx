@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +30,22 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
 import { createTeamMember, fetchTeam } from "@/store/teamSlice";
+
+/** Matches the API rule for technician usernames. */
+export const TECHNICIAN_USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
+
+/** Returns an error message, or null when the credential pair is valid (or both empty). */
+export function validateTechnicianCredentials(username: string, password: string, { requirePassword = true } = {}) {
+  const handle = username.trim().toLowerCase();
+  if (!handle && !password) return null;
+  if (!handle) return "Enter a username for the technician login.";
+  if (!TECHNICIAN_USERNAME_PATTERN.test(handle)) {
+    return "Username must be 3-30 characters: letters, numbers, dot, underscore, or dash.";
+  }
+  if (requirePassword && !password) return "Enter a password for the technician login.";
+  if (password && password.length < 8) return "Password must be at least 8 characters.";
+  return null;
+}
 
 const ROLES: PortalEmployeeRole[] = ["technician", "estimator", "dispatcher", "owner"];
 
@@ -57,6 +74,9 @@ export function CreateEmployeeDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [trade, setTrade] = useState("");
+  const [payRate, setPayRate] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
 
   function reset() {
@@ -66,6 +86,9 @@ export function CreateEmployeeDialog({
     setEmail("");
     setPhone("");
     setTrade("");
+    setPayRate("");
+    setUsername("");
+    setPassword("");
     setSaving(false);
   }
 
@@ -90,9 +113,16 @@ export function CreateEmployeeDialog({
       phone: phone.trim(),
       trade: trade.trim() || "General",
       active: true as const,
+      hourlyRate: Math.max(0, Number(payRate) || 0),
+      ...(username.trim() ? { username: username.trim().toLowerCase(), password } : {}),
     };
     if (!input.firstName || !input.lastName) {
       toast.error("First and last name are required.");
+      return;
+    }
+    const credentialError = validateTechnicianCredentials(username, password);
+    if (credentialError) {
+      toast.error(credentialError);
       return;
     }
 
@@ -130,7 +160,7 @@ export function CreateEmployeeDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-md" data-lenis-prevent>
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-md" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -199,6 +229,50 @@ export function CreateEmployeeDialog({
               onChange={setPhone}
               placeholder="(555) 123-4567"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="create-emp-rate">Pay rate (per hour)</Label>
+            <Input
+              id="create-emp-rate"
+              type="number"
+              min="0"
+              step="0.5"
+              value={payRate}
+              placeholder="0.00"
+              onChange={(e) => setPayRate(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Used to calculate pay from tracked clock-in hours.</p>
+          </div>
+          <div className="space-y-3 rounded-md border border-border-soft bg-secondary/40 p-3">
+            <div>
+              <p className="text-sm font-semibold">Technician portal login</p>
+              <p className="text-xs text-muted-foreground">
+                Optional. They sign in on the Pro login with this username to see only their own jobs, schedule, and time.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="create-emp-username">Username</Label>
+                <Input
+                  id="create-emp-username"
+                  value={username}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  placeholder="marcus.lee"
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="create-emp-password">Password</Label>
+                <PasswordInput
+                  id="create-emp-password"
+                  value={password}
+                  autoComplete="new-password"
+                  placeholder="At least 8 characters"
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
         </div>
         <DialogFooter>

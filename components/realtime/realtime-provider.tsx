@@ -386,6 +386,12 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("chat:presence", handlePresence),
       onSocketEvent("SUPPORT_PRESENCE", handleSupportPresence),
       onSocketEvent("presence:snapshot", handlePresenceSnapshot),
+      onSocketEvent("technician:refresh", (payload) => {
+        broadcastRealtime({ type: "TECHNICIAN_REFRESH", payload });
+      }),
+      onSocketEvent("TIME_ENTRY_UPDATED", (payload) => {
+        broadcastRealtime({ type: "TIME_ENTRY_UPDATED", payload });
+      }),
       onSocketEvent("LEAD_CREATED", (payload) => {
         broadcastRealtime({ type: "LEAD_CREATED", payload });
         showNotificationToast(

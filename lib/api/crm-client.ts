@@ -948,6 +948,9 @@ function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
   if (employee.workingHours !== undefined) {
     payload.workingHours = (employee.workingHours as PortalEmployeeWorkingHours[] | undefined) ?? [];
   }
+  // Technician portal credentials — only sent when the provider sets them.
+  if (employee.username !== undefined) payload.username = employee.username.trim().toLowerCase();
+  if (employee.password) payload.password = employee.password;
   return payload;
 }
 
@@ -3418,6 +3421,42 @@ export async function getProviderReports(query: ProviderReportsQuery = {}) {
 export type ProviderDashboardQuery = CrmRequestOptions;
 
 /** GET /api/provider/dashboard — Main / Sales / Service card aggregates. */
+function mapDashboardActionItem(raw: unknown) {
+  const row = asReportsRecord(raw);
+  const priority = stringOr(row.priority);
+  return {
+    id: stringOr(row.id),
+    kind: stringOr(row.kind),
+    actionLabel: stringOr(row.actionLabel),
+    priority:
+      priority === "high" || priority === "medium" || priority === "low"
+        ? (priority as "high" | "medium" | "low")
+        : undefined,
+    title: stringOr(row.title) || undefined,
+    customerName: stringOr(row.customerName),
+    reference: stringOr(row.reference),
+    status: stringOr(row.status),
+    statusLabel: stringOr(row.statusLabel),
+    detail: stringOr(row.detail),
+    time: stringOr(row.time) || null,
+    amount: row.amount == null ? undefined : numberOr(row.amount),
+    href: stringOr(row.href) || "/pro/dashboard",
+  };
+}
+
+function mapDashboardActionCenter(raw: unknown) {
+  const data = asReportsRecord(raw);
+  const list = (value: unknown) =>
+    (Array.isArray(value) ? value : []).map(mapDashboardActionItem).filter((item) => item.id);
+  return {
+    importantActions: list(data.importantActions),
+    importantActionsTotal: numberOr(data.importantActionsTotal),
+    importantActionsHigh: numberOr(data.importantActionsHigh),
+    today: list(data.today),
+    todayDate: stringOr(data.todayDate),
+  };
+}
+
 export async function getProviderDashboard(query: ProviderDashboardQuery = {}) {
   const response = await getData(
     providerCrmApi.dashboard,
@@ -3603,6 +3642,7 @@ export async function getProviderDashboard(query: ProviderDashboardQuery = {}) {
     city: stringOr(data.city),
     state: stringOr(data.state),
     generatedAt: stringOr(data.generatedAt),
+    actionCenter: mapDashboardActionCenter(data.actionCenter),
     attention: {
       overdueInvoices: {
         count: numberOr(overdueInv.count),

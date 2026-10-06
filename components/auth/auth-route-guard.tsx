@@ -7,6 +7,7 @@ import { selectAuth } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
 import { customerPaths } from "@/lib/customer-paths";
 import { readPendingFixedOrder } from "@/lib/booking/pending-fixed-order";
+import { isTechnicianPath, technicianPaths } from "@/lib/technician-paths";
 
 function isCustomerAuthPath(pathname: string): boolean {
   return (
@@ -64,9 +65,10 @@ function isPublicEstimateSharePath(pathname: string): boolean {
 
 function normalizeRole(
   role: string | null | undefined,
-): "customer" | "provider" | null {
+): "customer" | "provider" | "technician" | null {
   if (!role) return null;
   const value = role.toLowerCase();
+  if (value === "technician") return "technician";
   if (value === "customer" || value === "consumer" || value === "user") {
     return "customer";
   }
@@ -100,6 +102,8 @@ function readNextFromLocation(): string | null {
  * - After provider login, send them to the provider dashboard (/pro/dashboard).
  * - Providers may stay on /pro/dashboard/* and on public estimate share links (/e/*, legacy UUID).
  * - Other customer marketing/account routes bounce providers to the dashboard.
+ * - Technicians are confined to /technical/*; everyone else is kept out of it.
+ *   (The API enforces the same rules — this only avoids rendering wrong pages.)
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -120,6 +124,12 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     !isPublicEstimateSharePath(pathname);
   /** Hide pro chrome while bouncing a logged-in customer off /pro. */
   const customerOnPro = loggedIn && role === "customer" && isProArea(pathname);
+  /** Technicians only ever see /technical/* — hide anything else while redirecting. */
+  const technicianOffPortal =
+    loggedIn && role === "technician" && !isTechnicianPath(pathname);
+  /** Non-technicians never see the technician portal. */
+  const nonTechnicianOnTechnical =
+    auth.hydrated && role !== "technician" && isTechnicianPath(pathname);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -133,9 +143,22 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
           typeof window !== "undefined" ? window.location.search : "";
         const next = encodeURIComponent(`${pathname}${search}`);
         router.replace(`/login?next=${next}`);
-      } else if (isProDashboard(pathname)) {
+      } else if (isProDashboard(pathname) || isTechnicianPath(pathname)) {
         router.replace(proPaths.login);
       }
+      return;
+    }
+
+    if (nextRole === "technician") {
+      // Provider, customer, and marketing routes are all off-limits.
+      if (!isTechnicianPath(pathname)) {
+        router.replace(technicianPaths.dashboard);
+      }
+      return;
+    }
+
+    if (isTechnicianPath(pathname)) {
+      router.replace(nextRole === "provider" ? proPaths.dashboard : customerPaths.site);
       return;
     }
 
@@ -174,7 +197,7 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     router,
   ]);
 
-  if (providerOffPortal || customerOnPro) {
+  if (providerOffPortal || customerOnPro || technicianOffPortal || nonTechnicianOnTechnical) {
     return null;
   }
 

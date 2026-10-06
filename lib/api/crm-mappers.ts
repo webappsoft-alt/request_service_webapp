@@ -25,6 +25,7 @@ import type {
   QuoteAnswer,
 } from "@/lib/data/portal";
 import type { ChatAttachment, ChatMessage, ChatThread } from "@/lib/booking/chat-store";
+import { mapTimeTotals } from "@/lib/time-tracking";
 import {
   displayLeadArea,
   displayLeadCustomerName,
@@ -809,6 +810,9 @@ export function mapPortalEmployee(raw: unknown): PortalEmployee | null {
     emergencyPhone: trimmed(record.emergencyPhone) || undefined,
     workingHours: mapEmployeeWorkingHours(record.workingHours),
     attachments: mapEmployeeAttachments(record.attachments),
+    username: trimmed(record.username) || undefined,
+    loginEnabled: booleanValue(record.loginEnabled, false),
+    timeTotals: mapTimeTotals(record.timeTotals),
   };
 }
 

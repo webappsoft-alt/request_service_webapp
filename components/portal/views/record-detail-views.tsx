@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
+  Clock3,
   Loader2,
   Pencil,
   Share2,
@@ -154,6 +155,7 @@ import {
 } from "@/components/api/apiFuntions";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -2470,6 +2472,7 @@ export function JobDetailView({ id }: { id: string }) {
     ...(alreadyInvoiced
       ? [{ id: "invoice", label: invoice?.number || "Invoice" }]
       : []),
+    { id: "time", label: "Time tracking", icon: Clock3 },
     { id: "logs", label: "Logs" },
     { id: "notes", label: "Notes" },
     { id: "attachments", label: "Attachments" },
@@ -2858,6 +2861,28 @@ export function JobDetailView({ id }: { id: string }) {
                     dispatch(upsertJobItem(next));
                     records.cacheJob(next);
                   }}
+                />
+              );
+            case "time":
+              return (
+                <TimeTrackingPanel
+                  scopeKey={`job:${job.id}`}
+                  jobId={job.id}
+                  defaultRange={{ preset: "all" }}
+                  showEmployee
+                  showByEmployee
+                  allowStop
+                  hrefFor={(kind, recordId) =>
+                    kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/new-estimate/${recordId}`
+                  }
+                  header={
+                    <div>
+                      <p className="text-sm font-bold text-foreground">Technician time tracking</p>
+                      <p className="text-xs text-muted-foreground">
+                        Clock-in / clock-out sessions recorded on {job.number} by assigned technicians.
+                      </p>
+                    </div>
+                  }
                 />
               );
             case "logs":

@@ -41,6 +41,31 @@ export type DashboardScheduleEvent = {
   href: string;
 };
 
+/** One row in Important Actions / Today's Work — always links to an existing detail page. */
+export type DashboardActionItem = {
+  id: string;
+  kind: string;
+  actionLabel: string;
+  priority?: "high" | "medium" | "low";
+  title?: string;
+  customerName: string;
+  reference: string;
+  status: string;
+  statusLabel: string;
+  detail: string;
+  time?: string | null;
+  amount?: number;
+  href: string;
+};
+
+export type DashboardActionCenter = {
+  importantActions: DashboardActionItem[];
+  importantActionsTotal: number;
+  importantActionsHigh: number;
+  today: DashboardActionItem[];
+  todayDate: string;
+};
+
 export type DashboardPeriodTotals = {
   revenue: number;
   count: number;
@@ -51,6 +76,7 @@ export type ProviderDashboardData = {
   city: string;
   state: string;
   generatedAt: string;
+  actionCenter: DashboardActionCenter;
   attention: {
     overdueInvoices: { count: number; amountPastDue: number };
     uninvoicedCompletedJobs: number;

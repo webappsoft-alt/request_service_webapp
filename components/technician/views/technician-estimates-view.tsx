@@ -1,0 +1,282 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Mail, Phone } from "lucide-react";
+import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { PortalPage } from "@/components/portal/portal-page";
+import {
+  ClockControl,
+  DetailCard,
+  EmptyNote,
+  EstimateStatusPill,
+  JobStatusPill,
+  KeyValue,
+  LocationBlock,
+  customerName,
+} from "@/components/technician/tech-ui";
+import { LineItemsTable } from "@/components/technician/views/technician-job-detail-view";
+import { TimeEntriesTable, TimeSummaryCards } from "@/components/time-tracking/time-tracking-ui";
+import { Button } from "@/components/ui/button";
+import { CenteredSpinner } from "@/components/ui/spinner";
+import { formatClock } from "@/lib/data/portal";
+import { formatDate, formatMoney } from "@/lib/format";
+import { technicianPaths } from "@/lib/technician-paths";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  TECH_PAGE_SIZE,
+  fetchTechEstimate,
+  fetchTechEstimates,
+  markTechSectionRead,
+} from "@/store/technicianSlice";
+
+export function TechnicianEstimatesView() {
+  const dispatch = useAppDispatch();
+  const { data, loading, error } = useAppSelector((state) => state.technician.estimates);
+  const version = useAppSelector((state) => state.technician.versions.estimates);
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    void dispatch(markTechSectionRead("estimates"));
+  }, [dispatch]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(search), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
+  useEffect(() => {
+    void dispatch(fetchTechEstimates({ page, limit: TECH_PAGE_SIZE, search: debounced, force: version > 0 }));
+  }, [dispatch, page, debounced, version]);
+
+  return (
+    <PortalPage
+      eyebrow="Technician / Estimates"
+      title={`My estimates${data ? ` (${data.total})` : ""}`}
+      description="Site visits and estimates assigned to you, or linked to jobs you work on."
+    >
+      {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
+      <PortalDataTable
+        filename="my-estimates"
+        countLabel="Estimates"
+        searchPlaceholder="Search estimate # or customer"
+        loading={loading}
+        empty={debounced ? "No estimates match your search." : "No estimates assigned to you yet."}
+        rows={data?.items ?? []}
+        rowKey={(row) => row.id}
+        rowHref={(row) => technicianPaths.estimate(row.id)}
+        serverPagination={{
+          page,
+          pageSize: TECH_PAGE_SIZE,
+          total: data?.total ?? 0,
+          totalPages: data?.totalPages ?? 1,
+          onPageChange: setPage,
+          search,
+          onSearchChange: (value) => {
+            setSearch(value);
+            setPage(1);
+          },
+        }}
+        columns={[
+          {
+            id: "number",
+            header: "Estimate #",
+            sortValue: (row) => row.number,
+            exportValue: (row) => row.number,
+            cell: (row) => (
+              <div>
+                <Link href={technicianPaths.estimate(row.id)} className="font-semibold text-primary hover:underline">
+                  {row.number}
+                </Link>
+                {row.title ? <p className="truncate text-xs text-muted-foreground">{row.title}</p> : null}
+              </div>
+            ),
+          },
+          {
+            id: "customer",
+            header: "Customer",
+            sortValue: (row) => customerName(row.customer, row.customerSnapshot),
+            exportValue: (row) => customerName(row.customer, row.customerSnapshot),
+            cell: (row) => customerName(row.customer, row.customerSnapshot),
+          },
+          {
+            id: "address",
+            header: "Property",
+            className: "min-w-56",
+            exportValue: (row) => String(row.propertyAddress?.address || ""),
+            cell: (row) => (
+              <div onClick={(event) => event.stopPropagation()}>
+                <LocationBlock location={row.propertyAddress} compact />
+              </div>
+            ),
+          },
+          {
+            id: "visit",
+            header: "Visit date",
+            sortValue: (row) => row.scheduledDate || "",
+            exportValue: (row) => (row.scheduledDate ? formatDate(row.scheduledDate) : ""),
+            cell: (row) => (row.scheduledDate ? formatDate(row.scheduledDate) : "—"),
+          },
+          {
+            id: "status",
+            header: "Status",
+            sortValue: (row) => row.status,
+            exportValue: (row) => row.status,
+            cell: (row) => <EstimateStatusPill status={row.status} />,
+          },
+        ]}
+        actions={(row) => [{ label: "Open estimate", href: technicianPaths.estimate(row.id) }]}
+      />
+    </PortalPage>
+  );
+}
+
+export function TechnicianEstimateDetailView({ id }: { id: string }) {
+  const dispatch = useAppDispatch();
+  const entry = useAppSelector((state) => state.technician.estimateDetails[id]);
+  const version = useAppSelector((state) => state.technician.versions.estimates);
+  const timeVersion = useAppSelector((state) => state.timeTracking.version);
+
+  useEffect(() => {
+    void dispatch(fetchTechEstimate(id));
+  }, [dispatch, id, version, timeVersion]);
+
+  const data = entry?.data;
+  const items = useMemo(() => data?.estimate.items ?? [], [data]);
+
+  if (!data) {
+    if (!entry || entry.loading) {
+      return (
+        <div className="rounded-md border border-border-soft bg-card">
+          <CenteredSpinner label="Loading estimate" className="min-h-[22rem]" />
+        </div>
+      );
+    }
+    return (
+      <PortalPage eyebrow="Technician / Estimates" title="Estimate not available">
+        <EmptyNote>{entry.error || "This estimate is not assigned to you."}</EmptyNote>
+        <Button asChild size="sm" className="h-8 w-fit">
+          <Link href={technicianPaths.estimates}>Back to my estimates</Link>
+        </Button>
+      </PortalPage>
+    );
+  }
+
+  const { estimate, job, schedule, timeEntries, timeSummary } = data;
+  const snapshot = (estimate.customerSnapshot || {}) as Record<string, unknown>;
+  const customer = estimate.customer;
+  const phone = customer?.phone || String(snapshot.phone || "");
+  const email = customer?.email || String(snapshot.email || "");
+  const visit = (estimate.siteVisit || {}) as Record<string, unknown>;
+  const location =
+    estimate.propertyAddress && Object.keys(estimate.propertyAddress).length
+      ? estimate.propertyAddress
+      : (snapshot.address as Record<string, unknown>) || null;
+
+  return (
+    <PortalPage
+      eyebrow="Technician / Estimate"
+      title={`${estimate.number}${estimate.title ? ` · ${estimate.title}` : ""}`}
+      badge={<EstimateStatusPill status={estimate.status} />}
+      actions={
+        <Button asChild size="sm" variant="outline" className="h-8">
+          <Link href={technicianPaths.estimates}>
+            <ArrowLeft className="size-3.5" /> My estimates
+          </Link>
+        </Button>
+      }
+    >
+      <ClockControl target={{ kind: "estimate", id: estimate.id }} />
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <DetailCard title="Customer">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">{customerName(customer, snapshot)}</p>
+            {phone ? (
+              <a href={`tel:${phone}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
+                <Phone className="size-3.5" aria-hidden /> {phone}
+              </a>
+            ) : null}
+            {email ? (
+              <a href={`mailto:${email}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
+                <Mail className="size-3.5" aria-hidden /> {email}
+              </a>
+            ) : null}
+          </div>
+        </DetailCard>
+        <DetailCard title="Property" className="lg:col-span-2">
+          <LocationBlock location={location} />
+        </DetailCard>
+      </div>
+
+      <DetailCard title="Site visit">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <KeyValue label="Visit date" value={estimate.scheduledDate ? formatDate(estimate.scheduledDate) : "—"} />
+          <KeyValue label="Access notes" value={String(visit.accessNotes || "")} />
+          <KeyValue label="Measurements" value={String(visit.measurements || "")} />
+          <KeyValue label="Findings" value={String(visit.findings || "")} />
+          <KeyValue label="Recommendations" value={String(visit.recommendations || "")} />
+          {job ? (
+            <KeyValue
+              label="Linked job"
+              value={
+                <span className="flex items-center gap-2">
+                  <Link href={technicianPaths.job(job.id)} className="font-semibold text-primary hover:underline">
+                    {job.number || "Job"}
+                  </Link>
+                  {job.status ? <JobStatusPill status={job.status} /> : null}
+                </span>
+              }
+            />
+          ) : null}
+        </div>
+        {schedule.length ? (
+          <ul className="mt-3 divide-y divide-border-soft border-t border-border-soft text-sm">
+            {schedule.map((row) => (
+              <li key={row.id} className="flex justify-between gap-2 py-2">
+                <span className="font-medium">{formatDate(row.date)}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {formatClock(row.startMinutes)}–{formatClock(row.endMinutes)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </DetailCard>
+
+      <DetailCard title={`Scope (${items.length})`}>
+        <LineItemsTable items={items} empty="No line items yet." />
+        <div className="mt-3 flex flex-wrap justify-end gap-4 text-sm">
+          <span>
+            Subtotal <span className="font-semibold">{formatMoney(Number(estimate.subtotal) || 0)}</span>
+          </span>
+          <span>
+            Tax <span className="font-semibold">{formatMoney(Number(estimate.tax) || 0)}</span>
+          </span>
+          <span>
+            Total <span className="font-semibold">{formatMoney(Number(estimate.total) || 0)}</span>
+          </span>
+        </div>
+      </DetailCard>
+
+      {estimate.notes ? (
+        <DetailCard title="Notes">
+          <p className="text-sm whitespace-pre-wrap">{String(estimate.notes).replace(/<[^>]+>/g, "")}</p>
+        </DetailCard>
+      ) : null}
+
+      <DetailCard title="My time on this estimate">
+        <div className="space-y-3">
+          <TimeSummaryCards summary={timeSummary} />
+          <TimeEntriesTable
+            entries={timeEntries}
+            hrefFor={(kind, recordId) => (kind === "job" ? technicianPaths.job(recordId) : technicianPaths.estimate(recordId))}
+            empty="No time tracked on this estimate yet."
+          />
+        </div>
+      </DetailCard>
+    </PortalPage>
+  );
+}

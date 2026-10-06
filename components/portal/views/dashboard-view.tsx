@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
 import { DashboardActionAlerts } from "@/components/portal/dashboard-action-alerts";
+import { DashboardActionCenter } from "@/components/portal/dashboard-action-center";
 import {
   DashPanel,
   DonutChart,
@@ -337,6 +338,13 @@ export function DashboardView() {
             ))}
           </div>
         </section>
+
+        {/* Quick navigation: what needs action + what is on for today */}
+        <DashboardActionCenter
+          actionCenter={data?.actionCenter}
+          loading={loading}
+          error={error}
+        />
 
         <PeriodBar value={period} onChange={setPeriod} />
 

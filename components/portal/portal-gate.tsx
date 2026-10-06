@@ -9,6 +9,7 @@ import {
   selectIsAuthenticated,
 } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
+import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
 
 export function PortalGate({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -20,12 +21,19 @@ export function PortalGate({ children }: { children: ReactNode }) {
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
 
+  const isTechnician = isTechnicianRole(user?.role || auth.role);
+
   useEffect(() => {
     if (!auth.hydrated) return;
+    if (isTechnician) {
+      // Technicians have their own portal; provider pages are never rendered for them.
+      router.replace(technicianPaths.dashboard);
+      return;
+    }
     if (!isProvider) {
       router.replace(proPaths.login);
     }
-  }, [auth.hydrated, isProvider, router]);
+  }, [auth.hydrated, isProvider, isTechnician, router]);
 
   if (!auth.hydrated || !isProvider) {
     return (

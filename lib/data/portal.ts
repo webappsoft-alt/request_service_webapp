@@ -227,6 +227,20 @@ export type PortalEmployee = {
   emergencyPhone?: string;
   workingHours?: PortalEmployeeWorkingHours[];
   attachments?: PortalEmployeeAttachment[];
+  /** Technician portal login handle (empty when no login issued). */
+  username?: string;
+  /** True once the provider has issued technician credentials. */
+  loginEnabled?: boolean;
+  /** Write-only: new technician password (never returned by the API). */
+  password?: string;
+  /** Tracked time totals (all time) — hours × pay rate. */
+  timeTotals?: {
+    totalSeconds: number;
+    totalHours: number;
+    totalPay: number;
+    sessions: number;
+    clockedIn: boolean;
+  };
 };
 
 /** Nested on GET /api/provider/team/:id → data.activeAssignments */

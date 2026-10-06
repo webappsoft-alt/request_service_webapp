@@ -8,6 +8,17 @@ import type { Socket } from "socket.io-client";
  */
 
 export type RealtimeEvents = {
+  /** Technician portal: which lists changed (jobs, estimates, schedule, dashboard). */
+  "technician:refresh": {
+    scopes?: string[];
+    type?: string;
+    data?: Record<string, unknown>;
+    at?: string;
+  };
+  /** Clock-in / clock-out — sent to the provider room and the technician. */
+  TIME_ENTRY_UPDATED: {
+    entry?: Record<string, unknown>;
+  };
   "socket:ready": {
     ok: boolean;
     role?: string;

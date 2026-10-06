@@ -26,6 +26,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { PasswordInput } from "@/components/auth/password-input";
+import { validateTechnicianCredentials } from "@/components/portal/create-employee-dialog";
+import { formatMoney } from "@/lib/format";
+import { formatHours } from "@/lib/time-tracking";
 import type { PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
 import { employeeRoleLabel } from "@/lib/data/portal";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -259,6 +263,47 @@ export function TeamView() {
             cell: (row) => <StatusPill label={row.active ? "Active" : "Inactive"} tone={row.active ? "success" : "neutral"} />,
           },
           {
+            id: "login",
+            header: "Login",
+            sortValue: (row) => row.username || "",
+            searchValue: (row) => row.username || "",
+            exportValue: (row) => row.username || "",
+            cell: (row) =>
+              row.loginEnabled && row.username ? (
+                <span className="text-sm">@{row.username}</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">No login</span>
+              ),
+          },
+          {
+            id: "rate",
+            header: "Pay rate",
+            sortValue: (row) => row.hourlyRate ?? 0,
+            exportValue: (row) => String(row.hourlyRate ?? 0),
+            cell: (row) => `${formatMoney(row.hourlyRate ?? 0)}/hr`,
+          },
+          {
+            id: "hours",
+            header: "Hours",
+            sortValue: (row) => row.timeTotals?.totalSeconds ?? 0,
+            exportValue: (row) => String(row.timeTotals?.totalHours ?? 0),
+            cell: (row) => (
+              <span className="inline-flex items-center gap-1.5 tabular-nums">
+                {row.timeTotals?.clockedIn ? (
+                  <span className="size-1.5 animate-pulse rounded-full bg-emerald-600" title="Clocked in now" aria-label="Clocked in now" />
+                ) : null}
+                {formatHours(row.timeTotals?.totalSeconds ?? 0)}
+              </span>
+            ),
+          },
+          {
+            id: "pay",
+            header: "Total pay",
+            sortValue: (row) => row.timeTotals?.totalPay ?? 0,
+            exportValue: (row) => String(row.timeTotals?.totalPay ?? 0),
+            cell: (row) => <span className="font-medium tabular-nums">{formatMoney(row.timeTotals?.totalPay ?? 0)}</span>,
+          },
+          {
             id: "assigned",
             header: "Scheduled",
             sortValue: (row) => events.filter((item) => item.employeeId === row.id && item.date).length,
@@ -360,7 +405,11 @@ function EmployeeFormDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [trade, setTrade] = useState("");
+  const [payRate, setPayRate] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
+  const loginEnabled = Boolean(employee?.loginEnabled && employee?.username);
 
   function reset() {
     setFirstName("");
@@ -369,6 +418,9 @@ function EmployeeFormDialog({
     setEmail("");
     setPhone("");
     setTrade("");
+    setPayRate("");
+    setUsername("");
+    setPassword("");
     setSaving(false);
   }
 
@@ -384,6 +436,9 @@ function EmployeeFormDialog({
     setEmail(employee.email);
     setPhone(employee.phone);
     setTrade(employee.trade);
+    setPayRate(employee.hourlyRate ? String(employee.hourlyRate) : "");
+    setUsername(employee.username ?? "");
+    setPassword("");
     setSaving(false);
   }, [open, employee]);
 
@@ -397,8 +452,18 @@ function EmployeeFormDialog({
       phone: phone.trim(),
       trade: trade.trim() || "General",
       active: true as const,
+      hourlyRate: Math.max(0, Number(payRate) || 0),
+      ...(username.trim() ? { username: username.trim().toLowerCase() } : {}),
+      ...(password ? { password } : {}),
     };
     if (!input.firstName || !input.lastName) return;
+    const credentialError = validateTechnicianCredentials(username, password, {
+      requirePassword: !loginEnabled,
+    });
+    if (credentialError) {
+      toast.error(credentialError);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -423,7 +488,7 @@ function EmployeeFormDialog({
       reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error(typeof err === "string" ? err : "Could not save employee.");
+      toast.error(typeof err === "string" ? err : err instanceof Error ? err.message : "Could not save employee.");
     } finally {
       setSaving(false);
     }
@@ -438,7 +503,7 @@ function EmployeeFormDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-md" data-lenis-prevent>
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-md" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit employee" : "Add employee"}</DialogTitle>
           <DialogDescription>
@@ -518,6 +583,45 @@ function EmployeeFormDialog({
               placeholder="(555) 123-4567"
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="emp-rate">Pay rate (per hour)</FieldLabel>
+            <Input
+              id="emp-rate"
+              type="number"
+              min="0"
+              step="0.5"
+              value={payRate}
+              placeholder="0.00"
+              onChange={(change) => setPayRate(change.target.value)}
+            />
+          </Field>
+          <div className="grid gap-4 rounded-md border border-border-soft bg-secondary/40 p-3 sm:grid-cols-2">
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              <span className="font-semibold text-foreground">Technician portal login</span> — optional. They sign in on the Pro
+              login to see only their own work and clock in.
+            </p>
+            <Field>
+              <FieldLabel htmlFor="emp-username">Username</FieldLabel>
+              <Input
+                id="emp-username"
+                value={username}
+                autoComplete="off"
+                autoCapitalize="none"
+                placeholder="marcus.lee"
+                onChange={(change) => setUsername(change.target.value.toLowerCase())}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="emp-password">{loginEnabled ? "New password" : "Password"}</FieldLabel>
+              <PasswordInput
+                id="emp-password"
+                value={password}
+                autoComplete="new-password"
+                placeholder={loginEnabled ? "Leave blank to keep" : "At least 8 characters"}
+                onChange={(change) => setPassword(change.target.value)}
+              />
+            </Field>
+          </div>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || mutating}>

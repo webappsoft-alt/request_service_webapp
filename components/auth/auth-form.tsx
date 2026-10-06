@@ -16,6 +16,7 @@ import { PasswordInput } from "@/components/auth/password-input";
 import { Input } from "@/components/ui/input";
 import type { DemoRole } from "@/lib/auth/demo-session";
 import { proPaths } from "@/lib/pro-paths";
+import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store/hooks";
 import {
@@ -41,7 +42,7 @@ function copyFor(role: DemoRole, mode: AuthMode) {
             eyebrow: "Service companies",
             title: "Pro login",
             description:
-              "Sign in to manage your business profile, services, and incoming requests.",
+              "Sign in to manage your business, or use the username your company gave you to open your technician portal.",
           }
         : {
             eyebrow: "Homeowners",
@@ -149,11 +150,14 @@ function AuthFormInner({
           }
 
           dispatch(setCredentials(credentials));
+          const isTechnician = isTechnicianRole(credentials.user?.role);
           toast.success(
             (typeof credentials.message === "string" && credentials.message) ||
-              (isProvider
-                ? "Signed in to your business account."
-                : "Welcome back."),
+              (isTechnician
+                ? "Signed in to your technician portal."
+                : isProvider
+                  ? "Signed in to your business account."
+                  : "Welcome back."),
           );
           const redirectNext = searchParams.get("next")?.trim() || "";
           const safeRedirect =
@@ -163,7 +167,9 @@ function AuthFormInner({
               ? redirectNext
               : null;
           router.push(
-            safeRedirect || (isProvider ? proPaths.dashboard : "/"),
+            isTechnician
+              ? technicianPaths.dashboard
+              : safeRedirect || (isProvider ? proPaths.dashboard : "/"),
           );
         } catch (error) {
           showApiErrorToast(error, "Invalid email or password.");
@@ -284,13 +290,18 @@ function AuthFormInner({
           <FieldGroup>
             {mode !== "reset" ? (
               <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="email">
+                  {isProvider && mode === "login" ? "Email or username" : "Email"}
+                </FieldLabel>
                 <Input
                   id="email"
                   name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@email.com"
+                  type={isProvider && mode === "login" ? "text" : "email"}
+                  autoComplete={isProvider && mode === "login" ? "username" : "email"}
+                  autoCapitalize="none"
+                  placeholder={
+                    isProvider && mode === "login" ? "you@email.com or username" : "you@email.com"
+                  }
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   required

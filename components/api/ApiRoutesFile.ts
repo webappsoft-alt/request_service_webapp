@@ -126,6 +126,10 @@ export const providerCrmApi = {
   teamMemberAttachments: (id: string) => `provider/team/${id}/attachments`,
   teamMemberAttachment: (id: string, attachmentId: string) =>
     `provider/team/${id}/attachments/${attachmentId}`,
+  /** GET technician time entries — query: employeeId | jobId | estimateId, from, to, tz */
+  timeEntries: "provider/time-entries",
+  /** POST stop a technician's running timer */
+  timeEntryClockOut: (id: string) => `provider/time-entries/${id}/clock-out`,
   contractors: "provider/contractors",
   contractor: (id: string) => `provider/contractors/${id}`,
   contractorAttachments: (id: string) => `provider/contractors/${id}/attachments`,
@@ -284,7 +288,26 @@ export const chatApi = {
   providerInboxSummary: providerCrmApi.inboxSummary,
 } as const;
 
-/** Authenticated in-app notifications (customer + provider). */
+/** Technician (employee) portal — every route returns only the logged-in technician's data. */
+export const technicianApi = {
+  profile: "technician/profile",
+  password: "technician/profile/password",
+  dashboard: "technician/dashboard",
+  jobs: "technician/jobs",
+  job: (id: string) => `technician/jobs/${id}`,
+  jobClockIn: (id: string) => `technician/jobs/${id}/clock-in`,
+  jobClockOut: (id: string) => `technician/jobs/${id}/clock-out`,
+  estimates: "technician/estimates",
+  estimate: (id: string) => `technician/estimates/${id}`,
+  estimateClockIn: (id: string) => `technician/estimates/${id}/clock-in`,
+  estimateClockOut: (id: string) => `technician/estimates/${id}/clock-out`,
+  schedule: "technician/schedule",
+  timeEntries: "technician/time-entries",
+  activeEntry: "technician/time-entries/active",
+  clockOutActive: "technician/time-entries/clock-out",
+} as const;
+
+/** Authenticated in-app notifications (customer + provider + technician). */
 export const notificationsApi = {
   list: "notifications",
   markRead: (id: string) => `notifications/${id}/read`,

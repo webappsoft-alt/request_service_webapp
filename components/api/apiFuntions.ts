@@ -286,9 +286,10 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
           path.startsWith("/pro/reset-password");
 
         if (!isAuthPage) {
-          window.location.href = path.startsWith("/pro")
-            ? "/pro/login"
-            : "/login";
+          window.location.href =
+            path.startsWith("/pro") || path.startsWith("/technical")
+              ? "/pro/login"
+              : "/login";
         }
       }
     }

@@ -127,6 +127,8 @@ export function usePortalInbox() {
       }
       if (type === "LEADS_TAB_OPENED") {
         setPortalInboxCleared("leads", true);
+        clearPortalInboxCount("newLeads");
+        ackProviderInboxBadges(["leads"]);
         return;
       }
       if (type === "ORDERS_TAB_OPENED") {

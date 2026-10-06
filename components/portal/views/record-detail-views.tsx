@@ -2090,7 +2090,9 @@ export function JobDetailView({ id }: { id: string }) {
   // Prefer live CRM ObjectIds over any stale local `inv_*` link from offline mode.
   const workspaceInvoice =
     allInvoices.find((item) => item.id === job?.invoiceId) ??
-    allInvoices.find((item) => item.jobId === id) ??
+    allInvoices.find(
+      (item) => item.jobId === id && item.invoiceType !== "change_order",
+    ) ??
     (linkedInvoiceId
       ? allInvoices.find((item) => item.id === linkedInvoiceId)
       : undefined);
@@ -2887,22 +2889,83 @@ export function JobDetailView({ id }: { id: string }) {
                   onActionsChange={onAttachmentsActionsChange}
                 />
               );
-            case "invoice":
-              return invoice ? (
-                <InvoiceSummaryTab
-                  invoice={invoice}
-                  customer={customer}
-                  customerLabel={customerLabel}
-                  service={service}
-                  job={job}
-                  estimate={estimate}
-                  payments={relatedPayments}
-                />
-              ) : (
-                <p className="px-1 text-sm text-muted-foreground">
-                  No invoice is linked to this job yet.
-                </p>
+            case "invoice": {
+              // Change orders are billed on their own invoices — listed apart from the job invoice.
+              const changeOrderInvoices = (job.changeOrders || [])
+                .filter((co) => co.billingInvoiceId)
+                .map((co) => ({
+                  co,
+                  record: allInvoices.find((item) => item.id === co.billingInvoiceId),
+                }));
+              return (
+                <div className="space-y-6">
+                  {invoice ? (
+                    <InvoiceSummaryTab
+                      invoice={invoice}
+                      customer={customer}
+                      customerLabel={customerLabel}
+                      service={service}
+                      job={job}
+                      estimate={estimate}
+                      payments={relatedPayments}
+                    />
+                  ) : (
+                    <p className="px-1 text-sm text-muted-foreground">
+                      No invoice is linked to this job yet.
+                    </p>
+                  )}
+                  {changeOrderInvoices.length ? (
+                    <section className="overflow-hidden rounded-md border border-border-soft bg-card">
+                      <div className="border-b border-border-soft px-4 py-3">
+                        <h2 className="text-sm font-semibold">Change order invoices</h2>
+                        <p className="text-xs text-muted-foreground">
+                          Billed and paid separately — not included in the job total.
+                        </p>
+                      </div>
+                      <ul className="divide-y divide-border-soft">
+                        {changeOrderInvoices.map(({ co, record }) => (
+                          <li
+                            key={co.id}
+                            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Link
+                                  href={`/pro/dashboard/invoices/${co.billingInvoiceId}`}
+                                  className="font-semibold text-primary hover:underline"
+                                >
+                                  {record?.number || co.billingInvoiceNumber || "Invoice"}
+                                </Link>
+                                <StatusPill label="Change order invoice" tone="primary" />
+                                {record ? (
+                                  <StatusPill
+                                    label={invoiceStatusLabel(record.status)}
+                                    className={invoiceStatusTone(record.status)}
+                                  />
+                                ) : null}
+                              </div>
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                {co.number} · {co.title || co.description}
+                              </p>
+                            </div>
+                            <div className="text-right text-sm tabular-nums">
+                              <p className="font-semibold">
+                                {formatMoney(record?.total ?? co.total)}
+                              </p>
+                              {record ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Balance {formatMoney(record.balanceDue)}
+                                </p>
+                              ) : null}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+                </div>
               );
+            }
             case "settings":
               return (
                 <JobSettingsTab

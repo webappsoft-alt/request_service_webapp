@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Loader2, Plus, Send } from "lucide-react";
+import { FileText, Loader2, Plus, Send } from "lucide-react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { JobChangeOrderDialog } from "@/components/portal/job-change-order-dialog";
 import { StatusPill } from "@/components/portal/status-pill";
 import {
+  createJobChangeOrderInvoice,
   sendJobChangeOrder,
   updateJobChangeOrderStatus,
 } from "@/lib/api/crm-client";
@@ -48,6 +50,12 @@ function coStatusLabel(status: ChangeOrder["status"]) {
       return _exhaustive;
     }
   }
+}
+
+function itemKindLabel(kind?: string) {
+  if (kind === "materials") return "Material";
+  if (kind === "equipment") return "Equipment";
+  return "Labour";
 }
 
 function sumByStatus(orders: ChangeOrder[], status: ChangeOrder["status"]) {
@@ -114,6 +122,32 @@ export function JobChangeOrdersPanel({
     }
   };
 
+  /** Approved change orders are billed on their own invoice — never the job invoice. */
+  const createInvoice = async (co: ChangeOrder) => {
+    setBusyId(co.id);
+    try {
+      const invoice = await createJobChangeOrderInvoice(job.id, co.id);
+      if (!invoice) throw new Error("Invoice was not created");
+      toast.success(`${invoice.number} created for ${co.number}.`);
+      onJobUpdated?.({
+        ...job,
+        changeOrders: orders.map((item) =>
+          item.id === co.id
+            ? {
+                ...item,
+                billingInvoiceId: invoice.id,
+                billingInvoiceNumber: invoice.number,
+              }
+            : item,
+        ),
+      });
+    } catch (err) {
+      toast.error(extractErrorMessage(err) || "Could not create the change order invoice.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const cancel = async (co: ChangeOrder) => {
     setBusyId(co.id);
     try {
@@ -138,7 +172,7 @@ export function JobChangeOrdersPanel({
           <p className="text-sm font-bold text-foreground">Change orders</p>
           <p className="text-xs text-muted-foreground">
             Additional approved work stays separate from the original job
-            amount.
+            amount and is billed on its own invoice.
           </p>
         </div>
         <Button size="sm" className="h-8" onClick={() => setOpen(true)}>
@@ -203,11 +237,50 @@ export function JobChangeOrdersPanel({
                     ? `Sent ${formatShortDate(co.sentAt)}`
                     : `Created ${formatShortDate(co.createdAt)}`}
                 </p>
+                {co.items.length ? (
+                  <ul className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
+                    {co.items.map((line) => (
+                      <li key={line.id} className="flex flex-wrap gap-x-2">
+                        <span className="font-medium text-foreground">
+                          {itemKindLabel(line.kind)}
+                        </span>
+                        <span className="min-w-0 truncate">{line.description}</span>
+                        <span className="tabular-nums">
+                          {line.quantity} × {formatMoney(line.unitPrice)} ={" "}
+                          {formatMoney(line.total)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold tabular-nums text-foreground">
                   +{formatMoney(co.total)}
                 </span>
+                {co.status === "approved" && co.billingInvoiceId ? (
+                  <Button size="sm" variant="outline" className="h-8" asChild>
+                    <Link href={`/pro/dashboard/invoices/${co.billingInvoiceId}`}>
+                      <FileText className="size-3.5" />
+                      {co.billingInvoiceNumber || "Open invoice"}
+                    </Link>
+                  </Button>
+                ) : null}
+                {co.status === "approved" && !co.billingInvoiceId ? (
+                  <Button
+                    size="sm"
+                    className="h-8"
+                    disabled={busyId === co.id}
+                    onClick={() => void createInvoice(co)}
+                  >
+                    {busyId === co.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <FileText className="size-3.5" />
+                    )}
+                    Create invoice
+                  </Button>
+                ) : null}
                 {co.status === "draft" ? (
                   <Button
                     size="sm"

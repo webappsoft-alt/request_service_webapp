@@ -34,6 +34,7 @@ import {
   selectCustomerApiEstimatesLoading,
   selectCustomerQuoteBatches,
   selectCustomerQuoteBatchesLoading,
+  selectCustomerQuoteRequestsTableLoading,
   selectCustomerQuoteBatchesPagination,
   type CustomerQuoteBatch,
 } from "@/store/customerQuotesSlice";
@@ -134,6 +135,14 @@ export function CustomerEstimatesDashboardView({
   const [requestsPage, setRequestsPage] = useState(1);
   const [requestsSearchInput, setRequestsSearchInput] = useState("");
   const [requestsSearch, setRequestsSearch] = useState("");
+  // Spinner only on first load or when page/search changes the dataset.
+  const requestsTableLoading = useAppSelector(
+    selectCustomerQuoteRequestsTableLoading({
+      page: requestsPage,
+      limit: CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+      search: requestsSearch || undefined,
+    }),
+  );
 
   const tabParam = searchParams.get("tab");
   const activeTab: TabId =
@@ -289,7 +298,7 @@ export function CustomerEstimatesDashboardView({
     return <CenteredSpinner label="Checking your account…" />;
   }
 
-  const loadingRequests = batchesLoading && !batches.length;
+  const loadingRequests = requestsTableLoading;
   const loadingEstimates =
     (apiEstimatesLoading || rememberedLoading) && !estimateItems.length;
   const isRequests = activeTab === "requests";

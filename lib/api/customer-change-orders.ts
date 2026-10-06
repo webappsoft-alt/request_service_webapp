@@ -28,6 +28,9 @@ export type CustomerChangeOrder = {
   rejectedAt?: string | null;
   sentAt?: string | null;
   requestedAt?: string | null;
+  /** The change order's own invoice — billed separately from the job invoice. */
+  billingInvoiceId?: string | null;
+  billingInvoiceNumber?: string;
   customerName?: string;
   propertyAddress?: string;
 };

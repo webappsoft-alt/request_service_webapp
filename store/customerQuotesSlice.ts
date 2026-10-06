@@ -83,6 +83,8 @@ type CustomerQuotesState = {
   batchesPagination: CustomerQuoteRequestsPagination | null;
   batchesLoading: boolean;
   batchesLoaded: boolean;
+  /** Query (page/limit/search) of the rows currently in `batches`. */
+  batchesLoadedKey: string | null;
   batchesError: string | null;
   estimates: CustomerApiEstimate[];
   estimatesLoading: boolean;
@@ -104,6 +106,7 @@ const initialState: CustomerQuotesState = {
   batchesPagination: null,
   batchesLoading: false,
   batchesLoaded: false,
+  batchesLoadedKey: null,
   batchesError: null,
   estimates: [],
   estimatesLoading: false,
@@ -268,6 +271,25 @@ function parsePagination(
   };
 }
 
+export function quoteRequestsKey(
+  arg?: { page?: number; limit?: number; search?: string } | void,
+) {
+  const value = arg || {};
+  return JSON.stringify({
+    page: Math.max(1, Number(value.page) || 1),
+    limit: Number(value.limit) || CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
+    search: String(value.search || "").trim(),
+  });
+}
+
+/** Spinner only when the table would show a different page/search. */
+export const selectCustomerQuoteRequestsTableLoading =
+  (arg: { page?: number; limit?: number; search?: string }) =>
+  (state: RootState) =>
+    Boolean(state.customerQuotes?.batchesLoading) &&
+    (!(state.customerQuotes?.batches.length) ||
+      state.customerQuotes?.batchesLoadedKey !== quoteRequestsKey(arg));
+
 export const fetchCustomerQuoteRequests = createAsyncThunk(
   "customerQuotes/fetchQuoteRequests",
   async (
@@ -316,7 +338,8 @@ export const fetchCustomerEstimates = createAsyncThunk(
   "customerQuotes/fetchEstimates",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getData(userApi.estimates);
+      // force: bypass the 45s GET cache so every tab visit refreshes in the background.
+      const response = await getData(userApi.estimates, undefined, { force: true, silent: true });
       const root = asRecord(response);
       const data = asRecord(root?.data) ?? root;
       const listRaw = Array.isArray(data?.estimates) ? data.estimates : [];
@@ -373,6 +396,7 @@ const customerQuotesSlice = createSlice({
         state.batches = action.payload.batches;
         state.batchesPagination =
           action.payload.pagination || initialPagination();
+        state.batchesLoadedKey = quoteRequestsKey(action.meta.arg);
       })
       .addCase(fetchCustomerQuoteRequests.rejected, (state, action) => {
         state.batchesLoading = false;

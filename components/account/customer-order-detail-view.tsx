@@ -35,6 +35,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CenteredSpinner } from "@/components/ui/spinner";
+import {
+  fetchCustomerChangeOrders,
+  selectCustomerChangeOrders,
+} from "@/store/customerChangeOrdersSlice";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate } from "@/lib/format";
 import {
@@ -306,6 +310,17 @@ export function CustomerOrderDetailView({
   const nextPath = customerPaths.order(orderId);
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  /** CRM job change orders — separate scope, price, and invoice from this job. */
+  const allChangeOrders = useAppSelector(selectCustomerChangeOrders);
+  const jobChangeOrders = useMemo(
+    () => allChangeOrders.filter((co) => String(co.jobId) === String(orderId)),
+    [allChangeOrders, orderId],
+  );
+
+  useEffect(() => {
+    if (!auth.hydrated || !isAuthenticated || !orderId) return;
+    void dispatch(fetchCustomerChangeOrders());
+  }, [auth.hydrated, dispatch, isAuthenticated, orderId]);
 
   const activeOrder = useMemo(() => {
     if (order?.id === orderId) return order;
@@ -987,6 +1002,76 @@ export function CustomerOrderDetailView({
                         ) : null}
                       </div>
                     ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {jobChangeOrders.length > 0 ? (
+                <section className="rounded-xl border border-input bg-card p-5 sm:p-6 shadow-xs">
+                  <div className="border-b border-input pb-4">
+                    <h2 className="text-base font-semibold text-foreground">
+                      Change orders for this job
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Extra work is priced, approved, and invoiced separately — it is
+                      never added to the original job total.
+                    </p>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {jobChangeOrders.map((co) => {
+                      const status = String(co.status || "").toLowerCase();
+                      return (
+                        <div
+                          key={co.id}
+                          className="flex flex-col gap-3 rounded-lg border border-input bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-foreground text-sm">
+                                {co.number}
+                              </span>
+                              <Badge
+                                variant={
+                                  status === "approved"
+                                    ? "default"
+                                    : status === "rejected" || status === "cancelled"
+                                      ? "destructive"
+                                      : "secondary"
+                                }
+                                className="text-xs"
+                              >
+                                {status === "pending"
+                                  ? "Awaiting your approval"
+                                  : status.charAt(0).toUpperCase() + status.slice(1)}
+                              </Badge>
+                            </div>
+                            <p className="truncate text-sm text-foreground">{co.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(co.items || []).length} line item
+                              {(co.items || []).length === 1 ? "" : "s"} · Separate from job total
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            <span className="font-mono text-sm font-semibold text-foreground">
+                              {formatOrderMoney(co.amount, pricing.currency)}
+                            </span>
+                            {co.billingInvoiceId ? (
+                              <Button asChild variant="outline" size="sm">
+                                <Link href={customerPaths.invoice(co.billingInvoiceId)}>
+                                  <Receipt className="size-3.5" />
+                                  {co.billingInvoiceNumber || "Invoice"}
+                                </Link>
+                              </Button>
+                            ) : null}
+                            <Button asChild size="sm" variant={status === "pending" ? "default" : "outline"}>
+                              <Link href={customerPaths.changeOrder(co.jobId, co.id)}>
+                                {status === "pending" ? "Review & approve" : "View"}
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}

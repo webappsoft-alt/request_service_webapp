@@ -43,6 +43,11 @@ export type CustomerInvoice = {
   notes: string;
   jobId: string | null;
   jobNumber: string | null;
+  /** "change_order" = separate invoice for one job change order. */
+  invoiceType?: "standard" | "change_order";
+  changeOrderId?: string | null;
+  changeOrderNumber?: string;
+  changeOrderTitle?: string;
   items: CustomerInvoiceItem[];
   payments?: CustomerInvoicePayment[];
   createdAt?: string;
@@ -56,10 +61,35 @@ export type CustomerInvoice = {
   } | null;
 };
 
+export const CUSTOMER_INVOICES_PAGE_LIMIT = 10;
+
+export type CustomerInvoicesPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
+export type CustomerInvoicesQuery = { page?: number; limit?: number; search?: string };
+
+/** Identifies which page/search the rows in `items` belong to. */
+export function customerInvoicesKey(arg?: CustomerInvoicesQuery | void) {
+  if (!arg || arg.page == null) return "all";
+  return JSON.stringify({
+    page: Math.max(1, Number(arg.page) || 1),
+    limit: Number(arg.limit) || CUSTOMER_INVOICES_PAGE_LIMIT,
+    search: String(arg.search || "").trim(),
+  });
+}
+
 type CustomerInvoicesState = {
   items: CustomerInvoice[];
   loading: boolean;
   loaded: boolean;
+  /** Any list request in flight (incl. silent background refreshes). */
+  fetching: boolean;
+  loadedKey: string | null;
+  pagination: CustomerInvoicesPagination | null;
   error: string | null;
   detail: CustomerInvoice | null;
   detailLoading: boolean;
@@ -70,6 +100,9 @@ const initialState: CustomerInvoicesState = {
   items: [],
   loading: false,
   loaded: false,
+  fetching: false,
+  loadedKey: null,
+  pagination: null,
   error: null,
   detail: null,
   detailLoading: false,
@@ -118,6 +151,10 @@ function mapInvoice(raw: unknown): CustomerInvoice | null {
     notes: stringValue(row.notes),
     jobId: stringValue(row.jobId) || null,
     jobNumber: stringValue(row.jobNumber) || null,
+    invoiceType: stringValue(row.invoiceType) === "change_order" ? "change_order" : "standard",
+    changeOrderId: stringValue(row.changeOrderId) || null,
+    changeOrderNumber: stringValue(row.changeOrderNumber),
+    changeOrderTitle: stringValue(row.changeOrderTitle),
     items: itemsRaw.flatMap((item) => {
       const entry = asRecord(item);
       if (!entry) return [];
@@ -200,15 +237,34 @@ function mapPayment(raw: unknown): CustomerInvoicePayment | null {
 
 export const fetchCustomerInvoices = createAsyncThunk(
   "customerInvoices/fetchList",
-  async (_, { rejectWithValue }) => {
+  async (arg: CustomerInvoicesQuery | void, { rejectWithValue }) => {
     try {
-      const response = await getData(userApi.invoices);
+      const params =
+        arg && arg.page != null
+          ? {
+              page: Math.max(1, Number(arg.page) || 1),
+              limit: Number(arg.limit) || CUSTOMER_INVOICES_PAGE_LIMIT,
+              search: String(arg.search || "").trim() || undefined,
+            }
+          : undefined;
+      // force: bypass the 45s GET cache so every tab visit refreshes in the background.
+      const response = await getData(userApi.invoices, params, { force: true, silent: true });
       const root = asRecord(response);
       const data = asRecord(root?.data) ?? root;
       const listRaw = Array.isArray(data?.invoices) ? data.invoices : [];
-      return listRaw
+      const items = listRaw
         .map(mapInvoice)
         .filter((item): item is CustomerInvoice => Boolean(item));
+      const page = asRecord(data?.pagination);
+      const pagination: CustomerInvoicesPagination | null = page
+        ? {
+            page: Number(page.page) || 1,
+            limit: Number(page.limit) || CUSTOMER_INVOICES_PAGE_LIMIT,
+            total: Number(page.total) || 0,
+            totalPages: Math.max(1, Number(page.totalPages) || 1),
+          }
+        : null;
+      return { items, pagination };
     } catch (err) {
       return rejectWithValue(
         extractErrorMessage(err) || "Could not load invoices.",
@@ -279,15 +335,20 @@ const customerInvoicesSlice = createSlice({
     builder
       .addCase(fetchCustomerInvoices.pending, (state) => {
         state.loading = !state.loaded;
+        state.fetching = true;
         state.error = null;
       })
       .addCase(fetchCustomerInvoices.fulfilled, (state, action) => {
         state.loading = false;
+        state.fetching = false;
         state.loaded = true;
-        state.items = action.payload;
+        state.items = action.payload.items;
+        state.pagination = action.payload.pagination;
+        state.loadedKey = customerInvoicesKey(action.meta.arg);
       })
       .addCase(fetchCustomerInvoices.rejected, (state, action) => {
         state.loading = false;
+        state.fetching = false;
         state.loaded = true;
         state.error =
           typeof action.payload === "string"
@@ -332,6 +393,16 @@ export const { clearCustomerInvoices, clearCustomerInvoiceDetail } =
 
 export const selectCustomerInvoices = (state: RootState) =>
   state.customerInvoices?.items ?? [];
+export const selectCustomerInvoicesPagination = (state: RootState) =>
+  state.customerInvoices?.pagination ?? null;
+/**
+ * Table spinner only when the table would show a different page/search (or on
+ * first load). Refreshing the rows already on screen stays silent.
+ */
+export const selectCustomerInvoicesTableLoading =
+  (arg: CustomerInvoicesQuery) => (state: RootState) =>
+    Boolean(state.customerInvoices?.fetching) &&
+    state.customerInvoices?.loadedKey !== customerInvoicesKey(arg);
 export const selectCustomerInvoicesLoading = (state: RootState) =>
   Boolean(state.customerInvoices?.loading);
 export const selectCustomerInvoiceDetail = (state: RootState) =>

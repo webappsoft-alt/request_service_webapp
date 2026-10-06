@@ -179,6 +179,8 @@ export const providerCrmApi = {
     `provider/jobs/${id}/change-orders/${orderId}`,
   jobChangeOrderSend: (id: string, orderId: string) =>
     `provider/jobs/${id}/change-orders/${orderId}/send`,
+  jobChangeOrderInvoice: (id: string, orderId: string) =>
+    `provider/jobs/${id}/change-orders/${orderId}/invoice`,
   jobActivities: (id: string) => `provider/jobs/${id}/activities`,
   jobActivity: (id: string, activityId: string) =>
     `provider/jobs/${id}/activities/${activityId}`,

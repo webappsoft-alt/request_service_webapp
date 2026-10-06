@@ -37,47 +37,42 @@ import {
   isCustomerOverviewPath,
 } from "@/lib/data/customer-nav";
 import { customerPaths } from "@/lib/customer-paths";
-import { listPublicChatThreads } from "@/lib/api/chat-client";
+import { ADMIN_DIRECT_THREAD_ID } from "@/lib/api/chat-client";
+import { mapAdminDirectChat } from "@/lib/api/crm-mappers";
+import type { ChatThread } from "@/lib/booking/chat-store";
 import {
-  fetchNotifications,
-  isChangeOrderNotification,
-  isEstimateNotification,
-  isInvoiceNotification,
-  isOrderNotification,
-  isPaymentNotification,
   markAllNotificationsRead,
   markNotificationRead,
-  markUnreadNotificationsWhere,
   normalizeSocketNotification,
   notificationHref,
   type AppNotification,
 } from "@/lib/api/notifications-client";
 import {
-  getCustomerInboxClearState,
   reopenCustomerInboxBadge,
   setCustomerInboxCleared,
-  subscribeCustomerInboxClears,
 } from "@/components/account/customer-inbox-clears";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector, useAppStore } from "@/store/hooks";
 import { selectAuthUser, type AuthUser } from "@/store/authSlice";
-
-function countUnreadByKind(items: AppNotification[]) {
-  let estimates = 0;
-  let invoices = 0;
-  let payments = 0;
-  let orders = 0;
-  let changeOrders = 0;
-  for (const item of items) {
-    if (item.isRead) continue;
-    if (isChangeOrderNotification(item)) changeOrders += 1;
-    else if (isEstimateNotification(item)) estimates += 1;
-    else if (isPaymentNotification(item)) payments += 1;
-    else if (isInvoiceNotification(item)) invoices += 1;
-    else if (isOrderNotification(item)) orders += 1;
-  }
-  return { estimates, invoices, payments, orders, changeOrders };
-}
+import {
+  allNotificationsMarkedRead,
+  chatMessageReceived,
+  chatReadReceipt,
+  chatThreadUpserted,
+  clearBadge,
+  loadCustomerChatThreads,
+  loadCustomerNotifications,
+  notificationBadgeKind,
+  notificationReceived,
+  notificationsMarkedRead,
+  selectCustomerBadgeIds,
+  selectCustomerNotifications,
+  selectCustomerUnreadMessages,
+  selectCustomerUnreadNotifications,
+  setUnreadNotifications,
+  type CustomerBadgeKind,
+} from "@/store/customerInboxSlice";
+import { fetchCustomerChangeOrders } from "@/store/customerChangeOrdersSlice";
 
 function RecordTab({
   href,
@@ -269,33 +264,48 @@ function NavLinks({
   );
 }
 
+/** Sidebar tabs whose badge resets when the customer opens them. */
+const TAB_BADGES: Array<{
+  href: string;
+  kind: CustomerBadgeKind;
+  openedEvent?: string;
+}> = [
+  { href: customerPaths.estimates, kind: "estimates", openedEvent: "CUSTOMER_ESTIMATES_TAB_OPENED" },
+  { href: customerPaths.changeOrders, kind: "changeOrders" },
+  { href: customerPaths.invoices, kind: "invoices", openedEvent: "CUSTOMER_INVOICES_TAB_OPENED" },
+  { href: customerPaths.payments, kind: "payments", openedEvent: "CUSTOMER_PAYMENTS_TAB_OPENED" },
+  { href: customerPaths.orders, kind: "orders", openedEvent: "CUSTOMER_ORDERS_TAB_OPENED" },
+];
+
+function badgeKindForPath(pathname: string): CustomerBadgeKind | null {
+  return TAB_BADGES.find((tab) => pathname.startsWith(tab.href))?.kind ?? null;
+}
+
+function asPayload(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
 export function CustomerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const store = useAppStore();
   const authUser = useAppSelector(selectAuthUser);
   const [collapsed, setCollapsed] = useState(false);
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-  /** Sidebar badges — independent of header mark-all-read. */
-  const [sidebarBase, setSidebarBase] = useState({
-    estimates: 0,
-    changeOrders: 0,
-    invoices: 0,
-    payments: 0,
-    orders: 0,
-  });
-  const [sidebarBump, setSidebarBump] = useState({
-    estimates: 0,
-    changeOrders: 0,
-    invoices: 0,
-    payments: 0,
-    orders: 0,
-  });
-  const [clears, setClears] = useState(getCustomerInboxClearState);
-  const skipSidebarSyncRef = useRef(false);
-  const clearedTabRef = useRef<string | null>(null);
+  const notifications = useAppSelector(selectCustomerNotifications);
+  const unreadNotifications = useAppSelector(selectCustomerUnreadNotifications);
+  const badgeIds = useAppSelector(selectCustomerBadgeIds);
+  const unreadMessages = useAppSelector(selectCustomerUnreadMessages);
+  const notificationsStatus = useAppSelector(
+    (state) => state.customerInbox?.notificationsStatus ?? "idle",
+  );
   const [headerSearch, setHeaderSearch] = useState("");
+  const pathnameRef = useRef(pathname);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+  const clearedKeyRef = useRef<string | null>(null);
+  const customerEmail = String(authUser?.email || "").trim();
 
   const menuUser: AuthUser = authUser
     ? { ...authUser, role: authUser.role || "customer" }
@@ -303,380 +313,197 @@ export function CustomerShell({ children }: { children: ReactNode }) {
 
   const currentSection = getCurrentCustomerSection(pathname);
 
-  const refreshChatBadge = useCallback(async () => {
-    const email = String(authUser?.email || "").trim();
-    if (!email) {
-      setUnreadMessages(0);
-      return;
-    }
-    try {
-      const [threadsResult] = await Promise.all([
-        listPublicChatThreads(email, { silent: true, page: 1, limit: 10 }),
-      ]);
-      const threads = threadsResult.items;
-      const threadUnread = threads.reduce(
-        (sum, thread) => sum + (thread.unreadForCustomer || 0),
-        0,
-      );
-      // Server unread already includes Platform Support
-      setUnreadMessages(threadsResult.unread || threadUnread);
-    } catch {
-      setUnreadMessages(0);
-    }
-  }, [authUser?.email]);
-
-  const refreshNotifications = useCallback(async () => {
-    if (!authUser?.id && !authUser?.email) {
-      setNotifications([]);
-      setUnreadNotifications(0);
-      return;
-    }
-    try {
-      const result = await fetchNotifications({
-        page: 1,
-        limit: 10,
-        status: "all",
-        silent: true,
-        force: true,
-      });
-      setNotifications(result.items);
-      setUnreadNotifications(result.unreadCount);
-      // Do not wipe sidebar counts when Mark all read just cleared the feed.
-      if (skipSidebarSyncRef.current) {
-        skipSidebarSyncRef.current = false;
-        return;
-      }
-      const counts = countUnreadByKind(result.items);
-      const clearState = getCustomerInboxClearState();
-      // Never lower sidebar badges from a notifications refetch (Mark all read
-      // zeros unread in DB). Tab-open and live bumps own decreases / increases.
-      setSidebarBase((prev) => ({
-        estimates: clearState.estimates
-          ? prev.estimates
-          : Math.max(prev.estimates, counts.estimates),
-        changeOrders: clearState.changeOrders
-          ? prev.changeOrders
-          : Math.max(prev.changeOrders, counts.changeOrders),
-        invoices: clearState.invoices
-          ? prev.invoices
-          : Math.max(prev.invoices, counts.invoices),
-        payments: clearState.payments
-          ? prev.payments
-          : Math.max(prev.payments, counts.payments),
-        orders: clearState.orders
-          ? prev.orders
-          : Math.max(prev.orders, counts.orders),
-      }));
-    } catch {
-      // Keep last known counts if the feed fails.
-    }
-  }, [authUser?.email, authUser?.id]);
+  // Load notifications + conversations once per session; the socket keeps them live.
+  useEffect(() => {
+    if (!authUser?.id && !customerEmail) return;
+    void dispatch(loadCustomerNotifications());
+  }, [authUser?.id, customerEmail, dispatch]);
 
   useEffect(() => {
-    return subscribeCustomerInboxClears(() => {
-      setClears(getCustomerInboxClearState());
-    });
-  }, []);
+    if (!customerEmail) return;
+    void dispatch(loadCustomerChatThreads({ email: customerEmail }));
+  }, [customerEmail, dispatch]);
 
-  useEffect(() => {
-    void refreshChatBadge();
-    void refreshNotifications();
-  }, [pathname, refreshChatBadge, refreshNotifications]);
+  /** Mark this kind's unread notifications read (known ids only — no refetch). */
+  const markKindRead = useCallback(
+    (kind: CustomerBadgeKind) => {
+      const unreadIds = (store.getState().customerInbox?.notifications ?? [])
+        .filter((row) => !row.isRead && notificationBadgeKind(row) === kind)
+        .map((row) => row.id);
+      if (!unreadIds.length) return;
+      dispatch(notificationsMarkedRead(unreadIds));
+      void Promise.allSettled(unreadIds.map((id) => markNotificationRead(id)));
+    },
+    [dispatch, store],
+  );
 
-  // Opening a customer tab resets only that sidebar badge (existing mark-read flow).
+  // Opening a tab resets only that sidebar badge (and marks its notifications read).
   useEffect(() => {
-    if (pathname.startsWith(customerPaths.estimates)) {
-      if (clearedTabRef.current === "estimates") return;
-      clearedTabRef.current = "estimates";
-      setCustomerInboxCleared("estimates", true);
-      setSidebarBump((current) => ({ ...current, estimates: 0 }));
-      setSidebarBase((current) => ({ ...current, estimates: 0 }));
+    const tab = TAB_BADGES.find((item) => pathname.startsWith(item.href));
+    if (!tab) {
+      clearedKeyRef.current = null;
+      return;
+    }
+    // Re-run once the first notification page lands so seeded badges clear too.
+    const key = `${tab.kind}:${notificationsStatus}`;
+    if (clearedKeyRef.current === key) return;
+    clearedKeyRef.current = key;
+    setCustomerInboxCleared(tab.kind, true);
+    dispatch(clearBadge(tab.kind));
+    markKindRead(tab.kind);
+    if (tab.openedEvent) {
       window.dispatchEvent(
-        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_ESTIMATES_TAB_OPENED" } }),
+        new CustomEvent("rs-realtime", { detail: { type: tab.openedEvent } }),
       );
-      void markUnreadNotificationsWhere(isEstimateNotification).catch(() => undefined);
-      return;
     }
-    if (pathname.startsWith(customerPaths.changeOrders)) {
-      if (clearedTabRef.current === "changeOrders") return;
-      clearedTabRef.current = "changeOrders";
-      setCustomerInboxCleared("changeOrders", true);
-      setSidebarBump((current) => ({ ...current, changeOrders: 0 }));
-      setSidebarBase((current) => ({ ...current, changeOrders: 0 }));
-      void markUnreadNotificationsWhere(isChangeOrderNotification).catch(
-        () => undefined,
-      );
-      return;
-    }
-    if (pathname.startsWith(customerPaths.invoices)) {
-      if (clearedTabRef.current === "invoices") return;
-      clearedTabRef.current = "invoices";
-      setCustomerInboxCleared("invoices", true);
-      setSidebarBump((current) => ({ ...current, invoices: 0 }));
-      setSidebarBase((current) => ({ ...current, invoices: 0 }));
-      window.dispatchEvent(
-        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_INVOICES_TAB_OPENED" } }),
-      );
-      void markUnreadNotificationsWhere(isInvoiceNotification).catch(() => undefined);
-      return;
-    }
-    if (pathname.startsWith(customerPaths.payments)) {
-      if (clearedTabRef.current === "payments") return;
-      clearedTabRef.current = "payments";
-      setCustomerInboxCleared("payments", true);
-      setSidebarBump((current) => ({ ...current, payments: 0 }));
-      setSidebarBase((current) => ({ ...current, payments: 0 }));
-      window.dispatchEvent(
-        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_PAYMENTS_TAB_OPENED" } }),
-      );
-      void markUnreadNotificationsWhere(isPaymentNotification).catch(() => undefined);
-      return;
-    }
-    if (pathname.startsWith(customerPaths.orders)) {
-      if (clearedTabRef.current === "orders") return;
-      clearedTabRef.current = "orders";
-      setCustomerInboxCleared("orders", true);
-      setSidebarBump((current) => ({ ...current, orders: 0 }));
-      setSidebarBase((current) => ({ ...current, orders: 0 }));
-      window.dispatchEvent(
-        new CustomEvent("rs-realtime", { detail: { type: "CUSTOMER_ORDERS_TAB_OPENED" } }),
-      );
-      void markUnreadNotificationsWhere(isOrderNotification).catch(() => undefined);
-      return;
-    }
-    clearedTabRef.current = null;
-  }, [pathname]);
+  }, [dispatch, markKindRead, notificationsStatus, pathname]);
 
   useEffect(() => {
     return subscribeRealtime((detail) => {
       const type = String(detail?.type || "");
-      if (
-        type === "CHAT_MESSAGE" ||
-        type === "CHAT_THREAD_UPDATED" ||
-        type === "CHAT_READ_RECEIPT" ||
-        type === "DIRECT_CHAT_MESSAGE" ||
-        type === "DIRECT_CHAT_READ"
-      ) {
-        void refreshChatBadge();
-        if (type === "DIRECT_CHAT_READ") {
-          void refreshNotifications();
+      const payload = asPayload(detail?.payload);
+      // The Messages page applies chat updates itself while it is open.
+      const chatViewOpen = Boolean(store.getState().customerInbox?.chatViewMounted);
+
+      if (type === "CHAT_THREAD_UPDATED") {
+        if (chatViewOpen) return;
+        const thread = detail.payload as ChatThread | undefined;
+        if (
+          thread?.id &&
+          String(thread.customerEmail || "").toLowerCase() === customerEmail.toLowerCase()
+        ) {
+          dispatch(chatThreadUpserted(thread));
         }
+        return;
+      }
+      if (type === "CHAT_MESSAGE") {
+        if (chatViewOpen) return;
+        const threadId = String(payload.threadId || "");
+        const message = asPayload(payload.message);
+        if (!threadId || !Object.keys(message).length) return;
+        const known = (store.getState().customerInbox?.chatThreads ?? []).some(
+          (thread) => thread.id === threadId,
+        );
+        if (known) {
+          dispatch(chatMessageReceived({ threadId, message }));
+        } else if (payload.thread) {
+          dispatch(chatThreadUpserted(payload.thread as ChatThread));
+        } else if (customerEmail) {
+          // A conversation we have never seen — pull the first page once.
+          void dispatch(loadCustomerChatThreads({ email: customerEmail, force: true }));
+        }
+        return;
+      }
+      if (type === "CHAT_READ_RECEIPT") {
+        if (chatViewOpen) return;
+        const threadId = String(payload.threadId || "");
+        if (!threadId) return;
+        dispatch(
+          chatReadReceipt({
+            threadId,
+            readBy: String(payload.readBy || ""),
+            unreadForCustomer: Number(payload.unreadForCustomer) || 0,
+            unreadForProvider: Number(payload.unreadForProvider) || 0,
+          }),
+        );
+        return;
+      }
+      if (type === "DIRECT_CHAT_MESSAGE") {
+        if (chatViewOpen) return;
+        const mapped = payload.chat ? mapAdminDirectChat(payload.chat, "customer") : null;
+        if (mapped) dispatch(chatThreadUpserted(mapped));
+        return;
+      }
+      if (type === "DIRECT_CHAT_READ") {
+        if (chatViewOpen) return;
+        const readBy = String(payload.readBy || "");
+        if (readBy === "customer" || readBy === "provider") {
+          dispatch(
+            chatReadReceipt({
+              threadId: ADMIN_DIRECT_THREAD_ID,
+              readBy: "customer",
+              unreadForCustomer: Number(payload.unreadForPeer) || 0,
+            }),
+          );
+        }
+        return;
       }
       if (type === "NEW_NOTIFICATION") {
         const mapped = normalizeSocketNotification(detail.payload);
-        if (mapped) {
-          const isChatMsg = String(mapped.type || "") === "NEW_CHAT_MESSAGE";
-          const viewingThisChat =
-            typeof window !== "undefined" &&
-            window.location.pathname.includes("/messages") &&
-            (() => {
-              const params = new URLSearchParams(window.location.search);
-              const directAdmin =
-                params.get("direct") === "admin" ||
-                params.get("thread") === "admin-direct";
-              const openThread = params.get("thread") || "";
-              const notifThread = String(
-                mapped.data?.threadId || mapped.data?.chatId || "",
-              );
-              const href = String(mapped.href || mapped.data?.href || "");
-              const isAdminDirectNotif =
-                mapped.data?.direct === true ||
-                mapped.data?.tab === "direct" ||
-                href.includes("direct=admin") ||
-                notifThread === "admin-direct";
-              if (directAdmin && isAdminDirectNotif) return true;
-              if (openThread && notifThread && openThread === notifThread) return true;
-              if (openThread && href.includes(`thread=${openThread}`)) return true;
-              return false;
-            })();
-
-          setNotifications((current) => {
-            if (current.some((row) => row.id === mapped.id)) return current;
-            const entry =
-              isChatMsg && viewingThisChat
-                ? { ...mapped, isRead: true }
-                : mapped;
-            return [entry, ...current].slice(0, 20);
-          });
-          if (!mapped.isRead && !(isChatMsg && viewingThisChat)) {
-            setUnreadNotifications((count) => count + 1);
-            if (isChangeOrderNotification(mapped)) {
-              reopenCustomerInboxBadge("changeOrders");
-              setSidebarBump((current) => ({
-                ...current,
-                changeOrders: current.changeOrders + 1,
-              }));
-            } else if (isEstimateNotification(mapped)) {
-              reopenCustomerInboxBadge("estimates");
-              setSidebarBump((current) => ({
-                ...current,
-                estimates: current.estimates + 1,
-              }));
-            } else if (isPaymentNotification(mapped)) {
-              reopenCustomerInboxBadge("payments");
-              setSidebarBump((current) => ({
-                ...current,
-                payments: current.payments + 1,
-              }));
-            } else if (isInvoiceNotification(mapped)) {
-              reopenCustomerInboxBadge("invoices");
-              setSidebarBump((current) => ({
-                ...current,
-                invoices: current.invoices + 1,
-              }));
-            } else if (isOrderNotification(mapped)) {
-              reopenCustomerInboxBadge("orders");
-              setSidebarBump((current) => ({
-                ...current,
-                orders: current.orders + 1,
-              }));
-            }
-          }
+        if (!mapped) return;
+        const isChatMsg = String(mapped.type || "") === "NEW_CHAT_MESSAGE";
+        const viewingThisChat =
+          typeof window !== "undefined" &&
+          window.location.pathname.includes("/messages") &&
+          (() => {
+            const params = new URLSearchParams(window.location.search);
+            const directAdmin =
+              params.get("direct") === "admin" ||
+              params.get("thread") === "admin-direct";
+            const openThread = params.get("thread") || "";
+            const notifThread = String(
+              mapped.data?.threadId || mapped.data?.chatId || "",
+            );
+            const href = String(mapped.href || mapped.data?.href || "");
+            const isAdminDirectNotif =
+              mapped.data?.direct === true ||
+              mapped.data?.tab === "direct" ||
+              href.includes("direct=admin") ||
+              notifThread === "admin-direct";
+            if (directAdmin && isAdminDirectNotif) return true;
+            if (openThread && notifThread && openThread === notifThread) return true;
+            if (openThread && href.includes(`thread=${openThread}`)) return true;
+            return false;
+          })();
+        if (isChatMsg && viewingThisChat) {
+          dispatch(notificationReceived({ notification: { ...mapped, isRead: true } }));
+          return;
         }
-        void refreshNotifications();
-        void refreshChatBadge();
-        return;
-      }
-      if (type === "ORDER_UPDATED") {
-        const payload =
-          detail.payload && typeof detail.payload === "object"
-            ? (detail.payload as Record<string, unknown>)
-            : {};
-        const action = String(payload.action || "");
-        const number = String(payload.number || "").trim();
-        const orderId = String(payload.id || payload.orderId || "").trim();
-        let optimistic: AppNotification | null = null;
-        if (action === "accept" || action === "auto_confirm") {
-          optimistic = {
-            id: `booking-accept:${orderId || number || Date.now()}`,
-            type: "BOOKING_ACCEPTED",
-            title: "Booking accepted",
-            message: number
-              ? `${number} was accepted by the provider.`
-              : "Your booking was accepted.",
-            data: { ...payload, href: "/account/dashboard/orders" },
-            isRead: false,
-            createdAt: new Date().toISOString(),
-            href: "/account/dashboard/orders",
-          };
-        } else if (action === "reject") {
-          optimistic = {
-            id: `booking-reject:${orderId || number || Date.now()}`,
-            type: "BOOKING_REJECTED",
-            title: "Booking declined",
-            message: number
-              ? `${number} was declined by the provider.`
-              : "Your booking request was declined.",
-            data: { ...payload, href: "/account/dashboard/orders" },
-            isRead: false,
-            createdAt: new Date().toISOString(),
-            href: "/account/dashboard/orders",
-          };
-        } else if (action === "requested") {
-          optimistic = {
-            id: `booking-requested:${orderId || number || Date.now()}`,
-            type: "ORDER_STATUS_CHANGED",
-            title: "Booking request sent",
-            message: number
-              ? `${number} was sent. Waiting for the provider to accept.`
-              : "Your booking request was sent.",
-            data: { ...payload, href: "/account/dashboard/orders" },
-            isRead: false,
-            createdAt: new Date().toISOString(),
-            href: "/account/dashboard/orders",
-          };
+        const kind = notificationBadgeKind(mapped);
+        // Already on that tab — record it as read instead of raising its badge.
+        const onThatTab = Boolean(kind && kind === badgeKindForPath(pathnameRef.current));
+        if (onThatTab && !mapped.isRead) {
+          dispatch(notificationReceived({ notification: { ...mapped, isRead: true } }));
+          void markNotificationRead(mapped.id).catch(() => undefined);
+        } else {
+          if (kind && !mapped.isRead) reopenCustomerInboxBadge(kind);
+          dispatch(notificationReceived({ notification: mapped }));
         }
-        if (optimistic) {
-          const row = optimistic;
-          setNotifications((current) => {
-            if (current.some((item) => item.id === row.id)) return current;
-            return [row, ...current].slice(0, 20);
-          });
-          setUnreadNotifications((count) => count + 1);
+        if (kind === "changeOrders") void dispatch(fetchCustomerChangeOrders());
+        return;
+      }
+      if (type === "CHANGE_ORDER_REQUESTED" || type === "CHANGE_ORDER_RESPONDED") {
+        // Badge comes from the persisted NEW_NOTIFICATION; refresh the Orders highlight.
+        void dispatch(fetchCustomerChangeOrders());
+        return;
+      }
+      if (type === "SOCKET_RECONNECTED" || type === "CUSTOMER_BADGE_INVALIDATE") {
+        // Events may have been missed while offline — re-sync once.
+        void dispatch(loadCustomerNotifications({ force: true }));
+        if (customerEmail && type === "SOCKET_RECONNECTED") {
+          void dispatch(loadCustomerChatThreads({ email: customerEmail, force: true }));
         }
-        reopenCustomerInboxBadge("orders");
-        setSidebarBump((current) => ({ ...current, orders: current.orders + 1 }));
-        void refreshNotifications();
-        return;
       }
-      if (
-        type === "ESTIMATE_SENT" ||
-        type === "ESTIMATE_UPDATED" ||
-        type === "ESTIMATE_ACCEPTED"
-      ) {
-        // NEW_NOTIFICATION already bumps the Estimates badge when a row is
-        // persisted. Domain events only reopen + refresh so counts stay accurate.
-        reopenCustomerInboxBadge("estimates");
-        void refreshNotifications();
-        return;
-      }
-      if (type === "CHANGE_ORDER_REQUESTED") {
-        reopenCustomerInboxBadge("changeOrders");
-        setSidebarBump((current) => ({
-          ...current,
-          changeOrders: current.changeOrders + 1,
-        }));
-        void refreshNotifications();
-        return;
-      }
-      if (type === "INVOICE_SENT") {
-        reopenCustomerInboxBadge("invoices");
-        setSidebarBump((current) => ({
-          ...current,
-          invoices: current.invoices + 1,
-        }));
-        void refreshNotifications();
-        return;
-      }
-      if (type === "PAYMENT_RECEIVED") {
-        reopenCustomerInboxBadge("payments");
-        setSidebarBump((current) => ({
-          ...current,
-          payments: current.payments + 1,
-        }));
-        void refreshNotifications();
-        return;
-      }
-      if (
-        type === "CUSTOMER_BADGE_INVALIDATE" ||
-        type === "SERVICE_SCHEDULED" ||
-        type === "SOCKET_RECONNECTED"
-      ) {
-        void refreshNotifications();
-        void refreshChatBadge();
-      }
+      // INVOICE_SENT / PAYMENT_RECEIVED / ESTIMATE_* / ORDER_UPDATED each arrive
+      // together with a NEW_NOTIFICATION — counting them here too caused the "2" badge.
     });
-  }, [refreshChatBadge, refreshNotifications]);
+  }, [customerEmail, dispatch, store]);
 
-  const unreadEstimates = clears.estimates
-    ? sidebarBump.estimates
-    : Math.max(sidebarBase.estimates, sidebarBump.estimates);
-  const unreadChangeOrders = clears.changeOrders
-    ? sidebarBump.changeOrders
-    : Math.max(sidebarBase.changeOrders, sidebarBump.changeOrders);
-  const unreadInvoices = clears.invoices
-    ? sidebarBump.invoices
-    : Math.max(sidebarBase.invoices, sidebarBump.invoices);
-  const unreadPayments = clears.payments
-    ? sidebarBump.payments
-    : Math.max(sidebarBase.payments, sidebarBump.payments);
-  const unreadOrders = clears.orders
-    ? sidebarBump.orders
-    : Math.max(sidebarBase.orders, sidebarBump.orders);
+  const unreadEstimates = badgeIds.estimates.length;
+  const unreadChangeOrders = badgeIds.changeOrders.length;
+  const unreadInvoices = badgeIds.invoices.length;
+  const unreadPayments = badgeIds.payments.length;
+  const unreadOrders = badgeIds.orders.length;
   // Header notification count only — messages stay on the sidebar.
   const bellCount = unreadNotifications;
 
   async function onOpenNotification(item: AppNotification) {
     const href = notificationHref(item);
     if (!item.isRead) {
+      dispatch(notificationsMarkedRead([item.id]));
       try {
         const result = await markNotificationRead(item.id);
-        setUnreadNotifications(result.unreadCount);
-        setNotifications((current) =>
-          current.map((row) =>
-            row.id === item.id ? { ...row, isRead: true, readAt: new Date().toISOString() } : row,
-          ),
-        );
+        dispatch(setUnreadNotifications(result.unreadCount));
       } catch {
         // still navigate
       }
@@ -685,18 +512,12 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   }
 
   async function onMarkAllRead() {
-    // Optimistic header clear — do not touch sidebar badge state.
-    skipSidebarSyncRef.current = true;
-    setUnreadNotifications(0);
-    setNotifications((current) =>
-      current.map((row) => ({ ...row, isRead: true, readAt: new Date().toISOString() })),
-    );
+    // Header only — sidebar badges reset when their tab is opened.
+    dispatch(allNotificationsMarkedRead());
     try {
       await markAllNotificationsRead();
-      setUnreadNotifications(0);
     } catch {
-      skipSidebarSyncRef.current = false;
-      void refreshNotifications();
+      void dispatch(loadCustomerNotifications({ force: true }));
     }
   }
 

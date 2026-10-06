@@ -1517,6 +1517,8 @@ function mapChangeOrders(jobId: string, value: unknown): ChangeOrder[] {
           .filter(Boolean),
         estimateId: trimmed(record.estimateId) || undefined,
         invoiceId: trimmed(record.invoiceId) || undefined,
+        billingInvoiceId: crmIdOf(record.billingInvoiceId) || undefined,
+        billingInvoiceNumber: trimmed(record.billingInvoiceNumber) || undefined,
         approvedBy: trimmed(record.approvedBy) || undefined,
         approvedAt: record.approvedAt
           ? toIsoString(record.approvedAt)
@@ -1721,6 +1723,11 @@ export function mapInvoice(raw: unknown): Invoice | null {
     customerEmail: customer.email || undefined,
     jobId: crmIdOf(record.jobId) || undefined,
     estimateId: crmIdOf(record.estimateId) || undefined,
+    invoiceType:
+      trimmed(record.invoiceType) === "change_order" ? "change_order" : "standard",
+    changeOrderId: crmIdOf(record.changeOrderId) || undefined,
+    changeOrderNumber: trimmed(record.changeOrderNumber) || undefined,
+    changeOrderTitle: trimmed(record.changeOrderTitle) || undefined,
     status:
       trimmed(record.status) === "sent" ||
       trimmed(record.status) === "partially_paid" ||

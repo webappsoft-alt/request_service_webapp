@@ -38,6 +38,8 @@ type OrdersState = {
   listError: string | null;
   listLoaded: boolean;
   listRequestKey: string | null;
+  /** Query (page/limit/status) of the rows currently in `list`. */
+  listLoadedKey: string | null;
   detail: CustomerOrderDetail | null;
   detailLoading: boolean;
   detailError: string | null;
@@ -66,6 +68,7 @@ const initialState: OrdersState = {
   listError: null,
   listLoaded: false,
   listRequestKey: null,
+  listLoadedKey: null,
   detail: null,
   detailLoading: false,
   detailError: null,
@@ -797,7 +800,8 @@ export const fetchCustomerOrders = createAsyncThunk<
           limit,
           status,
         },
-        { silent: true },
+        // force: bypass the 45s GET cache so every tab visit refreshes in the background.
+        { silent: true, force: true },
       );
       return parseOrdersList(response);
     } catch (error) {
@@ -938,6 +942,7 @@ const ordersSlice = createSlice({
         state.listLoaded = true;
         state.listError = null;
         state.listRequestKey = null;
+        state.listLoadedKey = listRequestKey(action.meta.arg || {});
       })
       .addCase(fetchCustomerOrders.rejected, (state, action) => {
         state.listLoading = false;
@@ -1018,6 +1023,16 @@ export const selectCustomerOrdersPagination = (state: {
 
 export const selectCustomerOrdersLoading = (state: { orders?: OrdersState }) =>
   Boolean(state.orders?.listLoading);
+
+/**
+ * True only while the table would show a different dataset (first load, page,
+ * or filter change). Re-fetching the rows already on screen stays silent.
+ */
+export const selectCustomerOrdersTableLoading =
+  (arg: { page?: number; limit?: number; status?: string }) =>
+  (state: { orders?: OrdersState }) =>
+    Boolean(state.orders?.listLoading) &&
+    state.orders?.listLoadedKey !== listRequestKey(arg);
 
 export const selectCustomerOrdersError = (state: { orders?: OrdersState }) =>
   state.orders?.listError ?? null;

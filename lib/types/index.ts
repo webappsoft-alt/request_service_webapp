@@ -334,6 +334,9 @@ export interface ChangeOrder {
   attachments?: string[];
   estimateId?: string;
   invoiceId?: string;
+  /** The change order's own invoice — never merged into the job invoice. */
+  billingInvoiceId?: string;
+  billingInvoiceNumber?: string;
   approvedBy?: string;
   approvedAt?: string;
   rejectedBy?: string;
@@ -409,6 +412,11 @@ export interface Invoice {
   customerEmail?: string;
   jobId?: string;
   estimateId?: string;
+  /** "change_order" = separate invoice for one approved job change order. */
+  invoiceType?: "standard" | "change_order";
+  changeOrderId?: string;
+  changeOrderNumber?: string;
+  changeOrderTitle?: string;
   status: InvoiceStatus;
   issuedAt: string;
   dueAt?: string;

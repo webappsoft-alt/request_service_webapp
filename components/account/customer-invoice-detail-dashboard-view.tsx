@@ -182,13 +182,30 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
     <PortalPage
       eyebrow="Invoices"
       title={invoice.number}
-      description={`Invoice from ${companyName}`}
+      description={
+        invoice.invoiceType === "change_order"
+          ? `Change order ${invoice.changeOrderNumber || ""} invoice from ${companyName} — billed and paid separately from the job invoice`
+          : `Invoice from ${companyName}`
+      }
       badge={
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill
             label={statusLabel(invoice.status)}
             tone={moneyTone(invoice.status)}
           />
+          {invoice.invoiceType === "change_order" ? (
+            invoice.jobId && invoice.changeOrderId ? (
+              <Link href={customerPaths.changeOrder(invoice.jobId, invoice.changeOrderId)}>
+                <Badge className="text-xs font-semibold">
+                  Change order {invoice.changeOrderNumber}
+                </Badge>
+              </Link>
+            ) : (
+              <Badge className="text-xs font-semibold">
+                Change order {invoice.changeOrderNumber}
+              </Badge>
+            )
+          ) : null}
           {invoice.jobNumber ? (
             <Badge
               variant="outline"

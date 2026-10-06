@@ -49,7 +49,15 @@ import {
 } from "@/lib/chat-format";
 import { markUnreadChatNotificationsReadForThread } from "@/lib/api/notifications-client";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector, useAppStore } from "@/store/hooks";
+import {
+  selectCustomerChatListHasMore,
+  selectCustomerChatListPage,
+  selectCustomerChatStatus,
+  selectCustomerChatThreads,
+  setChatThreads,
+  setChatViewMounted,
+} from "@/store/customerInboxSlice";
 import {
   selectAuth,
   selectAuthUser,
@@ -234,11 +242,32 @@ export function CustomerMessagesView({
     supportOnline,
   } = useRealtime();
 
-  const [threads, setThreads] = useState<ChatThread[]>([]);
-  const [listPage, setListPage] = useState(1);
-  const [listHasMore, setListHasMore] = useState(false);
+  const dispatch = useAppDispatch();
+  const store = useAppStore();
+  // Conversations live in the customer inbox slice: fetched once, kept live by
+  // the socket, and reused when the customer navigates back here.
+  const threads = useAppSelector(selectCustomerChatThreads);
+  const chatStatus = useAppSelector(selectCustomerChatStatus);
+  const cachedListPage = useAppSelector(selectCustomerChatListPage);
+  const cachedListHasMore = useAppSelector(selectCustomerChatListHasMore);
+  /** Latest cached threads (read from the store so updaters never see stale rows). */
+  const currentThreads = useCallback(
+    () => store.getState().customerInbox?.chatThreads ?? [],
+    [store],
+  );
+  const setThreads = useCallback(
+    (update: ChatThread[] | ((current: ChatThread[]) => ChatThread[])) => {
+      const next = typeof update === "function" ? update(currentThreads()) : update;
+      dispatch(setChatThreads({ threads: next }));
+    },
+    [currentThreads, dispatch],
+  );
+  const [listPage, setListPage] = useState(cachedListPage);
+  const [listHasMore, setListHasMore] = useState(cachedListHasMore);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [ownLoading, setLoading] = useState(true);
+  // Cached conversations render immediately — the spinner is only for a first fetch.
+  const loading = ownLoading && chatStatus !== "loaded";
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
@@ -301,6 +330,7 @@ export function CustomerMessagesView({
         setListPage(page);
         const pages = result.pagination?.pages || 1;
         setListHasMore(page < pages);
+        dispatch(setChatThreads({ threads: currentThreads(), page, hasMore: page < pages }));
         setError(null);
       } catch (err) {
         const message =
@@ -314,13 +344,42 @@ export function CustomerMessagesView({
         setLoadingMore(false);
       }
     },
-    [listingEmail],
+    [currentThreads, dispatch, listingEmail, setThreads],
   );
 
+  // Let the shell skip chat socket updates while this page applies them itself.
+  useEffect(() => {
+    dispatch(setChatViewMounted(true));
+    return () => {
+      dispatch(setChatViewMounted(false));
+    };
+  }, [dispatch]);
+
+  // Reuse cached conversations; only fetch when nothing has been loaded yet.
+  const enrichedCacheRef = useRef(false);
   useEffect(() => {
     if (!auth.hydrated || !isAuthenticated) return;
+    if (chatStatus === "loading") return;
+    if (chatStatus === "loaded") {
+      if (enrichedCacheRef.current) return;
+      enrichedCacheRef.current = true;
+      // Cached rows from the shell may be missing provider names — fill them quietly.
+      const cachedThreads = currentThreads();
+      void enrichThreadsWithProviderNames(cachedThreads).then((enriched) => {
+        if (enriched.some((thread, index) => thread !== cachedThreads[index])) {
+          setThreads(
+            sortChatThreadsByUnreadThenRecent(
+              enriched,
+              (thread) => thread.unreadForCustomer || 0,
+            ),
+          );
+        }
+      });
+      return;
+    }
+    enrichedCacheRef.current = true;
     void loadThreads();
-  }, [auth.hydrated, isAuthenticated, loadThreads]);
+  }, [auth.hydrated, chatStatus, currentThreads, isAuthenticated, loadThreads, setThreads]);
 
   useEffect(() => {
     if (!listingEmail) return;

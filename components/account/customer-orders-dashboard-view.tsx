@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, FileText, Receipt, Sparkles } from "lucide-react";
+import { Eye, FilePlus2, FileText, Receipt, Sparkles } from "lucide-react";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/portal/status-pill";
 import {
   Select,
@@ -32,10 +33,18 @@ import {
   customerOrderDetailFromListItem,
   fetchCustomerOrders,
   selectCustomerOrders,
-  selectCustomerOrdersLoading,
   selectCustomerOrdersPagination,
+  selectCustomerOrdersTableLoading,
   setCustomerOrderDetail,
 } from "@/store/ordersSlice";
+import {
+  fetchCustomerChangeOrders,
+  isPendingChangeOrderStatus,
+  selectCustomerChangeOrders,
+} from "@/store/customerChangeOrdersSlice";
+import type { CustomerChangeOrder } from "@/lib/api/customer-change-orders";
+import { formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const STATUS_FILTERS = [
   { value: "all", label: "All statuses" },
@@ -60,17 +69,81 @@ function orderTone(status: string) {
   return "neutral" as const;
 }
 
+function changeOrderStatusLabel(status: string) {
+  const clean = String(status || "").toLowerCase();
+  if (isPendingChangeOrderStatus(clean)) return "Awaiting approval";
+  if (clean === "approved") return "Approved";
+  if (clean === "rejected") return "Rejected";
+  if (clean === "cancelled") return "Cancelled";
+  return clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "—";
+}
+
+/** Pending change orders first, then the most recently sent. */
+function primaryChangeOrder(items: CustomerChangeOrder[]) {
+  return [...items].sort((a, b) => {
+    const pa = isPendingChangeOrderStatus(a.status) ? 0 : 1;
+    const pb = isPendingChangeOrderStatus(b.status) ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    const ta = new Date(a.sentAt || a.requestedAt || 0).getTime();
+    const tb = new Date(b.sentAt || b.requestedAt || 0).getTime();
+    return tb - ta;
+  })[0];
+}
+
 export function CustomerOrdersDashboardView() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const orders = useAppSelector(selectCustomerOrders);
-  const loading = useAppSelector(selectCustomerOrdersLoading);
   const pagination = useAppSelector(selectCustomerOrdersPagination);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const query = {
+    page,
+    limit: CUSTOMER_ORDERS_PAGE_LIMIT,
+    status: status === "all" ? undefined : status,
+  };
+  // Spinner only when the table would show a different page/filter; a refresh of
+  // the rows already on screen happens silently in the background.
+  const loading = useAppSelector(selectCustomerOrdersTableLoading(query));
+  const changeOrders = useAppSelector(selectCustomerChangeOrders);
+
+  /** Job change orders keyed by the job (= order row) id. */
+  const changeOrdersByJob = useMemo(() => {
+    const map = new Map<string, CustomerChangeOrder[]>();
+    for (const co of changeOrders) {
+      const key = String(co.jobId || "");
+      if (!key) continue;
+      map.set(key, [...(map.get(key) || []), co]);
+    }
+    return map;
+  }, [changeOrders]);
+
+  const visibleOrders = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return orders;
+    return orders.filter((row) => {
+      const cos = changeOrdersByJob.get(row.id) || [];
+      return [
+        orderServiceTitle(row),
+        row.orderNumber,
+        row.provider?.companyName,
+        row.status,
+        ...cos.map((co) => `${co.number} ${co.title}`),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [changeOrdersByJob, orders, search]);
+
+  useEffect(() => {
+    if (!auth.hydrated || !isAuthenticated) return;
+    void dispatch(fetchCustomerChangeOrders());
+  }, [auth.hydrated, dispatch, isAuthenticated]);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -139,9 +212,16 @@ export function CustomerOrdersDashboardView() {
             </Select>
           </div>
         }
-        rows={orders}
+        rows={visibleOrders}
         rowKey={(row) => row.id}
         rowHref={(row) => customerPaths.order(row.id)}
+        rowClassName={(row) =>
+          (changeOrdersByJob.get(row.id) || []).some((co) =>
+            isPendingChangeOrderStatus(co.status),
+          )
+            ? "bg-amber-50/70 hover:bg-amber-50"
+            : undefined
+        }
         empty="No orders found."
         columns={[
           {
@@ -215,6 +295,49 @@ export function CustomerOrdersDashboardView() {
             ),
           },
           {
+            id: "changeOrder",
+            header: "Change order",
+            sortValue: (row) => {
+              const co = primaryChangeOrder(changeOrdersByJob.get(row.id) || []);
+              return co ? (isPendingChangeOrderStatus(co.status) ? 0 : 1) : 2;
+            },
+            exportValue: (row) => {
+              const cos = changeOrdersByJob.get(row.id) || [];
+              return cos
+                .map((co) => `${co.number} ${changeOrderStatusLabel(co.status)} ${co.amount}`)
+                .join("; ");
+            },
+            cell: (row) => {
+              const cos = changeOrdersByJob.get(row.id) || [];
+              const co = primaryChangeOrder(cos);
+              if (!co) return <span className="text-muted-foreground">—</span>;
+              const pending = isPendingChangeOrderStatus(co.status);
+              return (
+                <div className="flex flex-col items-start gap-1">
+                  <Button
+                    asChild
+                    size="sm"
+                    variant={pending ? "default" : "outline"}
+                    className={cn(
+                      "h-7 gap-1.5 px-2.5 text-xs",
+                      pending && "bg-amber-500 text-white hover:bg-amber-600",
+                    )}
+                  >
+                    <Link href={customerPaths.changeOrder(co.jobId, co.id)}>
+                      <FilePlus2 className="size-3.5" />
+                      {pending ? `Review ${co.number}` : `${co.number} · ${formatMoney(co.amount)}`}
+                    </Link>
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    {changeOrderStatusLabel(co.status)}
+                    {pending ? ` · ${formatMoney(co.amount)}` : ""}
+                    {cos.length > 1 ? ` · +${cos.length - 1} more` : ""}
+                  </span>
+                </div>
+              );
+            },
+          },
+          {
             id: "total",
             header: "Total",
             sortValue: (row) => row.pricing.totalAmount ?? 0,
@@ -232,6 +355,11 @@ export function CustomerOrdersDashboardView() {
             icon: <Eye className="size-3.5" />,
             quick: true,
           },
+          ...(changeOrdersByJob.get(row.id) || []).map((co) => ({
+            label: `Change order ${co.number}`,
+            href: customerPaths.changeOrder(co.jobId, co.id),
+            icon: <FilePlus2 className="size-3.5" />,
+          })),
           ...(row.invoiceId
             ? [
                 {

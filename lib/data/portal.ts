@@ -1650,6 +1650,8 @@ export function invoiceDaysOverdue(invoice: Pick<Invoice, "dueAt" | "status">, t
 }
 
 export function invoiceKind(invoice: Invoice): InvoiceKind {
+  // Separate invoice billed for one approved job change order.
+  if (invoice.invoiceType === "change_order") return "change_order";
   if (invoice.status === "draft") return "draft";
   if (invoice.items.some((item) => item.source === "change_order")) return "change_order";
   if (invoice.amountPaid > 0 && invoice.balanceDue > 0) return "progress";
@@ -1665,7 +1667,7 @@ export function invoiceKindLabel(kind: InvoiceKind) {
     case "progress":
       return "Progress invoice";
     case "change_order":
-      return "Change order";
+      return "Change order invoice";
     default: {
       const _never: never = kind;
       return _never;

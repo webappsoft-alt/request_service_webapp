@@ -543,6 +543,10 @@ export function InvoiceSummaryTab({
   ]);
   const overdueDays = invoiceDaysOverdue(invoice);
   const kind = invoiceKindLabel(invoiceKind(invoice));
+  const changeOrder =
+    invoice.invoiceType === "change_order"
+      ? job?.changeOrders?.find((co) => co.id === invoice.changeOrderId)
+      : undefined;
   const siteAddress = address
     ? `${address.street}, ${formatLocation(address.city, address.state, address.zip)}`
     : "";
@@ -554,6 +558,41 @@ export function InvoiceSummaryTab({
 
   return (
     <div className="space-y-4">
+      {invoice.invoiceType === "change_order" ? (
+        <section className="rounded-md border border-primary/30 bg-secondary/40 px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                Change order invoice
+              </p>
+              <p className="mt-0.5 font-semibold text-foreground">
+                {invoice.changeOrderNumber || changeOrder?.number || "Change order"}
+                {invoice.changeOrderTitle || changeOrder?.title
+                  ? ` · ${invoice.changeOrderTitle || changeOrder?.title}`
+                  : ""}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Billed and paid separately from the original job invoice — not part of the job total.
+                {changeOrder?.approvedAt
+                  ? ` Approved ${formatDate(changeOrder.approvedAt)}${changeOrder.approvedBy ? ` by ${changeOrder.approvedBy}` : ""}.`
+                  : ""}
+              </p>
+              {changeOrder?.description && changeOrder.description !== changeOrder.title ? (
+                <p className="mt-1 whitespace-pre-wrap text-xs text-foreground">
+                  {changeOrder.description}
+                </p>
+              ) : null}
+            </div>
+            {invoice.jobId ? (
+              <Button size="sm" variant="outline" className="h-8" asChild>
+                <Link href={`/pro/dashboard/jobs/${invoice.jobId}?tab=change-orders`}>
+                  View change orders
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-md border border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
         <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
           <span className="text-muted-foreground">Customer:</span>

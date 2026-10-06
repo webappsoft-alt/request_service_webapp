@@ -660,30 +660,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     (!showVisits && !showPrepInfo) ||
     !prepPanelOpen;
 
+  /**
+   * Create the estimate if needed — and save the labour / material lines,
+   * scope, terms, and discount already entered (same payload as Save draft).
+   */
   async function ensureEstimate() {
     if (!opportunity) return null;
     if (estimate?.id) return estimate;
-    setSaving(true);
-    try {
-      const created = await createEstimateV2Estimate(opportunity.id, {
-        title: opportunity.title,
-        notes: scopeOfWork || opportunity.description || "",
-        terms,
-        discount: Number(discount) || 0,
-        customerId: customerIdOf(opportunity),
-        propertyAddress: opportunity.propertyAddress,
-      });
-      if (!created.estimate?.id) throw new Error("Estimate was not created.");
-      setEstimate(created.estimate);
-      toast.success(`${created.estimate.number} created.`);
-      await load();
-      return created.estimate;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create estimate.");
-      return null;
-    } finally {
-      setSaving(false);
-    }
+    const created = await saveEstimateDraft({ silent: true });
+    if (created?.id) toast.success(`${created.number || "Estimate"} created.`);
+    return created;
   }
 
   async function setPrepChoice(prepChoice: PrepChoice) {
@@ -785,11 +771,27 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       if (!current?.id) {
         const created = await createEstimateV2Estimate(opportunity.id, {
           title: opportunity.title,
-          notes: scopeOfWork,
+          notes: scopeOfWork || opportunity.description || "",
           terms,
           discount: Number(discount) || 0,
           customerId: customerIdOf(opportunity),
           propertyAddress: opportunity.propertyAddress,
+          // Send the labour / material lines with the create itself so the new
+          // estimate never starts empty (the update below re-saves the full draft).
+          items: filledLines.map((line) => ({
+            description: line.description.trim() || (line.kind === "labor" ? "Labour" : "Item"),
+            kind:
+              line.kind === "materials"
+                ? ("material" as const)
+                : line.kind === "equipment"
+                  ? ("equipment" as const)
+                  : ("labor" as const),
+            quantity: Math.max(0.01, Number(line.quantity) || 1),
+            unitPrice: Math.max(0, Number(line.unitPrice) || 0),
+            taxRate: taxRatePercent,
+            ...(line.images?.length ? { images: line.images } : {}),
+            ...(line.section ? { section: line.section } : {}),
+          })),
         });
         current = created.estimate;
       }
@@ -1384,15 +1386,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     >
                       {sendButtonLabel}
                     </Button>
-                    {(estimate?.status === "sent" ||
-                      estimate?.status === "accepted" ||
+                    {/* Only after the customer accepts — never while still awaiting their response. */}
+                    {(estimate?.status === "accepted" ||
                       estimate?.status === "converted_to_job") ? (
                       <>
-                        {estimate.status === "accepted" ? (
-                          <span className="flex h-9 items-center rounded-md bg-green-50 px-3 text-sm font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                            Customer Accepted
-                          </span>
-                        ) : null}
                         {estimate.jobId ? (
                           <Button size="sm" variant="outline" asChild>
                             <Link href={`/pro/dashboard/jobs/${estimate.jobId}`}>

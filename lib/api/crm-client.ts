@@ -2118,6 +2118,16 @@ export async function sendJobChangeOrder(jobId: string, orderId: string) {
   return mapCrmEntity(response, mapJob);
 }
 
+/** Bill an approved change order on its own invoice (separate from the job invoice). */
+export async function createJobChangeOrderInvoice(jobId: string, orderId: string) {
+  const response = await postData(
+    providerCrmApi.jobChangeOrderInvoice(jobId, orderId),
+    {},
+    { silent: false },
+  );
+  return mapCrmEntity(response, mapInvoice);
+}
+
 export async function updateJobChangeOrderStatus(
   jobId: string,
   orderId: string,

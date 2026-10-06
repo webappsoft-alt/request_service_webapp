@@ -69,6 +69,7 @@ export function PortalDataTable<T>({
   loading = false,
   busyRowIds,
   isRowBusy,
+  rowClassName,
 }: {
   rows: T[];
   rowKey: (row: T) => string;
@@ -91,6 +92,8 @@ export function PortalDataTable<T>({
   busyRowIds?: string[];
   /** Predicate to determine if a specific row is busy */
   isRowBusy?: (row: T) => boolean;
+  /** Optional per-row highlight (e.g. rows that need the customer's attention). */
+  rowClassName?: (row: T) => string | undefined;
 }) {
   const router = useRouter();
   const isServer = Boolean(serverPagination);
@@ -173,7 +176,10 @@ export function PortalDataTable<T>({
   const pageCount = isServer
     ? (serverPagination?.totalPages ?? Math.max(1, Math.ceil(totalCount / pageSize)))
     : Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = isServer ? (serverPagination?.page ?? 1) : page;
+  // Clamp so a shrinking dataset (refresh/search) never leaves an empty page.
+  const currentPage = isServer
+    ? (serverPagination?.page ?? 1)
+    : Math.min(page, pageCount);
 
   const pageRows = useMemo(() => {
     if (isServer) return rows;
@@ -353,7 +359,7 @@ export function PortalDataTable<T>({
                 return (
                   <TableRow
                     key={rowKey(row)}
-                    className={cn(href && "cursor-pointer")}
+                    className={cn(href && "cursor-pointer", rowClassName?.(row))}
                     onClick={
                       href
                         ? (event) => {

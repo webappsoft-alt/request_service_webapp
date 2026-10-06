@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye } from "lucide-react";
@@ -14,9 +14,11 @@ import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
 import {
+  CUSTOMER_INVOICES_PAGE_LIMIT,
   fetchCustomerInvoices,
   selectCustomerInvoices,
-  selectCustomerInvoicesLoading,
+  selectCustomerInvoicesPagination,
+  selectCustomerInvoicesTableLoading,
 } from "@/store/customerInvoicesSlice";
 
 function statusLabel(status: string) {
@@ -35,7 +37,25 @@ export function CustomerInvoicesDashboardView() {
   const auth = useAppSelector(selectAuth);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const invoices = useAppSelector(selectCustomerInvoices);
-  const loading = useAppSelector(selectCustomerInvoicesLoading);
+  const pagination = useAppSelector(selectCustomerInvoicesPagination);
+  const loaded = useAppSelector((state) => Boolean(state.customerInvoices?.loaded));
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const query = { page, limit: CUSTOMER_INVOICES_PAGE_LIMIT, search };
+  // Spinner only when page/search changes the dataset; revisits refresh silently.
+  const tableLoading = useAppSelector(selectCustomerInvoicesTableLoading(query));
+
+  // Debounce typing so search hits the API once the customer pauses.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const next = searchInput.trim();
+      if (next === search) return;
+      setSearch(next);
+      setPage(1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [search, searchInput]);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -45,10 +65,16 @@ export function CustomerInvoicesDashboardView() {
       );
       return;
     }
-    void dispatch(fetchCustomerInvoices());
-  }, [auth.hydrated, isAuthenticated, router, dispatch]);
+    void dispatch(
+      fetchCustomerInvoices({
+        page,
+        limit: CUSTOMER_INVOICES_PAGE_LIMIT,
+        search,
+      }),
+    );
+  }, [auth.hydrated, isAuthenticated, router, dispatch, page, search]);
 
-  if (!auth.hydrated || (loading && !invoices.length)) {
+  if (!auth.hydrated || (!loaded && !invoices.length)) {
     return (
       <PortalPage
         eyebrow="Activity"
@@ -70,7 +96,16 @@ export function CustomerInvoicesDashboardView() {
         filename="customer-invoices"
         countLabel="Invoices"
         searchPlaceholder="Search invoices…"
-        loading={loading && !invoices.length}
+        loading={tableLoading}
+        serverPagination={{
+          page: pagination?.page || page,
+          pageSize: pagination?.limit || CUSTOMER_INVOICES_PAGE_LIMIT,
+          total: pagination?.total ?? invoices.length,
+          totalPages: pagination?.totalPages || 1,
+          onPageChange: (next) => setPage(next),
+          search: searchInput,
+          onSearchChange: (value) => setSearchInput(value),
+        }}
         rows={invoices}
         rowKey={(row) => row.id}
         rowHref={(row) => customerPaths.invoice(row.id)}
@@ -91,7 +126,9 @@ export function CustomerInvoicesDashboardView() {
                   {row.number}
                 </Link>
                 <p className="text-xs text-muted-foreground">
-                  {row.jobNumber
+                  {row.invoiceType === "change_order"
+                    ? `Change order ${row.changeOrderNumber || ""}${row.jobNumber ? ` · Job ${row.jobNumber}` : ""}`
+                    : row.jobNumber
                     ? `Job ${row.jobNumber}`
                     : row.issuedAt
                       ? `Issued ${formatDate(row.issuedAt.slice(0, 10))}`

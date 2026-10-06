@@ -107,7 +107,8 @@ export const fetchCustomerPayments = createAsyncThunk(
   "customerPayments/fetchList",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getData(userApi.payments);
+      // force: bypass the 45s GET cache so every tab visit refreshes in the background.
+      const response = await getData(userApi.payments, undefined, { force: true, silent: true });
       const root = asRecord(response);
       const data = asRecord(root?.data) ?? root;
       const listRaw = Array.isArray(data?.payments) ? data.payments : [];

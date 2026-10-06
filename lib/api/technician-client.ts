@@ -99,6 +99,7 @@ export type TechJobDetail = {
   timeEntries: TimeEntry[];
   timeSummary: TimeSummary;
   activeEntry: TimeEntry | null;
+  payments: { summary: LedgerSummary; history: TechnicianPaymentRecord[] };
 };
 
 export type TechEstimateRow = {
@@ -406,6 +407,12 @@ export async function getTechnicianJob(id: string): Promise<TechJobDetail> {
     timeEntries: mapEntries(data.timeEntries),
     timeSummary: mapTimeSummary(data.timeSummary),
     activeEntry: mapTimeEntry(data.activeEntry),
+    payments: {
+      summary: mapLedgerSummary(asRecord(data.payments).summary),
+      history: (Array.isArray(asRecord(data.payments).history) ? (asRecord(data.payments).history as unknown[]) : []).map(
+        mapTechnicianPayment,
+      ),
+    },
   };
 }
 
@@ -559,4 +566,152 @@ export async function listProviderTimeEntries(query: ProviderTimeQuery): Promise
 
 export async function providerStopTimeEntry(id: string): Promise<TimeEntry | null> {
   return mapTimeEntry(dataOf(await postData(providerCrmApi.timeEntryClockOut(id), {}, { silent: true })));
+}
+
+/* ───────────────────────────── Technician pay ledger ───────────────────────────── */
+
+export type TechnicianPaymentMethod = "cash" | "check" | "card" | "ach";
+
+export type TechnicianPaymentRecord = {
+  id: string;
+  number: string;
+  employeeId: string;
+  employeeName: string;
+  job: { id: string; number?: string; title?: string } | null;
+  estimate: { id: string; number?: string; title?: string } | null;
+  amount: number;
+  method: TechnicianPaymentMethod;
+  paidAt: string;
+  reference: string;
+  notes: string;
+};
+
+export type LedgerRow = {
+  employeeId: string;
+  employeeName: string;
+  payRate: number;
+  jobId: string | null;
+  estimateId: string | null;
+  job: { id: string; number?: string; title?: string; status?: string } | null;
+  estimate: { id: string; number?: string; title?: string; status?: string } | null;
+  seconds: number;
+  sessions: number;
+  earned: number;
+  paid: number;
+  remaining: number;
+};
+
+export type LedgerSummary = {
+  totalSeconds: number;
+  sessions: number;
+  earned: number;
+  paid: number;
+  remaining: number;
+};
+
+export type TechnicianLedger = {
+  summary: LedgerSummary;
+  byJob: LedgerRow[];
+  payments: TechnicianPaymentRecord[];
+};
+
+export const EMPTY_LEDGER: TechnicianLedger = {
+  summary: { totalSeconds: 0, sessions: 0, earned: 0, paid: 0, remaining: 0 },
+  byJob: [],
+  payments: [],
+};
+
+function mapRef(value: unknown) {
+  const row = asRecord(value);
+  const id = idOf(row);
+  if (!id) return null;
+  return {
+    id,
+    number: row.number ? String(row.number) : undefined,
+    title: row.title ? String(row.title) : undefined,
+    status: row.status ? String(row.status) : undefined,
+  };
+}
+
+export function mapLedgerSummary(value: unknown): LedgerSummary {
+  const row = asRecord(value);
+  return {
+    totalSeconds: Number(row.totalSeconds) || 0,
+    sessions: Number(row.sessions) || 0,
+    earned: Number(row.earned) || 0,
+    paid: Number(row.paid) || 0,
+    remaining: Number(row.remaining) || 0,
+  };
+}
+
+export function mapTechnicianPayment(value: unknown): TechnicianPaymentRecord {
+  const row = asRecord(value);
+  const employee = asRecord(row.employeeId);
+  return {
+    id: idOf(row),
+    number: String(row.number || ""),
+    employeeId: typeof row.employeeId === "string" ? row.employeeId : idOf(employee),
+    employeeName: `${employee.firstName || ""} ${employee.lastName || ""}`.trim(),
+    job: mapRef(row.jobId),
+    estimate: mapRef(row.estimateId),
+    amount: Number(row.amount) || 0,
+    method: (String(row.method || "cash") as TechnicianPaymentMethod),
+    paidAt: String(row.paidAt || row.createdAt || ""),
+    reference: String(row.reference || ""),
+    notes: String(row.notes || ""),
+  };
+}
+
+function mapLedger(value: unknown): TechnicianLedger {
+  const data = asRecord(dataOf(value));
+  return {
+    summary: mapLedgerSummary(data.summary),
+    byJob: (Array.isArray(data.byJob) ? data.byJob : []).map((item) => {
+      const row = asRecord(item);
+      return {
+        employeeId: String(row.employeeId || ""),
+        employeeName: String(row.employeeName || ""),
+        payRate: Number(row.payRate) || 0,
+        jobId: row.jobId ? String(row.jobId) : null,
+        estimateId: row.estimateId ? String(row.estimateId) : null,
+        job: mapRef(row.job),
+        estimate: mapRef(row.estimate),
+        seconds: Number(row.seconds) || 0,
+        sessions: Number(row.sessions) || 0,
+        earned: Number(row.earned) || 0,
+        paid: Number(row.paid) || 0,
+        remaining: Number(row.remaining) || 0,
+      };
+    }),
+    payments: (Array.isArray(data.payments) ? data.payments : []).map(mapTechnicianPayment),
+  };
+}
+
+export async function getTechnicianLedger(): Promise<TechnicianLedger> {
+  return mapLedger(await getData(technicianApi.payments, undefined, quiet));
+}
+
+export async function getProviderLedger(query: { employeeId?: string; jobId?: string }): Promise<TechnicianLedger> {
+  return mapLedger(await getData(providerCrmApi.technicianPayments, query, quiet));
+}
+
+export type RecordTechnicianPaymentInput = {
+  employeeId: string;
+  jobId?: string | null;
+  estimateId?: string | null;
+  amount: number;
+  method: TechnicianPaymentMethod;
+  paidAt?: string;
+  reference?: string;
+  notes?: string;
+};
+
+export async function recordTechnicianPayment(input: RecordTechnicianPaymentInput) {
+  return mapTechnicianPayment(dataOf(await postData(providerCrmApi.technicianPayments, input, { silent: true })));
+}
+
+/** Persist a nav-section badge reset (marks that section's notifications read). */
+export async function markTechnicianSectionRead(section: string): Promise<{ unreadCount: number }> {
+  const data = asRecord(dataOf(await putData(technicianApi.sectionRead, { section }, { silent: true })));
+  return { unreadCount: Number(data.unreadCount) || 0 };
 }

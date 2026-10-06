@@ -130,6 +130,8 @@ export const providerCrmApi = {
   timeEntries: "provider/time-entries",
   /** POST stop a technician's running timer */
   timeEntryClockOut: (id: string) => `provider/time-entries/${id}/clock-out`,
+  /** GET earned/paid/remaining ledger; POST record a technician payout (separate from customer payments) */
+  technicianPayments: "provider/technician-payments",
   contractors: "provider/contractors",
   contractor: (id: string) => `provider/contractors/${id}`,
   contractorAttachments: (id: string) => `provider/contractors/${id}/attachments`,
@@ -305,6 +307,9 @@ export const technicianApi = {
   timeEntries: "technician/time-entries",
   activeEntry: "technician/time-entries/active",
   clockOutActive: "technician/time-entries/clock-out",
+  payments: "technician/payments",
+  /** PUT { section } — mark a nav section's notifications read (persists badge reset) */
+  sectionRead: "technician/notifications/read-section",
 } as const;
 
 /** Authenticated in-app notifications (customer + provider + technician). */

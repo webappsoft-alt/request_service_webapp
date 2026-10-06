@@ -205,6 +205,7 @@ export function EventCalendar({
   kindFilter: controlledKindFilter,
   onKindFilterChange,
   loading = false,
+  readOnly = false,
 }: {
   events: PortalCalendarEvent[];
   employeeLabel: (id?: string) => string;
@@ -225,6 +226,11 @@ export function EventCalendar({
   kindFilter?: PortalEventKind | "";
   onKindFilterChange?: (kind: PortalEventKind | "") => void;
   loading?: boolean;
+  /**
+   * View-only calendar (technician portal): no drag/resize, no context menus,
+   * and cards open `event.href` instead of provider detail pages.
+   */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [localEvents, setLocalEvents] = useState<PortalCalendarEvent[]>(propEvents);
@@ -425,6 +431,7 @@ export function EventCalendar({
   }
 
   function dropOnDay(iso: string, drag: DragEvent) {
+    if (readOnly) return;
     drag.preventDefault();
     setOverDay(null);
     const payload = readPayload(drag);
@@ -442,6 +449,7 @@ export function EventCalendar({
   }
 
   function dropOnSlot(iso: string, slotStart: number, drag: DragEvent) {
+    if (readOnly) return;
     drag.preventDefault();
     setOverDay(null);
     const payload = readPayload(drag);
@@ -486,6 +494,7 @@ export function EventCalendar({
   }
 
   function resizeTo(item: PortalCalendarEvent, endMinutes: number) {
+    if (readOnly) return;
     const times = eventTimes(item);
     applyMove(item, {
       date: item.date ?? selectedDay,
@@ -535,7 +544,7 @@ export function EventCalendar({
 
   const handleCardClick = (e: React.MouseEvent, event: PortalCalendarEvent) => {
     e.stopPropagation();
-    router.push(getEventDetailUrl(event));
+    router.push(readOnly ? event.href : getEventDetailUrl(event));
   };
 
   const handleContextMenu = (e: React.MouseEvent, event: PortalCalendarEvent) => {
@@ -684,7 +693,11 @@ export function EventCalendar({
         </span>
       </div>
 
-      <div className="w-full">
+      <div
+        className="w-full"
+        // Cancel every drag gesture in view-only mode (cards and resize handles).
+        onDragStartCapture={readOnly ? (drag) => drag.preventDefault() : undefined}
+      >
         {loading ? (
           <CalendarGridSkeleton />
         ) : view === "month" ? (
@@ -700,8 +713,8 @@ export function EventCalendar({
             onOver={setOverDay}
             onDrop={dropOnDay}
             onClickCard={handleCardClick}
-            onContextMenuCard={handleContextMenu}
-            onContextMenuDay={handleContextMenuDay}
+            onContextMenuCard={readOnly ? undefined : handleContextMenu}
+            onContextMenuDay={readOnly ? undefined : handleContextMenuDay}
           />
         ) : (
           <TimeGrid
@@ -715,7 +728,7 @@ export function EventCalendar({
             onDropSlot={dropOnSlot}
             onResize={resizeTo}
             onClickCard={handleCardClick}
-            onContextMenuCard={handleContextMenu}
+            onContextMenuCard={readOnly ? undefined : handleContextMenu}
           />
         )}
       </div>

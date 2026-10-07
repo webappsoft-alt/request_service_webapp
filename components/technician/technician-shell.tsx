@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MessageSquare,
   UserRound,
   Wallet,
 } from "lucide-react";
@@ -30,6 +31,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
+import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
+import { TechnicianLocationShare } from "@/components/technician/technician-location-share";
 import { technicianPaths } from "@/lib/technician-paths";
 import { cn } from "@/lib/utils";
 import { selectAuthUser } from "@/store/authSlice";
@@ -47,6 +50,8 @@ type NavItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   section?: TechSection;
+  /** Live unread count from the office chat instead of a section badge. */
+  chat?: boolean;
 };
 
 const NAV: NavItem[] = [
@@ -56,6 +61,7 @@ const NAV: NavItem[] = [
   { href: technicianPaths.schedule, label: "Schedule", icon: CalendarDays, section: "schedule" },
   { href: technicianPaths.time, label: "Time Tracking", icon: Clock3 },
   { href: technicianPaths.payments, label: "Payments", icon: Wallet, section: "payments" },
+  { href: technicianPaths.messages, label: "Messages", icon: MessageSquare, chat: true },
   { href: technicianPaths.profile, label: "Profile", icon: UserRound },
 ];
 
@@ -64,8 +70,10 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavBadge({ section }: { section?: TechSection }) {
-  const count = useAppSelector((state) => (section ? selectTechSectionBadge(state, section) : 0));
+function NavBadge({ section, chat = false }: { section?: TechSection; chat?: boolean }) {
+  const sectionCount = useAppSelector((state) => (section ? selectTechSectionBadge(state, section) : 0));
+  const chatCount = useTechChatUnread("technician");
+  const count = chat ? chatCount : sectionCount;
   if (!count) return null;
   return (
     <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]">
@@ -92,7 +100,7 @@ function NavLinks({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
           >
             <Icon className="size-4 shrink-0" aria-hidden />
             {item.label}
-            <NavBadge section={item.section} />
+            <NavBadge section={item.section} chat={item.chat} />
           </Link>
         );
         return (
@@ -124,6 +132,23 @@ function ActiveTimerChip() {
       <span className="hidden sm:inline">{label}</span>
       <LiveTimer entry={active} />
     </Link>
+  );
+}
+
+/** Header shortcut to the office chat with a live unread badge. */
+function TechnicianChatShortcut() {
+  const unread = useTechChatUnread("technician");
+  return (
+    <Button asChild variant="ghost" size="icon" className="relative" aria-label={unread ? `Messages, ${unread} unread` : "Messages"}>
+      <Link href={technicianPaths.messages}>
+        <MessageSquare />
+        {unread > 0 ? (
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] font-semibold leading-none text-white">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        ) : null}
+      </Link>
+    </Button>
   );
 }
 
@@ -256,6 +281,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
   return (
     <div className="portal-app min-h-svh bg-[#eef1f5]">
       <TechnicianRealtimeBridge />
+      <TechnicianLocationShare />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-[#003F7D] text-white lg:flex">
         <div className="flex h-12 flex-col justify-center border-b border-white/10 px-4">
           <Link href={technicianPaths.dashboard} className="truncate text-sm font-semibold tracking-wide">
@@ -289,6 +315,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
             <p className="truncate text-sm font-semibold text-foreground lg:hidden">{title}</p>
             <div className="ml-auto flex items-center gap-1.5">
               <ActiveTimerChip />
+              <TechnicianChatShortcut />
               <TechnicianNotifications />
               <TechnicianAccountMenu />
             </div>

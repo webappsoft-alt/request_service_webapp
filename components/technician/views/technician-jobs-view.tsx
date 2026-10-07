@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
 import {
   JobStatusPill,
   LocationBlock,
@@ -159,6 +160,22 @@ export function TechnicianJobsView() {
             sortValue: (row) => row.status,
             exportValue: (row) => row.status,
             cell: (row) => <JobStatusPill status={row.status} />,
+          },
+          {
+            id: "chat",
+            header: "Chat",
+            className: "w-16",
+            exportValue: () => "",
+            cell: (row) => (
+              <TechChatButton
+                side="technician"
+                contextType="job"
+                contextId={row.id}
+                iconOnly
+                label={`Message the office about ${row.number}`}
+                className="size-9 text-[#003F7D]"
+              />
+            ),
           },
         ]}
         actions={(row) => [{ label: "Open job", href: technicianPaths.job(row.id) }]}

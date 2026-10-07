@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PortalPage } from "@/components/portal/portal-page";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
 import { DetailCard } from "@/components/technician/tech-ui";
 import { useTechSectionSeen } from "@/components/technician/use-tech-section-seen";
 import { PaymentHistoryTable } from "@/components/time-tracking/timesheet-ui";
@@ -50,6 +51,7 @@ export function TechnicianPaymentsView() {
       eyebrow="Technician / Payments"
       title="My payments"
       description="Pay is earned from your completed clock-in sessions (hours × your pay rate). Payments from the office are listed below."
+      actions={<TechChatButton side="technician" contextType="payment" label="Ask about pay" />}
     >
       {ledger.error ? (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{ledger.error}</p>

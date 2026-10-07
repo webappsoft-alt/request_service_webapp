@@ -299,6 +299,7 @@ export function NewEstimateListView() {
           {
             id: "number",
             header: "Estimate",
+            className: "w-[22rem] min-w-60 max-w-[22rem] whitespace-normal",
             sortValue: (row) => linkedEstimate(row)?.number || row.number,
             searchValue: (row) =>
               `${linkedEstimate(row)?.number || ""} ${row.number} ${row.title || ""}`,
@@ -312,7 +313,14 @@ export function NewEstimateListView() {
                   >
                     {number}
                   </Link>
-                  <p className="mt-0.5 text-xs font-medium text-foreground">{row.title}</p>
+                  {row.title ? (
+                    <p
+                      className="mt-0.5 line-clamp-2 break-words text-xs font-medium text-foreground"
+                      title={row.title}
+                    >
+                      {row.title}
+                    </p>
+                  ) : null}
                   {row.categoryName ? (
                     <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       {row.categoryName}

@@ -8,6 +8,24 @@ import type { Socket } from "socket.io-client";
  */
 
 export type RealtimeEvents = {
+  /** Technician ↔ provider chat (technician user room, provider room, admins). */
+  "techchat:message": {
+    threadId: string;
+    message: import("@/lib/api/technician-chat-client").TechChatMessage;
+    thread: import("@/lib/api/technician-chat-client").TechChatThread;
+  };
+  "techchat:read": { threadId: string; reader: "technician" | "provider"; readAt: string };
+  "techchat:typing": { threadId: string; from: "technician" | "provider"; isTyping: boolean };
+  "techchat:unread": { total: number };
+  /** Provider room: a technician shared their live position. */
+  "technician:location": {
+    employeeId: string;
+    name?: string;
+    lat: number;
+    lng: number;
+    accuracy?: number | null;
+    at: string;
+  };
   /** Technician portal: which lists changed (jobs, estimates, schedule, dashboard). */
   "technician:refresh": {
     scopes?: string[];
@@ -437,6 +455,12 @@ export function onRealtime<E extends keyof RealtimeEvents>(
   handler: (payload: RealtimeEvents[E]) => void,
 ) {
   return onSocketEvent(event, handler);
+}
+
+/** Technician ↔ provider chat typing pulse (server checks thread membership). */
+export function emitTechChatTyping(threadId: string, isTyping: boolean) {
+  if (!sharedSocket || !threadId) return;
+  sharedSocket.emit("techchat:typing", { threadId, isTyping });
 }
 
 export function emitLeadStatusChange(id: string, status: string) {

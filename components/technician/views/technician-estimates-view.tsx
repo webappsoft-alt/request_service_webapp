@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Clock3, Mail, Phone } from "lucide-react";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import {
   ClockControl,
@@ -128,6 +129,22 @@ export function TechnicianEstimatesView() {
             exportValue: (row) => row.status,
             cell: (row) => <EstimateStatusPill status={row.status} />,
           },
+          {
+            id: "chat",
+            header: "Chat",
+            className: "w-16",
+            exportValue: () => "",
+            cell: (row) => (
+              <TechChatButton
+                side="technician"
+                contextType="estimate"
+                contextId={row.id}
+                iconOnly
+                label={`Message the office about ${row.number}`}
+                className="size-9 text-[#003F7D]"
+              />
+            ),
+          },
         ]}
         actions={(row) => [{ label: "Open estimate", href: technicianPaths.estimate(row.id) }]}
       />
@@ -196,11 +213,14 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
         trackOpen={false}
         badge={<EstimateStatusPill status={estimate.status} />}
         actions={
-          <Button asChild size="sm" variant="outline" className="h-8">
-            <Link href={technicianPaths.estimates}>
-              <ArrowLeft className="size-3.5" /> My estimates
-            </Link>
-          </Button>
+          <>
+            <TechChatButton side="technician" contextType="estimate" contextId={estimate.id} label="Chat with office" className="h-8" />
+            <Button asChild size="sm" variant="outline" className="h-8">
+              <Link href={technicianPaths.estimates}>
+                <ArrowLeft className="size-3.5" /> My estimates
+              </Link>
+            </Button>
+          </>
         }
         metaBar={
           <>

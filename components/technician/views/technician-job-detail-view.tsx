@@ -6,6 +6,7 @@ import { ArrowLeft, Clock3, Mail, Phone } from "lucide-react";
 import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
 import { LineItemsTotals, type CostingNoun } from "@/components/portal/job-costing";
 import { PortalPage } from "@/components/portal/portal-page";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { jobCostMix, type JobCostLine } from "@/components/portal/use-job-costing";
 import {
@@ -168,11 +169,14 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
         trackOpen={false}
         badge={<JobStatusPill status={job.status} />}
         actions={
-          <Button asChild size="sm" variant="outline" className="h-8">
-            <Link href={technicianPaths.jobs}>
-              <ArrowLeft className="size-3.5" /> My jobs
-            </Link>
-          </Button>
+          <>
+            <TechChatButton side="technician" contextType="job" contextId={job.id} label="Chat with office" className="h-8" />
+            <Button asChild size="sm" variant="outline" className="h-8">
+              <Link href={technicianPaths.jobs}>
+                <ArrowLeft className="size-3.5" /> My jobs
+              </Link>
+            </Button>
+          </>
         }
         metaBar={
           <>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   ExternalLink,
@@ -10,7 +10,13 @@ import {
   Car,
   Clock,
   Loader2,
+  Building2,
+  HardHat,
+  Home,
 } from "lucide-react";
+import { onSocketEvent } from "@/components/socket/socket-api";
+import { getTechnicianLocations, type TechnicianLocation } from "@/lib/api/technician-chat-client";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +52,33 @@ export type RouteLocationMapDialogProps = RouteLocationMapInnerProps & {
   originLabel?: string;
   /** Subtitle under the title. */
   description?: string;
+  /**
+   * Customer's own (billing / profile) address. When it differs from the job
+   * site, the dialog adds a "Customer address" tab so both are distinguished.
+   */
+  billingAddress?: string;
+  billingCoords?: RouteLocationMapInnerProps["customerCoords"];
+  /** Assigned technicians: adds a tab per technician routing their live location to the job site. */
+  technicians?: { employeeId: string; name: string }[];
 };
+
+type RouteTab = { key: string; label: string; kind: "site" | "customer" | "technician"; employeeId?: string; name?: string };
+
+function sameAddress(a?: string, b?: string) {
+  const norm = (v?: string) => String(v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return Boolean(norm(a)) && norm(a) === norm(b);
+}
+
+function ago(value: string | null) {
+  if (!value) return "";
+  const mins = Math.round((Date.now() - new Date(value).getTime()) / 60000);
+  if (!Number.isFinite(mins)) return "";
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return new Date(value).toLocaleDateString([], { month: "short", day: "numeric" });
+}
 
 export function RouteLocationMapDialog({
   open,
@@ -63,7 +95,74 @@ export function RouteLocationMapDialog({
   customerAddress,
   customerCoords,
   serviceAddress,
+  billingAddress,
+  billingCoords,
+  technicians,
 }: RouteLocationMapDialogProps) {
+  const tabs = useMemo<RouteTab[]>(() => {
+    const list: RouteTab[] = [{ key: "site", label: "Job site", kind: "site" }];
+    if (billingAddress && !sameAddress(billingAddress, customerAddress)) {
+      list.push({ key: "customer", label: "Customer address", kind: "customer" });
+    }
+    for (const tech of technicians ?? []) {
+      if (!tech.employeeId) continue;
+      list.push({
+        key: `tech:${tech.employeeId}`,
+        label: technicians && technicians.length > 1 ? tech.name || "Technician" : "Assigned technician",
+        kind: "technician",
+        employeeId: tech.employeeId,
+        name: tech.name,
+      });
+    }
+    return list;
+  }, [billingAddress, customerAddress, technicians]);
+  const [tabKey, setTabKey] = useState("site");
+  const tab = tabs.find((item) => item.key === tabKey) ?? tabs[0];
+  const [locations, setLocations] = useState<Record<string, TechnicianLocation>>({});
+  const [locFetchedFor, setLocFetchedFor] = useState("");
+  const techIds = useMemo(() => (technicians ?? []).map((t) => t.employeeId).filter(Boolean).join(","), [technicians]);
+  const locLoading = open && Boolean(techIds) && locFetchedFor !== techIds;
+
+  // Every time the dialog opens it starts on the job site.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) setTabKey("site");
+  }
+
+  // Live technician positions: one fetch when the dialog opens, then socket updates.
+  useEffect(() => {
+    if (!open || !techIds) return;
+    let cancelled = false;
+    getTechnicianLocations(techIds.split(","))
+      .then((rows) => {
+        if (cancelled) return;
+        setLocations(Object.fromEntries(rows.map((row) => [row.employeeId, row])));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLocFetchedFor(techIds);
+      });
+    const off = onSocketEvent("technician:location", (payload) => {
+      if (!payload?.employeeId || !techIds.split(",").includes(payload.employeeId)) return;
+      setLocations((current) => ({
+        ...current,
+        [payload.employeeId]: {
+          employeeId: payload.employeeId,
+          name: payload.name || current[payload.employeeId]?.name || "",
+          lat: payload.lat,
+          lng: payload.lng,
+          accuracy: payload.accuracy ?? null,
+          at: payload.at,
+        },
+      }));
+    });
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, [open, techIds]);
+
   const [routeStats, setRouteStats] = useState<{
     distanceMiles: number;
     distanceKm: number;
@@ -83,11 +182,59 @@ export function RouteLocationMapDialog({
           .join(", ")
       : "");
 
-  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
-    resolvedBusinessAddress || `${businessCoords?.lat || provider?.lat || ""},${businessCoords?.lng || provider?.lng || ""}`,
-  )}&destination=${encodeURIComponent(
-    customerAddress || `${customerCoords?.lat || ""},${customerCoords?.lng || ""}`,
-  )}`;
+  const techLocation = tab.kind === "technician" && tab.employeeId ? locations[tab.employeeId] : undefined;
+  const techCoords =
+    techLocation && techLocation.lat != null && techLocation.lng != null
+      ? { lat: techLocation.lat, lng: techLocation.lng }
+      : null;
+
+  // Origin → destination for the selected tab.
+  const route =
+    tab.kind === "technician"
+      ? {
+          originLabel: "Technician (live location)",
+          originName: tab.name || techLocation?.name || "Technician",
+          originAddress: techLocation?.at ? `Shared ${ago(techLocation.at)}` : "",
+          originCoords: techCoords,
+          destLabel: "Job Site (Destination)",
+          destName: resolvedCustomerName,
+          destAddress: customerAddress,
+          destCoords: customerCoords ?? null,
+          serviceAddress,
+        }
+      : tab.kind === "customer"
+        ? {
+            originLabel,
+            originName: resolvedBusinessName,
+            originAddress: resolvedBusinessAddress,
+            originCoords: businessCoords ?? null,
+            destLabel: "Customer Address",
+            destName: resolvedCustomerName,
+            destAddress: billingAddress || "",
+            destCoords: billingCoords ?? null,
+            serviceAddress: null,
+          }
+        : {
+            originLabel,
+            originName: resolvedBusinessName,
+            originAddress: resolvedBusinessAddress,
+            originCoords: businessCoords ?? null,
+            destLabel: "Job Site (Destination)",
+            destName: resolvedCustomerName,
+            destAddress: customerAddress,
+            destCoords: customerCoords ?? null,
+            serviceAddress,
+          };
+  const waitingForTech = tab.kind === "technician" && !techCoords;
+
+  const originParam =
+    tab.kind === "technician"
+      ? techCoords
+        ? `${techCoords.lat},${techCoords.lng}`
+        : ""
+      : resolvedBusinessAddress || `${businessCoords?.lat || provider?.lat || ""},${businessCoords?.lng || provider?.lng || ""}`;
+  const destParam = route.destAddress || `${route.destCoords?.lat || ""},${route.destCoords?.lng || ""}`;
+  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -122,6 +269,36 @@ export function RouteLocationMapDialog({
             </Button>
           </div>
 
+          {tabs.length > 1 ? (
+            <div role="tablist" aria-label="Locations" className="mt-3 flex flex-wrap gap-1.5">
+              {tabs.map((item) => {
+                const Icon = item.kind === "site" ? Building2 : item.kind === "customer" ? Home : HardHat;
+                const active = item.key === tab.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => {
+                      setTabKey(item.key);
+                      setRouteStats(null);
+                    }}
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-semibold transition-colors",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-primary/40 hover:text-primary",
+                    )}
+                  >
+                    <Icon className="size-3.5" aria-hidden />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           {/* Route details banner */}
           <div className="mt-3 grid gap-2.5 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-center">
             {/* Origin */}
@@ -129,15 +306,15 @@ export function RouteLocationMapDialog({
               <div className="flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-sky-600" />
                 <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                  {originLabel}
+                  {route.originLabel}
                 </span>
               </div>
               <p className="truncate text-xs font-semibold text-slate-800">
-                {resolvedBusinessName}
+                {route.originName}
               </p>
-              {resolvedBusinessAddress ? (
+              {route.originAddress ? (
                 <p className="truncate text-[11px] text-slate-500">
-                  {resolvedBusinessAddress}
+                  {route.originAddress}
                 </p>
               ) : null}
             </div>
@@ -150,24 +327,26 @@ export function RouteLocationMapDialog({
             {/* Destination */}
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-emerald-600" />
+                <span className={cn("size-2 rounded-full", tab.kind === "customer" ? "bg-violet-600" : "bg-emerald-600")} />
                 <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                  Job Site (Destination)
+                  {route.destLabel}
                 </span>
               </div>
               <p className="truncate text-xs font-semibold text-slate-800">
-                {resolvedCustomerName}
+                {route.destName}
               </p>
-              {customerAddress ? (
-                <p className="truncate text-[11px] text-slate-500">
-                  {customerAddress}
+              {route.destAddress ? (
+                <p className="truncate text-[11px] text-slate-500" title={route.destAddress}>
+                  {route.destAddress}
                 </p>
               ) : null}
             </div>
 
             {/* Distance & Time pill */}
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2 sm:border-t-0 sm:border-l sm:pl-3 sm:pt-0">
-              {routeStats ? (
+              {waitingForTech ? (
+                <span className="text-xs text-slate-400">No live location</span>
+              ) : routeStats ? (
                 <div className="flex flex-col items-start gap-1 sm:items-end">
                   <div className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700 border border-sky-200">
                     <Car className="size-3 text-sky-600" />
@@ -195,16 +374,34 @@ export function RouteLocationMapDialog({
 
         {/* Map Body */}
         <div className="p-4 flex-1">
-          {open ? (
+          {open && waitingForTech ? (
+            <div className="flex h-[440px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center sm:h-[490px]">
+              {locLoading ? (
+                <Loader2 className="size-6 animate-spin text-primary" />
+              ) : (
+                <HardHat className="size-8 text-slate-400" />
+              )}
+              <p className="text-sm font-semibold text-slate-700">
+                {locLoading ? "Finding the technician…" : `${tab.name || "The technician"} has not shared a live location yet`}
+              </p>
+              {!locLoading ? (
+                <p className="max-w-sm text-xs text-slate-500">
+                  Their position appears here while they have the technician portal open with location
+                  allowed. It updates live, so there is no need to reopen this map.
+                </p>
+              ) : null}
+            </div>
+          ) : open ? (
             <RouteLocationMapInner
-              provider={provider}
-              businessName={resolvedBusinessName}
-              businessAddress={resolvedBusinessAddress}
-              businessCoords={businessCoords}
-              customerName={resolvedCustomerName}
-              customerAddress={customerAddress}
-              customerCoords={customerCoords}
-              serviceAddress={serviceAddress}
+              key={tab.key}
+              provider={tab.kind === "technician" ? null : provider}
+              businessName={route.originName}
+              businessAddress={tab.kind === "technician" ? "" : route.originAddress}
+              businessCoords={route.originCoords}
+              customerName={route.destName}
+              customerAddress={route.destAddress}
+              customerCoords={route.destCoords}
+              serviceAddress={route.serviceAddress}
               onRouteCalculated={setRouteStats}
             />
           ) : null}

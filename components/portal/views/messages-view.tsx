@@ -35,11 +35,92 @@ import {
   sortChatThreadsByUnreadThenRecent,
 } from "@/lib/chat-format";
 import { cn } from "@/lib/utils";
+import { usePortalInbox } from "@/components/portal/use-portal-inbox";
+import { TechChatInbox } from "@/components/tech-chat/tech-chat-inbox";
+import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
+import { useFillViewport } from "@/components/portal/use-fill-viewport";
 import { ADMIN_DIRECT_THREAD_ID } from "@/lib/api/crm-mappers";
 
 type FilterTab = "all" | "unread" | "leads";
 
+/**
+ * Provider Messages: customer / lead chats and technician chats in one place.
+ * `?tab=technicians` switches to the technician ↔ office conversations.
+ */
 export function MessagesView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const technicians = searchParams.get("tab") === "technicians";
+  const customerUnread = usePortalInbox().unreadChats;
+  const technicianUnread = useTechChatUnread("provider");
+  // Size the chat workspace to the real space left under the portal header.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const frameHeight = useFillViewport(frameRef, { min: 520 });
+  const tabs = [
+    { id: "customers", label: "Customers & leads", unread: customerUnread, active: !technicians },
+    { id: "technicians", label: "Technicians", unread: technicianUnread, active: technicians },
+  ];
+
+  return (
+    <div
+      ref={frameRef}
+      style={frameHeight ? { height: frameHeight } : undefined}
+      className="-m-3 sm:-m-4 flex h-[calc(100vh-93px)] min-h-[520px] flex-col overflow-hidden bg-background"
+    >
+      <div className="flex shrink-0 items-center gap-1 border-b border-border bg-card px-3 py-2 sm:px-4" role="tablist" aria-label="Conversations">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={tab.active}
+            onClick={() =>
+              router.replace(tab.id === "technicians" ? "/pro/dashboard/messages?tab=technicians" : "/pro/dashboard/messages", {
+                scroll: false,
+              })
+            }
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+              tab.active ? "bg-[#003F7D] text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {tab.label}
+            {tab.unread > 0 ? (
+              <span
+                className={cn(
+                  "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none",
+                  tab.active ? "bg-white text-[#003F7D]" : "bg-[#c2410c] text-white",
+                )}
+              >
+                {tab.unread > 99 ? "99+" : tab.unread}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+      {technicians ? (
+        // Pinned to the space under the tabs so both panes always reach the bottom.
+        <div className="relative min-h-0 flex-1">
+          <TechChatInbox
+            side="provider"
+            initialThreadId={searchParams.get("thread")}
+            className="absolute inset-0 h-full min-h-0 rounded-none border-0"
+            onSelect={(id) =>
+              router.replace(
+                id ? `/pro/dashboard/messages?tab=technicians&thread=${id}` : "/pro/dashboard/messages?tab=technicians",
+                { scroll: false },
+              )
+            }
+          />
+        </div>
+      ) : (
+        <CustomerMessages />
+      )}
+    </div>
+  );
+}
+
+function CustomerMessages() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const directAdmin = searchParams.get("direct") === "admin";
@@ -248,14 +329,14 @@ export function MessagesView() {
 
   if (loading && !threads.length) {
     return (
-      <div className="-m-3 sm:-m-4 flex h-[calc(100vh-93px)] min-h-[580px] flex-col overflow-hidden bg-background">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
         <ChatWorkspaceSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="-m-3 sm:-m-4 flex h-[calc(100vh-93px)] min-h-[580px] flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {threads.length ? (
         <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
           {/* Left Sidebar: Threads Inbox */}

@@ -12,6 +12,8 @@ import {
   Share2,
 } from "lucide-react";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
+import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
 import { toast } from "sonner";
 import { ArchiveBadge, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import {
@@ -2692,6 +2694,16 @@ export function JobDetailView({ id }: { id: string }) {
                 {removingAssignee ? "Removing…" : "Remove assignee"}
               </Button>
             ) : null}
+            {resolvedEmployeeId ? (
+              <TechChatButton
+                side="provider"
+                contextType="job"
+                contextId={job.id}
+                employeeId={resolvedEmployeeId}
+                label="Chat with technician"
+                className="h-8"
+              />
+            ) : null}
             <Button
               size="sm"
               variant="outline"
@@ -3195,6 +3207,11 @@ export function JobDetailView({ id }: { id: string }) {
                 zip: job.address.zip || "",
               }
             : null
+        }
+        billingAddress={locationText(...defaultAddressFirst(customer?.addresses))}
+        billingCoords={locationCoords(...defaultAddressFirst(customer?.addresses))}
+        technicians={
+          resolvedEmployeeId ? [{ employeeId: resolvedEmployeeId, name: technician || "Technician" }] : []
         }
       />
     </>

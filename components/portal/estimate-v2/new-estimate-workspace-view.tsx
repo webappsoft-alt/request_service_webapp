@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, CheckCircle2, ChevronDown, ChevronUp, Link2, MapPin } from "lucide-react";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
+import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -492,6 +493,23 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     () => opportunity?.siteAssessments || [],
     [opportunity],
   );
+
+  // Route map tabs: the customer profile address and every technician on an open visit.
+  const customerAddresses = useMemo(
+    () =>
+      defaultAddressFirst(
+        opportunity && typeof opportunity.customerId === "object" ? opportunity.customerId.serviceAddresses : [],
+      ),
+    [opportunity],
+  );
+  const visitTechnicians = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const visit of visits) {
+      if (!visit.assignedEmployeeId || visit.status === "cancelled") continue;
+      if (!seen.has(visit.assignedEmployeeId)) seen.set(visit.assignedEmployeeId, visit.assignedEmployeeName || "Technician");
+    }
+    return [...seen].map(([employeeId, name]) => ({ employeeId, name }));
+  }, [visits]);
 
   const hasCompletedVisit = useMemo(
     () => visits.some((visit) => visit.status === "completed"),
@@ -1874,6 +1892,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                 }
               : null
           }
+          billingAddress={locationText(...customerAddresses)}
+          billingCoords={locationCoords(...customerAddresses)}
+          technicians={visitTechnicians}
         />
       ) : null}
     </PortalPage>

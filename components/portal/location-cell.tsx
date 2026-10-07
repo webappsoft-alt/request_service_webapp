@@ -71,6 +71,13 @@ export function locationCoords(...candidates: AddressLike[]): LatLng | null {
   return null;
 }
 
+/** Customer profile addresses with the default one first (for "Customer address" on the route map). */
+export function defaultAddressFirst<T>(addresses: T[] | null | undefined): T[] {
+  const list = Array.isArray(addresses) ? [...addresses] : [];
+  const isDefault = (item: T) => Boolean(item && typeof item === "object" && (item as { isDefault?: unknown }).isDefault);
+  return list.sort((x, y) => Number(isDefault(y)) - Number(isDefault(x)));
+}
+
 export function locationText(...candidates: AddressLike[]) {
   return resolveLocation(...candidates)?.full ?? "";
 }

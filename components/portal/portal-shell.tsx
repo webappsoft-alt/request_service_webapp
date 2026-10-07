@@ -9,6 +9,7 @@ import { PeopleSubnav, WorkSubnav } from "@/components/portal/people-subnav";
 import { PortalNotifications } from "@/components/portal/portal-notifications";
 import { useOpenRecords } from "@/components/portal/use-open-records";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
+import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { Button } from "@/components/ui/button";
@@ -37,10 +38,12 @@ function NavLinks({
 }) {
   const pathname = usePathname();
   const inbox = usePortalInbox();
+  const teamChatUnread = useTechChatUnread("provider");
 
   function badgeFor(href: string) {
     if (href === "/pro/dashboard/requests") return inbox.newLeads;
-    if (href === "/pro/dashboard/messages") return inbox.unreadChats;
+    // Customer chats + technician chats share the Messages page.
+    if (href === "/pro/dashboard/messages") return inbox.unreadChats + teamChatUnread;
     // Classic estimates nav is hidden; badge follows the new Estimate path.
     if (href === "/pro/dashboard/new-estimate") return inbox.pendingEstimates;
     if (href === "/pro/dashboard/orders") return inbox.pendingOrders;

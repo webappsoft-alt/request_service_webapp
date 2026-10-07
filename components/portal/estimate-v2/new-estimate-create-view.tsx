@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,24 @@ const EMPTY_PROPERTY: AddressFieldsValue = {
 
 const SETUP_CATEGORIES_VALUE = "__setup_service_categories__";
 const PROFILE_CATEGORIES_HREF = "/pro/dashboard/profile?step=categories";
+
+/** Selected customer / property card: strong border, tint and ring. */
+const SELECTED_CARD = "border-primary bg-primary/[0.07] ring-1 ring-primary/40 shadow-xs";
+
+/** Right-side indicator: filled primary check when selected, empty circle otherwise. */
+function SelectionMark({ selected }: { selected: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "flex size-5 shrink-0 items-center justify-center rounded-full border transition",
+        selected ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background",
+      )}
+    >
+      {selected ? <Check className="size-3.5 stroke-[3]" /> : null}
+    </span>
+  );
+}
 
 function serviceAddressToFields(addr?: ServiceAddress | null): AddressFieldsValue {
   if (!addr) return EMPTY_PROPERTY;
@@ -534,18 +553,22 @@ export function NewEstimateCreateView() {
                 <button
                   key={item.id}
                   type="button"
+                  aria-pressed={customerId === item.id}
                   onClick={() => setCustomerId(item.id)}
                   className={cn(
-                    "flex w-full flex-col rounded-md border px-3 py-2 text-left text-sm transition",
+                    "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition",
                     customerId === item.id
-                      ? "border-primary bg-primary/5"
+                      ? SELECTED_CARD
                       : "border-transparent hover:bg-secondary/60",
                   )}
                 >
-                  <span className="font-medium">{crmCustomerName(item)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {[item.email, item.phone].filter(Boolean).join(" · ") || "No contact yet"}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="font-medium">{crmCustomerName(item)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {[item.email, item.phone].filter(Boolean).join(" · ") || "No contact yet"}
+                    </span>
                   </span>
+                  <SelectionMark selected={customerId === item.id} />
                 </button>
               ))}
               {!customersLoading && !filteredCustomers.length ? (
@@ -592,16 +615,20 @@ export function NewEstimateCreateView() {
                   <button
                     key={addr.id}
                     type="button"
+                    aria-pressed={addressId === addr.id}
                     onClick={() => setAddressId(addr.id)}
                     className={cn(
-                      "w-full rounded-md border px-3 py-2 text-left text-sm transition",
+                      "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition",
                       addressId === addr.id
-                        ? "border-primary bg-primary/5"
+                        ? SELECTED_CARD
                         : "border-input hover:bg-secondary/60",
                     )}
                   >
-                    <p className="font-medium">{addr.label || "Property"}</p>
-                    <p className="text-xs text-muted-foreground">{addressLine(addr)}</p>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{addr.label || "Property"}</span>
+                      <span className="block text-xs text-muted-foreground">{addressLine(addr)}</span>
+                    </span>
+                    <SelectionMark selected={addressId === addr.id} />
                   </button>
                 ))}
                 <div className="rounded-md border border-dashed border-input p-3">

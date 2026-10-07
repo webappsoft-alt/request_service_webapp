@@ -55,6 +55,7 @@ import {
   rememberCustomerEstimateToken,
 } from "@/lib/booking/customer-estimates-store";
 import { formatDate, formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store/hooks";
 import {
   CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT,
@@ -1042,7 +1043,15 @@ export function CustomerEstimatePage({
           </div>
         ) : null}
 
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,8.5in)_minmax(16rem,20rem)]">
+        {/* Side column only while the conversation panel shows; otherwise the document is centered. */}
+        <div
+          className={cn(
+            "grid items-start gap-4",
+            showConversationPanel
+              ? "lg:grid-cols-[minmax(0,8.5in)_minmax(16rem,20rem)]"
+              : "mx-auto w-full max-w-[8.5in]",
+          )}
+        >
           <div className="min-w-0 space-y-4">
             {snapshot.status === "inspected" || snapshot.status === "site_visit" ? (
               <CustomerSiteInspectionSection

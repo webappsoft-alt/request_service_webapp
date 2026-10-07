@@ -2,7 +2,7 @@ import { EstimateTemplatesView } from "@/components/portal/views/estimate-templa
 import { portalMetadata } from "@/lib/portal-meta";
 
 export const metadata = portalMetadata(
-  "Templates",
+  "Estimate Templates",
   "Ready-made estimate templates for your services.",
   "/pro/dashboard/templates",
 );

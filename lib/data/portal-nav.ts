@@ -83,7 +83,7 @@ export const portalNavGroups: PortalNavGroup[] = [
       { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images },
       { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
       { href: "/pro/dashboard/services", label: "Fixed services", icon: Wrench },
-      { href: "/pro/dashboard/templates", label: "Templates", icon: LayoutTemplate },
+      { href: "/pro/dashboard/templates", label: "Estimate Templates", icon: LayoutTemplate },
       { href: "/pro/dashboard/billing", label: "Utilities", icon: Wallet },
       { href: "/pro/dashboard/timesheets", label: "Timesheets", icon: Timer },
       { href: "/pro/dashboard/reports", label: "Reports", icon: BarChart3 },

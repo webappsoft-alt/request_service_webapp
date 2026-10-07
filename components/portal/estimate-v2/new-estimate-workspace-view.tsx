@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { QuoteAnswersCard } from "@/components/portal/quote-answers-card";
+import { QuoteAnswersAccordion } from "@/components/portal/quote-answers-card";
 import { PortalPage } from "@/components/portal/portal-page";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
@@ -1422,13 +1422,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                 {opportunity.description}
               </p>
             ) : null}
-            {opportunity.quoteAnswers?.length ? (
-              <QuoteAnswersCard
-                className="mt-3"
-                compact
-                answers={opportunity.quoteAnswers}
-              />
-            ) : null}
           </div>
 
           <div className={RAIL_CARD}>
@@ -1565,6 +1558,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
         {/* Main column */}
         <section className="min-w-0 space-y-4">
+          <QuoteAnswersAccordion answers={opportunity.quoteAnswers} />
           {showVisits ? (
             <SiteVisitsPanel
               opportunityId={opportunity.id}

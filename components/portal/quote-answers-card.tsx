@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronDown, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function visibleQuoteAnswers(
@@ -21,12 +23,14 @@ export function QuoteAnswersCard({
   notes,
   photos,
   compact = false,
+  hideHeader = false,
   className,
 }: {
   answers?: Array<{ id?: string; label: string; value: string }> | null;
   notes?: string | null;
   photos?: string[] | null;
   compact?: boolean;
+  hideHeader?: boolean;
   className?: string;
 }) {
   const listed = visibleQuoteAnswers(answers);
@@ -42,20 +46,23 @@ export function QuoteAnswersCard({
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold tracking-[0.08em] text-[#003F7D] uppercase">
-          Customer answers
-        </p>
-        {listed.length ? (
-          <span className="text-[11px] font-medium text-muted-foreground">
-            {listed.length} question{listed.length === 1 ? "" : "s"}
-          </span>
-        ) : null}
-      </div>
+      {hideHeader ? null : (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold tracking-[0.08em] text-[#003F7D] uppercase">
+            Customer answers
+          </p>
+          {listed.length ? (
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {listed.length} question{listed.length === 1 ? "" : "s"}
+            </span>
+          ) : null}
+        </div>
+      )}
       {listed.length ? (
         <dl
           className={cn(
-            "mt-3 grid gap-2",
+            "grid gap-2",
+            hideHeader ? "" : "mt-3",
             compact ? "grid-cols-1" : "sm:grid-cols-2",
           )}
         >
@@ -94,6 +101,62 @@ export function QuoteAnswersCard({
               <img src={src} alt="Customer photo" className="size-16 object-cover" />
             </a>
           ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Collapsible "Customer quote answers" banner; renders nothing when the customer submitted no answers. */
+export function QuoteAnswersAccordion({
+  answers,
+  defaultOpen = false,
+  className,
+}: {
+  answers?: Array<{ id?: string; label: string; value: string }> | null;
+  defaultOpen?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const listed = visibleQuoteAnswers(answers);
+  if (!listed.length) return null;
+  const preview = listed
+    .slice(0, 3)
+    .map((item) => item.value)
+    .join(" · ");
+
+  return (
+    <div className={cn("overflow-hidden rounded-xl border border-[#d7e2ef] bg-[#f7f9fc]", className)}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[#eef3f9]"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <ClipboardList className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-sm font-semibold tracking-tight text-slate-900">Customer quote answers</span>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {listed.length} question{listed.length === 1 ? "" : "s"}
+            </span>
+          </span>
+          {open ? null : (
+            <span className="mt-0.5 block truncate text-xs text-slate-500">{preview}</span>
+          )}
+        </span>
+        <span className="hidden text-xs font-semibold text-primary sm:inline">{open ? "Hide" : "View answers"}</span>
+        <ChevronDown className={cn("size-4 shrink-0 text-slate-500 transition-transform", open && "rotate-180")} />
+      </button>
+      {open ? (
+        <div className="border-t border-[#d7e2ef] px-4 py-3">
+          <QuoteAnswersCard
+            hideHeader
+            answers={listed}
+            className="rounded-none border-0 bg-transparent px-0 py-0"
+          />
         </div>
       ) : null}
     </div>

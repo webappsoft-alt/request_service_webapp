@@ -85,14 +85,22 @@ export function TemplatePreviewTable({
       )}
     >
       <div className="max-h-[22rem] overflow-y-auto">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
+          {/* Fixed px widths (inline so they always win): Description takes everything else. */}
+          <colgroup>
+            <col style={{ width: "auto" }} />
+            <col style={{ width: 76 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 78 }} />
+            <col style={{ width: 88 }} />
+          </colgroup>
           <thead className="sticky top-0 bg-[#f7f8fa] text-[11px] tracking-[0.08em] text-slate-500 uppercase">
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Description</th>
-              <th className="px-2 py-2 text-left font-semibold">Type</th>
-              <th className="px-2 py-2 text-right font-semibold">Qty</th>
-              <th className="px-2 py-2 text-right font-semibold">Price</th>
-              <th className="px-3 py-2 text-right font-semibold">Total</th>
+              <th style={{ width: 76 }} className="px-2 py-2 text-left font-semibold">Type</th>
+              <th style={{ width: 56 }} className="px-2 py-2 text-right font-semibold">Qty</th>
+              <th style={{ width: 78 }} className="px-2 py-2 text-right font-semibold">Price</th>
+              <th style={{ width: 88 }} className="px-3 py-2 text-right font-semibold">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -157,17 +165,17 @@ function SectionRows({
       </tr>
       {rows.map((item, index) => (
         <tr key={`${section}-${index}`} className="bg-white">
-          <td className="px-3 py-1.5 text-slate-800">{item.description}</td>
-          <td className="px-2 py-1.5 text-slate-500">
+          <td className="px-3 py-1.5 break-words text-slate-800">{item.description}</td>
+          <td className="px-2 py-1.5 text-xs whitespace-nowrap text-slate-500">
             {KIND_LABEL[item.kind]}
           </td>
           <td className="px-2 py-1.5 text-right whitespace-nowrap text-slate-600 tabular-nums">
             {item.quantity} {item.unit}
           </td>
-          <td className="px-2 py-1.5 text-right text-slate-600 tabular-nums">
+          <td className="px-2 py-1.5 text-right whitespace-nowrap text-slate-600 tabular-nums">
             {formatMoney(item.unitPrice)}
           </td>
-          <td className="px-3 py-1.5 text-right font-medium text-slate-900 tabular-nums">
+          <td className="px-3 py-1.5 text-right whitespace-nowrap font-medium text-slate-900 tabular-nums">
             {formatMoney(round2(item.quantity * item.unitPrice))}
           </td>
         </tr>

@@ -60,6 +60,7 @@ export function PortalDataTable<T>({
   filename,
   empty = "No records found.",
   rowHref,
+  onRowClick,
   toolbar,
   letters,
   letterValue,
@@ -80,6 +81,8 @@ export function PortalDataTable<T>({
   filename: string;
   empty?: string;
   rowHref?: (row: T) => string;
+  /** Row click without navigation (e.g. open a detail dialog). Ignored when rowHref is set. */
+  onRowClick?: (row: T) => void;
   toolbar?: ReactNode;
   letters?: boolean;
   letterValue?: (row: T) => string;
@@ -359,12 +362,13 @@ export function PortalDataTable<T>({
               pageRows.map((row) => {
                 const rowActions = actions?.(row) ?? [];
                 const href = rowHref?.(row);
+                const clickable = Boolean(href || onRowClick);
                 return (
                   <TableRow
                     key={rowKey(row)}
-                    className={cn(href && "cursor-pointer", rowClassName?.(row))}
+                    className={cn(clickable && "cursor-pointer", rowClassName?.(row))}
                     onClick={
-                      href
+                      clickable
                         ? (event) => {
                             const target = event.target as HTMLElement | null;
                             // Nested links/buttons (Chat, customer name, menus) keep their own navigation.
@@ -375,7 +379,8 @@ export function PortalDataTable<T>({
                             ) {
                               return;
                             }
-                            router.push(href);
+                            if (href) router.push(href);
+                            else onRowClick?.(row);
                           }
                         : undefined
                     }

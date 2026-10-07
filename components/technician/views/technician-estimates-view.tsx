@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { formatClock } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
+import { formatHours } from "@/lib/time-tracking";
 import { technicianPaths } from "@/lib/technician-paths";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -152,6 +153,10 @@ export function TechnicianEstimatesView() {
   );
 }
 
+function dateOrDash(value: unknown) {
+  return value ? formatDate(String(value)) : "—";
+}
+
 export function TechnicianEstimateDetailView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
   const entry = useAppSelector((state) => state.technician.estimateDetails[id]);
@@ -195,6 +200,33 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
       ? estimate.propertyAddress
       : (snapshot.address as Record<string, unknown>) || null;
   const notes = estimate.notes ? String(estimate.notes).replace(/<[^>]+>/g, "") : "";
+  const terms = estimate.terms ? String(estimate.terms).replace(/<[^>]+>/g, "").trim() : "";
+  const company = customer?.companyName || String(snapshot.companyName || "");
+  const altPhone = customer?.altPhone || String(snapshot.altPhone || "");
+  const { timeSummary } = data;
+
+  // Most recent site visit (older records only have the single `siteVisit`).
+  const visits = (
+    Array.isArray(estimate.siteVisits) && estimate.siteVisits.length
+      ? estimate.siteVisits
+      : Object.values(visit).some(Boolean)
+        ? [visit]
+        : []
+  ) as Array<Record<string, unknown>>;
+  const visitWhen = (row: Record<string, unknown>) => String(row.visitedAt || row.scheduledAt || row.createdAt || "");
+  const latestVisit = [...visits].sort((a, b) => visitWhen(b).localeCompare(visitWhen(a)))[0];
+  const visitCount = visits.length;
+  const visitPhotos = visits.reduce((sum, row) => sum + (Array.isArray(row.photos) ? row.photos.length : 0), 0);
+
+  const kindCounts = (
+    [
+      ["Labour", items.filter((item) => item.kind === "labor").length],
+      ["Material", items.filter((item) => item.kind === "material").length],
+      ["Equipment", items.filter((item) => item.kind === "equipment").length],
+    ] as Array<[string, number]>
+  ).filter(([, count]) => count > 0);
+  const subtotal = Number(estimate.subtotal) || items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const discount = Number(estimate.discount) || 0;
 
   const tabs = [
     { id: "summary", label: "Summary" },
@@ -301,9 +333,16 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
                 <DetailCard title="Customer">
                   <div className="space-y-2">
                     <p className="text-sm font-semibold">{name}</p>
+                    {company && company !== name ? <p className="text-xs text-muted-foreground">{company}</p> : null}
                     {phone ? (
                       <a href={`tel:${phone}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
                         <Phone className="size-3.5" aria-hidden /> {phone}
+                      </a>
+                    ) : null}
+                    {altPhone && altPhone !== phone ? (
+                      <a href={`tel:${altPhone}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
+                        <Phone className="size-3.5" aria-hidden /> {altPhone}
+                        <span className="text-xs text-muted-foreground">(alt)</span>
                       </a>
                     ) : null}
                     {email ? (
@@ -318,6 +357,92 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
                     location={location}
                     record={{ recordType: "estimate", recordNumber: estimate.number, customerName: name }}
                   />
+                </DetailCard>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <DetailCard title="Estimate information" className="lg:col-span-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <KeyValue label="Status" value={<EstimateStatusPill status={estimate.status} />} />
+                    <KeyValue label="Visit date" value={estimate.scheduledDate ? formatDate(estimate.scheduledDate) : "Not scheduled"} />
+                    <KeyValue label="Issued" value={dateOrDash(estimate.issuedAt)} />
+                    <KeyValue label="Valid until" value={dateOrDash(estimate.expiresAt)} />
+                    <KeyValue label="Created" value={dateOrDash(estimate.createdAt)} />
+                    <KeyValue label="Last updated" value={dateOrDash(estimate.updatedAt)} />
+                  </div>
+                  {terms ? (
+                    <div className="mt-3">
+                      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Terms</p>
+                      <p className="mt-1 line-clamp-4 text-sm whitespace-pre-wrap">{terms}</p>
+                    </div>
+                  ) : null}
+                </DetailCard>
+                <DetailCard title="Price summary">
+                  <dl className="space-y-1.5 text-sm">
+                    {kindCounts.map(([label, count]) => (
+                      <div key={label} className="flex justify-between gap-2 text-muted-foreground">
+                        <dt>{label}</dt>
+                        <dd className="tabular-nums">
+                          {count} item{count === 1 ? "" : "s"}
+                        </dd>
+                      </div>
+                    ))}
+                    <div className="flex justify-between gap-2 border-t border-border-soft pt-1.5">
+                      <dt className="text-muted-foreground">Subtotal</dt>
+                      <dd className="tabular-nums">{formatMoney(subtotal)}</dd>
+                    </div>
+                    {discount > 0 ? (
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-muted-foreground">Discount</dt>
+                        <dd className="tabular-nums">−{formatMoney(discount)}</dd>
+                      </div>
+                    ) : null}
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Tax</dt>
+                      <dd className="tabular-nums">{formatMoney(Number(estimate.tax) || 0)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2 border-t border-border-soft pt-1.5 font-semibold">
+                      <dt>Total</dt>
+                      <dd className="tabular-nums">{formatMoney(Number(estimate.total) || 0)}</dd>
+                    </div>
+                  </dl>
+                </DetailCard>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <DetailCard title={visitCount > 1 ? `Latest site visit (${visitCount} total)` : "Site visit"} className="lg:col-span-2">
+                  {latestVisit ? (
+                    <div className="space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <KeyValue label="Technician" value={String(latestVisit.technician || "")} />
+                        <KeyValue
+                          label="Visited"
+                          value={dateOrDash(latestVisit.visitedAt || latestVisit.scheduledAt)}
+                        />
+                        <KeyValue label="Photos" value={visitPhotos ? String(visitPhotos) : "None"} />
+                      </div>
+                      {latestVisit.findings ? (
+                        <KeyValue label="Findings" value={<span className="line-clamp-3 whitespace-pre-wrap">{String(latestVisit.findings)}</span>} />
+                      ) : null}
+                      {latestVisit.recommendations ? (
+                        <KeyValue
+                          label="Recommendations"
+                          value={<span className="line-clamp-3 whitespace-pre-wrap">{String(latestVisit.recommendations)}</span>}
+                        />
+                      ) : null}
+                      {!latestVisit.findings && !latestVisit.recommendations ? (
+                        <p className="text-sm text-muted-foreground">No findings recorded yet.</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No site visit recorded yet.</p>
+                  )}
+                </DetailCard>
+                <DetailCard title="My time">
+                  <div className="grid grid-cols-2 gap-3">
+                    <KeyValue label="Hours" value={formatHours(timeSummary.totalSeconds || 0)} />
+                    <KeyValue label="Sessions" value={String(timeSummary.sessions || 0)} />
+                    <KeyValue label="Earned" value={formatMoney(timeSummary.totalPay || 0)} />
+                    <KeyValue label="Booked visits" value={String(schedule.length)} />
+                  </div>
                 </DetailCard>
               </div>
               {job ? (

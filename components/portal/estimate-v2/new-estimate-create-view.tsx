@@ -33,6 +33,11 @@ import {
   type PrepChoice,
 } from "@/lib/api/estimate-v2-client";
 import { getRequest, updateCustomer } from "@/lib/api/crm-client";
+import {
+  findTemplateCategory,
+  getEstimateTemplateCatalog,
+  type EstimateTemplateCategory,
+} from "@/lib/api/estimate-templates-client";
 import { QuoteAnswersCard, quoteNotesFromDetails } from "@/components/portal/quote-answers-card";
 import type { QuoteAnswer } from "@/lib/data/portal";
 import type { ServiceAddress } from "@/lib/types";
@@ -126,6 +131,8 @@ export function NewEstimateCreateView() {
   const [sameAsCustomerAddress, setSameAsCustomerAddress] = useState(false);
 
   const [categoryName, setCategoryName] = useState("");
+  const [subcategoryName, setSubcategoryName] = useState("");
+  const [templateCatalog, setTemplateCatalog] = useState<EstimateTemplateCategory[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
@@ -195,6 +202,20 @@ export function NewEstimateCreateView() {
   useEffect(() => {
     if (customerParam && !customerId) setCustomerId(customerParam);
   }, [customerParam, customerId]);
+
+  // Subcategories (offered jobs) for the picked category — they choose the ready-made template.
+  useEffect(() => {
+    if (!useApi) return;
+    getEstimateTemplateCatalog()
+      .then(setTemplateCatalog)
+      .catch(() => setTemplateCatalog([]));
+  }, [useApi]);
+  const subcategoryOptions = useMemo(
+    () => findTemplateCategory(templateCatalog, categoryName)?.subcategories || [],
+    [templateCatalog, categoryName],
+  );
+  // A subcategory from another category no longer applies once the category changes.
+  const validSubcategory = subcategoryOptions.some((item) => item.name === subcategoryName) ? subcategoryName : "";
 
   useEffect(() => {
     if (!useApi || !customerQuery.trim()) return;
@@ -399,6 +420,7 @@ export function NewEstimateCreateView() {
         title: title.trim(),
         description: description.trim(),
         categoryName: categoryName.trim(),
+        subcategoryName: validSubcategory || undefined,
         source: linkedRequestId ? "lead" : "manual",
         requestId: linkedRequestId || undefined,
         internalNotes: internalNotes.trim(),
@@ -422,7 +444,10 @@ export function NewEstimateCreateView() {
         toast.success("Estimate created. Continue in the workspace.");
       }
 
-      router.push(`/pro/dashboard/new-estimate/${opportunity.id}`);
+      // Create now → the workspace asks Manual vs Ready-made template.
+      router.push(
+        `/pro/dashboard/new-estimate/${opportunity.id}${prepChoice === "create_now" || prepChoice === "have_information" ? "?start=1" : ""}`,
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create estimate.");
     } finally {
@@ -683,6 +708,28 @@ export function NewEstimateCreateView() {
                   .
                 </p>
               ) : null}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subcategory (optional)</Label>
+              <Select
+                value={validSubcategory || undefined}
+                onValueChange={setSubcategoryName}
+                disabled={!subcategoryOptions.length}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder={categoryName ? "Select subcategory" : "Pick a category first"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {subcategoryOptions.map((item) => (
+                    <SelectItem key={item.name} value={item.name}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Loads the matching ready-made estimate template.</p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="opp-title">Request title</Label>

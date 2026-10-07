@@ -357,6 +357,7 @@ export function workItemsToJobCostLines(items: AssessmentWorkItem[]): JobCostLin
         unit: item.unit || defaultUnit(type),
         unitPrice: Math.max(0, Number(item.unitPrice) || 0),
         ...(kind === "materials" ? { images: [] as string[] } : {}),
+        ...(String(item.section || "").trim() ? { section: String(item.section).trim() } : {}),
       };
     });
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, Link2, MapPin } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, LayoutTemplate, Link2, MapPin } from "lucide-react";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
@@ -32,6 +32,17 @@ import { shareUrlFor } from "@/components/portal/use-estimate-share";
 import { SiteVisitsPanel } from "@/components/portal/estimate-v2/site-visits-panel";
 import { ExistingInformationPanel } from "@/components/portal/estimate-v2/existing-information-panel";
 import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
+import { EstimateStartDialog, SaveTemplatePrompt } from "@/components/portal/estimate-v2/estimate-template-dialogs";
+import {
+  findTemplateCategory,
+  getEstimateTemplateCatalog,
+  linesToTemplateItems,
+  saveCustomEstimateTemplate,
+  templateItemsToLines,
+  templateSignature,
+  type EstimateTemplate,
+  type EstimateTemplateCategory,
+} from "@/lib/api/estimate-templates-client";
 import { workItemsToJobCostLines } from "@/components/portal/estimate-v2/work-items-editor";
 import {
   jobCostMix,
@@ -99,6 +110,50 @@ const RAIL_CARD =
 const ACTIVITY_PREVIEW_COUNT = 4;
 const MAIN_CARD =
   "rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+
+type AppliedTemplate = {
+  id: string;
+  source: EstimateTemplate["source"];
+  name: string;
+  categoryKey: string;
+  subcategoryName: string;
+  /** Scope + lines right after loading — any difference means the provider edited it. */
+  signature: string;
+};
+
+type TemplateMemory = { applied: AppliedTemplate | null; prompted: string };
+
+/** Per-estimate template state, kept in this browser so reloads don't re-prompt. */
+function templateMemoryKey(opportunityId: string) {
+  return `rs:estimate-template:${opportunityId}`;
+}
+
+function readTemplateMemory(opportunityId: string): TemplateMemory {
+  try {
+    const raw = window.localStorage.getItem(templateMemoryKey(opportunityId));
+    const parsed = raw ? (JSON.parse(raw) as Partial<TemplateMemory>) : {};
+    return { applied: parsed.applied || null, prompted: String(parsed.prompted || "") };
+  } catch {
+    return { applied: null, prompted: "" };
+  }
+}
+
+function writeTemplateMemory(opportunityId: string, memory: TemplateMemory) {
+  try {
+    window.localStorage.setItem(templateMemoryKey(opportunityId), JSON.stringify(memory));
+  } catch {
+    /* storage unavailable — prompts may repeat, nothing else breaks */
+  }
+}
+
+function isEstimateLocked(estimate: Estimate | null) {
+  return (
+    estimate?.status === "accepted" ||
+    estimate?.status === "converted_to_job" ||
+    estimate?.status === "rejected" ||
+    estimate?.status === "expired"
+  );
+}
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
@@ -359,6 +414,37 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [prepPanelOpen, setPrepPanelOpen] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState(false);
 
+  // Ready-made templates: start choice, applied template, and the "save as template" prompt.
+  const [templateCatalog, setTemplateCatalog] = useState<EstimateTemplateCategory[] | null>(null);
+  const [startOpen, setStartOpen] = useState(false);
+  const [startOnTemplates, setStartOnTemplates] = useState(false);
+  const [templateMemory, setTemplateMemory] = useState<TemplateMemory>(() => readTemplateMemory(opportunityId));
+  const [savePrompt, setSavePrompt] = useState<{ mode: "edited" | "manual"; signature: string } | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const afterPromptRef = useRef<(() => void) | null>(null);
+  const startParamHandled = useRef(false);
+
+  const refreshTemplateCatalog = useCallback(() => {
+    getEstimateTemplateCatalog()
+      .then(setTemplateCatalog)
+      .catch(() => setTemplateCatalog([]));
+  }, []);
+
+  useEffect(() => {
+    refreshTemplateCatalog();
+  }, [refreshTemplateCatalog]);
+
+  const rememberTemplate = useCallback(
+    (patch: Partial<TemplateMemory>) => {
+      setTemplateMemory((current) => {
+        const next = { ...current, ...patch };
+        writeTemplateMemory(opportunityId, next);
+        return next;
+      });
+    },
+    [opportunityId],
+  );
+
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
     if (!silent) setLoading(true);
@@ -469,6 +555,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
       const rate = await fetchTaxRatePercent(data.propertyAddress?.state);
       setTaxRatePercent(rate);
+
+      // New estimate wizard → "Create estimate now" lands here with ?start=1: ask Manual vs Template.
+      if (!silent && !startParamHandled.current && new URLSearchParams(window.location.search).get("start") === "1") {
+        startParamHandled.current = true;
+        router.replace(`/pro/dashboard/new-estimate/${data.id}`, { scroll: false });
+        if (!isEstimateLocked(freshEstimate)) {
+          setStartOnTemplates(false);
+          setStartOpen(true);
+        }
+      }
 
       // Full load only: open prep path when no estimate yet; never fight silent refreshes.
       if (!silent) {
@@ -694,6 +790,128 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     return created;
   }
 
+  const templateCategory = findTemplateCategory(templateCatalog || [], opportunity?.categoryName);
+  const hasLineContent = filledLines.some((line) => line.description.trim());
+  const fillsPrepWorkItems = opportunity?.prepChoice === "have_information" && prepPanelOpen && !estimate?.id;
+  const templateWouldReplace = fillsPrepWorkItems
+    ? prepWorkItems.some((item) => String(item.description || "").trim())
+    : hasLineContent;
+
+  function openStartDialog(options?: { templatesOnly?: boolean }) {
+    if (isEstimateLocked(estimate)) return;
+    setStartOnTemplates(Boolean(options?.templatesOnly));
+    setStartOpen(true);
+  }
+
+  function scrollToEstimate() {
+    window.setTimeout(() => {
+      estimateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+
+
+  /** Load a template into the sheet; the provider edits from there. */
+  function applyTemplate(template: EstimateTemplate, options?: { quiet?: boolean }) {
+    if (!opportunity) return;
+    const nextLines = templateItemsToLines(template.items);
+    const currentScope = scopeOfWork.trim();
+    const defaultScope = [opportunity.description, opportunity.prepFindings].map((value) => String(value || "").trim());
+    // Keep a scope the provider wrote; replace an empty one or the copied customer description.
+    const nextScope =
+      template.scopeOfWork && (!currentScope || defaultScope.includes(currentScope)) ? template.scopeOfWork : scopeOfWork;
+    if (fillsPrepWorkItems) {
+      setPrepWorkItems(
+        template.items.map((item, index) => ({
+          id: `tpl_wi_${Date.now().toString(36)}_${index}`,
+          description: item.description,
+          type: item.kind,
+          quantity: item.quantity,
+          unit: item.unit || (item.kind === "labor" ? "hr" : "ea"),
+          unitPrice: item.unitPrice,
+          ...(item.section ? { section: item.section } : {}),
+        })),
+      );
+    } else {
+      setLines(nextLines.length ? nextLines : [createEmptyLine("labor")]);
+    }
+    setScopeOfWork(nextScope);
+    rememberTemplate({
+      applied: {
+        id: template.id,
+        source: template.source,
+        name: template.name,
+        categoryKey: template.categoryKey,
+        subcategoryName: template.subcategoryName,
+        signature: templateSignature(nextScope, nextLines),
+      },
+    });
+    if (template.subcategoryName && template.subcategoryName !== opportunity.subcategoryName) {
+      setOpportunity((current) => (current ? { ...current, subcategoryName: template.subcategoryName } : current));
+      void updateEstimateV2Opportunity(opportunity.id, { subcategoryName: template.subcategoryName }).catch(() => {});
+    }
+    toast.success(
+      `Loaded the ${template.name} template — ${template.items.length} ${fillsPrepWorkItems ? "work items" : "line items"}.`,
+    );
+    if (fillsPrepWorkItems) {
+      window.setTimeout(() => prepInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    } else if (!options?.quiet) {
+      scrollToEstimate();
+    }
+  }
+
+  /**
+   * After Save draft / Build / Send: if the sheet was built by hand, or a loaded
+   * template was changed, offer to keep it as the provider's own template.
+   * `next` runs once the provider answers (or straight away when there is nothing to ask).
+   */
+  function offerSaveTemplate(next?: () => void) {
+    const run = () => next?.();
+    if (isEstimateLocked(estimate) || !templateCatalog?.length || !linesToTemplateItems(lines).length) return run();
+    const signature = templateSignature(scopeOfWork, lines);
+    const applied = templateMemory.applied;
+    const mode = applied ? (applied.signature !== signature ? "edited" : null) : "manual";
+    if (!mode || templateMemory.prompted === signature) return run();
+    afterPromptRef.current = next || null;
+    setSavePrompt({ mode, signature });
+  }
+
+  function finishSavePrompt() {
+    const next = afterPromptRef.current;
+    afterPromptRef.current = null;
+    setSavePrompt(null);
+    next?.();
+  }
+
+  async function saveSheetAsTemplate(input: { categoryKey: string; subcategoryName: string; name: string }) {
+    if (!savePrompt) return;
+    setSavingTemplate(true);
+    try {
+      const saved = await saveCustomEstimateTemplate({
+        ...input,
+        scopeOfWork,
+        items: linesToTemplateItems(lines),
+      });
+      rememberTemplate({
+        applied: {
+          id: saved.id,
+          source: "custom",
+          name: saved.name,
+          categoryKey: saved.categoryKey,
+          subcategoryName: saved.subcategoryName,
+          signature: savePrompt.signature,
+        },
+        prompted: savePrompt.signature,
+      });
+      refreshTemplateCatalog();
+      toast.success(`Saved "${saved.name}" — future ${saved.subcategoryName} estimates will start from it.`);
+      finishSavePrompt();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the template.");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
   async function setPrepChoice(prepChoice: PrepChoice) {
     if (!opportunity) return;
     setSaving(true);
@@ -716,15 +934,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
       if (prepChoice === "create_now") {
         setPrepPanelOpen(false);
-        window.setTimeout(() => {
-          estimateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 80);
+        scrollToEstimate();
+        openStartDialog();
       } else if (prepChoice === "have_information" || prepChoice === "schedule_assessment") {
         setPrepPanelOpen(true);
         if (prepChoice === "have_information") {
           window.setTimeout(() => {
             prepInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
           }, 80);
+          // Same choice as Create estimate now: blank work items or a ready-made template.
+          openStartDialog();
         }
       }
     } catch (err) {
@@ -1184,9 +1403,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           <div className={RAIL_CARD}>
             <SectionLabel>Work request</SectionLabel>
             {opportunity.categoryName ? (
-              <p className="mt-2.5 inline-flex rounded-md bg-primary/8 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-primary uppercase">
-                {opportunity.categoryName}
-              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <p className="inline-flex rounded-md bg-primary/8 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-primary uppercase">
+                  {opportunity.categoryName}
+                </p>
+                {opportunity.subcategoryName ? (
+                  <p className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-slate-600 uppercase">
+                    {opportunity.subcategoryName}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             <p className="mt-2 text-[15px] font-semibold tracking-tight text-slate-900">
               {opportunity.title}
@@ -1425,7 +1651,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       View on map
                     </Button>
                     {!estimate && !showVisits ? (
-                      <Button size="sm" disabled={saving} onClick={() => void ensureEstimate()}>
+                      <Button
+                        size="sm"
+                        disabled={saving}
+                        onClick={() =>
+                          void ensureEstimate().then((created) => {
+                            if (created) offerSaveTemplate();
+                          })
+                        }
+                      >
                         Build estimate
                       </Button>
                     ) : null}
@@ -1433,7 +1667,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       size="sm"
                       variant="outline"
                       disabled={saving || estimateLocked}
-                      onClick={() => void saveEstimateDraft()}
+                      onClick={() =>
+                        void saveEstimateDraft().then((saved) => {
+                          if (saved) offerSaveTemplate();
+                        })
+                      }
                     >
                       Save draft
                     </Button>
@@ -1449,7 +1687,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     <Button
                       size="sm"
                       disabled={saving || estimateLocked}
-                      onClick={() => void openSendDialog()}
+                      onClick={() => offerSaveTemplate(() => void openSendDialog())}
                     >
                       {sendButtonLabel}
                     </Button>
@@ -1511,6 +1749,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         <p className="text-xs text-slate-500">
                           Group by trade or stage (Plumbing, Electrical…) — qty × unit price
                         </p>
+                        {templateMemory.applied ? (
+                          <p className="mt-1 inline-flex items-center gap-1 text-xs text-primary">
+                            <LayoutTemplate className="size-3" />
+                            From template · {templateMemory.applied.name}
+                            {templateMemory.applied.source === "custom" ? " (yours)" : ""}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <SectionedLineItemsEditor
@@ -1895,6 +2140,40 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           billingAddress={locationText(...customerAddresses)}
           billingCoords={locationCoords(...customerAddresses)}
           technicians={visitTechnicians}
+        />
+      ) : null}
+
+      <EstimateStartDialog
+        open={startOpen}
+        onOpenChange={setStartOpen}
+        catalog={templateCatalog}
+        defaultCategoryKey={templateCategory?.categoryKey}
+        defaultSubcategory={opportunity.subcategoryName}
+        startOnTemplates={startOnTemplates}
+        replacesLines={templateWouldReplace}
+        onManual={() => {
+          rememberTemplate({ applied: null });
+          scrollToEstimate();
+        }}
+        onApply={applyTemplate}
+      />
+      {savePrompt && templateCatalog?.length ? (
+        <SaveTemplatePrompt
+          open
+          onOpenChange={(next) => {
+            if (!next) setSavePrompt(null);
+          }}
+          catalog={templateCatalog}
+          mode={savePrompt.mode}
+          sourceName={templateMemory.applied?.name}
+          defaultCategoryKey={templateMemory.applied?.categoryKey || templateCategory?.categoryKey}
+          defaultSubcategory={templateMemory.applied?.subcategoryName || opportunity.subcategoryName}
+          saving={savingTemplate}
+          onSave={(input) => void saveSheetAsTemplate(input)}
+          onSkip={() => {
+            rememberTemplate({ prompted: savePrompt.signature });
+            finishSavePrompt();
+          }}
         />
       ) : null}
     </PortalPage>

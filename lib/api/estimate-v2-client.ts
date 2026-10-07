@@ -71,6 +71,8 @@ export type EstimateV2Opportunity = {
   propertyAddress: OpportunityPropertyAddress;
   categoryId?: string | null;
   categoryName?: string;
+  /** Offered job within the category — picks the ready-made estimate template. */
+  subcategoryName?: string;
   title: string;
   description?: string;
   source?: string;
@@ -123,6 +125,8 @@ export type AssessmentWorkItem = {
   notes?: string;
   catalogItemId?: string;
   catalogLabel?: string;
+  /** Trade group (e.g. Plumbing) carried into the estimate line items. */
+  section?: string;
   customerVisible?: boolean;
 };
 
@@ -255,6 +259,7 @@ export async function createEstimateV2Opportunity(input: {
   description?: string;
   categoryId?: string;
   categoryName?: string;
+  subcategoryName?: string;
   source?: string;
   requestId?: string;
   internalNotes?: string;
@@ -269,6 +274,7 @@ export async function updateEstimateV2Opportunity(
     title: string;
     description: string;
     categoryName: string;
+    subcategoryName: string;
     categoryId: string | null;
     propertyAddress: OpportunityPropertyAddress;
     prepChoice: PrepChoice;

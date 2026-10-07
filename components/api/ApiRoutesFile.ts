@@ -164,6 +164,12 @@ export const providerCrmApi = {
   estimateConvertToJob: (id: string) => `provider/estimates/${id}/convert-to-job`,
   estimateConvertToInvoice: (id: string) =>
     `provider/estimates/${id}/convert-to-invoice`,
+  /** Ready-made estimate templates (platform defaults + provider custom). */
+  estimateTemplates: "provider/estimate-templates",
+  estimateTemplateCatalog: "provider/estimate-templates/catalog",
+  estimateTemplateResolve: "provider/estimate-templates/resolve",
+  estimateTemplateCustom: "provider/estimate-templates/custom",
+  estimateTemplateCustomById: (id: string) => `provider/estimate-templates/custom/${id}`,
   /** Isolated estimate-v2 (Opportunity / Site Assessment). Removable with New estimate UI. */
   estimateV2Opportunities: "provider/estimate-v2/opportunities",
   estimateV2Opportunity: (id: string) => `provider/estimate-v2/opportunities/${id}`,

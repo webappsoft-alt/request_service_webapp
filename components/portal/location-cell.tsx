@@ -92,11 +92,14 @@ export function LocationCell({
   candidates,
   className,
   map,
+  customerCandidates,
 }: {
   candidates: AddressLike[];
   className?: string;
   /** Labels for the route map (record number, customer). */
   map?: { recordType?: "job" | "estimate"; recordNumber?: string; customerName?: string };
+  /** Customer's profile address — shown as a second "Customer location" tab on the map. */
+  customerCandidates?: AddressLike[];
 }) {
   const openMap = useRouteMap();
   const location = resolveLocation(...candidates);
@@ -125,6 +128,12 @@ export function LocationCell({
               customerName: map?.customerName,
               customerAddress: location.full,
               customerCoords: locationCoords(...candidates),
+              customerLocation: customerCandidates?.length
+                ? (() => {
+                    const address = locationText(...customerCandidates);
+                    return address ? { address, coords: locationCoords(...customerCandidates) } : null;
+                  })()
+                : null,
             })
           }
         >

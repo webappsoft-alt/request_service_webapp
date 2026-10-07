@@ -143,6 +143,7 @@ export function invoiceBoardColumns({
       cell: (row) => (
         <LocationCell
           candidates={siteCandidates(row)}
+          customerCandidates={[customerAddress?.(row.customerId)]}
           map={{ recordType: "job", recordNumber: jobOf(row)?.number || row.number, customerName: customerName(row.customerId) }}
         />
       ),

@@ -45,6 +45,12 @@ export function jobBoardColumns({
   const techOf = (job: Job) => employeeLabel(eventFor(job)?.employeeId) || job.assignedTo || "";
   const invoiceOf = (job: Job) => invoices.find((item) => item.id === job.invoiceId);
   const serviceOf = (job: Job) => jobServiceLabel(job, estimates, requests);
+  // Site location: the estimate's Service location when the job came from one.
+  const siteOf = (job: Job): AddressLike[] => [
+    estimates.find((item) => item.id === job.estimateId)?.propertyAddress,
+    job.address,
+    customerAddress?.(job.customerId),
+  ];
 
   return [
     {
@@ -82,12 +88,13 @@ export function jobBoardColumns({
     {
       id: "address",
       header: "Location",
-      sortValue: (row) => locationText(row.address, customerAddress?.(row.customerId)),
-      searchValue: (row) => locationText(row.address, customerAddress?.(row.customerId)),
-      exportValue: (row) => locationText(row.address, customerAddress?.(row.customerId)),
+      sortValue: (row) => locationText(...siteOf(row)),
+      searchValue: (row) => locationText(...siteOf(row)),
+      exportValue: (row) => locationText(...siteOf(row)),
       cell: (row) => (
         <LocationCell
-          candidates={[row.address, customerAddress?.(row.customerId)]}
+          candidates={siteOf(row)}
+          customerCandidates={[customerAddress?.(row.customerId)]}
           map={{ recordType: "job", recordNumber: row.number, customerName: customerName(row.customerId) }}
         />
       ),

@@ -10,6 +10,7 @@ import { TechChatConversation } from "@/components/tech-chat/tech-chat-conversat
 import { rememberTechChatThread } from "@/components/tech-chat/use-tech-chat-unread";
 import {
   TECH_CHAT_PAGE_SIZE,
+  getTechChat,
   listTechChats,
   techChatContextLabel,
   type TechChatSide,
@@ -184,6 +185,22 @@ export function TechChatInbox({
       offRead();
     };
   }, [side, selectedId]);
+
+  // The selected thread (from a Chat button or link) is always listed, even beyond page 1.
+  const missingSelected = !loading && Boolean(selectedId) && !threads.some((row) => row.id === selectedId);
+  useEffect(() => {
+    if (!missingSelected || !selectedId) return;
+    let cancelled = false;
+    getTechChat(side, selectedId)
+      .then((thread) => {
+        if (cancelled || !thread?.id) return;
+        setThreads((current) => (current.some((row) => row.id === thread.id) ? current : [thread, ...current]));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [missingSelected, selectedId, side]);
 
   // Search and the unread filter run on the server; only hide rows read since loading.
   const visible = unreadOnly ? threads.filter((row) => unreadOf(row) > 0 || row.id === selectedId) : threads;

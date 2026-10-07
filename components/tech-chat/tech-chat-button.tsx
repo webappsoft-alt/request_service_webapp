@@ -51,12 +51,18 @@ export function TechChatButton({
   const unread = useTechChatUnread(side, thread?.id ?? null, side === "technician" ? contextKey(contextType, contextId) : null);
 
   async function start() {
-    // Technicians chat on the Messages page; it opens (or creates) this record's thread.
+    // Both sides chat on their Messages page; it opens (or creates) this record's thread.
+    const target = contextType === "general" || (contextType === "payment" && !contextId)
+      ? contextType
+      : `${contextType}:${contextId}`;
     if (side === "technician") {
-      const target = contextType === "general" || (contextType === "payment" && !contextId)
-        ? contextType
-        : `${contextType}:${contextId}`;
       router.push(`/technical/messages?open=${encodeURIComponent(target)}`);
+      return;
+    }
+    if (employeeId) {
+      router.push(
+        `/pro/dashboard/messages?tab=technicians&open=${encodeURIComponent(target)}&employee=${encodeURIComponent(employeeId)}`,
+      );
       return;
     }
     setOpen(true);

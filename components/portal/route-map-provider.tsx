@@ -19,8 +19,11 @@ export type RouteTarget = {
   recordType?: "job" | "estimate";
   recordNumber?: string;
   customerName?: string;
+  /** Site location — where the work happens (estimate Service location / job site). */
   customerAddress: string;
   customerCoords?: LatLng | null;
+  /** Customer's own profile address; adds a "Customer location" tab (provider portal). */
+  customerLocation?: { address: string; coords?: LatLng | null } | null;
 };
 
 const RouteMapContext = createContext<((target: RouteTarget) => void) | null>(null);
@@ -105,7 +108,7 @@ export function RouteMapProvider({
     : undefined;
   const description = currentLocation
     ? here
-      ? "Route and drive time from where you are now to the job site."
+      ? "Route and drive time from where you are now to the site location."
       : locating === "denied"
         ? "Allow location access in your browser to route from where you are now. Showing the route from the business."
         : "Finding your current location…"
@@ -129,6 +132,8 @@ export function RouteMapProvider({
           customerName={target.customerName}
           customerAddress={target.customerAddress}
           customerCoords={target.customerCoords ?? null}
+          billingAddress={currentLocation ? undefined : target.customerLocation?.address || undefined}
+          billingCoords={target.customerLocation?.coords ?? null}
         />
       ) : null}
     </RouteMapContext.Provider>

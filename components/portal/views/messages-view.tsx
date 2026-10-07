@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Camera,
+  Loader2,
   ExternalLink,
   FilePlus2,
   FileText,
@@ -37,11 +38,22 @@ import {
 import { cn } from "@/lib/utils";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
 import { TechChatInbox } from "@/components/tech-chat/tech-chat-inbox";
-import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
+import { rememberTechChatThread, useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
+import { openTechChat, type TechChatContextType } from "@/lib/api/technician-chat-client";
 import { useFillViewport } from "@/components/portal/use-fill-viewport";
 import { ADMIN_DIRECT_THREAD_ID } from "@/lib/api/crm-mappers";
 
 type FilterTab = "all" | "unread" | "leads";
+
+const TECH_CHAT_CONTEXTS: TechChatContextType[] = ["job", "estimate", "payment", "general"];
+
+/** "job:<id>" | "estimate:<id>" | "payment[:<id>]" | "general" from a Chat button. */
+function parseTechChatOpen(value: string | null) {
+  if (!value) return null;
+  const [type, id] = value.split(":");
+  if (!TECH_CHAT_CONTEXTS.includes(type as TechChatContextType)) return null;
+  return { contextType: type as TechChatContextType, contextId: id || null };
+}
 
 /**
  * Provider Messages: customer / lead chats and technician chats in one place.
@@ -56,6 +68,29 @@ export function MessagesView() {
   // Size the chat workspace to the real space left under the portal header.
   const frameRef = useRef<HTMLDivElement>(null);
   const frameHeight = useFillViewport(frameRef, { min: 520 });
+  // A Chat button on a job / estimate sent us here: open (or create) that thread, then show it.
+  const openParam = technicians ? searchParams.get("open") : null;
+  const openEmployee = searchParams.get("employee") || "";
+  const openKey = openParam ? `${openParam}|${openEmployee}` : "";
+  const [openError, setOpenError] = useState<{ key: string; message: string } | null>(null);
+  const openStarted = useRef<string | null>(null);
+  useEffect(() => {
+    const target = parseTechChatOpen(openParam);
+    if (!openKey || !target || openStarted.current === openKey) return;
+    openStarted.current = openKey;
+    openTechChat("provider", { ...target, employeeId: openEmployee || undefined })
+      .then((thread) => {
+        rememberTechChatThread("provider", thread);
+        router.replace(`/pro/dashboard/messages?tab=technicians&thread=${thread.id}`, { scroll: false });
+      })
+      .catch((err) => {
+        const message =
+          err && typeof err === "object" && "message" in err ? String((err as { message?: unknown }).message || "") : "";
+        setOpenError({ key: openKey, message: message || "Could not open this chat." });
+      });
+  }, [openKey, openParam, openEmployee, router]);
+  const openingChat = Boolean(openKey) && openError?.key !== openKey;
+
   const tabs = [
     { id: "customers", label: "Customers & leads", unread: customerUnread, active: !technicians },
     { id: "technicians", label: "Technicians", unread: technicianUnread, active: technicians },
@@ -98,7 +133,31 @@ export function MessagesView() {
           </button>
         ))}
       </div>
-      {technicians ? (
+      {technicians && openingChat ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-6 animate-spin text-primary" />
+          <p className="text-sm font-medium">Opening the conversation…</p>
+        </div>
+      ) : technicians && openKey && openError ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm font-medium text-destructive">{openError.message}</p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                openStarted.current = null;
+                setOpenError(null);
+              }}
+            >
+              Try again
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => router.replace("/pro/dashboard/messages?tab=technicians")}>
+              All conversations
+            </Button>
+          </div>
+        </div>
+      ) : technicians ? (
         // Pinned to the space under the tabs so both panes always reach the bottom.
         <div className="relative min-h-0 flex-1">
           <TechChatInbox

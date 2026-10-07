@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   Clock3,
+  HardHat,
   Loader2,
   MapPin,
   Pencil,
@@ -2678,35 +2679,6 @@ export function JobDetailView({ id }: { id: string }) {
             <Button
               size="sm"
               variant="outline"
-              className="h-8"
-              onClick={() => setAssignOpen(true)}
-            >
-              {technician ? "New assignment" : "Assign team member"}
-            </Button>
-            {technician ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 text-muted-foreground"
-                disabled={removingAssignee}
-                onClick={() => void removeJobAssignee()}
-              >
-                {removingAssignee ? "Removing…" : "Remove assignee"}
-              </Button>
-            ) : null}
-            {resolvedEmployeeId ? (
-              <TechChatButton
-                side="provider"
-                contextType="job"
-                contextId={job.id}
-                employeeId={resolvedEmployeeId}
-                label="Chat with technician"
-                className="h-8"
-              />
-            ) : null}
-            <Button
-              size="sm"
-              variant="outline"
               className="h-8 gap-1.5"
               onClick={() => setMapOpen(true)}
             >
@@ -2721,9 +2693,6 @@ export function JobDetailView({ id }: { id: string }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
-                <DropdownMenuItem onSelect={() => setMapOpen(true)}>
-                  View on map
-                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/pro/dashboard/schedule">Open calendar</Link>
                 </DropdownMenuItem>
@@ -2768,58 +2737,64 @@ export function JobDetailView({ id }: { id: string }) {
             case "summary":
               return (
                 <div className="space-y-4">
-                  {estimate ? (
-                    <div className="rounded-md bg-secondary px-4 py-3">
-                      <p className="text-sm font-semibold text-foreground">
-                        Estimate converted to {job.number}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Created from{" "}
-                        <Link
-                          href={`/pro/dashboard/new-estimate/${estimate.id}`}
-                          className="font-semibold text-primary underline"
-                        >
-                          {estimate.number}
-                        </Link>
-                        {estimate.title ? ` · ${estimate.title}` : ""}.
-                      </p>
-                    </div>
-                  ) : job.estimateId ? (
-                    <div className="rounded-md bg-secondary px-4 py-3">
-                      <p className="text-sm font-semibold text-foreground">
-                        Estimate converted to {job.number}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        This job keeps a reference to its source estimate.
-                      </p>
-                    </div>
-                  ) : null}
                   <div
                     className={
                       technician
-                        ? "flex flex-wrap items-center justify-between gap-3 rounded-md border border-sky-200 bg-sky-50/80 px-4 py-3"
-                        : "flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-input bg-muted/30 px-4 py-3"
+                        ? "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-4 py-3 shadow-xs"
+                        : "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-input bg-muted/30 px-4 py-3"
                     }
                   >
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-                        Assigned technician
-                      </p>
-                      <p className="mt-0.5 text-sm font-semibold text-foreground">
-                        {technician || "Unassigned"}
-                      </p>
-                      {start ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          Scheduled {formatDate(start)}
-                          {due && due !== start ? ` → ${formatDate(due)}` : ""}
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={
+                          technician
+                            ? "flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+                            : "flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-input bg-background text-muted-foreground"
+                        }
+                        aria-hidden
+                      >
+                        {technician ? (
+                          technician
+                            .split(/\s+/)
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((part) => part[0]?.toUpperCase())
+                            .join("")
+                        ) : (
+                          <HardHat className="size-4" />
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                          Assigned technician
                         </p>
-                      ) : null}
+                        <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+                          {technician || "Unassigned"}
+                        </p>
+                        {start ? (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Scheduled {formatDate(start)}
+                            {due && due !== start ? ` → ${formatDate(due)}` : ""}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {technician && resolvedEmployeeId ? (
+                        <TechChatButton
+                          side="provider"
+                          contextType="job"
+                          contextId={job.id}
+                          employeeId={resolvedEmployeeId}
+                          label="Chat"
+                          variant="default"
+                          className="h-8"
+                        />
+                      ) : null}
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8"
+                        className="h-8 bg-background"
                         onClick={() => setAssignOpen(true)}
                       >
                         {technician ? "Change" : "Assign"}
@@ -2828,11 +2803,11 @@ export function JobDetailView({ id }: { id: string }) {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-8"
+                          className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           disabled={removingAssignee}
                           onClick={() => void removeJobAssignee()}
                         >
-                          Remove
+                          {removingAssignee ? "Removing…" : "Remove"}
                         </Button>
                       ) : null}
                     </div>

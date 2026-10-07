@@ -31,7 +31,7 @@ import {
 import { estimateCanShare } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { LocationCell } from "@/components/portal/location-cell";
+import { defaultAddressFirst, LocationCell } from "@/components/portal/location-cell";
 
 function customerLabel(opportunity: EstimateV2Opportunity) {
   const c = opportunity.customerId;
@@ -350,6 +350,9 @@ export function NewEstimateListView() {
             cell: (row) => (
               <LocationCell
                 candidates={[row.propertyAddress]}
+                customerCandidates={
+                  typeof row.customerId === "object" ? defaultAddressFirst(row.customerId?.serviceAddresses) : []
+                }
                 map={{ recordType: "estimate", recordNumber: row.number, customerName: customerLabel(row) }}
               />
             ),

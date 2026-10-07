@@ -120,6 +120,7 @@ import {
   paymentNumber,
   withArchiveFilter,
 } from "@/lib/data/portal";
+import { defaultAddressFirst } from "@/components/portal/location-cell";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Estimate, Invoice, Job } from "@/lib/types";
 
@@ -1225,7 +1226,7 @@ export function JobsView() {
               : getPortalCustomerName(provider, customerId);
           },
           customerAddress: (customerId) =>
-            customers.find((item) => item.id === customerId)?.addresses?.[0],
+            defaultAddressFirst(customers.find((item) => item.id === customerId)?.addresses)[0],
         })}
         actions={(row) => {
           const archived = Boolean(row.isArchived) || records.isArchived("job", row.id);
@@ -1764,7 +1765,7 @@ export function InvoicesView() {
               : getPortalCustomerName(provider, customerId);
           },
           customerAddress: (customerId) =>
-            customers.find((item) => item.id === customerId)?.addresses?.[0],
+            defaultAddressFirst(customers.find((item) => item.id === customerId)?.addresses)[0],
         })}
         actions={(row) => {
           const archived =

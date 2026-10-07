@@ -53,8 +53,8 @@ export type RouteLocationMapDialogProps = RouteLocationMapInnerProps & {
   /** Subtitle under the title. */
   description?: string;
   /**
-   * Customer's own (billing / profile) address. When it differs from the job
-   * site, the dialog adds a "Customer address" tab so both are distinguished.
+   * Customer's own (profile) address. When given, the dialog shows two tabs:
+   * "Site location" (where the work is) and "Customer location".
    */
   billingAddress?: string;
   billingCoords?: RouteLocationMapInnerProps["customerCoords"];
@@ -63,11 +63,6 @@ export type RouteLocationMapDialogProps = RouteLocationMapInnerProps & {
 };
 
 type RouteTab = { key: string; label: string; kind: "site" | "customer" | "technician"; employeeId?: string; name?: string };
-
-function sameAddress(a?: string, b?: string) {
-  const norm = (v?: string) => String(v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return Boolean(norm(a)) && norm(a) === norm(b);
-}
 
 function ago(value: string | null) {
   if (!value) return "";
@@ -100,9 +95,9 @@ export function RouteLocationMapDialog({
   technicians,
 }: RouteLocationMapDialogProps) {
   const tabs = useMemo<RouteTab[]>(() => {
-    const list: RouteTab[] = [{ key: "site", label: "Job site", kind: "site" }];
-    if (billingAddress && !sameAddress(billingAddress, customerAddress)) {
-      list.push({ key: "customer", label: "Customer address", kind: "customer" });
+    const list: RouteTab[] = [{ key: "site", label: "Site location", kind: "site" }];
+    if (billingAddress) {
+      list.push({ key: "customer", label: "Customer location", kind: "customer" });
     }
     for (const tech of technicians ?? []) {
       if (!tech.employeeId) continue;
@@ -115,7 +110,7 @@ export function RouteLocationMapDialog({
       });
     }
     return list;
-  }, [billingAddress, customerAddress, technicians]);
+  }, [billingAddress, technicians]);
   const [tabKey, setTabKey] = useState("site");
   const tab = tabs.find((item) => item.key === tabKey) ?? tabs[0];
   const [locations, setLocations] = useState<Record<string, TechnicianLocation>>({});
@@ -123,7 +118,7 @@ export function RouteLocationMapDialog({
   const techIds = useMemo(() => (technicians ?? []).map((t) => t.employeeId).filter(Boolean).join(","), [technicians]);
   const locLoading = open && Boolean(techIds) && locFetchedFor !== techIds;
 
-  // Every time the dialog opens it starts on the job site.
+  // Every time the dialog opens it starts on the site location.
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
@@ -196,8 +191,8 @@ export function RouteLocationMapDialog({
           originName: tab.name || techLocation?.name || "Technician",
           originAddress: techLocation?.at ? `Shared ${ago(techLocation.at)}` : "",
           originCoords: techCoords,
-          destLabel: "Job Site (Destination)",
-          destName: resolvedCustomerName,
+          destLabel: "Site Location (Destination)",
+          destName: "Site location",
           destAddress: customerAddress,
           destCoords: customerCoords ?? null,
           serviceAddress,
@@ -208,7 +203,7 @@ export function RouteLocationMapDialog({
             originName: resolvedBusinessName,
             originAddress: resolvedBusinessAddress,
             originCoords: businessCoords ?? null,
-            destLabel: "Customer Address",
+            destLabel: "Customer Location",
             destName: resolvedCustomerName,
             destAddress: billingAddress || "",
             destCoords: billingCoords ?? null,
@@ -219,8 +214,8 @@ export function RouteLocationMapDialog({
             originName: resolvedBusinessName,
             originAddress: resolvedBusinessAddress,
             originCoords: businessCoords ?? null,
-            destLabel: "Job Site (Destination)",
-            destName: resolvedCustomerName,
+            destLabel: "Site Location (Destination)",
+            destName: "Site location",
             destAddress: customerAddress,
             destCoords: customerCoords ?? null,
             serviceAddress,

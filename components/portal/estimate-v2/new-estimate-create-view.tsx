@@ -277,19 +277,28 @@ export function NewEstimateCreateView() {
     if (!stillValid) setCategoryName("");
   }, [providerCategories, categoryName]);
 
-  async function addPropertyToCustomer() {
-    if (!selectedCustomer) return;
+  /** The provider typed a separate property but has not pressed "Add property" yet. */
+  const typedNewProperty =
+    !sameAsCustomerAddress &&
+    Boolean(newProperty.address.trim() || newProperty.city.trim() || newProperty.zip.trim());
+
+  async function addPropertyToCustomer({ fromContinue = false } = {}): Promise<boolean> {
+    if (!selectedCustomer) return false;
     if (!selectedCustomer.id || !/^[a-f\d]{24}$/i.test(selectedCustomer.id)) {
       toast.error("Customer is not saved on the server yet. Create the customer again.");
-      return;
+      return false;
     }
     const street = newProperty.address.trim();
     const city = newProperty.city.trim();
     const state = newProperty.state.trim();
     const zip = newProperty.zip.trim();
     if (!street || !city || !state || !zip) {
-      toast.error("Street, city, state, and ZIP are required for the property.");
-      return;
+      toast.error(
+        fromContinue
+          ? "Finish the new service location (street, city, state and ZIP), or clear it to use the selected property."
+          : "Street, city, state, and ZIP are required for the property.",
+      );
+      return false;
     }
     setSavingAddress(true);
     try {
@@ -324,11 +333,26 @@ export function NewEstimateCreateView() {
       setSameAsCustomerAddress(false);
       toast.success("Property added.");
       void dispatch(fetchCustomers({ force: true, limit: 100, page: 1, search: "" }));
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add property.");
+      return false;
     } finally {
       setSavingAddress(false);
     }
+  }
+
+  /**
+   * A separately typed service location wins over the highlighted saved one:
+   * save it to the customer, select it, then continue — so the estimate gets
+   * the address the provider entered, not the customer's primary address.
+   */
+  async function continueFromCustomerStep() {
+    if (typedNewProperty) {
+      const saved = await addPropertyToCustomer({ fromContinue: true });
+      if (!saved) return;
+    }
+    setStep("request");
   }
 
   async function handleCreateAndContinue(prepChoice: PrepChoice) {
@@ -435,7 +459,14 @@ export function NewEstimateCreateView() {
           <button
             key={id}
             type="button"
-            onClick={() => setStep(id)}
+            onClick={() => {
+              // Leaving step 1 with a typed service location saves it first.
+              if (step === "customer" && id !== "customer" && typedNewProperty) {
+                void addPropertyToCustomer({ fromContinue: true }).then((saved) => saved && setStep(id));
+                return;
+              }
+              setStep(id);
+            }}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition",
               step === id
@@ -588,10 +619,10 @@ export function NewEstimateCreateView() {
             <div className="mt-4 flex justify-end">
               <Button
                 size="sm"
-                disabled={!selectedCustomer || !selectedAddress}
-                onClick={() => setStep("request")}
+                disabled={!selectedCustomer || savingAddress || (!selectedAddress && !typedNewProperty)}
+                onClick={() => void continueFromCustomerStep()}
               >
-                Continue
+                {savingAddress ? "Saving…" : "Continue"}
               </Button>
             </div>
           </div>

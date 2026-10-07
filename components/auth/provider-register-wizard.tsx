@@ -53,6 +53,7 @@ import {
   type ProviderPaymentMethod,
 } from "@/lib/provider-preferences";
 import { cn } from "@/lib/utils";
+import { useCategoryJobs } from "@/components/portal/use-category-jobs";
 
 const STEPS = [
   "account",
@@ -181,6 +182,8 @@ function toggleValue(list: string[], value: string) {
 }
 
 export function ProviderRegisterWizard() {
+  // Jobs per category from the database, same list as Business Profile.
+  const { jobsFor } = useCategoryJobs();
   const router = useRouter();
   const emailCheckRequestId = useRef(0);
   const [step, setStep] = useState<Step>("account");
@@ -658,7 +661,7 @@ export function ProviderRegisterWizard() {
                         patch({
                           categoryIds: toggleValue(draft.categoryIds, category.id),
                           jobs: checked
-                            ? draft.jobs.filter((job) => !category.commonServices.includes(job))
+                            ? draft.jobs.filter((job) => !jobsFor(category.id, category.commonServices).includes(job))
                             : draft.jobs,
                         })
                       }
@@ -684,7 +687,7 @@ export function ProviderRegisterWizard() {
                       {category.name}
                     </p>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      {category.commonServices.map((job) => (
+                      {jobsFor(category.id, category.commonServices).map((job) => (
                         <label key={job} className="flex items-start gap-2 text-sm">
                           <Checkbox
                             checked={draft.jobs.includes(job)}

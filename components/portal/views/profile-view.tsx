@@ -80,6 +80,7 @@ import {
   type ServiceArea,
   type ServiceAreaNeighborhood,
 } from "@/store/serviceAreasSlice";
+import { useCategoryJobs } from "@/components/portal/use-category-jobs";
 
 /** Catalog + existing neighborhoods for independent coverage chips. */
 function coverageNeighborhoodPool(
@@ -370,6 +371,9 @@ export function ProfileView() {
     );
   }, [coverageAreas]);
 
+  // Jobs per category come from the database (all subcategories), not the static list.
+  const { jobsFor } = useCategoryJobs();
+
   const selectedCategories = useMemo(
     () =>
       categoryIds
@@ -530,9 +534,8 @@ export function ProfileView() {
     const checked = categoryIds.includes(categoryId);
     setCategoryIds((current) => toggleValue(current, categoryId));
     if (checked && category) {
-      setJobs((current) =>
-        current.filter((job) => !category.commonServices.includes(job)),
-      );
+      const categoryJobs = jobsFor(categoryId, category.commonServices);
+      setJobs((current) => current.filter((job) => !categoryJobs.includes(job)));
     }
   }
 
@@ -1439,19 +1442,18 @@ export function ProfileView() {
               {selectedCategories.length ? (
                 <div className="flex flex-col gap-5">
                   {selectedCategories.map((category) => {
-                    const selectedCount = category.commonServices.filter((job) =>
-                      jobs.includes(job),
-                    ).length;
+                    const categoryJobs = jobsFor(category.id, category.commonServices);
+                    const selectedCount = categoryJobs.filter((job) => jobs.includes(job)).length;
                     return (
                       <div key={category.id} className="flex flex-col gap-3">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="text-sm font-semibold">{category.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {selectedCount} of {category.commonServices.length} selected
+                            {selectedCount} of {categoryJobs.length} selected
                           </p>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2">
-                          {category.commonServices.map((job) => {
+                          {categoryJobs.map((job) => {
                             const checked = jobs.includes(job);
                             return (
                               <label

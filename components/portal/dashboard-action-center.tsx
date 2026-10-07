@@ -147,8 +147,17 @@ function ActionCard({ item }: { item: DashboardActionItem }) {
   );
 }
 
-/** Today's work — calm timeline card, no animation. */
-function TodayCard({ item }: { item: DashboardActionItem }) {
+/** Today's work — calm timeline card, no animation. Shared with the technician dashboard. */
+export function TodayWorkCard({
+  item,
+  cta = "Start",
+  highlight,
+}: {
+  item: DashboardActionItem;
+  cta?: string;
+  /** Technician dashboard: mark the running / next slot. */
+  highlight?: "now" | "next";
+}) {
   const Icon = KIND_ICON[item.kind] ?? CalendarClock;
   const heading = item.title || item.reference || item.actionLabel;
   const detail = subline(item);
@@ -157,7 +166,14 @@ function TodayCard({ item }: { item: DashboardActionItem }) {
     <li>
       <Link
         href={item.href}
-        className="group flex items-center gap-3 rounded-lg border border-[#003F7D]/15 bg-[#f6f9fc] px-3 py-2.5 transition-colors hover:border-[#003F7D]/35 hover:bg-[#eef3f9]"
+        className={cn(
+          "group flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+          highlight === "now"
+            ? "tech-today-card-now border-emerald-300 bg-emerald-50"
+            : highlight === "next"
+              ? "tech-today-card-next border-[#003F7D]/45 bg-[#eef3f9]"
+              : "border-[#003F7D]/15 bg-[#f6f9fc] hover:border-[#003F7D]/35 hover:bg-[#eef3f9]",
+        )}
       >
         <span className="flex w-16 shrink-0 flex-col items-center rounded-md bg-white py-1 text-center ring-1 ring-[#003F7D]/15">
           <span className="text-[11px] font-bold tabular-nums text-[#003F7D]">{item.time || "Today"}</span>
@@ -166,6 +182,16 @@ function TodayCard({ item }: { item: DashboardActionItem }) {
           <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.08em] text-[#003F7D]/70 uppercase">
             <Icon className="size-3" aria-hidden />
             {item.actionLabel}
+            {highlight ? (
+              <span
+                className={cn(
+                  "ml-1 rounded-full px-1.5 py-px text-[9px] font-bold tracking-wide text-white",
+                  highlight === "now" ? "action-urgent-blink bg-emerald-600" : "bg-[#003F7D]",
+                )}
+              >
+                {highlight === "now" ? "NOW" : "UP NEXT"}
+              </span>
+            ) : null}
           </p>
           <p className="truncate text-[13px] font-semibold text-foreground">{heading}</p>
           {detail ? <p className="truncate text-[11px] text-muted-foreground">{detail}</p> : null}
@@ -176,7 +202,7 @@ function TodayCard({ item }: { item: DashboardActionItem }) {
           </span>
         ) : null}
         <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-[#003F7D]/25 bg-white px-2.5 text-[11px] font-semibold text-[#003F7D] group-hover:border-[#003F7D]/50">
-          Start
+          {cta}
           <ArrowRight className="size-3" aria-hidden />
         </span>
       </Link>
@@ -184,7 +210,7 @@ function TodayCard({ item }: { item: DashboardActionItem }) {
   );
 }
 
-function Panel({
+export function ActionPanel({
   tone,
   icon,
   title,
@@ -272,12 +298,12 @@ export function DashboardActionCenter({
   if (showLoading) {
     return (
       <div className="grid gap-3 xl:grid-cols-12">
-        <Panel tone="urgent" icon={<AlertTriangle className="size-4" aria-hidden />} title="Important actions" className="xl:col-span-7">
+        <ActionPanel tone="urgent" icon={<AlertTriangle className="size-4" aria-hidden />} title="Important actions" className="xl:col-span-7">
           <LoadingCards />
-        </Panel>
-        <Panel tone="today" icon={<CalendarClock className="size-4" aria-hidden />} title="Today's work" className="xl:col-span-5">
+        </ActionPanel>
+        <ActionPanel tone="today" icon={<CalendarClock className="size-4" aria-hidden />} title="Today's work" className="xl:col-span-5">
           <LoadingCards />
-        </Panel>
+        </ActionPanel>
       </div>
     );
   }
@@ -302,7 +328,7 @@ export function DashboardActionCenter({
   return (
     <div className="grid gap-3 xl:grid-cols-12">
       {hasActions ? (
-        <Panel
+        <ActionPanel
           tone="urgent"
           icon={
             <span className="relative flex size-5 items-center justify-center">
@@ -362,11 +388,11 @@ export function DashboardActionCenter({
           ) : (
             <p className="px-4 py-6 text-center text-xs text-muted-foreground">Nothing in this filter.</p>
           )}
-        </Panel>
+        </ActionPanel>
       ) : null}
 
       {hasToday ? (
-        <Panel
+        <ActionPanel
           tone="today"
           icon={<CalendarClock className="size-4" aria-hidden />}
           title="Today's work"
@@ -389,10 +415,10 @@ export function DashboardActionCenter({
             )}
           >
             {today.map((item) => (
-              <TodayCard key={item.id} item={item} />
+              <TodayWorkCard key={item.id} item={item} />
             ))}
           </ul>
-        </Panel>
+        </ActionPanel>
       ) : null}
     </div>
   );

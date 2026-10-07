@@ -18,6 +18,7 @@ import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectio
 import {
   PROFILE_CATEGORIES_HREF,
   TemplatePreviewTable,
+  TemplatePricingNote,
 } from "@/components/portal/estimate-v2/estimate-template-dialogs";
 import {
   jobCostMix,
@@ -241,6 +242,7 @@ export function EstimateTemplatesView() {
         </div>
       ) : (
         <div className="space-y-3 rounded-2xl border border-[#94a3b8] bg-white p-4">
+          <TemplatePricingNote pricing={rows.find((row) => row.platform?.pricing)?.platform?.pricing} />
           {activeFilterCount ? (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-muted-foreground">Filtered by</span>
@@ -722,6 +724,7 @@ function TemplateViewBody({
             ? "Your customized version. New estimates for this subcategory load this one."
             : "The platform default, shown for comparison. Your estimates load the Customized version."}
       </p>
+      {template.source === "default" ? <TemplatePricingNote pricing={template.pricing} /> : null}
 
       <div className="grid gap-2 sm:grid-cols-5">
         {(

@@ -35,9 +35,21 @@ export type EstimateTemplate = {
   totals: EstimateTemplateTotals;
   /** Default built from the category fallback (no subcategory-specific default yet). */
   generic?: boolean;
+  /** Location factor applied to a platform default's national baseline rates. */
+  pricing?: EstimateTemplatePricing;
   /** The provider has a custom template for this subcategory. */
   hasCustom?: boolean;
   updatedAt?: string;
+};
+
+export type EstimateTemplatePricing = {
+  source: "city" | "state" | "national";
+  label: string;
+  labor: number;
+  material: number;
+  equipment: number;
+  city?: string;
+  state?: string;
 };
 
 export type EstimateTemplateCategory = {

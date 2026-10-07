@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FileStack, LayoutTemplate, Loader2, PencilLine } from "lucide-react";
+import { FileStack, MapPin, LayoutTemplate, Loader2, PencilLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +26,7 @@ import {
   type EstimateTemplate,
   type EstimateTemplateCategory,
   type EstimateTemplateItem,
+  type EstimateTemplatePricing,
 } from "@/lib/api/estimate-templates-client";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -172,6 +173,39 @@ function SectionRows({
         </tr>
       ))}
     </>
+  );
+}
+
+/** "Priced for Denver, CO · labour ×1.08 · material ×1.05" — how default rates were localized. */
+export function TemplatePricingNote({
+  pricing,
+  className,
+}: {
+  pricing?: EstimateTemplatePricing;
+  className?: string;
+}) {
+  if (!pricing) return null;
+  const factors = (
+    [
+      ["labour", pricing.labor],
+      ["material", pricing.material],
+      ["equipment", pricing.equipment],
+    ] as const
+  ).filter(([, value], index, all) => value !== 1 && !(index === 2 && value === all[1][1]));
+  return (
+    <p className={cn("flex flex-wrap items-center gap-1 text-xs text-muted-foreground", className)}>
+      <MapPin className="size-3 text-primary" />
+      {pricing.source === "national" ? (
+        <span>National baseline pricing — add your business city and state to localize rates.</span>
+      ) : (
+        <span>
+          Priced for <span className="font-medium text-slate-700">{pricing.label}</span>
+          {factors.length
+            ? ` · ${factors.map(([label, value]) => `${label} ×${value.toFixed(2)}`).join(" · ")}`
+            : " · same as national baseline"}
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -505,6 +539,7 @@ function StartDialogBody({
                 <p className="text-sm font-semibold">{preview.name}</p>
                 <TemplateSourceBadge source={preview.source} />
               </div>
+              {preview.source === "default" ? <TemplatePricingNote pricing={preview.pricing} /> : null}
               {preview.scopeOfWork ? (
                 <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
                   {preview.scopeOfWork}

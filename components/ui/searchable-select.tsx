@@ -9,6 +9,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type PointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDownIcon, X } from "lucide-react";
@@ -28,6 +29,15 @@ type CommonProps = {
   disabled?: boolean;
   className?: string;
   emptyMessage?: string;
+  /** Render at most this many matches (large lists, e.g. every city in a state). */
+  maxResults?: number;
+  /**
+   * Server-side search: called as the user types (and with "" on close).
+   * Options are then shown as given — no client-side filtering.
+   */
+  onSearchChange?: (query: string) => void;
+  /** Shown instead of the empty message while server results load. */
+  loading?: boolean;
 };
 
 export type SearchableSelectProps = CommonProps & {
@@ -148,6 +158,9 @@ export function SearchableSelect({
   disabled,
   className,
   emptyMessage = "No options found.",
+  maxResults,
+  onSearchChange,
+  loading = false,
 }: SearchableSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -155,6 +168,11 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
+  // Latest server-search callback, so closing the menu does not depend on its identity.
+  const searchChangeRef = useRef(onSearchChange);
+  useEffect(() => {
+    searchChangeRef.current = onSearchChange;
+  }, [onSearchChange]);
   const [mounted, setMounted] = useState(false);
   const menuStyle = useFixedMenuStyle(open, rootRef, [options.length, query]);
 
@@ -163,10 +181,15 @@ export function SearchableSelect({
     [options, value],
   );
 
-  const filtered = useMemo(
-    () => filterOptions(options, query),
-    [options, query],
+  const matches = useMemo(
+    () => (onSearchChange ? options : filterOptions(options, query)),
+    [options, query, onSearchChange],
   );
+  const filtered = useMemo(
+    () => (maxResults ? matches.slice(0, maxResults) : matches),
+    [matches, maxResults],
+  );
+  const hiddenCount = matches.length - filtered.length;
 
   useEffect(() => {
     setMounted(true);
@@ -203,6 +226,36 @@ export function SearchableSelect({
   function closeMenu() {
     setOpen(false);
     setQuery("");
+    searchChangeRef.current?.("");
+  }
+
+  function changeQuery(next: string) {
+    setQuery(next);
+    onSearchChange?.(next);
+  }
+
+  /**
+   * Opens only from a press on the field itself (or the keyboard) — a click on
+   * its <label> is a plain click event and is ignored.
+   */
+  function onTriggerPointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    openMenu();
+  }
+
+  function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") {
+      event.preventDefault();
+      openMenu();
+    }
+  }
+
+  /** Clicking the open field again closes it (unless the user is mid-search). */
+  function onOpenFieldPointerDown(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0 || query) return;
+    event.preventDefault();
+    closeMenu();
   }
 
   function openMenu() {
@@ -243,9 +296,14 @@ export function SearchableSelect({
         className="overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
         onWheel={(event) => event.stopPropagation()}
       >
+        {hiddenCount > 0 ? (
+          <div className="border-b border-input px-3 py-1.5 text-xs text-muted-foreground">
+            Showing {filtered.length} of {matches.length} — type to narrow the list.
+          </div>
+        ) : null}
         {filtered.length === 0 ? (
           <div className="px-3 py-2.5 text-sm text-muted-foreground">
-            {emptyMessage}
+            {loading ? "Searching…" : emptyMessage}
           </div>
         ) : (
           filtered.map((option, index) => {
@@ -293,13 +351,22 @@ export function SearchableSelect({
             aria-expanded={open}
             aria-controls={listId}
             className={cn(triggerClassName, "pr-9 select-text")}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => changeQuery(event.target.value)}
+            onPointerDown={onOpenFieldPointerDown}
             onKeyDown={onKeyDown}
           />
-          <ChevronDownIcon
-            className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 rotate-180 text-muted-foreground"
-            aria-hidden
-          />
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label="Close"
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              closeMenu();
+            }}
+          >
+            <ChevronDownIcon className="size-4 rotate-180" aria-hidden />
+          </button>
         </div>
       ) : (
         <button
@@ -308,7 +375,8 @@ export function SearchableSelect({
           disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={false}
-          onClick={openMenu}
+          onPointerDown={onTriggerPointerDown}
+          onKeyDown={onTriggerKeyDown}
           className={cn(
             triggerClassName,
             !selected && "text-muted-foreground",
@@ -324,6 +392,7 @@ export function SearchableSelect({
                 tabIndex={-1}
                 aria-label="Clear"
                 className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -353,6 +422,9 @@ export function SearchableMultiSelect({
   disabled,
   className,
   emptyMessage = "No options found.",
+  maxResults,
+  onSearchChange,
+  loading = false,
 }: SearchableMultiSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -360,6 +432,11 @@ export function SearchableMultiSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
+  // Latest server-search callback, so closing the menu does not depend on its identity.
+  const searchChangeRef = useRef(onSearchChange);
+  useEffect(() => {
+    searchChangeRef.current = onSearchChange;
+  }, [onSearchChange]);
   const [mounted, setMounted] = useState(false);
   const menuStyle = useFixedMenuStyle(open, rootRef, [options.length, query, value.length]);
 
@@ -368,10 +445,15 @@ export function SearchableMultiSelect({
     [options, value],
   );
 
-  const filtered = useMemo(
-    () => filterOptions(options, query),
-    [options, query],
+  const matches = useMemo(
+    () => (onSearchChange ? options : filterOptions(options, query)),
+    [options, query, onSearchChange],
   );
+  const filtered = useMemo(
+    () => (maxResults ? matches.slice(0, maxResults) : matches),
+    [matches, maxResults],
+  );
+  const hiddenCount = matches.length - filtered.length;
 
   useEffect(() => {
     setMounted(true);
@@ -408,6 +490,36 @@ export function SearchableMultiSelect({
   function closeMenu() {
     setOpen(false);
     setQuery("");
+    searchChangeRef.current?.("");
+  }
+
+  function changeQuery(next: string) {
+    setQuery(next);
+    onSearchChange?.(next);
+  }
+
+  /**
+   * Opens only from a press on the field itself (or the keyboard) — a click on
+   * its <label> is a plain click event and is ignored.
+   */
+  function onTriggerPointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    openMenu();
+  }
+
+  function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") {
+      event.preventDefault();
+      openMenu();
+    }
+  }
+
+  /** Clicking the open field again closes it (unless the user is mid-search). */
+  function onOpenFieldPointerDown(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0 || query) return;
+    event.preventDefault();
+    closeMenu();
   }
 
   function openMenu() {
@@ -455,9 +567,14 @@ export function SearchableMultiSelect({
         className="overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
         onWheel={(event) => event.stopPropagation()}
       >
+        {hiddenCount > 0 ? (
+          <div className="border-b border-input px-3 py-1.5 text-xs text-muted-foreground">
+            Showing {filtered.length} of {matches.length} — type to narrow the list.
+          </div>
+        ) : null}
         {filtered.length === 0 ? (
           <div className="px-3 py-2.5 text-sm text-muted-foreground">
-            {emptyMessage}
+            {loading ? "Searching…" : emptyMessage}
           </div>
         ) : (
           filtered.map((option, index) => {
@@ -540,13 +657,22 @@ export function SearchableMultiSelect({
             aria-expanded={open}
             aria-controls={listId}
             className="h-7 min-w-28 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => changeQuery(event.target.value)}
+            onPointerDown={onOpenFieldPointerDown}
             onKeyDown={onKeyDown}
           />
-          <ChevronDownIcon
-            className="size-4 shrink-0 rotate-180 text-muted-foreground"
-            aria-hidden
-          />
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label="Close"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              closeMenu();
+            }}
+          >
+            <ChevronDownIcon className="size-4 rotate-180" aria-hidden />
+          </button>
         </div>
       ) : (
         <button
@@ -555,7 +681,8 @@ export function SearchableMultiSelect({
           disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={false}
-          onClick={openMenu}
+          onPointerDown={onTriggerPointerDown}
+          onKeyDown={onTriggerKeyDown}
           className={cn(
             triggerClassName,
             !selected.length && "text-muted-foreground",

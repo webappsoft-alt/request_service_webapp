@@ -233,6 +233,9 @@ export const providerCrmApi = {
 export const publicApi = {
   /** GET active categories; use `only_parent` / `parent_category_id` */
   categories: "public/categories",
+  /** Every US city / town (50 states + DC) and its suburbs + ZIP areas. */
+  usCities: "public/us-cities",
+  usCityAreas: "public/us-cities/areas",
   /** GET public professionals directory (Find a Professional) */
   professionals: "public/professionals",
   /** GET one public professional by slug */

@@ -133,9 +133,21 @@ export function TimeRangeFilter({
   );
 }
 
-export function TimeStat({ label, value, hint, accent }: { label: string; value: ReactNode; hint?: string; accent?: boolean }) {
+export function TimeStat({
+  label,
+  value,
+  hint,
+  accent,
+  className,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  accent?: boolean;
+  className?: string;
+}) {
   return (
-    <div className={cn("rounded-md border border-border-soft bg-card px-3 py-2.5", accent && "border-[#003F7D]/25 bg-[#e8eef5]")}>
+    <div className={cn("rounded-md border border-border-soft bg-card px-3 py-2.5", className, accent && "border-[#003F7D]/25 bg-[#e8eef5]")}>
       <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-0.5 text-lg font-semibold text-foreground tabular-nums">{value}</p>
       {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}

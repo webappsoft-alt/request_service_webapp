@@ -294,6 +294,11 @@ export async function deleteEstimateV2Opportunity(id: string) {
   return unwrapData<{ id: string; number?: string; deleted: boolean }>(response);
 }
 
+/** Browser offset so the server files the visit on the user's local calendar day. */
+function withTzOffset<T extends { scheduledAt?: string | null }>(input: T) {
+  return input.scheduledAt ? { ...input, tzOffsetMinutes: new Date().getTimezoneOffset() } : input;
+}
+
 export async function createEstimateV2SiteAssessment(
   opportunityId: string,
   input: {
@@ -313,7 +318,7 @@ export async function createEstimateV2SiteAssessment(
 ) {
   const response = await postData(
     providerCrmApi.estimateV2OpportunityAssessments(opportunityId),
-    input,
+    withTzOffset(input),
   );
   bustEstimateV2Cache();
   return unwrapData<EstimateV2SiteAssessment>(response);
@@ -329,7 +334,7 @@ export async function updateEstimateV2SiteAssessment(
 ) {
   const response = await patchData(
     providerCrmApi.estimateV2Assessment(assessmentId),
-    patch,
+    withTzOffset(patch),
   );
   bustEstimateV2Cache();
   return unwrapData<EstimateV2SiteAssessment>(response);

@@ -459,35 +459,62 @@ export function JobCosting({
         onChange={changeLines}
         locked={locked}
       />
-      <dl className="mt-4 ml-auto w-full max-w-sm overflow-hidden rounded-lg border border-border-soft bg-card text-sm">
-        <div className="grid grid-cols-2 gap-x-4 px-3 py-2">
-          <dt className="text-muted-foreground">Labour</dt>
-          <dd className="text-right tabular-nums">{formatMoney(mix.labor)}</dd>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
-          <dt className="text-muted-foreground">Material</dt>
-          <dd className="text-right tabular-nums">{formatMoney(mix.materials)}</dd>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
-          <dt className="text-muted-foreground">Subtotal</dt>
-          <dd className="text-right tabular-nums">{formatMoney(sheet.subtotal)}</dd>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
-          <dt className="text-muted-foreground">
-            Tax ({formatTaxRatePercent(taxRatePercent)}%)
-          </dt>
-          <dd className="text-right tabular-nums">{formatMoney(sheet.tax)}</dd>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft bg-[#f7f8fa] px-3 py-2.5">
-          <dt className="font-semibold">
-            {noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}
-          </dt>
-          <dd className="text-right font-semibold tabular-nums text-primary">
-            {formatMoney(sheet.total)}
-          </dd>
-        </div>
-      </dl>
+      <LineItemsTotals
+        labor={mix.labor}
+        materials={mix.materials}
+        subtotal={sheet.subtotal}
+        tax={sheet.tax}
+        taxLabel={`Tax (${formatTaxRatePercent(taxRatePercent)}%)`}
+        total={sheet.total}
+        noun={noun}
+      />
     </div>
+  );
+}
+
+/** Labour / Material / Subtotal / Tax / Total box under every line-items table. */
+export function LineItemsTotals({
+  labor,
+  materials,
+  subtotal,
+  tax,
+  taxLabel = "Tax",
+  total,
+  noun = "job",
+}: {
+  labor: number;
+  materials: number;
+  subtotal: number;
+  tax: number;
+  taxLabel?: string;
+  total: number;
+  noun?: CostingNoun;
+}) {
+  return (
+    <dl className="mt-4 ml-auto w-full max-w-sm overflow-hidden rounded-lg border border-border-soft bg-card text-sm">
+      <div className="grid grid-cols-2 gap-x-4 px-3 py-2">
+        <dt className="text-muted-foreground">Labour</dt>
+        <dd className="text-right tabular-nums">{formatMoney(labor)}</dd>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
+        <dt className="text-muted-foreground">Material</dt>
+        <dd className="text-right tabular-nums">{formatMoney(materials)}</dd>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
+        <dt className="text-muted-foreground">Subtotal</dt>
+        <dd className="text-right tabular-nums">{formatMoney(subtotal)}</dd>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft px-3 py-2">
+        <dt className="text-muted-foreground">{taxLabel}</dt>
+        <dd className="text-right tabular-nums">{formatMoney(tax)}</dd>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 border-t border-border-soft bg-[#f7f8fa] px-3 py-2.5">
+        <dt className="font-semibold">
+          {noun === "estimate" ? "Quote total" : noun === "invoice" ? "Invoice total" : "Job total"}
+        </dt>
+        <dd className="text-right font-semibold tabular-nums text-primary">{formatMoney(total)}</dd>
+      </div>
+    </dl>
   );
 }
 

@@ -37,7 +37,7 @@ export function TechnicianProfileView() {
 
   if (!data) {
     return loading || !error ? (
-      <div className="rounded-md border border-border-soft bg-card">
+      <div className="rounded-md border border-input bg-card">
         <CenteredSpinner label="Loading profile" className="min-h-[22rem]" />
       </div>
     ) : (

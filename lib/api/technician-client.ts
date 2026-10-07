@@ -54,6 +54,7 @@ export type TechLineItem = {
   description: string;
   kind: string;
   quantity: number;
+  unit?: string;
   unitPrice: number;
   total: number;
   section?: string;
@@ -240,6 +241,7 @@ function mapItems(value: unknown): TechLineItem[] {
       description: String(row.description || ""),
       kind: String(row.kind || "labor"),
       quantity: Number(row.quantity) || 0,
+      unit: row.unit ? String(row.unit) : undefined,
       unitPrice: Number(row.unitPrice) || 0,
       total: Number(row.total) || 0,
       section: row.section ? String(row.section) : undefined,
@@ -497,12 +499,23 @@ function kindsParam(kinds?: ("job" | "estimate")[]) {
   return kinds && kinds.length === 1 ? kinds.join(",") : undefined;
 }
 
-export async function listTechnicianTimeEntries(query: TimeEntriesQuery): Promise<TimeEntriesPage> {
+export async function listTechnicianTimeEntries(
+  query: TimeEntriesQuery & { jobId?: string; estimateId?: string },
+): Promise<TimeEntriesPage> {
   const page = query.page ?? 1;
   const limit = query.limit ?? 20;
   const response = await getData(
     technicianApi.timeEntries,
-    { page, limit, from: query.from, to: query.to, kinds: kindsParam(query.kinds), tz: browserTimeZone() },
+    {
+      page,
+      limit,
+      from: query.from,
+      to: query.to,
+      kinds: kindsParam(query.kinds),
+      jobId: query.jobId,
+      estimateId: query.estimateId,
+      tz: browserTimeZone(),
+    },
     quiet,
   );
   return mapEntriesPage(response, page, limit);
@@ -732,8 +745,16 @@ function mapLedger(value: unknown): TechnicianLedger {
   };
 }
 
-export async function getTechnicianLedger(query: LedgerHistoryQuery = {}): Promise<TechnicianLedger> {
-  return mapLedger(await getData(technicianApi.payments, historyParams(query), quiet));
+export async function getTechnicianLedger(
+  query: LedgerHistoryQuery & { jobId?: string; estimateId?: string } = {},
+): Promise<TechnicianLedger> {
+  return mapLedger(
+    await getData(
+      technicianApi.payments,
+      { ...historyParams(query), jobId: query.jobId, estimateId: query.estimateId },
+      quiet,
+    ),
+  );
 }
 
 export async function getProviderLedger(

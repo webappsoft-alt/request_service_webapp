@@ -53,6 +53,7 @@ export type LedgerQuery = {
   employeeId?: string;
   employeeIds?: string[];
   jobId?: string;
+  estimateId?: string;
   paymentsPage?: number;
   paymentsLimit?: number;
   kinds?: ("job" | "estimate")[];
@@ -112,6 +113,8 @@ export function timeFilterKey(query: ProviderTimeQuery) {
     query.limit || 20,
     (query.kinds || []).join(","),
     (query.employeeIds || []).join(","),
+    query.jobId || "",
+    query.estimateId || "",
   ].join("|");
 }
 
@@ -185,6 +188,7 @@ function ledgerKey(query: LedgerQuery) {
     query.employeeId || "",
     (query.employeeIds || []).join(","),
     query.jobId || "",
+    query.estimateId || "",
     query.paymentsPage || 1,
     query.paymentsLimit || 10,
     (query.kinds || []).join(","),
@@ -201,7 +205,7 @@ export const fetchLedger = createAsyncThunk<
     try {
       const history = { paymentsPage: query.paymentsPage, paymentsLimit: query.paymentsLimit, kinds: query.kinds };
       const data = query.technician
-        ? await getTechnicianLedger(history)
+        ? await getTechnicianLedger({ ...history, jobId: query.jobId, estimateId: query.estimateId })
         : await getProviderLedger({ employeeId: query.employeeId, employeeIds: query.employeeIds, jobId: query.jobId, ...history });
       return { scopeKey, filterKey: ledgerKey(query), data };
     } catch (error) {

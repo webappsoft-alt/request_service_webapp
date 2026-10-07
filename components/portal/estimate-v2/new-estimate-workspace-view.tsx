@@ -1096,10 +1096,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           <button
             type="button"
             onClick={() => setMapOpen(true)}
-            className="inline-flex items-center gap-1 rounded-md border border-primary/25 bg-primary/5 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+            className="group inline-flex items-center gap-1 text-xs font-bold text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
             title="View route and distance on map"
           >
-            <MapPin className="size-3 text-primary" />
+            <MapPin className="size-3.5 group-hover:animate-pulse" />
             View on map
           </button>
         </div>
@@ -1149,25 +1149,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             <p className="mt-2.5 text-[15px] font-semibold tracking-tight text-slate-900">
               {customerNameFromOpportunity(opportunity)}
             </p>
-            <button
-              type="button"
-              onClick={() => setMapOpen(true)}
-              className="mt-1 flex items-start gap-1.5 text-left text-sm leading-relaxed font-medium text-primary hover:text-primary/80 cursor-pointer"
-              title="Click to view on map"
-            >
-              <MapPin className="size-4 shrink-0 mt-0.5 text-primary" />
-              <span>{propertyLine(opportunity)}</span>
-            </button>
-            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+            <p className="mt-1 text-sm leading-relaxed text-slate-700">
+              <span>{propertyLine(opportunity)}</span>{" "}
               <button
                 type="button"
                 onClick={() => setMapOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                className="group inline-flex items-center gap-1 align-baseline text-xs font-bold text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
+                title="View route and distance on map"
               >
-                <MapPin className="size-3 text-primary" />
+                <MapPin className="size-3.5 shrink-0 self-center group-hover:animate-pulse" />
                 View on map
               </button>
-            </div>
+            </p>
           </div>
 
           <div className={RAIL_CARD}>

@@ -131,11 +131,12 @@ export function TimeTrackingPanel({
       employeeId,
       employeeIds: employeeId || !employeeKey ? undefined : employeeKey.split(","),
       jobId,
+      estimateId,
       paymentsPage,
       paymentsLimit: PAGE_SIZE,
       kinds: kindsKey.split(",") as RecordKind[],
     }),
-    [technician, employeeId, employeeKey, jobId, paymentsPage, kindsKey],
+    [technician, employeeId, employeeKey, jobId, estimateId, paymentsPage, kindsKey],
   );
 
   useEffect(() => {

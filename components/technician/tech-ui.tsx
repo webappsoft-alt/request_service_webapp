@@ -230,7 +230,7 @@ export function ClockControl({
   }
 
   return (
-    <div className={cn("rounded-md border border-border-soft bg-card p-3", runningHere && "border-emerald-300 bg-emerald-50/60", className)}>
+    <div className={cn("rounded-md border border-input bg-card p-3", runningHere && "border-emerald-300 bg-emerald-50/60", className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Time on this {target.kind}</p>
@@ -296,7 +296,7 @@ export function ClockControl({
 
 export function DetailCard({ title, children, action, className }: { title: string; children: React.ReactNode; action?: React.ReactNode; className?: string }) {
   return (
-    <section className={cn("rounded-md border border-border-soft bg-card", className)}>
+    <section className={cn("rounded-md border border-input bg-card", className)}>
       <div className="flex items-center justify-between gap-2 border-b border-border-soft px-4 py-2.5">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         {action}

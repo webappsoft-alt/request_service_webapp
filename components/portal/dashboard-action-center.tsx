@@ -139,7 +139,7 @@ function ActionCard({ item }: { item: DashboardActionItem }) {
             "bg-[#003F7D] text-white group-hover:bg-[#002f5e]",
           )}
         >
-          {urgent ? "Act now" : "Open"}
+          {urgent ? "View" : "Open"}
           <ArrowRight className="size-3" aria-hidden />
         </span>
       </Link>

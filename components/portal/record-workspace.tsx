@@ -89,6 +89,7 @@ export function RecordWorkspace({
   badge,
   metaBar,
   notice,
+  trackOpen = true,
   children,
 }: {
   href: string;
@@ -104,6 +105,8 @@ export function RecordWorkspace({
   /** Persistent info bar (Customer / Site / Total / Status), shown under the title row. */
   metaBar?: ReactNode;
   notice?: ReactNode;
+  /** Add this record to the Pro open-records tab strip (off in the technician portal). */
+  trackOpen?: boolean;
   children: (tab: string) => ReactNode;
 }) {
   const router = useRouter();
@@ -119,8 +122,8 @@ export function RecordWorkspace({
   const subnavNode = hasSubnav && subnav ? subnav(tab) : null;
 
   useEffect(() => {
-    openRecord({ href, label, kind });
-  }, [href, kind, label, openRecord]);
+    if (trackOpen) openRecord({ href, label, kind });
+  }, [href, kind, label, openRecord, trackOpen]);
 
   function setTab(next: string) {
     const params = new URLSearchParams(searchParams.toString());

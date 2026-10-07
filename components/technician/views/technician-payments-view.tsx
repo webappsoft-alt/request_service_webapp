@@ -56,7 +56,7 @@ export function TechnicianPaymentsView() {
       ) : null}
       <div className="grid gap-2 sm:grid-cols-3">
         {tiles.map((tile) => (
-          <div key={tile.label} className="rounded-lg border border-border-soft bg-card px-4 py-3">
+          <div key={tile.label} className="rounded-lg border border-input bg-card px-4 py-3">
             <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{tile.label}</p>
             <p className={cn("mt-0.5 text-2xl font-semibold tabular-nums", tile.tone)}>{tile.value}</p>
             <p className="text-xs text-muted-foreground">{tile.hint}</p>

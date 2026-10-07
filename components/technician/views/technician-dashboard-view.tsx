@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { formatClock } from "@/lib/data/portal";
 import { formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { technicianPaths } from "@/lib/technician-paths";
 import { formatDuration, formatHours } from "@/lib/time-tracking";
 import { selectAuthUser } from "@/store/authSlice";
@@ -55,7 +56,7 @@ export function TechnicianDashboardView() {
 
   if (!data && loading) {
     return (
-      <div className="rounded-md border border-border-soft bg-card">
+      <div className="rounded-md border border-input bg-card">
         <CenteredSpinner label="Loading your day" className="min-h-[22rem]" />
       </div>
     );
@@ -70,6 +71,12 @@ export function TechnicianDashboardView() {
   }
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nextRowId =
+    [...data.todaySchedule]
+      .filter((row) => row.startMinutes > nowMinutes)
+      .sort((a, b) => a.startMinutes - b.startMinutes)[0]?.id ?? null;
 
   return (
     <PortalPage
@@ -106,16 +113,16 @@ export function TechnicianDashboardView() {
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
         <TimeStat label="Hours today" value={formatHours(data.time.today.totalSeconds)} hint={formatDuration(data.time.today.totalSeconds)} accent />
-        <TimeStat label="This week" value={formatHours(data.time.week.totalSeconds)} hint={`${data.time.week.sessions} sessions`} />
-        <TimeStat label="This month" value={formatHours(data.time.month.totalSeconds)} hint={`${formatMoney(data.time.month.totalPay)} earned`} />
-        <TimeStat label="Open jobs" value={data.counts.openJobs} hint={`${data.counts.completedJobs} completed`} />
-        <TimeStat label="Estimates" value={data.counts.estimates} hint="Assigned visits" />
-        <TimeStat label="Visits today" value={data.counts.todayVisits} hint={`Pay rate ${formatMoney(data.payRate)}/hr`} />
+        <TimeStat className="border-input" label="This week" value={formatHours(data.time.week.totalSeconds)} hint={`${data.time.week.sessions} sessions`} />
+        <TimeStat className="border-input" label="This month" value={formatHours(data.time.month.totalSeconds)} hint={`${formatMoney(data.time.month.totalPay)} earned`} />
+        <TimeStat className="border-input" label="Open jobs" value={data.counts.openJobs} hint={`${data.counts.completedJobs} completed`} />
+        <TimeStat className="border-input" label="Estimates" value={data.counts.estimates} hint="Assigned visits" />
+        <TimeStat className="border-input" label="Visits today" value={data.counts.todayVisits} hint={`Pay rate ${formatMoney(data.payRate)}/hr`} />
       </div>
 
       <Link
         href={technicianPaths.payments}
-        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-border-soft bg-card px-4 py-3 hover:bg-muted/40"
+        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-input bg-card px-4 py-3 hover:bg-muted/40"
       >
         <span className="flex items-center gap-2 text-sm font-semibold">
           <Wallet className="size-4 text-muted-foreground" aria-hidden /> Payments
@@ -141,12 +148,15 @@ export function TechnicianDashboardView() {
 
       <div className="grid gap-3 lg:grid-cols-3">
         {/* Today's schedule */}
-        <section className="rounded-md border border-border-soft bg-card lg:col-span-2">
-          <header className="flex items-center justify-between border-b border-border-soft px-4 py-2.5">
+        <section className="overflow-hidden rounded-md border border-[#003F7D]/40 bg-card shadow-[0_1px_3px_rgba(0,63,125,0.12)] lg:col-span-2">
+          <header className="flex items-center justify-between bg-[#003F7D] px-4 py-2.5 text-white">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <CalendarDays className="size-4 text-muted-foreground" aria-hidden /> Today&apos;s schedule
+              <CalendarDays className="size-4" aria-hidden /> Today&apos;s schedule
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-semibold text-[#003F7D] tabular-nums">
+                {data.todaySchedule.length}
+              </span>
             </h2>
-            <Link href={technicianPaths.schedule} className="text-xs font-medium text-primary hover:underline">
+            <Link href={technicianPaths.schedule} className="text-xs font-medium text-white/90 hover:text-white hover:underline">
               Full schedule
             </Link>
           </header>
@@ -159,15 +169,44 @@ export function TechnicianDashboardView() {
                     : row.kind === "estimate" && row.recordId
                       ? technicianPaths.estimate(row.recordId)
                       : technicianPaths.schedule;
+                const state =
+                  row.startMinutes <= nowMinutes && nowMinutes < row.endMinutes
+                    ? "now"
+                    : row.id === nextRowId
+                      ? "next"
+                      : row.endMinutes <= nowMinutes
+                        ? "past"
+                        : "later";
                 return (
-                  <Link key={row.id} href={href} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50">
+                  <Link
+                    key={row.id}
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-3 border-l-4 px-4 py-2.5 transition-colors",
+                      state === "now" && "border-l-emerald-500 bg-emerald-50 hover:bg-emerald-100/70",
+                      state === "next" && "border-l-[#003F7D] bg-[#e8eef5] hover:bg-[#dce6f1]",
+                      state === "past" && "border-l-transparent opacity-60 hover:bg-muted/50",
+                      state === "later" && "border-l-transparent hover:bg-muted/50",
+                    )}
+                  >
                     <div className="w-24 shrink-0 text-xs font-semibold text-[#003F7D] tabular-nums">
                       {formatClock(row.startMinutes)}–{formatClock(row.endMinutes)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{row.title}</p>
+                      <p className="flex items-center gap-2 text-sm font-semibold">
+                        <span className="truncate">{row.title}</span>
+                        {state === "now" ? (
+                          <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white uppercase">
+                            Now
+                          </span>
+                        ) : state === "next" ? (
+                          <span className="shrink-0 rounded-full bg-[#003F7D] px-2 py-0.5 text-[10px] font-semibold text-white uppercase">
+                            Up next
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {row.kind === "estimate" ? "Estimate visit" : "Job"} · {customerName(row.customer)}
+                        {row.kind === "estimate" || row.kind === "visit" ? "Estimate visit" : "Job"} · {customerName(row.customer)}
                       </p>
                     </div>
                     <ArrowRight className="size-4 text-muted-foreground" aria-hidden />
@@ -181,7 +220,7 @@ export function TechnicianDashboardView() {
         </section>
 
         {/* Actions / notifications */}
-        <section className="rounded-md border border-border-soft bg-card">
+        <section className="rounded-md border border-input bg-card">
           <header className="flex items-center gap-2 border-b border-border-soft px-4 py-2.5">
             <Bell className="size-4 text-muted-foreground" aria-hidden />
             <h2 className="text-sm font-semibold">Needs your attention</h2>
@@ -189,11 +228,20 @@ export function TechnicianDashboardView() {
           <ul className="space-y-2 p-4 text-sm">
             <li className="flex items-center justify-between gap-2">
               <span>Unread notifications</span>
-              <span className="font-semibold tabular-nums">{unread}</span>
+              <span className={cn("font-semibold tabular-nums", unread > 0 && "rounded-full bg-amber-100 px-2 text-amber-800")}>
+                {unread}
+              </span>
             </li>
             <li className="flex items-center justify-between gap-2">
               <span>Jobs scheduled today</span>
-              <span className="font-semibold tabular-nums">{data.todayJobs.length}</span>
+              <span
+                className={cn(
+                  "font-semibold tabular-nums",
+                  data.todayJobs.length > 0 && "rounded-full bg-[#e8eef5] px-2 text-[#003F7D]",
+                )}
+              >
+                {data.todayJobs.length}
+              </span>
             </li>
             <li className="flex items-center justify-between gap-2">
               <span>Running timer</span>
@@ -217,7 +265,7 @@ export function TechnicianDashboardView() {
         <JobList title="Assigned jobs" icon={<Briefcase className="size-4 text-muted-foreground" aria-hidden />} jobs={data.upcomingJobs} empty="No open jobs assigned to you." viewAll />
       </div>
 
-      <section className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-soft bg-card px-4 py-3">
+      <section className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-input bg-card px-4 py-3">
         <p className="flex items-center gap-2 text-sm">
           <FileText className="size-4 text-muted-foreground" aria-hidden />
           You have <span className="font-semibold">{data.counts.estimates}</span> estimate visit{data.counts.estimates === 1 ? "" : "s"} assigned.
@@ -244,7 +292,7 @@ function JobList({
   viewAll?: boolean;
 }) {
   return (
-    <section className="rounded-md border border-border-soft bg-card">
+    <section className="rounded-md border border-input bg-card">
       <header className="flex items-center justify-between border-b border-border-soft px-4 py-2.5">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           {icon} {title}

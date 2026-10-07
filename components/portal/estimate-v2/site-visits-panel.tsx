@@ -46,6 +46,7 @@ import { WorkItemsEditor } from "@/components/portal/estimate-v2/work-items-edit
 import { employeeName, type PortalEmployee } from "@/lib/data/portal";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { DateTimeField } from "@/components/ui/date-time-field";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
 import { fetchTeam } from "@/store/teamSlice";
@@ -103,6 +104,11 @@ function visitTypeLabel(visit: EstimateV2SiteAssessment) {
 function statusLabel(status: string) {
   return status.replace(/_/g, " ");
 }
+
+/** Shared look for every field in the schedule dialog — same height, stroke and fill. */
+const DIALOG_FIELD = "h-10 w-full rounded-lg border-input bg-white px-3 text-sm shadow-none";
+/** Radix Select cannot use "" as an item value. */
+const UNASSIGNED = "__unassigned";
 
 function toLocalInput(value?: string | null) {
   if (!value) return "";
@@ -833,7 +839,7 @@ export function SiteVisitsPanel({
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <Label>Assigned technician</Label>
+                <Label htmlFor="visit-tech">Assigned technician</Label>
                 {showTechnicianDropdown ? (
                   <button
                     type="button"
@@ -855,30 +861,33 @@ export function SiteVisitsPanel({
                   No technicians yet — create one
                 </button>
               ) : (
-                <select
-                  className="flex h-10 w-full rounded-lg border border-[#b4becc] bg-[#fafbfc] px-3 text-sm"
-                  value={employeeId}
+                <Select
+                  value={employeeId || UNASSIGNED}
                   disabled={!canEditCapture || saving}
-                  onChange={(e) => setEmployeeId(e.target.value)}
+                  onValueChange={(value) => setEmployeeId(value === UNASSIGNED ? "" : value)}
                 >
-                  <option value="">Unassigned</option>
-                  {assignableEmployees.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {employeeName(item)}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="visit-tech" className={cn(DIALOG_FIELD, "bg-[#fafbfc]")}>
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                    {assignableEmployees.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {employeeName(item)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="visit-when">Date / time</Label>
-              <Input
+              <DateTimeField
                 id="visit-when"
-                type="datetime-local"
                 value={scheduledAt}
                 disabled={!canEditCapture || saving}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className="bg-[#fafbfc]"
+                onChange={setScheduledAt}
+                fieldClassName={cn(DIALOG_FIELD, "bg-[#fafbfc]")}
               />
               <p className="text-[11px] leading-relaxed text-slate-400">
                 Use Reschedule to change time with a reason and keep history on this visit.
@@ -1175,7 +1184,7 @@ export function SiteVisitsPanel({
       ) : null}
 
       <Dialog open={followUpOpen} onOpenChange={setFollowUpOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
               {sortedVisits.length ? "Schedule follow-up visit" : "Schedule site visit"}
@@ -1185,14 +1194,14 @@ export function SiteVisitsPanel({
               estimate. Photos and measurements stay on each visit separately.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 py-2">
+          <div className="grid gap-4 py-2 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Visit type</Label>
+              <Label htmlFor="follow-up-type">Visit type</Label>
               <Select
                 value={followUpType}
                 onValueChange={(value) => setFollowUpType(value as VisitType)}
               >
-                <SelectTrigger>
+                <SelectTrigger id="follow-up-type" className={DIALOG_FIELD}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1205,16 +1214,8 @@ export function SiteVisitsPanel({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Date / time</Label>
-              <Input
-                type="datetime-local"
-                value={followUpAt}
-                onChange={(e) => setFollowUpAt(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <Label>Technician</Label>
+                <Label htmlFor="follow-up-tech">Technician</Label>
                 {showTechnicianDropdown ? (
                   <button
                     type="button"
@@ -1231,32 +1232,47 @@ export function SiteVisitsPanel({
                   type="button"
                   disabled={saving}
                   onClick={() => openCreateEmployee("followUp")}
-                  className="flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-[#94a3b8] bg-[#fafbfc] px-3 text-sm font-medium text-primary transition hover:border-primary/50 hover:bg-primary/[0.04] disabled:opacity-60"
+                  className="flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-input bg-white px-3 text-sm font-medium text-primary transition hover:border-primary/50 hover:bg-primary/[0.04] disabled:opacity-60"
                 >
                   No technicians yet — create one
                 </button>
               ) : (
-                <select
-                  className="flex h-10 w-full rounded-lg border border-[#b4becc] bg-[#fafbfc] px-3 text-sm"
-                  value={followUpEmployeeId}
-                  onChange={(e) => setFollowUpEmployeeId(e.target.value)}
+                <Select
+                  value={followUpEmployeeId || UNASSIGNED}
+                  onValueChange={(value) => setFollowUpEmployeeId(value === UNASSIGNED ? "" : value)}
                 >
-                  <option value="">Unassigned</option>
-                  {assignableEmployees.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {employeeName(item)}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="follow-up-tech" className={DIALOG_FIELD}>
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                    {assignableEmployees.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {employeeName(item)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label>Instructions</Label>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="follow-up-at">Date / time</Label>
+              <DateTimeField
+                id="follow-up-at"
+                value={followUpAt}
+                onChange={setFollowUpAt}
+                fieldClassName={DIALOG_FIELD}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="follow-up-instructions">Instructions</Label>
               <Textarea
-                rows={2}
+                id="follow-up-instructions"
+                rows={3}
                 value={followUpInstructions}
                 onChange={(e) => setFollowUpInstructions(e.target.value)}
                 placeholder="What should this visit accomplish?"
+                className="min-h-20 w-full rounded-lg border-input bg-white text-sm"
               />
             </div>
           </div>
@@ -1282,11 +1298,12 @@ export function SiteVisitsPanel({
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="space-y-1.5">
-              <Label>New date / time</Label>
-              <Input
-                type="datetime-local"
+              <Label htmlFor="reschedule-at">New date / time</Label>
+              <DateTimeField
+                id="reschedule-at"
                 value={rescheduleAt}
-                onChange={(e) => setRescheduleAt(e.target.value)}
+                onChange={setRescheduleAt}
+                fieldClassName={DIALOG_FIELD}
               />
             </div>
             <div className="space-y-1.5">

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Clock3, Mail, Phone } from "lucide-react";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { RecordWorkspace } from "@/components/portal/record-workspace";
 import {
   ClockControl,
   DetailCard,
@@ -15,9 +16,9 @@ import {
   LocationBlock,
   customerName,
 } from "@/components/technician/tech-ui";
-import { LineItemsTable } from "@/components/technician/views/technician-job-detail-view";
+import { MetaItem, TabHeading, TechLabourMaterial } from "@/components/technician/views/technician-job-detail-view";
 import { useTechSectionSeen } from "@/components/technician/use-tech-section-seen";
-import { TimeEntriesTable, TimeSummaryCards } from "@/components/time-tracking/time-tracking-ui";
+import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { formatClock } from "@/lib/data/portal";
@@ -150,7 +151,7 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
   if (!data) {
     if (!entry || entry.loading) {
       return (
-        <div className="rounded-md border border-border-soft bg-card">
+        <div className="rounded-md border border-input bg-card">
           <CenteredSpinner label="Loading estimate" className="min-h-[22rem]" />
         </div>
       );
@@ -165,9 +166,10 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
     );
   }
 
-  const { estimate, job, schedule, timeEntries, timeSummary } = data;
+  const { estimate, job, schedule } = data;
   const snapshot = (estimate.customerSnapshot || {}) as Record<string, unknown>;
   const customer = estimate.customer;
+  const name = customerName(customer, snapshot);
   const phone = customer?.phone || String(snapshot.phone || "");
   const email = customer?.email || String(snapshot.email || "");
   const visit = (estimate.siteVisit || {}) as Record<string, unknown>;
@@ -175,112 +177,144 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
     estimate.propertyAddress && Object.keys(estimate.propertyAddress).length
       ? estimate.propertyAddress
       : (snapshot.address as Record<string, unknown>) || null;
+  const notes = estimate.notes ? String(estimate.notes).replace(/<[^>]+>/g, "") : "";
+
+  const tabs = [
+    { id: "summary", label: "Summary" },
+    { id: "visit", label: "Site visit" },
+    { id: "materials", label: `Labour & Material (${items.length})` },
+    { id: "time", label: "My time", icon: Clock3 },
+    ...(notes ? [{ id: "notes", label: "Notes" }] : []),
+  ];
 
   return (
-    <PortalPage
-      eyebrow="Technician / Estimate"
-      title={`${estimate.number}${estimate.title ? ` · ${estimate.title}` : ""}`}
-      badge={<EstimateStatusPill status={estimate.status} />}
-      actions={
-        <Button asChild size="sm" variant="outline" className="h-8">
-          <Link href={technicianPaths.estimates}>
-            <ArrowLeft className="size-3.5" /> My estimates
-          </Link>
-        </Button>
-      }
-    >
-      <ClockControl target={{ kind: "estimate", id: estimate.id }} />
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <DetailCard title="Customer">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold">{customerName(customer, snapshot)}</p>
-            {phone ? (
-              <a href={`tel:${phone}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
-                <Phone className="size-3.5" aria-hidden /> {phone}
-              </a>
-            ) : null}
-            {email ? (
-              <a href={`mailto:${email}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
-                <Mail className="size-3.5" aria-hidden /> {email}
-              </a>
-            ) : null}
-          </div>
-        </DetailCard>
-        <DetailCard title="Property" className="lg:col-span-2">
-          <LocationBlock
-            location={location}
-            record={{ recordType: "estimate", recordNumber: estimate.number, customerName: customerName(customer, snapshot) }}
-          />
-        </DetailCard>
-      </div>
-
-      <DetailCard title="Site visit">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <KeyValue label="Visit date" value={estimate.scheduledDate ? formatDate(estimate.scheduledDate) : "—"} />
-          <KeyValue label="Access notes" value={String(visit.accessNotes || "")} />
-          <KeyValue label="Measurements" value={String(visit.measurements || "")} />
-          <KeyValue label="Findings" value={String(visit.findings || "")} />
-          <KeyValue label="Recommendations" value={String(visit.recommendations || "")} />
-          {job ? (
-            <KeyValue
-              label="Linked job"
-              value={
-                <span className="flex items-center gap-2">
-                  <Link href={technicianPaths.job(job.id)} className="font-semibold text-primary hover:underline">
-                    {job.number || "Job"}
-                  </Link>
-                  {job.status ? <JobStatusPill status={job.status} /> : null}
-                </span>
-              }
-            />
-          ) : null}
-        </div>
-        {schedule.length ? (
-          <ul className="mt-3 divide-y divide-border-soft border-t border-border-soft text-sm">
-            {schedule.map((row) => (
-              <li key={row.id} className="flex justify-between gap-2 py-2">
-                <span className="font-medium">{formatDate(row.date)}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {formatClock(row.startMinutes)}–{formatClock(row.endMinutes)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </DetailCard>
-
-      <DetailCard title={`Scope (${items.length})`}>
-        <LineItemsTable items={items} empty="No line items yet." />
-        <div className="mt-3 flex flex-wrap justify-end gap-4 text-sm">
-          <span>
-            Subtotal <span className="font-semibold">{formatMoney(Number(estimate.subtotal) || 0)}</span>
-          </span>
-          <span>
-            Tax <span className="font-semibold">{formatMoney(Number(estimate.tax) || 0)}</span>
-          </span>
-          <span>
-            Total <span className="font-semibold">{formatMoney(Number(estimate.total) || 0)}</span>
-          </span>
-        </div>
-      </DetailCard>
-
-      {estimate.notes ? (
-        <DetailCard title="Notes">
-          <p className="text-sm whitespace-pre-wrap">{String(estimate.notes).replace(/<[^>]+>/g, "")}</p>
-        </DetailCard>
-      ) : null}
-
-      <DetailCard title="My time on this estimate">
-        <div className="space-y-3">
-          <TimeSummaryCards summary={timeSummary} />
-          <TimeEntriesTable
-            entries={timeEntries}
-            hrefFor={(kind, recordId) => (kind === "job" ? technicianPaths.job(recordId) : technicianPaths.estimate(recordId))}
-            empty="No time tracked on this estimate yet."
-          />
-        </div>
-      </DetailCard>
-    </PortalPage>
+    <div className="overflow-hidden rounded-md border border-input">
+      <RecordWorkspace
+        href={technicianPaths.estimate(estimate.id)}
+        label={`${estimate.number}${estimate.title ? ` · ${estimate.title}` : ""}`}
+        kind="estimate"
+        trackOpen={false}
+        badge={<EstimateStatusPill status={estimate.status} />}
+        actions={
+          <Button asChild size="sm" variant="outline" className="h-8">
+            <Link href={technicianPaths.estimates}>
+              <ArrowLeft className="size-3.5" /> My estimates
+            </Link>
+          </Button>
+        }
+        metaBar={
+          <>
+            <MetaItem label="Customer" value={name} />
+            <MetaItem label="Visit" value={estimate.scheduledDate ? formatDate(estimate.scheduledDate) : "Not scheduled"} />
+            <MetaItem label="Total" value={formatMoney(Number(estimate.total) || 0)} />
+          </>
+        }
+        tabs={tabs}
+        subnavTabs={["materials", "time"]}
+        subnav={(tab) =>
+          tab === "materials" ? (
+            <TabHeading title="Labour & Material" hint="Scope priced by the office. Read only." />
+          ) : (
+            <TabHeading title="My time on this estimate" hint="Every clock-in on this estimate, with hours and pay." />
+          )
+        }
+      >
+        {(tab) => {
+          if (tab === "visit") {
+            return (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <KeyValue label="Visit date" value={estimate.scheduledDate ? formatDate(estimate.scheduledDate) : "—"} />
+                  <KeyValue label="Access notes" value={String(visit.accessNotes || "")} />
+                  <KeyValue label="Measurements" value={String(visit.measurements || "")} />
+                  <KeyValue label="Findings" value={String(visit.findings || "")} />
+                  <KeyValue label="Recommendations" value={String(visit.recommendations || "")} />
+                </div>
+                <DetailCard title="Booked visits">
+                  {schedule.length ? (
+                    <ul className="divide-y divide-border-soft text-sm">
+                      {schedule.map((row) => (
+                        <li key={row.id} className="flex justify-between gap-2 py-2">
+                          <span className="font-medium">{formatDate(row.date)}</span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {formatClock(row.startMinutes)}–{formatClock(row.endMinutes)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No visit booked for you yet.</p>
+                  )}
+                </DetailCard>
+              </div>
+            );
+          }
+          if (tab === "materials") {
+            return (
+              <TechLabourMaterial
+                items={items}
+                noun="estimate"
+                tax={Number(estimate.tax) || 0}
+                total={Number(estimate.total) || undefined}
+              />
+            );
+          }
+          if (tab === "time") {
+            return (
+              <TimeTrackingPanel
+                scopeKey={`tech:estimate:${estimate.id}`}
+                technician
+                estimateId={estimate.id}
+                defaultRange={{ preset: "all" }}
+                defaultView="sessions"
+                hrefFor={(kind, recordId) => (kind === "job" ? technicianPaths.job(recordId) : technicianPaths.estimate(recordId))}
+              />
+            );
+          }
+          if (tab === "notes") {
+            return <p className="text-sm whitespace-pre-wrap">{notes}</p>;
+          }
+          return (
+            <div className="space-y-3">
+              <ClockControl target={{ kind: "estimate", id: estimate.id }} />
+              <div className="grid gap-3 lg:grid-cols-3">
+                <DetailCard title="Customer">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold">{name}</p>
+                    {phone ? (
+                      <a href={`tel:${phone}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
+                        <Phone className="size-3.5" aria-hidden /> {phone}
+                      </a>
+                    ) : null}
+                    {email ? (
+                      <a href={`mailto:${email}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
+                        <Mail className="size-3.5" aria-hidden /> {email}
+                      </a>
+                    ) : null}
+                  </div>
+                </DetailCard>
+                <DetailCard title="Property" className="lg:col-span-2">
+                  <LocationBlock
+                    location={location}
+                    record={{ recordType: "estimate", recordNumber: estimate.number, customerName: name }}
+                  />
+                </DetailCard>
+              </div>
+              {job ? (
+                <DetailCard title="Linked job">
+                  <span className="flex items-center gap-2 text-sm">
+                    <Link href={technicianPaths.job(job.id)} className="font-semibold text-primary hover:underline">
+                      {job.number || "Job"}
+                    </Link>
+                    {job.title ? <span className="text-muted-foreground">· {job.title}</span> : null}
+                    {job.status ? <JobStatusPill status={job.status} /> : null}
+                  </span>
+                </DetailCard>
+              ) : null}
+            </div>
+          );
+        }}
+      </RecordWorkspace>
+    </div>
   );
 }

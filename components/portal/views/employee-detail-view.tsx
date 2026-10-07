@@ -845,6 +845,11 @@ function TechnicianLoginCard({
   const [saving, setSaving] = useState(false);
   // Remounted (via key) when the employee or saved username changes, so no sync effect is needed.
   const enabled = Boolean(employee.loginEnabled && employee.username);
+  const suggestedUsername =
+    [employee.firstName, employee.lastName]
+      .map((part) => (part ?? "").toLowerCase().replace(/[^a-z0-9]/g, ""))
+      .filter(Boolean)
+      .join(".") || "username";
 
   async function save() {
     if (saving) return;
@@ -890,7 +895,7 @@ function TechnicianLoginCard({
             value={username}
             autoComplete="off"
             autoCapitalize="none"
-            placeholder="first.last"
+            placeholder={`e.g. ${suggestedUsername}`}
             onChange={(event) => setUsername(event.target.value.toLowerCase())}
           />
         </Field>

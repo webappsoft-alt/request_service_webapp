@@ -295,7 +295,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main key={pathname} id="main-content" className="page-enter px-3 py-3 sm:px-4">
-          <div className="mx-auto w-full max-w-7xl">
+          <div className="mx-auto w-full">
             <RouteMapProvider origin={routeOrigin} currentLocation>
               {children}
             </RouteMapProvider>

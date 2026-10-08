@@ -159,7 +159,7 @@ function ReviewContent({
     <DialogContent className="sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle className="flex flex-wrap items-center gap-2">
-          {isCompletion ? "Completion submitted" : "Change order request"}
+          {isCompletion ? "Completion submitted" : "Scope change request"}
           <RequestStatusPill status={request.status} type={request.type} />
         </DialogTitle>
         <DialogDescription>
@@ -193,9 +193,7 @@ function ReviewContent({
           {isCompletion ? (
             <Detail label="Photos">{request.photos.length}</Detail>
           ) : (
-            <Detail label="Estimated cost">
-              <span className="font-semibold tabular-nums">{formatMoney(request.estimatedCost)}</span>
-            </Detail>
+            <Detail label="Reason">{request.reason || <span className="text-muted-foreground">Not given</span>}</Detail>
           )}
         </div>
 
@@ -208,11 +206,8 @@ function ReviewContent({
           </>
         ) : (
           <>
-            <Detail label="Extra material / work">
+            <Detail label="Description">
               <p className="whitespace-pre-wrap">{request.description}</p>
-            </Detail>
-            <Detail label="Reason">
-              {request.reason ? <p className="whitespace-pre-wrap">{request.reason}</p> : <span className="text-muted-foreground">Not given</span>}
             </Detail>
           </>
         )}
@@ -220,7 +215,14 @@ function ReviewContent({
         {!pending ? (
           <div className="rounded-md border border-input px-3 py-2 text-sm">
             <p className="font-medium">
-              {request.status === "approved" ? "Approved" : "Rejected"} by {request.reviewedBy || "the office"}
+              {request.status === "rejected"
+                ? "Rejected"
+                : isCompletion
+                  ? "Approved"
+                  : request.status === "items_added_pending_assignee_acceptance"
+                    ? "Items added — awaiting acceptance"
+                    : "Items added and accepted"}{" "}
+              by {request.reviewedBy || "the office"}
               {request.reviewedAt ? ` on ${formatDate(request.reviewedAt)}` : ""}
               {request.changeOrderNumber ? ` · Change order ${request.changeOrderNumber}` : ""}
             </p>
@@ -287,7 +289,7 @@ function ReviewContent({
                   <LineItemsEditor lines={lines} onChange={setLines} locked={busy} allowMaterialImages={false} minLines={1} />
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
-                      They asked for: {formatMoney(request.estimatedCost)} (estimate)
+                      {request.estimatedCost > 0 ? `Their old estimate: ${formatMoney(request.estimatedCost)}` : "Internal — not billed to the customer"}
                     </span>
                     <span className="font-semibold tabular-nums">Total {formatMoney(linesTotal)}</span>
                   </div>
@@ -324,18 +326,18 @@ function ReviewContent({
               </Button>
               <Button variant="destructive" onClick={reject} disabled={busy}>
                 {acting === "reject" ? <Spinner size="sm" className="text-current" label="Rejecting" /> : isCompletion ? <RotateCcw /> : <XCircle />}
-                {isCompletion ? "Reject & Request Re-work" : "Decline request"}
+                {isCompletion ? "Reject & Request Re-work" : "Reject request"}
               </Button>
             </>
           ) : (
             <>
               <Button variant="outline" onClick={() => setMode("reject")} disabled={busy}>
                 {isCompletion ? <RotateCcw /> : <XCircle />}
-                {isCompletion ? "Reject & Request Re-work" : "Decline"}
+                {isCompletion ? "Reject & Request Re-work" : "Reject"}
               </Button>
               <Button onClick={approve} disabled={busy}>
                 {acting === "approve" ? <Spinner size="sm" className="text-current" label="Approving" /> : <CheckCircle2 />}
-                {isCompletion ? "Approve & Mark Job Complete" : "Accept & create change order"}
+                {isCompletion ? "Approve & Mark Job Complete" : "Accept"}
               </Button>
             </>
           )}

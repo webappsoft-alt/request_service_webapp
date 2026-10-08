@@ -6,7 +6,25 @@ import type { LedgerRow, TechnicianLedger, TechnicianPaymentMethod } from "@/lib
 /* ───────────────────────────── Types ───────────────────────────── */
 
 export type ContractorRequestType = "completion" | "change_order";
-export type ContractorRequestStatus = "pending_pro_approval" | "approved" | "rejected";
+/**
+ * pending_pro_approval → provider review. Completion: approved | rejected.
+ * Scope change: items_added_pending_assignee_acceptance → accepted, or rejected
+ * (legacy scope changes may still read "approved").
+ */
+export type ContractorRequestStatus =
+  | "pending_pro_approval"
+  | "items_added_pending_assignee_acceptance"
+  | "accepted"
+  | "approved"
+  | "rejected";
+
+const REQUEST_STATUSES: ContractorRequestStatus[] = [
+  "pending_pro_approval",
+  "items_added_pending_assignee_acceptance",
+  "accepted",
+  "approved",
+  "rejected",
+];
 
 export type ContractorRequest = {
   id: string;
@@ -249,7 +267,9 @@ function mapRequest(value: unknown): ContractorRequest {
       ? { id: str(employee.id), name: str(employee.name), role: str(employee.role), phone: str(employee.phone) }
       : null,
     type: row.type === "change_order" ? "change_order" : "completion",
-    status: (["approved", "rejected"].includes(str(row.status)) ? row.status : "pending_pro_approval") as ContractorRequestStatus,
+    status: (REQUEST_STATUSES.includes(str(row.status) as ContractorRequestStatus)
+      ? row.status
+      : "pending_pro_approval") as ContractorRequestStatus,
     photos: Array.isArray(row.photos) ? row.photos.map(str).filter(Boolean) : [],
     notes: str(row.notes),
     description: str(row.description),
@@ -536,7 +556,7 @@ export async function submitContractorCompletion(jobId: string, input: { photos:
 
 export async function submitContractorChangeRequest(
   jobId: string,
-  input: { description: string; reason?: string; estimatedCost: number },
+  input: { description: string; reason: string },
 ) {
   return mapRequest(dataOf(await postData(contractorPortalApi.jobChangeRequests(jobId), input, { silent: true })));
 }
@@ -630,6 +650,20 @@ export type PendingReviewQuery = {
   type?: ContractorRequestType;
   jobId?: string;
 };
+
+/** Pending technician / contractor requests per job id (Jobs table "Requests" column). */
+export async function getPendingRequestsByJob(): Promise<Record<string, number>> {
+  const response = await getData(`${providerCrmApi.contractorRequests}/pending-by-job`, {}, quiet);
+  const raw = (response && typeof response === "object" && "data" in response ? (response as { data: unknown }).data : response) as
+    | Record<string, unknown>
+    | null;
+  const out: Record<string, number> = {};
+  for (const [jobId, count] of Object.entries(raw || {})) {
+    const value = Number(count) || 0;
+    if (value > 0) out[jobId] = value;
+  }
+  return out;
+}
 
 export async function listContractorReviewRequests(query: PendingReviewQuery): Promise<Paginated<ContractorRequest>> {
   const page = query.page || 1;
@@ -797,7 +831,7 @@ export async function getContractorTimesheetLedger(
 /** Technician portal: ask the office for extra material / work on an assigned job. */
 export async function submitTechnicianChangeRequest(
   jobId: string,
-  input: { description: string; reason: string; estimatedCost: number },
+  input: { description: string; reason: string },
 ): Promise<ContractorRequest> {
   return mapRequest(dataOf(await postData(technicianApi.jobChangeRequests(jobId), input, { silent: true })));
 }

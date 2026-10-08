@@ -123,7 +123,7 @@ export function ContractorJobDetailView({ id }: { id: string }) {
           <ContractorMapButton job={job} />
           <ContractorChatButton jobId={job.id} number={job.number} />
           <Button variant="outline" onClick={() => setChangeOpen(true)} disabled={closed}>
-            <FilePlus2 /> Request change order
+            <FilePlus2 /> Request scope change
           </Button>
           <Button onClick={() => setCompleteOpen(true)} disabled={!canComplete}>
             <CheckCircle2 /> Mark as complete
@@ -303,7 +303,7 @@ export function ContractorJobDetailView({ id }: { id: string }) {
                       <RequestStatusPill status={item.status} type="change_order" />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Est. {formatMoney(item.estimatedCost)} · {formatDate(item.createdAt)}
+                      {item.reason ? `${item.reason} · ` : ""}{formatDate(item.createdAt)}
                       {item.changeOrderNumber ? ` · ${item.changeOrderNumber}` : ""}
                     </p>
                     {item.reviewNote ? <p className="text-xs text-foreground">Office: {item.reviewNote}</p> : null}

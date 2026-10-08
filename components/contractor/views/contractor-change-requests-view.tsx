@@ -9,7 +9,7 @@ import { PortalPage } from "@/components/portal/portal-page";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ContractorRequestStatus } from "@/lib/api/contractor-portal-client";
 import { contractorPaths } from "@/lib/contractor-paths";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { CONTRACTOR_PAGE_SIZE, fetchContractorChangeRequests } from "@/store/contractorPortalSlice";
 
@@ -17,15 +17,18 @@ const ALL = "__all__";
 
 const STATUS_FILTERS: Array<{ value: ContractorRequestStatus | ""; label: string }> = [
   { value: "", label: "All" },
-  { value: "pending_pro_approval", label: "Pending" },
-  { value: "approved", label: "Accepted" },
-  { value: "rejected", label: "Declined" },
+  { value: "pending_pro_approval", label: "Pending provider review" },
+  { value: "items_added_pending_assignee_acceptance", label: "Awaiting your acceptance" },
+  { value: "accepted", label: "Accepted" },
+  { value: "rejected", label: "Rejected" },
 ];
 
 const STATUS_LABEL: Record<ContractorRequestStatus, string> = {
-  pending_pro_approval: "Pending",
+  pending_pro_approval: "Pending provider review",
+  items_added_pending_assignee_acceptance: "Awaiting your acceptance",
+  accepted: "Accepted",
   approved: "Accepted",
-  rejected: "Declined",
+  rejected: "Rejected",
 };
 
 export function ContractorChangeRequestsView() {
@@ -63,7 +66,7 @@ export function ContractorChangeRequestsView() {
   return (
     <PortalPage
       eyebrow="Contractor / Change requests"
-      title="Change requests"
+      title="Scope change requests"
       description="Extra material or work you've asked for, and the office's response. Start a new one from an assigned job."
     >
       {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
@@ -131,17 +134,15 @@ export function ContractorChangeRequestsView() {
             cell: (row) => (
               <div className="min-w-0">
                 <p className="line-clamp-2 text-sm">{row.description}</p>
-                {row.reason ? <p className="line-clamp-1 text-xs text-muted-foreground">Reason: {row.reason}</p> : null}
               </div>
             ),
           },
           {
-            id: "cost",
-            header: "Est. cost",
-            className: "text-right",
-            sortValue: (row) => row.estimatedCost,
-            exportValue: (row) => row.estimatedCost.toFixed(2),
-            cell: (row) => <span className="tabular-nums">{formatMoney(row.estimatedCost)}</span>,
+            id: "reason",
+            header: "Reason",
+            sortValue: (row) => row.reason,
+            exportValue: (row) => row.reason,
+            cell: (row) => <span className="text-sm">{row.reason || "—"}</span>,
           },
           {
             id: "requested",

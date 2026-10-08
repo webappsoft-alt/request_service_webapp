@@ -13,17 +13,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { ContractorJob } from "@/lib/api/contractor-portal-client";
-
-type ChangeRequestInput = { description: string; reason: string; estimatedCost: number };
 import { useAppDispatch } from "@/store/hooks";
 import { submitChangeRequest } from "@/store/contractorPortalSlice";
 
+type ScopeChangeInput = { description: string; reason: string };
+
+const REASONS = [
+  "Unforeseen site condition",
+  "Extra material needed",
+  "Additional labour needed",
+  "Equipment needed",
+  "Customer asked on site",
+  "Missing from job scope",
+  "Other",
+];
+
 /**
- * Field staff ask the office for extra material / work on an active job.
+ * Field staff ask the office for a scope change on an active job. Internal only:
+ * the office prices it by adding labour / material / equipment, the requester
+ * accepts the updated scope — the customer is never involved.
  * Contractors submit through the portal store; technicians pass `submit`.
  */
 export function ChangeOrderRequestDialog({
@@ -36,42 +48,39 @@ export function ChangeOrderRequestDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Override the contractor submit (technician portal). Throw to show an error. */
-  submit?: (input: ChangeRequestInput) => Promise<void>;
+  submit?: (input: ScopeChangeInput) => Promise<void>;
 }) {
   const dispatch = useAppDispatch();
-  const [description, setDescription] = useState("");
   const [reason, setReason] = useState("");
-  const [cost, setCost] = useState("");
+  const [description, setDescription] = useState("");
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const costValue = Number(cost);
+  const reasonError = reason ? null : "Pick a reason.";
   const descriptionError = description.trim().length < 3 ? "Describe the extra material or work needed." : null;
-  const costError =
-    cost.trim() === "" || !Number.isFinite(costValue) || costValue < 0 ? "Enter an estimated cost (0 or more)." : null;
 
   function reset() {
-    setDescription("");
     setReason("");
-    setCost("");
+    setDescription("");
     setTouched(false);
+  }
+
+  function done() {
+    toast.success("Scope change request sent to the office.");
+    reset();
+    onOpenChange(false);
   }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setTouched(true);
-    if (descriptionError || costError) return;
+    if (reasonError || descriptionError) return;
+    const input = { reason, description: description.trim() };
     setSubmitting(true);
     if (submit) {
       try {
-        await submit({
-          description: description.trim(),
-          reason: reason.trim(),
-          estimatedCost: Math.round(costValue * 100) / 100,
-        });
-        toast.success("Change order request sent to the office.");
-        reset();
-        onOpenChange(false);
+        await submit(input);
+        done();
       } catch (error) {
         toast.error(error instanceof Error && error.message ? error.message : "Could not send your request.");
       } finally {
@@ -79,22 +88,10 @@ export function ChangeOrderRequestDialog({
       }
       return;
     }
-    const result = await dispatch(
-      submitChangeRequest({
-        jobId: job.id,
-        description: description.trim(),
-        reason: reason.trim(),
-        estimatedCost: Math.round(costValue * 100) / 100,
-      }),
-    );
+    const result = await dispatch(submitChangeRequest({ jobId: job.id, ...input }));
     setSubmitting(false);
-    if (submitChangeRequest.fulfilled.match(result)) {
-      toast.success("Change order request sent to the office.");
-      reset();
-      onOpenChange(false);
-    } else {
-      toast.error(result.payload || "Could not send your request.");
-    }
+    if (submitChangeRequest.fulfilled.match(result)) done();
+    else toast.error(result.payload || "Could not send your request.");
   }
 
   return (
@@ -109,71 +106,52 @@ export function ChangeOrderRequestDialog({
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
-            <DialogTitle>Request change order</DialogTitle>
+            <DialogTitle>Request scope change</DialogTitle>
             <DialogDescription>
               {job.number}
-              {job.title ? ` · ${job.title}` : ""}. The office will accept it as a formal change order or reply with
-              remarks.
+              {job.title ? ` · ${job.title}` : ""}. The office reviews it and adds the labour, material or equipment
+              — you then accept the updated scope.
             </DialogDescription>
           </DialogHeader>
 
           <FieldGroup>
+            <Field data-invalid={touched && reasonError ? true : undefined}>
+              <FieldLabel htmlFor="scope-reason">
+                Reason <span className="text-destructive">*</span>
+              </FieldLabel>
+              <Select value={reason} onValueChange={setReason} disabled={submitting}>
+                <SelectTrigger id="scope-reason" className="w-full" aria-invalid={touched && Boolean(reasonError)}>
+                  <SelectValue placeholder="Why is the change needed?" />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-[100] w-[var(--radix-select-trigger-width)]">
+                  {REASONS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {touched && reasonError ? <FieldError>{reasonError}</FieldError> : null}
+            </Field>
+
             <Field data-invalid={touched && descriptionError ? true : undefined}>
-              <FieldLabel htmlFor="co-description">
-                Extra material / work needed <span className="text-destructive">*</span>
+              <FieldLabel htmlFor="scope-description">
+                Description <span className="text-destructive">*</span>
               </FieldLabel>
               <Textarea
-                id="co-description"
+                id="scope-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                rows={3}
+                rows={4}
                 maxLength={2000}
                 placeholder="e.g. Replace 12 ft of corroded copper supply line behind the vanity"
                 aria-invalid={touched && Boolean(descriptionError)}
                 disabled={submitting}
               />
-              {touched && descriptionError ? <FieldError>{descriptionError}</FieldError> : null}
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="co-reason">Reason</FieldLabel>
-              <Textarea
-                id="co-reason"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                rows={2}
-                maxLength={2000}
-                placeholder="Why it's needed: what you found on site"
-                disabled={submitting}
-              />
-            </Field>
-
-            <Field data-invalid={touched && costError ? true : undefined}>
-              <FieldLabel htmlFor="co-cost">
-                Estimated cost <span className="text-destructive">*</span>
-              </FieldLabel>
-              <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-sm text-muted-foreground">
-                  $
-                </span>
-                <Input
-                  id="co-cost"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.01"
-                  value={cost}
-                  onChange={(event) => setCost(event.target.value)}
-                  className="pl-6"
-                  placeholder="0.00"
-                  aria-invalid={touched && Boolean(costError)}
-                  disabled={submitting}
-                />
-              </div>
-              {touched && costError ? (
-                <FieldError>{costError}</FieldError>
+              {touched && descriptionError ? (
+                <FieldError>{descriptionError}</FieldError>
               ) : (
-                <FieldDescription>Materials plus labor. The office can adjust it before approving.</FieldDescription>
+                <FieldDescription>No price needed — the office adds the items and cost.</FieldDescription>
               )}
             </Field>
           </FieldGroup>

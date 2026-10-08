@@ -28,6 +28,7 @@ export function jobBoardColumns({
   customerName,
   customerAddress,
   onChangeStatus,
+  pendingRequests = {},
 }: {
   estimates: Estimate[];
   requests: PortalRequest[];
@@ -38,6 +39,8 @@ export function jobBoardColumns({
   /** Fallback when the job has no site address of its own. */
   customerAddress?: (customerId: string) => AddressLike;
   onChangeStatus?: (job: Job) => void;
+  /** Pending technician / contractor requests per job id. */
+  pendingRequests?: Record<string, number>;
 }): PortalTableColumn<Job>[] {
   const eventFor = (job: Job) => events.find((item) => item.kind === "job" && item.recordId === job.id);
   const startOf = (job: Job) => eventFor(job)?.date ?? job.scheduledAt;
@@ -164,6 +167,32 @@ export function jobBoardColumns({
       searchValue: (row) => String(row.changeOrders.length),
       exportValue: (row) => String(row.changeOrders.length),
       cell: (row) => row.changeOrders.length,
+    },
+    {
+      id: "requests",
+      header: "Requests",
+      sortValue: (row) => pendingRequests[row.id] || 0,
+      exportValue: (row) => String(pendingRequests[row.id] || 0),
+      cell: (row) => {
+        const count = pendingRequests[row.id] || 0;
+        if (!count) return <span className="text-muted-foreground">—</span>;
+        return (
+          <Link
+            href={`/pro/dashboard/jobs/${row.id}?tab=requests`}
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 py-0.5 pr-2 pl-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100"
+            aria-label={`${count} pending request${count === 1 ? "" : "s"}`}
+          >
+            <span className="relative inline-flex">
+              <span className="absolute inset-0 animate-ping rounded-full bg-amber-400 opacity-60" aria-hidden />
+              <span className="relative inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] leading-none text-white">
+                {count}
+              </span>
+            </span>
+            Pending
+          </Link>
+        );
+      },
     },
     {
       id: "status",

@@ -24,13 +24,16 @@ export function RequestStatusPill({
   status: ContractorRequestStatus;
   type?: "completion" | "change_order";
 }) {
-  if (status === "approved") {
+  if (status === "approved" || status === "accepted") {
     return <StatusPill tone="success" label={type === "completion" ? "Approved" : "Accepted"} />;
   }
-  if (status === "rejected") {
-    return <StatusPill tone="danger" label={type === "completion" ? "Re-work requested" : "Declined"} />;
+  if (status === "items_added_pending_assignee_acceptance") {
+    return <StatusPill tone="primary" label="Items added · awaiting acceptance" />;
   }
-  return <StatusPill tone="warning" label="Pending approval" />;
+  if (status === "rejected") {
+    return <StatusPill tone="danger" label={type === "completion" ? "Re-work requested" : "Rejected"} />;
+  }
+  return <StatusPill tone="warning" label="Pending provider review" />;
 }
 
 /** Where the contractor stands on a job, from their latest completion submission. */

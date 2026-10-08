@@ -24,19 +24,20 @@ const ALL = "__all__";
 
 const STATUS_FILTERS: Array<{ value: ContractorRequestStatus | ""; label: string }> = [
   { value: "", label: "All statuses" },
-  { value: "pending_pro_approval", label: "Pending" },
-  { value: "approved", label: "Approved" },
+  { value: "pending_pro_approval", label: "Pending review" },
+  { value: "items_added_pending_assignee_acceptance", label: "Awaiting acceptance" },
+  { value: "accepted", label: "Approved / accepted" },
   { value: "rejected", label: "Rejected" },
 ];
 
 const TYPE_FILTERS: Array<{ value: ContractorRequestType | ""; label: string }> = [
   { value: "", label: "All types" },
   { value: "completion", label: "Job completion" },
-  { value: "change_order", label: "Material / change order" },
+  { value: "change_order", label: "Scope change" },
 ];
 
 function typeLabel(request: ContractorRequest) {
-  return request.type === "completion" ? "Job completion" : "Material / change order";
+  return request.type === "completion" ? "Job completion" : "Scope change";
 }
 
 function SenderTag({ request }: { request: ContractorRequest }) {
@@ -243,7 +244,7 @@ export function JobRequestsTab({
               const sub =
                 row.type === "completion"
                   ? [`${row.photos.length} photo${row.photos.length === 1 ? "" : "s"}`, row.reviewNote && `Office: ${row.reviewNote}`]
-                  : [extraLine(row, changeOrders) || `Estimate ${formatMoney(row.estimatedCost)}`, row.reviewNote && `Office: ${row.reviewNote}`];
+                  : [row.reason, extraLine(row, changeOrders), row.reviewNote && `Office: ${row.reviewNote}`];
               return (
                 <div className="min-w-0">
                   <p className="line-clamp-1 text-sm text-foreground">
@@ -271,7 +272,7 @@ export function JobRequestsTab({
                   onSelect: () => setPicked({ request: row, mode: "review" }),
                 },
                 {
-                  label: row.type === "completion" ? "Reject" : "Decline",
+                  label: "Reject",
                   icon: <XCircle />,
                   variant: "destructive" as const,
                   onSelect: () => setPicked({ request: row, mode: "reject" }),

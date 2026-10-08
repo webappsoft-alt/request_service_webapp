@@ -47,7 +47,7 @@ export function FieldExtraWork({
     setAccepting(order.id);
     try {
       await onAccept(order);
-      toast.success(`You accepted ${order.number || "the extra work"}.`);
+      toast.success(`You accepted the updated scope${order.number ? ` (${order.number})` : ""}.`);
     } catch (error) {
       toast.error(error instanceof Error && error.message ? error.message : "Could not accept this change order.");
     } finally {
@@ -63,7 +63,7 @@ export function FieldExtraWork({
           <div key={order.id} className="overflow-hidden rounded-lg border border-[#94a3b8] bg-card">
             <div className="flex flex-wrap items-center gap-2 border-b border-[#94a3b8] bg-[#f7f8fa] px-3 py-2">
               <p className="min-w-0 flex-1 text-sm font-semibold text-foreground">
-                Extra · {order.number || "Change order"}
+                Scope update · {order.number || "Change order"}
                 {order.title ? <span className="font-normal text-muted-foreground"> — {order.title}</span> : null}
               </p>
               {accepted ? (
@@ -74,7 +74,7 @@ export function FieldExtraWork({
               ) : (
                 <Button size="sm" className="h-8" onClick={() => void accept(order)} disabled={accepting === order.id}>
                   {accepting === order.id ? <Spinner /> : <CheckCircle2 />}
-                  Accept
+                  Accept updated scope
                 </Button>
               )}
             </div>

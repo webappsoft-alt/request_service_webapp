@@ -271,6 +271,14 @@ function AuthFormInner({
                   Contractor sign in
                 </Link>
               </span>
+            ) : null}
+            {!isProvider ? (
+              <span className="mt-2 block">
+                Technician for a company?{" "}
+                <Link href={technicianPaths.login} className={authLinkClass}>
+                  Technician sign in
+                </Link>
+              </span>
             ) : (
               <span className="mt-2 block">
                 Technician for a company?{" "}

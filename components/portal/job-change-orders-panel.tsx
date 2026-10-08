@@ -64,6 +64,22 @@ function sumByStatus(orders: ChangeOrder[], status: ChangeOrder["status"]) {
     .reduce((sum, co) => sum + (Number(co.total) || 0), 0);
 }
 
+/** Customer change order vs internal scope update (contractor / technician). */
+function ChangeOrderKindBadge({ co }: { co: ChangeOrder }) {
+  const kind = co.requestedBy?.participantType;
+  const label = !kind
+    ? "Customer change order"
+    : kind === "contractor"
+      ? "Internal scope update (Contractor)"
+      : "Internal scope update (Technician)";
+  const tone = !kind
+    ? "bg-[#eef3f9] text-[#003f7d]"
+    : kind === "contractor"
+      ? "bg-[#e7f5f1] text-[#0f7b68]"
+      : "bg-[#e0f5f9] text-[#0e7490]";
+  return <span className={`rounded-full px-2 text-[10px] font-semibold leading-5 ${tone}`}>{label}</span>;
+}
+
 export function JobChangeOrdersPanel({
   job,
   originalAmount,
@@ -84,8 +100,9 @@ export function JobChangeOrdersPanel({
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const consumedCreateParam = useRef(false);
-  // Extras requested by technicians / contractors are handled on the Requests tab.
-  const orders = useMemo(() => (job.changeOrders || []).filter((co) => !co.requestedBy), [job.changeOrders]);
+  const orders = useMemo(() => job.changeOrders || [], [job.changeOrders]);
+  // Totals are customer billing only; internal scope updates are never billed.
+  const customerOrders = useMemo(() => orders.filter((co) => !co.requestedBy), [orders]);
 
   /** Open once from ?create=1, then strip it so the tab never reopens the modal. */
   useEffect(() => {
@@ -101,16 +118,16 @@ export function JobChangeOrdersPanel({
   }, [searchParams, pathname, router]);
 
   const approved = useMemo(
-    () => sumByStatus(orders, "approved"),
-    [orders],
+    () => sumByStatus(customerOrders, "approved"),
+    [customerOrders],
   );
   const pending = useMemo(
-    () => sumByStatus(orders, "pending_approval"),
-    [orders],
+    () => sumByStatus(customerOrders, "pending_approval"),
+    [customerOrders],
   );
   const rejected = useMemo(
-    () => sumByStatus(orders, "rejected"),
-    [orders],
+    () => sumByStatus(customerOrders, "rejected"),
+    [customerOrders],
   );
 
   const send = async (co: ChangeOrder) => {
@@ -173,10 +190,10 @@ export function JobChangeOrdersPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-bold text-foreground">Change orders</p>
+          <p className="text-sm font-bold text-foreground">Change orders &amp; scope changes</p>
           <p className="text-xs text-muted-foreground">
-            Additional approved work stays separate from the original job
-            amount and is billed on its own invoice.
+            Customer change orders are approved by the customer and billed on their own invoice.
+            Internal scope updates (from your contractors and technicians) are for reference only and never billed.
           </p>
         </div>
         {locked ? null : (
@@ -225,31 +242,26 @@ export function JobChangeOrdersPanel({
                   <span className="font-semibold text-foreground">
                     {co.number}
                   </span>
-                  {co.requestedBy && co.status !== "approved" && co.status !== "rejected" && co.status !== "cancelled" ? (
-                    <StatusPill tone="warning" label={`Awaiting ${co.requestedBy.participantType} acceptance`} />
+                  <ChangeOrderKindBadge co={co} />
+                  {co.requestedBy ? (
+                    co.fieldAcceptance?.status === "accepted" || co.status === "approved" ? (
+                      <StatusPill
+                        tone="success"
+                        label={`Accepted by ${co.fieldAcceptance?.acceptedBy || co.requestedBy.name || co.requestedBy.participantType}`}
+                      />
+                    ) : co.status === "rejected" || co.status === "cancelled" ? (
+                      <StatusPill label={coStatusLabel(co.status)} tone={coStatusTone(co.status)} />
+                    ) : (
+                      <StatusPill tone="warning" label={`Awaiting ${co.requestedBy.participantType} acceptance`} />
+                    )
                   ) : (
                     <StatusPill
                       label={coStatusLabel(co.status)}
                       tone={coStatusTone(co.status)}
                     />
                   )}
-                  {co.requestedBy ? (
-                    <span
-                      className={
-                        co.requestedBy.participantType === "contractor"
-                          ? "rounded-full bg-[#e7f5f1] px-1.5 text-[10px] font-semibold leading-4 text-[#0f7b68]"
-                          : "rounded-full bg-[#eef3f9] px-1.5 text-[10px] font-semibold leading-4 text-[#003f7d]"
-                      }
-                    >
-                      Requested by {co.requestedBy.participantType}
-                      {co.requestedBy.name ? ` · ${co.requestedBy.name}` : ""}
-                    </span>
-                  ) : null}
-                  {co.fieldAcceptance?.status === "accepted" ? (
-                    <StatusPill
-                      tone="success"
-                      label={`Accepted by ${co.fieldAcceptance.acceptedBy || co.requestedBy?.participantType || "requester"}`}
-                    />
+                  {co.requestedBy?.name ? (
+                    <span className="text-xs text-muted-foreground">Requested by {co.requestedBy.name}</span>
                   ) : null}
                 </div>
                 <p className="truncate text-sm text-foreground">
@@ -283,10 +295,17 @@ export function JobChangeOrdersPanel({
                 ) : null}
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold tabular-nums text-foreground">
-                  +{formatMoney(co.total)}
-                </span>
-                {co.status === "approved" && co.billingInvoiceId ? (
+                {co.requestedBy ? (
+                  <span className="text-right">
+                    <span className="block text-sm font-semibold tabular-nums text-foreground">{formatMoney(co.total)}</span>
+                    <span className="block text-[11px] text-muted-foreground">Not billed</span>
+                  </span>
+                ) : (
+                  <span className="text-sm font-semibold tabular-nums text-foreground">
+                    +{formatMoney(co.total)}
+                  </span>
+                )}
+                {!co.requestedBy && co.status === "approved" && co.billingInvoiceId ? (
                   <Button size="sm" variant="outline" className="h-8" asChild>
                     <Link href={`/pro/dashboard/invoices/${co.billingInvoiceId}`}>
                       <FileText className="size-3.5" />
@@ -294,7 +313,7 @@ export function JobChangeOrdersPanel({
                     </Link>
                   </Button>
                 ) : null}
-                {co.status === "approved" && !co.billingInvoiceId ? (
+                {!co.requestedBy && co.status === "approved" && !co.billingInvoiceId ? (
                   <Button
                     size="sm"
                     className="h-8"
@@ -324,7 +343,7 @@ export function JobChangeOrdersPanel({
                     Send
                   </Button>
                 ) : null}
-                {co.status === "draft" || co.status === "pending_approval" ? (
+                {!co.requestedBy && (co.status === "draft" || co.status === "pending_approval") ? (
                   <Button
                     size="sm"
                     variant="outline"

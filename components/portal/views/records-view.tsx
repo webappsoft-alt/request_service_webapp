@@ -35,6 +35,8 @@ import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { canStartJobNow } from "@/lib/portal-schedule-sync";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { getPendingRequestsByJob } from "@/lib/api/contractor-portal-client";
+import { JobNotCompleteDialog, jobCompletionBlockers, type CompletionBlocker } from "@/components/portal/job-not-complete-dialog";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   clearEstimatesError,
@@ -862,6 +864,22 @@ export function JobsView() {
   const [archiving, setArchiving] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  /** Pending technician / contractor requests per job — refreshed by the `contractor:requests` socket. */
+  const reviewsVersion = useAppSelector((state) => state.contractorReviews.version);
+  const [pendingRequests, setPendingRequests] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    getPendingRequestsByJob()
+      .then((map) => {
+        if (!cancelled) setPendingRequests(map);
+      })
+      .catch(() => {
+        // Badge column only.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reviewsVersion]);
   const isFirstMountRef = useRef(true);
   const prevQueryRef = useRef({
     page: 1,
@@ -1051,8 +1069,20 @@ export function JobsView() {
     }
   };
 
+  /** Field staff who still have to finish a job before it can be invoiced. */
+  const [blocked, setBlocked] = useState<{ job: Job; blockers: CompletionBlocker[] } | null>(null);
+
   async function handleConvert(row: Job) {
     if (convertingId) return;
+    if (!row.invoiceId?.trim() && row.status !== "invoiced" && row.status !== "paid") {
+      const event = events.find((item) => item.kind === "job" && item.recordId === row.id);
+      const technician = employeeLabel(event?.employeeId) || row.assignedTo || "";
+      const blockers = jobCompletionBlockers(row, technician);
+      if (blockers.length) {
+        setBlocked({ job: row, blockers });
+        return;
+      }
+    }
     const existingInvoiceId = row.invoiceId?.trim();
     if (existingInvoiceId) {
       const mongo = resolveCrmObjectId(existingInvoiceId);
@@ -1156,6 +1186,7 @@ export function JobsView() {
         searchPlaceholder="Search jobs"
         rows={rows}
         rowKey={(row) => row.id}
+        rowClassName={(row) => (pendingRequests[row.id] ? "bg-amber-50/50" : undefined)}
         rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
         loading={tableLoading}
         empty={
@@ -1214,6 +1245,7 @@ export function JobsView() {
           </div>
         }
         columns={jobBoardColumns({
+          pendingRequests,
           estimates: allEstimates,
           requests,
           invoices: allInvoices,
@@ -1348,6 +1380,15 @@ export function JobsView() {
               },
             },
           ];
+        }}
+      />
+      <JobNotCompleteDialog
+        jobId={blocked?.job.id ?? ""}
+        jobNumber={blocked?.job.number ?? ""}
+        blockers={blocked?.blockers ?? []}
+        open={Boolean(blocked)}
+        onOpenChange={(open) => {
+          if (!open) setBlocked(null);
         }}
       />
       <ConfirmArchiveDialog

@@ -206,35 +206,35 @@
 }
 
 /*
- * Technician portal theme — dark teal-blue + cyan, distinct from the Pro
+ * Technician portal theme — midnight + indigo, distinct from the Pro
  * navy and the contractor slate + emerald. Scoped to `.technician-theme` (set on the technician shell,
  * login and <body> while in the portal), so nothing outside it changes.
  * Shared components use `var(--tech-accent, #003F7D)`, which stays navy elsewhere.
  */
 .technician-theme {
-  --tech-accent: #0e7490;
-  --tech-accent-hover: #155e75;
-  --tech-accent-soft: #e0f5f9;
-  --tech-bg: #f0f5f6;
-  --tech-sidebar: #12343b;
-  --tech-sidebar-2: #0c252b;
-  --tech-sidebar-accent: #67e8f9;
-  --tech-sidebar-border: rgb(255 255 255 / 0.08);
-  --tech-sidebar-text: rgb(226 240 243 / 0.78);
-  --tech-sidebar-active: rgb(255 255 255 / 0.1);
+  --tech-accent: #4f46e5;
+  --tech-accent-hover: #4338ca;
+  --tech-accent-soft: #eef2ff;
+  --tech-bg: #f6f7fb;
+  --tech-sidebar: #12132a;
+  --tech-sidebar-2: #0a0b1a;
+  --tech-sidebar-accent: #a5b4fc;
+  --tech-sidebar-border: rgb(255 255 255 / 0.07);
+  --tech-sidebar-text: rgb(224 228 255 / 0.72);
+  --tech-sidebar-active: rgb(129 140 248 / 0.16);
 
   --primary: var(--tech-accent);
   --primary-foreground: #ffffff;
   --brand: var(--tech-accent);
-  --secondary: #e0f5f9;
+  --secondary: #eef2ff;
   --secondary-foreground: var(--tech-accent);
-  --accent: #e0f5f9;
+  --accent: #eef2ff;
   --accent-foreground: var(--tech-accent);
-  --ring: rgb(14 116 144 / 0.35);
+  --ring: rgb(79 70 229 / 0.35);
 
   --chat-accent: var(--tech-accent);
   --chat-accent-soft: var(--tech-accent-soft);
-  --chat-accent-faint: #f3fafb;
+  --chat-accent-faint: #f7f8ff;
 }
 
 /* Portal uses the same global border/input tokens as the rest of the app. */

@@ -189,7 +189,7 @@ export const submitJobCompletion = createAsyncThunk<
 
 export const submitChangeRequest = createAsyncThunk<
   ContractorRequest,
-  { jobId: string; description: string; reason?: string; estimatedCost: number },
+  { jobId: string; description: string; reason: string },
   { rejectValue: string }
 >("contractorPortal/submitChangeRequest", async ({ jobId, ...input }, { rejectWithValue }) => {
   try {

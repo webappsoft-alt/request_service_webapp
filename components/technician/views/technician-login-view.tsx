@@ -33,7 +33,7 @@ const FEATURES = [
 function BrandMark({ light = false }: { light?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--tech-sidebar-accent)] to-[var(--tech-accent)] text-white shadow-lg shadow-cyan-900/20">
+      <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--tech-sidebar-accent)] to-[var(--tech-accent)] text-white shadow-lg shadow-indigo-900/30">
         <Wrench className="size-5" aria-hidden />
       </span>
       <span className="leading-tight">
@@ -92,7 +92,7 @@ export function TechnicianLoginView() {
   return (
     <div className="technician-theme grid min-h-svh bg-[var(--tech-bg)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       {/* Showcase panel */}
-      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[var(--tech-sidebar)] via-[var(--tech-sidebar-2)] to-[#08191d] lg:flex lg:flex-col lg:justify-between lg:p-12">
+      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[var(--tech-sidebar)] via-[var(--tech-sidebar-2)] to-[#07071a] lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div
           aria-hidden
           className="pointer-events-none absolute -top-32 -right-32 size-[28rem] rounded-full bg-[var(--tech-sidebar-accent)]/15 blur-3xl"

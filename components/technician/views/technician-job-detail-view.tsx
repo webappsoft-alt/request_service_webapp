@@ -186,7 +186,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
           <>
             <TechChatButton side="technician" contextType="job" contextId={job.id} label="Chat with office" className="h-8" />
             <Button size="sm" variant="outline" className="h-8" disabled={closed} onClick={() => setChangeOpen(true)}>
-              <FilePlus2 className="size-3.5" /> Request change order
+              <FilePlus2 className="size-3.5" /> Request scope change
             </Button>
             <Button asChild size="sm" variant="outline" className="h-8">
               <Link href={technicianPaths.jobs}>
@@ -234,7 +234,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                             <RequestStatusPill status={request.status} type="change_order" />
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Est. {formatMoney(request.estimatedCost)} · {formatDate(request.createdAt)}
+                            {request.reason ? `${request.reason} · ` : ""}{formatDate(request.createdAt)}
                             {request.changeOrderNumber ? ` · ${request.changeOrderNumber}` : ""}
                             {request.reviewNote ? ` · Office: ${request.reviewNote}` : ""}
                           </p>

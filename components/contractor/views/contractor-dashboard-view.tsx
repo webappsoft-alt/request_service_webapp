@@ -190,13 +190,13 @@ export function ContractorDashboardView() {
                   {data.recentFeedback.map((item) => (
                     <li key={item.id} className="flex flex-col gap-1 px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {item.status === "approved" ? (
+                        {item.status !== "rejected" ? (
                           <CheckCircle2 className="size-4 text-emerald-600" aria-hidden />
                         ) : (
                           <AlertTriangle className="size-4 text-red-600" aria-hidden />
                         )}
                         <span className="text-sm font-medium text-slate-900">
-                          {item.type === "completion" ? "Completion" : "Change order"} · {item.job?.number || "Job"}
+                          {item.type === "completion" ? "Completion" : "Scope change"} · {item.job?.number || "Job"}
                         </span>
                         <span className="ml-auto">
                           <RequestStatusPill status={item.status} type={item.type} />

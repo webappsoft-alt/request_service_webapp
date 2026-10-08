@@ -28,6 +28,7 @@ import {
 import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { AssignContractorDialog, JobContractorsCard } from "@/components/portal/job-crew";
+import { JobNotCompleteDialog, jobCompletionBlockers, type CompletionBlocker } from "@/components/portal/job-not-complete-dialog";
 import { JobRequestsTab } from "@/components/portal/job-requests-tab";
 import { listContractorReviewRequests } from "@/lib/api/contractor-portal-client";
 import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
@@ -2012,6 +2013,8 @@ export function JobDetailView({ id }: { id: string }) {
   const [converting, setConverting] = useState(false);
   const [removingAssignee, setRemovingAssignee] = useState(false);
   const [contractorOpen, setContractorOpen] = useState(false);
+  /** Who still has to finish before invoicing (shown in a dialog instead of converting). */
+  const [completionBlockers, setCompletionBlockers] = useState<CompletionBlocker[] | null>(null);
   const jobSearchParams = useSearchParams();
   const reviewsVersion = useAppSelector((state) => state.contractorReviews.version);
   /** Pending technician / contractor requests on this job (Requests tab badge). */
@@ -2350,6 +2353,15 @@ export function JobDetailView({ id }: { id: string }) {
 
   async function convertToInvoice() {
     if (converting) return;
+    {
+      const invoicedAlready =
+        Boolean(currentJob.invoiceId || invoice?.id) || currentJob.status === "invoiced" || currentJob.status === "paid";
+      const blockers = invoicedAlready ? [] : jobCompletionBlockers(currentJob, technician);
+      if (blockers.length) {
+        setCompletionBlockers(blockers);
+        return;
+      }
+    }
     const mongoExisting =
       resolveCrmObjectId(currentJob.invoiceId) ||
       resolveCrmObjectId(invoice?.id);
@@ -2539,7 +2551,7 @@ export function JobDetailView({ id }: { id: string }) {
     { id: "materials", label: "Labour & Material" },
     {
       id: "change-orders",
-      label: `Change Orders (${(currentJob.changeOrders || []).filter((co) => !co.requestedBy).length})`,
+      label: `Change Orders (${(currentJob.changeOrders || []).length})`,
     },
     ...(alreadyInvoiced
       ? [{ id: "invoice", label: invoice?.number || "Invoice" }]
@@ -3142,6 +3154,15 @@ export function JobDetailView({ id }: { id: string }) {
           }
         }}
       </RecordWorkspace>
+      <JobNotCompleteDialog
+        jobId={job.id}
+        jobNumber={job.number}
+        blockers={completionBlockers ?? []}
+        open={Boolean(completionBlockers)}
+        onOpenChange={(open) => {
+          if (!open) setCompletionBlockers(null);
+        }}
+      />
       <AssignContractorDialog
         job={job}
         open={contractorOpen}

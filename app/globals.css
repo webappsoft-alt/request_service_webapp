@@ -290,6 +290,7 @@
   input[type="reset"]:disabled,
   input[type="checkbox"]:disabled,
   input[type="radio"]:disabled,
+  /* input[type="radio"]:disabled, */
 
   select:disabled {
     cursor: not-allowed;

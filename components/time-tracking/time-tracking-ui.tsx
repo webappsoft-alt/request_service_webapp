@@ -87,7 +87,7 @@ export function TimeRangeFilter({
             className={cn(
               "rounded-[4px] px-2.5 py-1 text-xs font-medium transition-colors",
               value.preset === preset.id
-                ? "bg-[#003F7D] text-white"
+                ? "bg-[var(--tech-accent,#003F7D)] text-white"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
             aria-pressed={value.preset === preset.id}
@@ -147,7 +147,7 @@ export function TimeStat({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-md border border-border-soft bg-card px-3 py-2.5", className, accent && "border-[#003F7D]/25 bg-[#e8eef5]")}>
+    <div className={cn("rounded-md border border-border-soft bg-card px-3 py-2.5", className, accent && "border-[var(--tech-accent,#003F7D)]/25 bg-[#e8eef5]")}>
       <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</p>
       <p className="mt-0.5 text-lg font-semibold text-foreground tabular-nums">{value}</p>
       {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}

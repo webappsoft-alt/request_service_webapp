@@ -883,7 +883,7 @@ function TechnicianLoginCard({
           <p className="text-sm font-bold text-foreground">Technician portal login</p>
           <p className="text-xs text-muted-foreground">
             {enabled
-              ? `Signs in on the Pro login as @${employee.username}. They only see their own jobs, estimates, schedule, and time.`
+              ? `Signs in at /technical/login as @${employee.username}. They only see their own jobs, estimates, schedule, and time.`
               : "Create a username and password so this employee can clock in and see their assigned work."}
           </p>
         </div>

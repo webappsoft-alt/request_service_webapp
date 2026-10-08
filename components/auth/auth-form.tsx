@@ -43,7 +43,7 @@ function copyFor(role: DemoRole, mode: AuthMode) {
             eyebrow: "Service companies",
             title: "Pro login",
             description:
-              "Sign in to manage your business, or use the username your company gave you to open your technician portal.",
+              "Sign in to manage your business.",
           }
         : {
             eyebrow: "Homeowners",
@@ -271,7 +271,14 @@ function AuthFormInner({
                   Contractor sign in
                 </Link>
               </span>
-            ) : null}
+            ) : (
+              <span className="mt-2 block">
+                Technician for a company?{" "}
+                <Link href={technicianPaths.login} className={authLinkClass}>
+                  Technician sign in
+                </Link>
+              </span>
+            )}
           </>
         ) : (
           <>

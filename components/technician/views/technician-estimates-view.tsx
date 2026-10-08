@@ -142,7 +142,7 @@ export function TechnicianEstimatesView() {
                 contextId={row.id}
                 iconOnly
                 label={`Message the office about ${row.number}`}
-                className="size-9 text-[#003F7D]"
+                className="size-9 text-[var(--tech-accent,#003F7D)]"
               />
             ),
           },

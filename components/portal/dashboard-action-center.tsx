@@ -136,7 +136,7 @@ function ActionCard({ item }: { item: DashboardActionItem }) {
         <span
           className={cn(
             "inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-colors",
-            "bg-[#003F7D] text-white group-hover:bg-[#002f5e]",
+            "bg-[var(--tech-accent,#003F7D)] text-white group-hover:bg-[#002f5e]",
           )}
         >
           {urgent ? "View" : "Open"}
@@ -171,22 +171,22 @@ export function TodayWorkCard({
           highlight === "now"
             ? "tech-today-card-now border-emerald-300 bg-emerald-50"
             : highlight === "next"
-              ? "tech-today-card-next border-[#003F7D]/45 bg-[#eef3f9]"
-              : "border-[#003F7D]/15 bg-[#f6f9fc] hover:border-[#003F7D]/35 hover:bg-[#eef3f9]",
+              ? "tech-today-card-next border-[var(--tech-accent,#003F7D)]/45 bg-[#eef3f9]"
+              : "border-[var(--tech-accent,#003F7D)]/15 bg-[#f6f9fc] hover:border-[var(--tech-accent,#003F7D)]/35 hover:bg-[#eef3f9]",
         )}
       >
-        <span className="flex w-16 shrink-0 flex-col items-center rounded-md bg-white py-1 text-center ring-1 ring-[#003F7D]/15">
-          <span className="text-[11px] font-bold tabular-nums text-[#003F7D]">{item.time || "Today"}</span>
+        <span className="flex w-16 shrink-0 flex-col items-center rounded-md bg-white py-1 text-center ring-1 ring-[var(--tech-accent,#003F7D)]/15">
+          <span className="text-[11px] font-bold tabular-nums text-[var(--tech-accent,#003F7D)]">{item.time || "Today"}</span>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.08em] text-[#003F7D]/70 uppercase">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.08em] text-[var(--tech-accent,#003F7D)]/70 uppercase">
             <Icon className="size-3" aria-hidden />
             {item.actionLabel}
             {highlight ? (
               <span
                 className={cn(
                   "ml-1 rounded-full px-1.5 py-px text-[9px] font-bold tracking-wide text-white",
-                  highlight === "now" ? "action-urgent-blink bg-emerald-600" : "bg-[#003F7D]",
+                  highlight === "now" ? "action-urgent-blink bg-emerald-600" : "bg-[var(--tech-accent,#003F7D)]",
                 )}
               >
                 {highlight === "now" ? "NOW" : "UP NEXT"}
@@ -201,7 +201,7 @@ export function TodayWorkCard({
             {item.statusLabel}
           </span>
         ) : null}
-        <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-[#003F7D]/25 bg-white px-2.5 text-[11px] font-semibold text-[#003F7D] group-hover:border-[#003F7D]/50">
+        <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-[var(--tech-accent,#003F7D)]/25 bg-white px-2.5 text-[11px] font-semibold text-[var(--tech-accent,#003F7D)] group-hover:border-[var(--tech-accent,#003F7D)]/50">
           {cta}
           <ArrowRight className="size-3" aria-hidden />
         </span>
@@ -229,7 +229,7 @@ export function ActionPanel({
     <section
       className={cn(
         "flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
-        tone === "urgent" ? "border-red-200" : "border-[#003F7D]/20",
+        tone === "urgent" ? "border-red-200" : "border-[var(--tech-accent,#003F7D)]/20",
         className,
       )}
     >
@@ -238,7 +238,7 @@ export function ActionPanel({
           "flex items-center justify-between gap-3 px-4 py-2.5",
           tone === "urgent"
             ? "border-b border-red-200 bg-gradient-to-r from-red-50 via-white to-white"
-            : "bg-[#003F7D] text-white",
+            : "bg-[var(--tech-accent,#003F7D)] text-white",
         )}
       >
         <h2
@@ -363,7 +363,7 @@ export function DashboardActionCenter({
                     className={cn(
                       "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
                       filter === option.id
-                        ? "bg-[#003F7D] text-white"
+                        ? "bg-[var(--tech-accent,#003F7D)] text-white"
                         : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >

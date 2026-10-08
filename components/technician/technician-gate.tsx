@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
-import { isTechnicianRole } from "@/lib/technician-paths";
+import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
 import { contractorPaths, isContractorRole } from "@/lib/contractor-paths";
 
 /**
@@ -23,7 +23,7 @@ export function TechnicianGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!auth.hydrated || isTechnician) return;
     if (!isAuthenticated) {
-      router.replace(proPaths.login);
+      router.replace(technicianPaths.login);
     } else if (role === "provider") {
       router.replace(proPaths.dashboard);
     } else if (isContractorRole(role)) {
@@ -35,7 +35,7 @@ export function TechnicianGate({ children }: { children: ReactNode }) {
 
   if (!auth.hydrated || !isTechnician) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-[#f5f5f5] text-sm text-muted-foreground">
+      <div className="technician-theme flex min-h-svh items-center justify-center bg-[var(--tech-bg)] text-sm text-muted-foreground">
         Opening your technician portal…
       </div>
     );

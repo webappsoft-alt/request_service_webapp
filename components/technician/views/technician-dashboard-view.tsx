@@ -161,7 +161,7 @@ export function TechnicianDashboardView() {
             {numbers.map((item) => (
               <Link key={item.label} href={item.href} className="px-4 py-3 transition-colors hover:bg-muted/40">
                 <p className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase">{item.label}</p>
-                <p className={cn("mt-1 text-xl font-semibold tracking-tight tabular-nums", item.hot && "text-[#003F7D]")}>
+                <p className={cn("mt-1 text-xl font-semibold tracking-tight tabular-nums", item.hot && "text-[var(--tech-accent,#003F7D)]")}>
                   {item.value}
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">{item.note}</p>

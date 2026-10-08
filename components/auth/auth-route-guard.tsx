@@ -7,7 +7,7 @@ import { selectAuth } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
 import { customerPaths } from "@/lib/customer-paths";
 import { readPendingFixedOrder } from "@/lib/booking/pending-fixed-order";
-import { isTechnicianPath, technicianPaths } from "@/lib/technician-paths";
+import { isTechnicianLoginPath, isTechnicianPath, technicianPaths } from "@/lib/technician-paths";
 import {
   contractorPaths,
   isContractorLoginPath,
@@ -134,10 +134,15 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const customerOnPro = loggedIn && role === "customer" && isProArea(pathname);
   /** Technicians only ever see /technical/* — hide anything else while redirecting. */
   const technicianOffPortal =
-    loggedIn && role === "technician" && !isTechnicianPath(pathname);
-  /** Non-technicians never see the technician portal. */
+    loggedIn &&
+    role === "technician" &&
+    (!isTechnicianPath(pathname) || isTechnicianLoginPath(pathname));
+  /** Signed-in non-technicians never see the technician portal; signed-out visitors only its login. */
   const nonTechnicianOnTechnical =
-    auth.hydrated && role !== "technician" && isTechnicianPath(pathname);
+    auth.hydrated &&
+    role !== "technician" &&
+    isTechnicianPath(pathname) &&
+    (loggedIn || !isTechnicianLoginPath(pathname));
   /** Contractors only ever see the contractor portal (not its login while signed in). */
   const contractorOffPortal =
     loggedIn &&
@@ -164,7 +169,9 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
         router.replace(`/login?next=${next}`);
       } else if (isContractorPath(pathname)) {
         if (!isContractorLoginPath(pathname)) router.replace(contractorPaths.login);
-      } else if (isProDashboard(pathname) || isTechnicianPath(pathname)) {
+      } else if (isTechnicianPath(pathname)) {
+        if (!isTechnicianLoginPath(pathname)) router.replace(technicianPaths.login);
+      } else if (isProDashboard(pathname)) {
         router.replace(proPaths.login);
       }
       return;
@@ -191,7 +198,7 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
 
     if (nextRole === "technician") {
       // Provider, customer, and marketing routes are all off-limits.
-      if (!isTechnicianPath(pathname)) {
+      if (!isTechnicianPath(pathname) || isTechnicianLoginPath(pathname)) {
         router.replace(technicianPaths.dashboard);
       }
       return;

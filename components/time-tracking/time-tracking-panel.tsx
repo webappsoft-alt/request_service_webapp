@@ -321,7 +321,7 @@ export function TimeTrackingPanel({
               onClick={() => setView(item.id)}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-xs font-medium transition-colors",
-                active ? "bg-[#003F7D] text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                active ? "bg-[var(--tech-accent,#003F7D)] text-white" : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <Icon className="size-3.5" aria-hidden />
@@ -399,7 +399,7 @@ export function TimeTrackingPanel({
                   className={cn(
                     "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
                     active
-                      ? "border-[#003F7D] text-[#003F7D] dark:text-blue-200"
+                      ? "border-[var(--tech-accent,#003F7D)] text-[var(--tech-accent,#003F7D)] dark:text-blue-200"
                       : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -407,7 +407,7 @@ export function TimeTrackingPanel({
                   <span
                     className={cn(
                       "rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
-                      active ? "bg-[#e8eef5] text-[#003F7D]" : "bg-muted text-muted-foreground",
+                      active ? "bg-[#e8eef5] text-[var(--tech-accent,#003F7D)]" : "bg-muted text-muted-foreground",
                     )}
                   >
                     {tab.count}

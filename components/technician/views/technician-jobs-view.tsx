@@ -77,7 +77,7 @@ export function TechnicianJobsView() {
                 }}
                 className={cn(
                   "rounded-[4px] px-2.5 py-1 text-xs font-medium",
-                  scope === item.id ? "bg-[#003F7D] text-white" : "text-muted-foreground hover:bg-muted",
+                  scope === item.id ? "bg-[var(--tech-accent,#003F7D)] text-white" : "text-muted-foreground hover:bg-muted",
                 )}
               >
                 {item.label}
@@ -173,7 +173,7 @@ export function TechnicianJobsView() {
                 contextId={row.id}
                 iconOnly
                 label={`Message the office about ${row.number}`}
-                className="size-9 text-[#003F7D]"
+                className="size-9 text-[var(--tech-accent,#003F7D)]"
               />
             ),
           },

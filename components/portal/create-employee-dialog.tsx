@@ -247,7 +247,7 @@ export function CreateEmployeeDialog({
             <div>
               <p className="text-sm font-semibold">Technician portal login</p>
               <p className="text-xs text-muted-foreground">
-                Optional. They sign in on the Pro login with this username to see only their own jobs, schedule, and time.
+                Optional. They sign in at /technical/login with this username to see only their own jobs, schedule, and time.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

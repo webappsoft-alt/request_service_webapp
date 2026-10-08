@@ -106,7 +106,7 @@ function RecordTag({
   const label = record.number ? `#${record.number}` : kind === "job" ? "Job" : "Estimate";
   const tone =
     kind === "job"
-      ? "border-[#003F7D]/20 bg-[#e8eef5] text-[#003F7D] dark:bg-[#003F7D]/25 dark:text-blue-100"
+      ? "border-[var(--tech-accent,#003F7D)]/20 bg-[#e8eef5] text-[var(--tech-accent,#003F7D)] dark:bg-[var(--tech-accent,#003F7D)]/25 dark:text-blue-100"
       : "border-amber-300/60 bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200";
   const chip = (
     <span
@@ -202,15 +202,15 @@ export function TimesheetKpis({
   return (
     <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-3", ledger ? "lg:grid-cols-6" : "lg:grid-cols-4")}>
       <Stat
-        className="border-l-4 border-l-[#003F7D] shadow-[0_1px_3px_rgba(15,23,42,0.08)]"
-        valueClassName="text-xl text-[#003F7D] dark:text-blue-200"
+        className="border-l-4 border-l-[var(--tech-accent,#003F7D)] shadow-[0_1px_3px_rgba(15,23,42,0.08)]"
+        valueClassName="text-xl text-[var(--tech-accent,#003F7D)] dark:text-blue-200"
         label="Total hours"
         value={formatHoursShort(summary.totalSeconds)}
         hint={formatExactDuration(summary.totalSeconds)}
       />
       <Stat
-        className="border-l-4 border-l-[#003F7D] shadow-[0_1px_3px_rgba(15,23,42,0.08)]"
-        valueClassName="text-xl text-[#003F7D] dark:text-blue-200"
+        className="border-l-4 border-l-[var(--tech-accent,#003F7D)] shadow-[0_1px_3px_rgba(15,23,42,0.08)]"
+        valueClassName="text-xl text-[var(--tech-accent,#003F7D)] dark:text-blue-200"
         label="Total pay"
         value={formatMoney(summary.totalPay)}
         hint={payRate != null && payRate > 0 ? `Hours × ${formatMoney(payRate)}/hr` : "Hours × pay rate"}
@@ -454,7 +454,7 @@ function SessionCard({
     action = onPay && ledgerRow.payable !== false ? (
       <Button
         size="xs"
-        className="h-5 bg-[#003F7D] px-1.5 text-[10px] text-white hover:bg-[#003F7D]/90"
+        className="h-5 bg-[var(--tech-accent,#003F7D)] px-1.5 text-[10px] text-white hover:bg-[var(--tech-accent,#003F7D)]/90"
         onClick={() => onPay(ledgerRow)}
         title={`${formatMoney(ledgerRow.remaining)} unpaid on this ${kind}`}
       >
@@ -477,7 +477,7 @@ function SessionCard({
       className={cn(
         "space-y-1 rounded-md border bg-card p-1.5 text-[11px] leading-tight shadow-[0_1px_2px_rgba(15,23,42,0.05)]",
         running ? "border-emerald-300 ring-1 ring-emerald-200 dark:border-emerald-500/50 dark:ring-emerald-500/20" : "border-[#94a3b8] dark:border-border",
-        kind === "job" ? "border-l-[3px] border-l-[#003F7D]" : "border-l-[3px] border-l-amber-400",
+        kind === "job" ? "border-l-[3px] border-l-[var(--tech-accent,#003F7D)]" : "border-l-[3px] border-l-amber-400",
       )}
     >
       <div className="flex min-w-0 items-center justify-between gap-1">
@@ -545,7 +545,7 @@ export function WeekBoard({
             className={cn(
               "border-r border-[#94a3b8] dark:border-border px-2 py-1.5 text-[11px] font-semibold tracking-[0.1em] uppercase last:border-r-0",
               index === todayColumn
-                ? "bg-[#e8eef5] text-[#003F7D] dark:bg-[#003F7D]/25 dark:text-blue-100"
+                ? "bg-[#e8eef5] text-[var(--tech-accent,#003F7D)] dark:bg-[var(--tech-accent,#003F7D)]/25 dark:text-blue-100"
                 : "bg-slate-50 text-slate-500 dark:bg-muted/40 dark:text-muted-foreground",
             )}
           >
@@ -571,7 +571,7 @@ export function WeekBoard({
                 className={cn(
                   "flex min-h-24 min-w-0 flex-col gap-1 border-[#94a3b8] dark:border-border p-1.5 md:border-r md:last:border-r-0",
                   day.outside && "bg-slate-50/80 dark:bg-muted/30",
-                  isToday && "bg-[#e8eef5]/40 dark:bg-[#003F7D]/10",
+                  isToday && "bg-[#e8eef5]/40 dark:bg-[var(--tech-accent,#003F7D)]/10",
                   // Mobile: only days with time (or today) are listed.
                   !day.entries.length && !isToday && "hidden md:flex",
                   "border-b md:border-b-0",
@@ -586,7 +586,7 @@ export function WeekBoard({
                   >
                     <span className="mr-1 md:hidden">{WEEKDAYS[dayIndex]}</span>
                     {isToday ? (
-                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e8eef5] px-1.5 text-[#003F7D] ring-1 ring-[#003F7D]/20 dark:bg-[#003F7D]/30 dark:text-blue-100">
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e8eef5] px-1.5 text-[var(--tech-accent,#003F7D)] ring-1 ring-[var(--tech-accent,#003F7D)]/20 dark:bg-[var(--tech-accent,#003F7D)]/30 dark:text-blue-100">
                         {showMonth ? day.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : day.date.getDate()}
                       </span>
                     ) : showMonth ? (
@@ -721,7 +721,7 @@ export function LedgerTable({
                   Awaiting approval
                 </span>
               ) : row.remaining > 0 ? (
-                <Button size="xs" className="bg-[#003F7D] text-white hover:bg-[#003F7D]/90" onClick={() => onPay(row)}>
+                <Button size="xs" className="bg-[var(--tech-accent,#003F7D)] text-white hover:bg-[var(--tech-accent,#003F7D)]/90" onClick={() => onPay(row)}>
                   Pay
                 </Button>
               ) : (
@@ -1010,7 +1010,7 @@ export function PayTechnicianDialog({
             Cancel
           </Button>
           <Button
-            className="bg-[#003F7D] text-white hover:bg-[#003F7D]/90"
+            className="bg-[var(--tech-accent,#003F7D)] text-white hover:bg-[var(--tech-accent,#003F7D)]/90"
             disabled={invalid || saving}
             onClick={() => void save()}
           >

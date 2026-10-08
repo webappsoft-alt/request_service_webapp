@@ -16,6 +16,7 @@ import {
   MessageSquare,
   UserRound,
   Wallet,
+  Wrench,
 } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { LiveTimer } from "@/components/time-tracking/time-tracking-ui";
@@ -76,7 +77,10 @@ function NavBadge({ section, chat = false }: { section?: TechSection; chat?: boo
   const count = chat ? chatCount : sectionCount;
   if (!count) return null;
   return (
-    <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]">
+    <span
+      className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--tech-sidebar-accent)] px-1.5 text-[10px] font-bold leading-none text-[var(--tech-sidebar-2)]"
+      aria-label={`${count} new`}
+    >
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -94,11 +98,19 @@ function NavLinks({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex items-center gap-2.5 px-3 py-1.5 text-[13px] font-medium transition-colors",
-              active ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
+              "relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
+              active
+                ? "bg-[var(--tech-sidebar-active)] text-white"
+                : "text-[var(--tech-sidebar-text)] hover:bg-white/5 hover:text-white",
             )}
           >
-            <Icon className="size-4 shrink-0" aria-hidden />
+            {active ? (
+              <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[var(--tech-sidebar-accent)]" aria-hidden />
+            ) : null}
+            <Icon
+              className={cn("size-4 shrink-0", active ? "text-[var(--tech-sidebar-accent)]" : "text-slate-400")}
+              aria-hidden
+            />
             {item.label}
             <NavBadge section={item.section} chat={item.chat} />
           </Link>
@@ -110,6 +122,22 @@ function NavLinks({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
         );
       })}
     </nav>
+  );
+}
+
+function SidebarBrand({ company }: { company: string }) {
+  return (
+    <Link href={technicianPaths.dashboard} className="flex items-center gap-2.5">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--tech-sidebar-accent)] to-[var(--tech-accent)] text-white shadow-sm">
+        <Wrench className="size-[18px]" aria-hidden />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold text-white">{company || "Technician portal"}</span>
+        <span className="block text-[10px] font-semibold tracking-[0.16em] text-[var(--tech-sidebar-accent)] uppercase">
+          Technician portal
+        </span>
+      </span>
+    </Link>
   );
 }
 
@@ -229,7 +257,7 @@ function TechnicianAccountMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-8 gap-1.5 px-1.5" aria-label="Open account menu">
-          <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+          <span className="flex size-7 items-center justify-center rounded-full bg-[var(--tech-accent-soft)] text-xs font-semibold text-[var(--tech-accent)]">
             {initials}
           </span>
           <ChevronDown className="size-3.5 text-muted-foreground" />
@@ -278,36 +306,45 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
 
   const title = company || "Technician portal";
 
+  // Dialogs / popovers render in <body>; give them the technician palette too.
+  useEffect(() => {
+    document.body.classList.add("technician-theme");
+    return () => document.body.classList.remove("technician-theme");
+  }, []);
+
   return (
-    <div className="portal-app min-h-svh bg-[#eef1f5]">
+    <div className="technician-theme portal-app min-h-svh bg-[var(--tech-bg)]">
       <TechnicianRealtimeBridge />
       <TechnicianLocationShare />
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-[#003F7D] text-white lg:flex">
-        <div className="flex h-12 flex-col justify-center border-b border-white/10 px-4">
-          <Link href={technicianPaths.dashboard} className="truncate text-sm font-semibold tracking-wide">
-            {title}
-          </Link>
-          <span className="text-[10px] font-semibold tracking-[0.16em] text-white/50 uppercase">Technician</span>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-gradient-to-b from-[var(--tech-sidebar)] to-[var(--tech-sidebar-2)] lg:flex">
+        <div className="flex h-14 items-center border-b border-[var(--tech-sidebar-border)] px-4">
+          <SidebarBrand company={company} />
         </div>
-        <div className="flex-1 overflow-y-auto px-2 py-3">
+        <div className="flex-1 overflow-y-auto px-3 py-4">
           <NavLinks />
         </div>
+        {company ? (
+          <p className="border-t border-[var(--tech-sidebar-border)] px-4 py-3 text-[11px] leading-snug text-slate-400">
+            Working with <span className="font-medium text-slate-200">{company}</span>
+          </p>
+        ) : null}
       </aside>
 
-      <div className="lg:pl-56">
-        <header className="sticky top-0 z-20 border-b border-input bg-card">
-          <div className="flex h-12 items-center gap-2 px-3 sm:px-4">
+      <div className="lg:pl-60">
+        <header className="sticky top-0 z-20 border-b border-input bg-white/95 backdrop-blur">
+          <div className="flex h-14 items-center gap-2 px-3 sm:px-5">
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu">
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="flex w-72 flex-col border-0 bg-[#003F7D] p-0 text-white">
-                <SheetHeader className="border-b border-white/10 px-4 py-3">
-                  <SheetTitle className="text-white">{title}</SheetTitle>
+              <SheetContent side="left" className="technician-theme flex w-72 flex-col border-0 bg-gradient-to-b from-[var(--tech-sidebar)] to-[var(--tech-sidebar-2)] p-0 text-white">
+                <SheetHeader className="border-b border-[var(--tech-sidebar-border)] px-4 py-3">
+                  <SheetTitle className="sr-only">Technician portal menu</SheetTitle>
+                  <SidebarBrand company={company} />
                 </SheetHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
+                <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
                   <NavLinks closeOnNavigate />
                 </div>
               </SheetContent>

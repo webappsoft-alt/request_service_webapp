@@ -68,11 +68,14 @@ export function JobChangeOrdersPanel({
   job,
   originalAmount,
   invoiceId,
+  locked = false,
   onJobUpdated,
 }: {
   job: Job;
   originalAmount: number;
   invoiceId?: string;
+  /** Completed job — no new change orders. */
+  locked?: boolean;
   onJobUpdated?: (job: Job) => void;
 }) {
   const router = useRouter();
@@ -81,7 +84,8 @@ export function JobChangeOrdersPanel({
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const consumedCreateParam = useRef(false);
-  const orders = job.changeOrders || [];
+  // Extras requested by technicians / contractors are handled on the Requests tab.
+  const orders = useMemo(() => (job.changeOrders || []).filter((co) => !co.requestedBy), [job.changeOrders]);
 
   /** Open once from ?create=1, then strip it so the tab never reopens the modal. */
   useEffect(() => {
@@ -175,10 +179,12 @@ export function JobChangeOrdersPanel({
             amount and is billed on its own invoice.
           </p>
         </div>
-        <Button size="sm" className="h-8" onClick={() => setOpen(true)}>
-          <Plus className="size-3.5" />
-          Create change order
-        </Button>
+        {locked ? null : (
+          <Button size="sm" className="h-8" onClick={() => setOpen(true)}>
+            <Plus className="size-3.5" />
+            Create change order
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -219,10 +225,32 @@ export function JobChangeOrdersPanel({
                   <span className="font-semibold text-foreground">
                     {co.number}
                   </span>
-                  <StatusPill
-                    label={coStatusLabel(co.status)}
-                    tone={coStatusTone(co.status)}
-                  />
+                  {co.requestedBy && co.status !== "approved" && co.status !== "rejected" && co.status !== "cancelled" ? (
+                    <StatusPill tone="warning" label={`Awaiting ${co.requestedBy.participantType} acceptance`} />
+                  ) : (
+                    <StatusPill
+                      label={coStatusLabel(co.status)}
+                      tone={coStatusTone(co.status)}
+                    />
+                  )}
+                  {co.requestedBy ? (
+                    <span
+                      className={
+                        co.requestedBy.participantType === "contractor"
+                          ? "rounded-full bg-[#e7f5f1] px-1.5 text-[10px] font-semibold leading-4 text-[#0f7b68]"
+                          : "rounded-full bg-[#eef3f9] px-1.5 text-[10px] font-semibold leading-4 text-[#003f7d]"
+                      }
+                    >
+                      Requested by {co.requestedBy.participantType}
+                      {co.requestedBy.name ? ` · ${co.requestedBy.name}` : ""}
+                    </span>
+                  ) : null}
+                  {co.fieldAcceptance?.status === "accepted" ? (
+                    <StatusPill
+                      tone="success"
+                      label={`Accepted by ${co.fieldAcceptance.acceptedBy || co.requestedBy?.participantType || "requester"}`}
+                    />
+                  ) : null}
                 </div>
                 <p className="truncate text-sm text-foreground">
                   {co.title || co.description}
@@ -281,7 +309,7 @@ export function JobChangeOrdersPanel({
                     Create invoice
                   </Button>
                 ) : null}
-                {co.status === "draft" ? (
+                {co.status === "draft" && !co.requestedBy ? (
                   <Button
                     size="sm"
                     className="h-8"
@@ -315,7 +343,7 @@ export function JobChangeOrdersPanel({
 
       <JobChangeOrderDialog
         job={job}
-        open={open}
+        open={open && !locked}
         onOpenChange={setOpen}
         invoiceId={invoiceId}
         onSaved={onJobUpdated}

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, Search, X } from "lucide-react";
 import { PeopleSubnav, WorkSubnav } from "@/components/portal/people-subnav";
 import { PortalNotifications } from "@/components/portal/portal-notifications";
+import { ContractorReviewsBridge } from "@/components/portal/contractor-reviews-bridge";
 import { useOpenRecords } from "@/components/portal/use-open-records";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
 import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
@@ -27,6 +28,7 @@ import { isDashboardPath, isPeoplePath, isWorkPath, portalNavGroups } from "@/li
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
+import { selectPendingReviewTotal } from "@/store/contractorReviewsSlice";
 import type { AuthUser } from "@/store/authSlice";
 
 function NavLinks({
@@ -39,6 +41,7 @@ function NavLinks({
   const pathname = usePathname();
   const inbox = usePortalInbox();
   const teamChatUnread = useTechChatUnread("provider");
+  const pendingFieldRequests = useAppSelector(selectPendingReviewTotal);
 
   function badgeFor(href: string) {
     if (href === "/pro/dashboard/requests") return inbox.newLeads;
@@ -47,6 +50,8 @@ function NavLinks({
     // Classic estimates nav is hidden; badge follows the new Estimate path.
     if (href === "/pro/dashboard/new-estimate") return inbox.pendingEstimates;
     if (href === "/pro/dashboard/orders") return inbox.pendingOrders;
+    // Completion proofs / change order requests from technicians and contractors.
+    if (href === "/pro/dashboard/jobs") return pendingFieldRequests;
     return 0;
   }
 
@@ -90,7 +95,7 @@ function NavLinks({
                       <span
                         className={cn(
                           "absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]",
-                          item.href === "/pro/dashboard/new-estimate" &&
+                          (item.href === "/pro/dashboard/new-estimate" || item.href === "/pro/dashboard/jobs") &&
                             "animate-pulse ring-2 ring-amber-300",
                         )}
                       >
@@ -103,7 +108,7 @@ function NavLinks({
                     <span
                       className={cn(
                         "ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]",
-                        item.href === "/pro/dashboard/new-estimate" &&
+                        (item.href === "/pro/dashboard/new-estimate" || item.href === "/pro/dashboard/jobs") &&
                           "animate-pulse ring-2 ring-amber-300 ring-offset-1 ring-offset-[#003F7D]",
                       )}
                     >
@@ -160,6 +165,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="portal-app min-h-svh bg-[#eef1f5]">
+      <ContractorReviewsBridge />
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] text-white transition-[width] duration-200 lg:flex",

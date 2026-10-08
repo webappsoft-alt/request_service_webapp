@@ -414,9 +414,13 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
   if (contractor.hourlyRate !== undefined) payload.hourlyRate = contractor.hourlyRate ?? 0;
   if (contractor.overtimeRate !== undefined) payload.overtimeRate = contractor.overtimeRate ?? 0;
   if (contractor.travelRate !== undefined) payload.travelRate = contractor.travelRate ?? 0;
+  if (contractor.payType !== undefined) payload.payType = contractor.payType;
+  if (contractor.fixedRate !== undefined) payload.fixedRate = contractor.fixedRate ?? 0;
   if (contractor.insuranceExpires !== undefined) {
-    payload.insuranceExpires = contractor.insuranceExpires || new Date().toISOString();
+    // Empty = not on file (the API accepts null; "now" would mark it expired immediately).
+    payload.insuranceExpires = contractor.insuranceExpires || null;
   }
+  if (contractor.portalPassword) payload.portalPassword = contractor.portalPassword;
   if (contractor.workingHours !== undefined) payload.workingHours = contractor.workingHours;
   const hasLocationFields =
     contractor.street !== undefined ||
@@ -602,6 +606,11 @@ function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
     ) {
       return [];
     }
+    // Keep a multi-technician crew intact on ordinary job saves.
+    const crewIds = job.assignedEmployeeIds || [];
+    if (crewIds.length && (!job.assignedEmployeeId || crewIds.includes(job.assignedEmployeeId))) {
+      return crewIds;
+    }
     if (!techId) return resolveAssignedEmployeeIds(job, _employees);
     if (_employees.some((employee) => employee.id === techId)) return [techId];
     return resolveAssignedEmployeeIds({ ...job, assignedTo: techId }, _employees);
@@ -612,7 +621,8 @@ function jobPayload(job: Job, _employees: PortalEmployee[] = []) {
     title: job.title || "",
     status: job.status,
     assignedEmployees,
-    assignedContractors: [],
+    // assignedContractors is deliberately omitted: contractors are managed by
+    // the crew endpoint, and an empty list here would unassign them.
     scheduledAt: job.scheduledAt || null,
     dueAt: job.dueAt || null,
     notes: job.notes || "",
@@ -1110,6 +1120,10 @@ export async function createContractor(contractor: PortalContractor) {
       status: contractor.status,
       hourlyRate: contractor.hourlyRate,
       insuranceExpires: contractor.insuranceExpires,
+      street: contractor.street,
+      latitude: contractor.latitude,
+      longitude: contractor.longitude,
+      portalPassword: contractor.portalPassword,
     }),
   );
   return mapCrmEntity(response, mapPortalContractor);

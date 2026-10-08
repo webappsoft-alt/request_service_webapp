@@ -32,6 +32,8 @@ import {
   type RecordKind,
 } from "@/components/time-tracking/timesheet-ui";
 import { Button } from "@/components/ui/button";
+import { PayContractorDialog } from "@/components/portal/job-crew";
+import { getContractorLedger, type ContractorPayRow } from "@/lib/api/contractor-portal-client";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -46,6 +48,8 @@ export type TimeTrackingPanelProps = {
   /** Technician portal (own data) vs provider portal (scoped by ids below). */
   technician?: boolean;
   employeeId?: string;
+  /** Contractor profile: their sessions, job ledger and payouts (paid via the contractor payout dialog). */
+  contractor?: { id: string; name: string };
   jobId?: string;
   estimateId?: string;
   defaultRange?: TimeRange;
@@ -78,6 +82,7 @@ export function TimeTrackingPanel({
   scopeKey,
   technician = false,
   employeeId,
+  contractor,
   jobId,
   estimateId,
   defaultRange = { preset: "week" },
@@ -100,6 +105,9 @@ export function TimeTrackingPanel({
   const [paymentsTab, setPaymentsTab] = useState<"balances" | "history">("balances");
   const [stoppingId, setStoppingId] = useState<string | null>(null);
   const pay = usePayDialog();
+  const [contractorPaying, setContractorPaying] = useState<ContractorPayRow | null>(null);
+  const contractorId = contractor?.id;
+  const contractorName = contractor?.name;
 
   const resolved = useMemo(() => resolveTimeRange(range), [range]);
   const listScope = view === "sessions" ? scopeKey : `${scopeKey}:board`;
@@ -112,6 +120,8 @@ export function TimeTrackingPanel({
   const employeeKey = employeeIds.join(",");
   const query = useMemo(
     () => ({
+      contractorId,
+      participantType: contractorId ? ("contractor" as const) : undefined,
       employeeId,
       employeeIds: employeeId || !employeeKey ? undefined : employeeKey.split(","),
       jobId,
@@ -122,12 +132,14 @@ export function TimeTrackingPanel({
       page: view === "sessions" ? page : 1,
       limit: view === "sessions" ? PAGE_SIZE : BOARD_LIMIT,
     }),
-    [employeeId, employeeKey, jobId, estimateId, kindsKey, resolved.from, resolved.to, page, view],
+    [contractorId, employeeId, employeeKey, jobId, estimateId, kindsKey, resolved.from, resolved.to, page, view],
   );
   // Payment history is paged + filtered by the API; earned / remaining per job always cover everything.
   const ledgerQuery = useMemo(
     () => ({
       technician,
+      contractorId,
+      contractorName,
       employeeId,
       employeeIds: employeeId || !employeeKey ? undefined : employeeKey.split(","),
       jobId,
@@ -136,7 +148,7 @@ export function TimeTrackingPanel({
       paymentsLimit: PAGE_SIZE,
       kinds: kindsKey.split(",") as RecordKind[],
     }),
-    [technician, employeeId, employeeKey, jobId, estimateId, paymentsPage, kindsKey],
+    [technician, contractorId, contractorName, employeeId, employeeKey, jobId, estimateId, paymentsPage, kindsKey],
   );
 
   useEffect(() => {
@@ -170,14 +182,14 @@ export function TimeTrackingPanel({
       if (type !== "TIME_ENTRY_UPDATED" && type !== "TECHNICIAN_PAYMENT_UPDATED") return;
       // Refs may be ids or populated objects — match on the serialized payload.
       const text = detail.payload ? JSON.stringify(detail.payload) : "";
-      const ids = [employeeId, jobId, estimateId].filter(Boolean) as string[];
+      const ids = [contractorId, employeeId, jobId, estimateId].filter(Boolean) as string[];
       if (ids.length && !ids.some((id) => text.includes(id))) return;
       if (type === "TIME_ENTRY_UPDATED") {
         void dispatch(fetchTimeEntries({ scopeKey: listScope, query, technician, force: true }));
       }
       void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
     });
-  }, [dispatch, technician, scopeKey, listScope, query, ledgerQuery, employeeId, jobId, estimateId]);
+  }, [dispatch, technician, scopeKey, listScope, query, ledgerQuery, contractorId, employeeId, jobId, estimateId]);
 
   // Ledger rows follow the Jobs / Estimates toggles; totals are re-added from the visible rows.
   const ledgerRows = useMemo(
@@ -225,7 +237,24 @@ export function TimeTrackingPanel({
     }
   }
 
-  const onPay = canPay ? (row: LedgerRow) => pay.start(row) : undefined;
+  /** Contractor rows pay through the contractor payout (approved work, never above the balance). */
+  async function startContractorPay(row: LedgerRow) {
+    if (!contractorId || !row.jobId) return;
+    try {
+      const { rows } = await getContractorLedger(contractorId);
+      const match = rows.find((item) => item.jobId === row.jobId);
+      if (match?.payable) setContractorPaying(match);
+      else toast.error("This job can be paid once the contractor's completed work is approved.");
+    } catch (error) {
+      toast.error(error instanceof Error && error.message ? error.message : "Could not load the balance.");
+    }
+  }
+
+  const onPay = canPay
+    ? contractorId
+      ? (row: LedgerRow) => void startContractorPay(row)
+      : (row: LedgerRow) => pay.start(row)
+    : undefined;
   const onStop = allowStop ? (entry: TimeEntry) => void stop(entry) : undefined;
   const showTechFilter = Boolean(employeeOptions && !employeeId);
   const loadingFirst = list.loading && !list.items.length;
@@ -254,7 +283,7 @@ export function TimeTrackingPanel({
               }}
             />
           ) : null}
-          {!jobId && !estimateId ? (
+          {!jobId && !estimateId && !contractorId ? (
             <RecordTypeFilter
               value={kinds}
               onChange={(next) => {
@@ -349,11 +378,11 @@ export function TimeTrackingPanel({
       {view === "payments" ? (
         <div className="space-y-3">
           {/* Inner tabs: balances to pay vs. payouts already made. */}
-          <div className="flex gap-1 border-b border-[#94a3b8] dark:border-border" role="tablist" aria-label="Payments">
+          <div className="inline-flex gap-1 border-b border-[#94a3b8] dark:border-border" role="tablist" aria-label="Payments">
             {[
               {
                 id: "balances" as const,
-                label: `Payement  remaining by ${jobId ? "technician" : "job"}`,
+                label: `Payment remaining by ${jobId ? "technician" : "job"}`,
                 count: ledgerRows.length,
                 owed: ledgerRows.filter((row) => row.remaining > 0).length,
               },
@@ -419,7 +448,21 @@ export function TimeTrackingPanel({
         </div>
       ) : null}
 
-      {canPay ? <PayTechnicianDialog key={pay.key} row={pay.row} open={pay.open} onOpenChange={pay.setOpen} /> : null}
+      {canPay && !contractorId ? (
+        <PayTechnicianDialog key={pay.key} row={pay.row} open={pay.open} onOpenChange={pay.setOpen} />
+      ) : null}
+      {canPay && contractorId ? (
+        <PayContractorDialog
+          open={Boolean(contractorPaying)}
+          onOpenChange={(next) => !next && setContractorPaying(null)}
+          contractorId={contractorId}
+          contractorName={contractorName || "Contractor"}
+          row={contractorPaying}
+          onPaid={() => {
+            void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
+          }}
+        />
+      ) : null}
     </div>
   );
 }

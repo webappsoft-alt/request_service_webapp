@@ -66,6 +66,10 @@
 }
 
 :root {
+  /* Field chat (technician / contractor ↔ office). Overridden per portal theme. */
+  --chat-accent: #003f7d;
+  --chat-accent-soft: #eef3f9;
+  --chat-accent-faint: #f6f9fc;
   /* Brand: #003F7D → oklch(0.372 0.12 254). All navy tokens are tones of this. */
   --background: oklch(0.993 0.006 254);
   --foreground: oklch(0.24 0.04 254);
@@ -168,6 +172,37 @@
   --sidebar-accent-foreground: oklch(0.985 0.008 254);
   --sidebar-border: oklch(1 0 0 / 18%);
   --sidebar-ring: oklch(0.68 0.08 254);
+}
+
+/*
+ * Contractor portal theme — balanced slate + emerald, distinct from the Pro
+ * portal's navy. Scoped to `.contractor-theme`, so shadcn primitives inside
+ * the portal (buttons, rings, focus states) pick up the accent automatically.
+ * Change the palette here; components only reference these tokens.
+ */
+.contractor-theme {
+  --ct-accent: #0f7b68;
+  --ct-accent-hover: #0c6656;
+  --ct-accent-soft: #e7f5f1;
+  --ct-accent-ring: rgb(15 123 104 / 0.35);
+  --ct-bg: #f3f5f8;
+  --ct-surface: #ffffff;
+  --ct-border: #94a3b8; /* same card border as the Pro portal */
+  --ct-divider: #edf0f4;
+  --ct-sidebar: #263240;
+  --ct-sidebar-2: #1f2a36;
+  --ct-sidebar-border: rgb(255 255 255 / 0.08);
+  --ct-sidebar-text: rgb(226 232 240 / 0.78);
+  --ct-sidebar-active: rgb(255 255 255 / 0.1);
+  --ct-sidebar-accent: #34d3a5;
+
+  --primary: var(--ct-accent);
+  --primary-foreground: #ffffff;
+  --ring: var(--ct-accent-ring);
+
+  --chat-accent: var(--ct-accent);
+  --chat-accent-soft: var(--ct-accent-soft);
+  --chat-accent-faint: #f3faf8;
 }
 
 /* Portal uses the same global border/input tokens as the rest of the app. */

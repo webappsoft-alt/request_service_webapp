@@ -76,7 +76,10 @@ function bindSocket() {
 }
 
 function isTechnicianPortal() {
-  return typeof window !== "undefined" && window.location.pathname.startsWith("/technical");
+  // Contractors use the same field-side chat engine as technicians.
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname;
+  return path.startsWith("/technical") || path.startsWith("/contractor");
 }
 
 async function load(side: TechChatSide) {

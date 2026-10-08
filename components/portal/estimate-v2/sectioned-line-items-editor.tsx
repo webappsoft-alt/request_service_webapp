@@ -26,10 +26,13 @@ export function SectionedLineItemsEditor({
   lines,
   onChange,
   locked = false,
+  showPricing = true,
 }: {
   lines: JobCostLine[];
   onChange: (lines: JobCostLine[]) => void;
   locked?: boolean;
+  /** Price / Total columns and section totals (default true). */
+  showPricing?: boolean;
 }) {
   const groups = useMemo(() => groupLinesBySection(lines), [lines]);
   const [draftSection, setDraftSection] = useState("");
@@ -243,9 +246,11 @@ export function SectionedLineItemsEditor({
               lines={group.lines}
               onChange={(next) => replaceGroupLines(group.key, next)}
               locked={locked}
+              showPricing={showPricing}
               className="rounded-none border-0"
             />
 
+            {showPricing ? (
             <div
               className={cn(
                 "flex items-center justify-between border-t border-[#94a3b8] bg-[#f8fafc] px-3 py-2 text-sm",
@@ -258,6 +263,7 @@ export function SectionedLineItemsEditor({
                 {formatMoney(group.total)}
               </span>
             </div>
+            ) : null}
           </div>
         );
       })}

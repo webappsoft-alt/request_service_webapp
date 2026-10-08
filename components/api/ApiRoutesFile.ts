@@ -135,6 +135,21 @@ export const providerCrmApi = {
   contractors: "provider/contractors",
   contractor: (id: string) => `provider/contractors/${id}`,
   contractorAttachments: (id: string) => `provider/contractors/${id}/attachments`,
+  /** PUT { enabled, password } — enable / reset / revoke the contractor portal sign-in */
+  contractorPortalAccess: (id: string) => `provider/contractors/${id}/portal-access`,
+  /** Contractor submissions (completion proof, change order requests) awaiting review */
+  contractorRequests: "provider/contractor-requests",
+  /** PUT — technicians + contractors (scope / pay terms) on a job, synced to the schedule */
+  /** POST assign / update one contractor on a job; DELETE …/:contractorId removes them. */
+  jobContractors: (id: string) => `provider/jobs/${id}/contractors`,
+  jobContractor: (id: string, contractorId: string) => `provider/jobs/${id}/contractors/${contractorId}`,
+  /** Contractor payouts: GET ?contractorId (history), POST (pay approved work) */
+  contractorPayments: "provider/contractor-payments",
+  contractorPaymentLedger: "provider/contractor-payments/ledger",
+  contractorPaymentsForJob: (jobId: string) => `provider/contractor-payments/job/${jobId}`,
+  contractorRequest: (id: string) => `provider/contractor-requests/${id}`,
+  contractorRequestApprove: (id: string) => `provider/contractor-requests/${id}/approve`,
+  contractorRequestReject: (id: string) => `provider/contractor-requests/${id}/reject`,
   contractorAttachment: (id: string, attachmentId: string) =>
     `provider/contractors/${id}/attachments/${attachmentId}`,
   vendors: "provider/vendors",
@@ -308,6 +323,9 @@ export const technicianApi = {
   job: (id: string) => `technician/jobs/${id}`,
   jobClockIn: (id: string) => `technician/jobs/${id}/clock-in`,
   jobClockOut: (id: string) => `technician/jobs/${id}/clock-out`,
+  /** POST: technician asks the office for a change order (reviewed on the job's Requests tab). */
+  jobChangeRequests: (id: string) => `technician/jobs/${id}/change-requests`,
+  jobChangeOrderAccept: (id: string, orderId: string) => `technician/jobs/${id}/change-orders/${orderId}/accept`,
   estimates: "technician/estimates",
   estimate: (id: string) => `technician/estimates/${id}`,
   estimateClockIn: (id: string) => `technician/estimates/${id}/clock-in`,
@@ -322,7 +340,29 @@ export const technicianApi = {
   badges: "technician/notifications/badges",
 } as const;
 
-/** Authenticated in-app notifications (customer + provider + technician). */
+/** Third-party contractor portal — every route returns only the logged-in contractor's data. */
+export const contractorPortalApi = {
+  profile: "contractor/profile",
+  password: "contractor/profile/password",
+  dashboard: "contractor/dashboard",
+  jobs: "contractor/jobs",
+  job: (id: string) => `contractor/jobs/${id}`,
+  /** POST: accept a change order the office created from this contractor's request. */
+  jobChangeOrderAccept: (id: string, orderId: string) => `contractor/jobs/${id}/change-orders/${orderId}/accept`,
+  jobCompletion: (id: string) => `contractor/jobs/${id}/completion`,
+  jobChangeRequests: (id: string) => `contractor/jobs/${id}/change-requests`,
+  jobClockIn: (id: string) => `contractor/jobs/${id}/clock-in`,
+  jobClockOut: (id: string) => `contractor/jobs/${id}/clock-out`,
+  activeEntry: "contractor/time-entries/active",
+  schedule: "contractor/schedule",
+  changeRequests: "contractor/change-requests",
+  payouts: "contractor/payouts",
+  badges: "contractor/notifications/badges",
+  /** PUT { section } — reset a nav section's sidebar badge */
+  sectionRead: "contractor/notifications/read-section",
+} as const;
+
+/** Authenticated in-app notifications (customer + provider + technician + contractor). */
 export const notificationsApi = {
   list: "notifications",
   markRead: (id: string) => `notifications/${id}/read`,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ContractorTimesheet } from "@/components/portal/contractor-timesheet";
 import { PortalPage } from "@/components/portal/portal-page";
 import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
 import type { EmployeeOption } from "@/components/time-tracking/timesheet-ui";
@@ -78,6 +79,7 @@ export function TimesheetsView() {
         allowStop
         hrefFor={(kind, id) => (kind === "job" ? `/pro/dashboard/jobs/${id}?tab=time` : `/pro/dashboard/new-estimate/${id}`)}
       />
+      <ContractorTimesheet />
     </PortalPage>
   );
 }

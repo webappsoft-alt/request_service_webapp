@@ -98,10 +98,18 @@ export type PortalContractor = {
   hourlyRate: number;
   overtimeRate?: number;
   travelRate?: number;
+  /** Default pay basis when assigning to a job. */
+  payType?: "hourly" | "fixed";
+  /** Default contract amount for fixed-price jobs. */
+  fixedRate?: number;
   insuranceExpires: string;
   workingHours?: import("@/lib/data/portal").PortalEmployeeWorkingHours[];
   attachments?: import("@/lib/data/portal").PortalEmployeeAttachment[];
   createdAt: string;
+  /** Contractor portal sign-in is active (read-only, from the API). */
+  hasPortalAccess?: boolean;
+  /** Write-only: sets / resets the portal password on create or update. */
+  portalPassword?: string;
 };
 
 export type PortalVendorInventoryItem = {

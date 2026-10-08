@@ -25,6 +25,7 @@ export function TechChatButton({
   contextType,
   contextId,
   employeeId,
+  contractorId,
   label = "Chat",
   variant = "outline",
   size = "sm",
@@ -36,6 +37,8 @@ export function TechChatButton({
   contextId?: string | null;
   /** Provider side only: the technician to chat with. */
   employeeId?: string;
+  /** Provider side only: the contractor to chat with (opens in the drawer). */
+  contractorId?: string;
   label?: string;
   variant?: "outline" | "default" | "ghost" | "secondary";
   size?: "sm" | "default" | "icon";
@@ -56,10 +59,11 @@ export function TechChatButton({
       ? contextType
       : `${contextType}:${contextId}`;
     if (side === "technician") {
-      router.push(`/technical/messages?open=${encodeURIComponent(target)}`);
+      const base = window.location.pathname.startsWith("/contractor") ? "/contractor/messages" : "/technical/messages";
+      router.push(`${base}?open=${encodeURIComponent(target)}`);
       return;
     }
-    if (employeeId) {
+    if (employeeId && !contractorId) {
       router.push(
         `/pro/dashboard/messages?tab=technicians&open=${encodeURIComponent(target)}&employee=${encodeURIComponent(employeeId)}`,
       );
@@ -70,7 +74,11 @@ export function TechChatButton({
     setLoading(true);
     setError("");
     try {
-      const data = await openTechChat(side, { contextType, contextId: contextId ?? null, employeeId });
+      const data = await openTechChat(side, {
+        contextType,
+        contextId: contextId ?? null,
+        ...(contractorId ? { contractorId } : { employeeId }),
+      });
       setThread(data);
       rememberTechChatThread(side, data);
     } catch (err) {

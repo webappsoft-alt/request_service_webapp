@@ -17,6 +17,7 @@ import {
   type TechChatThread,
 } from "@/lib/api/technician-chat-client";
 import { cn } from "@/lib/utils";
+import { ParticipantBadge } from "@/components/tech-chat/participant-badge";
 
 function initials(name: string) {
   return (
@@ -238,7 +239,7 @@ export function TechChatInbox({
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder={side === "technician" ? "Search jobs, estimates…" : "Search technicians, jobs…"}
+              placeholder={side === "technician" ? "Search jobs, estimates…" : "Search technicians, contractors, jobs…"}
               className="h-9 pl-8 text-sm"
             />
           </div>
@@ -253,7 +254,7 @@ export function TechChatInbox({
                 onClick={() => setUnreadOnly(tab.key)}
                 className={cn(
                   "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                  unreadOnly === tab.key ? "bg-[#003F7D] text-white" : "bg-[#f1f5f9] text-muted-foreground hover:text-foreground",
+                  unreadOnly === tab.key ? "bg-(color:--chat-accent) text-white" : "bg-[#f1f5f9] text-muted-foreground hover:text-foreground",
                 )}
               >
                 {tab.label}
@@ -278,20 +279,23 @@ export function TechChatInbox({
                   onClick={() => select(row.id)}
                   className={cn(
                     "flex w-full items-start gap-3 border-b border-input px-3 py-3 text-left transition-colors",
-                    row.id === selectedId ? "bg-[#eef3f9]" : "hover:bg-[#f6f9fc]",
+                    row.id === selectedId ? "bg-(color:--chat-accent-soft)" : "hover:bg-(color:--chat-accent-faint)",
                   )}
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#003F7D]/10 text-xs font-semibold text-[#003F7D]">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-(color:--chat-accent)/10 text-xs font-semibold text-(color:--chat-accent)">
                     {initials(name)}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
-                      <span className={cn("truncate text-sm", unread ? "font-semibold text-foreground" : "font-medium")}>
-                        {name}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className={cn("truncate text-sm", unread ? "font-semibold text-foreground" : "font-medium")}>
+                          {name}
+                        </span>
+                        {side === "provider" ? <ParticipantBadge thread={row} /> : null}
                       </span>
                       <span className="shrink-0 text-[11px] text-muted-foreground">{when(row.lastMessageAt)}</span>
                     </span>
-                    <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-[#003F7D]">
+                    <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-(color:--chat-accent)">
                       <Icon className="size-3 shrink-0" aria-hidden />
                       <span className="truncate">{techChatContextLabel(row)}</span>
                     </span>
@@ -315,7 +319,7 @@ export function TechChatInbox({
                 ? "No conversations match."
                 : side === "technician"
                   ? "No conversations yet. Use Chat on a job, estimate or payment to message the office."
-                  : "No technician conversations yet."}
+                  : "No technician or contractor conversations yet."}
             </p>
           )}
           {hasMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
@@ -327,7 +331,7 @@ export function TechChatInbox({
             <button
               type="button"
               onClick={() => void loadMore()}
-              className="w-full py-3 text-xs font-medium text-[#003F7D] hover:underline"
+              className="w-full py-3 text-xs font-medium text-(color:--chat-accent) hover:underline"
             >
               Load more ({threads.length} of {paging.total})
             </button>
@@ -349,7 +353,7 @@ export function TechChatInbox({
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-            <span className="flex size-12 items-center justify-center rounded-xl bg-[#eef3f9] text-[#003F7D]">
+            <span className="flex size-12 items-center justify-center rounded-xl bg-(color:--chat-accent-soft) text-(color:--chat-accent)">
               <MessageSquare className="size-5" />
             </span>
             <p className="text-sm font-semibold text-foreground">Select a conversation</p>

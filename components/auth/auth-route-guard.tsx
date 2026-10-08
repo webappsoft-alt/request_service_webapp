@@ -8,6 +8,11 @@ import { proPaths } from "@/lib/pro-paths";
 import { customerPaths } from "@/lib/customer-paths";
 import { readPendingFixedOrder } from "@/lib/booking/pending-fixed-order";
 import { isTechnicianPath, technicianPaths } from "@/lib/technician-paths";
+import {
+  contractorPaths,
+  isContractorLoginPath,
+  isContractorPath,
+} from "@/lib/contractor-paths";
 
 function isCustomerAuthPath(pathname: string): boolean {
   return (
@@ -65,10 +70,11 @@ function isPublicEstimateSharePath(pathname: string): boolean {
 
 function normalizeRole(
   role: string | null | undefined,
-): "customer" | "provider" | "technician" | null {
+): "customer" | "provider" | "technician" | "contractor" | null {
   if (!role) return null;
   const value = role.toLowerCase();
   if (value === "technician") return "technician";
+  if (value === "contractor") return "contractor";
   if (value === "customer" || value === "consumer" || value === "user") {
     return "customer";
   }
@@ -103,6 +109,8 @@ function readNextFromLocation(): string | null {
  * - Providers may stay on /pro/dashboard/* and on public estimate share links (/e/*, legacy UUID).
  * - Other customer marketing/account routes bounce providers to the dashboard.
  * - Technicians are confined to /technical/*; everyone else is kept out of it.
+ * - Contractors are confined to /contractor/*; everyone else only sees /contractor/login
+ *   while signed out.
  *   (The API enforces the same rules — this only avoids rendering wrong pages.)
  */
 export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
@@ -130,6 +138,17 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   /** Non-technicians never see the technician portal. */
   const nonTechnicianOnTechnical =
     auth.hydrated && role !== "technician" && isTechnicianPath(pathname);
+  /** Contractors only ever see the contractor portal (not its login while signed in). */
+  const contractorOffPortal =
+    loggedIn &&
+    role === "contractor" &&
+    (!isContractorPath(pathname) || isContractorLoginPath(pathname));
+  /** Signed-in non-contractors never see the contractor portal; signed-out visitors only its login. */
+  const nonContractorOnContractor =
+    auth.hydrated &&
+    role !== "contractor" &&
+    isContractorPath(pathname) &&
+    (loggedIn || !isContractorLoginPath(pathname));
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -143,9 +162,30 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
           typeof window !== "undefined" ? window.location.search : "";
         const next = encodeURIComponent(`${pathname}${search}`);
         router.replace(`/login?next=${next}`);
+      } else if (isContractorPath(pathname)) {
+        if (!isContractorLoginPath(pathname)) router.replace(contractorPaths.login);
       } else if (isProDashboard(pathname) || isTechnicianPath(pathname)) {
         router.replace(proPaths.login);
       }
+      return;
+    }
+
+    if (nextRole === "contractor") {
+      // Provider, technician, customer, and marketing routes are all off-limits.
+      if (!isContractorPath(pathname) || isContractorLoginPath(pathname)) {
+        router.replace(contractorPaths.dashboard);
+      }
+      return;
+    }
+
+    if (isContractorPath(pathname)) {
+      router.replace(
+        nextRole === "provider"
+          ? proPaths.dashboard
+          : nextRole === "technician"
+            ? technicianPaths.dashboard
+            : customerPaths.site,
+      );
       return;
     }
 
@@ -197,7 +237,14 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     router,
   ]);
 
-  if (providerOffPortal || customerOnPro || technicianOffPortal || nonTechnicianOnTechnical) {
+  if (
+    providerOffPortal ||
+    customerOnPro ||
+    technicianOffPortal ||
+    nonTechnicianOnTechnical ||
+    contractorOffPortal ||
+    nonContractorOnContractor
+  ) {
     return null;
   }
 

@@ -101,6 +101,8 @@ export type TechJobDetail = {
   timeSummary: TimeSummary;
   activeEntry: TimeEntry | null;
   payments: { summary: LedgerSummary; history: TechnicianPaymentRecord[] };
+  /** This technician's change order requests on the job (raw; see mapChangeRequest). */
+  changeRequests: unknown[];
 };
 
 export type TechEstimateRow = {
@@ -414,6 +416,7 @@ export async function getTechnicianJob(id: string): Promise<TechJobDetail> {
       customerId: mapCustomer(job.customerId),
     } as TechJobDetail["job"],
     schedule: (Array.isArray(data.schedule) ? data.schedule : []).map(mapSchedule),
+    changeRequests: Array.isArray(data.changeRequests) ? data.changeRequests : [],
     timeEntries: mapEntries(data.timeEntries),
     timeSummary: mapTimeSummary(data.timeSummary),
     activeEntry: mapTimeEntry(data.activeEntry),
@@ -570,6 +573,12 @@ export type ProviderTimeQuery = TimeEntriesQuery & {
   jobId?: string;
   estimateId?: string;
   includeOverall?: boolean;
+  /**
+   * Technician panels default to technician sessions only — contractor time is
+   * paid through the contractor ledger, so it must not reach technician pay.
+   */
+  participantType?: "technician" | "contractor";
+  contractorId?: string;
 };
 
 export async function listProviderTimeEntries(query: ProviderTimeQuery): Promise<TimeEntriesPage> {
@@ -589,6 +598,8 @@ export async function listProviderTimeEntries(query: ProviderTimeQuery): Promise
       limit,
       tz: browserTimeZone(),
       includeOverall: query.includeOverall || undefined,
+      participantType: query.contractorId ? undefined : query.participantType || "technician",
+      contractorId: query.contractorId,
     },
     quiet,
   );
@@ -630,6 +641,8 @@ export type LedgerRow = {
   earned: number;
   paid: number;
   remaining: number;
+  /** false = balance exists but can't be paid yet (contractor work awaiting approval). */
+  payable?: boolean;
 };
 
 export type LedgerSummary = {

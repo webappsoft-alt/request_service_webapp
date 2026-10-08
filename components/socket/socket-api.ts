@@ -33,6 +33,19 @@ export type RealtimeEvents = {
     data?: Record<string, unknown>;
     at?: string;
   };
+  /** Contractor portal: which lists changed (jobs, changeRequests, payouts, dashboard). */
+  "contractor:refresh": {
+    scopes?: string[];
+    type?: string;
+    data?: Record<string, unknown>;
+    at?: string;
+  };
+  /** Provider room: a contractor submission was created or reviewed (counts come via provider:inbox-counts). */
+  "contractor:requests": {
+    requestId?: string;
+    status?: string;
+    at?: string;
+  };
   /** Clock-in / clock-out — sent to the provider room and the technician. */
   TIME_ENTRY_UPDATED: {
     entry?: Record<string, unknown>;
@@ -150,6 +163,8 @@ export type RealtimeEvents = {
   };
   /** Provider sidebar badge counts — pushed over the shared socket (no REST). */
   "provider:inbox-counts": {
+    /** Contractor submissions awaiting the pro's review (Pending reviews badge). */
+    contractorReviews?: { completions?: number; changeOrders?: number; total?: number };
     newLeads?: number;
     unreadChats?: number;
     pendingOrders?: number;

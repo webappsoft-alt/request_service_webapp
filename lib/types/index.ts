@@ -342,8 +342,30 @@ export interface ChangeOrder {
   rejectedBy?: string;
   rejectedAt?: string;
   sentAt?: string;
+  /** Set when it came from a technician / contractor request. */
+  requestedBy?: { participantType: "contractor" | "technician"; name: string };
+  /** The requester's confirmation of the written-up scope. */
+  fieldAcceptance?: { status: "pending" | "accepted"; acceptedAt?: string; acceptedBy?: string };
   createdAt: string;
   updatedAt: string;
+}
+
+/** A contractor on a job: who, plus the outsourced scope and how it is paid. */
+export interface JobContractorAssignment {
+  contractorId: string;
+  name: string;
+  trade?: string;
+  /** Contractor has an active portal login (chat / proof uploads possible). */
+  hasPortalAccess?: boolean;
+  /** Short title of the contractor's part of the job. */
+  title: string;
+  instructions: string;
+  /** Contractor's own start / end (ISO); separate from the technician schedule. */
+  startAt: string | null;
+  endAt: string | null;
+  payType: "hourly" | "fixed";
+  payRate: number;
+  estimatedHours: number;
 }
 
 export interface Job {
@@ -356,8 +378,12 @@ export interface Job {
   serviceId?: string;
   address: ServiceAddress;
   assignedTo?: string;
-  /** First assigned crew member id from API (when available). */
+  /** First assigned technician (employee) id from API (when available). */
   assignedEmployeeId?: string;
+  /** Every assigned technician (employee) id. */
+  assignedEmployeeIds?: string[];
+  /** Third-party contractors on the job with their scope + pay terms. */
+  crewContractors?: JobContractorAssignment[];
   /** Convenience label when API embeds customer. */
   customerName?: string;
   scheduledAt?: string;

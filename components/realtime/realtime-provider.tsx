@@ -389,6 +389,12 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("technician:refresh", (payload) => {
         broadcastRealtime({ type: "TECHNICIAN_REFRESH", payload });
       }),
+      onSocketEvent("contractor:refresh", (payload) => {
+        broadcastRealtime({ type: "CONTRACTOR_REFRESH", payload });
+      }),
+      onSocketEvent("contractor:requests", (payload) => {
+        broadcastRealtime({ type: "CONTRACTOR_REQUESTS_CHANGED", payload });
+      }),
       onSocketEvent("TIME_ENTRY_UPDATED", (payload) => {
         broadcastRealtime({ type: "TIME_ENTRY_UPDATED", payload });
       }),

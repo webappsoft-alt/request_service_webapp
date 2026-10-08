@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock3, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Clock3, FilePlus2, Mail, Phone } from "lucide-react";
+import { ChangeOrderRequestDialog } from "@/components/contractor/change-order-request-dialog";
+import { RequestStatusPill } from "@/components/contractor/contractor-ui";
+import {
+  acceptTechnicianChangeOrder,
+  mapChangeRequest,
+  mapJobChangeOrders,
+  submitTechnicianChangeRequest,
+} from "@/lib/api/contractor-portal-client";
+import { FieldExtraWork } from "@/components/contractor/field-change-orders";
 import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
 import { LineItemsTotals, type CostingNoun } from "@/components/portal/job-costing";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -118,6 +127,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
 
   const data = entry?.data;
   const items = useMemo(() => data?.job.items ?? [], [data]);
+  const [changeOpen, setChangeOpen] = useState(false);
 
   if (!data) {
     if (!entry || entry.loading) {
@@ -150,12 +160,16 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
       : (snapshot.address as Record<string, unknown>) || null;
   const closed = CLOSED_STATUSES.includes(job.status);
   const changeOrders = job.changeOrders || [];
+  const changeRequests = data.changeRequests.map(mapChangeRequest);
+  // Extras this technician asked for (customer change orders stay in "Estimate & changes").
+  const fieldOrders = mapJobChangeOrders(changeOrders).filter((order) => order.requestedByMe);
+  const awaitingMe = fieldOrders.filter((order) => order.requestedByMe && order.acceptance === "pending").length;
   const jobTax = Number(job.tax) || 0;
   const jobTotal = Number(job.total) || undefined;
 
   const tabs = [
     { id: "summary", label: "Summary" },
-    { id: "materials", label: `Labour & Material (${items.length})` },
+    { id: "materials", label: `Labour & Material (${items.length})${awaitingMe ? " · accept" : ""}` },
     { id: "time", label: "My time & pay", icon: Clock3 },
     ...(estimate || changeOrders.length ? [{ id: "estimates", label: "Estimate & changes" }] : []),
   ];
@@ -171,6 +185,9 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
         actions={
           <>
             <TechChatButton side="technician" contextType="job" contextId={job.id} label="Chat with office" className="h-8" />
+            <Button size="sm" variant="outline" className="h-8" disabled={closed} onClick={() => setChangeOpen(true)}>
+              <FilePlus2 className="size-3.5" /> Request change order
+            </Button>
             <Button asChild size="sm" variant="outline" className="h-8">
               <Link href={technicianPaths.jobs}>
                 <ArrowLeft className="size-3.5" /> My jobs
@@ -197,7 +214,37 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
       >
         {(tab) => {
           if (tab === "materials") {
-            return <TechLabourMaterial items={items} noun="job" tax={jobTax} total={jobTotal} />;
+            return (
+              <div className="space-y-4">
+                <TechLabourMaterial items={items} noun="job" tax={jobTax} total={jobTotal} />
+                <FieldExtraWork
+                  orders={fieldOrders}
+                  onAccept={async (order) => {
+                    await acceptTechnicianChangeOrder(job.id, order.id);
+                    await dispatch(fetchTechJob(job.id));
+                  }}
+                />
+                {changeRequests.length ? (
+                  <DetailCard title="My change order requests">
+                    <ul className="divide-y divide-border-soft">
+                      {changeRequests.map((request) => (
+                        <li key={request.id} className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="line-clamp-2 text-sm">{request.description}</p>
+                            <RequestStatusPill status={request.status} type="change_order" />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Est. {formatMoney(request.estimatedCost)} · {formatDate(request.createdAt)}
+                            {request.changeOrderNumber ? ` · ${request.changeOrderNumber}` : ""}
+                            {request.reviewNote ? ` · Office: ${request.reviewNote}` : ""}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </DetailCard>
+                ) : null}
+              </div>
+            );
           }
           if (tab === "time") {
             return (
@@ -233,7 +280,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                 {changeOrders.length ? (
                   <DetailCard title="Approved change orders">
                     <ul className="space-y-2 text-sm">
-                      {changeOrders.map((co) => (
+                      {changeOrders.filter((co) => co.status === "approved" && !co.requestedByMe).map((co) => (
                         <li key={String(co.id || co._id)} className="flex justify-between gap-2">
                           <span>
                             <span className="font-medium">{String(co.number || "")}</span> {String(co.title || "")}
@@ -329,6 +376,15 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
           );
         }}
       </RecordWorkspace>
+      <ChangeOrderRequestDialog
+        job={job}
+        open={changeOpen}
+        onOpenChange={setChangeOpen}
+        submit={async (input) => {
+          await submitTechnicianChangeRequest(job.id, input);
+          await dispatch(fetchTechJob(job.id));
+        }}
+      />
     </div>
   );
 }

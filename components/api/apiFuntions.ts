@@ -283,11 +283,13 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
           path.startsWith("/reset-password") ||
           path.startsWith("/pro/forgot-password") ||
           path.startsWith("/pro/verify-forgot-otp") ||
-          path.startsWith("/pro/reset-password");
+          path.startsWith("/pro/reset-password") ||
+          path.startsWith("/contractor/login");
 
         if (!isAuthPage) {
-          window.location.href =
-            path.startsWith("/pro") || path.startsWith("/technical")
+          window.location.href = path.startsWith("/contractor")
+            ? "/contractor/login"
+            : path.startsWith("/pro") || path.startsWith("/technical")
               ? "/pro/login"
               : "/login";
         }

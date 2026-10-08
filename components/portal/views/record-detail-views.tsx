@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
   Clock3,
+  Handshake,
   HardHat,
   Loader2,
   MapPin,
@@ -14,7 +15,6 @@ import {
 } from "lucide-react";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
-import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
 import { toast } from "sonner";
 import { ArchiveBadge, ConfirmArchiveDialog } from "@/components/portal/archive-control";
 import {
@@ -27,6 +27,10 @@ import {
 } from "@/components/portal/create-person-dialogs";
 import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
+import { AssignContractorDialog, JobContractorsCard } from "@/components/portal/job-crew";
+import { JobRequestsTab } from "@/components/portal/job-requests-tab";
+import { listContractorReviewRequests } from "@/lib/api/contractor-portal-client";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
 import {
   ChangeVisitAssignmentDialog,
   ScheduleAnotherSiteVisitDialog,
@@ -2007,6 +2011,33 @@ export function JobDetailView({ id }: { id: string }) {
   const [deleting, setDeleting] = useState(false);
   const [converting, setConverting] = useState(false);
   const [removingAssignee, setRemovingAssignee] = useState(false);
+  const [contractorOpen, setContractorOpen] = useState(false);
+  const jobSearchParams = useSearchParams();
+  const reviewsVersion = useAppSelector((state) => state.contractorReviews.version);
+  /** Pending technician / contractor requests on this job (Requests tab badge). */
+  const [pendingRequests, setPendingRequests] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    listContractorReviewRequests({ jobId: id, status: "pending_pro_approval", page: 1, limit: 1 })
+      .then((page) => {
+        if (!cancelled) setPendingRequests(page.total);
+      })
+      .catch(() => {
+        // Badge only; the tab still loads its own list.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reviewsVersion]);
+  // A technician / contractor accepted a change order or sent a request → refresh the job.
+  useEffect(() => {
+    if (!reviewsVersion) return;
+    void dispatch(fetchJobDetail(id))
+      .unwrap()
+      .then((fresh) => records.cacheJob(fresh))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the socket version bumps
+  }, [reviewsVersion]);
   const [assigneeOverride, setAssigneeOverride] = useState<{
     employeeId: string;
     name: string;
@@ -2297,14 +2328,23 @@ export function JobDetailView({ id }: { id: string }) {
       setAssigneeOverride(null);
       void dispatch(fetchJobDetail(job.id));
       toast.error(
-        typeof error === "string"
-          ? error
-          : error instanceof Error
-            ? error.message
-            : "Could not remove the assignee.",
+        error instanceof Error && error.message
+          ? error.message
+          : "Could not remove the team member.",
       );
     } finally {
       setRemovingAssignee(false);
+    }
+  }
+
+  /** Reload the job after a contractor is assigned, edited or removed. */
+  async function reloadJobContractors() {
+    if (!job) return;
+    try {
+      const fresh = await dispatch(fetchJobDetail(job.id)).unwrap();
+      records.cacheJob(fresh);
+    } catch {
+      // keep current view; next load picks it up
     }
   }
 
@@ -2483,6 +2523,9 @@ export function JobDetailView({ id }: { id: string }) {
       currentJob.status === "invoiced" ||
       currentJob.status === "paid",
   );
+  /** Completed (or invoiced) jobs are closed: no crew changes or new change orders, only invoicing. */
+  const jobClosed = alreadyInvoiced || currentJob.status === "completed";
+  const closedHint = "This job is completed";
   const relatedPayments = invoice
     ? records
         .mergePayments(payments)
@@ -2496,12 +2539,13 @@ export function JobDetailView({ id }: { id: string }) {
     { id: "materials", label: "Labour & Material" },
     {
       id: "change-orders",
-      label: `Change Orders (${currentJob.changeOrders?.length || 0})`,
+      label: `Change Orders (${(currentJob.changeOrders || []).filter((co) => !co.requestedBy).length})`,
     },
     ...(alreadyInvoiced
       ? [{ id: "invoice", label: invoice?.number || "Invoice" }]
       : []),
     { id: "time", label: "Time tracking", icon: Clock3 },
+    { id: "requests", label: "Requests", alert: pendingRequests },
     { id: "logs", label: "Logs" },
     { id: "notes", label: "Notes" },
     { id: "attachments", label: "Attachments" },
@@ -2671,11 +2715,24 @@ export function JobDetailView({ id }: { id: string }) {
                 {converting ? "Converting…" : "Convert to invoice"}
               </Button>
             )}
-            <Button size="sm" variant="outline" className="h-8" asChild>
-              <Link href={`/pro/dashboard/jobs/${job.id}?tab=change-orders&create=1`}>
-                Create change order
-              </Link>
-            </Button>
+            {jobClosed ? null : (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5"
+                  onClick={() => setContractorOpen(true)}
+                >
+                  <Handshake className="size-3.5 text-primary" />
+                  Assign contractor
+                </Button>
+                <Button size="sm" variant="outline" className="h-8" asChild>
+                  <Link href={`/pro/dashboard/jobs/${job.id}?tab=change-orders&create=1`}>
+                    Create change order
+                  </Link>
+                </Button>
+              </>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -2795,6 +2852,8 @@ export function JobDetailView({ id }: { id: string }) {
                         size="sm"
                         variant="outline"
                         className="h-8 bg-background"
+                        disabled={jobClosed}
+                        title={jobClosed ? closedHint : undefined}
                         onClick={() => setAssignOpen(true)}
                       >
                         {technician ? "Change" : "Assign"}
@@ -2804,7 +2863,8 @@ export function JobDetailView({ id }: { id: string }) {
                           size="sm"
                           variant="ghost"
                           className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          disabled={removingAssignee}
+                          disabled={removingAssignee || jobClosed}
+                          title={jobClosed ? closedHint : undefined}
                           onClick={() => void removeJobAssignee()}
                         >
                           {removingAssignee ? "Removing…" : "Remove"}
@@ -2812,6 +2872,7 @@ export function JobDetailView({ id }: { id: string }) {
                       ) : null}
                     </div>
                   </div>
+                  <JobContractorsCard job={job} onChanged={reloadJobContractors} locked={jobClosed} />
                   <JobSummaryTab
                     job={job}
                     estimate={estimate}
@@ -2839,11 +2900,12 @@ export function JobDetailView({ id }: { id: string }) {
                   estimate={estimate}
                   invoice={invoice}
                   technician={technician}
-                  preferApi={apiReady}
+                  // Signed-in pro: always the server's lines — don't wait for the whole CRM snapshot.
+                  preferApi={crm.enabled}
                   hideHeader
                   onActionsChange={onMaterialsActionsChange}
                   onSave={
-                    apiReady
+                    crm.enabled
                       ? async (lines) => {
                           const filled = filledWorkLines(lines);
                           const items = linesToJobItems(job.id, filled);
@@ -2855,7 +2917,13 @@ export function JobDetailView({ id }: { id: string }) {
                                 job: { ...job, items },
                               }),
                             ).unwrap();
-                            void dispatch(fetchJobDetail(job.id));
+                            // Wait for the saved job so the table shows server lines (not the old ones).
+                            try {
+                              const fresh = await dispatch(fetchJobDetail(job.id)).unwrap();
+                              records.cacheJob(fresh);
+                            } catch {
+                              // Saved on the server; the next load picks it up.
+                            }
                             if (crm.ready) void crm.refresh({ silent: true });
                           } catch (error) {
                             toast.error(
@@ -2874,6 +2942,19 @@ export function JobDetailView({ id }: { id: string }) {
                   }
                 />
               );
+            case "requests":
+              return (
+                <JobRequestsTab
+                  jobId={job.id}
+                  changeOrders={job.changeOrders || []}
+                  initialRequestId={jobSearchParams.get("request")}
+                  onCountsChange={setPendingRequests}
+                  onChangeOrderCreated={async () => {
+                    // The extra stays on this tab (with its lines) until the requester accepts it.
+                    await reloadJobContractors();
+                  }}
+                />
+              );
             case "change-orders":
               return (
                 <JobChangeOrdersPanel
@@ -2883,6 +2964,7 @@ export function JobDetailView({ id }: { id: string }) {
                     0,
                   )}
                   invoiceId={invoice?.id || job.invoiceId}
+                  locked={jobClosed}
                   onJobUpdated={(next) => {
                     dispatch(upsertJobItem(next));
                     records.cacheJob(next);
@@ -3060,6 +3142,12 @@ export function JobDetailView({ id }: { id: string }) {
           }
         }}
       </RecordWorkspace>
+      <AssignContractorDialog
+        job={job}
+        open={contractorOpen}
+        onOpenChange={setContractorOpen}
+        onSaved={reloadJobContractors}
+      />
       <AssignEventDialog
         open={assignOpen}
         onOpenChange={setAssignOpen}

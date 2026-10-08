@@ -288,6 +288,17 @@ export function notificationHref(
 
   if (portal === "provider") {
     if (type === "NEW_LEAD") return "/pro/dashboard/requests?status=new";
+    // Technician / contractor requests are reviewed on the job's Requests tab.
+    if (type.startsWith("CONTRACTOR_")) {
+      const href = String(data.href || "");
+      const jobId = String(data.jobId || "");
+      const requestId = String(data.requestId || "");
+      // Older notifications pointed at the removed "Pending reviews" page.
+      if (jobId && (!href.startsWith("/pro/") || href.includes("contractor-reviews"))) {
+        return `/pro/dashboard/jobs/${jobId}?tab=requests${requestId ? `&request=${requestId}` : ""}`;
+      }
+      return href.startsWith("/pro/") ? href : "/pro/dashboard/jobs";
+    }
     if (type === "NEW_CHAT_MESSAGE") {
       if (isAdminDirect) return "/pro/dashboard/messages?direct=admin";
       return threadId

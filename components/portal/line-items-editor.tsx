@@ -79,6 +79,8 @@ export type LineItemsEditorProps = {
   minLines?: number;
   /** Prefer a wider description column (tighter Type/Unit/Price). Default on everywhere. */
   wideDescription?: boolean;
+  /** Price and Total columns (default true). Off for viewers who must not see customer pricing. */
+  showPricing?: boolean;
   className?: string;
 };
 
@@ -112,6 +114,7 @@ export function LineItemsEditor({
   allowMaterialImages = true,
   minLines = 0,
   wideDescription = true,
+  showPricing = true,
   className,
 }: LineItemsEditorProps) {
   function patch(id: string, next: Partial<JobCostLine>) {
@@ -135,7 +138,7 @@ export function LineItemsEditor({
     onChange(lines.filter((line) => line.id !== id));
   }
 
-  const colSpan = showUnit ? 7 : 6;
+  const colSpan = (showUnit ? 7 : 6) - (showPricing ? 0 : 2);
   const cols = colWidths(wideDescription);
 
   return (
@@ -172,22 +175,26 @@ export function LineItemsEditor({
                 Unit
               </TableHead>
             ) : null}
-            <TableHead
-              className={cn(
-                "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
-                cols.price,
-              )}
-            >
-              Price
-            </TableHead>
-            <TableHead
-              className={cn(
-                "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
-                cols.total,
-              )}
-            >
-              Total
-            </TableHead>
+            {showPricing ? (
+              <>
+                <TableHead
+                  className={cn(
+                    "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                    cols.price,
+                  )}
+                >
+                  Price
+                </TableHead>
+                <TableHead
+                  className={cn(
+                    "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                    cols.total,
+                  )}
+                >
+                  Total
+                </TableHead>
+              </>
+            ) : null}
             <TableHead className={cn("h-8 bg-[#f7f8fa]", cols.remove)}>
               <span className="sr-only">Remove</span>
             </TableHead>
@@ -203,6 +210,7 @@ export function LineItemsEditor({
                 showUnit={showUnit}
                 allowMaterialImages={allowMaterialImages}
                 wideDescription={wideDescription}
+                showPricing={showPricing}
                 canRemove={!locked && lines.length > minLines}
                 onChange={patch}
                 onRemove={() => remove(line.id)}
@@ -227,6 +235,7 @@ function LineItemRow({
   showUnit,
   allowMaterialImages,
   wideDescription,
+  showPricing,
   canRemove,
   onChange,
   onRemove,
@@ -236,6 +245,7 @@ function LineItemRow({
   showUnit: boolean;
   allowMaterialImages: boolean;
   wideDescription: boolean;
+  showPricing: boolean;
   canRemove: boolean;
   onChange: (id: string, patch: Partial<JobCostLine>) => void;
   onRemove: () => void;
@@ -478,6 +488,8 @@ function LineItemRow({
           </Select>
         </TableCell>
       ) : null}
+      {showPricing ? (
+      <>
       <TableCell className={cn(cols.price, "align-top px-0.5 py-2")}>
         <div className="relative mx-auto w-full">
           <span
@@ -527,6 +539,8 @@ function LineItemRow({
           {formatMoney(lineTotal(line))}
         </div>
       </TableCell>
+      </>
+      ) : null}
       <TableCell className={cn(cols.remove, "align-top px-0 py-2 text-center")}>
         {canRemove ? (
           <div className="flex h-8 items-center justify-center self-start">

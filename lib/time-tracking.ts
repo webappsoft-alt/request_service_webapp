@@ -12,7 +12,9 @@ export type TimeEntryRef = {
 
 export type TimeEntry = {
   id: string;
+  /** Employee id, or the Contractor id for contractor sessions. */
   employeeId: string;
+  participantType?: "technician" | "contractor";
   employee?: { id: string; name: string } | null;
   job: TimeEntryRef | null;
   estimate: TimeEntryRef | null;
@@ -104,19 +106,25 @@ export function mapTimeEntry(raw: unknown): TimeEntry | null {
   const row = asRecord(raw);
   const id = String(row.id || row._id || "");
   if (!id) return null;
-  const employeeRaw = row.employeeId;
+  // Contractor sessions keep the contractor in employeeId (unpopulated) and populate contractorId.
+  const isContractor = row.participantType === "contractor";
+  const employeeRaw = isContractor && row.contractorId && typeof row.contractorId === "object" ? row.contractorId : row.employeeId;
   const employeeRow = asRecord(employeeRaw);
   const employeeId =
-    typeof employeeRaw === "string" ? employeeRaw : String(employeeRow.id || employeeRow._id || "");
+    typeof employeeRaw === "string"
+      ? employeeRaw
+      : String(employeeRow.id || employeeRow._id || (typeof row.contractorId === "string" ? row.contractorId : "") || "");
+  const person = `${employeeRow.firstName || ""} ${employeeRow.lastName || ""}`.trim();
   const status = row.status === "active" ? "active" : "completed";
   return {
     id,
     employeeId,
+    participantType: isContractor ? "contractor" : "technician",
     employee:
       typeof employeeRaw === "object" && employeeRaw
         ? {
             id: employeeId,
-            name: `${employeeRow.firstName || ""} ${employeeRow.lastName || ""}`.trim(),
+            name: isContractor ? String(employeeRow.companyName || "") || person : person,
           }
         : null,
     job: refFrom(row.jobId),

@@ -919,10 +919,13 @@ export function mapPortalContractor(raw: unknown): PortalContractor | null {
     hourlyRate: numberValue(record.hourlyRate),
     overtimeRate: numberValue(record.overtimeRate, 0) || undefined,
     travelRate: numberValue(record.travelRate, 0) || undefined,
+    payType: trimmed(record.payType) === "fixed" ? "fixed" : "hourly",
+    fixedRate: numberValue(record.fixedRate, 0),
     insuranceExpires: toIsoString(record.insuranceExpires),
     workingHours: mapEmployeeWorkingHours(record.workingHours),
     attachments: mapEmployeeAttachments(record.attachments),
     createdAt: toIsoString(record.createdAt),
+    hasPortalAccess: Boolean(record.portalEnabled && record.userId),
   };
 }
 
@@ -1532,6 +1535,24 @@ function mapChangeOrders(jobId: string, value: unknown): ChangeOrder[] {
           ? toIsoString(record.rejectedAt)
           : undefined,
         sentAt: record.sentAt ? toIsoString(record.sentAt) : undefined,
+        requestedBy: (() => {
+          const by = asRecord(record.requestedBy);
+          const type = trimmed(by?.participantType);
+          return type === "contractor" || type === "technician"
+            ? { participantType: type, name: trimmed(by?.name) }
+            : undefined;
+        })(),
+        fieldAcceptance: (() => {
+          const acc = asRecord(record.fieldAcceptance);
+          const status = trimmed(acc?.status);
+          return status === "pending" || status === "accepted"
+            ? {
+                status,
+                acceptedAt: acc?.acceptedAt ? toIsoString(acc.acceptedAt) : undefined,
+                acceptedBy: trimmed(acc?.acceptedBy) || undefined,
+              }
+            : undefined;
+        })(),
         createdAt: toIsoString(record.requestedAt ?? record.createdAt),
         updatedAt: toIsoString(
           record.approvedAt ??
@@ -1563,6 +1584,39 @@ function mapAssignedEmployeeId(value: unknown): string {
     return "";
   }
   return crmIdOf(value);
+}
+
+/** Contractors on a job, joined with their per-job terms (contractorAssignments). */
+function mapJobContractors(record: Record<string, unknown>): NonNullable<Job["crewContractors"]> {
+  const terms = new Map(
+    asArray(record.contractorAssignments)
+      .map((entry) => asRecord(entry))
+      .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+      .map((entry) => [crmIdOf(entry.contractorId), entry] as const),
+  );
+  return asArray(record.assignedContractors)
+    .map((entry) => {
+      const contractorId = crmIdOf(entry);
+      if (!contractorId) return null;
+      const person = asRecord(entry) || {};
+      const term = terms.get(contractorId) || {};
+      const payType: "hourly" | "fixed" =
+        trimmed(term.payType) === "fixed" || (!term.payType && trimmed(person.payType) === "fixed") ? "fixed" : "hourly";
+      return {
+        contractorId,
+        name: displayNameFromRecord(person) || "Contractor",
+        trade: trimmed(person.trade) || undefined,
+        hasPortalAccess: Boolean(person.portalEnabled && person.userId),
+        title: trimmed(term.title),
+        instructions: trimmed(term.instructions),
+        startAt: trimmed(term.startAt) || null,
+        endAt: trimmed(term.endAt) || null,
+        payType,
+        payRate: numberValue(term.payRate, 0),
+        estimatedHours: numberValue(term.estimatedHours, 0),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
 }
 
 export function mapJob(raw: unknown): Job | null {
@@ -1622,10 +1676,10 @@ export function mapJob(raw: unknown): Job | null {
       mapAssignedName(record.assignedContractors) ||
       trimmed(record.assignedTo) ||
       undefined,
-    assignedEmployeeId:
-      mapAssignedEmployeeId(record.assignedEmployees) ||
-      mapAssignedEmployeeId(record.assignedContractors) ||
-      undefined,
+    // Technicians only — contractors live in crewContractors (an id here would be sent back as an employee).
+    assignedEmployeeId: mapAssignedEmployeeId(record.assignedEmployees) || undefined,
+    assignedEmployeeIds: asArray(record.assignedEmployees).map((entry) => crmIdOf(entry)).filter(Boolean),
+    crewContractors: mapJobContractors(record),
     scheduledAt: toIsoString(record.scheduledAt) || undefined,
     dueAt: toIsoString(record.dueAt) || undefined,
     status:

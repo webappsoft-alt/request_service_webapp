@@ -8,7 +8,7 @@ import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { cn } from "@/lib/utils";
 
-type AlertTone = "leads" | "estimates" | "orders" | "changeOrders";
+type AlertTone = "leads" | "estimates" | "orders" | "changeOrders" | "contractorReviews";
 
 type AlertRow = {
   id: AlertTone;
@@ -24,6 +24,7 @@ const toneClass: Record<AlertTone, string> = {
   estimates: "dashboard-alert--estimates",
   orders: "dashboard-alert--orders",
   changeOrders: "dashboard-alert--estimates",
+  contractorReviews: "dashboard-alert--orders",
 };
 
 function plural(count: number, singular: string, pluralLabel: string) {

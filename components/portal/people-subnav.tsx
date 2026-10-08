@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
 import { peopleSubnav, workSubnav } from "@/lib/data/portal-nav";
+import { useAppSelector } from "@/store/hooks";
+import { selectPendingReviewTotal } from "@/store/contractorReviewsSlice";
 import { cn } from "@/lib/utils";
 
 export function ModuleSubnav({ items }: { items: { href: string; label: string; badge?: number }[] }) {
@@ -43,6 +45,7 @@ export function PeopleSubnav() {
 
 export function WorkSubnav() {
   const inbox = usePortalInbox();
+  const pendingFieldRequests = useAppSelector(selectPendingReviewTotal);
   return (
     <ModuleSubnav
       items={workSubnav.map((item) => ({
@@ -56,7 +59,9 @@ export function WorkSubnav() {
                 ? inbox.pendingEstimates
                 : item.href === "/pro/dashboard/orders"
                   ? inbox.pendingOrders
-                  : undefined,
+                  : item.href === "/pro/dashboard/jobs"
+                    ? pendingFieldRequests
+                    : undefined,
       }))}
     />
   );

@@ -93,7 +93,7 @@ export function MessagesView() {
 
   const tabs = [
     { id: "customers", label: "Customers & leads", unread: customerUnread, active: !technicians },
-    { id: "technicians", label: "Technicians", unread: technicianUnread, active: technicians },
+    { id: "technicians", label: "Technicians & contractors", unread: technicianUnread, active: technicians },
   ];
 
   return (

@@ -451,7 +451,7 @@ function SessionCard({
       </span>
     );
   } else if (ledgerRow && ledgerRow.remaining > 0) {
-    action = onPay ? (
+    action = onPay && ledgerRow.payable !== false ? (
       <Button
         size="xs"
         className="h-5 bg-[#003F7D] px-1.5 text-[10px] text-white hover:bg-[#003F7D]/90"
@@ -716,7 +716,11 @@ export function LedgerTable({
             id: "action",
             header: "Action",
             cell: (row: LedgerRow) =>
-              row.remaining > 0 ? (
+              row.remaining > 0 && row.payable === false ? (
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300" title="Pay once the completed work is approved">
+                  Awaiting approval
+                </span>
+              ) : row.remaining > 0 ? (
                 <Button size="xs" className="bg-[#003F7D] text-white hover:bg-[#003F7D]/90" onClick={() => onPay(row)}>
                   Pay
                 </Button>

@@ -6,6 +6,7 @@ import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
 import { isTechnicianRole } from "@/lib/technician-paths";
+import { contractorPaths, isContractorRole } from "@/lib/contractor-paths";
 
 /**
  * Client guard for /technical/*. The API independently rejects non-technician
@@ -25,6 +26,8 @@ export function TechnicianGate({ children }: { children: ReactNode }) {
       router.replace(proPaths.login);
     } else if (role === "provider") {
       router.replace(proPaths.dashboard);
+    } else if (isContractorRole(role)) {
+      router.replace(contractorPaths.dashboard);
     } else {
       router.replace("/");
     }

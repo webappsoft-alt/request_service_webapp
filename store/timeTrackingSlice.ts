@@ -19,6 +19,7 @@ import {
   type TimeEntriesPage,
 } from "@/lib/api/technician-client";
 import { EMPTY_TIME_SUMMARY, type TimeEntry, type TimeSummary } from "@/lib/time-tracking";
+import { getContractorTimesheetLedger } from "@/lib/api/contractor-portal-client";
 
 /**
  * Time tracking lists keyed by scope so the same data powers every view:
@@ -50,6 +51,9 @@ export type LedgerState = {
 
 export type LedgerQuery = {
   technician?: boolean;
+  /** Contractor profile: ledger + payouts come from the contractor payouts API. */
+  contractorId?: string;
+  contractorName?: string;
   employeeId?: string;
   employeeIds?: string[];
   jobId?: string;
@@ -115,6 +119,7 @@ export function timeFilterKey(query: ProviderTimeQuery) {
     (query.employeeIds || []).join(","),
     query.jobId || "",
     query.estimateId || "",
+    query.contractorId || "",
   ].join("|");
 }
 
@@ -185,6 +190,7 @@ export const clockOutThunk = createAsyncThunk<TimeEntry | null, { target: ClockT
 function ledgerKey(query: LedgerQuery) {
   return [
     query.technician ? "tech" : "pro",
+    query.contractorId || "",
     query.employeeId || "",
     (query.employeeIds || []).join(","),
     query.jobId || "",
@@ -204,7 +210,9 @@ export const fetchLedger = createAsyncThunk<
   async ({ scopeKey, query }, { rejectWithValue }) => {
     try {
       const history = { paymentsPage: query.paymentsPage, paymentsLimit: query.paymentsLimit, kinds: query.kinds };
-      const data = query.technician
+      const data = query.contractorId
+        ? await getContractorTimesheetLedger(query.contractorId, query.contractorName || "Contractor", history)
+        : query.technician
         ? await getTechnicianLedger({ ...history, jobId: query.jobId, estimateId: query.estimateId })
         : await getProviderLedger({ employeeId: query.employeeId, employeeIds: query.employeeIds, jobId: query.jobId, ...history });
       return { scopeKey, filterKey: ledgerKey(query), data };

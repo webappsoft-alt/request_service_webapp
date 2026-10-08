@@ -10,6 +10,7 @@ import {
 } from "@/store/authSlice";
 import { proPaths } from "@/lib/pro-paths";
 import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
+import { contractorPaths, isContractorRole } from "@/lib/contractor-paths";
 
 export function PortalGate({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -22,6 +23,7 @@ export function PortalGate({ children }: { children: ReactNode }) {
     (user?.role === "provider" || auth.role === "provider");
 
   const isTechnician = isTechnicianRole(user?.role || auth.role);
+  const isContractor = isContractorRole(user?.role || auth.role);
 
   useEffect(() => {
     if (!auth.hydrated) return;
@@ -30,10 +32,15 @@ export function PortalGate({ children }: { children: ReactNode }) {
       router.replace(technicianPaths.dashboard);
       return;
     }
+    if (isContractor) {
+      // Contractors have their own portal too.
+      router.replace(contractorPaths.dashboard);
+      return;
+    }
     if (!isProvider) {
       router.replace(proPaths.login);
     }
-  }, [auth.hydrated, isProvider, isTechnician, router]);
+  }, [auth.hydrated, isProvider, isTechnician, isContractor, router]);
 
   if (!auth.hydrated || !isProvider) {
     return (

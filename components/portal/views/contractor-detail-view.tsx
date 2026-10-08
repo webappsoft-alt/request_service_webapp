@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
+import { TimeStat } from "@/components/time-tracking/time-tracking-ui";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getContractorLedger, type ContractorPayRow, type ContractorPayTotals } from "@/lib/api/contractor-portal-client";
+import { formatDuration, formatHours } from "@/lib/time-tracking";
 import Link from "next/link";
 import {
   ChevronDown,
@@ -70,6 +75,8 @@ import {
   estimateStatusLabel,
   estimateStatusTone,
   formatClock,
+  jobStatusLabel,
+  jobStatusTone,
   timeWindowLabel,
   windowFromMinutes,
   type PortalCalendarEvent,
@@ -113,7 +120,8 @@ function insuranceApiValue(value: string) {
 }
 
 function isInsuranceExpired(contractor: PortalContractor) {
-  if (!contractor.insuranceExpires) return true;
+  // Not on file yet (streamlined create) — matches the API, which doesn't block dispatch.
+  if (!contractor.insuranceExpires) return false;
   const expires = contractor.insuranceExpires.slice(0, 10);
   return expires < new Date().toISOString().slice(0, 10);
 }
@@ -267,6 +275,7 @@ export function ContractorDetailView({ id }: { id: string }) {
           { id: "settings", label: "Settings" },
           { id: "compliance", label: "Compliance" },
           { id: "pay", label: "Pay rate" },
+          { id: "time", label: "Time tracking" },
           { id: "availability", label: "Availability" },
           { id: "schedule", label: "Schedule" },
           { id: "jobs", label: "Jobs" },
@@ -344,9 +353,9 @@ export function ContractorDetailView({ id }: { id: string }) {
             return (
               <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-foreground">Per hour price</p>
+                  <p className="text-sm font-bold text-foreground">Pay rate</p>
                   <p className="text-xs text-muted-foreground">
-                    Quoted hourly rate for this contractor on jobs and estimates.
+                    Default terms when this contractor is put on a job. Each job can set its own.
                   </p>
                 </div>
                 <Button
@@ -455,8 +464,10 @@ export function ContractorDetailView({ id }: { id: string }) {
             />
             {expired ? (
               <StatusPill label="Insurance expired" className="bg-red-50 text-red-800" />
-            ) : (
+            ) : contractor.insuranceExpires ? (
               <StatusPill label="Insurance valid" tone="success" />
+            ) : (
+              <StatusPill label="Insurance not on file" />
             )}
           </>
         }
@@ -523,6 +534,29 @@ export function ContractorDetailView({ id }: { id: string }) {
                   onSave={saveContractor}
                   hideHeader
                   onActionsChange={onPayActionsChange}
+                />
+              );
+            case "time":
+              return (
+                <TimeTrackingPanel
+                  scopeKey={`contractor:${contractor.id}`}
+                  contractor={{ id: contractor.id, name: contractorDisplayName(contractor) }}
+                  payRate={contractor.hourlyRate ?? 0}
+                  defaultRange={{ preset: "week" }}
+                  canPay
+                  allowStop
+                  hrefFor={(kind, recordId) =>
+                    kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/new-estimate/${recordId}`
+                  }
+                  header={
+                    <div>
+                      <p className="text-sm font-bold text-foreground">Time tracking</p>
+                      <p className="text-xs text-muted-foreground">
+                        Clock-in / clock-out sessions recorded by {contractorDisplayName(contractor)}, with pay earned, paid and
+                        remaining. Jobs can be paid once their completed work is approved.
+                      </p>
+                    </div>
+                  }
                 />
               );
             case "availability":
@@ -929,6 +963,8 @@ function ContractorPayTab({
     hourlyRate: contractor.hourlyRate ?? 0,
     overtimeRate: contractor.overtimeRate ?? 0,
     travelRate: contractor.travelRate ?? 0,
+    payType: contractor.payType ?? "hourly",
+    fixedRate: contractor.fixedRate ?? 0,
   });
   const [saving, setSaving] = useState(false);
 
@@ -937,8 +973,17 @@ function ContractorPayTab({
       hourlyRate: contractor.hourlyRate ?? 0,
       overtimeRate: contractor.overtimeRate ?? 0,
       travelRate: contractor.travelRate ?? 0,
+      payType: contractor.payType ?? "hourly",
+      fixedRate: contractor.fixedRate ?? 0,
     });
-  }, [contractor.id, contractor.hourlyRate, contractor.overtimeRate, contractor.travelRate]);
+  }, [
+    contractor.id,
+    contractor.hourlyRate,
+    contractor.overtimeRate,
+    contractor.travelRate,
+    contractor.payType,
+    contractor.fixedRate,
+  ]);
 
   const weekHours = useMemo(() => {
     const hours = contractor.workingHours ?? [];
@@ -1044,6 +1089,51 @@ function ContractorPayTab({
           hint="Hours × rate"
         />
       </div>
+      <ContractorTrackedTotals contractorId={contractor.id} hourlyRate={pay.hourlyRate} />
+    </div>
+  );
+}
+
+/** Pay rate tab: all-time hours and earnings, like the employee pay tab. */
+function ContractorTrackedTotals({ contractorId, hourlyRate }: { contractorId: string; hourlyRate: number }) {
+  const [data, setData] = useState<{ rows: ContractorPayRow[]; totals: ContractorPayTotals } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getContractorLedger(contractorId)
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch(() => {
+        // Totals are supplementary; the rate form still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contractorId]);
+
+  const seconds = Math.round((data?.rows ?? []).reduce((sum, row) => sum + row.hours, 0) * 3600);
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Tracked time &amp; earnings (all time)</p>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <TimeStat label="Hours worked" value={formatHours(seconds)} hint={formatDuration(seconds)} accent />
+        <TimeStat
+          label="Total earned"
+          value={formatMoney(data?.totals.earned ?? 0)}
+          hint="Hourly time + fixed contracts + change orders"
+          accent
+        />
+        <TimeStat label="Paid" value={formatMoney(data?.totals.paid ?? 0)} hint={`${(data?.rows ?? []).length} jobs`} />
+        <TimeStat
+          label="Remaining"
+          value={formatMoney(data?.totals.balance ?? 0)}
+          hint={`${formatMoney(data?.totals.payable ?? 0)} ready to pay · ${formatMoney(hourlyRate)}/hr`}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        A new rate applies to new job assignments; jobs already assigned keep the terms they were assigned with.
+      </p>
     </div>
   );
 }
@@ -1150,17 +1240,58 @@ function ContractorScheduleTab({
   );
 }
 
+function contractorDisplayName(row: Pick<PortalContractor, "companyName" | "firstName" | "lastName">) {
+  return row.companyName || `${row.firstName || ""} ${row.lastName || ""}`.trim() || "Contractor";
+}
+
+function contractorWindow(start?: string | null, end?: string | null) {
+  if (!start) return "";
+  const fmt = (value: string) =>
+    new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return end ? `${fmt(start)} → ${fmt(end)}` : fmt(start);
+}
+
+function WorkStatePill({ pay }: { pay?: ContractorPayRow }) {
+  if (!pay) return <span className="text-xs text-muted-foreground">—</span>;
+  if (pay.earned > 0 && pay.balance <= 0) return <StatusPill tone="success" label="Paid" />;
+  if (pay.paid > 0) return <StatusPill tone="primary" label="Partly paid" />;
+  if (pay.approved) return <StatusPill tone="warning" label="Ready to pay" />;
+  if (pay.completion === "pending_pro_approval") return <StatusPill tone="warning" label="Awaiting review" />;
+  if (pay.completion === "rejected") return <StatusPill tone="danger" label="Re-work" />;
+  return <StatusPill label="In progress" />;
+}
+
 function ContractorJobsTab({ contractorId }: { contractorId: string }) {
   const dispatch = useAppDispatch();
   const filterKey = contractorsTabFilterKey({});
   const tab = useAppSelector((state) => state.contractors?.jobs);
+  const [payByJob, setPayByJob] = useState<Map<string, ContractorPayRow>>(() => new Map());
 
   useEffect(() => {
     void dispatch(fetchContractorJobs({ contractorId, force: true }));
   }, [dispatch, contractorId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    getContractorLedger(contractorId)
+      .then(({ rows }) => {
+        if (!cancelled) setPayByJob(new Map(rows.map((row) => [row.jobId, row])));
+      })
+      .catch(() => {
+        // Pay columns stay empty; the job list still renders.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contractorId]);
+
   const rows = selectContractorsTabRows(tab, contractorId, filterKey, []);
   const listLoading = selectContractorsTabShowLoader(tab, contractorId, filterKey);
+  const termsOf = (row: (typeof rows)[number]) => row.crewContractors?.find((item) => item.contractorId === contractorId);
+  const siteOf = (row: (typeof rows)[number]) =>
+    [row.address?.street, row.address?.city, [row.address?.state, row.address?.zip].filter(Boolean).join(" ")]
+      .filter(Boolean)
+      .join(", ");
 
   return (
     <PortalDataTable
@@ -1168,7 +1299,7 @@ function ContractorJobsTab({ contractorId }: { contractorId: string }) {
       countLabel="Jobs"
       searchPlaceholder="Search jobs"
       loading={listLoading}
-      empty="No jobs for this contractor yet. Assign one from their schedule."
+      empty="No jobs for this contractor yet. Assign one from a job's Assign contractor button."
       rows={rows}
       rowKey={(row) => row.id}
       rowHref={(row) => `/pro/dashboard/jobs/${row.id}`}
@@ -1177,32 +1308,119 @@ function ContractorJobsTab({ contractorId }: { contractorId: string }) {
           id: "number",
           header: "Job #",
           sortValue: (row) => row.number,
-          searchValue: (row) => `${row.number} ${row.title}`,
+          searchValue: (row) => `${row.number} ${row.title || ""} ${termsOf(row)?.title || ""} ${row.customerName || ""}`,
           exportValue: (row) => row.number,
           cell: (row) => (
-            <Link
-              href={`/pro/dashboard/jobs/${row.id}`}
-              className="font-semibold text-primary hover:underline"
-            >
-              {row.number || row.id}
-            </Link>
+            <div className="min-w-0">
+              <Link href={`/pro/dashboard/jobs/${row.id}`} className="font-semibold text-primary hover:underline">
+                {row.number || row.id}
+              </Link>
+              <p className="truncate text-xs text-muted-foreground">{row.title || "—"}</p>
+            </div>
           ),
         },
         {
-          id: "title",
-          header: "Title",
-          sortValue: (row) => row.title || "",
-          searchValue: (row) => row.title || "",
-          exportValue: (row) => row.title || "",
-          cell: (row) => row.title || "—",
+          id: "scope",
+          header: "Contractor scope",
+          className: "w-64 min-w-56 max-w-72 whitespace-normal",
+          exportValue: (row) => termsOf(row)?.title || "",
+          cell: (row) => {
+            const terms = termsOf(row);
+            return terms ? (
+              <div className="max-w-72 min-w-0 whitespace-normal">
+                <p className="truncate text-sm font-medium">{terms.title || "—"}</p>
+                {terms.instructions ? (
+                  <p className="line-clamp-2 text-xs break-words text-muted-foreground" title={terms.instructions}>
+                    {terms.instructions}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            );
+          },
+        },
+        {
+          id: "customer",
+          header: "Customer / site",
+          className: "min-w-48",
+          sortValue: (row) => row.customerName || "",
+          exportValue: (row) => [row.customerName, siteOf(row)].filter(Boolean).join(" · "),
+          cell: (row) => (
+            <div className="min-w-0">
+              <p className="truncate text-sm">{row.customerName || "—"}</p>
+              {siteOf(row) ? <p className="line-clamp-1 text-xs text-muted-foreground">{siteOf(row)}</p> : null}
+            </div>
+          ),
+        },
+        {
+          id: "when",
+          header: "When",
+          sortValue: (row) => termsOf(row)?.startAt || row.scheduledAt || "",
+          exportValue: (row) => contractorWindow(termsOf(row)?.startAt, termsOf(row)?.endAt) || (row.scheduledAt ? formatDate(row.scheduledAt) : ""),
+          cell: (row) => (
+            <span className="text-xs">
+              {contractorWindow(termsOf(row)?.startAt, termsOf(row)?.endAt) || (row.scheduledAt ? formatDate(row.scheduledAt) : "Not scheduled")}
+            </span>
+          ),
+        },
+        {
+          id: "terms",
+          header: "Pay terms",
+          exportValue: (row) => {
+            const pay = payByJob.get(row.id);
+            return pay ? (pay.payType === "fixed" ? `Fixed ${pay.payRate}` : `${pay.payRate}/hr`) : "";
+          },
+          cell: (row) => {
+            const pay = payByJob.get(row.id);
+            const terms = termsOf(row);
+            const type = pay?.payType || terms?.payType;
+            const rate = pay?.payRate ?? terms?.payRate ?? 0;
+            if (!type) return <span className="text-xs text-muted-foreground">—</span>;
+            return (
+              <div className="text-xs">
+                <p>{type === "fixed" ? `Fixed ${formatMoney(rate)}` : `${formatMoney(rate)}/hr`}</p>
+                {pay && type === "hourly" ? <p className="text-muted-foreground">{pay.hours} h logged</p> : null}
+              </div>
+            );
+          },
+        },
+        {
+          id: "earned",
+          header: "Earned",
+          className: "text-right",
+          sortValue: (row) => payByJob.get(row.id)?.earned ?? 0,
+          exportValue: (row) => (payByJob.get(row.id)?.earned ?? 0).toFixed(2),
+          cell: (row) => <span className="tabular-nums">{formatMoney(payByJob.get(row.id)?.earned ?? 0)}</span>,
+        },
+        {
+          id: "balance",
+          header: "Balance",
+          className: "text-right",
+          sortValue: (row) => payByJob.get(row.id)?.balance ?? 0,
+          exportValue: (row) => (payByJob.get(row.id)?.balance ?? 0).toFixed(2),
+          cell: (row) => {
+            const pay = payByJob.get(row.id);
+            return (
+              <div className="text-right">
+                <p className="font-semibold tabular-nums">{formatMoney(pay?.balance ?? 0)}</p>
+                {pay?.paid ? <p className="text-xs text-muted-foreground">{formatMoney(pay.paid)} paid</p> : null}
+              </div>
+            );
+          },
+        },
+        {
+          id: "work",
+          header: "Work / pay",
+          exportValue: (row) => payByJob.get(row.id)?.completion || "",
+          cell: (row) => <WorkStatePill pay={payByJob.get(row.id)} />,
         },
         {
           id: "status",
-          header: "Status",
+          header: "Job status",
           sortValue: (row) => row.status || "",
-          searchValue: (row) => row.status || "",
-          exportValue: (row) => row.status || "",
-          cell: (row) => <StatusPill label={row.status || "—"} />,
+          exportValue: (row) => jobStatusLabel(row.status),
+          cell: (row) => <StatusPill label={jobStatusLabel(row.status)} className={jobStatusTone(row.status)} />,
         },
       ]}
     />

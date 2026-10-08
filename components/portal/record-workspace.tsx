@@ -31,6 +31,8 @@ export type RecordTab = {
   id: string;
   label: string;
   icon?: ComponentType<{ className?: string }>;
+  /** Items needing attention — shown as a pulsing badge next to the label. */
+  alert?: number;
 };
 
 const DEFAULT_TAB_ICONS: Record<
@@ -191,6 +193,14 @@ export function RecordWorkspace({
                   />
                 ) : null}
                 <span className="whitespace-nowrap">{item.label}</span>
+                {item.alert ? (
+                  <span className="relative inline-flex" aria-label={`${item.alert} pending`}>
+                    <span className="absolute inset-0 animate-ping rounded-full bg-amber-400 opacity-60" aria-hidden />
+                    <span className="relative inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-none text-white">
+                      {item.alert > 99 ? "99+" : item.alert}
+                    </span>
+                  </span>
+                ) : null}
               </button>
             );
           })}

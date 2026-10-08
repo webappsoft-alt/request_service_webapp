@@ -21,7 +21,11 @@ export type TechChatMessage = {
 export type TechChatThread = {
   id: string;
   providerId: string;
+  /** Technician's Employee id, or the Contractor id for contractor threads. */
   employeeId: string;
+  /** Who the field side is (contractor threads share this engine). */
+  participantType?: "technician" | "contractor";
+  contractorId?: string | null;
   technicianUserId: string;
   technicianName: string;
   providerName: string;
@@ -47,7 +51,13 @@ export type TechnicianLocation = {
   at: string | null;
 };
 
-const base = (side: TechChatSide) => (side === "technician" ? "technician/chats" : "provider/technician-chats");
+/** True inside the contractor portal — its field-side chat uses /contractor/chats. */
+function inContractorPortal() {
+  return typeof window !== "undefined" && window.location.pathname.startsWith("/contractor");
+}
+
+const base = (side: TechChatSide) =>
+  side === "provider" ? "provider/technician-chats" : inContractorPortal() ? "contractor/chats" : "technician/chats";
 const quiet = { silent: true, force: true } as const;
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -87,7 +97,7 @@ export async function getTechChatUnread(side: TechChatSide): Promise<number> {
 
 export async function openTechChat(
   side: TechChatSide,
-  body: { contextType: TechChatContextType; contextId?: string | null; employeeId?: string },
+  body: { contextType: TechChatContextType; contextId?: string | null; employeeId?: string; contractorId?: string },
 ): Promise<TechChatThreadDetail> {
   return dataOf(await postData(`${base(side)}/open`, body, { silent: true })) as TechChatThreadDetail;
 }
@@ -139,6 +149,12 @@ export function techChatContextLabel(thread: Omit<ContextFields, "contextId">) {
 /** Where the record behind a thread lives, for the side that is reading it. */
 export function techChatContextHref(thread: ContextFields, side: TechChatSide): { href: string; label: string } | null {
   const id = thread.contextId;
+  if (side === "technician" && inContractorPortal()) {
+    if ((thread.contextType === "job" || thread.contextType === "payment") && id) {
+      return { href: `/contractor/jobs/${id}`, label: "Open job" };
+    }
+    return thread.contextType === "payment" ? { href: "/contractor/payouts", label: "Open payouts" } : null;
+  }
   if (side === "technician") {
     if (thread.contextType === "job" && id) return { href: `/technical/jobs/${id}`, label: "Open job" };
     if (thread.contextType === "estimate" && id) return { href: `/technical/estimates/${id}`, label: "Open estimate" };

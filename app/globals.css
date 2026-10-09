@@ -276,6 +276,8 @@
   --chat-accent: var(--tech-accent);
   --chat-accent-soft: var(--tech-accent-soft);
   --chat-accent-faint: #f7f8ff;
+  /* --chat-accent-faint: #f7f8ff; */
+
 }
 
 .dark .technician-theme,

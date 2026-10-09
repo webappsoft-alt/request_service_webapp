@@ -2,6 +2,33 @@
 export const HERO_HOME_IMAGE = "/images/home/hero-home.jpg";
 export const HERO_PRO_IMAGE = "/images/home/split-provider.jpg";
 
+const DEFAULT_SITE_URL = "https://www.requestservices.com";
+
+/** Never return "" — `new URL("")` throws and breaks Netlify/Next builds. */
+function resolveSiteUrl() {
+  const candidates = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.NEXT_PUBLIC_LIVE_DOMAIN_URL,
+    process.env.LIVE_DOMAIN_URL,
+    process.env.live_domain_url,
+    process.env.URL,
+    process.env.DEPLOY_PRIME_URL,
+  ];
+  for (const value of candidates) {
+    const trimmed = String(value || "")
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .replace(/\/+$/, "");
+    if (!trimmed) continue;
+    try {
+      return new URL(trimmed).origin;
+    } catch {
+      // try next candidate
+    }
+  }
+  return DEFAULT_SITE_URL;
+}
+
 export const siteConfig = {
   name: "Request Service",
   shortName: "Request",
@@ -9,7 +36,7 @@ export const siteConfig = {
   tagline: "The professional marketplace for home services.",
   description:
     "Request Service connects homeowners with trusted local professionals for plumbing, HVAC, electrical, and more — and gives service businesses the tools to manage estimates, jobs, invoices, and payments.",
-  url: process.env.live_domain_url ?? "https://www.requestservices.com",
+  url: resolveSiteUrl(),
   locale: "en_US",
   language: "en-US",
   country: "United States",

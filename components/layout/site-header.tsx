@@ -24,6 +24,7 @@ import { ProHeader } from "@/components/pro/pro-header";
 import { primaryNav, secondaryNav } from "@/lib/data/navigation";
 import { customerPaths } from "@/lib/customer-paths";
 import { proPaths } from "@/lib/pro-paths";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -88,6 +89,7 @@ function CustomerSiteHeader({ pathname }: { pathname: string }) {
           })}
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
+          <ThemeToggle />
           {!auth.hydrated ? (
             <div
               className="size-9 animate-pulse rounded-full bg-muted"
@@ -132,7 +134,11 @@ function CustomerSiteHeader({ pathname }: { pathname: string }) {
                   </SheetClose>
                 );
               })}
-              <Separator className="my-3" />
+              <div className="flex items-center justify-between px-2 py-2 text-sm font-medium text-muted-foreground">
+                <span>Theme</span>
+                <ThemeToggle />
+              </div>
+              <Separator className="my-2" />
               {auth.hydrated ? (
                 <HeaderActions
                   showAccount={showAccount}

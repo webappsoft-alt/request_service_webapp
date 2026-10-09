@@ -45,7 +45,7 @@ export function LocalFilterTabs({
               className={cn(
                 "cursor-pointer border-b-2 px-2.5 py-1 text-sm transition-colors",
                 active
-                  ? "border-[#003F7D] font-semibold text-[#003F7D]"
+                  ? "border-[#003F7D] dark:border-primary font-semibold text-[#003F7D] dark:text-primary"
                   : "border-transparent font-medium text-muted-foreground hover:text-foreground",
               )}
             >

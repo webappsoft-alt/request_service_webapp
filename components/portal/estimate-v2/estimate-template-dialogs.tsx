@@ -155,27 +155,27 @@ function SectionRows({
 }) {
   return (
     <>
-      <tr className="border-t border-[#e2e8f0] bg-white">
+      <tr className="border-t border-[#e2e8f0] dark:border-border bg-white dark:bg-card">
         <td
           colSpan={5}
-          className="px-3 pt-2.5 pb-1 text-xs font-semibold text-slate-700"
+          className="px-3 pt-2.5 pb-1 text-xs font-semibold text-slate-700 dark:text-slate-200"
         >
           {section}
         </td>
       </tr>
       {rows.map((item, index) => (
-        <tr key={`${section}-${index}`} className="bg-white">
-          <td className="px-3 py-1.5 break-words text-slate-800">{item.description}</td>
-          <td className="px-2 py-1.5 text-xs whitespace-nowrap text-slate-500">
+        <tr key={`${section}-${index}`} className="bg-white dark:bg-card">
+          <td className="px-3 py-1.5 break-words text-slate-800 dark:text-slate-200">{item.description}</td>
+          <td className="px-2 py-1.5 text-xs whitespace-nowrap text-slate-500 dark:text-muted-foreground">
             {KIND_LABEL[item.kind]}
           </td>
-          <td className="px-2 py-1.5 text-right whitespace-nowrap text-slate-600 tabular-nums">
+          <td className="px-2 py-1.5 text-right whitespace-nowrap text-slate-600 dark:text-slate-400 tabular-nums">
             {item.quantity} {item.unit}
           </td>
-          <td className="px-2 py-1.5 text-right whitespace-nowrap text-slate-600 tabular-nums">
+          <td className="px-2 py-1.5 text-right whitespace-nowrap text-slate-600 dark:text-slate-400 tabular-nums">
             {formatMoney(item.unitPrice)}
           </td>
-          <td className="px-3 py-1.5 text-right whitespace-nowrap font-medium text-slate-900 tabular-nums">
+          <td className="px-3 py-1.5 text-right whitespace-nowrap font-medium text-slate-900 dark:text-slate-100 tabular-nums">
             {formatMoney(round2(item.quantity * item.unitPrice))}
           </td>
         </tr>
@@ -207,7 +207,7 @@ export function TemplatePricingNote({
         <span>National baseline pricing — add your business city and state to localize rates.</span>
       ) : (
         <span>
-          Priced for <span className="font-medium text-slate-700">{pricing.label}</span>
+          Priced for <span className="font-medium text-slate-700 dark:text-slate-200">{pricing.label}</span>
           {factors.length
             ? ` · ${factors.map(([label, value]) => `${label} ×${value.toFixed(2)}`).join(" · ")}`
             : " · same as national baseline"}

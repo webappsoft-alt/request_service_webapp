@@ -106,10 +106,10 @@ const PREP_OPTIONS = [
 ] as const;
 
 const RAIL_CARD =
-  "rounded-2xl border border-[#94a3b8] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+  "rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 const ACTIVITY_PREVIEW_COUNT = 4;
 const MAIN_CARD =
-  "rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+  "rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 
 type AppliedTemplate = {
   id: string;
@@ -268,8 +268,8 @@ function ChangeRequestsRail({
       {latest ? (
         <div
           className={cn(
-            "mt-3 rounded-lg border bg-white p-2.5",
-            waiting ? "border-fuchsia-200" : "border-emerald-200",
+            "mt-3 rounded-lg border bg-white dark:bg-card p-2.5",
+            waiting ? "border-fuchsia-200 dark:border-fuchsia-900/60" : "border-emerald-200 dark:border-emerald-900/60",
           )}
         >
           <div className="flex items-start gap-2">

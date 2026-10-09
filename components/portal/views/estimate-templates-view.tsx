@@ -106,8 +106,8 @@ function StatusBadge({ status }: { status: TemplateRow["status"] }) {
       className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
         status === "custom"
-          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-          : "bg-slate-50 text-slate-600 ring-slate-200",
+          ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800"
+          : "bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
       )}
     >
       {status === "custom" ? "Customized" : "Default"}
@@ -224,12 +224,12 @@ export function EstimateTemplatesView() {
       ) : null}
 
       {templates !== null && !rows.length ? (
-        <div className="rounded-2xl border border-dashed border-[#94a3b8] bg-white px-6 py-12 text-center">
+        <div className="rounded-2xl border border-dashed border-[#94a3b8] dark:border-border bg-white dark:bg-card px-6 py-12 text-center">
           <LayoutTemplate className="mx-auto size-8 text-slate-400" />
-          <p className="mt-3 text-sm font-semibold text-slate-800">
+          <p className="mt-3 text-sm font-semibold text-slate-800 dark:text-foreground">
             No templates yet
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-muted-foreground">
             Templates follow the categories on your Business profile.{" "}
             <Link
               href={PROFILE_CATEGORIES_HREF}
@@ -241,7 +241,7 @@ export function EstimateTemplatesView() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3 rounded-2xl border border-[#94a3b8] bg-white p-4">
+        <div className="space-y-3 rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-4">
           <TemplatePricingNote pricing={rows.find((row) => row.platform?.pricing)?.platform?.pricing} />
           {activeFilterCount ? (
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -305,7 +305,7 @@ export function EstimateTemplatesView() {
                 searchValue: (row) => row.categoryName,
                 exportValue: (row) => row.categoryName,
                 cell: (row) => (
-                  <span className="text-sm text-slate-700">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
                     {row.categoryName}
                   </span>
                 ),
@@ -320,7 +320,7 @@ export function EstimateTemplatesView() {
                 exportValue: (row) => row.subcategoryName,
                 cell: (row) => (
                   <div>
-                    <p className="font-medium text-slate-900">
+                    <p className="font-medium text-slate-900 dark:text-slate-100">
                       {row.subcategoryName}
                     </p>
                     {row.effective.name !== row.subcategoryName ? (
@@ -358,8 +358,8 @@ export function EstimateTemplatesView() {
                 exportValue: (row) =>
                   `${row.effective.totals.itemCount} items; ${row.effective.totals.laborHours} labour hrs; ${row.effective.totals.total}`,
                 cell: (row) => (
-                  <div className="text-xs text-slate-600">
-                    <p className="text-sm font-semibold text-slate-900 tabular-nums">
+                  <div className="text-xs text-slate-600 dark:text-slate-400">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
                       {formatMoney(row.effective.totals.total)}
                     </p>
                     <p className="tabular-nums">

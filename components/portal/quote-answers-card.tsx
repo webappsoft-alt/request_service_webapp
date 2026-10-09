@@ -41,14 +41,14 @@ export function QuoteAnswersCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-[#d7e2ef] bg-[#f7f9fc]",
+        "rounded-xl border border-[#d7e2ef] dark:border-border bg-[#f7f9fc] dark:bg-slate-900/40",
         compact ? "px-3 py-3" : "px-4 py-4",
         className,
       )}
     >
       {hideHeader ? null : (
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold tracking-[0.08em] text-[#003F7D] uppercase">
+          <p className="text-[11px] font-semibold tracking-[0.08em] text-[#003F7D] dark:text-primary uppercase">
             Customer answers
           </p>
           {listed.length ? (
@@ -69,7 +69,7 @@ export function QuoteAnswersCard({
           {listed.map((item) => (
             <div
               key={item.id || item.label}
-              className="min-w-0 rounded-lg border border-white bg-white px-3 py-2.5"
+              className="min-w-0 rounded-lg border border-border-soft dark:border-border bg-white dark:bg-card px-3 py-2.5"
             >
               <dt className="text-[11px] font-medium text-muted-foreground">{item.label}</dt>
               <dd className="mt-1 text-sm font-semibold leading-snug text-foreground wrap-break-word">
@@ -80,7 +80,7 @@ export function QuoteAnswersCard({
         </dl>
       ) : null}
       {note ? (
-        <div className={cn(listed.length ? "mt-3 pt-3 border-t border-[#d7e2ef]" : "mt-2")}>
+        <div className={cn(listed.length ? "mt-3 pt-3 border-t border-[#d7e2ef] dark:border-border" : "mt-2")}>
           <p className="text-[11px] font-medium text-muted-foreground">Notes</p>
           <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
             {note}
@@ -95,7 +95,7 @@ export function QuoteAnswersCard({
               href={src}
               target="_blank"
               rel="noreferrer"
-              className="block overflow-hidden rounded-md border border-[#d7e2ef] bg-white"
+              className="block overflow-hidden rounded-md border border-[#d7e2ef] dark:border-border bg-white dark:bg-card"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={src} alt="Customer photo" className="size-16 object-cover" />

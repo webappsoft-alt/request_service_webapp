@@ -995,8 +995,8 @@ export function CreateEstimateDialog({
                   className={cn(
                     "flex h-full w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors",
                     path === "site_visit"
-                      ? "border-[#003F7D] bg-[#f3f7fb] ring-1 ring-[#003F7D]"
-                      : "border-input bg-background hover:border-[#003F7D]/40 hover:bg-secondary/30",
+                      ? "border-[#003F7D] dark:border-primary bg-[#f3f7fb] dark:bg-primary/15 ring-1 ring-[#003F7D] dark:ring-primary"
+                      : "border-input bg-card hover:border-[#003F7D]/40 dark:hover:border-primary/40 hover:bg-secondary/30",
                   )}
                   onClick={() => setPath("site_visit")}
                 >
@@ -1004,7 +1004,7 @@ export function CreateEstimateDialog({
                     className={cn(
                       "flex size-9 shrink-0 items-center justify-center rounded-md border",
                       path === "site_visit"
-                        ? "border-[#003F7D]/20 bg-white text-[#003F7D]"
+                        ? "border-[#003F7D]/20 dark:border-primary/30 bg-white dark:bg-slate-800 text-[#003F7D] dark:text-primary"
                         : "border-input bg-secondary/50 text-muted-foreground",
                     )}
                   >
@@ -1019,8 +1019,8 @@ export function CreateEstimateDialog({
                         className={cn(
                           "flex size-5 shrink-0 items-center justify-center rounded-full border",
                           path === "site_visit"
-                            ? "border-[#003F7D] bg-[#003F7D] text-white"
-                            : "border-input bg-white text-transparent",
+                            ? "border-[#003F7D] dark:border-primary bg-[#003F7D] dark:bg-primary text-white dark:text-primary-foreground"
+                            : "border-input bg-card text-transparent",
                         )}
                         aria-hidden="true"
                       >
@@ -1040,8 +1040,8 @@ export function CreateEstimateDialog({
                   className={cn(
                     "flex h-full w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors",
                     path === "office"
-                      ? "border-[#003F7D] bg-[#f3f7fb] ring-1 ring-[#003F7D]"
-                      : "border-input bg-background hover:border-[#003F7D]/40 hover:bg-secondary/30",
+                      ? "border-[#003F7D] dark:border-primary bg-[#f3f7fb] dark:bg-primary/15 ring-1 ring-[#003F7D] dark:ring-primary"
+                      : "border-input bg-card hover:border-[#003F7D]/40 dark:hover:border-primary/40 hover:bg-secondary/30",
                   )}
                   onClick={() => setPath("office")}
                 >
@@ -1049,7 +1049,7 @@ export function CreateEstimateDialog({
                     className={cn(
                       "flex size-9 shrink-0 items-center justify-center rounded-md border",
                       path === "office"
-                        ? "border-[#003F7D]/20 bg-white text-[#003F7D]"
+                        ? "border-[#003F7D]/20 dark:border-primary/30 bg-white dark:bg-slate-800 text-[#003F7D] dark:text-primary"
                         : "border-input bg-secondary/50 text-muted-foreground",
                     )}
                   >
@@ -1064,8 +1064,8 @@ export function CreateEstimateDialog({
                         className={cn(
                           "flex size-5 shrink-0 items-center justify-center rounded-full border",
                           path === "office"
-                            ? "border-[#003F7D] bg-[#003F7D] text-white"
-                            : "border-input bg-white text-transparent",
+                            ? "border-[#003F7D] dark:border-primary bg-[#003F7D] dark:bg-primary text-white dark:text-primary-foreground"
+                            : "border-input bg-card text-transparent",
                         )}
                         aria-hidden="true"
                       >

@@ -253,7 +253,7 @@ export function PortalDataTable<T>({
                 setPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="h-8 border-border-soft bg-white pl-8 text-xs dark:bg-white"
+              className="h-8 border-border-soft bg-white pl-8 text-xs dark:bg-slate-800/80 dark:border-border dark:text-foreground"
             />
           </div>
           <p className="text-xs text-muted-foreground">
@@ -325,7 +325,7 @@ export function PortalDataTable<T>({
                   <TableHead
                     key={column.id}
                     className={cn(
-                      "h-8 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
+                      "h-8 bg-[#f7f8fa] dark:bg-slate-800/90 px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
                       column.className,
                     )}
                   >
@@ -351,7 +351,7 @@ export function PortalDataTable<T>({
                 );
               })}
               {actions ? (
-                <TableHead className="h-8 min-w-[4.5rem] bg-[#f7f8fa] px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 min-w-[4.5rem] bg-[#f7f8fa] dark:bg-slate-800/90 px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Options
                 </TableHead>
               ) : null}

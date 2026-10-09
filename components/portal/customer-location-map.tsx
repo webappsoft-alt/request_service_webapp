@@ -84,19 +84,19 @@ export function CustomerLocationMap({
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#dce4ee] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+    <section className="overflow-hidden rounded-xl border border-border-soft dark:border-border bg-card shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
       {simpro ? (
-        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-[#d7e2ee] bg-[#eef4fa] px-4">
-          <h3 className="text-sm font-semibold text-[#003F7D]">Location</h3>
+        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border-soft dark:border-border bg-muted/40 dark:bg-slate-800/80 px-4">
+          <h3 className="text-sm font-semibold text-primary">Location</h3>
         </header>
       ) : (
-        <header className="border-b border-border-soft px-5 py-3">
+        <header className="border-b border-border-soft dark:border-border px-5 py-3">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Location</p>
-          <h3 className="text-sm font-semibold">{line}</h3>
+          <h3 className="text-sm font-semibold text-foreground">{line}</h3>
         </header>
       )}
       {simpro ? (
-        <div className="border-b border-[#e8eef5] bg-white px-4 py-2.5">
+        <div className="border-b border-border-soft dark:border-border bg-card px-4 py-2.5">
           <p className="text-sm font-medium text-foreground">{line}</p>
         </div>
       ) : null}

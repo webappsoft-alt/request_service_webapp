@@ -340,9 +340,9 @@ export function WeekHeat({
               style={{
                 background:
                   day.count === 0
-                    ? "color-mix(in oklab, var(--muted) 80%, white)"
-                    : `color-mix(in oklab, var(--primary) ${Math.round(18 + intensity * 55)}%, white)`,
-                color: intensity > 0.55 ? "white" : undefined,
+                    ? "var(--muted)"
+                    : `color-mix(in oklab, var(--primary) ${Math.round(22 + intensity * 60)}%, var(--card))`,
+                color: intensity > 0.55 ? "var(--primary-foreground)" : "var(--foreground)",
               }}
               title={`${day.label}: ${day.count}`}
             >

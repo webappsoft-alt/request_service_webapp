@@ -561,7 +561,7 @@ export function JobSummaryTab({
               </p>
             ) : null}
             {estimate?.notes ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                 {estimate.notes}
               </p>
             ) : null}
@@ -578,11 +578,11 @@ export function JobSummaryTab({
       )}
       {notice ? <div className="space-y-3">{notice}</div> : null}
       {isEstimate && estimate?.scheduledDate ? (
-        <div className="rounded-md bg-sky-50 px-4 py-2.5 text-sm">
-          <p className="text-[10px] font-semibold tracking-[0.12em] text-sky-800 uppercase">
+        <div className="rounded-md bg-sky-50 dark:bg-sky-950/40 px-4 py-2.5 text-sm border border-sky-200/50 dark:border-sky-800/50">
+          <p className="text-[10px] font-semibold tracking-[0.12em] text-sky-800 dark:text-sky-300 uppercase">
             Scheduled date
           </p>
-          <p className="mt-0.5 font-semibold text-sky-950">
+          <p className="mt-0.5 font-semibold text-sky-950 dark:text-sky-100">
             {formatDate(estimate.scheduledDate)}
           </p>
         </div>

@@ -44,7 +44,7 @@ export function PortalGate({ children }: { children: ReactNode }) {
 
   if (!auth.hydrated || !isProvider) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-[#f5f5f5] text-sm text-muted-foreground">
+      <div className="flex min-h-svh items-center justify-center bg-[#f5f5f5] dark:bg-slate-900 text-sm text-muted-foreground dark:text-slate-400">
         Opening your business portal…
       </div>
     );

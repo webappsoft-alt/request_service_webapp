@@ -3,7 +3,18 @@
  * Defaults to official OpenStreetMap raster tiles. Override via env vars if you
  * want to swap in a premium style; no credential ever leaves this module.
  */
-export function getMapTileLayerProps() {
+export function getMapTileLayerProps(isDark = false) {
+  if (isDark && process.env.NEXT_PUBLIC_MAPS_DARK_TILE_URL) {
+    const darkTileUrl = process.env.NEXT_PUBLIC_MAPS_DARK_TILE_URL;
+    const darkAttribution =
+      process.env.NEXT_PUBLIC_MAPS_ATTRIBUTION ||
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    return {
+      url: darkTileUrl,
+      attribution: darkAttribution,
+    } as const;
+  }
+
   const tileUrl =
     process.env.NEXT_PUBLIC_MAPS_TILE_URL ||
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";

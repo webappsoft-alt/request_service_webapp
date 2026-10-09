@@ -116,7 +116,7 @@ export function ExistingInformationPanel({
 
   if (collapsed) {
     return (
-      <div className="rounded-2xl border border-[#94a3b8] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
@@ -219,7 +219,7 @@ export function ExistingInformationPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-[#94a3b8] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+    <div className="rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#d8dee8] pb-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">Existing information</h2>

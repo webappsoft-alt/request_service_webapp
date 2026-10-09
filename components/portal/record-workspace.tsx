@@ -154,15 +154,15 @@ export function RecordWorkspace({
       </div>
 
       {metaBar ? (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-border-soft bg-[#f7f8fa] px-4 py-2 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-border-soft dark:border-border bg-[#f7f8fa] dark:bg-slate-800/60 px-4 py-2 text-sm">
           {metaBar}
         </div>
       ) : null}
 
       {/* Main folder tabs — grey track only */}
-      <div className="bg-[#e8ecf1] px-3 pt-2 sm:px-4">
+      <div className="bg-[#e8ecf1] dark:bg-slate-900/90 px-3 pt-2 sm:px-4">
         <div
-          className="flex flex-wrap items-end gap-0.5 border-b border-[#cfd6e0]"
+          className="flex flex-wrap items-end gap-0.5 border-b border-[#cfd6e0] dark:border-border"
           role="tablist"
         >
           {tabs.map((item) => {
@@ -179,15 +179,15 @@ export function RecordWorkspace({
                 className={cn(
                   "inline-flex cursor-pointer items-center gap-1.5 px-3 py-2 text-sm transition-colors",
                   active
-                    ? "-mb-px rounded-t-md border border-b-0 border-[#cfd6e0] bg-card font-semibold text-[#003F7D]"
-                    : "mb-px font-medium text-slate-500 hover:text-slate-800",
+                    ? "-mb-px rounded-t-md border border-b-0 border-[#cfd6e0] dark:border-border bg-card font-semibold text-[#003F7D] dark:text-primary"
+                    : "mb-px font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100",
                 )}
               >
                 {Icon ? (
                   <Icon
                     className={cn(
                       "size-3.5 shrink-0",
-                      active ? "text-[#003F7D]" : "text-slate-400",
+                      active ? "text-[#003F7D] dark:text-primary" : "text-slate-400 dark:text-slate-500",
                     )}
                     aria-hidden
                   />

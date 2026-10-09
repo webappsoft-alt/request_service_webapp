@@ -157,7 +157,7 @@ export function ContractorDashboardView() {
                 <ul className="divide-y divide-[var(--ct-divider)]">
                   {data.upcoming.map((job) => (
                     <li key={job.id}>
-                      <Link href={contractorPaths.job(job.id)} className="flex flex-col gap-1 px-4 py-3 hover:bg-slate-50">
+                      <Link href={contractorPaths.job(job.id)} className="flex flex-col gap-1 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-slate-900">{job.number}</span>
                           <span className="truncate text-sm text-slate-700">{job.title}</span>

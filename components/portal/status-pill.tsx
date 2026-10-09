@@ -16,10 +16,10 @@ export function StatusPill({
       className={cn(
         "rounded-md border-transparent",
         !className && tone === "neutral" && "bg-muted text-foreground",
-        !className && tone === "success" && "bg-emerald-50 text-emerald-800",
-        !className && tone === "warning" && "bg-amber-50 text-amber-800",
-        !className && tone === "danger" && "bg-red-50 text-red-800",
-        !className && tone === "primary" && "bg-secondary text-primary",
+        !className && tone === "success" && "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
+        !className && tone === "warning" && "bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
+        !className && tone === "danger" && "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300",
+        !className && tone === "primary" && "bg-secondary text-primary dark:bg-blue-950/60 dark:text-blue-300",
         className,
       )}
     >
@@ -65,7 +65,7 @@ export function StatusDot({
           tone === "success" && "bg-emerald-500",
           tone === "warning" && "bg-amber-400",
           tone === "danger" && "bg-red-500",
-          tone === "primary" && "bg-[#003F7D]",
+          tone === "primary" && "bg-[#003F7D] dark:bg-blue-400",
           tone === "neutral" && "bg-slate-400",
         )}
       />

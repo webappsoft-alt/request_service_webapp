@@ -30,6 +30,11 @@ export const siteConfig = {
     facebook: "https://www.facebook.com/requestservices",
     instagram: "https://www.instagram.com/requestservices",
   },
+  /** Mobile app store links (footer badges + QR). Empty until the apps are published. */
+  apps: {
+    appStore: process.env.NEXT_PUBLIC_APP_STORE_URL || "",
+    googlePlay: process.env.NEXT_PUBLIC_GOOGLE_PLAY_URL || "",
+  },
   founder: "Request Service",
 } as const;
 

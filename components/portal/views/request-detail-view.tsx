@@ -203,19 +203,19 @@ function leadStatusAlertClass(status: string) {
     case "contacted":
     case "estimate_sent":
     case "converted_to_estimate":
-      return "bg-amber-50 text-amber-950";
+      return "bg-amber-50 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200 border border-amber-200/60 dark:border-amber-900/60";
     case "accepted":
     case "converted_to_job":
-      return "bg-emerald-50 text-emerald-950";
+      return "bg-emerald-50 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-200 border border-emerald-200/60 dark:border-emerald-900/60";
     case "declined":
     case "closed":
-      return "bg-red-50 text-red-950";
+      return "bg-red-50 text-red-950 dark:bg-red-950/40 dark:text-red-200 border border-red-200/60 dark:border-red-900/60";
     case "new":
     case "viewed":
     case "scheduled":
-      return "bg-[#eef4fa] text-[#0f2f52]";
+      return "bg-[#eef4fa] text-[#0f2f52] dark:bg-blue-950/40 dark:text-blue-200 border border-blue-200/60 dark:border-blue-900/60";
     default:
-      return "bg-slate-50 text-slate-900";
+      return "bg-slate-50 text-slate-900 dark:bg-slate-800 dark:text-slate-200 border border-border-soft dark:border-border";
   }
 }
 
@@ -2251,7 +2251,7 @@ export function RequestDetailView({ id }: { id: string }) {
               return (
                 <div className="flex h-[calc(100vh-270px)] min-h-[520px] flex-col overflow-hidden rounded-xl bg-card">
                   {/* Chat Top Header */}
-                  <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-soft bg-white px-4 sm:px-6">
+                  <header className="flex h-14 shrink-0 items-center justify-between border-b border-border-soft dark:border-border bg-white dark:bg-card px-4 sm:px-6">
                     <div className="flex min-w-0 items-center gap-3">
                       {/* Customer Avatar */}
                       <div className="relative shrink-0">

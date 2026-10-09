@@ -204,6 +204,8 @@ function ContractorNotifications() {
   );
 }
 
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+
 function ContractorAccountMenu() {
   const user = useAppSelector(selectAuthUser);
   const profile = useAppSelector((state) => state.contractorPortal.profile.data);
@@ -237,6 +239,7 @@ function ContractorAccountMenu() {
             <UserRound /> Profile
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => handleUserLogout()}>
           <LogOut /> Log out
         </DropdownMenuItem>
@@ -282,7 +285,7 @@ export function ContractorShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="lg:pl-60">
-        <header className="sticky top-0 z-20 border-b border-input bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-input bg-white/95 dark:bg-card/95 backdrop-blur">
           <div className="flex h-14 items-center gap-2 px-3 sm:px-5">
             <Sheet>
               <SheetTrigger asChild>
@@ -305,6 +308,7 @@ export function ContractorShell({ children }: { children: ReactNode }) {
             </Sheet>
             <p className="truncate text-sm font-semibold text-foreground lg:hidden">{company || "Contractor portal"}</p>
             <div className="ml-auto flex items-center gap-1.5">
+              <ThemeToggle />
               <ContractorNotifications />
               <ContractorAccountMenu />
             </div>

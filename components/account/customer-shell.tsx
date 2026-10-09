@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search, X } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,14 +91,14 @@ function RecordTab({
       className={cn(
         "flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-[4px] border px-2.5 text-xs transition-colors",
         active
-          ? "border-[#003F7D]/25 bg-[#e8eef5] font-semibold text-[#003F7D] shadow-[inset_0_-2px_0_#003F7D]"
-          : "border-input bg-[#f7f8fa] text-muted-foreground hover:border-input hover:bg-white hover:text-foreground",
+          ? "border-[#003F7D]/25 bg-[#e8eef5] font-semibold text-[#003F7D] shadow-[inset_0_-2px_0_#003F7D] dark:border-primary/40 dark:bg-primary/15 dark:text-primary dark:shadow-[inset_0_-2px_0_var(--primary)]"
+          : "border-input bg-[#f7f8fa] text-muted-foreground hover:border-input hover:bg-white hover:text-foreground dark:bg-slate-800/60 dark:hover:bg-slate-800 dark:hover:text-foreground",
       )}
     >
       <span
         className={cn(
           "size-1.5 shrink-0 rounded-full",
-          active ? "bg-[#003F7D]" : "bg-black/25",
+          active ? "bg-[#003F7D] dark:bg-primary" : "bg-black/25 dark:bg-white/30",
         )}
         aria-hidden
       />
@@ -108,7 +109,7 @@ function RecordTab({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-[3px] p-0.5 hover:bg-black/10 hover:text-foreground"
+          className="rounded-[3px] p-0.5 hover:bg-black/10 hover:text-foreground dark:hover:bg-white/10"
           aria-label={`Close ${label}`}
         >
           <X className="size-3" />
@@ -522,11 +523,11 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-svh bg-[#eef1f5]">
+    <div className="portal-app min-h-svh bg-[#eef1f5] dark:bg-background">
       {/* Sidebar matching Provider Portal style */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] text-white transition-[width] duration-200 lg:flex",
+          "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border text-white transition-[width] duration-200 lg:flex",
           collapsed ? "w-16" : "w-56",
         )}
       >
@@ -590,7 +591,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               </SheetTrigger>
               <SheetContent
                 side="left"
-                className="flex w-72 flex-col border-0 bg-[#003F7D] p-0 text-white"
+                className="flex w-72 flex-col border-0 bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border p-0 text-white"
               >
                 <SheetHeader className="border-b border-white/10 px-4 py-3">
                   <SheetTitle className="text-white">
@@ -640,7 +641,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search records…"
-                className="h-8 bg-[#f7f8fa] pl-8 text-sm border-input"
+                className="h-8 bg-[#f7f8fa] dark:bg-slate-800/80 pl-8 text-sm border-input"
                 aria-label="Search records"
                 value={headerSearch}
                 onChange={(event) => setHeaderSearch(event.target.value)}
@@ -735,6 +736,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               >
                 <Link href={customerPaths.site}>Back to site</Link>
               </Button>
+              <ThemeToggle />
               <UserAccountMenu user={menuUser} className="size-8 border-input" />
             </div>
           </div>

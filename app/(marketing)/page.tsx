@@ -1,8 +1,8 @@
 import { HomeCategoryFilterProvider } from "@/components/home/home-category-filter";
-// Featured Pros — kept for restore; swap back in place of the customer info sections below.
-// import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
+import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
 import { CustomerTrustSection } from "@/components/home/customer-trust-section";
-import { CustomerJourneySection } from "@/components/home/customer-journey-section";
+// Customer journey ("From the first question to the final invoice") — parked; kept for restore.
+// import { CustomerJourneySection } from "@/components/home/customer-journey-section";
 import { CustomerAssuranceSection } from "@/components/home/customer-assurance-section";
 import { HeroSection } from "@/components/home/hero-section";
 import { HomeSearchDock } from "@/components/home/home-search-dock";
@@ -35,12 +35,13 @@ export default function HomePage() {
             <ServicesSection />
           </div>
 
-          {/*
-            Featured Pros temporarily parked — restore when marketplace cards return:
-            <FeaturedProvidersSection />
-          */}
           <CustomerTrustSection />
-          <CustomerJourneySection />
+          {/* 4 business profiles from the API + "See all professionals" link. */}
+          <FeaturedProvidersSection />
+          {/*
+            Customer journey section parked — restore by swapping it back in:
+            <CustomerJourneySection />
+          */}
           <CustomerAssuranceSection />
 
           <WorkflowSection />

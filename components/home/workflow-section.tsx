@@ -146,7 +146,7 @@ export function WorkflowSection() {
         className="pointer-events-none absolute inset-x-0 top-0 z-0"
       >
         <svg
-          className="absolute inset-x-0 -top-10 h-10 w-full text-white"
+          className="absolute inset-x-0 -top-10 h-10 w-full text-white dark:text-card"
           viewBox="0 0 1440 40"
           preserveAspectRatio="none"
         >

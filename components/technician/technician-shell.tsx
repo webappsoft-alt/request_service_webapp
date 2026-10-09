@@ -244,6 +244,8 @@ function TechnicianNotifications() {
   );
 }
 
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+
 function TechnicianAccountMenu() {
   const user = useAppSelector(selectAuthUser);
   const name = `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "Technician";
@@ -331,7 +333,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="lg:pl-60">
-        <header className="sticky top-0 z-20 border-b border-input bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-input bg-white/95 dark:bg-card/95 backdrop-blur">
           <div className="flex h-14 items-center gap-2 px-3 sm:px-5">
             <Sheet>
               <SheetTrigger asChild>
@@ -353,6 +355,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
             <div className="ml-auto flex items-center gap-1.5">
               <ActiveTimerChip />
               <TechnicianChatShortcut />
+              <ThemeToggle />
               <TechnicianNotifications />
               <TechnicianAccountMenu />
             </div>

@@ -962,9 +962,9 @@ function MonthGrid({
   onContextMenuCard?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
   onContextMenuDay?: (e: React.MouseEvent, iso: string) => void;
 }) {
-  const inMonthLine = "#94a3b8";
-  const outMonthLine = "#e2e8f0";
-  const outerLine = "#94a3b8";
+  const inMonthLine = "var(--border)";
+  const outMonthLine = "var(--border-soft)";
+  const outerLine = "var(--border)";
   const weeks: MonthCell[][] = [];
   for (let index = 0; index < cells.length; index += 7) {
     weeks.push(cells.slice(index, index + 7));
@@ -976,7 +976,7 @@ function MonthGrid({
       style={{ border: `1px solid ${outerLine}` }}
     >
       <div
-        className="grid grid-cols-7 bg-[#f7f8fa]"
+        className="grid grid-cols-7 bg-[#f7f8fa] dark:bg-slate-800/60"
         style={{ borderBottom: `1px solid ${inMonthLine}` }}
       >
         {WEEKDAYS.map((day, index) => {
@@ -986,7 +986,7 @@ function MonthGrid({
               key={day}
               className={cn(
                 "px-2 py-2.5 text-center text-[11px] font-semibold tracking-wide uppercase",
-                weekend ? "bg-[#fef2f2] text-[#b91c1c]/80" : "text-muted-foreground",
+                weekend ? "bg-red-500/10 dark:bg-red-950/25 text-[#b91c1c]/90 dark:text-red-300" : "text-muted-foreground",
               )}
               style={index < 6 ? { borderRight: `1px solid ${inMonthLine}` } : undefined}
             >
@@ -1019,9 +1019,9 @@ function MonthGrid({
                       "px-1.5 pt-1.5",
                       cell.inMonth
                         ? weekend
-                          ? "bg-[#fef2f2]"
+                          ? "bg-red-500/5 dark:bg-red-950/20"
                           : "bg-card"
-                        : "bg-[#f8fafc]",
+                        : "bg-muted/30 dark:bg-slate-900/60",
                       cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
                       cell.inMonth && overDay === cell.iso && "bg-primary/15",
                       !cell.inMonth && overDay === cell.iso && "bg-primary/10",
@@ -1035,9 +1035,9 @@ function MonthGrid({
                         "flex size-6 items-center justify-center rounded-full text-xs font-medium",
                         cell.inMonth
                           ? weekend && cell.iso !== today
-                            ? "text-[#dc2626]/70"
+                            ? "text-[#dc2626]/80 dark:text-red-400"
                             : "text-foreground"
-                          : "text-slate-400",
+                          : "text-muted-foreground/60",
                         cell.iso === today && "bg-primary text-primary-foreground",
                       )}
                     >
@@ -1067,9 +1067,9 @@ function MonthGrid({
                       className={cn(
                         cell.inMonth
                           ? weekend
-                            ? "bg-[#fef2f2]"
+                            ? "bg-red-500/5 dark:bg-red-950/20"
                             : "bg-card"
-                          : "bg-[#f8fafc]",
+                          : "bg-muted/30 dark:bg-slate-900/60",
                         cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
                         cell.inMonth && overDay === cell.iso && "bg-primary/15",
                         !cell.inMonth && overDay === cell.iso && "bg-primary/10",

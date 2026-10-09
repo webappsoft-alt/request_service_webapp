@@ -65,17 +65,17 @@ export function CustomerAssuranceSection() {
           })}
         </div>
 
-        <div className="overflow-hidden rounded-[1.75rem] border border-[#003F7D]/15 bg-[#003F7D] px-6 py-8 text-primary-foreground sm:px-10 sm:py-10">
+        <div className="overflow-hidden rounded-[1.75rem] border border-[#003F7D]/15 bg-[#003F7D] px-6 py-8 text-primary-foreground sm:px-10 sm:py-10 dark:border-sky-400/20 dark:bg-[linear-gradient(135deg,#0b3a6e,#0a2a52)] dark:text-white">
           <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="flex flex-col gap-3">
-              <p className="inline-flex w-fit items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-medium tracking-[0.14em] uppercase">
+              <p className="inline-flex w-fit items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-medium tracking-[0.14em] uppercase dark:text-sky-100">
                 <Sparkles className="size-3.5" aria-hidden="true" />
                 Ready when you are
               </p>
               <h3 className="text-2xl font-semibold tracking-tight md:text-[1.85rem]">
                 Start with a quote request — or pick a pro by name.
               </h3>
-              <p className="max-w-xl text-sm leading-7 text-primary-foreground/75">
+              <p className="max-w-xl text-sm leading-7 text-primary-foreground/75 dark:text-slate-200/80">
                 General requests go to matching local professionals. Choosing a company from search
                 or a profile sends that request only to them.
               </p>

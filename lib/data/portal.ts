@@ -1427,31 +1427,31 @@ export function jobStatusLabel(status: JobStatus) {
 export function jobStatusTone(status: JobStatus) {
   switch (status) {
     case "unscheduled":
-      return "bg-slate-100 text-slate-700";
+      return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
     case "scheduled":
-      return "bg-sky-50 text-sky-800";
+      return "bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300";
     case "dispatched":
-      return "bg-indigo-50 text-indigo-800";
+      return "bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300";
     case "en_route":
-      return "bg-cyan-50 text-cyan-800";
+      return "bg-cyan-50 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300";
     case "on_site":
-      return "bg-teal-50 text-teal-800";
+      return "bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300";
     case "in_progress":
-      return "bg-amber-50 text-amber-900";
+      return "bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300";
     case "on_hold":
-      return "bg-orange-50 text-orange-800";
+      return "bg-orange-50 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300";
     case "waiting_parts":
-      return "bg-violet-50 text-violet-800";
+      return "bg-violet-50 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300";
     case "needs_return":
-      return "bg-rose-50 text-rose-800";
+      return "bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300";
     case "completed":
-      return "bg-emerald-50 text-emerald-800";
+      return "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300";
     case "invoiced":
-      return "bg-[#e8eef5] text-[#003F7D]";
+      return "bg-[#e8eef5] text-[#003F7D] dark:bg-blue-950/60 dark:text-blue-300";
     case "paid":
-      return "bg-green-50 text-green-800";
+      return "bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300";
     case "cancelled":
-      return "bg-red-50 text-red-800";
+      return "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300";
     default: {
       const _never: never = status;
       return _never;
@@ -1601,17 +1601,17 @@ export function timeWindowLabel(window: PortalTimeWindow) {
 export function invoiceStatusTone(status: InvoiceStatus) {
   switch (status) {
     case "draft":
-      return "bg-slate-100 text-slate-700";
+      return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
     case "sent":
-      return "bg-sky-50 text-sky-800";
+      return "bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300";
     case "partially_paid":
-      return "bg-amber-50 text-amber-900";
+      return "bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300";
     case "paid":
-      return "bg-green-50 text-green-800";
+      return "bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300";
     case "overdue":
-      return "bg-orange-50 text-orange-800";
+      return "bg-orange-50 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300";
     case "cancelled":
-      return "bg-red-50 text-red-800";
+      return "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300";
     default: {
       const _never: never = status;
       return _never;
@@ -1773,13 +1773,13 @@ export function paymentStatusTone(status: PaymentStatus) {
   switch (status) {
     case "pending":
     case "processing":
-      return "bg-amber-50 text-amber-900";
+      return "bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300";
     case "succeeded":
-      return "bg-green-50 text-green-800";
+      return "bg-green-50 text-green-800 dark:bg-green-950/60 dark:text-green-300";
     case "failed":
-      return "bg-red-50 text-red-800";
+      return "bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-300";
     case "refunded":
-      return "bg-slate-100 text-slate-700";
+      return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
     default: {
       const _never: never = status;
       return _never;

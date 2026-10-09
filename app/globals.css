@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   --color-background: var(--background);
@@ -129,56 +129,74 @@
 }
 
 .dark {
-  --background: oklch(0.2 0.04 254);
-  --foreground: oklch(0.985 0.008 254);
-  --card: oklch(0.24 0.04 254);
-  --card-foreground: oklch(0.985 0.008 254);
-  --popover: oklch(0.24 0.04 254);
-  --popover-foreground: oklch(0.985 0.008 254);
-  /* Lifted tone of #003F7D so primary text and fills stay visible on ink. */
+  /* Field chat (technician / contractor ↔ office) in dark mode */
+  --chat-accent: oklch(0.72 0.12 254);
+  --chat-accent-soft: rgba(59, 130, 246, 0.18);
+  --chat-accent-faint: #131d2b;
+
+  /* Surfaces & backgrounds: clean, modern slate-900 / slate-800 neutrals */
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+
+  /* Lifted tone of #003F7D so primary text and fills stay visible with WCAG AA compliance */
   --primary: oklch(0.72 0.09 254);
-  --primary-foreground: #003f7d;
-  --secondary: oklch(0.3 0.04 254);
-  --secondary-foreground: oklch(0.985 0.008 254);
-  --muted: oklch(0.3 0.04 254);
-  --muted-foreground: oklch(0.74 0.03 254);
-  --accent: oklch(0.3 0.04 254);
-  --accent-foreground: oklch(0.985 0.008 254);
+  --primary-foreground: #081d38;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
   --destructive: oklch(0.7 0.18 22);
-  --border: oklch(1 0 0 / 18%);
-  --input: oklch(1 0 0 / 18%);
+
+  /* Centralized, subtle border tokens */
+  --border: #334155;
+  --input: #334155;
+  --border-soft: #253346;
   --ring: oklch(0.68 0.08 254);
+
   --success: oklch(0.7 0.12 155);
-  --success-foreground: oklch(0.2 0.04 155);
+  --success-foreground: #042f26;
   --warning: oklch(0.8 0.12 75);
-  --warning-foreground: oklch(0.28 0.06 55);
+  --warning-foreground: #2d1804;
   --brand: oklch(0.72 0.09 254);
-  --brand-foreground: #003f7d;
+  --brand-foreground: #081d38;
+
+  --accent-blue: #3b82f6;
+  --accent-teal: oklch(0.7 0.12 205);
+  --accent-amber: oklch(0.75 0.14 65);
+  --accent-green: oklch(0.72 0.14 155);
+  --accent-violet: oklch(0.72 0.15 295);
+
   --ink: #003f7d;
-  --ink-foreground: oklch(0.98 0.008 254);
-  --ink-muted: oklch(0.8 0.04 254);
-  --ink-surface: oklch(0.32 0.08 254);
-  --ink-border: oklch(0.99 0 0 / 16%);
+  --ink-foreground: #f8fafc;
+  --ink-muted: #94a3b8;
+  --ink-surface: #1e293b;
+  --ink-border: rgba(255, 255, 255, 0.12);
+
   --chart-1: oklch(0.72 0.09 254);
   --chart-2: oklch(0.6 0.08 254);
   --chart-3: oklch(0.5 0.07 254);
   --chart-4: oklch(0.42 0.06 254);
   --chart-5: oklch(0.34 0.05 254);
-  --sidebar: oklch(0.24 0.04 254);
-  --sidebar-foreground: oklch(0.985 0.008 254);
+
+  --sidebar: #0f172a;
+  --sidebar-foreground: #f8fafc;
   --sidebar-primary: oklch(0.72 0.09 254);
-  --sidebar-primary-foreground: #003f7d;
-  --sidebar-accent: oklch(0.3 0.04 254);
-  --sidebar-accent-foreground: oklch(0.985 0.008 254);
-  --sidebar-border: oklch(1 0 0 / 18%);
+  --sidebar-primary-foreground: #081d38;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #334155;
   --sidebar-ring: oklch(0.68 0.08 254);
 }
 
 /*
  * Contractor portal theme — balanced slate + emerald, distinct from the Pro
- * portal's navy. Scoped to `.contractor-theme`, so shadcn primitives inside
- * the portal (buttons, rings, focus states) pick up the accent automatically.
- * Change the palette here; components only reference these tokens.
+ * portal's navy. Scoped to `.contractor-theme`.
  */
 .contractor-theme {
   --ct-accent: #0f7b68;
@@ -187,7 +205,7 @@
   --ct-accent-ring: rgb(15 123 104 / 0.35);
   --ct-bg: #f3f5f8;
   --ct-surface: #ffffff;
-  --ct-border: #94a3b8; /* same card border as the Pro portal */
+  --ct-border: #94a3b8;
   --ct-divider: #edf0f4;
   --ct-sidebar: #263240;
   --ct-sidebar-2: #1f2a36;
@@ -205,11 +223,34 @@
   --chat-accent-faint: #f3faf8;
 }
 
+.dark .contractor-theme,
+.contractor-theme.dark,
+[data-theme="dark"] .contractor-theme {
+  --ct-bg: #0f172a;
+  --ct-surface: #1e293b;
+  --ct-border: #334155;
+  --ct-divider: #253346;
+  --ct-sidebar: #0f172a;
+  --ct-sidebar-2: #0b1120;
+  --ct-sidebar-border: rgba(255, 255, 255, 0.1);
+  --ct-sidebar-text: rgb(226 232 240 / 0.85);
+  --ct-sidebar-active: rgb(255 255 255 / 0.12);
+  --ct-sidebar-accent: #34d3a5;
+  --ct-accent-soft: rgba(15, 123, 104, 0.22);
+  --ct-accent-ring: rgb(52 211 165 / 0.35);
+
+  --primary: #34d3a5;
+  --primary-foreground: #042f26;
+  --ring: var(--ct-accent-ring);
+
+  --chat-accent: #34d3a5;
+  --chat-accent-soft: rgba(15, 123, 104, 0.22);
+  --chat-accent-faint: #131d2b;
+}
+
 /*
  * Technician portal theme — midnight + indigo, distinct from the Pro
- * navy and the contractor slate + emerald. Scoped to `.technician-theme` (set on the technician shell,
- * login and <body> while in the portal), so nothing outside it changes.
- * Shared components use `var(--tech-accent, #003F7D)`, which stays navy elsewhere.
+ * navy and the contractor slate + emerald. Scoped to `.technician-theme`.
  */
 .technician-theme {
   --tech-accent: #4f46e5;
@@ -237,9 +278,395 @@
   --chat-accent-faint: #f7f8ff;
 }
 
+.dark .technician-theme,
+.technician-theme.dark,
+[data-theme="dark"] .technician-theme {
+  --tech-bg: #0f172a;
+  --tech-surface: #1e293b;
+  --tech-border: #334155;
+  --tech-divider: #253346;
+  --tech-sidebar: #0e0f22;
+  --tech-sidebar-2: #070814;
+  --tech-sidebar-border: rgba(255, 255, 255, 0.1);
+  --tech-sidebar-text: rgb(224 228 255 / 0.85);
+  --tech-sidebar-active: rgb(129 140 248 / 0.2);
+  --tech-sidebar-accent: #a5b4fc;
+  --tech-accent: #818cf8;
+  --tech-accent-hover: #6366f1;
+  --tech-accent-soft: rgba(79, 70, 229, 0.22);
+
+  --primary: #818cf8;
+  --primary-foreground: #0c1033;
+  --brand: #818cf8;
+  --secondary: #1a1d36;
+  --secondary-foreground: #c7d2fe;
+  --accent: #1a1d36;
+  --accent-foreground: #c7d2fe;
+  --ring: rgb(129 140 248 / 0.45);
+
+  --chat-accent: #818cf8;
+  --chat-accent-soft: rgba(79, 70, 229, 0.22);
+  --chat-accent-faint: #13152c;
+}
+
 /* Portal uses the same global border/input tokens as the rest of the app. */
 .portal-app {
   --sidebar-border: var(--border);
+}
+
+/* =========================================================================
+   DARK MODE COMPREHENSIVE SURFACE & TEXT ADAPTATIONS
+   Preserves existing layouts, automatically updates surfaces & typography
+   ========================================================================= */
+
+.dark {
+  color-scheme: dark;
+}
+
+/* Page background adaptations for all portal shells */
+.dark .portal-app,
+.dark .contractor-theme,
+.dark .technician-theme {
+  background-color: var(--background);
+}
+
+/* Centralized mapping of light-mode surfaces to slate-800 cards */
+.dark .portal-app .bg-white:not([data-keep-white]):not(.leaflet-popup *):not(.rs-pill),
+.dark .contractor-theme .bg-white:not([data-keep-white]),
+.dark .technician-theme .bg-white:not([data-keep-white]),
+.dark [data-slot="dialog-content"] .bg-white:not([data-keep-white]),
+.dark [data-slot="card"].bg-white,
+.dark .bg-white:not([data-keep-white]):not(.leaflet-popup *):not(.rs-pill) {
+  background-color: var(--card) !important;
+  color: var(--card-foreground);
+}
+
+/* Subtle neutral grey containers & table headers -> slate-800 / muted */
+.dark [class*="bg-[#fafbfc]"],
+.dark [class*="bg-[#f7f8fa]"],
+.dark [class*="bg-[#f8fafc]"],
+.dark [class*="bg-[#f1f5f9]"],
+.dark [class*="bg-[#f6f9fc]"],
+.dark [class*="bg-[#eef3f9]"],
+.dark [class*="bg-[#e8ecf1]"],
+.dark [class*="bg-[#eef4fa]"],
+.dark [class*="bg-[#f5f5f5]"],
+.dark [class*="bg-[#f0f4f8]"],
+.dark [class*="bg-[#f9fafb]"],
+.dark [class*="bg-[#f4f6f8]"],
+.dark [class*="bg-[#f8f9fa]"],
+.dark [class*="bg-[#edf2f7]"],
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-zinc-50,
+.dark .bg-zinc-100,
+.dark .bg-neutral-50,
+.dark .bg-neutral-100 {
+  background-color: var(--muted) !important;
+}
+
+/* Light portal backgrounds -> dark page background */
+.dark [class*="bg-[#eef1f5]"],
+.dark [class*="bg-[#f3f5f8]"],
+.dark [class*="bg-[#f6f7fb]"] {
+  background-color: var(--background) !important;
+}
+
+/* Weekend & alert light red tint in dark mode */
+.dark [class*="bg-[#fef2f2]"],
+.dark [class*="bg-[#fee2e2]"],
+.dark .bg-red-50,
+.dark .bg-red-100 {
+  background-color: rgba(69, 10, 10, 0.22) !important;
+}
+
+/* Light sky / blue tints */
+.dark .bg-sky-50,
+.dark .bg-blue-50 {
+  background-color: rgba(12, 74, 110, 0.25) !important;
+}
+
+/* Active tab / badge light-blue tint -> subtle lifted primary tint */
+.dark [class*="bg-[#e8eef5]"] {
+  background-color: color-mix(in oklab, var(--primary) 18%, transparent) !important;
+  color: var(--primary) !important;
+}
+
+/* Centralized border tokens: Map hardcoded light-grey borders -> Slate-700 / Slate-800 */
+.dark [class*="border-[#94a3b8]"],
+.dark [class*="border-[#b4becc]"],
+.dark [class*="border-[#cfd6e0]"],
+.dark [class*="border-slate-300"],
+.dark [class*="border-slate-200"],
+.dark [class*="border-zinc-300"],
+.dark [class*="border-zinc-200"],
+.dark [class*="border-[#e5e7eb]"],
+.dark [class*="border-[#d1d5db]"] {
+  border-color: var(--border) !important;
+}
+
+.dark [class*="border-[#d7e2ef]"],
+.dark [class*="border-[#e2e8f0]"],
+.dark [class*="border-[#edf0f4]"],
+.dark [class*="border-[#d8dee8]"] {
+  border-color: var(--border-soft) !important;
+}
+
+/* Leaflet Map & embedded component dark theming */
+.dark .leaflet-container {
+  background-color: #0f172a !important;
+}
+.dark .leaflet-tile-pane,
+.dark .rs-map .leaflet-tile-pane {
+  filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(90%);
+}
+.dark .leaflet-control-zoom {
+  border-color: var(--border) !important;
+}
+.dark .leaflet-control-zoom a {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+.dark .leaflet-control-zoom a:hover {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+}
+.dark .leaflet-control-attribution {
+  background-color: rgba(15, 23, 42, 0.8) !important;
+  color: #94a3b8 !important;
+}
+.dark .leaflet-control-attribution a {
+  color: #60a5fa !important;
+}
+.dark .leaflet-popup-content-wrapper,
+.dark .leaflet-popup-tip {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+}
+.dark .leaflet-popup-content p {
+  color: #f8fafc !important;
+}
+.dark .leaflet-popup-content .text-muted-foreground {
+  color: #94a3b8 !important;
+}
+
+/* Text readability: dark slate/zinc/gray -> pure white / near-white */
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-zinc-900,
+.dark .text-zinc-800,
+.dark .text-zinc-700,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700,
+.dark .text-neutral-900,
+.dark .text-neutral-800,
+.dark .text-neutral-700,
+.dark .text-black,
+.dark [class*="text-slate-900"],
+.dark [class*="text-slate-800"],
+.dark [class*="text-slate-700"],
+.dark [class*="text-zinc-900"],
+.dark [class*="text-zinc-800"],
+.dark [class*="text-zinc-700"],
+.dark [class*="text-gray-900"],
+.dark [class*="text-gray-800"],
+.dark [class*="text-gray-700"] {
+  color: var(--foreground) !important;
+}
+
+/* Secondary & placeholder text -> Slate-400 (legible medium-light, never muddy) */
+.dark .text-slate-500,
+.dark .text-slate-600,
+.dark .text-zinc-500,
+.dark .text-zinc-600,
+.dark .text-gray-500,
+.dark .text-gray-600,
+.dark [class*="text-slate-500"],
+.dark [class*="text-slate-600"],
+.dark [class*="text-zinc-500"],
+.dark [class*="text-zinc-600"],
+.dark [class*="text-gray-500"],
+.dark [class*="text-gray-600"] {
+  color: var(--muted-foreground) !important;
+}
+
+/* Customer trust cards and marketing wash in dark mode */
+.dark .trust-section .trust-card {
+  background-color: rgba(30, 41, 59, 0.75) !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+.dark .trust-section .bg-white {
+  background-color: var(--card) !important;
+}
+
+.dark .trust-section [class*="bg-[linear-gradient(180deg,rgba(255,255,255"] {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, transparent 28%, transparent 72%, rgba(15, 23, 42, 0.6) 100%) !important;
+}
+
+.dark .hero-photo-fade {
+  background: linear-gradient(
+    90deg,
+    var(--background) 0%,
+    var(--background) 34%,
+    color-mix(in oklab, var(--background) 88%, transparent) 46%,
+    color-mix(in oklab, var(--background) 42%, transparent) 64%,
+    color-mix(in oklab, var(--background) 8%, transparent) 82%,
+    transparent 100%
+  ) !important;
+}
+
+.dark .page-wash {
+  background-image:
+    radial-gradient(
+      54rem 32rem at 80% -10%,
+      oklch(0.372 0.12 254 / 22%),
+      transparent 64%
+    ),
+    radial-gradient(
+      42rem 28rem at 2% 2%,
+      oklch(0.372 0.12 254 / 12%),
+      transparent 60%
+    ),
+    linear-gradient(to bottom, #0f172a, #131c2e) !important;
+}
+
+.dark .hero-wash {
+  background-image:
+    radial-gradient(
+      54rem 32rem at 80% -10%,
+      oklch(0.372 0.12 254 / 18%),
+      transparent 64%
+    ),
+    radial-gradient(
+      42rem 28rem at 2% 2%,
+      oklch(0.372 0.12 254 / 10%),
+      transparent 60%
+    ),
+    linear-gradient(to bottom, #0f172a, #131c2e 72%, #0f172a) !important;
+}
+
+/* CKEditor & rich text toolbar in dark mode */
+.dark .job-rich-text .ck.ck-toolbar {
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--muted) !important;
+}
+
+.dark .ck.ck-toolbar .ck-button {
+  color: var(--foreground) !important;
+}
+
+.dark .ck.ck-toolbar .ck-button:hover {
+  background: var(--card) !important;
+}
+
+/* Dashboard Action Alerts in dark mode */
+.dark .dashboard-alert--leads {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  background: linear-gradient(90deg, #101e38 0%, #162a4d 55%, #12213d 100%) !important;
+  color: #bfdbfe !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 6px 18px -14px rgba(0, 0, 0, 0.7) !important;
+}
+.dark .dashboard-alert--leads .dashboard-action-alert-rail {
+  background: #3b82f6 !important;
+}
+.dark .dashboard-alert--leads .dashboard-action-alert-icon {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #93c5fd !important;
+}
+.dark .dashboard-alert--leads .dashboard-action-alert-cta {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.dark .dashboard-alert--estimates {
+  border-color: rgba(20, 184, 166, 0.3) !important;
+  background: linear-gradient(90deg, #092827 0%, #0d3836 55%, #0b302f 100%) !important;
+  color: #99f6e4 !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 6px 18px -14px rgba(0, 0, 0, 0.7) !important;
+}
+.dark .dashboard-alert--estimates .dashboard-action-alert-rail {
+  background: #14b8a6 !important;
+}
+.dark .dashboard-alert--estimates .dashboard-action-alert-icon {
+  background: rgba(20, 184, 166, 0.2) !important;
+  color: #5eead4 !important;
+}
+.dark .dashboard-alert--estimates .dashboard-action-alert-cta {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+}
+
+.dark .dashboard-alert--orders {
+  border-color: rgba(249, 115, 22, 0.3) !important;
+  background: linear-gradient(90deg, #2d1808 0%, #3d210c 55%, #331c0a 100%) !important;
+  color: #fed7aa !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 6px 18px -14px rgba(0, 0, 0, 0.7) !important;
+}
+.dark .dashboard-alert--orders .dashboard-action-alert-rail {
+  background: #f97316 !important;
+}
+.dark .dashboard-alert--orders .dashboard-action-alert-icon {
+  background: rgba(249, 115, 22, 0.2) !important;
+  color: #fdba74 !important;
+}
+.dark .dashboard-alert--orders .dashboard-action-alert-cta {
+  background: #ea580c !important;
+  color: #ffffff !important;
+}
+
+/* Google Places Autocomplete dropdown in dark mode */
+.dark .pac-container {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 12px 36px -10px rgba(0, 0, 0, 0.75) !important;
+}
+.dark .pac-item {
+  color: var(--foreground) !important;
+  border-top-color: var(--border-soft) !important;
+}
+.dark .pac-item:hover,
+.dark .pac-item-selected {
+  background-color: var(--muted) !important;
+}
+.dark .pac-item-query {
+  color: var(--foreground) !important;
+}
+.dark .pac-matched {
+  color: var(--primary) !important;
+}
+
+/* Leaflet maps in dark mode */
+.dark .rs-map .leaflet-container {
+  background: #0f172a !important;
+}
+.dark .rs-map .leaflet-control-attribution {
+  background: rgba(30, 41, 59, 0.8) !important;
+  color: var(--muted-foreground) !important;
+}
+.dark .rs-map .leaflet-control-attribution a {
+  color: var(--primary) !important;
+}
+.dark .rs-map .leaflet-popup-tip {
+  background: var(--card) !important;
+}
+.dark .rs-map .leaflet-container a.leaflet-popup-close-button {
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+}
+.dark .rs-map .leaflet-container a.leaflet-popup-close-button:hover {
+  background: var(--muted) !important;
+}
+.dark .rs-shop-pin {
+  background: var(--card) !important;
+  color: #93c5fd !important;
+  border-color: #3b82f6 !important;
 }
 
 @layer base {
@@ -1655,4 +2082,15 @@
   .tech-today-card-now {
     animation: none;
   }
+}
+
+/* Dark mode: light hover fills (hover:bg-slate-50 etc.) would flash near-white rows. */
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-zinc-50:hover,
+.dark .hover\:bg-neutral-50:hover,
+.dark .hover\:bg-white:hover {
+  background-color: rgb(255 255 255 / 0.05);
 }

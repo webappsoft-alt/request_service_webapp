@@ -26,21 +26,21 @@ export function opportunityStatusLabel(status: OpportunityStatus | string) {
 export function opportunityStatusTone(status: OpportunityStatus | string) {
   switch (status as OpportunityStatus) {
     case "new":
-      return "bg-slate-100 text-slate-700 ring-slate-200/80";
+      return "bg-slate-100 text-slate-700 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700";
     case "assessment_scheduled":
-      return "bg-sky-50 text-sky-800 ring-sky-200/80";
+      return "bg-sky-50 text-sky-800 ring-sky-200/80 dark:bg-sky-950/60 dark:text-sky-300 dark:ring-sky-800/60";
     case "assessment_completed":
-      return "bg-teal-50 text-teal-800 ring-teal-200/80";
+      return "bg-teal-50 text-teal-800 ring-teal-200/80 dark:bg-teal-950/60 dark:text-teal-300 dark:ring-teal-800/60";
     case "estimate_draft":
-      return "bg-amber-50 text-amber-900 ring-amber-200/80";
+      return "bg-amber-50 text-amber-900 ring-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:ring-amber-800/60";
     case "estimate_sent":
-      return "bg-[#e8eef5] text-[#003F7D] ring-[#003F7D]/25";
+      return "bg-[#e8eef5] text-[#003F7D] ring-[#003F7D]/25 dark:bg-blue-950/60 dark:text-blue-300 dark:ring-blue-800/60";
     case "won":
-      return "bg-emerald-50 text-emerald-800 ring-emerald-200/80";
+      return "bg-emerald-50 text-emerald-800 ring-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-800/60";
     case "lost":
-      return "bg-rose-50 text-rose-800 ring-rose-200/80";
+      return "bg-rose-50 text-rose-800 ring-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:ring-rose-800/60";
     default:
-      return "bg-slate-100 text-slate-700 ring-slate-200/80";
+      return "bg-slate-100 text-slate-700 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700";
   }
 }
 
@@ -114,29 +114,29 @@ function canonicalEstimateStatus(status: string): EstimateStatus | "unknown" {
 export function estimateStatusToneDistinct(status: EstimateStatus | string) {
   switch (canonicalEstimateStatus(String(status))) {
     case "site_visit":
-      return "bg-indigo-50 text-indigo-800 ring-1 ring-inset ring-indigo-200/80";
+      return "bg-indigo-50 text-indigo-800 ring-1 ring-inset ring-indigo-200/80 dark:bg-indigo-950/60 dark:text-indigo-300 dark:ring-indigo-800/60";
     case "inspected":
-      return "bg-teal-50 text-teal-800 ring-1 ring-inset ring-teal-200/80";
+      return "bg-teal-50 text-teal-800 ring-1 ring-inset ring-teal-200/80 dark:bg-teal-950/60 dark:text-teal-300 dark:ring-teal-800/60";
     case "draft":
-      return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/80";
+      return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700";
     case "scheduled":
-      return "bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-200/80";
+      return "bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-200/80 dark:bg-violet-950/60 dark:text-violet-300 dark:ring-violet-800/60";
     case "finalized":
-      return "bg-cyan-50 text-cyan-900 ring-1 ring-inset ring-cyan-200/80";
+      return "bg-cyan-50 text-cyan-900 ring-1 ring-inset ring-cyan-200/80 dark:bg-cyan-950/60 dark:text-cyan-300 dark:ring-cyan-800/60";
     case "sent":
-      return "bg-[#e8eef5] text-[#003F7D] ring-1 ring-inset ring-[#003F7D]/25";
+      return "bg-[#e8eef5] text-[#003F7D] ring-1 ring-inset ring-[#003F7D]/25 dark:bg-blue-950/60 dark:text-blue-300 dark:ring-blue-800/60";
     case "accepted":
-      return "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/80";
+      return "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-800/60";
     case "rejected":
-      return "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200/80";
+      return "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:ring-rose-800/60";
     case "expired":
-      return "bg-orange-50 text-orange-800 ring-1 ring-inset ring-orange-200/80";
+      return "bg-orange-50 text-orange-800 ring-1 ring-inset ring-orange-200/80 dark:bg-orange-950/60 dark:text-orange-300 dark:ring-orange-800/60";
     case "changes_requested":
-      return "bg-fuchsia-50 text-fuchsia-800 ring-1 ring-inset ring-fuchsia-200/80";
+      return "bg-fuchsia-50 text-fuchsia-800 ring-1 ring-inset ring-fuchsia-200/80 dark:bg-fuchsia-950/60 dark:text-fuchsia-300 dark:ring-fuchsia-800/60";
     case "converted_to_job":
-      return "bg-lime-50 text-lime-800 ring-1 ring-inset ring-lime-200/80";
+      return "bg-lime-50 text-lime-800 ring-1 ring-inset ring-lime-200/80 dark:bg-lime-950/60 dark:text-lime-300 dark:ring-lime-800/60";
     default:
-      return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/80";
+      return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700";
   }
 }
 

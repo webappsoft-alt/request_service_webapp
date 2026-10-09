@@ -13,6 +13,7 @@ import { usePortalInbox } from "@/components/portal/use-portal-inbox";
 import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -164,11 +165,11 @@ export function PortalShell({ children }: { children: ReactNode }) {
       };
 
   return (
-    <div className="portal-app min-h-svh bg-[#eef1f5]">
+    <div className="portal-app min-h-svh bg-[#eef1f5] dark:bg-background">
       <ContractorReviewsBridge />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] text-white transition-[width] duration-200 lg:flex",
+          "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border text-white transition-[width] duration-200 lg:flex",
           collapsed ? "w-16" : "w-56",
         )}
       >
@@ -198,7 +199,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="flex w-72 flex-col border-0 bg-[#003F7D] p-0 text-white">
+              <SheetContent side="left" className="flex w-72 flex-col border-0 bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border p-0 text-white">
                 <SheetHeader className="border-b border-white/10 px-4 py-3">
                   <SheetTitle className="text-white">{provider.companyName}</SheetTitle>
                 </SheetHeader>
@@ -228,7 +229,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search records…"
-                className="h-8 bg-[#f7f8fa] pl-8 text-sm"
+                className="h-8 bg-[#f7f8fa] dark:bg-slate-800/80 dark:border-input pl-8 text-sm"
                 aria-label="Search records"
                 value={headerSearch}
                 onChange={(event) => setHeaderSearch(event.target.value)}
@@ -247,7 +248,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
                 }}
               />
             </div>
-            <div className="ml-auto flex items-center gap-1 lg:ml-0">
+            <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+              <ThemeToggle />
               <PortalNotifications />
               <UserAccountMenu user={menuUser} className="size-8 border-input" />
             </div>
@@ -279,14 +281,14 @@ function RecordTab({
   return (
     <div
       className={cn(
-        "flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-[4px] border px-2.5 text-xs",
+        "flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-[4px] border px-2.5 text-xs transition-colors",
         active
-          ? "border-[#003F7D]/25 bg-[#e8eef5] font-semibold text-[#003F7D] shadow-[inset_0_-2px_0_#003F7D]"
-          : "border-input bg-[#f7f8fa] text-muted-foreground hover:border-input hover:bg-white hover:text-foreground",
+          ? "border-[#003F7D]/25 bg-[#e8eef5] font-semibold text-[#003F7D] shadow-[inset_0_-2px_0_#003F7D] dark:border-primary/40 dark:bg-primary/15 dark:text-primary dark:shadow-[inset_0_-2px_0_var(--primary)]"
+          : "border-input bg-[#f7f8fa] text-muted-foreground hover:border-input hover:bg-white hover:text-foreground dark:bg-slate-800/60 dark:hover:bg-slate-800 dark:hover:text-foreground",
       )}
     >
       <span
-        className={cn("size-1.5 shrink-0 rounded-full", active ? "bg-[#003F7D]" : "bg-black/25")}
+        className={cn("size-1.5 shrink-0 rounded-full", active ? "bg-[#003F7D] dark:bg-primary" : "bg-black/25 dark:bg-white/30")}
         aria-hidden
       />
       <Link href={href} className="min-w-0 truncate">
@@ -296,7 +298,7 @@ function RecordTab({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-[3px] p-0.5 hover:bg-black/10 hover:text-foreground"
+          className="rounded-[3px] p-0.5 hover:bg-black/10 hover:text-foreground dark:hover:bg-white/10"
           aria-label={`Close ${label}`}
         >
           <X className="size-3" />

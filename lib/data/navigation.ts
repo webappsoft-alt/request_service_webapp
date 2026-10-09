@@ -29,7 +29,7 @@ export const footerNav = {
     { label: "Blog", href: "/blog" },
     { label: "How It Works", href: "/how-it-works" },
     { label: "FAQ", href: "/faq" },
-    { label: "Customer Login", href: "/login" },
+    // { label: "Customer Login", href: "/login" },
   ],
   providers: [
     { label: "For Pros", href: "/pro" },

@@ -22,7 +22,7 @@ export function Logo({
         className={cn(
           "flex size-8 items-center justify-center rounded-md text-[13px] font-semibold tracking-tight",
           inverse
-            ? "bg-primary-foreground text-primary"
+            ? "bg-primary-foreground text-primary dark:bg-sky-500/15 dark:text-sky-300 dark:ring-1 dark:ring-sky-400/30"
             : "bg-primary text-primary-foreground"
         )}
       >
@@ -32,7 +32,7 @@ export function Logo({
         <span
           className={cn(
             "text-[15px] font-semibold tracking-tight",
-            inverse ? "text-primary-foreground" : "text-foreground"
+            inverse ? "text-primary-foreground dark:text-white" : "text-foreground"
           )}
         >
           Request Service

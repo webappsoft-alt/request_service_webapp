@@ -24,6 +24,7 @@ import {
   proResourceLinks,
 } from "@/lib/data/pro-nav";
 import { proPaths } from "@/lib/pro-paths";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -108,6 +109,7 @@ export function ProHeader() {
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
+          <ThemeToggle />
           <ProActions user={providerUser} onSignOut={() => handleUserLogout()} />
         </div>
 
@@ -138,6 +140,10 @@ export function ProHeader() {
                   <MobileLink key={item.label} href={item.href} label={item.label} />
                 ))}
               </MobileGroup>
+              <div className="flex items-center justify-between px-2 text-sm font-medium text-muted-foreground">
+                <span>Theme</span>
+                <ThemeToggle />
+              </div>
               <Separator />
               <ProActions
                 user={providerUser}

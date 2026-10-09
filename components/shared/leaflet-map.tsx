@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -9,6 +9,7 @@ import {
   type MapContainerProps,
 } from "react-leaflet";
 import L from "leaflet";
+import { useTheme } from "next-themes";
 import { getMapTileLayerProps } from "@/lib/maps";
 import "leaflet/dist/leaflet.css";
 
@@ -164,8 +165,6 @@ export function RecenterMap({
   return null;
 }
 
-const mapTiles = getMapTileLayerProps();
-
 export function LeafletMap({
   children,
   className,
@@ -181,6 +180,16 @@ export function LeafletMap({
   scrollWheelZoom = false,
   ...rest
 }: LeafletMapProps) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDark = mounted && resolvedTheme === "dark";
+  const mapTiles = getMapTileLayerProps(isDark);
+
   return (
     <MapContainer
       center={center ?? [39.8283, -98.5795]}
@@ -192,7 +201,7 @@ export function LeafletMap({
       className={className ?? "h-full w-full"}
       {...rest}
     >
-      <TileLayer attribution={mapTiles.attribution} url={mapTiles.url} />
+      <TileLayer key={isDark ? "dark-tiles" : "light-tiles"} attribution={mapTiles.attribution} url={mapTiles.url} />
       {showZoom && zoomPosition !== false ? (
         <ZoomControl position={zoomPosition} />
       ) : null}

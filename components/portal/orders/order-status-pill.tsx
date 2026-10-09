@@ -84,77 +84,77 @@ export function getOrderStatusConfig(status?: string | null) {
       return {
         label: "Requested",
         fullLabel: "Booking Requested",
-        pillClass: "bg-blue-50 text-blue-700 border-blue-200",
+        pillClass: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60",
         dotClass: "bg-blue-500",
       };
     case "CONFIRMED":
       return {
         label: "Confirmed",
         fullLabel: "Confirmed",
-        pillClass: "bg-sky-50 text-sky-700 border-sky-200",
+        pillClass: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800/60",
         dotClass: "bg-sky-500",
       };
     case "IN_TRANSIT":
       return {
         label: "In Transit",
         fullLabel: "In Transit",
-        pillClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
+        pillClass: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800/60",
         dotClass: "bg-indigo-500",
       };
     case "ARRIVED":
       return {
         label: "Arrived",
         fullLabel: "Arrived",
-        pillClass: "bg-amber-50 text-amber-800 border-amber-200",
+        pillClass: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60",
         dotClass: "bg-amber-500",
       };
     case "IN_PROGRESS":
       return {
         label: "In Progress",
         fullLabel: "In Progress",
-        pillClass: "bg-purple-50 text-purple-700 border-purple-200",
+        pillClass: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/60",
         dotClass: "bg-purple-500",
       };
     case "CHANGE_ORDER_PENDING":
       return {
         label: "Change Order",
         fullLabel: "Change Order Pending",
-        pillClass: "bg-orange-50 text-orange-800 border-orange-200",
+        pillClass: "bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800/60",
         dotClass: "bg-orange-500",
       };
     case "WORK_COMPLETED":
       return {
         label: "Completed",
         fullLabel: "Work Completed",
-        pillClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        pillClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60",
         dotClass: "bg-emerald-500",
       };
     case "SETTLED":
       return {
         label: "Settled",
         fullLabel: "Settled",
-        pillClass: "bg-teal-50 text-teal-800 border-teal-200",
+        pillClass: "bg-teal-50 text-teal-800 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800/60",
         dotClass: "bg-teal-600",
       };
     case "CANCELLED":
       return {
         label: "Cancelled",
         fullLabel: "Cancelled",
-        pillClass: "bg-rose-50 text-rose-700 border-rose-200",
+        pillClass: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60",
         dotClass: "bg-rose-500",
       };
     case "DISPUTED":
       return {
         label: "Disputed",
         fullLabel: "Disputed",
-        pillClass: "bg-red-50 text-red-800 border-red-300",
+        pillClass: "bg-red-50 text-red-800 border-red-300 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/60",
         dotClass: "bg-red-600",
       };
     default:
       return {
         label: formatOrderStatus(status),
         fullLabel: formatOrderStatus(status),
-        pillClass: "bg-slate-50 text-slate-700 border-input",
+        pillClass: "bg-slate-50 text-slate-700 border-input dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
         dotClass: "bg-slate-400",
       };
   }

@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Featured Pros marketplace cards for the customer home page.
- * Temporarily unused — restore via `app/(marketing)/page.tsx` when needed.
+ * Featured Pros marketplace cards for the customer home page:
+ * 4 business profiles from the API + "See all professionals".
  */
 
 import { useEffect, useMemo } from "react";
@@ -21,7 +21,7 @@ import {
   publicProfessionalToProvider,
 } from "@/store/publicProfessionalsSlice";
 
-const LANDING_PROVIDERS_LIMIT = 10;
+const LANDING_PROVIDERS_LIMIT = 4;
 const PROVIDER_SKELETON_COUNT = 4;
 
 export function FeaturedProvidersSection() {

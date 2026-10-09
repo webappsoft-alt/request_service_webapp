@@ -83,6 +83,11 @@ import {
   type PortalEmployeeWorkingHours,
 } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
+import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
+import { PasswordInput } from "@/components/auth/password-input";
+import { PersonAddressFields } from "@/components/shared/person-address-fields";
+import { setContractorPortalAccess } from "@/lib/api/contractor-portal-client";
+import { contractorPaths } from "@/lib/contractor-paths";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -717,8 +722,12 @@ function ContractorSettingsTab({
           lastName: draft.lastName,
           email: draft.email,
           phone: draft.phone,
+          street: draft.street || "",
           city: draft.city,
+          state: draft.state,
           zip: draft.zip,
+          latitude: draft.latitude ?? null,
+          longitude: draft.longitude ?? null,
           license: draft.license,
         }),
       );
@@ -804,9 +813,10 @@ function ContractorSettingsTab({
           />
         </Field>
         <Field label="Phone">
-          <Input
+          <AuthPhoneInput
             value={draft.phone}
-            onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
+            onChange={(phone) => setDraft({ ...draft, phone })}
+            placeholder="(555) 123-4567"
           />
         </Field>
         <Field label="License">
@@ -815,22 +825,155 @@ function ContractorSettingsTab({
             onChange={(event) => setDraft({ ...draft, license: event.target.value })}
           />
         </Field>
-        <Field label="City">
+      </div>
+      <PersonAddressFields
+        idPrefix={`con-${contractor.id}-address`}
+        value={{
+          street: draft.street || "",
+          city: draft.city || "",
+          state: draft.state || "",
+          zip: draft.zip || "",
+          latitude: draft.latitude ?? null,
+          longitude: draft.longitude ?? null,
+        }}
+        onChange={(address) => setDraft({ ...draft, ...address })}
+      />
+      <ContractorLoginCard contractor={contractor} />
+    </div>
+  );
+}
+
+/** Contractor portal sign-in: their email is the username; the office sets the password. */
+function ContractorLoginCard({ contractor }: { contractor: PortalContractor }) {
+  const dispatch = useAppDispatch();
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState(contractor.username || "");
+  const [busy, setBusy] = useState<"save" | "disable" | null>(null);
+  const active = Boolean(contractor.hasPortalAccess);
+  const email = String(contractor.email || "").trim();
+  const suggestedUsername =
+    [contractor.firstName, contractor.lastName]
+      .map((part) => String(part || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, ""))
+      .filter(Boolean)
+      .join(".") ||
+    String(contractor.companyName || "contractor").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
+    "contractor";
+
+  async function saveLogin() {
+    if (busy) return;
+    if (!email) {
+      toast.error("Add the contractor's email in Settings first — it is their sign-in.");
+      return;
+    }
+    if (password && password.length < 8) {
+      toast.error("Use at least 8 characters.");
+      return;
+    }
+    const nextUsername = username.trim().toLowerCase();
+    if (nextUsername && !/^[a-z0-9._-]{3,30}$/.test(nextUsername)) {
+      toast.error("Username must be 3-30 characters: letters, numbers, dot, underscore, or dash.");
+      return;
+    }
+    if (!active && !password) {
+      toast.error("Set a password to give them portal access.");
+      return;
+    }
+    setBusy("save");
+    try {
+      const saved = (await setContractorPortalAccess(contractor.id, {
+        enabled: true,
+        username: nextUsername,
+        ...(password ? { password } : {}),
+      })) as { username?: string } | null;
+      // An outdated API silently drops the username — never report success in that case.
+      if (String(saved?.username || "").toLowerCase() !== nextUsername) {
+        await dispatch(fetchContractorDetail(contractor.id));
+        toast.error("The username was not saved.", {
+          description: "The server did not store it — restart the backend and click Update login again.",
+        });
+        return;
+      }
+      await dispatch(fetchContractorDetail(contractor.id));
+      setPassword("");
+      toast.success(active ? "Login updated." : "Portal access turned on.", {
+        description: `They sign in at ${contractorPaths.login} with ${email}${nextUsername ? ` or @${nextUsername}` : ""}.`,
+      });
+    } catch (error) {
+      toast.error(typeof error === "string" ? error : error instanceof Error ? error.message : "Could not update the login.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function disableLogin() {
+    if (busy) return;
+    setBusy("disable");
+    try {
+      await setContractorPortalAccess(contractor.id, { enabled: false });
+      await dispatch(fetchContractorDetail(contractor.id));
+      toast.success("Portal access turned off. They can no longer sign in.");
+    } catch (error) {
+      toast.error(typeof error === "string" ? error : "Could not turn off portal access.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const signIn = contractor.username ? `@${contractor.username} or ${email}` : email;
+
+  // Same layout as the employee "Technician portal login" card.
+  return (
+    <div className="rounded-md border border-border-soft p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-foreground">Contractor portal login</p>
+          <p className="text-xs text-muted-foreground">
+            {active
+              ? `Signs in at ${contractorPaths.login} as ${signIn}. They only see their assigned jobs and submit completion.`
+              : "Create a username and password so this contractor can see their assigned jobs and submit completion."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {active ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-destructive hover:underline disabled:opacity-50"
+              disabled={Boolean(busy)}
+              onClick={() => void disableLogin()}
+            >
+              {busy === "disable" ? "Disabling…" : "Disable login"}
+            </button>
+          ) : null}
+          <StatusPill label={active ? "Login enabled" : "No login"} tone={active ? "success" : "neutral"} />
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <Field label="Username">
           <Input
-            value={draft.city}
-            onChange={(event) => setDraft({ ...draft, city: event.target.value })}
+            value={username}
+            autoComplete="off"
+            autoCapitalize="none"
+            placeholder={`e.g. ${suggestedUsername}`}
+            onChange={(event) => setUsername(event.target.value.toLowerCase())}
           />
         </Field>
-        <Field label="ZIP">
-          <Input
-            value={draft.zip}
-            onChange={(event) => setDraft({ ...draft, zip: event.target.value })}
+        <Field label={active ? "New password (leave blank to keep)" : "Password"}>
+          <PasswordInput
+            value={password}
+            autoComplete="new-password"
+            placeholder="At least 8 characters"
+            onChange={(event) => setPassword(event.target.value)}
           />
         </Field>
+        <Button size="sm" className="h-9" disabled={Boolean(busy)} onClick={() => void saveLogin()}>
+          {busy === "save" ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {active ? "Update login" : "Create login"}
+        </Button>
       </div>
     </div>
   );
 }
+
 
 function ContractorComplianceTab({
   contractor,

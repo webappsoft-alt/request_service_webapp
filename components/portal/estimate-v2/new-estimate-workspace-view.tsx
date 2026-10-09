@@ -146,6 +146,58 @@ function writeTemplateMemory(opportunityId: string, memory: TemplateMemory) {
   }
 }
 
+/** Everything the provider types into the estimate sheet (auto-saved so leaving the page loses nothing). */
+type SheetDraft = {
+  scopeOfWork: string;
+  terms: string;
+  discount: number;
+  lines: JobCostLine[];
+  prepFindings: string;
+  prepMeasurements: OpportunityMeasurement[];
+  prepWorkItems: AssessmentWorkItem[];
+};
+
+type StoredSheetDraft = { base: string; sheet: SheetDraft; savedAt: string };
+
+function sheetDraftKey(opportunityId: string) {
+  return `rs:estimate-draft:${opportunityId}`;
+}
+
+/** Content-only fingerprint — row ids are regenerated on every load, so they are ignored. */
+function sheetSignature(sheet: SheetDraft) {
+  const withoutId = <T extends { id?: string }>(rows: T[]) => rows.map((row) => {
+    const rest: Partial<T> = { ...row };
+    delete rest.id;
+    return rest;
+  });
+  return JSON.stringify({
+    ...sheet,
+    discount: Number(sheet.discount) || 0,
+    lines: withoutId(sheet.lines),
+    prepMeasurements: withoutId(sheet.prepMeasurements),
+    prepWorkItems: withoutId(sheet.prepWorkItems),
+  });
+}
+
+function readSheetDraft(opportunityId: string): StoredSheetDraft | null {
+  try {
+    const raw = window.localStorage.getItem(sheetDraftKey(opportunityId));
+    const parsed = raw ? (JSON.parse(raw) as StoredSheetDraft) : null;
+    return parsed?.sheet && Array.isArray(parsed.sheet.lines) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSheetDraft(opportunityId: string, draft: StoredSheetDraft | null) {
+  try {
+    if (draft) window.localStorage.setItem(sheetDraftKey(opportunityId), JSON.stringify(draft));
+    else window.localStorage.removeItem(sheetDraftKey(opportunityId));
+  } catch {
+    /* storage unavailable — the sheet just isn't kept across pages */
+  }
+}
+
 function isEstimateLocked(estimate: Estimate | null) {
   return (
     estimate?.status === "accepted" ||
@@ -366,6 +418,132 @@ function collectStartingLines(data: EstimateV2Opportunity): JobCostLine[] {
   return [...fromVisits, ...fromOpportunity];
 }
 
+/** Lines worth saving: anything with a description or a price. */
+function filledSheetLines(lines: JobCostLine[]) {
+  return lines.filter((line) => line.description.trim() || Number(line.unitPrice) > 0);
+}
+
+/** Estimate part of the sheet only (scope, terms, discount, line items). */
+function estimateSheetSignature(sheet: SheetDraft) {
+  return JSON.stringify(JSON.parse(sheetSignature(sheet)), ["scopeOfWork", "terms", "discount", "lines", "description", "kind", "quantity", "unit", "unitPrice", "images", "section"]);
+}
+
+/** Existing-information part of the sheet only. */
+function prepSheetSignature(sheet: SheetDraft) {
+  const parsed = JSON.parse(sheetSignature(sheet)) as Record<string, unknown>;
+  return JSON.stringify([parsed.prepFindings, parsed.prepMeasurements, parsed.prepWorkItems]);
+}
+
+/**
+ * Create the draft estimate if needed, then save scope, terms, discount and lines to it.
+ * Shared by Save draft / Build / Send and the background auto-save.
+ */
+async function persistEstimateSheet(input: {
+  opportunity: EstimateV2Opportunity;
+  current: Estimate | null;
+  sheet: SheetDraft;
+  taxRatePercent: number;
+}): Promise<Estimate> {
+  const { opportunity, sheet, taxRatePercent } = input;
+  const filledLines = filledSheetLines(sheet.lines);
+  let current = input.current;
+  if (!current?.id) {
+    const created = await createEstimateV2Estimate(opportunity.id, {
+      title: opportunity.title,
+      notes: sheet.scopeOfWork || opportunity.description || "",
+      terms: sheet.terms,
+      discount: Number(sheet.discount) || 0,
+      customerId: customerIdOf(opportunity),
+      propertyAddress: opportunity.propertyAddress,
+      // Send the labour / material lines with the create itself so the new
+      // estimate never starts empty (the update below re-saves the full draft).
+      items: filledLines.map((line) => ({
+        description: line.description.trim() || (line.kind === "labor" ? "Labour" : "Item"),
+        kind:
+          line.kind === "materials"
+            ? ("material" as const)
+            : line.kind === "equipment"
+              ? ("equipment" as const)
+              : ("labor" as const),
+        quantity: Math.max(0.01, Number(line.quantity) || 1),
+        unitPrice: Math.max(0, Number(line.unitPrice) || 0),
+        taxRate: taxRatePercent,
+        ...(line.images?.length ? { images: line.images } : {}),
+        ...(line.section ? { section: line.section } : {}),
+      })),
+    });
+    current = created.estimate;
+  }
+  if (!current?.id) throw new Error("Estimate missing.");
+
+  const filled = filledLines.length ? filledLines : [createEmptyLine("labor")];
+  const draft = buildEstimate({
+    id: current.id,
+    number: current.number,
+    title: opportunity.title,
+    providerId: current.providerId,
+    customerId: customerIdOf(opportunity) || current.customerId,
+    customerName: customerNameFromOpportunity(opportunity),
+    address: {
+      id: opportunity.propertyAddress?.addressId || current.propertyAddress?.id || `addr_${current.id}`,
+      address: opportunity.propertyAddress?.address || opportunity.propertyAddress?.street || "",
+      street: opportunity.propertyAddress?.street || opportunity.propertyAddress?.address || "",
+      city: opportunity.propertyAddress?.city || "",
+      state: opportunity.propertyAddress?.state || "",
+      zip: opportunity.propertyAddress?.zip || "",
+      country: "US",
+      lat: opportunity.propertyAddress?.lat ?? null,
+      lng: opportunity.propertyAddress?.lng ?? null,
+      latitude: opportunity.propertyAddress?.lat ?? null,
+      longitude: opportunity.propertyAddress?.lng ?? null,
+    },
+    status: current.status === "draft" ? "draft" : current.status,
+    issuedAt: current.issuedAt || todayISO(),
+    notes: sheet.scopeOfWork,
+    terms: sheet.terms,
+    lines: filled,
+    taxRatePercent,
+  });
+
+  const saved = await updateEstimate(current.id, {
+    ...draft,
+    discount: Number(sheet.discount) || 0,
+    items: linesToEstimateItems(current.id, filled, taxRatePercent),
+  });
+  return saved || draft;
+}
+
+/**
+ * Background saves still running per opportunity — they finish after the page is left,
+ * and the next load / explicit save waits for them (so a draft is never created twice).
+ */
+const pendingSheetSaves = new Map<string, Promise<unknown>>();
+
+function queueSheetSave<T>(opportunityId: string, task: () => Promise<T>): Promise<T> {
+  const previous = pendingSheetSaves.get(opportunityId) || Promise.resolve();
+  const run = previous.catch(() => undefined).then(task);
+  const tracked = run.catch(() => undefined);
+  pendingSheetSaves.set(opportunityId, tracked);
+  void tracked.then(() => {
+    if (pendingSheetSaves.get(opportunityId) === tracked) pendingSheetSaves.delete(opportunityId);
+  });
+  return run;
+}
+
+/** Register an explicit save so background saves queue behind it. */
+function trackSheetSave(opportunityId: string, task: Promise<unknown>) {
+  const tracked = task.catch(() => undefined);
+  pendingSheetSaves.set(opportunityId, tracked);
+  void tracked.then(() => {
+    if (pendingSheetSaves.get(opportunityId) === tracked) pendingSheetSaves.delete(opportunityId);
+  });
+}
+
+/** Auto-save goes to the server only for drafts — a sent estimate is never changed silently. */
+function canAutoSaveToServer(estimate: Estimate | null) {
+  return !estimate?.id || estimate.status === "draft";
+}
+
 export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: string }) {
   const router = useRouter();
   const { employees } = usePortalCrew();
@@ -414,6 +592,126 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [prepPanelOpen, setPrepPanelOpen] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState(false);
 
+  /**
+   * Last copy of the sheet the server has (null while loading or when locked).
+   * `saved` is what the background auto-save compares against.
+   */
+  const sheetBaseRef = useRef<{ id: string; base: string; saved: SheetDraft } | null>(null);
+  /** Latest values the async auto-save needs (it runs after renders and after leaving the page). */
+  const autoSaveCtx = useRef<{ opportunity: EstimateV2Opportunity | null; estimate: Estimate | null; taxRatePercent: number }>({
+    opportunity: null,
+    estimate: null,
+    taxRatePercent: 0,
+  });
+  /** Edits not yet sent to the server, and the timer that sends them. */
+  const unsavedSheetRef = useRef<SheetDraft | null>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  /** Send pending edits now: creates the draft estimate when needed and saves every line. */
+  const flushSheetAutoSave = useCallback(() => {
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    const target = sheetBaseRef.current;
+    const sheet = unsavedSheetRef.current;
+    const { opportunity: opp, taxRatePercent: rate } = autoSaveCtx.current;
+    if (!target || !sheet || !opp || opp.id !== target.id) return;
+    unsavedSheetRef.current = null;
+    const estimateChanged = estimateSheetSignature(sheet) !== estimateSheetSignature(target.saved);
+    const prepChanged = prepSheetSignature(sheet) !== prepSheetSignature(target.saved);
+    if (!estimateChanged && !prepChanged) return;
+    if (mountedRef.current) setAutoSaveState("saving");
+    void queueSheetSave(opp.id, async () => {
+      if (prepChanged) {
+        await updateEstimateV2Opportunity(opp.id, {
+          prepFindings: sheet.prepFindings,
+          prepMeasurements: sheet.prepMeasurements.filter((item) => String(item.label || "").trim()),
+          workItems: sheet.prepWorkItems.filter((item) => String(item.description || "").trim()),
+        });
+      }
+      const current = autoSaveCtx.current.estimate;
+      // A blank sheet never creates an estimate on its own.
+      const worthCreating = Boolean(current?.id) || filledSheetLines(sheet.lines).length > 0;
+      if (estimateChanged && worthCreating && canAutoSaveToServer(current)) {
+        const saved = await persistEstimateSheet({ opportunity: opp, current, sheet, taxRatePercent: rate });
+        autoSaveCtx.current = { ...autoSaveCtx.current, estimate: saved };
+        return { saved, created: !current?.id };
+      }
+      return null;
+    })
+      .then((result) => {
+        if (result && mountedRef.current) {
+          const { saved } = result;
+          setEstimate(saved);
+          if (result.created) {
+            setOpportunity((existing) =>
+              existing && existing.id === opp.id ? { ...existing, estimates: [saved, ...(existing.estimates || [])] } : existing,
+            );
+          }
+        }
+        const base = sheetBaseRef.current;
+        if (base && base.id === opp.id) sheetBaseRef.current = { ...base, saved: sheet };
+        // Nothing typed since — the browser copy is no longer needed.
+        if (!unsavedSheetRef.current) writeSheetDraft(opp.id, null);
+        if (mountedRef.current) setAutoSaveState("saved");
+      })
+      .catch(() => {
+        // Keep the browser copy; the next edit (or visit) tries again.
+        if (mountedRef.current) setAutoSaveState("error");
+      });
+  }, []);
+
+  // Auto-save: every edit is kept in this browser straight away and sent to the server
+  // shortly after typing stops, so switching tabs or pages never loses entered line items.
+  useEffect(() => {
+    const target = sheetBaseRef.current;
+    if (!target) return;
+    const sheet: SheetDraft = {
+      scopeOfWork,
+      terms,
+      discount: Number(discount) || 0,
+      lines,
+      prepFindings,
+      prepMeasurements,
+      prepWorkItems,
+    };
+    if (sheetSignature(sheet) === sheetSignature(target.saved)) {
+      unsavedSheetRef.current = null;
+      writeSheetDraft(target.id, null);
+      return;
+    }
+    writeSheetDraft(target.id, { base: target.base, sheet, savedAt: new Date().toISOString() });
+    unsavedSheetRef.current = sheet;
+    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = window.setTimeout(flushSheetAutoSave, 1200);
+  }, [scopeOfWork, terms, discount, lines, prepFindings, prepMeasurements, prepWorkItems, flushSheetAutoSave]);
+
+  // Leaving the page (sidebar, tab, another record) saves whatever is still pending.
+  useEffect(() => {
+    mountedRef.current = true;
+    const onHide = () => flushSheetAutoSave();
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      mountedRef.current = false;
+      flushSheetAutoSave();
+    };
+  }, [flushSheetAutoSave]);
+
+  /** Saved to the server explicitly — drop the browser copy and any pending auto-save. */
+  const clearSheetDraft = useCallback(() => {
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    unsavedSheetRef.current = null;
+    if (sheetBaseRef.current) writeSheetDraft(sheetBaseRef.current.id, null);
+    sheetBaseRef.current = null;
+  }, []);
+
   // Ready-made templates: start choice, applied template, and the "save as template" prompt.
   const [templateCatalog, setTemplateCatalog] = useState<EstimateTemplateCategory[] | null>(null);
   const [startOpen, setStartOpen] = useState(false);
@@ -450,6 +748,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     if (!silent) setLoading(true);
     try {
       let data: EstimateV2Opportunity;
+      // A save started just before leaving the page must land before we read it back.
+      await pendingSheetSaves.get(opportunityId);
       try {
         data = await getEstimateV2Opportunity(opportunityId);
       } catch {
@@ -464,20 +764,21 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         throw new Error("Estimate not found.");
       }
       setOpportunity(data);
+      autoSaveCtx.current = { ...autoSaveCtx.current, opportunity: data };
       setFollowUpAt(
         data.followUpAt ? new Date(data.followUpAt).toISOString().slice(0, 10) : "",
       );
       setFollowUpNotes(data.followUpNotes || "");
-      setPrepFindings(data.prepFindings || "");
-      setPrepMeasurements(
+      // Hold off auto-saving until the sheet below is fully loaded.
+      sheetBaseRef.current = null;
+      const loadedMeasurements: OpportunityMeasurement[] =
         (data.prepMeasurements || []).map((item, index) => ({
           ...item,
           id: item.id || `pm_${index}`,
           label: item.label || "",
           value: item.value || "",
           unit: item.unit || "",
-        })),
-      );
+        }));
       setPrepAttachments(
         (data.customerAttachments || []).map((item, index) => ({
           ...item,
@@ -489,7 +790,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           addedAt: item.addedAt,
         })),
       );
-      setPrepWorkItems(
+      const loadedWorkItems: AssessmentWorkItem[] =
         (data.workItems || []).map((item, index) => {
           const typeRaw = String(item.type || "labor").toLowerCase();
           const type =
@@ -507,30 +808,31 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             unit: item.unit || (type === "labor" ? "hr" : "ea"),
             unitPrice: item.unitPrice ?? null,
           };
-        }),
-      );
+        });
 
       const linked = data.estimates?.[0] || null;
+      let loadedScope: string;
+      let loadedTerms = "Proposal valid for 30 calendar days from issue date.";
+      let loadedDiscount = 0;
+      let loadedLines: JobCostLine[];
       let freshEstimate: Estimate | null = null;
       if (linked?.id) {
         freshEstimate = (await getEstimate(linked.id)) || linked;
         setEstimate(freshEstimate);
-        setScopeOfWork(
-          stripChangeRequestLinesFromNotes(
-            freshEstimate.notes || data.description || data.prepFindings || "",
-          ),
+        loadedScope = stripChangeRequestLinesFromNotes(
+          freshEstimate.notes || data.description || data.prepFindings || "",
         );
-        setTerms(freshEstimate.terms || "Proposal valid for 30 calendar days from issue date.");
-        setDiscount(Number(freshEstimate.discount) || 0);
+        loadedTerms = freshEstimate.terms || loadedTerms;
+        loadedDiscount = Number(freshEstimate.discount) || 0;
         const fromEstimate = estimateToLines(freshEstimate);
         const estimateHasContent = fromEstimate.some(
           (line) => line.description.trim() && line.description !== "Labour",
         );
         if (estimateHasContent) {
-          setLines(fromEstimate);
+          loadedLines = fromEstimate;
         } else {
           const fromWork = collectStartingLines(data);
-          setLines(fromWork.length ? fromWork : [createEmptyLine("labor")]);
+          loadedLines = fromWork.length ? fromWork : [createEmptyLine("labor")];
         }
 
         // Heal drift: opportunity pipeline status must follow the linked estimate.
@@ -546,15 +848,42 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         }
       } else {
         setEstimate(null);
-        setScopeOfWork(data.description || data.prepFindings || "");
-        setTerms("Proposal valid for 30 calendar days from issue date.");
-        setDiscount(0);
+        loadedScope = data.description || data.prepFindings || "";
         const fromWork = collectStartingLines(data);
-        setLines(fromWork.length ? fromWork : [createEmptyLine("labor")]);
+        loadedLines = fromWork.length ? fromWork : [createEmptyLine("labor")];
       }
+
+      // Server copy of the sheet; bring back unsaved edits made on top of exactly this copy.
+      const serverSheet: SheetDraft = {
+        scopeOfWork: loadedScope,
+        terms: loadedTerms,
+        discount: loadedDiscount,
+        lines: loadedLines,
+        prepFindings: data.prepFindings || "",
+        prepMeasurements: loadedMeasurements,
+        prepWorkItems: loadedWorkItems,
+      };
+      const base = sheetSignature(serverSheet);
+      const stored = readSheetDraft(data.id);
+      const editable = !isEstimateLocked(freshEstimate);
+      const restored =
+        editable && stored && stored.base === base && sheetSignature(stored.sheet) !== base ? stored.sheet : null;
+      if (stored && !restored) writeSheetDraft(data.id, null);
+      const sheet = restored || serverSheet;
+      setScopeOfWork(sheet.scopeOfWork);
+      setTerms(sheet.terms);
+      setDiscount(Number(sheet.discount) || 0);
+      setLines(sheet.lines.length ? sheet.lines : [createEmptyLine("labor")]);
+      setPrepFindings(sheet.prepFindings);
+      setPrepMeasurements(sheet.prepMeasurements);
+      setPrepWorkItems(sheet.prepWorkItems);
+      // Edits restored from this browser are saved to the server by the auto-save effect.
+      sheetBaseRef.current = editable ? { id: data.id, base, saved: serverSheet } : null;
+      autoSaveCtx.current = { ...autoSaveCtx.current, estimate: freshEstimate };
 
       const rate = await fetchTaxRatePercent(data.propertyAddress?.state);
       setTaxRatePercent(rate);
+      autoSaveCtx.current = { ...autoSaveCtx.current, taxRatePercent: rate };
 
       // New estimate wizard → "Create estimate now" lands here with ?start=1: ask Manual vs Template.
       if (!silent && !startParamHandled.current && new URLSearchParams(window.location.search).get("start") === "1") {
@@ -963,6 +1292,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         customerAttachments: prepAttachments,
         workItems: prepWorkItems.filter((item) => String(item.description || "").trim()),
       });
+      clearSheetDraft();
       await load();
       setPrepPanelOpen(false);
       toast.success("Existing information saved.");
@@ -1007,73 +1337,36 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   }): Promise<Estimate | null> {
     if (!opportunity) return null;
     setSaving(true);
+    // This save covers any pending auto-save; the browser copy stays until it succeeds.
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    unsavedSheetRef.current = null;
     try {
-      let current = estimate;
-      if (!current?.id) {
-        const created = await createEstimateV2Estimate(opportunity.id, {
-          title: opportunity.title,
-          notes: scopeOfWork || opportunity.description || "",
-          terms,
-          discount: Number(discount) || 0,
-          customerId: customerIdOf(opportunity),
-          propertyAddress: opportunity.propertyAddress,
-          // Send the labour / material lines with the create itself so the new
-          // estimate never starts empty (the update below re-saves the full draft).
-          items: filledLines.map((line) => ({
-            description: line.description.trim() || (line.kind === "labor" ? "Labour" : "Item"),
-            kind:
-              line.kind === "materials"
-                ? ("material" as const)
-                : line.kind === "equipment"
-                  ? ("equipment" as const)
-                  : ("labor" as const),
-            quantity: Math.max(0.01, Number(line.quantity) || 1),
-            unitPrice: Math.max(0, Number(line.unitPrice) || 0),
-            taxRate: taxRatePercent,
-            ...(line.images?.length ? { images: line.images } : {}),
-            ...(line.section ? { section: line.section } : {}),
-          })),
-        });
-        current = created.estimate;
-      }
-      if (!current?.id) throw new Error("Estimate missing.");
-
-      const filled = filledLines.length ? filledLines : [createEmptyLine("labor")];
-      const draft = buildEstimate({
-        id: current.id,
-        number: current.number,
-        title: opportunity.title,
-        providerId: current.providerId,
-        customerId: customerIdOf(opportunity) || current.customerId,
-        customerName: customerNameFromOpportunity(opportunity),
-        address: {
-          id: opportunity.propertyAddress?.addressId || current.propertyAddress?.id || `addr_${current.id}`,
-          address: opportunity.propertyAddress?.address || opportunity.propertyAddress?.street || "",
-          street: opportunity.propertyAddress?.street || opportunity.propertyAddress?.address || "",
-          city: opportunity.propertyAddress?.city || "",
-          state: opportunity.propertyAddress?.state || "",
-          zip: opportunity.propertyAddress?.zip || "",
-          country: "US",
-          lat: opportunity.propertyAddress?.lat ?? null,
-          lng: opportunity.propertyAddress?.lng ?? null,
-          latitude: opportunity.propertyAddress?.lat ?? null,
-          longitude: opportunity.propertyAddress?.lng ?? null,
-        },
-        status: current.status === "draft" ? "draft" : current.status,
-        issuedAt: current.issuedAt || todayISO(),
-        notes: scopeOfWork,
+      const sheet: SheetDraft = {
+        scopeOfWork,
         terms,
-        lines: filled,
+        discount: Number(discount) || 0,
+        lines,
+        prepFindings,
+        prepMeasurements,
+        prepWorkItems,
+      };
+      // Wait for a background save so the draft estimate is never created twice.
+      await pendingSheetSaves.get(opportunity.id);
+      const task = persistEstimateSheet({
+        opportunity,
+        current: autoSaveCtx.current.estimate || estimate,
+        sheet,
         taxRatePercent,
       });
-
-      const saved = await updateEstimate(current.id, {
-        ...draft,
-        discount: Number(discount) || 0,
-        items: linesToEstimateItems(current.id, filled, taxRatePercent),
-      });
-      const next = saved || draft;
+      trackSheetSave(opportunity.id, task);
+      const next = await task;
+      autoSaveCtx.current = { ...autoSaveCtx.current, estimate: next };
       setEstimate(next);
+      clearSheetDraft();
+      setAutoSaveState("saved");
       if (!options?.silent) {
         toast.success(
           next.status === "draft" ? "Estimate draft saved." : "Estimate saved.",
@@ -1626,6 +1919,26 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       </p>
                     ) : !estimate?.status ? (
                       <p className="mt-0.5 text-sm text-slate-500">Ready to build</p>
+                    ) : null}
+                    {autoSaveState !== "idle" && !estimateLocked ? (
+                      <p
+                        className={cn(
+                          "mt-1 inline-flex items-center gap-1 text-xs",
+                          autoSaveState === "error" ? "text-amber-700" : "text-slate-500",
+                        )}
+                        aria-live="polite"
+                      >
+                        {autoSaveState === "saving" ? (
+                          "Saving draft…"
+                        ) : autoSaveState === "error" ? (
+                          "Couldn't auto-save — kept on this device, will retry"
+                        ) : (
+                          <>
+                            <Check className="size-3 text-emerald-600" aria-hidden />
+                            All changes saved as draft
+                          </>
+                        )}
+                      </p>
                     ) : null}
                     {informationSourceLabel ? (
                       <p className="mt-1.5 text-xs text-slate-500">

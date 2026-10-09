@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  UserRound,
   Wallet,
 } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
@@ -58,6 +59,7 @@ const NAV: NavItem[] = [
   { href: contractorPaths.messages, label: "Messages", icon: MessageSquare, chat: true },
   { href: contractorPaths.changeRequests, label: "Change Requests", icon: FilePlus2, section: "changeRequests" },
   { href: contractorPaths.payouts, label: "Invoices / Payouts", icon: Wallet, section: "payouts" },
+  { href: contractorPaths.profile, label: "Profile", icon: UserRound },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -230,6 +232,11 @@ function ContractorAccountMenu() {
           </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={contractorPaths.profile}>
+            <UserRound /> Profile
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => handleUserLogout()}>
           <LogOut /> Log out
         </DropdownMenuItem>

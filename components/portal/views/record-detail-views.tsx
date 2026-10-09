@@ -2738,22 +2738,17 @@ export function JobDetailView({ id }: { id: string }) {
                   <Handshake className="size-3.5 text-primary" />
                   Assign contractor
                 </Button>
-                <Button size="sm" variant="outline" className="h-8" asChild>
-                  <Link href={`/pro/dashboard/jobs/${job.id}?tab=change-orders&create=1`}>
-                    Create change order
-                  </Link>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5"
+                  onClick={() => setAssignOpen(true)}
+                >
+                  <HardHat className="size-3.5 text-primary" />
+                  {technician ? "Change technician" : "Assign technician"}
                 </Button>
               </>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5"
-              onClick={() => setMapOpen(true)}
-            >
-              <MapPin className="size-3.5 text-primary" />
-              View on map
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8">
@@ -2806,84 +2801,87 @@ export function JobDetailView({ id }: { id: string }) {
             case "summary":
               return (
                 <div className="space-y-4">
-                  <div
-                    className={
-                      technician
-                        ? "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-4 py-3 shadow-xs"
-                        : "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-input bg-muted/30 px-4 py-3"
-                    }
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        className={
-                          technician
-                            ? "flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
-                            : "flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-input bg-background text-muted-foreground"
-                        }
-                        aria-hidden
-                      >
-                        {technician ? (
-                          technician
-                            .split(/\s+/)
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((part) => part[0]?.toUpperCase())
-                            .join("")
-                        ) : (
-                          <HardHat className="size-4" />
-                        )}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-                          Assigned technician
-                        </p>
-                        <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
-                          {technician || "Unassigned"}
-                        </p>
-                        {start ? (
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            Scheduled {formatDate(start)}
-                            {due && due !== start ? ` → ${formatDate(due)}` : ""}
+                  {/* Only once a technician is assigned — "Assign technician" is in the header. */}
+                  {technician ? (
+                    <div
+                      className={
+                        technician
+                          ? "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-4 py-3 shadow-xs"
+                          : "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-input bg-muted/30 px-4 py-3"
+                      }
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          className={
+                            technician
+                              ? "flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+                              : "flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-input bg-background text-muted-foreground"
+                          }
+                          aria-hidden
+                        >
+                          {technician ? (
+                            technician
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((part) => part[0]?.toUpperCase())
+                              .join("")
+                          ) : (
+                            <HardHat className="size-4" />
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                            Assigned technician
                           </p>
+                          <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+                            {technician || "Unassigned"}
+                          </p>
+                          {start ? (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              Scheduled {formatDate(start)}
+                              {due && due !== start ? ` → ${formatDate(due)}` : ""}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {technician && resolvedEmployeeId ? (
+                          <TechChatButton
+                            side="provider"
+                            contextType="job"
+                            contextId={job.id}
+                            employeeId={resolvedEmployeeId}
+                            label="Chat"
+                            variant="default"
+                            className="h-8"
+                          />
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 bg-background"
+                          disabled={jobClosed}
+                          title={jobClosed ? closedHint : undefined}
+                          onClick={() => setAssignOpen(true)}
+                        >
+                          {technician ? "Change" : "Assign"}
+                        </Button>
+                        {technician ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            disabled={removingAssignee || jobClosed}
+                            title={jobClosed ? closedHint : undefined}
+                            onClick={() => void removeJobAssignee()}
+                          >
+                            {removingAssignee ? "Removing…" : "Remove"}
+                          </Button>
                         ) : null}
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {technician && resolvedEmployeeId ? (
-                        <TechChatButton
-                          side="provider"
-                          contextType="job"
-                          contextId={job.id}
-                          employeeId={resolvedEmployeeId}
-                          label="Chat"
-                          variant="default"
-                          className="h-8"
-                        />
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 bg-background"
-                        disabled={jobClosed}
-                        title={jobClosed ? closedHint : undefined}
-                        onClick={() => setAssignOpen(true)}
-                      >
-                        {technician ? "Change" : "Assign"}
-                      </Button>
-                      {technician ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          disabled={removingAssignee || jobClosed}
-                          title={jobClosed ? closedHint : undefined}
-                          onClick={() => void removeJobAssignee()}
-                        >
-                          {removingAssignee ? "Removing…" : "Remove"}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
+                    ) : null}
                   <JobContractorsCard job={job} onChanged={reloadJobContractors} locked={jobClosed} />
                   <JobSummaryTab
                     job={job}

@@ -9,7 +9,7 @@ export const siteConfig = {
   tagline: "The professional marketplace for home services.",
   description:
     "Request Service connects homeowners with trusted local professionals for plumbing, HVAC, electrical, and more — and gives service businesses the tools to manage estimates, jobs, invoices, and payments.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.requestservices.com",
+  url: process.env.live_domain_url ?? "https://www.requestservices.com",
   locale: "en_US",
   language: "en-US",
   country: "United States",

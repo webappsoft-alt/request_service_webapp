@@ -219,6 +219,14 @@ export type ContractorProfile = {
   trade: string;
   license: string;
   status: string;
+  /** Portal username (sign-in alternative to email). */
+  username: string;
+  /** Business address on file with the provider (one line, plus its parts for editing). */
+  address: string;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
   provider: { id: string; name: string; phone: string; email: string } | null;
 };
 
@@ -476,7 +484,20 @@ const quiet = { silent: true, force: true } as const;
 /* ───────────────────────────── Contractor portal API ───────────────────────────── */
 
 export async function getContractorProfile(): Promise<ContractorProfile> {
-  const row = asRecord(dataOf(await getData(contractorPortalApi.profile, undefined, quiet)));
+  return mapContractorProfile(dataOf(await getData(contractorPortalApi.profile, undefined, quiet)));
+}
+
+/** Fields a contractor may change themselves — email, trade and license stay with the provider. */
+export type ContractorProfileInput = Partial<
+  Pick<ContractorProfile, "companyName" | "firstName" | "lastName" | "phone" | "street" | "city" | "state" | "zip">
+>;
+
+export async function updateContractorProfile(input: ContractorProfileInput): Promise<ContractorProfile> {
+  return mapContractorProfile(dataOf(await putData(contractorPortalApi.profile, input, { silent: true })));
+}
+
+function mapContractorProfile(value: unknown): ContractorProfile {
+  const row = asRecord(value);
   const provider = row.provider ? asRecord(row.provider) : null;
   return {
     id: str(row.id),
@@ -490,6 +511,12 @@ export async function getContractorProfile(): Promise<ContractorProfile> {
     trade: str(row.trade),
     license: str(row.license),
     status: str(row.status),
+    address: str(row.address),
+    username: str(row.username),
+    street: str(row.street),
+    city: str(row.city),
+    state: str(row.state),
+    zip: str(row.zip),
     provider: provider
       ? { id: str(provider.id), name: str(provider.name), phone: str(provider.phone), email: str(provider.email) }
       : null,
@@ -702,7 +729,10 @@ export async function rejectContractorRequest(id: string, reason: string) {
 }
 
 /** Pro: enable / reset (password) or revoke (enabled=false) a contractor's portal sign-in. */
-export async function setContractorPortalAccess(id: string, input: { enabled: boolean; password?: string }) {
+export async function setContractorPortalAccess(
+  id: string,
+  input: { enabled: boolean; password?: string; /** "" removes it */ username?: string },
+) {
   return dataOf(await putData(providerCrmApi.contractorPortalAccess(id), input, { silent: true }));
 }
 

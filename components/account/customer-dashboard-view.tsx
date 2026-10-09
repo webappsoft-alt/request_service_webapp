@@ -283,30 +283,53 @@ export function CustomerDashboardView() {
       }
     >
       {pendingChangeOrders.length > 0 ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-semibold text-amber-950">
-            Action required — change order
-            {pendingChangeOrders.length === 1 ? "" : "s"} need your approval
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-200 border-l-4 border-l-orange-500 bg-amber-50/70 px-3 py-2"
+        >
+          <span className="relative flex size-2.5 shrink-0" aria-hidden>
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-orange-500 opacity-75" />
+            <span className="relative inline-flex size-2.5 rounded-full bg-orange-500" />
+          </span>
+          <p className="text-sm text-amber-950">
+            <span className="font-semibold">
+              {pendingChangeOrders.length} change order{pendingChangeOrders.length === 1 ? "" : "s"} need your approval
+            </span>
+            <span className="text-amber-800">
+              {" "}
+              · +{formatMoney(pendingChangeOrders.reduce((sum, co) => sum + (Number(co.amount) || 0), 0))}
+            </span>
           </p>
-          <ul className="mt-2 space-y-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {pendingChangeOrders.slice(0, 3).map((co) => (
-              <li
+              <Link
                 key={`${co.jobId}-${co.id}`}
-                className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-950"
+                href={customerPaths.changeOrder(co.jobId, co.id)}
+                title={co.title || co.description || undefined}
+                className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs text-slate-700 hover:border-amber-400 hover:text-slate-900"
               >
-                <span>
-                  {co.number} · Job {co.jobNumber || "—"} · +
-                  {formatMoney(co.amount)}
-                </span>
-                <Button size="sm" className="h-8" asChild>
-                  <Link href={customerPaths.changeOrder(co.jobId, co.id)}>
-                    Review change order
-                    <ArrowRight className="size-3.5" />
-                  </Link>
-                </Button>
-              </li>
+                <span className="font-semibold">{co.number}</span>
+                <span className="text-slate-400">·</span>
+                <span>{co.jobNumber || "Job"}</span>
+                <span className="font-medium tabular-nums text-amber-800">+{formatMoney(co.amount)}</span>
+              </Link>
             ))}
-          </ul>
+            {pendingChangeOrders.length > 3 ? (
+              <span className="text-xs text-amber-800">+{pendingChangeOrders.length - 3} more</span>
+            ) : null}
+          </div>
+          <Button size="sm" className="h-7 shrink-0" asChild>
+            <Link
+              href={
+                pendingChangeOrders.length === 1
+                  ? customerPaths.changeOrder(pendingChangeOrders[0].jobId, pendingChangeOrders[0].id)
+                  : customerPaths.changeOrders
+              }
+            >
+              Review
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </Button>
         </div>
       ) : null}
 

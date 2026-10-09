@@ -46,6 +46,54 @@ function splitContact(value: string) {
   return { first: parts[0] || "", last: parts.slice(1).join(" ") };
 }
 
+/** Uploaded W-9: a thumbnail for images, a PDF badge + preview link for documents. */
+function W9Preview({
+  file,
+  label,
+  onRemove,
+}: {
+  file: { name: string; url: string; fileType?: string };
+  label?: string;
+  onRemove?: () => void;
+}) {
+  const kind = String(file.fileType || "").toLowerCase();
+  const path = file.url.split("?")[0].toLowerCase();
+  const isImage = kind.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/.test(path);
+  const isPdf = kind === "application/pdf" || path.endsWith(".pdf");
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-input bg-muted/20 p-2 text-sm">
+      {isImage ? (
+        <a href={file.url} target="_blank" rel="noreferrer" className="shrink-0" aria-label="Open W-9 image">
+          {/* eslint-disable-next-line @next/next/no-img-element -- uploaded file on the API host */}
+          <img src={file.url} alt="W-9 preview" className="size-14 rounded-md border border-input object-cover" />
+        </a>
+      ) : (
+        <span className="flex size-14 shrink-0 flex-col items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-700">
+          <FileText className="size-5" aria-hidden />
+          <span className="text-[10px] font-bold">{isPdf ? "PDF" : "FILE"}</span>
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        {label ? <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</p> : null}
+        <p className="truncate font-medium text-foreground">{file.name || "W-9"}</p>
+        <a href={file.url} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">
+          {isImage ? "View full image" : "Preview document"}
+        </a>
+      </div>
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Remove W-9"
+        >
+          <X className="size-4" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** Readable, unambiguous temporary password the pro can pass on. */
 function generatePassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -107,6 +155,7 @@ function ContractorForm({
   const [w9, setW9] = useState<W9File | null>(null);
   const [w9Uploading, setW9Uploading] = useState(false);
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState(contractor?.username || "");
   const [revoking, setRevoking] = useState(false);
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -125,6 +174,10 @@ function ContractorForm({
           ? "Email is required for portal access. It's their sign-in."
           : null,
     password: wantsPassword && password.length < 8 ? "Use at least 8 characters." : null,
+    username:
+      username.trim() && !/^[a-z0-9._-]{3,30}$/.test(username.trim().toLowerCase())
+        ? "Username: 3-30 letters, numbers, dot, underscore, or dash."
+        : null,
   };
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -190,10 +243,15 @@ function ContractorForm({
       phone: phone.trim(),
       trade: trade.trim(),
       license: license.trim(),
-      ...(isEdit
-        ? { street: street.trim(), city: city.trim(), state: state.trim(), zip: zip.trim(), latitude, longitude }
-        : {}),
+      street: street.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      zip: zip.trim(),
+      latitude,
+      longitude,
       ...(portalOn && password ? { portalPassword: password } : {}),
+      // Username rides along with a new login, or updates an existing one.
+      ...((portalOn && password) || hasAccess ? { portalUsername: username.trim().toLowerCase() } : {}),
     };
 
     setSaving(true);
@@ -208,9 +266,6 @@ function ContractorForm({
         const next: PortalContractor = {
           id: `con_${provider.id}_new_${Date.now()}`,
           number: `CON-${220 + contractors.length}`,
-          city: "",
-          state: "",
-          zip: "",
           ...patch,
           status: "active",
           hourlyRate: 0,
@@ -334,34 +389,22 @@ function ContractorForm({
         </Field>
 
         <Field>
-          <FieldLabel>W-9</FieldLabel>
+          <FieldLabel>W-9 Tax Form (Taxpayer Identification Document)</FieldLabel>
           {w9 ? (
-            <div className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm">
-              <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <a href={w9.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate hover:underline">
-                {w9.name}
-              </a>
-              <button
-                type="button"
-                onClick={() => setW9(null)}
-                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Remove W-9"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-start"
-              onClick={() => fileRef.current?.click()}
-              disabled={w9Uploading}
-            >
-              {w9Uploading ? <Loader2 className="animate-spin" /> : <Upload />}
-              {w9Uploading ? "Uploading…" : existingW9 ? "Replace W-9" : "Upload W-9 (PDF or image)"}
-            </Button>
-          )}
+            <W9Preview file={w9} onRemove={() => setW9(null)} />
+          ) : existingW9 ? (
+            <W9Preview file={{ name: existingW9.name, url: existingW9.url, fileType: existingW9.fileType }} label="On file" />
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            className="justify-start"
+            onClick={() => fileRef.current?.click()}
+            disabled={w9Uploading}
+          >
+            {w9Uploading ? <Loader2 className="animate-spin" /> : <Upload />}
+            {w9Uploading ? "Uploading…" : w9 || existingW9 ? "Replace W-9" : "Upload W-9 (PDF, JPG or PNG)"}
+          </Button>
           <input
             ref={fileRef}
             type="file"
@@ -373,90 +416,81 @@ function ContractorForm({
               event.target.value = "";
             }}
           />
-          {existingW9 && !w9 ? (
-            <FieldDescription className="inline-flex items-center gap-1">
-              <Paperclip className="size-3" aria-hidden />
-              On file:{" "}
-              <a href={existingW9.url} target="_blank" rel="noreferrer" className="underline">
-                {existingW9.name}
-              </a>
-            </FieldDescription>
-          ) : null}
         </Field>
 
-        {isEdit ? (
-          <>
-            <Field>
-              <FieldLabel htmlFor="con-location">Location</FieldLabel>
-              <GoogleAddressAutocomplete
-                id="con-location"
-                value={street}
-                onChange={setStreet}
-                onSelect={applyAddress}
-                placeholder="Start typing a street address…"
-              />
-            </Field>
-            <CityStateZipFields
-              idPrefix="con"
-              value={{ city, state, zip }}
-              onChange={(next) => {
-                setCity(next.city);
-                setState(next.state);
-                setZip(next.zip);
-              }}
-            />
-          </>
-        ) : null}
+        <Field>
+          <FieldLabel htmlFor="con-location">Location address</FieldLabel>
+          <GoogleAddressAutocomplete
+            id="con-location"
+            value={street}
+            onChange={setStreet}
+            onSelect={applyAddress}
+            placeholder="Start typing a street address…"
+          />
+        </Field>
+        <CityStateZipFields
+          idPrefix="con"
+          value={{ city, state, zip }}
+          onChange={(next) => {
+            setCity(next.city);
+            setState(next.state);
+            setZip(next.zip);
+          }}
+        />
 
         {useApi ? (
-          <div className="rounded-lg border border-input bg-muted/30 p-3">
-            <div className="flex items-start gap-2.5">
-              <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Contractor portal</p>
-                <p className="text-xs text-muted-foreground">
-                  {hasAccess
-                    ? `Active. They sign in at ${contractorPaths.login} with their email.`
-                    : "Lets them see assigned jobs, submit completion photos, and request change orders."}
-                </p>
-              </div>
+          <div className="grid gap-4 rounded-md border border-border-soft bg-secondary/40 p-3 sm:grid-cols-2">
+            <div className="flex items-start justify-between gap-2 sm:col-span-2">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Contractor Portal Login</span> — Optional. They sign in to
+                view their assigned jobs and submit completion.
+                {hasAccess ? <span className="mt-1 block font-medium text-emerald-700">Portal access is active.</span> : null}
+              </p>
               {hasAccess ? (
-                <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive" onClick={revokeAccess} disabled={busy}>
+                <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 text-destructive" onClick={revokeAccess} disabled={busy}>
                   {revoking ? <Loader2 className="animate-spin" /> : null}
-                  Revoke
+                  Disable login
                 </Button>
               ) : null}
             </div>
-            <Field className="mt-3" data-invalid={touched && errors.password ? true : undefined}>
-              <FieldLabel htmlFor="con-portal-password">
-                {hasAccess ? "New password" : "Portal password"}
-                <span className="font-normal text-muted-foreground">
-                  {hasAccess ? " (leave blank to keep the current one)" : " (optional)"}
-                </span>
-              </FieldLabel>
-              <div className="flex gap-2">
-                <PasswordInput
-                  id="con-portal-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="new-password"
-                  className="flex-1"
-                  placeholder={hasAccess ? "••••••••" : "At least 8 characters"}
-                />
-                <Button type="button" variant="outline" onClick={() => setPassword(generatePassword())}>
-                  Generate
-                </Button>
-              </div>
-              {touched && errors.password ? (
-                <FieldError>{errors.password}</FieldError>
-              ) : (
-                <FieldDescription>
-                  {hasAccess
-                    ? "Setting one signs them in with the new password next time."
-                    : "Set one to give them portal access now. Their email is the username; share the password securely."}
-                </FieldDescription>
-              )}
+            <Field data-invalid={touched && errors.email && wantsPassword ? true : undefined}>
+              <FieldLabel htmlFor="con-portal-username">Username</FieldLabel>
+              <Input
+                id="con-portal-username"
+                name="contractor-portal-username"
+                value={username}
+                autoComplete="off"
+                autoCapitalize="none"
+                placeholder="alex.rivera (optional)"
+                onChange={(event) => setUsername(event.target.value.toLowerCase())}
+              />
             </Field>
+            <Field data-invalid={touched && errors.password ? true : undefined}>
+              <div className="flex items-center justify-between gap-2">
+                <FieldLabel htmlFor="con-portal-password">{hasAccess ? "New password" : "Password"}</FieldLabel>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline"
+                  onClick={() => setPassword(generatePassword())}
+                >
+                  Generate
+                </button>
+              </div>
+              <PasswordInput
+                id="con-portal-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="new-password"
+                placeholder={hasAccess ? "Leave blank to keep" : "At least 8 characters"}
+              />
+            </Field>
+            {touched && (errors.password || errors.username || (wantsPassword && errors.email)) ? (
+              <FieldError className="sm:col-span-2">{errors.password || errors.username || errors.email}</FieldError>
+            ) : (
+              <FieldDescription className="text-xs sm:col-span-2">
+                They sign in with their email{username.trim() ? ` or @${username.trim().toLowerCase()}` : " or the username above"}. Disable login stops them signing in; their jobs and history stay.
+              </FieldDescription>
+            )}
           </div>
         ) : null}
       </FieldGroup>

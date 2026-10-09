@@ -25,8 +25,8 @@ import {
 import {
   employeeRoleLabel,
   type PortalEmployee,
-  type PortalEmployeeRole,
-} from "@/lib/data/portal";
+  type PortalEmployeeRole, emptyPersonAddress, type PortalPersonAddress } from "@/lib/data/portal";
+import { PersonAddressFields } from "@/components/shared/person-address-fields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
 import { createTeamMember, fetchTeam } from "@/store/teamSlice";
@@ -77,6 +77,7 @@ export function CreateEmployeeDialog({
   const [payRate, setPayRate] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [address, setAddress] = useState<PortalPersonAddress>(emptyPersonAddress);
   const [saving, setSaving] = useState(false);
 
   function reset() {
@@ -89,6 +90,7 @@ export function CreateEmployeeDialog({
     setPayRate("");
     setUsername("");
     setPassword("");
+    setAddress(emptyPersonAddress());
     setSaving(false);
   }
 
@@ -114,6 +116,7 @@ export function CreateEmployeeDialog({
       trade: trade.trim() || "General",
       active: true as const,
       hourlyRate: Math.max(0, Number(payRate) || 0),
+      address,
       ...(username.trim() ? { username: username.trim().toLowerCase(), password } : {}),
     };
     if (!input.firstName || !input.lastName) {
@@ -243,6 +246,7 @@ export function CreateEmployeeDialog({
             />
             <p className="text-xs text-muted-foreground">Used to calculate pay from tracked clock-in hours.</p>
           </div>
+          <PersonAddressFields idPrefix="create-emp-address" value={address} onChange={setAddress} />
           <div className="space-y-3 rounded-md border border-border-soft bg-secondary/40 p-3">
             <div>
               <p className="text-sm font-semibold">Technician portal login</p>

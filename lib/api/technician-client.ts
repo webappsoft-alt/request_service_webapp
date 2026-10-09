@@ -193,6 +193,7 @@ export type TechProfile = {
     hireDate?: string;
     emergencyName?: string;
     emergencyPhone?: string;
+    address?: { street?: string; city?: string; state?: string; zip?: string; latitude?: number | null; longitude?: number | null };
     username?: string;
   };
   provider: {
@@ -555,6 +556,7 @@ export async function updateTechnicianProfile(patch: Partial<{
   phone: string;
   emergencyName: string;
   emergencyPhone: string;
+  address: { street: string; city: string; state: string; zip: string; latitude?: number | null; longitude?: number | null };
   avatarUrl: string;
 }>): Promise<TechProfile> {
   return dataOf(await putData(technicianApi.profile, patch, { silent: true })) as TechProfile;

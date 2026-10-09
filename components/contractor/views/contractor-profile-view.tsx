@@ -6,34 +6,36 @@ import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { PasswordInput } from "@/components/auth/password-input";
 import { PortalPage } from "@/components/portal/portal-page";
+import { CityStateZipFields } from "@/components/shared/city-state-zip-fields";
+import { GoogleAddressAutocomplete } from "@/components/shared/google-address-autocomplete";
 import { DetailCard, KeyValue } from "@/components/technician/tech-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CenteredSpinner } from "@/components/ui/spinner";
-import { emptyPersonAddress, employeeRoleLabel, type PortalEmployeeRole } from "@/lib/data/portal";
-import { PersonAddressFields } from "@/components/shared/person-address-fields";
-import { formatDate, formatMoney } from "@/lib/format";
+import type { ContractorProfile } from "@/lib/api/contractor-portal-client";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { updateAuthUser } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { changeTechPassword, fetchTechProfile, saveTechProfile } from "@/store/technicianSlice";
-import type { TechProfile } from "@/lib/api/technician-client";
+import { fetchContractorProfile, saveContractorProfile, updateContractorPassword } from "@/store/contractorPortalSlice";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const STATUS_LABEL: Record<string, string> = { active: "Active", inactive: "Inactive", on_stop: "On stop" };
+
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="space-y-1.5">
+    <div className={className ? `space-y-1.5 ${className}` : "space-y-1.5"}>
       <Label className="text-xs font-semibold">{label}</Label>
       {children}
     </div>
   );
 }
 
-export function TechnicianProfileView() {
+export function ContractorProfileView() {
   const dispatch = useAppDispatch();
-  const { data, loading, error } = useAppSelector((state) => state.technician.profile);
+  const { data, loading, error } = useAppSelector((state) => state.contractorPortal.profile);
 
   useEffect(() => {
-    void dispatch(fetchTechProfile());
+    void dispatch(fetchContractorProfile());
   }, [dispatch]);
 
   if (!data) {
@@ -42,37 +44,39 @@ export function TechnicianProfileView() {
         <CenteredSpinner label="Loading profile" className="min-h-[22rem]" />
       </div>
     ) : (
-      <PortalPage eyebrow="Technician" title="Profile">
+      <PortalPage eyebrow="Contractor" title="Profile">
         <p className="text-sm text-muted-foreground">{error}</p>
       </PortalPage>
     );
   }
 
   // Remount the form when the saved profile changes so drafts start from server values.
-  return <ProfileForm key={String(data.employee.updatedAt ?? data.employee.id)} data={data} />;
+  return <ProfileForm key={JSON.stringify(data)} data={data} />;
 }
 
-function ProfileForm({ data }: { data: TechProfile }) {
+function ProfileForm({ data }: { data: ContractorProfile }) {
   const dispatch = useAppDispatch();
-  const saving = useAppSelector((state) => state.technician.profile.saving);
+  const saving = useAppSelector((state) => Boolean(state.contractorPortal.profile.saving));
   const [draft, setDraft] = useState({
-    firstName: data.employee.firstName || "",
-    lastName: data.employee.lastName || "",
-    phone: data.employee.phone || "",
-    emergencyName: data.employee.emergencyName || "",
-    emergencyPhone: data.employee.emergencyPhone || "",
-    address: { ...emptyPersonAddress(), ...data.employee.address },
+    companyName: data.companyName || "",
+    firstName: data.firstName || "",
+    lastName: data.lastName || "",
+    phone: data.phone || "",
+    street: data.street || "",
+    city: data.city || "",
+    state: data.state || "",
+    zip: data.zip || "",
   });
   const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const [changingPassword, setChangingPassword] = useState(false);
 
   async function onSave() {
-    if (!draft.firstName.trim() || !draft.lastName.trim()) {
-      toast.error("First and last name are required.");
+    if (!draft.companyName.trim() && !`${draft.firstName}${draft.lastName}`.trim()) {
+      toast.error("Enter a company name or a contact person.");
       return;
     }
-    const result = await dispatch(saveTechProfile(draft));
-    if (saveTechProfile.rejected.match(result)) {
+    const result = await dispatch(saveContractorProfile(draft));
+    if (saveContractorProfile.rejected.match(result)) {
       toast.error(result.payload || "Could not save your profile.");
       return;
     }
@@ -91,10 +95,10 @@ function ProfileForm({ data }: { data: TechProfile }) {
     }
     setChangingPassword(true);
     const result = await dispatch(
-      changeTechPassword({ currentPassword: passwords.currentPassword, newPassword: passwords.newPassword }),
+      updateContractorPassword({ currentPassword: passwords.currentPassword, newPassword: passwords.newPassword }),
     );
     setChangingPassword(false);
-    if (changeTechPassword.rejected.match(result)) {
+    if (updateContractorPassword.rejected.match(result)) {
       toast.error(result.payload || "Could not change your password.");
       return;
     }
@@ -102,13 +106,11 @@ function ProfileForm({ data }: { data: TechProfile }) {
     toast.success("Password updated.");
   }
 
-  const { employee, user, provider } = data;
-
   return (
     <PortalPage
-      eyebrow="Technician / Profile"
-      title={`${employee.firstName} ${employee.lastName}`.trim()}
-      description={provider?.name ? `Technician at ${provider.name}` : undefined}
+      eyebrow="Contractor / Profile"
+      title={data.companyName || data.displayName}
+      description={data.provider?.name ? `Contractor for ${data.provider.name}` : undefined}
       actions={
         <Button size="sm" className="h-8" disabled={saving} onClick={() => void onSave()}>
           {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -118,46 +120,72 @@ function ProfileForm({ data }: { data: TechProfile }) {
     >
       <DetailCard title="Your details">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="First name">
+          <Field label="Company name" className="sm:col-span-2">
+            <Input
+              value={draft.companyName}
+              placeholder="Rivera Contracting LLC"
+              onChange={(e) => setDraft({ ...draft, companyName: e.target.value })}
+            />
+          </Field>
+          <Field label="Contact first name">
             <Input value={draft.firstName} onChange={(e) => setDraft({ ...draft, firstName: e.target.value })} />
           </Field>
-          <Field label="Last name">
+          <Field label="Contact last name">
             <Input value={draft.lastName} onChange={(e) => setDraft({ ...draft, lastName: e.target.value })} />
           </Field>
           <Field label="Phone">
             <AuthPhoneInput value={draft.phone} onChange={(phone) => setDraft({ ...draft, phone })} placeholder="(555) 123-4567" />
           </Field>
-          <Field label="Emergency contact name">
-            <Input value={draft.emergencyName} onChange={(e) => setDraft({ ...draft, emergencyName: e.target.value })} />
-          </Field>
-          <Field label="Emergency phone">
-            <AuthPhoneInput
-              value={draft.emergencyPhone}
-              onChange={(emergencyPhone) => setDraft({ ...draft, emergencyPhone })}
-              placeholder="(555) 123-4567"
+          <Field label="Street address">
+            <GoogleAddressAutocomplete
+              id="ct-profile-street"
+              value={draft.street}
+              onChange={(street) => setDraft((current) => ({ ...current, street }))}
+              onSelect={(address) =>
+                setDraft((current) => ({
+                  ...current,
+                  street: address.streetAddress.trim(),
+                  city: address.city || current.city,
+                  state: normalizeUsStateCode(address.state) || current.state,
+                  zip: address.zipCode || current.zip,
+                }))
+              }
+              placeholder="Start typing a street address…"
             />
           </Field>
-        </div>
-        <div className="mt-3">
-          <PersonAddressFields
-            idPrefix="tech-profile-address"
-            value={draft.address}
-            onChange={(address) => setDraft({ ...draft, address })}
-          />
+          <div className="sm:col-span-2">
+            <CityStateZipFields
+              idPrefix="ct-profile"
+              value={{ city: draft.city, state: draft.state, zip: draft.zip }}
+              onChange={(next) => setDraft((current) => ({ ...current, ...next }))}
+            />
+          </div>
         </div>
       </DetailCard>
 
       <DetailCard title="Set by your company">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <KeyValue label="Username" value={user.username ? `@${user.username}` : "—"} />
-          <KeyValue label="Email" value={employee.email || (String(user.email || "").endsWith("@technician.local") ? "—" : user.email)} />
-          <KeyValue label="Role" value={employeeRoleLabel(employee.role as PortalEmployeeRole)} />
-          <KeyValue label="Expertise" value={employee.trade} />
-          <KeyValue label="Pay rate" value={`${formatMoney(Number(employee.hourlyRate) || 0)}/hr`} />
-          <KeyValue label="Hire date" value={employee.hireDate ? formatDate(employee.hireDate) : "—"} />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <KeyValue label="Email (sign-in)" value={data.email} />
+          <KeyValue label="Username (sign-in)" value={data.username ? `@${data.username}` : "—"} />
+          <KeyValue label="Trade" value={data.trade} />
+          <KeyValue label="License #" value={data.license} />
+          <KeyValue label="Contractor #" value={data.number} />
+          <KeyValue label="Status" value={STATUS_LABEL[data.status] || data.status} />
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Contact your office to change your username, role, or pay rate.</p>
+        <p className="mt-3 text-xs text-muted-foreground">
+          You can sign in with your email or username. Contact {data.provider?.name || "your company"} to change them, your trade, or license.
+        </p>
       </DetailCard>
+
+      {data.provider ? (
+        <DetailCard title="Working with">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <KeyValue label="Company" value={data.provider.name} />
+            <KeyValue label="Phone" value={data.provider.phone} />
+            <KeyValue label="Email" value={data.provider.email} />
+          </div>
+        </DetailCard>
+      ) : null}
 
       <DetailCard title="Change password">
         <div className="grid gap-3 sm:grid-cols-3">

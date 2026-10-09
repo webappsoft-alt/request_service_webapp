@@ -82,7 +82,7 @@ export function ContractorLoginView() {
       toast.success("Signed in to your contractor portal.");
       router.replace(contractorPaths.dashboard);
     } catch (error) {
-      showApiErrorToast(error, "Invalid email or password.");
+      showApiErrorToast(error, "Invalid email, username, or password.");
     } finally {
       setSubmitting(false);
       dispatch(setAuthLoading(false));
@@ -141,22 +141,22 @@ export function ContractorLoginView() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_40px_-12px_rgb(15_23_42_/_0.15)] sm:p-8">
             <p className="text-[11px] font-semibold tracking-[0.18em] text-[var(--ct-accent)] uppercase">Contractor sign in</p>
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900">Welcome back</h1>
-            <p className="mt-1.5 text-sm text-slate-500">Sign in with the email and password from the company you work with.</p>
+            <p className="mt-1.5 text-sm text-slate-500">Sign in with the email or username and password from the company you work with.</p>
 
             <form onSubmit={onSubmit} className="mt-7">
               <FieldGroup className="gap-5">
                 <Field>
-                  <FieldLabel htmlFor="contractor-email">Email</FieldLabel>
+                  <FieldLabel htmlFor="contractor-email">Email or username</FieldLabel>
                   <div className="relative">
                     <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
                     <Input
                       id="contractor-email"
-                      type="email"
-                      autoComplete="email"
+                      type="text"
+                      autoComplete="username"
                       autoCapitalize="none"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      placeholder="you@yourcompany.com"
+                      placeholder="you@yourcompany.com or username"
                       className="h-11 rounded-xl bg-slate-50/60 pl-10"
                       required
                     />

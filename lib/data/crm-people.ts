@@ -108,8 +108,12 @@ export type PortalContractor = {
   createdAt: string;
   /** Contractor portal sign-in is active (read-only, from the API). */
   hasPortalAccess?: boolean;
+  /** Portal username (they can sign in with it or their email). */
+  username?: string;
   /** Write-only: sets / resets the portal password on create or update. */
   portalPassword?: string;
+  /** Write-only: portal username on create or update ("" removes it). */
+  portalUsername?: string;
 };
 
 export type PortalVendorInventoryItem = {

@@ -808,6 +808,20 @@ export function mapPortalEmployee(raw: unknown): PortalEmployee | null {
     hireDate: toIsoString(record.hireDate) || undefined,
     emergencyName: trimmed(record.emergencyName) || undefined,
     emergencyPhone: trimmed(record.emergencyPhone) || undefined,
+    address: (() => {
+      const raw = asRecord(record.address);
+      if (!raw) return undefined;
+      const lat = Number(raw.latitude);
+      const lng = Number(raw.longitude);
+      return {
+        street: trimmed(raw.street),
+        city: trimmed(raw.city),
+        state: trimmed(raw.state),
+        zip: trimmed(raw.zip),
+        latitude: raw.latitude == null || !Number.isFinite(lat) ? null : lat,
+        longitude: raw.longitude == null || !Number.isFinite(lng) ? null : lng,
+      };
+    })(),
     workingHours: mapEmployeeWorkingHours(record.workingHours),
     attachments: mapEmployeeAttachments(record.attachments),
     username: trimmed(record.username) || undefined,
@@ -926,6 +940,7 @@ export function mapPortalContractor(raw: unknown): PortalContractor | null {
     attachments: mapEmployeeAttachments(record.attachments),
     createdAt: toIsoString(record.createdAt),
     hasPortalAccess: Boolean(record.portalEnabled && record.userId),
+    username: trimmed(record.username) || undefined,
   };
 }
 
@@ -1671,9 +1686,9 @@ export function mapJob(raw: unknown): Job | null {
     estimateId: crmIdOf(record.estimateId),
     serviceId: crmIdOf(record.serviceId) || undefined,
     address,
+    // Technician only — contractors are shown from crewContractors, never as the assigned technician.
     assignedTo:
       mapAssignedName(record.assignedEmployees) ||
-      mapAssignedName(record.assignedContractors) ||
       trimmed(record.assignedTo) ||
       undefined,
     // Technicians only — contractors live in crewContractors (an id here would be sent back as an employee).

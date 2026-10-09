@@ -251,6 +251,7 @@ function applyDetail(state: TeamState, payload: PortalEmployeeDetail) {
         hireDate: payload.employee.hireDate ?? cached.hireDate,
         emergencyName: payload.employee.emergencyName ?? cached.emergencyName,
         emergencyPhone: payload.employee.emergencyPhone ?? cached.emergencyPhone,
+        address: payload.employee.address ?? cached.address,
         workingHours: payload.employee.workingHours ?? cached.workingHours,
         attachments:
           payload.employee.attachments !== undefined

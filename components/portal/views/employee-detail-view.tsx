@@ -77,6 +77,7 @@ import {
 import {
   calendarEventKindLabel,
   employeeName,
+  emptyPersonAddress,
   employeeRoleLabel,
   estimateCustomerName,
   estimateStatusLabel,
@@ -89,6 +90,7 @@ import {
   type PortalEmployeeRole,
   type PortalEmployeeWorkingHours,
 } from "@/lib/data/portal";
+import { PersonAddressFields } from "@/components/shared/person-address-fields";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -704,6 +706,7 @@ function EmployeeSettingsTab({
           hireDate: hireDateApiValue(hireDateInputValue(draft.hireDate) || ""),
           emergencyName: draft.emergencyName,
           emergencyPhone: draft.emergencyPhone,
+          address: { ...emptyPersonAddress(), ...draft.address },
         }),
       );
       toast.success("Employee settings saved.");
@@ -827,6 +830,11 @@ function EmployeeSettingsTab({
           />
         </Field>
       </div>
+      <PersonAddressFields
+        idPrefix={`emp-${employee.id}-address`}
+        value={{ ...emptyPersonAddress(), ...draft.address }}
+        onChange={(address) => setDraft({ ...draft, address })}
+      />
       <TechnicianLoginCard key={`${employee.id}:${employee.username ?? ""}`} employee={employee} onSave={onSave} />
     </div>
   );

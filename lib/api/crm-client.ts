@@ -421,6 +421,7 @@ function contractorPayload(contractor: PortalContractor | Partial<PortalContract
     payload.insuranceExpires = contractor.insuranceExpires || null;
   }
   if (contractor.portalPassword) payload.portalPassword = contractor.portalPassword;
+  if (contractor.portalUsername !== undefined) payload.portalUsername = contractor.portalUsername.trim().toLowerCase();
   if (contractor.workingHours !== undefined) payload.workingHours = contractor.workingHours;
   const hasLocationFields =
     contractor.street !== undefined ||
@@ -955,6 +956,17 @@ function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
   if (employee.hireDate !== undefined) payload.hireDate = employee.hireDate || undefined;
   if (employee.emergencyName !== undefined) payload.emergencyName = employee.emergencyName || "";
   if (employee.emergencyPhone !== undefined) payload.emergencyPhone = employee.emergencyPhone || "";
+  if (employee.address !== undefined) {
+    const address = employee.address;
+    payload.address = {
+      street: address?.street?.trim() || "",
+      city: address?.city?.trim() || "",
+      state: address?.state?.trim() || "",
+      zip: address?.zip?.trim() || "",
+      latitude: address?.latitude ?? null,
+      longitude: address?.longitude ?? null,
+    };
+  }
   if (employee.workingHours !== undefined) {
     payload.workingHours = (employee.workingHours as PortalEmployeeWorkingHours[] | undefined) ?? [];
   }
@@ -1124,6 +1136,7 @@ export async function createContractor(contractor: PortalContractor) {
       latitude: contractor.latitude,
       longitude: contractor.longitude,
       portalPassword: contractor.portalPassword,
+      ...(contractor.portalUsername ? { portalUsername: contractor.portalUsername.trim().toLowerCase() } : {}),
     }),
   );
   return mapCrmEntity(response, mapPortalContractor);

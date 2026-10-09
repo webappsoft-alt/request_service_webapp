@@ -6,6 +6,8 @@ import {
   getContractorDashboard,
   getContractorJob,
   getContractorProfile,
+  updateContractorProfile,
+  type ContractorProfileInput,
   listContractorChangeRequests,
   listContractorJobs,
   listContractorPayouts,
@@ -45,7 +47,7 @@ type ListState<T> = { key: string; data: Paginated<T> | null; loading: boolean; 
 type DetailState<T> = Record<string, { data: T | null; loading: boolean; error: string | null }>;
 
 export type ContractorPortalState = {
-  profile: { data: ContractorProfile | null; loading: boolean; error: string | null };
+  profile: { data: ContractorProfile | null; loading: boolean; error: string | null; saving?: boolean };
   dashboard: { data: ContractorDashboard | null; loading: boolean; error: string | null };
   jobs: ListState<ContractorJob>;
   jobDetails: DetailState<ContractorJobDetail>;
@@ -90,6 +92,17 @@ export const fetchContractorProfile = createAsyncThunk<ContractorProfile, void, 
   async (_arg, { rejectWithValue }) => {
     try {
       return await getContractorProfile();
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
+export const saveContractorProfile = createAsyncThunk<ContractorProfile, ContractorProfileInput, { rejectValue: string }>(
+  "contractorPortal/saveProfile",
+  async (input, { rejectWithValue }) => {
+    try {
+      return await updateContractorProfile(input);
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
     }
@@ -359,6 +372,15 @@ const contractorPortalSlice = createSlice({
       .addCase(fetchContractorProfile.rejected, (state, action) => {
         state.profile.loading = false;
         state.profile.error = action.payload || "Could not load your profile.";
+      })
+      .addCase(saveContractorProfile.pending, (state) => {
+        state.profile.saving = true;
+      })
+      .addCase(saveContractorProfile.fulfilled, (state, action) => {
+        state.profile = { data: action.payload, loading: false, error: null, saving: false };
+      })
+      .addCase(saveContractorProfile.rejected, (state) => {
+        state.profile.saving = false;
       })
 
       .addCase(fetchContractorDashboard.pending, (state) => {

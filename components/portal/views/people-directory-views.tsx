@@ -15,6 +15,8 @@ import { ReminderSubjectLink, useReminderLookups } from "@/components/portal/rem
 import { ReminderStatusSelect } from "@/components/portal/reminder-status-select";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { PortalLoginLink } from "@/components/portal/portal-login-link";
+import { contractorPaths } from "@/lib/contractor-paths";
 import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -208,6 +210,7 @@ export function ContractorsView() {
         </Button>
       }
     >
+      <PortalLoginLink audience="contractor" path={contractorPaths.login} className="mb-3" />
       <PortalDataTable
         filename="contractors"
         countLabel="Contractors"

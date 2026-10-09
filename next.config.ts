@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const liveDomain = String(
-  process.env.NEXT_PUBLIC_LIVE_DOMAIN_URL ||
+  process.env.live_domain_url ||
     process.env.live_domain_url ||
     process.env.LIVE_DOMAIN_URL ||
     "",
@@ -13,8 +13,8 @@ const liveDomain = String(
 const nextConfig: NextConfig = {
   env: {
     // Expose `live_domain_url` to the browser for customer share / Open customer view links.
-    NEXT_PUBLIC_LIVE_DOMAIN_URL:
-      liveDomain || process.env.NEXT_PUBLIC_LIVE_DOMAIN_URL || "",
+    live_domain_url:
+      liveDomain || process.env.live_domain_url || "",
   },
   transpilePackages: ["ckeditor5", "@ckeditor/ckeditor5-react"],
   images: {

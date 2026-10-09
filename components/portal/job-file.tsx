@@ -1179,8 +1179,9 @@ export function JobSettingsTab({
         startMinutes,
         endMinutes,
         timeWindow: event?.timeWindow ?? ("morning" as const),
-        employeeId: contractor ? null : next.employeeId,
-        contractorId: contractor ? next.employeeId : null,
+        // Only the slot being set — never send an empty contractor/technician that would clear the other.
+        employeeId: contractor ? undefined : next.employeeId,
+        contractorId: contractor ? next.employeeId : undefined,
         status: "scheduled" as const,
       };
       try {

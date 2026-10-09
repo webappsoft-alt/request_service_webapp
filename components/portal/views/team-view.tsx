@@ -5,6 +5,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { PortalLoginLink } from "@/components/portal/portal-login-link";
+import { technicianPaths } from "@/lib/technician-paths";
 import { StatusPill } from "@/components/portal/status-pill";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
@@ -31,7 +33,8 @@ import { validateTechnicianCredentials } from "@/components/portal/create-employ
 import { formatMoney } from "@/lib/format";
 import { formatHours } from "@/lib/time-tracking";
 import type { PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
-import { employeeRoleLabel } from "@/lib/data/portal";
+import { emptyPersonAddress, employeeRoleLabel, type PortalPersonAddress } from "@/lib/data/portal";
+import { PersonAddressFields } from "@/components/shared/person-address-fields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
@@ -168,6 +171,7 @@ export function TeamView() {
         </Button>
       }
     >
+      <PortalLoginLink audience="technician" path={technicianPaths.login} className="mb-3" />
       <PortalDataTable
         filename="employees"
         countLabel="Employees"
@@ -408,6 +412,7 @@ function EmployeeFormDialog({
   const [payRate, setPayRate] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [address, setAddress] = useState<PortalPersonAddress>(emptyPersonAddress);
   const [saving, setSaving] = useState(false);
   const loginEnabled = Boolean(employee?.loginEnabled && employee?.username);
 
@@ -421,6 +426,7 @@ function EmployeeFormDialog({
     setPayRate("");
     setUsername("");
     setPassword("");
+    setAddress(emptyPersonAddress());
     setSaving(false);
   }
 
@@ -439,6 +445,7 @@ function EmployeeFormDialog({
     setPayRate(employee.hourlyRate ? String(employee.hourlyRate) : "");
     setUsername(employee.username ?? "");
     setPassword("");
+    setAddress({ ...emptyPersonAddress(), ...employee.address });
     setSaving(false);
   }, [open, employee]);
 
@@ -453,6 +460,7 @@ function EmployeeFormDialog({
       trade: trade.trim() || "General",
       active: true as const,
       hourlyRate: Math.max(0, Number(payRate) || 0),
+      address,
       ...(username.trim() ? { username: username.trim().toLowerCase() } : {}),
       ...(password ? { password } : {}),
     };
@@ -595,10 +603,11 @@ function EmployeeFormDialog({
               onChange={(change) => setPayRate(change.target.value)}
             />
           </Field>
+          <PersonAddressFields idPrefix="emp-address" value={address} onChange={setAddress} />
           <div className="grid gap-4 rounded-md border border-border-soft bg-secondary/40 p-3 sm:grid-cols-2">
             <p className="text-xs text-muted-foreground sm:col-span-2">
-              <span className="font-semibold text-foreground">Technician portal login</span> — optional. They sign in on the Pro
-              login to see only their own work and clock in.
+              <span className="font-semibold text-foreground">Technician portal login</span> — optional. They sign in on the
+              technician portal to see only their own work and clock in.
             </p>
             <Field>
               <FieldLabel htmlFor="emp-username">Username</FieldLabel>

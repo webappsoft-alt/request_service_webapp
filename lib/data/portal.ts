@@ -225,6 +225,8 @@ export type PortalEmployee = {
   hireDate?: string;
   emergencyName?: string;
   emergencyPhone?: string;
+  /** Home / base address. */
+  address?: PortalPersonAddress;
   workingHours?: PortalEmployeeWorkingHours[];
   attachments?: PortalEmployeeAttachment[];
   /** Technician portal login handle (empty when no login issued). */
@@ -1837,4 +1839,26 @@ export function invoiceItemSourceLabel(source: Invoice["items"][number]["source"
       return _never;
     }
   }
+}
+
+/** Street + city/state/zip (+ coordinates from Google Places) for employees.
+ */
+export type PortalPersonAddress = {
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export const emptyPersonAddress = (): PortalPersonAddress => ({ street: "", city: "", state: "", zip: "", latitude: null, longitude: null });
+
+/** One-line address for display ("" when nothing is on file). */
+export function personAddressLine(address?: Partial<PortalPersonAddress> | null) {
+  if (!address) return "";
+  return [address.street, address.city, [address.state, address.zip].filter(Boolean).join(" ")]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ");
 }

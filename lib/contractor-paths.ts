@@ -8,6 +8,7 @@ export const contractorPaths = {
   schedule: "/contractor/schedule",
   payouts: "/contractor/payouts",
   messages: "/contractor/messages",
+  profile: "/contractor/profile",
   message: (threadId: string) => `/contractor/messages?thread=${threadId}`,
 } as const;
 

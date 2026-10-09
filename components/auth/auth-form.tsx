@@ -15,7 +15,6 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { PasswordInput } from "@/components/auth/password-input";
 import { Input } from "@/components/ui/input";
 import type { DemoRole } from "@/lib/auth/demo-session";
-import { contractorPaths } from "@/lib/contractor-paths";
 import { proPaths } from "@/lib/pro-paths";
 import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
 import { cn } from "@/lib/utils";
@@ -264,29 +263,6 @@ function AuthFormInner({
             <Link href={registerHrefWithNext} className={authLinkClass}>
               Sign up
             </Link>
-            {!isProvider ? (
-              <span className="mt-2 block">
-                Work as a contractor for a company?{" "}
-                <Link href={contractorPaths.login} className={authLinkClass}>
-                  Contractor sign in
-                </Link>
-              </span>
-            ) : null}
-            {!isProvider ? (
-              <span className="mt-2 block">
-                Technician for a company?{" "}
-                <Link href={technicianPaths.login} className={authLinkClass}>
-                  Technician sign in
-                </Link>
-              </span>
-            ) : (
-              <span className="mt-2 block">
-                Technician for a company?{" "}
-                <Link href={technicianPaths.login} className={authLinkClass}>
-                  Technician sign in
-                </Link>
-              </span>
-            )}
           </>
         ) : (
           <>

@@ -17,6 +17,8 @@ export type SiteBrandingContact = {
   phone2: string;
   email: string;
   email2: string;
+  /** CMS "Customer support email" — shown in the footer; falls back to `email`. */
+  supportEmail: string;
   address: string;
   address2: string;
   businessHours: BusinessHourDay[];
@@ -171,6 +173,7 @@ export function fallbackSiteBranding(): SiteBrandingContact {
     phone2: "",
     email: siteConfig.email,
     email2: "",
+    supportEmail: siteConfig.email,
     address: fallbackAddress(),
     address2: "",
     businessHours: hours,
@@ -190,6 +193,7 @@ function parseBrandingResponse(response: unknown): SiteBrandingContact {
   const phone2 = stringOr(data.phone2);
   const email = stringOr(data.email) || fallback.email;
   const email2 = stringOr(data.email2);
+  const supportEmail = stringOr(data.customerSupportEmail) || email;
   const address = stringOr(data.address) || fallback.address;
   const address2 = stringOr(data.address2);
   const businessHours = normalizeHours(data.businessHours);
@@ -202,6 +206,7 @@ function parseBrandingResponse(response: unknown): SiteBrandingContact {
     phone2,
     email,
     email2,
+    supportEmail,
     address,
     address2,
     businessHours,

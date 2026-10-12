@@ -26,9 +26,7 @@ export const footerNav = {
     { label: "Find a Professional", href: "/find-a-professional" },
     { label: "Get a quote", href: "/get-a-quote" },
     { label: "Services", href: "/services" },
-    { label: "Blog", href: "/blog" },
     { label: "How It Works", href: "/how-it-works" },
-    { label: "FAQ", href: "/faq" },
     // { label: "Customer Login", href: "/login" },
   ],
   providers: [
@@ -40,8 +38,11 @@ export const footerNav = {
   company: [
     { label: "About", href: "/about" },
     { label: "Blog", href: "/blog" },
-    { label: "Contact", href: "/contact" },
     { label: "Sitemap", href: "/sitemap.xml" },
+  ],
+  support: [
+    { label: "Contact Us", href: "/contact" },
+    { label: "FAQ", href: "/faq" },
   ],
   legal: [
     { label: "Privacy Policy", href: "/privacy" },

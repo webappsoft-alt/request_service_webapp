@@ -32,6 +32,17 @@ const socials = [
   },
 ] as const;
 
+/**
+ * One-line CMS address → exactly two lines: street on line 1, "City, ST ZIP" on line 2
+ * ("100 Congress Ave, Suite 2000" / "Austin, TX 78701"). Left as-is if it doesn't match.
+ */
+function splitAddress(address: string) {
+  const value = address.trim();
+  if (!value) return [];
+  const match = value.match(/^(.+?),\s*([^,]+,\s*[A-Za-z]{2}\s+\d{5}(?:-\d{4})?)$/);
+  return match ? [match[1], match[2]] : [value];
+}
+
 const linkClass =
   "text-sm text-white/80 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none";
 
@@ -44,21 +55,24 @@ export function SiteFooter() {
     void dispatch(fetchSiteBranding());
   }, [dispatch]);
 
-  const addressLines = [branding.address, branding.address2].filter(Boolean);
+  const addressLines = branding.address2
+    ? [branding.address, branding.address2].filter(Boolean)
+    : splitAddress(branding.address);
   const phones = [
     { label: branding.phone, href: branding.phoneHref },
     branding.phone2
       ? { label: branding.phone2, href: branding.phone2Href }
       : null,
   ].filter(Boolean) as Array<{ label: string; href: string }>;
-  const emails = [branding.email, branding.email2].filter(Boolean);
+  // Footer shows the CMS "Customer support email" (falls back to the general email).
+  const emails = [...new Set([branding.supportEmail || branding.email, branding.email2].filter(Boolean))];
 
   const serviceLinks = [
     ...serviceCategories.slice(0, 6).map((category) => ({
       label: category.name,
       href: `/services/${category.slug}`,
     })),
-    // { label: "All services", href: "/services" },
+    { label: "View All Services", href: "/services" },
   ];
 
   return (
@@ -77,8 +91,8 @@ export function SiteFooter() {
                 <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 <span>
                   {addressLines.map((line, index) => (
-                    <span key={`${line}-${index}`}>
-                      {index > 0 ? <br /> : null}
+                    // Each line stays on one row, so the address is always two lines.
+                    <span key={`${line}-${index}`} className="block whitespace-nowrap">
                       {line}
                     </span>
                   ))}
@@ -141,12 +155,19 @@ export function SiteFooter() {
           </div>
         </div>
 
-        {/* Navigation columns */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4">
-          <FooterColumn title="Customers" items={footerNav.customers} />
-          <FooterColumn title="Pros" items={footerNav.providers} />
-          <FooterColumn title="Services" items={serviceLinks} />
-          <FooterColumn title="Company" items={footerNav.company} />
+        {/* Navigation: 3 columns side by side (1 on mobile), two sections each. */}
+        <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-3">
+          <div className="flex flex-col gap-8">
+            <FooterColumn title="Homeowners" items={footerNav.customers} />
+            <FooterColumn title="Home Services" items={serviceLinks} />
+          </div>
+          <div className="flex flex-col gap-8">
+            <FooterColumn title="For Professionals" items={footerNav.providers} />
+          </div>
+          <div className="flex flex-col gap-8">
+            <FooterColumn title="Company" items={footerNav.company} />
+            <FooterColumn title="Support" items={footerNav.support} />
+          </div>
         </div>
 
         {/* App downloads & QR */}

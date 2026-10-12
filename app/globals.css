@@ -2096,3 +2096,18 @@
 .dark .hover\:bg-white:hover {
   background-color: rgb(255 255 255 / 0.05);
 }
+
+/* In-place printing (components/print/print-portal.tsx): only the print layer prints. */
+#rs-print-root {
+  display: none;
+}
+@media print {
+  html.rs-printing body > *:not(#rs-print-root) {
+    display: none !important;
+  }
+  html.rs-printing #rs-print-root {
+    display: block;
+    color: #0f172a;
+    background: #ffffff;
+  }
+}

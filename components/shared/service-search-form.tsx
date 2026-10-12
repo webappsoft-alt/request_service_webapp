@@ -39,6 +39,7 @@ export function ServiceSearchForm({
   locationDisplayMode = "default",
   onSearch,
   onLocationResolved,
+  onFreeTextSearch,
 }: {
   defaultCategory?: string;
   defaultZip?: string;
@@ -47,6 +48,8 @@ export function ServiceSearchForm({
   locationDisplayMode?: "default" | "city-zip";
   onSearch?: (intent: SearchIntent) => void | Promise<void>;
   onLocationResolved?: (location: string, zip: string) => void;
+  /** Typed (non-suggestion) submit with text. Return true to stop the default results navigation. */
+  onFreeTextSearch?: (query: string) => boolean;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -57,6 +60,8 @@ export function ServiceSearchForm({
   const [serviceHits, setServiceHits] = useState<ServiceMatch[]>([]);
   const [openList, setOpenList] = useState<"service" | null>(null);
   const [activeService, setActiveService] = useState(0);
+  // True once the user arrows through suggestions — Enter then picks the highlighted one.
+  const [browsedHits, setBrowsedHits] = useState(false);
 
   const locationLabel =
     locationDisplayMode === "city-zip"
@@ -134,6 +139,7 @@ export function ServiceSearchForm({
     const hits = suggestServices(value) ?? [];
     setServiceHits(hits);
     setActiveService(0);
+    setBrowsedHits(false);
     setOpenList(hits.length ? "service" : null);
   }
 
@@ -144,13 +150,16 @@ export function ServiceSearchForm({
       case "ArrowDown":
         event.preventDefault();
         setActiveService((index) => (index + 1) % serviceHits.length);
+        setBrowsedHits(true);
         break;
       case "ArrowUp":
         event.preventDefault();
         setActiveService((index) => (index - 1 + serviceHits.length) % serviceHits.length);
+        setBrowsedHits(true);
         break;
       case "Enter":
-        if (serviceHits[activeService]) {
+        // With a free-text handler, plain Enter submits the typed sentence instead.
+        if (serviceHits[activeService] && (!onFreeTextSearch || browsedHits)) {
           event.preventDefault();
           chooseService(serviceHits[activeService]);
         }
@@ -183,6 +192,17 @@ export function ServiceSearchForm({
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (query.trim() && onFreeTextSearch) {
+      if (onFreeTextSearch(query.trim())) {
+        setOpenList(null);
+        return;
+      }
+      // Declined (e.g. a short keyword): keep the old Enter behaviour of taking the top suggestion.
+      if (openList === "service" && serviceHits[activeService]) {
+        chooseService(serviceHits[activeService]);
+        return;
+      }
+    }
     await goToResults(undefined, query);
   }
 

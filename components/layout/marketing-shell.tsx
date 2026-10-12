@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { CustomerLoginDialogProvider } from "@/components/auth/customer-login-dialog";
 import { HomeMotion } from "@/components/home/home-motion";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -21,12 +22,13 @@ export function MarketingShell({ children }: { children: ReactNode }) {
   }, [dispatch]);
 
   return (
-    <>
+    // Website-level sign-in modal (opened from the AI assistant and other guest prompts).
+    <CustomerLoginDialogProvider>
       <SiteHeader />
       <main key={pathname} id="main-content" className="page-enter flex-1">
         <HomeMotion>{children}</HomeMotion>
       </main>
       {isExplorer ? null : <SiteFooter />}
-    </>
+    </CustomerLoginDialogProvider>
   );
 }

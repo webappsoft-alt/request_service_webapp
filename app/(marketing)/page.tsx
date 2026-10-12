@@ -1,3 +1,4 @@
+import { BotProvider, BotWidget } from "@/components/bot-ai";
 import { HomeCategoryFilterProvider } from "@/components/home/home-category-filter";
 import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
 import { CustomerTrustSection } from "@/components/home/customer-trust-section";
@@ -27,27 +28,31 @@ export default function HomePage() {
     <>
       <JsonLd data={[servicesItemListJsonLd()]} />
 
-      <HomeCategoryFilterProvider>
-        <HomeMotion>
-          <HeroSection />
-          <div>
-            <HomeSearchDock />
-            <ServicesSection />
-          </div>
+      {/* AI assistant: floating widget + hero natural-language search hand-off. */}
+      <BotProvider>
+        <HomeCategoryFilterProvider>
+          <HomeMotion>
+            <HeroSection />
+            <div>
+              <HomeSearchDock />
+              <ServicesSection />
+            </div>
 
-          <CustomerTrustSection />
-          {/* 4 business profiles from the API + "See all professionals" link. */}
-          <FeaturedProvidersSection />
-          {/*
-            Customer journey section parked — restore by swapping it back in:
-            <CustomerJourneySection />
-          */}
-          <CustomerAssuranceSection />
+            <CustomerTrustSection />
+            {/* 4 business profiles from the API + "See all professionals" link. */}
+            <FeaturedProvidersSection />
+            {/*
+              Customer journey section parked — restore by swapping it back in:
+              <CustomerJourneySection />
+            */}
+            <CustomerAssuranceSection />
 
-          <WorkflowSection />
-          <HomeFaqSection />
-        </HomeMotion>
-      </HomeCategoryFilterProvider>
+            <WorkflowSection />
+            <HomeFaqSection />
+          </HomeMotion>
+        </HomeCategoryFilterProvider>
+        <BotWidget />
+      </BotProvider>
     </>
   );
 }

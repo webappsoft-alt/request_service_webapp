@@ -1,0 +1,118 @@
+"use client";
+
+import Link from "next/link";
+import { BadgeCheck, Check, Clock3, ExternalLink, MapPin, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { MockProvider } from "../types";
+import { CarouselRail, RailItem } from "./CarouselRail";
+
+export function ProviderCardCarousel({
+  providers,
+  selectedId,
+  onSelect,
+}: {
+  providers: MockProvider[];
+  selectedId: string | null;
+  onSelect: (provider: MockProvider) => void;
+}) {
+  if (!providers.length) return null;
+
+  return (
+    <CarouselRail label="Verified pros" count={providers.length}>
+      {providers.map((provider) => {
+        const selected = provider.id === selectedId;
+        return (
+          <RailItem key={provider.id}>
+            <article
+              className={cn(
+                "flex h-full flex-col gap-2 rounded-xl border bg-card p-2.5 text-card-foreground shadow-xs transition-colors",
+                selected ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/40",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br text-xs font-bold text-white",
+                    provider.accent,
+                  )}
+                >
+                  {provider.initials}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h4 className="flex items-center gap-1 text-[13px] leading-tight font-semibold">
+                    <span className="truncate">{provider.name}</span>
+                    {provider.verified ? (
+                      <BadgeCheck className="size-3.5 shrink-0 text-sky-500" aria-label="Verified" />
+                    ) : null}
+                  </h4>
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px]">
+                    <Star className="size-3 fill-amber-400 text-amber-400" aria-hidden />
+                    <span className="font-semibold">{provider.rating.toFixed(1)}</span>
+                    <span className="text-muted-foreground">({provider.reviewCount})</span>
+                    <span className="text-muted-foreground">· {provider.yearsInBusiness} yrs</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="size-3 shrink-0" aria-hidden />
+                  <span className="truncate">
+                    {provider.distanceMiles.toFixed(1)} mi · {provider.city}
+                  </span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Clock3 className="size-3 shrink-0" aria-hidden />
+                  <span className="truncate">{provider.responseTime}</span>
+                </span>
+              </div>
+
+              <div className="mt-auto grid grid-cols-2 gap-1.5">
+                {provider.slug ? (
+                  <Link
+                    href={`/professionals/${provider.slug}`}
+                    target="_blank"
+                    rel="noopener"
+                    draggable={false}
+                    className="inline-flex h-7 items-center justify-center gap-1 rounded-md border bg-background text-[11px] font-semibold transition-colors hover:bg-muted"
+                  >
+                    View Profile
+                    <ExternalLink className="size-3" aria-hidden />
+                  </Link>
+                ) : (
+                  <span
+                    title="Profile coming soon"
+                    className="inline-flex h-7 cursor-not-allowed items-center justify-center rounded-md border border-dashed text-[11px] font-medium text-muted-foreground"
+                  >
+                    View Profile
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onSelect(provider)}
+                  aria-pressed={selected}
+                  className={cn(
+                    "inline-flex h-7 items-center justify-center gap-1 rounded-md text-[11px] font-semibold transition-colors",
+                    selected
+                      ? "bg-emerald-600 text-white"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90",
+                  )}
+                >
+                  {selected ? (
+                    <>
+                      <Check className="size-3" aria-hidden />
+                      Selected
+                    </>
+                  ) : (
+                    "Select Pro"
+                  )}
+                </button>
+              </div>
+            </article>
+          </RailItem>
+        );
+      })}
+    </CarouselRail>
+  );
+}

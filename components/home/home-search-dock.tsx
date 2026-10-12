@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useOptionalBot } from "@/components/bot-ai/BotProvider";
 import { HeroServiceScroller } from "@/components/home/hero-service-scroller";
 import { useHomeCategoryFilter } from "@/components/home/home-category-filter";
 import { Container } from "@/components/layout/container";
 import { ServiceSearchForm } from "@/components/shared/service-search-form";
+import { suggestServices } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
 export function HomeSearchDock() {
   const { dockPinned, unpinDock } = useHomeCategoryFilter();
   const ignoreUntilRef = useRef(0);
+  const bot = useOptionalBot();
 
   useEffect(() => {
     if (!dockPinned) return;
@@ -48,7 +51,23 @@ export function HomeSearchDock() {
     <div className={cn(dockPinned ? "sticky top-17 z-40" : "relative z-20")}>
       <Container className="enter-visual relative -mt-14 lg:-mt-16">
         <div className="relative z-40 mx-auto w-full max-w-3xl overflow-visible rounded-xl border border-foreground/30 bg-card p-1.5 shadow-2xl md:p-2">
-          <ServiceSearchForm locationDisplayMode="city-zip" />
+          <ServiceSearchForm
+            locationDisplayMode="city-zip"
+            // Typed searches ("my tap is broken") go to the AI assistant; an exact
+            // service name ("Plumbing") or a picked suggestion still opens the results.
+            onFreeTextSearch={
+              bot
+                ? (query) => {
+                    const exact = (suggestServices(query) ?? []).some(
+                      (hit) => hit.label.toLowerCase() === query.toLowerCase(),
+                    );
+                    if (exact) return false;
+                    bot.openWithQuery(query);
+                    return true;
+                  }
+                : undefined
+            }
+          />
           <div className="relative z-0">
             <HeroServiceScroller />
           </div>

@@ -147,7 +147,7 @@ export function RecordWorkspace({
           {badge}
         </div>
         {actions ? (
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto print:hidden">
             {actions}
           </div>
         ) : null}
@@ -160,7 +160,7 @@ export function RecordWorkspace({
       ) : null}
 
       {/* Main folder tabs — grey track only */}
-      <div className="bg-[#e8ecf1] dark:bg-slate-900/90 px-3 pt-2 sm:px-4">
+      <div className="bg-[#e8ecf1] dark:bg-slate-900/90 px-3 pt-2 sm:px-4 print:hidden">
         <div
           className="flex flex-wrap items-end gap-0.5 border-b border-[#cfd6e0] dark:border-border"
           role="tablist"
@@ -209,7 +209,7 @@ export function RecordWorkspace({
 
       {/* Subnav on white — clear break from grey tab track */}
       {subnavNode ? (
-        <div className="border-b border-border-soft bg-card px-4 py-2.5">
+        <div className="border-b border-border-soft bg-card px-4 py-2.5 print:hidden">
           {subnavNode}
         </div>
       ) : null}

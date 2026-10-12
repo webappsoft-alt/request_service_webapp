@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, LayoutTemplate, Link2, MapPin } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, LayoutTemplate, Link2, MapPin, Printer } from "lucide-react";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
@@ -28,7 +28,7 @@ import {
   createEmptyLine,
 } from "@/components/portal/line-items-editor";
 import { SendApprovalDialog } from "@/components/portal/send-approval-dialog";
-import { shareUrlFor } from "@/components/portal/use-estimate-share";
+import { sharePath, shareUrlFor } from "@/components/portal/use-estimate-share";
 import { SiteVisitsPanel } from "@/components/portal/estimate-v2/site-visits-panel";
 import { ExistingInformationPanel } from "@/components/portal/estimate-v2/existing-information-panel";
 import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
@@ -1656,9 +1656,31 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         ) : null
       }
       actions={
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/pro/dashboard/new-estimate">All estimates</Link>
-        </Button>
+        <>
+          {/* Prints the customer-facing document (same layout the customer signs). */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={!estimate?.shareToken}
+            title={
+              estimate?.shareToken
+                ? "Print or save as PDF"
+                : "Send or share the estimate first to print the customer copy"
+            }
+            onClick={() => {
+              const token = String(estimate?.shareToken || "").trim();
+              if (!token) return;
+              window.open(`${sharePath(token)}?print=1`, "_blank", "noopener");
+            }}
+          >
+            <Printer className="size-3.5" />
+            Print / PDF
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/pro/dashboard/new-estimate">All estimates</Link>
+          </Button>
+        </>
       }
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.58fr)_minmax(0,2.42fr)]">

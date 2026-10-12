@@ -11,6 +11,7 @@ import {
   Loader2,
   MapPin,
   Pencil,
+  Printer,
   Share2,
 } from "lucide-react";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
@@ -165,6 +166,12 @@ import {
 } from "@/components/api/apiFuntions";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { formatTaxRatePercent, moneyWithStateTax } from "@/lib/tax/state-tax";
+import { paymentMethodLabel } from "@/lib/data/portal";
+import {
+  InvoicePrintDocument,
+  type InvoicePrintData,
+} from "@/components/invoice/invoice-print-document";
 import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -3534,6 +3541,22 @@ export function InvoiceDetailView({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, useApi, invoiceRef, router]);
 
+  // Same state-tax rate the Summary tab uses, so the printed totals match the screen.
+  const printTaxState =
+    job?.address?.state || estimate?.propertyAddress?.state || invoice?.address?.state || "";
+  const [printTaxRate, setPrintTaxRate] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
+      const rate = await fetchTaxRatePercent(printTaxState);
+      if (!cancelled) setPrintTaxRate(rate);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [printTaxState]);
+
   if (!invoice) {
     // Wait while loading or recovering a stale local inv_* link.
     if (useApi && (detailLoading || resolvingStale)) {
@@ -3554,6 +3577,74 @@ export function InvoiceDetailView({ id }: { id: string }) {
     Boolean(invoice.isArchived) || records.isArchived("invoice", invoice.id);
   const invoiceId = invoice.id;
   const invoiceNumber = invoice.number;
+
+  const printMoney = moneyWithStateTax(invoice.subtotal, printTaxRate, invoice.discount);
+  const printSite = job?.address || invoice.address || estimate?.propertyAddress;
+  const printSiteLines = printSite
+    ? [
+        [printSite.street, printSite.unit].filter(Boolean).join(", "),
+        formatLocation(printSite.city, printSite.state, printSite.zip),
+      ].filter(Boolean)
+    : [];
+  const printData: InvoicePrintData = {
+    number: invoice.number,
+    statusLabel: invoiceStatusLabel(invoice.status),
+    subtitle:
+      invoice.invoiceType === "change_order"
+        ? `Change order ${invoice.changeOrderNumber || ""}${invoice.changeOrderTitle ? ` · ${invoice.changeOrderTitle}` : ""}`.trim()
+        : undefined,
+    issuedAt: invoice.issuedAt,
+    dueAt: invoice.dueAt,
+    jobNumber: job?.number,
+    company: {
+      name: provider.companyName || "Service Professional",
+      logoUrl: provider.logoUrl,
+      addressLines: [
+        provider.street,
+        formatLocation(provider.city, provider.state, provider.zip),
+      ].filter(Boolean),
+      phone: provider.phone,
+      email: provider.email,
+      licensed: provider.licensed,
+      insured: provider.insured,
+    },
+    billTo: {
+      name: customerLabel?.trim() || "Customer",
+      phone:
+        customer?.phone?.trim() ||
+        invoice.customerPhone?.trim() ||
+        estimate?.customerPhone?.trim() ||
+        undefined,
+      email: invoice.customerEmail?.trim() || undefined,
+    },
+    serviceAddressLines: printSiteLines,
+    items: invoice.items.map((item) => ({
+      description: item.description,
+      kind: item.kind,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+      total: item.total,
+      section: item.section,
+    })),
+    subtotal: printMoney.subtotal,
+    discount: printMoney.discount,
+    taxLabel: `Tax (${formatTaxRatePercent(printTaxRate)}%)`,
+    tax: printMoney.tax,
+    total: printMoney.total,
+    amountPaid: invoice.amountPaid || 0,
+    balanceDue: Math.max(0, printMoney.total - (invoice.amountPaid || 0)),
+    payments: relatedPayments
+      .filter((payment) => payment.status === "succeeded")
+      .map((payment) => ({
+        date: payment.paidAt || payment.createdAt,
+        method: paymentMethodLabel(payment.method),
+        amount: payment.amount,
+        reference: payment.transactionReference || payment.number,
+      })),
+    notes: invoice.notes,
+    terms: invoice.terms,
+  };
 
   async function toggleArchive() {
     if (archiving) return;
@@ -3588,6 +3679,8 @@ export function InvoiceDetailView({ id }: { id: string }) {
 
   return (
     <>
+    <InvoicePrintDocument data={printData} />
+    <div className="print:hidden">
     <RecordWorkspace
       href={`/pro/dashboard/invoices/${invoice.id}`}
       label={invoice.number}
@@ -3679,6 +3772,16 @@ export function InvoiceDetailView({ id }: { id: string }) {
       notice={<FileNotices kind="invoice" id={invoice.id} />}
       actions={
         <>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            aria-label="Print or save as PDF"
+            onClick={() => window.print()}
+          >
+            <Printer className="size-3.5" />
+            Print / PDF
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -3881,6 +3984,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
         }
       }}
     </RecordWorkspace>
+    </div>
     <CreateReminderDialog
       open={reminderOpen}
       onOpenChange={setReminderOpen}

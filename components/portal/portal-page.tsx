@@ -35,7 +35,7 @@ export function PortalPage({
             <div className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-500 dark:text-muted-foreground">{description}</div>
           ) : null}
         </div>
-        {actions ? <div className={cn("flex flex-wrap gap-2")}>{actions}</div> : null}
+        {actions ? <div className={cn("flex flex-wrap gap-2 print:hidden")}>{actions}</div> : null}
       </div>
       {children}
     </div>

@@ -1,14 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowRight, ClipboardList, FileDiff, FileText, Inbox } from "lucide-react";
+import { ArrowRight, ClipboardList, FileText, Inbox } from "lucide-react";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
-import { usePortalRecords } from "@/components/portal/use-portal-records";
-import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { cn } from "@/lib/utils";
 
-type AlertTone = "leads" | "estimates" | "orders" | "changeOrders" | "contractorReviews";
+type AlertTone = "leads" | "estimates" | "orders";
 
 type AlertRow = {
   id: AlertTone;
@@ -23,8 +20,6 @@ const toneClass: Record<AlertTone, string> = {
   leads: "dashboard-alert--leads",
   estimates: "dashboard-alert--estimates",
   orders: "dashboard-alert--orders",
-  changeOrders: "dashboard-alert--estimates",
-  contractorReviews: "dashboard-alert--orders",
 };
 
 function plural(count: number, singular: string, pluralLabel: string) {
@@ -33,28 +28,18 @@ function plural(count: number, singular: string, pluralLabel: string) {
 
 /**
  * Compact animated attention bars under the dashboard greeting.
- * Cleared when the matching Leads / Estimates / Orders tab is opened.
+ * Same counts as the sidebar badges (usePortalInbox); cleared when the
+ * matching Leads / Estimates / Orders tab is opened.
  */
 export function DashboardActionAlerts() {
   const inbox = usePortalInbox();
-  const { jobs } = usePortalWorkspace();
-  const records = usePortalRecords();
-  const pendingChangeOrders = useMemo(() => {
-    const allJobs = records.mergeJobs(jobs);
-    return allJobs.reduce((count, job) => {
-      const pending = (job.changeOrders || []).filter(
-        (co) => co.status === "pending_approval",
-      ).length;
-      return count + pending;
-    }, 0);
-  }, [jobs, records]);
 
   const rows: AlertRow[] = [];
   if (inbox.newLeads > 0) {
     rows.push({
       id: "leads",
       count: inbox.newLeads,
-      label: `You have ${inbox.newLeads} new ${plural(inbox.newLeads, "lead request", "lead requests")}`,
+      label: `You have ${inbox.newLeads} new ${plural(inbox.newLeads, "lead", "leads")} awaiting review`,
       href: "/pro/dashboard/requests?status=new",
       cta: plural(inbox.newLeads, "View Lead", "View Leads"),
       icon: Inbox,
@@ -80,17 +65,6 @@ export function DashboardActionAlerts() {
       icon: ClipboardList,
     });
   }
-  if (pendingChangeOrders > 0) {
-    rows.push({
-      id: "changeOrders",
-      count: pendingChangeOrders,
-      label: `You have ${pendingChangeOrders} change ${plural(pendingChangeOrders, "order", "orders")} awaiting customer approval`,
-      href: "/pro/dashboard/jobs",
-      cta: plural(pendingChangeOrders, "View Job", "View Jobs"),
-      icon: FileDiff,
-    });
-  }
-
   if (!rows.length) return null;
 
   return (
@@ -98,8 +72,9 @@ export function DashboardActionAlerts() {
       {rows.map((row, index) => {
         const Icon = row.icon;
         return (
-          <div
+          <Link
             key={row.id}
+            href={row.href}
             className={cn(
               "dashboard-action-alert group relative flex items-center gap-3 overflow-hidden",
               "rounded-lg border px-3 py-2 pl-3.5 backdrop-blur-[2px]",
@@ -120,11 +95,11 @@ export function DashboardActionAlerts() {
             <p className="relative min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight">
               {row.label}
             </p>
-            <Link href={row.href} className="dashboard-action-alert-cta relative">
+            <span className="dashboard-action-alert-cta relative">
               {row.cta}
               <ArrowRight className="size-3.5 transition-transform duration-300 group-hover:translate-x-0.5" aria-hidden />
-            </Link>
-          </div>
+            </span>
+          </Link>
         );
       })}
     </div>

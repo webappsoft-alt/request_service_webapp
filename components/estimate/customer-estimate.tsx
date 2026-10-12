@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
@@ -538,6 +538,11 @@ export function CustomerEstimatePage({
     if (typeof window === "undefined") return false;
     return new URLSearchParams(window.location.search).get("accept") === "1";
   });
+  /** `?print=1` (pro "Print / PDF") opens the print dialog once the document loads. */
+  const [wantPrint] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("print") === "1";
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -699,6 +704,15 @@ export function CustomerEstimatePage({
     }, 250);
     return () => window.clearTimeout(timer);
   }, [wantAccept, canSign, loading]);
+
+  const printedRef = useRef(false);
+  useEffect(() => {
+    if (!wantPrint || loading || !snapshot || printedRef.current) return;
+    printedRef.current = true;
+    // Let images / fonts settle before opening the dialog.
+    const timer = window.setTimeout(() => window.print(), 600);
+    return () => window.clearTimeout(timer);
+  }, [wantPrint, loading, snapshot]);
 
   async function approve(signedBy: string, signatureImageBase64: string) {
     if (!snapshot) return;

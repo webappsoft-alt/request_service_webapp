@@ -1853,7 +1853,8 @@
     box-shadow 0.2s ease;
 }
 
-.dashboard-action-alert-cta:hover {
+.dashboard-action-alert-cta:hover,
+.dashboard-action-alert:hover .dashboard-action-alert-cta {
   transform: translateY(-1px);
 }
 

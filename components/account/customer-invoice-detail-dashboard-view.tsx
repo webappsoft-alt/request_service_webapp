@@ -29,7 +29,11 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PaymentMethodType } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
+import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
+import {
+  InvoicePrintDocument,
+  type InvoicePrintData,
+} from "@/components/invoice/invoice-print-document";
 import {
   clearCustomerInvoiceDetail,
   fetchCustomerInvoiceDetail,
@@ -85,6 +89,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const user = useAppSelector(selectAuthUser);
   const invoice = useAppSelector(selectCustomerInvoiceDetail);
   const loading = useAppSelector(selectCustomerInvoiceDetailLoading);
   const error = useAppSelector(selectCustomerInvoiceDetailError);
@@ -178,7 +183,60 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
   const companyName = invoice.provider?.companyName || "Service Professional";
   const initial = companyName.charAt(0).toUpperCase();
 
+  const customerName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    String(user?.name || "").trim() ||
+    "Customer";
+  const printData: InvoicePrintData = {
+    number: invoice.number,
+    statusLabel: statusLabel(invoice.status),
+    subtitle:
+      invoice.invoiceType === "change_order"
+        ? `Change order ${invoice.changeOrderNumber || ""}${invoice.changeOrderTitle ? ` · ${invoice.changeOrderTitle}` : ""}`.trim()
+        : undefined,
+    issuedAt: invoice.issuedAt,
+    dueAt: invoice.dueAt,
+    jobNumber: invoice.jobNumber || undefined,
+    company: {
+      name: companyName,
+      phone: invoice.provider?.phone,
+      email: invoice.provider?.email,
+    },
+    billTo: {
+      name: customerName,
+      phone: user?.phone,
+      email: user?.email,
+      addressLines: user?.location?.address ? [user.location.address] : undefined,
+    },
+    items: invoice.items.map((item) => ({
+      description: item.description,
+      kind: item.kind,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      total: item.total,
+    })),
+    subtotal: invoice.subtotal,
+    discount: invoice.discount,
+    taxLabel: "Tax",
+    tax: invoice.tax,
+    total: invoice.total,
+    amountPaid: invoice.amountPaid,
+    balanceDue: invoice.balanceDue,
+    payments: (invoice.payments || [])
+      .filter((payment) => payment.status === "succeeded")
+      .map((payment) => ({
+        date: payment.paidAt || payment.createdAt,
+        method: paymentMethodLabel((payment.method || "check") as PaymentMethodType),
+        amount: payment.amount,
+        reference: payment.transactionReference,
+      })),
+    notes: invoice.notes,
+  };
+
   return (
+    <>
+    <InvoicePrintDocument data={printData} />
+    <div className="print:hidden">
     <PortalPage
       eyebrow="Invoices"
       title={invoice.number}
@@ -236,10 +294,11 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
             variant="outline"
             size="sm"
             onClick={() => window.print()}
-            className="hidden sm:inline-flex"
+            className="gap-1.5"
+            aria-label="Print or save as PDF"
           >
             <Printer className="size-3.5" />
-            Print
+            Print / PDF
           </Button>
           {invoice.balanceDue > 0 ? (
             <Button size="sm" onClick={() => setPaymentOpen(true)}>
@@ -706,5 +765,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
         invoice={invoice as any}
       />
     </PortalPage>
+    </div>
+    </>
   );
 }

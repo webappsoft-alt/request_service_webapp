@@ -527,7 +527,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       {/* Sidebar matching Provider Portal style */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden flex-col bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border text-white transition-[width] duration-200 lg:flex",
+          "fixed inset-y-0 left-0 z-30 hidden flex-col print:hidden! bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border text-white transition-[width] duration-200 lg:flex",
           collapsed ? "w-16" : "w-56",
         )}
       >
@@ -571,12 +571,12 @@ export function CustomerShell({ children }: { children: ReactNode }) {
 
       <div
         className={cn(
-          "transition-[padding] duration-200",
+          "transition-[padding] duration-200 print:pl-0!",
           collapsed ? "lg:pl-16" : "lg:pl-56",
         )}
       >
         {/* Header matching Provider Portal style */}
-        <header className="sticky top-0 z-20 border-b border-input bg-card">
+        <header className="sticky top-0 z-20 border-b border-input bg-card print:hidden">
           <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
             <Sheet>
               <SheetTrigger asChild>

@@ -129,16 +129,12 @@ export function sharePath(token: string) {
 }
 
 /**
- * Live customer-facing site origin from `live_domain_url` /
- * `live_domain_url`. Prefer the configured live domain over the
- * current tab origin so Open customer view matches email links.
+ * Live customer-facing site origin from `NEXT_PUBLIC_SITE_URL`. Prefer the
+ * configured live domain over the current tab origin so Open customer view
+ * matches email links.
  */
 export function customerSiteOrigin(): string {
-  const fromEnv = String(
-    process.env.live_domain_url ||
-      process.env.live_domain_url ||
-      "",
-  )
+  const fromEnv = String(process.env.NEXT_PUBLIC_SITE_URL || "")
     .trim()
     .replace(/^["']|["']$/g, "")
     .replace(/\/+$/, "");

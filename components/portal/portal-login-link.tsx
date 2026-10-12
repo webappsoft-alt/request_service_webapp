@@ -22,7 +22,7 @@ export function PortalLoginLink({
   path: string;
   className?: string;
 }) {
-  // Live domain from .env (live_domain_url); the current tab's origin only when it isn't set.
+  // Live domain from .env (NEXT_PUBLIC_SITE_URL); the current tab's origin only when it isn't set.
   const origin = useSyncExternalStore(noopSubscribe, customerSiteOrigin, () => "");
   const url = `${origin}${path}`;
   const [copied, setCopied] = useState(false);

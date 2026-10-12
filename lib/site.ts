@@ -6,27 +6,16 @@ const DEFAULT_SITE_URL = "https://www.requestservices.com";
 
 /** Never return "" — `new URL("")` throws and breaks Netlify/Next builds. */
 function resolveSiteUrl() {
-  const candidates = [
-    process.env.NEXT_PUBLIC_SITE_URL,
-    process.env.NEXT_PUBLIC_LIVE_DOMAIN_URL,
-    process.env.LIVE_DOMAIN_URL,
-    process.env.live_domain_url,
-    process.env.URL,
-    process.env.DEPLOY_PRIME_URL,
-  ];
-  for (const value of candidates) {
-    const trimmed = String(value || "")
-      .trim()
-      .replace(/^["']|["']$/g, "")
-      .replace(/\/+$/, "");
-    if (!trimmed) continue;
-    try {
-      return new URL(trimmed).origin;
-    } catch {
-      // try next candidate
-    }
+  const trimmed = String(process.env.NEXT_PUBLIC_SITE_URL || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\/+$/, "");
+  if (!trimmed) return DEFAULT_SITE_URL;
+  try {
+    return new URL(trimmed).origin;
+  } catch {
+    return DEFAULT_SITE_URL;
   }
-  return DEFAULT_SITE_URL;
 }
 
 export const siteConfig = {

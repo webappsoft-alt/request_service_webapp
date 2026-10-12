@@ -28,7 +28,11 @@ import {
   createEmptyLine,
 } from "@/components/portal/line-items-editor";
 import { SendApprovalDialog } from "@/components/portal/send-approval-dialog";
-import { sharePath, shareUrlFor } from "@/components/portal/use-estimate-share";
+import {
+  shareUrlFor,
+  type EstimateApproval,
+  type EstimateShareSnapshot,
+} from "@/components/portal/use-estimate-share";
 import { SiteVisitsPanel } from "@/components/portal/estimate-v2/site-visits-panel";
 import { ExistingInformationPanel } from "@/components/portal/estimate-v2/existing-information-panel";
 import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
@@ -46,8 +50,11 @@ import {
 import { workItemsToJobCostLines } from "@/components/portal/estimate-v2/work-items-editor";
 import {
   jobCostMix,
+  lineTotal,
   type JobCostLine,
 } from "@/components/portal/use-job-costing";
+import { EstimatePdfDocument } from "@/components/estimate/estimate-pdf";
+import { PrintPortal } from "@/components/print/print-portal";
 import {
   buildEstimate,
   linesToEstimateItems,
@@ -554,6 +561,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [opportunity, setOpportunity] = useState<EstimateV2Opportunity | null>(null);
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Document being printed in place (any status, straight from the editor — nothing is saved or sent). */
+  const [printJob, setPrintJob] = useState<{
+    snapshot: EstimateShareSnapshot;
+    approval?: EstimateApproval;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
@@ -998,6 +1010,81 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     () => lines.filter((line) => line.description.trim() || Number(line.unitPrice) > 0),
     [lines],
   );
+
+  /**
+   * Prints the customer-facing document from what is on screen right now — works for drafts
+   * and "Ready to send" too (e.g. the customer is standing there). Nothing is saved or sent,
+   * and the user stays on this page: the browser's print dialog opens in place.
+   */
+  function printEstimate() {
+    if (!opportunity) return;
+    if (!filledLines.length) {
+      toast.error("Add at least one line item to print the estimate.");
+      return;
+    }
+    const property = opportunity.propertyAddress;
+    const contact = customerContactFromOpportunity(opportunity);
+    const companySig = estimate?.companySignature;
+    const customerSig = estimate?.signature;
+    setPrintJob({
+      snapshot: {
+        token: estimate?.shareToken || "",
+        estimateId: estimate?.id || opportunity.id,
+        number: estimate?.number || "Draft",
+        companyName: provider.companyName,
+        companyEmail: provider.email,
+        companyPhone: provider.phone,
+        companyStreet: provider.street,
+        companyCity: provider.city,
+        companyState: provider.state,
+        companyZip: provider.zip,
+        logoUrl: provider.logoUrl,
+        logoInitials: provider.logoInitials,
+        licensed: provider.licensed,
+        insured: provider.insured,
+        providerEmail: provider.email,
+        customerName: customerNameFromOpportunity(opportunity),
+        customerEmail: contact?.email || undefined,
+        customerPhone: contact?.phone || undefined,
+        street: property?.street || property?.address || "",
+        city: property?.city || "",
+        state: property?.state || "",
+        zip: property?.zip || "",
+        issuedAt: estimate?.issuedAt || new Date().toISOString(),
+        expiresAt: estimate?.expiresAt,
+        notes: stripChangeRequestLinesFromNotes(scopeOfWork) || undefined,
+        terms: terms.trim() || undefined,
+        items: filledLines.map((line) => ({
+          description: line.description,
+          kind: line.kind,
+          quantity: line.quantity,
+          unit: line.unit,
+          unitPrice: line.unitPrice,
+          total: lineTotal(line),
+          ...(line.kind === "materials" && line.images?.length ? { images: line.images } : {}),
+          ...(line.section ? { section: line.section } : {}),
+        })),
+        subtotal,
+        discount: Math.max(0, Number(discount) || 0) || undefined,
+        tax: taxAmount,
+        taxRatePercent,
+        total: grandTotal,
+        createdAt: new Date().toISOString(),
+        status: estimate?.status,
+        companySignedBy: companySig?.signedBy || undefined,
+        companySignedAt: companySig?.signedAt || undefined,
+        companySignatureDataUrl: companySig?.imageBase64 || undefined,
+      },
+      approval: customerSig
+        ? {
+            estimateId: estimate?.id || opportunity.id,
+            signedBy: customerSig.signedBy,
+            signedAt: customerSig.signedAt,
+            signatureDataUrl: customerSig.imageBase64 || "",
+          }
+        : undefined,
+    });
+  }
 
   /** Site visits only for the assessment path — never when user already has information. */
   const showVisits =
@@ -1657,26 +1744,23 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       }
       actions={
         <>
-          {/* Prints the customer-facing document (same layout the customer signs). */}
+          {/* Prints the customer-facing document (same layout the customer signs), in place, at any status. */}
           <Button
             variant="outline"
             size="sm"
             className="gap-1.5"
-            disabled={!estimate?.shareToken}
-            title={
-              estimate?.shareToken
-                ? "Print or save as PDF"
-                : "Send or share the estimate first to print the customer copy"
-            }
-            onClick={() => {
-              const token = String(estimate?.shareToken || "").trim();
-              if (!token) return;
-              window.open(`${sharePath(token)}?print=1`, "_blank", "noopener");
-            }}
+            disabled={!opportunity || Boolean(printJob)}
+            title="Print or save as PDF"
+            onClick={printEstimate}
           >
             <Printer className="size-3.5" />
             Print / PDF
           </Button>
+          {printJob ? (
+            <PrintPortal onDone={() => setPrintJob(null)}>
+              <EstimatePdfDocument snapshot={printJob.snapshot} approval={printJob.approval} />
+            </PrintPortal>
+          ) : null}
           <Button variant="outline" size="sm" asChild>
             <Link href="/pro/dashboard/new-estimate">All estimates</Link>
           </Button>

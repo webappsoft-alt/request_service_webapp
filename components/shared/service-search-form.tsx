@@ -6,6 +6,9 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { AiSuggestionList } from "@/components/bot-ai/search/AiSuggestionList";
+import { MIN_SUGGEST_LENGTH, useServiceSuggestions } from "@/components/bot-ai/search/useServiceSuggestions";
+import type { BotSearchSuggestion } from "@/components/bot-ai/types";
 import {
   GoogleAddressAutocomplete,
   type PlaceAddress,
@@ -39,7 +42,7 @@ export function ServiceSearchForm({
   locationDisplayMode = "default",
   onSearch,
   onLocationResolved,
-  onFreeTextSearch,
+  onAiSuggestion,
 }: {
   defaultCategory?: string;
   defaultZip?: string;
@@ -48,8 +51,11 @@ export function ServiceSearchForm({
   locationDisplayMode?: "default" | "city-zip";
   onSearch?: (intent: SearchIntent) => void | Promise<void>;
   onLocationResolved?: (location: string, zip: string) => void;
-  /** Typed (non-suggestion) submit with text. Return true to stop the default results navigation. */
-  onFreeTextSearch?: (query: string) => boolean;
+  /**
+   * Home hero: suggestions come from the AI assistant (plain-language problems →
+   * catalog services) and picking one calls this instead of opening the results page.
+   */
+  onAiSuggestion?: (query: string, suggestion: BotSearchSuggestion) => void;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -62,6 +68,9 @@ export function ServiceSearchForm({
   const [activeService, setActiveService] = useState(0);
   // True once the user arrows through suggestions — Enter then picks the highlighted one.
   const [browsedHits, setBrowsedHits] = useState(false);
+  const ai = useServiceSuggestions();
+  const aiMode = Boolean(onAiSuggestion);
+  const aiOpen = aiMode && openList === "service" && query.trim().length >= MIN_SUGGEST_LENGTH;
 
   const locationLabel =
     locationDisplayMode === "city-zip"
@@ -135,7 +144,19 @@ export function ServiceSearchForm({
     void goToResults(hit, hit.label);
   }
 
+  function chooseAiSuggestion(suggestion: BotSearchSuggestion) {
+    setOpenList(null);
+    onAiSuggestion?.(query.trim(), suggestion);
+  }
+
   function refreshServiceHits(value: string) {
+    if (aiMode) {
+      ai.update(value);
+      setActiveService(0);
+      setBrowsedHits(false);
+      setOpenList(value.trim().length >= MIN_SUGGEST_LENGTH ? "service" : null);
+      return;
+    }
     const hits = suggestServices(value) ?? [];
     setServiceHits(hits);
     setActiveService(0);
@@ -143,7 +164,47 @@ export function ServiceSearchForm({
     setOpenList(hits.length ? "service" : null);
   }
 
+  function onAiKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!aiOpen) return;
+    const hits = ai.suggestions;
+    switch (event.key) {
+      case "ArrowDown":
+      case "ArrowUp":
+        if (!hits.length) return;
+        event.preventDefault();
+        setActiveService((index) =>
+          event.key === "ArrowDown" ? (index + 1) % hits.length : (index - 1 + hits.length) % hits.length,
+        );
+        setBrowsedHits(true);
+        break;
+      case "Enter":
+        // Enter never opens the assistant by itself: the first press highlights the top
+        // match, a second press (or a click) picks it. With no matches it submits as before.
+        if (hits.length) {
+          event.preventDefault();
+          if (browsedHits && hits[activeService]) chooseAiSuggestion(hits[activeService]);
+          else {
+            setActiveService(0);
+            setBrowsedHits(true);
+          }
+        } else if (ai.loading) {
+          event.preventDefault();
+        }
+        break;
+      case "Escape":
+        event.preventDefault();
+        setOpenList(null);
+        break;
+      default:
+        break;
+    }
+  }
+
   function onServiceKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (aiMode) {
+      onAiKeyDown(event);
+      return;
+    }
     if (openList !== "service" || !serviceHits.length) return;
 
     switch (event.key) {
@@ -158,8 +219,7 @@ export function ServiceSearchForm({
         setBrowsedHits(true);
         break;
       case "Enter":
-        // With a free-text handler, plain Enter submits the typed sentence instead.
-        if (serviceHits[activeService] && (!onFreeTextSearch || browsedHits)) {
+        if (serviceHits[activeService]) {
           event.preventDefault();
           chooseService(serviceHits[activeService]);
         }
@@ -192,17 +252,7 @@ export function ServiceSearchForm({
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (query.trim() && onFreeTextSearch) {
-      if (onFreeTextSearch(query.trim())) {
-        setOpenList(null);
-        return;
-      }
-      // Declined (e.g. a short keyword): keep the old Enter behaviour of taking the top suggestion.
-      if (openList === "service" && serviceHits[activeService]) {
-        chooseService(serviceHits[activeService]);
-        return;
-      }
-    }
+    setOpenList(null);
     await goToResults(undefined, query);
   }
 
@@ -220,10 +270,10 @@ export function ServiceSearchForm({
         autoComplete="off"
         role="combobox"
         aria-autocomplete="list"
-        aria-expanded={openList === "service" && serviceHits.length > 0}
+        aria-expanded={aiMode ? aiOpen : openList === "service" && serviceHits.length > 0}
         aria-controls={variant === "hero" ? "hero-service-suggestions" : "service-query-suggestions"}
         aria-activedescendant={
-          openList === "service" && serviceHits[activeService]
+          openList === "service" && (aiMode ? browsedHits && ai.suggestions[activeService] : serviceHits[activeService])
             ? `${variant}-service-option-${activeService}`
             : undefined
         }
@@ -233,6 +283,10 @@ export function ServiceSearchForm({
           refreshServiceHits(value);
         }}
         onFocus={() => {
+          if (aiMode) {
+            if (query.trim().length >= MIN_SUGGEST_LENGTH) setOpenList("service");
+            return;
+          }
           if (query.trim().length >= 2) refreshServiceHits(query);
         }}
         onKeyDown={onServiceKeyDown}
@@ -241,7 +295,21 @@ export function ServiceSearchForm({
           variant === "hero" ? "h-9" : "h-11"
         )}
       />
-      {openList === "service" && serviceHits.length ? (
+      {aiOpen ? (
+        <AiSuggestionList
+          id={variant === "hero" ? "hero-service-suggestions" : "service-query-suggestions"}
+          suggestions={ai.suggestions}
+          loading={ai.loading}
+          empty={!ai.loading && ai.settledQuery === query.trim() && !ai.suggestions.length}
+          activeIndex={browsedHits ? activeService : -1}
+          optionIdPrefix={`${variant}-service-option`}
+          onHover={(index) => {
+            setActiveService(index);
+            setBrowsedHits(true);
+          }}
+          onChoose={chooseAiSuggestion}
+        />
+      ) : !aiMode && openList === "service" && serviceHits.length ? (
         <ServiceSuggestionList
           id={variant === "hero" ? "hero-service-suggestions" : "service-query-suggestions"}
           hits={serviceHits}

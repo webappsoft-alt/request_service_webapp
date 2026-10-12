@@ -53,6 +53,8 @@ function DialogContent({
   showCloseButton = true,
   /** Skip padded scroll shell — for fullscreen lightboxes and custom layouts. */
   shell = true,
+  /** Extra classes for this dialog's backdrop (e.g. stronger blur, higher z-index). */
+  overlayClassName,
   onPointerDownOutside,
   onInteractOutside,
   onFocusOutside,
@@ -60,6 +62,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
   shell?: boolean
+  overlayClassName?: string
 }) {
   function isPortaledSelectEvent(event: {
     target: EventTarget | null
@@ -89,7 +92,7 @@ function DialogContent({
 
   return (
     <DialogPortal>
-      <DialogOverlay className={shell ? undefined : "z-[190] bg-black/80"} />
+      <DialogOverlay className={cn(shell ? undefined : "z-[190] bg-black/80", overlayClassName)} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

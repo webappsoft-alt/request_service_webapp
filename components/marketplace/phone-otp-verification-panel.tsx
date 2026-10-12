@@ -15,10 +15,10 @@ import { Button } from "@/components/ui/button";
 import { REGISTRATION_OTP_LENGTH } from "@/lib/auth/pending-registration";
 import { cn } from "@/lib/utils";
 
-const OTP_LENGTH = REGISTRATION_OTP_LENGTH;
+export const OTP_LENGTH = REGISTRATION_OTP_LENGTH;
 const RESEND_SECONDS = 30;
 
-function OtpBoxes({
+export function OtpBoxes({
   value,
   onChange,
   disabled,

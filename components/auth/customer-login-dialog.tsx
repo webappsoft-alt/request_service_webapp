@@ -23,6 +23,14 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  elevatedModalAccent,
+  elevatedModalButton,
+  elevatedModalContent,
+  elevatedModalInput,
+  elevatedModalOverlay,
+} from "@/lib/modal-styles";
+import { cn } from "@/lib/utils";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import { useAppDispatch } from "@/store/hooks";
@@ -111,9 +119,10 @@ export function CustomerLoginDialogProvider({ children }: { children: ReactNode 
       {children}
       <Dialog open={open} onOpenChange={(next) => !submitting && setOpen(next)}>
         {/* Above the AI assistant panel (z-61) so it can open from inside the chat. */}
-        <DialogContent className="z-[70] sm:max-w-sm">
+        <DialogContent overlayClassName={elevatedModalOverlay} className={cn(elevatedModalContent, "sm:max-w-sm")}>
+          <span aria-hidden className={elevatedModalAccent} />
           <div className="flex flex-col gap-1 pr-6">
-            <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <span className="flex size-10 items-center justify-center rounded-full bg-linear-to-br from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20">
               <LogIn className="size-4" aria-hidden />
             </span>
             <DialogTitle className="mt-2 text-lg font-semibold">Welcome back</DialogTitle>
@@ -133,6 +142,7 @@ export function CustomerLoginDialogProvider({ children }: { children: ReactNode 
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
+                  className={elevatedModalInput}
                   required
                   autoFocus
                 />
@@ -153,12 +163,18 @@ export function CustomerLoginDialogProvider({ children }: { children: ReactNode 
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
+                  className={elevatedModalInput}
                   required
                 />
               </Field>
             </FieldGroup>
 
-            <Button type="submit" size="lg" disabled={submitting || !email.trim() || !password}>
+            <Button
+              type="submit"
+              size="lg"
+              className={elevatedModalButton}
+              disabled={submitting || !email.trim() || !password}
+            >
               {submitting ? <Spinner data-icon="inline-start" /> : null}
               {submitting ? "Signing in…" : "Sign in"}
             </Button>

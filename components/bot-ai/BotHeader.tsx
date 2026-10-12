@@ -11,7 +11,8 @@ export function BotAvatar({ className }: { className?: string }) {
     <span
       aria-hidden
       className={cn(
-        "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-sky-400 via-blue-600 to-indigo-700 text-white shadow-md shadow-blue-600/25",
+        // Same brand gradient as the floating launcher.
+        "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary via-primary to-primary/80 text-primary-foreground shadow-md ring-1 shadow-primary/25 ring-white/15",
         className,
       )}
     >

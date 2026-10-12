@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useOptionalBot } from "@/components/bot-ai/BotProvider";
+// AI assistant temporarily hidden — uncomment (with the prop below) to re-enable.
+// import { useOptionalBot } from "@/components/bot-ai/BotProvider";
 import { HeroServiceScroller } from "@/components/home/hero-service-scroller";
 import { useHomeCategoryFilter } from "@/components/home/home-category-filter";
 import { Container } from "@/components/layout/container";
 import { ServiceSearchForm } from "@/components/shared/service-search-form";
-import { suggestServices } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
 export function HomeSearchDock() {
   const { dockPinned, unpinDock } = useHomeCategoryFilter();
   const ignoreUntilRef = useRef(0);
-  const bot = useOptionalBot();
+  // const bot = useOptionalBot();
 
   useEffect(() => {
     if (!dockPinned) return;
@@ -53,20 +53,10 @@ export function HomeSearchDock() {
         <div className="relative z-40 mx-auto w-full max-w-3xl overflow-visible rounded-xl border border-foreground/30 bg-card p-1.5 shadow-2xl md:p-2">
           <ServiceSearchForm
             locationDisplayMode="city-zip"
-            // Typed searches ("my tap is broken") go to the AI assistant; an exact
-            // service name ("Plumbing") or a picked suggestion still opens the results.
-            onFreeTextSearch={
-              bot
-                ? (query) => {
-                    const exact = (suggestServices(query) ?? []).some(
-                      (hit) => hit.label.toLowerCase() === query.toLowerCase(),
-                    );
-                    if (exact) return false;
-                    bot.openWithQuery(query);
-                    return true;
-                  }
-                : undefined
-            }
+            // AI assistant hand-off temporarily disabled: without onAiSuggestion the form uses
+            // the standard service suggestions, and Enter/Search open the results page.
+            // To re-enable:
+            // onAiSuggestion={bot ? (query, suggestion) => bot.openWithSuggestion(query, suggestion) : undefined}
           />
           <div className="relative z-0">
             <HeroServiceScroller />

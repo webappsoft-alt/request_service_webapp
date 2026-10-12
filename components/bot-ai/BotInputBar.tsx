@@ -34,10 +34,12 @@ export function BotInputBar({
   onSend,
   disabled,
   autoFocus,
+  placeholder = "Describe your home issue…",
 }: {
   onSend: (text: string) => void;
   disabled?: boolean;
   autoFocus?: boolean;
+  placeholder?: string;
 }) {
   const [value, setValue] = useState("");
   const [listening, setListening] = useState(false);
@@ -123,7 +125,7 @@ export function BotInputBar({
               submit();
             }
           }}
-          placeholder={listening ? "Listening…" : "Describe your home issue…"}
+          placeholder={listening ? "Listening…" : placeholder}
           aria-label="Message the assistant"
           className="max-h-28 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-[13px] leading-5 outline-none placeholder:text-muted-foreground"
         />

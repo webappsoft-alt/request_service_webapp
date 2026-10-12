@@ -1,4 +1,5 @@
-import { BotProvider, BotWidget } from "@/components/bot-ai";
+// AI assistant temporarily hidden from the live site — uncomment to re-enable.
+// import { BotProvider, BotWidget } from "@/components/bot-ai";
 import { HomeCategoryFilterProvider } from "@/components/home/home-category-filter";
 import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
 import { CustomerTrustSection } from "@/components/home/customer-trust-section";
@@ -28,8 +29,12 @@ export default function HomePage() {
     <>
       <JsonLd data={[servicesItemListJsonLd()]} />
 
-      {/* AI assistant: floating widget + hero natural-language search hand-off. */}
-      <BotProvider>
+      {/*
+        AI assistant (floating widget + hero search hand-off) temporarily hidden.
+        To re-enable: restore <BotProvider> around this block and <BotWidget /> after it,
+        plus the onAiSuggestion prop in components/home/home-search-dock.tsx.
+      */}
+      {/* <BotProvider> */}
         <HomeCategoryFilterProvider>
           <HomeMotion>
             <HeroSection />
@@ -51,8 +56,8 @@ export default function HomePage() {
             <HomeFaqSection />
           </HomeMotion>
         </HomeCategoryFilterProvider>
-        <BotWidget />
-      </BotProvider>
+        {/* <BotWidget /> */}
+      {/* </BotProvider> */}
     </>
   );
 }

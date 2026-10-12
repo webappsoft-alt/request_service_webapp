@@ -97,7 +97,7 @@ export function CarouselRail({
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <div className="flex items-center justify-between gap-2 pl-9">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
           {label}
           <span className="ml-1.5 font-medium normal-case tabular-nums">
@@ -139,7 +139,9 @@ export function CarouselRail({
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
           className={cn(
-            "flex snap-x snap-mandatory scroll-px-9 gap-2 overflow-x-auto scroll-smooth pt-2 pr-3 pb-1 pl-9",
+            // Full drawer width; a single card stretches across it.
+            "flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth px-0.5 pt-2 pb-2.5",
+            "[&>[data-rail-item]:only-child]:w-full [&>[data-rail-item]:only-child]:max-w-none",
             "scrollbar-none [&::-webkit-scrollbar]:hidden",
             scrollable && "cursor-grab active:cursor-grabbing",
           )}
@@ -161,7 +163,11 @@ export function CarouselRail({
 
 export function RailItem({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div role="listitem" data-rail-item className={cn("w-51 shrink-0 snap-start select-none", className)}>
+    <div
+      role="listitem"
+      data-rail-item
+      className={cn("w-[82%] max-w-80 min-w-52 shrink-0 snap-start select-none", className)}
+    >
       {children}
     </div>
   );

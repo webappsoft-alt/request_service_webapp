@@ -1,19 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, Check, Clock3, ExternalLink, MapPin, Star } from "lucide-react";
+import { BadgeCheck, Check, ExternalLink, MapPin, ShieldCheck, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MockProvider } from "../types";
+import type { BotProviderCard } from "../types";
 import { CarouselRail, RailItem } from "./CarouselRail";
+import { ProviderAvatar } from "./ProviderAvatar";
+
+function distanceLabel(provider: BotProviderCard) {
+  const parts = [] as string[];
+  if (typeof provider.distanceMiles === "number") parts.push(`${provider.distanceMiles.toFixed(1)} mi`);
+  if (provider.city) parts.push(provider.city);
+  return parts.join(" · ") || "Serves your area";
+}
 
 export function ProviderCardCarousel({
   providers,
   selectedId,
   onSelect,
 }: {
-  providers: MockProvider[];
+  providers: BotProviderCard[];
   selectedId: string | null;
-  onSelect: (provider: MockProvider) => void;
+  onSelect: (provider: BotProviderCard) => void;
 }) {
   if (!providers.length) return null;
 
@@ -30,27 +38,26 @@ export function ProviderCardCarousel({
               )}
             >
               <div className="flex items-center gap-2">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br text-xs font-bold text-white",
-                    provider.accent,
-                  )}
-                >
-                  {provider.initials}
-                </span>
+                <ProviderAvatar name={provider.name} src={provider.avatarUrl} />
                 <div className="min-w-0 flex-1">
                   <h4 className="flex items-center gap-1 text-[13px] leading-tight font-semibold">
-                    <span className="truncate">{provider.name}</span>
+                    <span className="truncate" title={provider.name}>
+                      {provider.name}
+                    </span>
                     {provider.verified ? (
-                      <BadgeCheck className="size-3.5 shrink-0 text-sky-500" aria-label="Verified" />
+                      <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-label="Verified" />
                     ) : null}
                   </h4>
                   <p className="mt-0.5 flex items-center gap-1 text-[11px]">
                     <Star className="size-3 fill-amber-400 text-amber-400" aria-hidden />
-                    <span className="font-semibold">{provider.rating.toFixed(1)}</span>
-                    <span className="text-muted-foreground">({provider.reviewCount})</span>
-                    <span className="text-muted-foreground">· {provider.yearsInBusiness} yrs</span>
+                    {provider.reviewCount ? (
+                      <>
+                        <span className="font-semibold">{provider.rating.toFixed(1)}</span>
+                        <span className="text-muted-foreground">({provider.reviewCount})</span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">New on Request Service</span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -58,13 +65,15 @@ export function ProviderCardCarousel({
               <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <MapPin className="size-3 shrink-0" aria-hidden />
-                  <span className="truncate">
-                    {provider.distanceMiles.toFixed(1)} mi · {provider.city}
-                  </span>
+                  <span className="truncate">{distanceLabel(provider)}</span>
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <Clock3 className="size-3 shrink-0" aria-hidden />
-                  <span className="truncate">{provider.responseTime}</span>
+                  <ShieldCheck className="size-3 shrink-0" aria-hidden />
+                  <span className="truncate">
+                    {[provider.licensed && "Licensed", provider.insured && "Insured"].filter(Boolean).join(" · ") ||
+                      "Background reviewed"}
+                    {typeof provider.startingPrice === "number" ? ` · from $${provider.startingPrice}` : ""}
+                  </span>
                 </span>
               </div>
 
@@ -81,10 +90,7 @@ export function ProviderCardCarousel({
                     <ExternalLink className="size-3" aria-hidden />
                   </Link>
                 ) : (
-                  <span
-                    title="Profile coming soon"
-                    className="inline-flex h-7 cursor-not-allowed items-center justify-center rounded-md border border-dashed text-[11px] font-medium text-muted-foreground"
-                  >
+                  <span className="inline-flex h-7 items-center justify-center rounded-md border border-dashed text-[11px] font-medium text-muted-foreground">
                     View Profile
                   </span>
                 )}

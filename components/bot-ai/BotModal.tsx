@@ -62,7 +62,11 @@ export function BotModal() {
 
           <div className="relative flex min-h-0 flex-1 flex-col">
             <BotChatWindow />
-            <BotInputBar onSend={sendText} disabled={typing} autoFocus={open} />
+            <BotInputBar
+              onSend={sendText}
+              disabled={typing}
+              autoFocus={open}
+            />
             <BotHistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} />
           </div>
         </DialogPrimitive.Content>

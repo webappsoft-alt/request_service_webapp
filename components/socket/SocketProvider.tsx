@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import React, {
@@ -35,7 +36,7 @@ const SocketContext = createContext<SocketContextValue>({
 });
 
 /** Socket host from env only — never hardcode. */
-function getSocketBaseUrl() {
+export function getSocketBaseUrl() {
   const fromEnv = String(process.env.NEXT_PUBLIC_SOCKET_BASE_URL || "").trim();
   if (fromEnv) {
     return fromEnv.replace(/\/api\/?$/i, "").replace(/\/$/, "");

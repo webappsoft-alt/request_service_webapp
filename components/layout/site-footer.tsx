@@ -155,10 +155,12 @@ export function SiteFooter() {
           </div>
         </div>
 
-        {/* Navigation: 3 columns side by side (1 on mobile), two sections each. */}
-        <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-3">
+        {/* Navigation: 4 columns side by side (2 on small screens, 1 on mobile); Support sits under Company. */}
+        <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 md:grid-cols-4">
           <div className="flex flex-col gap-8">
             <FooterColumn title="Homeowners" items={footerNav.customers} />
+          </div>
+          <div className="flex flex-col gap-8">
             <FooterColumn title="Home Services" items={serviceLinks} />
           </div>
           <div className="flex flex-col gap-8">

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-// AI assistant temporarily hidden — uncomment (with the prop below) to re-enable.
-// import { useOptionalBot } from "@/components/bot-ai/BotProvider";
+import { useOptionalBot } from "@/components/bot-ai/BotProvider";
 import { HeroServiceScroller } from "@/components/home/hero-service-scroller";
 import { useHomeCategoryFilter } from "@/components/home/home-category-filter";
 import { Container } from "@/components/layout/container";
@@ -12,7 +11,7 @@ import { cn } from "@/lib/utils";
 export function HomeSearchDock() {
   const { dockPinned, unpinDock } = useHomeCategoryFilter();
   const ignoreUntilRef = useRef(0);
-  // const bot = useOptionalBot();
+  const bot = useOptionalBot();
 
   useEffect(() => {
     if (!dockPinned) return;
@@ -53,10 +52,7 @@ export function HomeSearchDock() {
         <div className="relative z-40 mx-auto w-full max-w-3xl overflow-visible rounded-xl border border-foreground/30 bg-card p-1.5 shadow-2xl md:p-2">
           <ServiceSearchForm
             locationDisplayMode="city-zip"
-            // AI assistant hand-off temporarily disabled: without onAiSuggestion the form uses
-            // the standard service suggestions, and Enter/Search open the results page.
-            // To re-enable:
-            // onAiSuggestion={bot ? (query, suggestion) => bot.openWithSuggestion(query, suggestion) : undefined}
+            onAiSuggestion={bot ? (query, suggestion) => bot.openWithSuggestion(query, suggestion) : undefined}
           />
           <div className="relative z-0">
             <HeroServiceScroller />

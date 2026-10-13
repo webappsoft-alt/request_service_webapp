@@ -153,7 +153,8 @@ export function BotWidget() {
         aria-haspopup="dialog"
         title="RS AI Assistant — drag to move"
         className={cn(
-          "group fixed z-50 flex h-14 touch-none items-center rounded-full p-1 text-primary-foreground select-none print:hidden",
+          // z-40: above page content/footer, below dialogs, sheets and the assistant modal (z-50+).
+          "group fixed z-40 flex h-14 touch-none items-center rounded-full p-1 text-primary-foreground select-none print:hidden",
           left ? "flex-row" : "flex-row-reverse",
           "bg-linear-to-br from-primary via-primary to-primary/80 shadow-lg ring-1 shadow-primary/30 ring-white/15",
           "transition-[box-shadow,transform,opacity] duration-300 hover:shadow-xl hover:shadow-primary/35",

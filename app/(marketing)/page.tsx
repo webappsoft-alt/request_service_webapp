@@ -1,5 +1,3 @@
-// AI assistant temporarily hidden from the live site — uncomment to re-enable.
-// import { BotProvider, BotWidget } from "@/components/bot-ai";
 import { HomeCategoryFilterProvider } from "@/components/home/home-category-filter";
 import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
 import { CustomerTrustSection } from "@/components/home/customer-trust-section";
@@ -29,35 +27,28 @@ export default function HomePage() {
     <>
       <JsonLd data={[servicesItemListJsonLd()]} />
 
-      {/*
-        AI assistant (floating widget + hero search hand-off) temporarily hidden.
-        To re-enable: restore <BotProvider> around this block and <BotWidget /> after it,
-        plus the onAiSuggestion prop in components/home/home-search-dock.tsx.
-      */}
-      {/* <BotProvider> */}
-        <HomeCategoryFilterProvider>
-          <HomeMotion>
-            <HeroSection />
-            <div>
-              <HomeSearchDock />
-              <ServicesSection />
-            </div>
+      {/* AI assistant (provider + floating launcher) is mounted site-wide in MarketingShell. */}
+      <HomeCategoryFilterProvider>
+        <HomeMotion>
+          <HeroSection />
+          <div>
+            <HomeSearchDock />
+            <ServicesSection />
+          </div>
 
-            <CustomerTrustSection />
-            {/* 4 business profiles from the API + "See all professionals" link. */}
-            <FeaturedProvidersSection />
-            {/*
-              Customer journey section parked — restore by swapping it back in:
-              <CustomerJourneySection />
-            */}
-            <CustomerAssuranceSection />
+          <CustomerTrustSection />
+          {/* 4 business profiles from the API + "See all professionals" link. */}
+          <FeaturedProvidersSection />
+          {/*
+            Customer journey section parked — restore by swapping it back in:
+            <CustomerJourneySection />
+          */}
+          <CustomerAssuranceSection />
 
-            <WorkflowSection />
-            <HomeFaqSection />
-          </HomeMotion>
-        </HomeCategoryFilterProvider>
-        {/* <BotWidget /> */}
-      {/* </BotProvider> */}
+          <WorkflowSection />
+          <HomeFaqSection />
+        </HomeMotion>
+      </HomeCategoryFilterProvider>
     </>
   );
 }

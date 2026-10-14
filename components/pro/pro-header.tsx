@@ -81,7 +81,7 @@ export function ProHeader() {
     >
       <div className="container-site flex h-17 items-center justify-between gap-6">
         <div className="flex min-w-0 items-center gap-8">
-          <Logo href={proPaths.home} />
+          <Logo />
           <nav className="hidden items-center gap-0.5 lg:flex" aria-label="For professionals">
             <NavTrigger
               label="Industries"

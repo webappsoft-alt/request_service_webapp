@@ -182,9 +182,18 @@ export function PortalShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className={cn("flex h-12 items-center border-b border-white/10", collapsed ? "justify-center px-2" : "px-4")}>
-          <Link href="/pro/dashboard" className="truncate text-sm font-semibold tracking-wide">
-            {collapsed ? "RS" : provider.companyName}
-          </Link>
+          {collapsed ? (
+            <Link href="/pro/dashboard" className="truncate text-sm font-semibold tracking-wide">
+              RS
+            </Link>
+          ) : (
+            <div className="flex min-w-0 flex-col leading-tight">
+              <Link href="/pro/dashboard" className="truncate text-sm font-semibold tracking-wide">
+                {provider.companyName}
+              </Link>
+              <span className="mt-0.5 truncate text-[11px] text-white/65">Request Service</span>
+            </div>
+          )}
         </div>
         <div className={cn("flex-1 overflow-y-auto py-3", collapsed ? "px-2" : "px-2")}>
           <NavLinks collapsed={collapsed} />
@@ -210,6 +219,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
               <SheetContent side="left" className="flex w-72 flex-col border-0 bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border p-0 text-white">
                 <SheetHeader className="border-b border-white/10 px-4 py-3">
                   <SheetTitle className="text-white">{provider.companyName}</SheetTitle>
+                  <p className="text-xs text-white/65">Request Service</p>
                 </SheetHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
                   <NavLinks closeOnNavigate />

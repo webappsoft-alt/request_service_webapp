@@ -251,6 +251,8 @@ export const publicApi = {
   /** Every US city / town (50 states + DC) and its suburbs + ZIP areas. */
   usCities: "public/us-cities",
   usCityAreas: "public/us-cities/areas",
+  /** GET active Pro membership plans (managed in admin → Subscription Plans) */
+  subscriptionPlans: "public/subscription-plans",
   /** GET public professionals directory (Find a Professional) */
   professionals: "public/professionals",
   /** GET one public professional by slug */

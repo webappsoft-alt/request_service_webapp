@@ -50,6 +50,7 @@ export function ProHeader() {
       ? user
       : null;
   const [open, setOpen] = useState<PanelId | null>(null);
+  const onPricing = pathname === proPaths.pricing;
   const closeTimer = useRef<number>(0);
 
   function show(id: PanelId) {
@@ -94,9 +95,13 @@ export function ProHeader() {
               onEnter={() => show("product")}
             />
             <Link
-              href={`${proPaths.home}#plans`}
+              href={proPaths.pricing}
               onMouseEnter={() => setOpen(null)}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-current={onPricing ? "page" : undefined}
+              className={cn(
+                "rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground",
+                onPricing ? "bg-muted text-foreground" : "text-muted-foreground",
+              )}
             >
               Pricing
             </Link>
@@ -134,7 +139,7 @@ export function ProHeader() {
                   <MobileLink key={item.label} href={item.href} label={item.label} />
                 ))}
               </MobileGroup>
-              <MobileLink href={`${proPaths.home}#plans`} label="Pricing" />
+              <MobileLink href={proPaths.pricing} label="Pricing" active={onPricing} />
               <MobileGroup title="Resources">
                 {proResourceLinks.map((item) => (
                   <MobileLink key={item.label} href={item.href} label={item.label} />
@@ -326,10 +331,14 @@ function MobileGroup({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-function MobileLink({ href, label }: { href: string; label: string }) {
+function MobileLink({ href, label, active = false }: { href: string; label: string; active?: boolean }) {
   return (
     <SheetClose asChild>
-      <Link href={href} className="rounded-md px-2 py-2 text-sm font-medium hover:bg-muted">
+      <Link
+        href={href}
+        aria-current={active ? "page" : undefined}
+        className={cn("rounded-md px-2 py-2 text-sm font-medium hover:bg-muted", active && "bg-muted")}
+      >
         {label}
       </Link>
     </SheetClose>

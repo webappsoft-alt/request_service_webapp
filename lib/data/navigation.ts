@@ -30,6 +30,7 @@ export const footerNav = {
   ],
   providers: [
     { label: "For Pros", href: "/pro" },
+    { label: "Plans & Pricing", href: "/pro/pricing" },
     { label: "Pro Login", href: "/pro/login" },
     { label: "Create a Pro Account", href: "/pro/register" },
     { label: "Pro dashboard", href: "/pro/dashboard" },

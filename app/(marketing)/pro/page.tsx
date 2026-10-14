@@ -1,14 +1,12 @@
 import { BlogSection } from "@/components/home/blog-section";
 import { HomeMotion } from "@/components/home/home-motion";
-import { Container, Section } from "@/components/layout/container";
 import { ProClose } from "@/components/pro/pro-close";
 import { ProFaqSection } from "@/components/pro/pro-faq-section";
 import { ProHero } from "@/components/pro/pro-hero";
+import { ProLandingPlans } from "@/components/pro/pro-pricing-view";
 import { ProProduct } from "@/components/pro/pro-product";
 import { ProWorkflow } from "@/components/pro/pro-workflow";
-import { PricingCard } from "@/components/shared/pricing-card";
 import { JsonLd } from "@/components/seo/json-ld";
-import { getActivePlans } from "@/lib/data/plans";
 import { breadcrumbJsonLd } from "@/lib/json-ld";
 import { proPaths } from "@/lib/pro-paths";
 import { buildMetadata } from "@/lib/seo";
@@ -42,25 +40,7 @@ export default function ProLandingPage() {
         <ProWorkflow />
         <ProProduct />
 
-        <Section id="plans" density="tight">
-          <Container className="flex flex-col gap-8">
-            <div className="flex max-w-2xl flex-col gap-3">
-              <p className="eyebrow text-primary">Subscription</p>
-              <h2 className="text-3xl font-semibold tracking-tight md:text-[2.5rem]">
-                Straightforward monthly plans
-              </h2>
-              <p className="max-w-xl text-sm leading-7 text-muted-foreground">
-                Every plan includes the public profile, request matching, and the
-                full desk above. Cancel anytime.
-              </p>
-            </div>
-            <div className="mx-auto grid w-full max-w-7xl gap-5 md:grid-cols-3">
-              {getActivePlans().map((plan) => (
-                <PricingCard key={plan.id} plan={plan} />
-              ))}
-            </div>
-          </Container>
-        </Section>
+        <ProLandingPlans />
 
         <ProFaqSection />
 

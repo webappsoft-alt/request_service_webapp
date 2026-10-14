@@ -1,5 +1,6 @@
 export const proPaths = {
   home: "/pro",
+  pricing: "/pro/pricing",
   login: "/pro/login",
   register: "/pro/register",
   forgotPassword: "/pro/forgot-password",

@@ -248,9 +248,6 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
                   </>
                 )}
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Page {page} of {totalPages}
-              </p>
             </div>
           )}
         </div>

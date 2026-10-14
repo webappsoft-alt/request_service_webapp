@@ -55,6 +55,7 @@ export async function BlogSection({
           </div>
           <Link
             href={linkHref}
+            prefetch={false}
             className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-brand transition-colors hover:text-foreground"
           >
             {linkText}

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Eye, Heart, Loader2, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { likeBlogPost, recordBlogView, checkEmailModerationStatus } from "@/lib/data/public-blogs";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -169,25 +170,38 @@ export function BlogEngagement({
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
-          <Eye className="size-3.5 text-primary" />
-          {views.toLocaleString()} views
-        </span>
-        <Button
+        <button
           type="button"
-          size="sm"
-          variant={liked ? "default" : "outline"}
-          className="gap-1.5 rounded-full"
-          disabled={liking || liked}
+          disabled={liking}
+          aria-pressed={liked}
           onClick={handleLikeClick}
+          className={cn(
+            "group/like inline-flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70",
+            liked
+              ? "cursor-default border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400"
+              : "border-border/70 bg-background text-foreground hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:hover:border-rose-900/60 dark:hover:bg-rose-950/40 dark:hover:text-rose-400",
+          )}
         >
           {liking ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
           ) : (
-            <Heart className={`size-3.5 ${liked ? "fill-current" : ""}`} />
+            <Heart
+              className={cn(
+                "size-4 transition-transform group-hover/like:scale-110",
+                liked && "fill-current",
+              )}
+              aria-hidden="true"
+            />
           )}
-          {likes.toLocaleString()} {liked ? "Liked" : "Like"}
-        </Button>
+          {liked ? "Liked" : "Like"}
+          <span className="tabular-nums text-muted-foreground group-hover/like:text-current">
+            {likes.toLocaleString()}
+          </span>
+        </button>
+        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Eye className="size-4" aria-hidden="true" />
+          <span className="tabular-nums">{views.toLocaleString()}</span> views
+        </span>
       </div>
 
       {modalOpen && typeof document !== "undefined"

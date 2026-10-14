@@ -57,7 +57,7 @@ export function BlogHero({
               ) : (
                 <>
                   <li>
-                    <Link href="/blog" className="transition-colors hover:text-white">
+                    <Link href="/blog" prefetch={false} className="transition-colors hover:text-white">
                       Blog
                     </Link>
                   </li>
@@ -85,6 +85,7 @@ export function BlogHero({
               <li key={topic.href}>
                 <Link
                   href={topic.href}
+                  prefetch={false}
                   className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/8 px-3.5 py-3 backdrop-blur-sm transition-colors hover:bg-white/14"
                 >
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/12">

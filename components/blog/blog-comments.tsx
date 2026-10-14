@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   checkEmailModerationStatus,
   fetchPublicBlogBySlug,
@@ -99,83 +100,101 @@ function CommentNode({
   const replies = item.replies || [];
 
   return (
-    <div className={depth > 0 ? "mt-3 border-l-2 border-border/70 pl-3 sm:pl-4" : ""}>
-      <div className="flex items-start gap-3 rounded-xl p-3 sm:gap-4 sm:p-4">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary sm:size-10">
+    <div
+      className={
+        depth > 0
+          ? "mt-4 border-l-2 border-border/60 pl-4 sm:pl-5"
+          : "rounded-2xl border border-border/70 bg-card p-4 shadow-xs sm:p-5"
+      }
+    >
+      <div className="flex items-start gap-3 sm:gap-3.5">
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+            item.isAdminReply
+              ? "bg-primary text-primary-foreground"
+              : "bg-primary/10 text-primary",
+            depth > 0 ? "size-8" : "size-10",
+          )}
+          aria-hidden="true"
+        >
           {item.authorName ? getInitials(item.authorName) : <User className="size-4" />}
         </div>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-sm font-semibold text-foreground">
-                {item.authorName}
-              </h4>
-              {item.isAdminReply ? (
-                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                  Staff
-                </span>
-              ) : null}
-              {item.isPinned ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                  <Pin className="size-3" /> Pinned
-                </span>
-              ) : null}
-              {item.isFlaggedUser ? (
-                <span className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
-                  <ShieldAlert className="size-3" /> Flagged User
-                </span>
-              ) : null}
-            </div>
-            {item.createdAt ? (
-              <span className="text-xs text-muted-foreground">
-                {formatDate(item.createdAt)}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h4 className="text-sm font-semibold text-foreground">
+              {item.authorName}
+            </h4>
+            {item.isAdminReply ? (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                Staff
               </span>
+            ) : null}
+            {item.isPinned ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                <Pin className="size-3" /> Pinned
+              </span>
+            ) : null}
+            {item.isFlaggedUser ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+                <ShieldAlert className="size-3" /> Flagged User
+              </span>
+            ) : null}
+            {item.createdAt ? (
+              <>
+                <span className="text-muted-foreground/60" aria-hidden="true">
+                  ·
+                </span>
+                <time dateTime={item.createdAt} className="text-xs text-muted-foreground">
+                  {formatDate(item.createdAt)}
+                </time>
+              </>
             ) : null}
           </div>
 
           {item.isFlaggedUser && item.flaggedUserReason ? (
-            <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <div className="mt-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">
               <strong className="font-semibold">Flagged User:</strong>{" "}
               {item.flaggedUserReason}
             </div>
           ) : null}
 
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">
             {body}
           </p>
 
-          <div className="flex flex-wrap gap-2 pt-0.5">
+          <div className="mt-2.5 -ml-2.5 flex flex-wrap items-center gap-1">
             <button
               type="button"
               onClick={() => onReply(item)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
             >
               <Reply className="size-3.5" /> Reply
             </button>
             <button
               type="button"
               onClick={() => onTicket(item)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <Ticket className="size-3.5" /> Create support ticket
+              <Ticket className="size-3.5" /> Support ticket
             </button>
           </div>
+
+          {replies.length > 0 ? (
+            <div>
+              {replies.map((child, idx) => (
+                <CommentNode
+                  key={child._id || `${child.authorName}-${depth}-${idx}`}
+                  item={child}
+                  depth={depth + 1}
+                  onReply={onReply}
+                  onTicket={onTicket}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
-
-      {replies.length > 0 ? (
-        <div className="space-y-1">
-          {replies.map((child, idx) => (
-            <CommentNode
-              key={child._id || `${child.authorName}-${depth}-${idx}`}
-              item={child}
-              depth={depth + 1}
-              onReply={onReply}
-              onTicket={onTicket}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -540,9 +559,11 @@ export function BlogComments({
 
   if (!commentsEnabled) {
     return (
-      <section className="mt-12 rounded-2xl border border-dashed border-border/70 bg-muted/20 p-8 text-center">
-        <MessageSquare className="mx-auto size-6 text-muted-foreground" />
-        <h2 className="mt-3 text-lg font-semibold">Comments are closed</h2>
+      <section className="flex flex-col items-center rounded-2xl border border-border/70 bg-card px-6 py-10 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <MessageSquare className="size-5" aria-hidden="true" />
+        </span>
+        <h2 className="mt-4 text-lg font-semibold">Comments are closed</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Discussion is turned off for this article.
         </p>
@@ -550,65 +571,65 @@ export function BlogComments({
     );
   }
 
+  const composerName = isAuthenticated ? loggedInName : authorName.trim();
+  const openGeneralTicket = () => {
+    setTicketSource(null);
+    setTicketCategory("other_important");
+    setTicketSubject("");
+    setTicketMessage("");
+    setTicketName(isAuthenticated ? loggedInName : authorName.trim());
+    setTicketEmail(
+      isAuthenticated ? String(authUser?.email || "") : authorEmail.trim(),
+    );
+    setTicketOpen(true);
+  };
+  const inputClass =
+    "h-10 w-full rounded-xl border border-input bg-background px-3.5 text-sm transition-shadow focus-visible:border-primary/50 focus-visible:ring-4 focus-visible:ring-primary/10 focus-visible:outline-none";
+
   return (
-    <section className="mt-12 flex flex-col gap-8 border-t border-border/70 pt-10">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <MessageSquare className="size-4" aria-hidden="true" />
-          </span>
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight md:text-2xl">
-              Discussion
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {loadingComments && comments.length === 0
-                ? "Loading comments…"
-                : `${totalCount} ${totalCount === 1 ? "comment" : "comments"}`}
-            </p>
-          </div>
+    <section id="discussion" className="flex scroll-mt-24 flex-col gap-6">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Discussion</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Questions, tips, or your own experience — add them below.
+          </p>
         </div>
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+          <MessageSquare className="size-3.5" aria-hidden="true" />
+          {loadingComments && comments.length === 0
+            ? "…"
+            : `${totalCount} ${totalCount === 1 ? "comment" : "comments"}`}
+        </span>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="flex flex-col gap-4 rounded-2xl border border-input bg-card/80 p-5 shadow-xs sm:p-6"
+        className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs sm:p-5"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">
-              {replyTo ? "Reply to comment" : "Leave a comment"}
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isAuthenticated
-                ? `Posting as ${loggedInName}.`
-                : "Your email address will not be published. Required fields are marked *"}
+        {replyTo ? (
+          <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5 text-xs text-muted-foreground">
+            <p className="min-w-0">
+              <Reply className="mr-1 inline size-3.5 text-primary" aria-hidden="true" />
+              Replying to <strong className="text-foreground">{replyTo.authorName}</strong>
+              : {(replyTo.comment || replyTo.body || "").slice(0, 140)}
+              {(replyTo.comment || replyTo.body || "").length > 140 ? "…" : ""}
             </p>
-          </div>
-          {replyTo ? (
             <button
               type="button"
               onClick={() => setReplyTo(null)}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="-m-1 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label="Cancel reply"
             >
-              <X className="size-4" />
+              <X className="size-3.5" />
             </button>
-          ) : null}
-        </div>
-
-        {replyTo ? (
-          <div className="rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 text-xs text-muted-foreground">
-            Replying to <strong className="text-foreground">{replyTo.authorName}</strong>
-            : {(replyTo.comment || replyTo.body || "").slice(0, 140)}
-            {(replyTo.comment || replyTo.body || "").length > 140 ? "…" : ""}
           </div>
         ) : null}
 
         {flaggedNotice ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-xs text-destructive">
+          <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-xs text-destructive">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1.5 min-w-0">
+              <div className="min-w-0 space-y-1.5">
                 <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
                   <ShieldAlert className="size-4 shrink-0" />
                   Account flagged
@@ -647,103 +668,147 @@ export function BlogComments({
           </div>
         ) : null}
 
-        {isAuthenticated ? (
-          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3.5 py-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-              {getInitials(loggedInName || "U")}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
-                {loggedInName}
-              </p>
-              {authUser?.email ? (
-                <p className="truncate text-xs text-muted-foreground">
-                  {authUser.email}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="comment-author-name"
-                className="mb-1.5 block text-xs font-medium text-foreground"
-              >
-                Name *
-              </label>
-              <input
-                id="comment-author-name"
-                type="text"
-                required
-                value={authorName}
-                onChange={(e) => setAuthorName(e.target.value)}
-                placeholder="e.g. Morgan Taylor"
-                className="h-10 w-full rounded-xl border border-input bg-background px-3.5 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="comment-author-email"
-                className="mb-1.5 block text-xs font-medium text-foreground"
-              >
-                Email *
-              </label>
-              <input
-                id="comment-author-email"
-                type="email"
-                required
-                value={authorEmail}
-                onChange={(e) => setAuthorEmail(e.target.value)}
-                onBlur={() => {
-                  if (authorEmail.trim()) void notifyIfFlagged(authorEmail);
-                }}
-                placeholder="e.g. morgan@example.com"
-                className="h-10 w-full rounded-xl border border-input bg-background px-3.5 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-          </div>
-        )}
-
-        <div>
-          <label
-            htmlFor="comment-body"
-            className="mb-1.5 block text-xs font-medium text-foreground"
+        <div className="flex gap-3 sm:gap-4">
+          <div
+            className="hidden size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary sm:flex"
+            aria-hidden="true"
           >
-            {replyTo ? "Your reply *" : "Comment *"}
-          </label>
-          <textarea
-            id="comment-body"
-            required
-            rows={4}
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            disabled={Boolean(flaggedNotice)}
-            placeholder={
-              flaggedNotice
-                ? "Commenting is disabled while your account is flagged"
-                : replyTo
-                  ? "Write your reply…"
-                  : "Share your thoughts or questions on this article…"
-            }
-            className="w-full rounded-xl border border-input bg-background p-3.5 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          />
-        </div>
+            {composerName ? getInitials(composerName) : <User className="size-4" />}
+          </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          {submittedSuccess ? (
-            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-              <CheckCircle2 className="size-4" />
-              Your comment has been posted!
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setTicketSource(null);
-                setTicketCategory("other_important");
-                setTicketSubject("");
-                setTicketMessage("");
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {isAuthenticated ? (
+              <p className="text-sm text-muted-foreground">
+                Posting as{" "}
+                <strong className="font-semibold text-foreground">{loggedInName}</strong>
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="comment-author-name" className="sr-only">
+                    Name
+                  </label>
+                  <input
+                    id="comment-author-name"
+                    type="text"
+                    required
+                    value={authorName}
+                    onChange={(e) => setAuthorName(e.target.value)}
+                    placeholder="Your name *"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="comment-author-email" className="sr-only">
+                    Email
+                  </label>
+                  <input
+                    id="comment-author-email"
+                    type="email"
+                    required
+                    value={authorEmail}
+                    onChange={(e) => setAuthorEmail(e.target.value)}
+                    onBlur={() => {
+                      if (authorEmail.trim()) void notifyIfFlagged(authorEmail);
+                    }}
+                    placeholder="Email (never published) *"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="comment-body" className="sr-only">
+                {replyTo ? "Your reply" : "Comment"}
+              </label>
+              <textarea
+                id="comment-body"
+                required
+                rows={4}
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                disabled={Boolean(flaggedNotice)}
+                placeholder={
+                  flaggedNotice
+                    ? "Commenting is disabled while your account is flagged"
+                    : replyTo
+                      ? "Write your reply…"
+                      : "Share your thoughts or ask a question…"
+                }
+                className="min-h-28 w-full resize-y rounded-xl border border-input bg-background p-3.5 text-sm leading-relaxed transition-shadow focus-visible:border-primary/50 focus-visible:ring-4 focus-visible:ring-primary/10 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Plain text — line breaks are kept. Be kind and stay on topic.
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              {submittedSuccess ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                  <CheckCircle2 className="size-4" />
+                  Your comment has been posted!
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openGeneralTicket}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <Ticket className="size-3.5" />
+                  Important query? Open a support ticket
+                </button>
+              )}
+
+              <Button
+                type="submit"
+                disabled={submitting || Boolean(flaggedNotice)}
+                className="gap-2 rounded-full px-5"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Posting…
+                  </>
+                ) : (
+                  <>
+                    {replyTo ? "Post reply" : "Post comment"}
+                    <Send className="size-3.5" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {loadingComments && comments.length === 0 ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card p-8 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading comments…
+        </div>
+      ) : comments.length > 0 ? (
+        <div className="flex flex-col gap-4">
+          {comments.map((item, index) => (
+            <CommentNode
+              key={item._id || `${item.authorName}-${index}`}
+              item={item}
+              depth={0}
+              onReply={(c) => {
+                setReplyTo(c);
+                document
+                  .getElementById("comment-body")
+                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+              onTicket={(c) => {
+                setTicketSource(c);
+                setTicketCategory("content_moderation");
+                setTicketSubject(
+                  `Follow-up: ${(c.comment || c.body || "").slice(0, 60)}`,
+                );
+                setTicketMessage(
+                  `Regarding comment by ${c.authorName}:\n\n"${c.comment || c.body || ""}"\n\n`,
+                );
                 setTicketName(
                   isAuthenticated ? loggedInName : authorName.trim(),
                 );
@@ -754,80 +819,22 @@ export function BlogComments({
                 );
                 setTicketOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              <Ticket className="size-3.5" />
-              Important query? Open a support ticket
-            </button>
-          )}
-
-          <Button
-            type="submit"
-            disabled={submitting || Boolean(flaggedNotice)}
-            className="gap-2 rounded-xl"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Posting...
-              </>
-            ) : (
-              <>
-                {replyTo ? "Post reply" : "Post comment"}
-                <Send className="size-3.5" />
-              </>
-            )}
-          </Button>
+            />
+          ))}
         </div>
-      </form>
-
-      <div className="flex flex-col gap-2">
-        {loadingComments && comments.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-input bg-card/60 p-8 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Loading comments…
-          </div>
-        ) : comments.length > 0 ? (
-          <div className="divide-y divide-border/60 rounded-2xl border border-input bg-card shadow-xs">
-            {comments.map((item, index) => (
-              <CommentNode
-                key={item._id || `${item.authorName}-${index}`}
-                item={item}
-                depth={0}
-                onReply={(c) => {
-                  setReplyTo(c);
-                  document
-                    .getElementById("comment-body")
-                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
-                onTicket={(c) => {
-                  setTicketSource(c);
-                  setTicketCategory("content_moderation");
-                  setTicketSubject(
-                    `Follow-up: ${(c.comment || c.body || "").slice(0, 60)}`,
-                  );
-                  setTicketMessage(
-                    `Regarding comment by ${c.authorName}:\n\n"${c.comment || c.body || ""}"\n\n`,
-                  );
-                  setTicketName(
-                    isAuthenticated ? loggedInName : authorName.trim(),
-                  );
-                  setTicketEmail(
-                    isAuthenticated
-                      ? String(authUser?.email || "")
-                      : authorEmail.trim(),
-                  );
-                  setTicketOpen(true);
-                }}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-input bg-card/60 p-8 text-center text-sm text-muted-foreground">
-            No comments on this article yet. Be the first to share your thoughts!
-          </div>
-        )}
-      </div>
+      ) : (
+        <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-gradient-to-b from-primary/[0.05] to-transparent px-6 py-10 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <MessageSquare className="size-5" aria-hidden="true" />
+          </span>
+          <h3 className="mt-4 text-base font-semibold text-foreground">
+            Join the conversation
+          </h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Be the first to share your thoughts on this guide.
+          </p>
+        </div>
+      )}
 
       {ticketOpen && typeof document !== "undefined"
         ? createPortal(

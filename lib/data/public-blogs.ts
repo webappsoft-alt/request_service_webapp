@@ -121,35 +121,17 @@ export async function fetchPublicBlogs(
 
     const result = (await response.json()) as PublicBlogsResponse;
     if (result && Array.isArray(result.data)) {
-      // Enrich blog items: if image is missing, extract from CKEditor content
-      const enriched = await Promise.all(
-        result.data.map(async (item) => {
-          let image = item.image || item.coverImage || item.thumbnail;
-          let content = item.content;
-
-          if (!image) {
-            if (content) {
-              image = extractFirstImageUrl(content);
-            } else if (item.slug) {
-              try {
-                const detail = await fetchPublicBlogBySlug(item.slug);
-                if (detail?.content) {
-                  content = detail.content;
-                  image = extractFirstImageUrl(detail.content);
-                }
-              } catch {
-                // ignore
-              }
-            }
-          }
-
-          return {
-            ...item,
-            image: image || item.image,
-            content: content || item.content,
-          };
-        }),
-      );
+      // The list API returns each card's image (first <img> in the article), so no
+      // per-article detail request is needed here.
+      const enriched = result.data.map((item) => ({
+        ...item,
+        image:
+          item.image ||
+          item.coverImage ||
+          item.thumbnail ||
+          extractFirstImageUrl(item.content) ||
+          undefined,
+      }));
 
       return {
         data: enriched,

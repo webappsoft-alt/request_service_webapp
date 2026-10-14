@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Briefcase, Eye, FileText, Link2, Plus, Trash2 } from "lucide-react";
@@ -307,12 +308,15 @@ export function NewEstimateListView() {
               const number = linkedEstimate(row)?.number || row.number;
               return (
                 <div>
-                  <Link
-                    href={`/pro/dashboard/new-estimate/${row.id}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {number}
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Link
+                      href={`/pro/dashboard/new-estimate/${row.id}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {number}
+                    </Link>
+                    {isAiGenerated(row.source) ? <AiGeneratedBadge /> : null}
+                  </div>
                   {row.title ? (
                     <p
                       className="mt-0.5 line-clamp-2 break-words text-xs font-medium text-foreground"

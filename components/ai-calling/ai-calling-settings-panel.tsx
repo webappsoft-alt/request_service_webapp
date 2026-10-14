@@ -1,7 +1,19 @@
 "use client";
 
 import { useId } from "react";
-import { AlertCircle, AudioLines, Bot, Loader2, PhoneForwarded, PhoneIncoming, Sparkles } from "lucide-react";
+import Link from "next/link";
+import {
+  AlertCircle,
+  AudioLines,
+  Bot,
+  Headphones,
+  Loader2,
+  PhoneForwarded,
+  PhoneIncoming,
+  Play,
+  Sparkles,
+  Square,
+} from "lucide-react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { Button } from "@/components/ui/button";
@@ -11,14 +23,16 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AiCallPreview } from "./ai-call-preview";
+import { AiCallHistory, CALL_HISTORY_PATH } from "./ai-call-history";
 import { AiCallingSwitch } from "./ai-calling-switch";
 import { AiPhoneNumberDisplay } from "./ai-phone-number-display";
 import { AiVoicePicker } from "./ai-voice-picker";
+import { fetchGreetingPreview, fetchVoiceSample } from "./audio";
 import { DEFAULT_GREETING, GREETING_MAX_LENGTH } from "./constants";
 import { formatPhone } from "./phone";
 import { useAiCallingSettings } from "./use-ai-calling-settings";
-import type { AiCallingAdapter } from "./types";
+import { useAudioPreview } from "./use-audio-preview";
+import type { AiCallingAdapter, AiVoiceId } from "./types";
 
 type AiCallingSettingsPanelProps = {
   /** Data source; defaults to this app's `provider/ai-calling` API. Define it once (not inline). */
@@ -30,7 +44,7 @@ const cardClass = "rounded-xl border-border-soft";
 
 const HOW_IT_WORKS = [
   { icon: PhoneIncoming, text: "A customer calls your AI number (or your forwarded business line)." },
-  { icon: Bot, text: "The AI greets them, answers questions, and captures the job as a lead." },
+  { icon: Bot, text: "The AI greets them, answers questions, and turns the job into a draft estimate for you to review." },
   { icon: PhoneForwarded, text: "If they ask for a person, the call transfers to your forwarding number." },
 ];
 
@@ -54,6 +68,21 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
   const ids = useId();
   const { saved, draft, errors, loading, loadError, saving, dirty, update, reset, save, setEnabled, reload } =
     useAiCallingSettings(adapter);
+  const preview = useAudioPreview();
+
+  async function playPreview(key: string, load: () => Promise<Blob>, cacheable: boolean) {
+    try {
+      await preview.play(key, load, { cacheable });
+    } catch (error) {
+      toast.error(error instanceof Error && error.message ? error.message : "Could not play the preview.");
+    }
+  }
+
+  const previewVoice = (voiceId: AiVoiceId) =>
+    void playPreview(`voice:${voiceId}`, () => fetchVoiceSample(voiceId), true);
+  const voiceKey = (key: string | null) =>
+    key?.startsWith("voice:") ? (key.slice(6) as AiVoiceId) : null;
+  const greetingKey = "greeting";
 
   async function onToggle(next: boolean) {
     try {
@@ -149,7 +178,7 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
                   ? saved.aiPhoneNumber
                     ? `Answering calls on ${formatPhone(saved.aiPhoneNumber)}.`
                     : "On. Your AI number is being set up."
-                  : "Turn on to let AI answer calls, capture leads, and hand off to your team."}
+                  : "Turn on to let AI answer calls, draft estimates, and hand off to your team."}
               </p>
             </div>
           </div>
@@ -234,23 +263,51 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
                   value={draft.voiceId}
                   onChange={(voiceId) => update("voiceId", voiceId)}
                   labelledBy={`${ids}-voice`}
+                  onPreview={previewVoice}
+                  playingId={voiceKey(preview.playingKey)}
+                  loadingId={voiceKey(preview.loadingKey)}
                 />
               </div>
 
               <Field data-invalid={Boolean(errors.greeting)}>
                 <div className="flex items-center justify-between gap-2">
                   <FieldLabel htmlFor={`${ids}-greeting`}>Greeting message</FieldLabel>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => update("greeting", DEFAULT_GREETING)}
-                    disabled={draft.greeting === DEFAULT_GREETING}
-                  >
-                    <Sparkles className="size-3" aria-hidden="true" />
-                    Use default
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => update("greeting", DEFAULT_GREETING)}
+                      disabled={draft.greeting === DEFAULT_GREETING}
+                    >
+                      <Sparkles className="size-3" aria-hidden="true" />
+                      Use default
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      disabled={!draft.greeting.trim()}
+                      onClick={() =>
+                        void playPreview(
+                          greetingKey,
+                          () => fetchGreetingPreview(draft.voiceId, draft.greeting.trim()),
+                          false,
+                        )
+                      }
+                    >
+                      {preview.loadingKey === greetingKey ? (
+                        <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                      ) : preview.playingKey === greetingKey ? (
+                        <Square className="size-3 fill-current" aria-hidden="true" />
+                      ) : (
+                        <Play className="size-3 fill-current" aria-hidden="true" />
+                      )}
+                      {preview.playingKey === greetingKey ? "Stop" : "Test greeting"}
+                    </Button>
+                  </div>
                 </div>
                 <Textarea
                   id={`${ids}-greeting`}
@@ -281,21 +338,40 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
           </Card>
         </div>
 
-        {/* Preview + how it works */}
+        {/* Recent calls, test call, how it works */}
         <div className="flex flex-col gap-4 lg:sticky lg:top-20">
           <Card className={cardClass}>
             <CardHeader className="border-b border-border-soft">
-              <CardTitle>Call preview</CardTitle>
-              <CardDescription>Updates as you edit.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <PhoneIncoming className="size-4 text-muted-foreground" aria-hidden="true" />
+                Recent calls
+              </CardTitle>
+              <CardDescription>Full conversation and activity log for every call.</CardDescription>
             </CardHeader>
-            <CardContent className="pt-4">
-              <AiCallPreview
-                greeting={draft.greeting}
-                voiceId={draft.voiceId}
-                aiPhoneNumber={saved.aiPhoneNumber}
-                escalationNumber={draft.escalationNumber}
-                enabled={live}
-              />
+            <CardContent className="flex flex-col gap-3 pt-3">
+              <AiCallHistory compact />
+              <Button asChild variant="outline" size="sm" className="w-full">
+                <Link href={CALL_HISTORY_PATH}>View all calls</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className={cardClass}>
+            <CardContent className="flex flex-col gap-3 pt-5">
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Headphones className="size-4" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Test call in your browser</p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    Talk to your receptionist with your microphone, no phone needed. Uses your saved voice and greeting.
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="outline" size="sm" className="w-full">
+                <Link href="/pro/dashboard/ai-receptionist/test">Start a test call</Link>
+              </Button>
             </CardContent>
           </Card>
 

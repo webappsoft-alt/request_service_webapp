@@ -410,6 +410,21 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
             : "A customer requested a quote.",
         );
       }),
+      onSocketEvent("ESTIMATE_CREATED", (payload) => {
+        broadcastRealtime({ type: "ESTIMATE_CREATED", payload });
+        window.dispatchEvent(new Event("rs-crm-api"));
+        if (payload?.source === "ai_receptionist") {
+          const href = payload.href ? String(payload.href) : "/pro/dashboard/new-estimate";
+          const forCustomer = payload.customerName ? ` for ${payload.customerName}` : "";
+          showNotificationToast(
+            "Draft estimate created",
+            payload.number
+              ? `Draft Estimate ${payload.number} created by AI Receptionist${forCustomer}.`
+              : `AI Receptionist created a draft estimate${forCustomer}.`,
+            { href, onOpen: () => router.push(href) },
+          );
+        }
+      }),
       onSocketEvent("ESTIMATE_ACCEPTED", (payload) => {
         broadcastRealtime({ type: "ESTIMATE_ACCEPTED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));

@@ -178,6 +178,15 @@ export type RealtimeEvents = {
       estimatesSeenAt?: string | null;
     } | null;
   };
+  ESTIMATE_CREATED: {
+    id?: string;
+    opportunityId?: string;
+    number?: string;
+    source?: string;
+    customerName?: string;
+    title?: string;
+    href?: string;
+  };
   ESTIMATE_ACCEPTED: {
     estimateId?: string;
     number?: string;

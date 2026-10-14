@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { CheckCircle2, FileText, LayoutDashboard, LogIn, RotateCcw, TriangleAlert, UserPlus } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, LayoutDashboard, LogIn, RotateCcw, TriangleAlert, UserPlus } from "lucide-react";
 import { customerPaths } from "@/lib/customer-paths";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./BotHeader";
@@ -15,6 +15,9 @@ import { ServiceCardCarousel } from "./cards/ServiceCardCarousel";
 import { useSmoothText } from "./hooks/useSmoothText";
 import { QuoteBriefCard } from "./quote/QuoteBriefCard";
 import type { BotAuthPrompt, BotHandoff, BotMessage, BotQuoteSuccess } from "./types";
+
+/** Sent by the backend with every scoping question (bot.service.js SKIP_SCOPING). */
+const SKIP_SCOPING_LABEL = "Skip & show pros";
 
 function timeLabel(timestamp: number) {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(timestamp);
@@ -239,9 +242,16 @@ function BotBubble({ message, isLatest, isNewest }: { message: BotMessage; isLat
                   if (path) choosePath(path);
                   else sendText(pill);
                 }}
-                className="rounded-full border border-primary/25 bg-primary/5 px-3 py-1.5 text-[11px] font-semibold text-primary transition hover:-translate-y-px hover:border-primary/50 hover:bg-primary/10 active:translate-y-0"
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-[11px] font-semibold transition hover:-translate-y-px active:translate-y-0",
+                  // "Skip & show pros" (scoping questions): a quiet escape hatch, not an answer.
+                  pill === SKIP_SCOPING_LABEL
+                    ? "inline-flex items-center gap-1 border border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+                    : "border border-primary/25 bg-primary/5 text-primary hover:border-primary/50 hover:bg-primary/10",
+                )}
               >
                 {pill}
+                {pill === SKIP_SCOPING_LABEL ? <ArrowRight className="size-3" aria-hidden /> : null}
               </button>
             ))}
           </div>

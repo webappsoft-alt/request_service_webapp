@@ -15,6 +15,7 @@ import {
   ListTodo,
   MapPin,
   MessageCircle,
+  Sparkles,
   Receipt,
   Store,
   Timer,
@@ -80,6 +81,7 @@ export const portalNavGroups: PortalNavGroup[] = [
     label: "Office",
     items: [
       { href: "/pro/dashboard/settings", label: "Business Profile", icon: Store },
+      { href: "/pro/dashboard/subscription", label: "Subscription", icon: Sparkles },
       { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images },
       { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
       { href: "/pro/dashboard/services", label: "Fixed services", icon: Wrench },

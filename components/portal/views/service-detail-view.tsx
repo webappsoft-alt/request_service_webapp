@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Clock3, MapPin, Pencil } from "lucide-react";
+import { Check, Clock3, EyeOff, MapPin, Pencil } from "lucide-react";
 import { ServiceHoursSummary } from "@/components/portal/hours-editor";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
@@ -139,6 +139,8 @@ export function ServiceDetailView({ id }: { id: string }) {
     photos[Math.min(activePhoto, Math.max(photos.length - 1, 0))] || undefined;
   const title = toTitleCase(service.name) || "Untitled service";
   const companyName = toTitleCase(provider.companyName);
+  // Parent category unticked in the Business Profile: kept here, hidden from customers.
+  const categoryDisabled = service.active && detail.categoryActive === false;
 
   return (
     <PortalPage
@@ -147,8 +149,8 @@ export function ServiceDetailView({ id }: { id: string }) {
       description="Catalog details customers can request from your public profile."
       badge={
         <StatusPill
-          label={service.active ? "Active" : "Hidden"}
-          tone={service.active ? "success" : "neutral"}
+          label={service.active ? (categoryDisabled ? "Category disabled" : "Active") : "Hidden"}
+          tone={service.active ? (categoryDisabled ? "warning" : "success") : "neutral"}
         />
       }
       actions={
@@ -165,6 +167,25 @@ export function ServiceDetailView({ id }: { id: string }) {
         </div>
       }
     >
+      {categoryDisabled ? (
+        <div
+          role="status"
+          className="mx-4 mb-4 flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <EyeOff className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <p className="min-w-0">
+            <span className="font-medium">Hidden from public. </span>
+            {detail.visibilityNote ||
+              "This package is currently hidden from customers because the parent category is not selected in your Business Profile."}{" "}
+            <Link
+              href="/pro/dashboard/profile?step=categories"
+              className="font-medium underline underline-offset-2"
+            >
+              Edit categories
+            </Link>
+          </p>
+        </div>
+      ) : null}
       <div className="grid items-start gap-6 px-4 pb-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,22rem)]">
         <div className="flex flex-col gap-4">
           <section className="overflow-hidden rounded-md border border-border-soft bg-card">

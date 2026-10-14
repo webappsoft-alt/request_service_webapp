@@ -17,6 +17,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { serviceUnitLabel } from "@/lib/data/portal";
 import { formatMoney, toTitleCase } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -30,6 +36,54 @@ import {
 } from "@/store/fixedServicesSlice";
 
 const SEARCH_DEBOUNCE_MS = 400;
+
+const CATEGORY_HIDDEN_NOTE =
+  "This package is currently hidden from customers because the parent category is not selected in your Business Profile.";
+
+/** Parent category unticked in the Business Profile → hidden from customers (not deleted). */
+function isCategoryDisabled(row: FixedService) {
+  return row.categoryActive === false;
+}
+
+function statusLabel(row: FixedService) {
+  if (!row.isPublic) return "Hidden";
+  return isCategoryDisabled(row) ? "Category disabled" : "Active";
+}
+
+function ServiceStatus({ row }: { row: FixedService }) {
+  if (!row.isPublic || !isCategoryDisabled(row)) {
+    return (
+      <StatusPill
+        label={row.isPublic ? "Active" : "Hidden"}
+        tone={row.isPublic ? "success" : "neutral"}
+      />
+    );
+  }
+  return (
+    <TooltipProvider delayDuration={0}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="cursor-help rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`Category disabled. ${row.visibilityNote || CATEGORY_HIDDEN_NOTE}`}
+          >
+            <StatusPill label="Category disabled" tone="warning" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-pretty">
+          {row.visibilityNote || CATEGORY_HIDDEN_NOTE}{" "}
+          <Link
+            href="/pro/dashboard/profile?step=categories"
+            className="font-medium underline underline-offset-2"
+          >
+            Edit categories
+          </Link>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export function ServicesView() {
   const dispatch = useAppDispatch();
@@ -238,15 +292,10 @@ export function ServicesView() {
           {
             id: "status",
             header: "Status",
-            sortValue: (row) => (row.isPublic ? "active" : "hidden"),
-            searchValue: (row) => (row.isPublic ? "Active" : "Hidden"),
-            exportValue: (row) => (row.isPublic ? "Active" : "Hidden"),
-            cell: (row) => (
-              <StatusPill
-                label={row.isPublic ? "Active" : "Hidden"}
-                tone={row.isPublic ? "success" : "neutral"}
-              />
-            ),
+            sortValue: (row) => statusLabel(row).toLowerCase(),
+            searchValue: (row) => statusLabel(row),
+            exportValue: (row) => statusLabel(row),
+            cell: (row) => <ServiceStatus row={row} />,
           },
         ]}
         actions={(row) => [

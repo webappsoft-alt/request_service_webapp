@@ -25,6 +25,9 @@ export type FixedService = {
   unit: FixedServiceUnit;
   isPublic: boolean;
   customerSee: boolean;
+  /** False when the parent category is unticked in the Business Profile (hidden from customers). */
+  categoryActive?: boolean;
+  visibilityNote?: string | null;
   images: string[];
   covered: string[];
   faqs: FixedServiceFaq[];
@@ -216,6 +219,8 @@ export function normalizeFixedService(raw: unknown): FixedService | null {
     unit: parseUnit(record.unit),
     isPublic: Boolean(record.isPublic ?? true),
     customerSee: Boolean(record.customerSee ?? record.isPublic ?? true),
+    categoryActive: record.categoryActive !== false,
+    visibilityNote: typeof record.visibilityNote === "string" ? record.visibilityNote : null,
     images: toStringArray(record.images),
     covered: toStringArray(record.covered),
     faqs: Array.isArray(record.faqs)

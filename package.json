@@ -7,7 +7,9 @@
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "ssh root@api.requestservice.com \"/root/deploy.sh web\"",
+    "deploy:all": "ssh root@api.requestservice.com \"/root/deploy.sh all\""
   },
   "dependencies": {
     "@ckeditor/ckeditor5-react": "^11.2.0",

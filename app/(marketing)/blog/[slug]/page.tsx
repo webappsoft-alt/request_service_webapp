@@ -203,7 +203,7 @@ export default async function BlogArticlePage({
             className="page-wash pointer-events-none absolute inset-0 -z-10"
             aria-hidden="true"
           />
-          <Container className="flex flex-col gap-8 pt-8 pb-10 md:pt-12 md:pb-14">
+          <Container className="flex flex-col gap-6 pt-8 pb-8 md:pt-10 md:pb-10">
             <nav aria-label="Breadcrumb">
               <ol className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <li>
@@ -288,25 +288,23 @@ export default async function BlogArticlePage({
                 </div>
               </div>
             </div>
-
-            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-border/40 bg-neutral-200 shadow-sm md:aspect-[21/9] dark:bg-neutral-800">
-              <BlogImage
-                src={image}
-                alt={title}
-                priority
-                sizes="(min-width: 1280px) 76rem, 100vw"
-              />
-              {image ? (
-                <div
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/25 to-transparent"
-                  aria-hidden="true"
-                />
-              ) : null}
-            </div>
           </Container>
         </header>
 
-        <div className="py-10 md:py-14">
+        {/* Featured image: its own section under the title banner, aligned with the
+            title and article, height-capped so it never fills the screen. */}
+        <Container className="mt-8 md:mt-10">
+          <div className="relative aspect-video max-h-[420px] w-full overflow-hidden rounded-2xl border border-border/40 bg-muted shadow-sm">
+            <BlogImage
+              src={image}
+              alt={title}
+              priority
+              sizes="(min-width: 1280px) 76rem, 100vw"
+            />
+          </div>
+        </Container>
+
+        <div className="mt-8 pb-10 md:mt-10 md:pb-14">
           <Container className="grid gap-12 lg:grid-cols-12 lg:gap-10 xl:gap-14">
             <div className="flex min-w-0 flex-col gap-12 lg:col-span-8">
               <div className="blog-content ck-content max-w-[46rem]">
@@ -433,8 +431,8 @@ export default async function BlogArticlePage({
       </article>
 
       {related.length ? (
-        <section className="border-t bg-muted/40 py-12 md:py-16">
-          <Container className="flex flex-col gap-8">
+        <section className="border-t bg-muted/40 py-10 md:py-12">
+          <Container className="flex flex-col gap-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="flex flex-col gap-1">
                 <p className="eyebrow text-primary">Keep reading</p>
@@ -451,7 +449,7 @@ export default async function BlogArticlePage({
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {related.map((item) => (
                 <BlogCard key={item._id || item.slug} post={item} />
               ))}

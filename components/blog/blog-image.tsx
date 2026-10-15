@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { ImageOff } from "lucide-react";
+import { Newspaper } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type BlogImageProps = {
@@ -15,7 +15,7 @@ type BlogImageProps = {
 
 /**
  * Blog cover / card image. Shows a soft shimmer while loading; missing or broken
- * sources fall back to a neutral gray placeholder instead of the browser's
+ * sources fall back to a soft branded placeholder instead of the browser's
  * broken-image icon and alt text.
  */
 export function BlogImage({ src, alt, sizes, priority, className }: BlogImageProps) {
@@ -25,11 +25,13 @@ export function BlogImage({ src, alt, sizes, priority, className }: BlogImagePro
   if (!usable) {
     return (
       <div
-        className="flex size-full items-center justify-center bg-neutral-200 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500"
+        className="flex size-full items-center justify-center bg-linear-to-br from-primary/10 via-muted to-primary/5"
         role="img"
         aria-label={alt}
       >
-        <ImageOff className="size-8" strokeWidth={1.5} aria-hidden="true" />
+        <span className="flex size-12 items-center justify-center rounded-full bg-background/70 text-primary/50 ring-1 ring-primary/10">
+          <Newspaper className="size-5" strokeWidth={1.5} aria-hidden="true" />
+        </span>
       </div>
     );
   }

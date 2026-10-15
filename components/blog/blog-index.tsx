@@ -210,7 +210,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
       {/* Grid of Articles or Skeletons or Empty State */}
       {loading ? (
         <div
-          className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3"
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
           aria-busy="true"
           aria-label="Loading articles"
         >
@@ -219,8 +219,8 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
           ))}
         </div>
       ) : blogs.length > 0 ? (
-        <div className="flex flex-col gap-10">
-          <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
+        <div className="flex flex-col gap-8">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {blogs.map((post) => (
               <BlogCard key={post._id || post.slug} post={post} />
             ))}

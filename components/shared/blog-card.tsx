@@ -41,31 +41,32 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
   ) || 0;
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-1 hover:border-primary/25 hover:shadow-lg">
-      <div className="relative aspect-[16/9] overflow-hidden bg-neutral-200 dark:bg-neutral-800">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-border/70 bg-card shadow-xs transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md">
+      {/* 16:9, capped at 192px so the image never dominates wide cards. */}
+      <div className="relative aspect-video max-h-48 w-full overflow-hidden bg-muted">
         <BlogImage
           src={imageSrc}
           alt={imageAlt}
           sizes="(min-width: 1280px) 24rem, (min-width: 768px) 45vw, 100vw"
-          className="transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+          className="transition-transform duration-700 ease-out group-hover:scale-[1.03]"
         />
-        <span className="absolute top-3 left-3 rounded-full bg-background/90 px-2.5 py-1 text-[0.6875rem] font-semibold tracking-wide text-primary uppercase shadow-xs backdrop-blur-sm">
+        <span className="absolute top-2.5 left-2.5 rounded-full bg-background/90 px-2 py-0.5 text-[0.625rem] font-semibold tracking-wide text-primary uppercase shadow-xs backdrop-blur-sm">
           {categoryName}
         </span>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2.5 p-5">
+      <div className="flex flex-1 flex-col gap-1.5 p-4">
         {post.publishedAt ? (
           <time
             dateTime={post.publishedAt}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+            className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground"
           >
-            <CalendarDays className="size-3.5" aria-hidden="true" />
+            <CalendarDays className="size-3" aria-hidden="true" />
             {formatDate(post.publishedAt)}
           </time>
         ) : null}
 
-        <h3 className="line-clamp-2 text-lg leading-snug font-semibold tracking-tight text-balance text-foreground transition-colors group-hover:text-primary">
+        <h3 className="line-clamp-2 text-base leading-snug font-semibold tracking-tight text-balance text-foreground transition-colors group-hover:text-primary">
           <Link
             href={`/blog/${post.slug}`}
             prefetch={false}
@@ -75,12 +76,12 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
           </Link>
         </h3>
         {post.description ? (
-          <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
+          <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">
             {post.description}
           </p>
         ) : null}
 
-        <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+        <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/60 pt-3">
           <div className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
             <span className="inline-flex items-center gap-1" aria-label={`${viewCount} views`}>
               <Eye className="size-3.5 shrink-0" aria-hidden="true" />
@@ -95,7 +96,7 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
               {commentCount.toLocaleString()}
             </span>
           </div>
-          <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary" aria-hidden="true">
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary" aria-hidden="true">
             Read article
             <ArrowRight className="size-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
           </span>

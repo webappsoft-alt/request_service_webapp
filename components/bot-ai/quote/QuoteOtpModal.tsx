@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Mail, MailCheck } from "lucide-react";
+import { CheckCircle2, Loader2, MessageSquareText, Smartphone } from "lucide-react";
 import { extractErrorMessage, postData } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import { OTP_LENGTH, OtpBoxes } from "@/components/marketplace/phone-otp-verification-panel";
 import { Button } from "@/components/ui/button";
+import { maskPhone, OTP_RESEND_SECONDS } from "@/lib/auth/pending-registration";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   elevatedModalAccent,
@@ -15,7 +16,6 @@ import {
 } from "@/lib/modal-styles";
 import { cn } from "@/lib/utils";
 
-const RESEND_SECONDS = 30;
 
 type Stage = "code" | "verifying" | "submitting";
 
@@ -49,7 +49,7 @@ export function QuoteOtpModal({
   const [stage, setStage] = useState<Stage>("code");
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState("");
-  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
+  const [resendIn, setResendIn] = useState(OTP_RESEND_SECONDS);
   const [resending, setResending] = useState(false);
   const [sessionKey, setSessionKey] = useState({ open, phone });
 
@@ -61,7 +61,7 @@ export function QuoteOtpModal({
       setStage("code");
       setVerified(false);
       setError("");
-      setResendIn(RESEND_SECONDS);
+      setResendIn(OTP_RESEND_SECONDS);
     }
   }
 
@@ -111,7 +111,7 @@ export function QuoteOtpModal({
       setError(message);
       setOtp("");
       // Expired / too many attempts: allow an immediate resend.
-      if (/expired|not found|too many/i.test(message)) setResendIn(0);
+      if (/expired|no active code|too many/i.test(message)) setResendIn(0);
       setStage("code");
       return;
     }
@@ -123,14 +123,14 @@ export function QuoteOtpModal({
     setResending(true);
     setError("");
     try {
-      await postData(
+      const response = await postData<{ resendInSeconds?: number }>(
         authApi.sendPhoneOtp,
         { phone, email },
         { token: null, skipLogoutOn401: true, silent: true },
       );
       setOtp("");
       setVerified(false);
-      setResendIn(RESEND_SECONDS);
+      setResendIn(response?.resendInSeconds ?? OTP_RESEND_SECONDS);
     } catch (resendError) {
       setError(errorMessage(resendError, "Could not resend the code."));
     } finally {
@@ -145,18 +145,18 @@ export function QuoteOtpModal({
         <span aria-hidden className={elevatedModalAccent} />
         <div className="flex flex-col items-center gap-2 pt-2 text-center">
           <span className="flex size-12 items-center justify-center rounded-full bg-linear-to-br from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20">
-            <MailCheck className="size-5" aria-hidden />
+            <Smartphone className="size-5" aria-hidden />
           </span>
           <DialogTitle className="text-lg font-semibold">Confirm Verification Code</DialogTitle>
-          {/* The existing send-phone-otp endpoint delivers the code by email (same as /get-a-quote). */}
+          {/* send-phone-otp texts the code (same as /get-a-quote). */}
           <DialogDescription className="text-sm leading-relaxed">
-            We sent a {OTP_LENGTH}-digit verification code to{" "}
-            {email ? <span className="font-semibold break-all text-foreground">{email}</span> : "your email"} to confirm
-            your service request for <span className="font-semibold whitespace-nowrap text-foreground">{phone}</span>.
+            Enter the {OTP_LENGTH}-digit code sent via text to{" "}
+            <span className="font-semibold whitespace-nowrap text-foreground">{maskPhone(phone)}</span> to confirm your
+            service request.
           </DialogDescription>
           <p className="flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-xs font-medium text-foreground/80">
-            <Mail className="size-3.5 text-primary" aria-hidden />
-            Check your email inbox — and your spam folder
+            <MessageSquareText className="size-3.5 text-primary" aria-hidden />
+            Sent to <span className="whitespace-nowrap">{phone}</span> · expires in 5 minutes
           </p>
         </div>
 

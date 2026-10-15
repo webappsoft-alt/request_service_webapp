@@ -10,7 +10,7 @@ import {
   type AddressFieldsValue,
 } from "@/components/shared/address-fields";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
-import { postData } from "@/components/api/apiFuntions";
+import { extractErrorMessage, postData } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import {
   extractUploadedUrl,
@@ -308,7 +308,7 @@ export function RequestIntake({
       return;
     }
     if (!email) {
-      toast.error("Enter your email so we can send the verification code.");
+      toast.error("Enter your email address.");
       return;
     }
 
@@ -321,14 +321,12 @@ export function RequestIntake({
       );
       toast.success(
         response?.message ||
-          "Verification code sent. Check your email.",
+          "We texted you a verification code.",
       );
       setShowPhoneVerify(true);
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not send verification code.",
+        extractErrorMessage(error) || "Could not send verification code.",
       );
     } finally {
       setOtpSending(false);

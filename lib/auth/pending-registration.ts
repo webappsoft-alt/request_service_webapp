@@ -4,6 +4,20 @@ export const PENDING_REGISTRATION_KEY = "rs-pending-registration";
 
 export const REGISTRATION_OTP_LENGTH = 4;
 
+/** Seconds before another code can be texted (matches the API cooldown). */
+export const OTP_RESEND_SECONDS = 60;
+
+/** A full international number from AuthPhoneInput ("+" country code + number), not just a dial code. */
+export function isValidMobileNumber(value: string | undefined): boolean {
+  return /^\+[1-9]\d{7,14}$/.test(String(value || "").trim());
+}
+
+/** "•••• 4567" — how the API shows a number a code was texted to. */
+export function maskPhone(value: string | undefined): string {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 4 ? `•••• ${digits.slice(-4)}` : "your phone";
+}
+
 export type PendingCustomerRegistration = {
   kind: "customer";
   firstName: string;
@@ -60,7 +74,6 @@ export type PendingProviderRegistration = {
 export type PendingRegistration =
   | PendingCustomerRegistration
   | PendingProviderRegistration;
-
 export function savePendingRegistration(draft: PendingRegistration): void {
   try {
     sessionStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(draft));

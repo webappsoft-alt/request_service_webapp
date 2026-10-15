@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { writeChatGuest } from "@/lib/booking/chat-store";
 import { openPublicChatThread } from "@/lib/api/chat-client";
-import { getData, postData } from "@/components/api/apiFuntions";
+import { extractErrorMessage, getData, postData } from "@/components/api/apiFuntions";
 import { authApi, publicApi } from "@/components/api/ApiRoutesFile";
 import { createFixedServiceBooking } from "@/lib/booking/create-fixed-booking";
 import { createMarketplaceQuote } from "@/lib/booking/create-marketplace-quote";
@@ -564,7 +564,7 @@ export function RequestServiceForm({
       return false;
     }
     if (!trimmedEmail) {
-      toast.error("Enter your email so we can send the verification code.");
+      toast.error("Enter your email address.");
       return false;
     }
     setOtpSending(true);
@@ -576,16 +576,14 @@ export function RequestServiceForm({
       );
       toast.success(
         response?.message ||
-          "Verification code sent. Check your email.",
+          "We texted you a verification code.",
       );
       setPendingAfterVerify(next);
       setShowPhoneVerify(true);
       return true;
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not send verification code.",
+        extractErrorMessage(error) || "Could not send verification code.",
       );
       return false;
     } finally {

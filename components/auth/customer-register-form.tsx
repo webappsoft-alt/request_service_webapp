@@ -17,6 +17,7 @@ import {
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import {
+  isValidMobileNumber,
   savePendingRegistration,
   type PendingCustomerRegistration,
 } from "@/lib/auth/pending-registration";
@@ -54,6 +55,7 @@ export function CustomerRegisterForm() {
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
     email.trim().length > 0 &&
+    isValidMobileNumber(phone) &&
     password.length > 0 &&
     confirmPassword.length > 0;
 
@@ -91,6 +93,10 @@ export function CustomerRegisterForm() {
       toast.error("Passwords do not match.");
       return;
     }
+    if (!isValidMobileNumber(phone)) {
+      toast.error("Enter your mobile number so we can text you a code.");
+      return;
+    }
 
     const draft: PendingCustomerRegistration = {
       kind: "customer",
@@ -98,7 +104,7 @@ export function CustomerRegisterForm() {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       password,
-      phone: phone.trim() || undefined,
+      phone: phone.trim(),
       zip: addressFields.zip.trim() || undefined,
       location: buildLocation(),
     };
@@ -107,12 +113,12 @@ export function CustomerRegisterForm() {
     try {
       const data = await postData<{ message?: string }>(
         authApi.sendOtp,
-        { email: draft.email },
+        { email: draft.email, phone: draft.phone },
         { silent: true, skipLogoutOn401: true },
       );
       savePendingRegistration(draft);
       toast.success(
-        data?.message || "Check your email for a verification code.",
+        data?.message || "We texted you a verification code.",
       );
       router.push(
         `/verify-otp?email=${encodeURIComponent(draft.email.toLowerCase())}${
@@ -131,7 +137,7 @@ export function CustomerRegisterForm() {
       audience="customer"
       eyebrow="Homeowners"
       title="Create your account"
-      description="Save estimates and hire a local pro. Name, email, and a password are enough to start."
+      description="Save estimates and hire a local pro. We’ll text a code to your mobile to confirm it’s you."
       footer={
         <>
           Already have an account?{" "}
@@ -183,12 +189,13 @@ export function CustomerRegisterForm() {
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="phone">Phone</FieldLabel>
+            <FieldLabel htmlFor="phone">Mobile phone</FieldLabel>
             <AuthPhoneInput
               id="phone"
               value={phone}
               onChange={setPhone}
-              placeholder="Optional"
+              placeholder="Enter mobile number"
+              required
             />
           </Field>
           <AddressFields

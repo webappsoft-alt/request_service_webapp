@@ -55,7 +55,7 @@ function copyFor(role: DemoRole, mode: AuthMode) {
         eyebrow: role === "provider" ? "Service companies" : "Homeowners",
         title: "Forgot password",
         description:
-          "Enter the email on your account. We’ll send a 4-digit code to verify it’s you.",
+          "Enter the email on your account. We’ll text a 4-digit code to the mobile number on file.",
       };
     case "reset":
       return {
@@ -183,17 +183,20 @@ function AuthFormInner({
         const trimmedEmail = email.trim();
         setSubmitting(true);
         try {
-          const data = await postData<{ message?: string; code?: string }>(
+          const data = await postData<{ message?: string; maskedPhone?: string }>(
             authApi.forgotPassword,
             { email: trimmedEmail },
             { silent: true, skipLogoutOn401: true },
           );
           savePasswordResetEmail(trimmedEmail);
           toast.success(
-            data?.message || "Password reset OTP sent to your email",
+            data?.message || "We texted a reset code to your mobile number.",
           );
+          const sentTo = data?.maskedPhone
+            ? `&to=${encodeURIComponent(data.maskedPhone)}`
+            : "";
           router.push(
-            `${verifyForgotHref}?email=${encodeURIComponent(trimmedEmail)}`,
+            `${verifyForgotHref}?email=${encodeURIComponent(trimmedEmail)}${sentTo}`,
           );
         } catch (error) {
           showApiErrorToast(error);

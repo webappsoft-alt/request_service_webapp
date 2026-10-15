@@ -43,6 +43,7 @@ import {
 } from "@/lib/data/portal";
 import { serviceCategories } from "@/lib/data/services";
 import {
+  isValidMobileNumber,
   savePendingRegistration,
   type PendingProviderRegistration,
 } from "@/lib/auth/pending-registration";
@@ -201,7 +202,7 @@ export function ProviderRegisterWizard() {
     setDraft((current) => ({ ...current, ...partial }));
   }
 
-  /** Early email check via the same send-otp API used at finish. */
+  /** Early "already registered?" check; sends no code. */
   async function checkEmailRegistered(rawEmail: string) {
     const email = rawEmail.trim();
     if (!email) {
@@ -215,8 +216,8 @@ export function ProviderRegisterWizard() {
     const requestId = ++emailCheckRequestId.current;
     setEmailChecking(true);
     try {
-      await postData<{ message?: string }>(
-        authApi.sendOtp,
+      await postData<{ available?: boolean }>(
+        authApi.checkEmail,
         { email },
         { silent: true, skipLogoutOn401: true },
       );
@@ -231,7 +232,7 @@ export function ProviderRegisterWizard() {
         patch({ email: "" });
         return false;
       }
-      // Other send-otp errors stay for finish(); do not block typing here.
+      // Other errors (network, rate limit) stay for finish(); do not block typing here.
       setEmailError(null);
       return true;
     } finally {
@@ -304,7 +305,7 @@ export function ProviderRegisterWizard() {
       firstName: draft.firstName.trim(),
       lastName: draft.lastName.trim(),
       email: draft.email.trim(),
-      phone: draft.phone.trim() || undefined,
+      phone: draft.phone.trim(),
       password: draft.password,
       companyName: draft.companyName.trim(),
       tagline: draft.tagline.trim() || undefined,
@@ -345,18 +346,18 @@ export function ProviderRegisterWizard() {
     try {
       const data = await postData<{ message?: string }>(
         authApi.sendOtp,
-        { email: pending.email },
+        { email: pending.email, phone: pending.phone },
         { silent: true, skipLogoutOn401: true },
       );
       savePendingRegistration(pending);
       toast.success(
-        data?.message || "Check your email for a verification code.",
+        data?.message || "We texted you a verification code.",
       );
       router.push(
         `/pro/verify-otp?email=${encodeURIComponent(pending.email.toLowerCase())}`,
       );
     } catch (error) {
-      showApiErrorToast(error, "Could not start email verification.");
+      showApiErrorToast(error, "Could not send the verification code.");
     } finally {
       setSubmitting(false);
     }
@@ -367,6 +368,10 @@ export function ProviderRegisterWizard() {
       return false;
     }
     if (!draft.email.trim()) {
+      return false;
+    }
+    if (!isValidMobileNumber(draft.phone)) {
+      toast.error("Enter your mobile number so we can text you a code.");
       return false;
     }
     if (draft.password.length < 8) {
@@ -419,6 +424,7 @@ export function ProviderRegisterWizard() {
         draft.email.trim().length > 0 &&
         !emailError &&
         !emailChecking &&
+        isValidMobileNumber(draft.phone) &&
         draft.password.length > 0 &&
         draft.confirmPassword.length > 0;
       break;
@@ -560,14 +566,15 @@ export function ProviderRegisterWizard() {
               {emailError ? <FieldError>{emailError}</FieldError> : null}
             </Field>
             <Field>
-              <FieldLabel htmlFor="pro-phone">Phone</FieldLabel>
+              <FieldLabel htmlFor="pro-phone">Mobile phone</FieldLabel>
               <AuthPhoneInput
                 id="pro-phone"
                 value={draft.phone}
                 onChange={(value) => patch({ phone: value })}
-                placeholder="Enter phone number"
+                placeholder="Enter mobile number"
+                required
               />
-              <FieldDescription>Skip if you’d rather add this on the profile later.</FieldDescription>
+              <FieldDescription>We’ll text a 4-digit code here to verify your account.</FieldDescription>
             </Field>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>

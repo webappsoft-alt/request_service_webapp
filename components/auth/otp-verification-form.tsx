@@ -9,7 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail } from "lucide-react";
+import { Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import {
   clearPendingRegistration,
+  OTP_RESEND_SECONDS,
   readPendingRegistration,
   REGISTRATION_OTP_LENGTH,
   savePendingRegistration,
@@ -139,10 +140,14 @@ export function OtpVerificationForm({
   const emailFromQuery = searchParams.get("email")?.trim() || "";
   const [pending, setPending] = useState<PendingRegistration | null>(null);
   const email = emailFromQuery || pending?.email || "";
+  const phone = pending?.phone || "";
 
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resendSeconds, setResendSeconds] = useState(0);
+  // The register page just texted a code, so resend starts on the cooldown.
+  const [resendSeconds, setResendSeconds] = useState(OTP_RESEND_SECONDS);
+  // A verified code can't be used twice: keep the proof so a failed register can retry.
+  const [verificationToken, setVerificationToken] = useState("");
 
   const registerHref = isProvider ? "/pro/register" : "/register";
   const nextPath = searchParams.get("next")?.trim() || "";
@@ -169,7 +174,8 @@ export function OtpVerificationForm({
   }, [isProvider]);
 
   useEffect(() => {
-    if (!emailFromQuery && !readPendingRegistration()?.email) {
+    const draft = readPendingRegistration();
+    if ((!emailFromQuery && !draft?.email) || !draft?.phone) {
       toast.error("Start registration again to receive a verification code.");
       router.replace(registerHref);
     }
@@ -195,11 +201,20 @@ export function OtpVerificationForm({
 
     setLoading(true);
     try {
-      await postData(
-        authApi.verifyOtp,
-        { email, code },
-        { silent: true, skipLogoutOn401: true },
-      );
+      let token = verificationToken;
+      if (!token) {
+        const verified = await postData<{ verificationToken?: string }>(
+          authApi.verifyOtp,
+          { email, phone: draft.phone, code },
+          { silent: true, skipLogoutOn401: true },
+        );
+        token = verified?.verificationToken || "";
+        if (!token) {
+          showApiErrorToast("Phone verified but no verification token was returned.");
+          return;
+        }
+        setVerificationToken(token);
+      }
 
       let registerPayload: Record<string, unknown>;
       let endpoint: string;
@@ -207,11 +222,11 @@ export function OtpVerificationForm({
       if (draft.kind === "provider") {
         endpoint = authApi.providerRegister;
         const { kind: _kind, ...rest } = draft;
-        registerPayload = rest;
+        registerPayload = { ...rest, verificationToken: token };
       } else {
         endpoint = authApi.customerRegister;
         const { kind: _kind, ...rest } = draft;
-        registerPayload = rest;
+        registerPayload = { ...rest, verificationToken: token };
       }
 
       const registered = await postData(
@@ -232,7 +247,7 @@ export function OtpVerificationForm({
         (typeof credentials.message === "string" && credentials.message) ||
           (isProvider
             ? "Your business account is ready."
-            : "Email verified. You’re signed in."),
+            : "Phone verified. You’re signed in."),
       );
       router.replace(successHref);
     } catch (error) {
@@ -245,7 +260,7 @@ export function OtpVerificationForm({
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (otp.length !== OTP_LENGTH) {
-      toast.error(`Enter the ${OTP_LENGTH}-digit code from your email.`);
+      toast.error(`Enter the ${OTP_LENGTH}-digit code from the text message.`);
       return;
     }
     await finalizeAccount(otp);
@@ -253,12 +268,12 @@ export function OtpVerificationForm({
 
   async function onResend() {
     const draft = pending || readPendingRegistration();
-    if (!email || resendSeconds > 0) return;
+    if (!email || !phone || resendSeconds > 0) return;
     setLoading(true);
     try {
-      const data = await postData<{ message?: string }>(
-        authApi.sendOtp,
-        { email },
+      const data = await postData<{ message?: string; resendInSeconds?: number }>(
+        authApi.resendOtp,
+        { email, phone },
         { silent: true, skipLogoutOn401: true },
       );
       if (draft) {
@@ -266,8 +281,9 @@ export function OtpVerificationForm({
         setPending(draft);
       }
       setOtp("");
-      setResendSeconds(60);
-      toast.success(data?.message || "A new code was sent to your email.");
+      setVerificationToken("");
+      setResendSeconds(data?.resendInSeconds ?? OTP_RESEND_SECONDS);
+      toast.success(data?.message || "We texted you a new code.");
     } catch (error) {
       showApiErrorToast(error, "Could not resend the code.");
     } finally {
@@ -275,17 +291,18 @@ export function OtpVerificationForm({
     }
   }
 
-  const canVerify = otp.length === OTP_LENGTH && !loading && Boolean(email);
+  const canVerify =
+    otp.length === OTP_LENGTH && !loading && Boolean(email) && Boolean(phone);
 
   return (
     <AuthShell
       audience={role}
       eyebrow={isProvider ? "Service companies" : "Homeowners"}
-      title="Verify your email"
-      description={`Enter the ${OTP_LENGTH}-digit code we emailed you.`}
+      title="Verify your phone"
+      description={`Enter the ${OTP_LENGTH}-digit code we texted you. It expires in 5 minutes.`}
       footer={
         <>
-          Wrong email?{" "}
+          Wrong number?{" "}
           <Link href={registerHrefWithNext} className={authLinkClass}>
             Go back to sign up
           </Link>
@@ -293,17 +310,17 @@ export function OtpVerificationForm({
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-6">
-        {email ? (
+        {phone ? (
           <div className="flex items-center gap-3 rounded-2xl border border-input bg-[#f4f7fb] px-4 py-3.5">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Mail className="size-4" aria-hidden="true" />
+              <Smartphone className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Code sent to
               </p>
               <p className="truncate text-sm font-semibold text-foreground">
-                {email}
+                {phone}
               </p>
             </div>
           </div>
@@ -334,7 +351,7 @@ export function OtpVerificationForm({
               "disabled:pointer-events-none disabled:opacity-50",
             )}
             onClick={onResend}
-            disabled={loading || resendSeconds > 0 || !email}
+            disabled={loading || resendSeconds > 0 || !email || !phone}
           >
             {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend code"}
           </button>

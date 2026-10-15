@@ -9,7 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail } from "lucide-react";
+import { Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { AuthShell, authLinkClass } from "@/components/auth/auth-shell";
 import {
@@ -22,7 +22,10 @@ import { Button } from "@/components/ui/button";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import type { DemoRole } from "@/lib/auth/demo-session";
-import { REGISTRATION_OTP_LENGTH } from "@/lib/auth/pending-registration";
+import {
+  OTP_RESEND_SECONDS,
+  REGISTRATION_OTP_LENGTH,
+} from "@/lib/auth/pending-registration";
 import { cn } from "@/lib/utils";
 
 /** Password-reset OTP is 4 digits (matches registration OTP). */
@@ -128,9 +131,12 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
 
   const emailFromQuery = searchParams.get("email")?.trim() || "";
   const [email, setEmail] = useState(emailFromQuery);
+  /** Masked number the code went to, e.g. "•••• 4567". */
+  const [sentTo, setSentTo] = useState(searchParams.get("to")?.trim() || "");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resendSeconds, setResendSeconds] = useState(0);
+  // The previous page just texted a code, so resend starts on the cooldown.
+  const [resendSeconds, setResendSeconds] = useState(OTP_RESEND_SECONDS);
 
   const forgotHref = isProvider ? "/pro/forgot-password" : "/forgot-password";
   const resetHref = isProvider ? "/pro/reset-password" : "/reset-password";
@@ -161,7 +167,7 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
     event.preventDefault();
     if (!email) return;
     if (otp.length !== OTP_LENGTH) {
-      toast.error(`Enter the ${OTP_LENGTH}-digit code from your email.`);
+      toast.error(`Enter the ${OTP_LENGTH}-digit code from the text message.`);
       return;
     }
 
@@ -173,7 +179,7 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
         success?: boolean;
       }>(
         authApi.verifyForgotOtp,
-        { code: otp },
+        { email, code: otp },
         { silent: true, skipLogoutOn401: true },
       );
 
@@ -185,11 +191,11 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
       savePasswordResetToken(data.token, email);
       toast.success(
         (typeof data.message === "string" && data.message) ||
-          "OTP verified. Choose a new password.",
+          "Code verified. Choose a new password.",
       );
       router.replace(resetHref);
     } catch (error) {
-      showApiErrorToast(error, "Invalid or expired OTP code.");
+      showApiErrorToast(error, "Invalid or expired code.");
     } finally {
       setLoading(false);
     }
@@ -199,15 +205,20 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
     if (!email || resendSeconds > 0) return;
     setLoading(true);
     try {
-      const data = await postData<{ message?: string }>(
+      const data = await postData<{
+        message?: string;
+        maskedPhone?: string;
+        resendInSeconds?: number;
+      }>(
         authApi.forgotPassword,
         { email },
         { silent: true, skipLogoutOn401: true },
       );
       setOtp("");
-      setResendSeconds(60);
+      if (data?.maskedPhone) setSentTo(data.maskedPhone);
+      setResendSeconds(data?.resendInSeconds ?? OTP_RESEND_SECONDS);
       toast.success(
-        data?.message || "Password reset OTP sent to your email",
+        data?.message || "We texted you a new reset code.",
       );
     } catch (error) {
       showApiErrorToast(error, "Could not resend the code.");
@@ -223,7 +234,7 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
       audience={role}
       eyebrow={isProvider ? "Service companies" : "Homeowners"}
       title="Verify reset code"
-      description={`Enter the ${OTP_LENGTH}-digit code we emailed you.`}
+      description={`Enter the ${OTP_LENGTH}-digit code we texted to the mobile number on your account. It expires in 5 minutes.`}
       footer={
         <>
           Return to{" "}
@@ -242,14 +253,17 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
         {email ? (
           <div className="flex items-center gap-3 rounded-2xl border border-input bg-[#f4f7fb] px-4 py-3.5">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Mail className="size-4" aria-hidden="true" />
+              <Smartphone className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Code sent to
               </p>
               <p className="truncate text-sm font-semibold text-foreground">
-                {email}
+                {sentTo || "Your mobile number"}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                Account: {email}
               </p>
             </div>
           </div>

@@ -7,16 +7,19 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
 } from "react";
-import { ArrowRight, Mail } from "lucide-react";
+import { ArrowRight, Smartphone } from "lucide-react";
 import { toast } from "sonner";
-import { postData } from "@/components/api/apiFuntions";
+import { extractErrorMessage, postData } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import { Button } from "@/components/ui/button";
-import { REGISTRATION_OTP_LENGTH } from "@/lib/auth/pending-registration";
+import {
+  maskPhone,
+  OTP_RESEND_SECONDS,
+  REGISTRATION_OTP_LENGTH,
+} from "@/lib/auth/pending-registration";
 import { cn } from "@/lib/utils";
 
 export const OTP_LENGTH = REGISTRATION_OTP_LENGTH;
-const RESEND_SECONDS = 30;
 
 export function OtpBoxes({
   value,
@@ -124,7 +127,9 @@ export function PhoneOtpVerificationPanel({
 }) {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resendSeconds, setResendSeconds] = useState(RESEND_SECONDS);
+  // The caller just texted a code, so resend starts on the 60-second cooldown.
+  const [resendSeconds, setResendSeconds] = useState(OTP_RESEND_SECONDS);
+  const maskedPhone = maskPhone(phone);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -156,9 +161,7 @@ export function PhoneOtpVerificationPanel({
         // Quote/request errors are toasted by the parent flow.
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Invalid verification code.",
-      );
+      toast.error(extractErrorMessage(error) || "Invalid verification code.");
     } finally {
       setLoading(false);
     }
@@ -168,22 +171,22 @@ export function PhoneOtpVerificationPanel({
     if (resendSeconds > 0 || loading) return;
     setLoading(true);
     try {
-      const response = await postData<{ message?: string }>(
+      const response = await postData<{
+        message?: string;
+        resendInSeconds?: number;
+      }>(
         authApi.sendPhoneOtp,
         { phone, email },
         { token: null, skipLogoutOn401: true, silent: true },
       );
       setOtp("");
-      setResendSeconds(RESEND_SECONDS);
+      setResendSeconds(response?.resendInSeconds ?? OTP_RESEND_SECONDS);
       toast.success(
-        response?.message ||
-          "Verification code sent. Check your email.",
+        response?.message || `We texted a new code to ${maskedPhone}.`,
       );
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not resend verification code.",
+        extractErrorMessage(error) || "Could not resend verification code.",
       );
     } finally {
       setLoading(false);
@@ -199,22 +202,22 @@ export function PhoneOtpVerificationPanel({
           Verify phone number
         </h2>
         <p className="text-sm leading-6 text-muted-foreground">
-          Enter the {OTP_LENGTH}-digit code we emailed you.
+          Enter the {OTP_LENGTH}-digit code sent via text to {maskedPhone}.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-6">
-        {email ? (
+        {phone ? (
           <div className="flex items-center gap-3 rounded-2xl border border-input bg-[#f4f7fb] px-4 py-3.5">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Mail className="size-4" aria-hidden="true" />
+              <Smartphone className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Code sent to
               </p>
               <p className="truncate text-sm font-semibold text-foreground">
-                {email}
+                {phone}
               </p>
             </div>
           </div>

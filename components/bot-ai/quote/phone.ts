@@ -1,6 +1,6 @@
 /**
- * International number from the country-picker input ("+923403538631"). Local formats
- * without a country code (e.g. "03403538631") are not guessed — the customer picks the
+ * International number from the country-picker input ("+447911123456"). Local formats
+ * without a country code (e.g. "07911123456") are not guessed — the customer picks the
  * country in the same phone input the /get-a-quote page uses.
  */
 export function normalizePhone(value: string) {

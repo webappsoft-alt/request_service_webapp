@@ -4,15 +4,21 @@ export const authApi = {
   login: "auth/login",
   customerRegister: "auth/customer/register",
   providerRegister: "auth/provider/register",
+  /** Signup step 0 — is the email free? Sends nothing. */
+  checkEmail: "auth/check-email",
+  /** Signup step 1 — texts a 4-digit code. Body: `{ email, phone }` */
   sendOtp: "auth/send-otp",
+  /** Same body and limits as sendOtp (60s cooldown, 4 per hour per number) */
+  resendOtp: "auth/resend-otp",
+  /** Signup step 2 — body: `{ email, phone, code }`; returns `verificationToken` for register */
   verifyOtp: "auth/verify-otp",
   /** Marketplace quote phone verification step 1 */
   sendPhoneOtp: "auth/send-phone-otp",
   /** Marketplace quote phone verification step 2 */
   verifyPhoneOtp: "auth/verify-phone-otp",
-  /** Password recovery step 1 */
+  /** Password recovery step 1 — texts a code to the account's phone. Body: `{ email }` */
   forgotPassword: "auth/forgot-password-otp",
-  /** Password recovery step 2 — body: `{ code }` */
+  /** Password recovery step 2 — body: `{ email, code }` */
   verifyForgotOtp: "auth/verify-forgot-otp",
   /** Password recovery step 3 — PUT with Bearer reset token + `{ newPassword }` */
   updatePasswordReset: "auth/update-password",

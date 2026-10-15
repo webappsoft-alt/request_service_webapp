@@ -11,6 +11,7 @@ import { useAppSelector } from "@/store/hooks";
 import { useBot } from "../BotProvider";
 import type { BotMessage, BotQuoteBrief } from "../types";
 import { isValidPhone, normalizePhone } from "./phone";
+import { maskPhone } from "@/lib/auth/pending-registration";
 import { QuoteOtpModal } from "./QuoteOtpModal";
 import { submitBotQuote, type BotQuoteLocation } from "./submitBotQuote";
 
@@ -260,7 +261,7 @@ export function QuoteBriefCard({ message, brief }: { message: BotMessage; brief:
         {!isAuthenticated ? "Sign in to send" : sending ? "Sending code…" : "Verify phone & send request"}
       </button>
       <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
-        We&apos;ll email a verification code to {email || "your account email"} first.
+        We&apos;ll text a verification code to {isValidPhone(phone) ? maskPhone(normalizePhone(phone)) : "your phone"} first.
       </p>
 
       <QuoteOtpModal

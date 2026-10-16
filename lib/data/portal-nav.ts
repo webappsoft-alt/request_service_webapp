@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Bot,
   Bell,
   Briefcase,
   Building2,
@@ -82,6 +83,7 @@ export const portalNavGroups: PortalNavGroup[] = [
     items: [
       { href: "/pro/dashboard/settings", label: "Business Profile", icon: Store },
       { href: "/pro/dashboard/subscription", label: "Subscription", icon: Sparkles },
+      { href: "/pro/dashboard/ai-receptionist", label: "AI Receptionist", icon: Bot },
       { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images },
       { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
       { href: "/pro/dashboard/services", label: "Fixed services", icon: Wrench },

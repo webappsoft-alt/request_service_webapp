@@ -386,8 +386,10 @@ export function RequestDetailView({ id }: { id: string }) {
     const cached = reduxRequests.detailsCache[id];
     // Trust cache only for progressed statuses. For new/viewed/contacted always
     // hit View once so the server can heal "has calendar visit → Scheduled" into MongoDB.
+    // Unseen leads always hit View too — that call stamps firstViewedAt (clears "Unseen").
     const trustCache =
       cached &&
+      cached.firstViewedAt &&
       cached.status !== "new" &&
       cached.status !== "viewed" &&
       cached.status !== "contacted";
@@ -413,7 +415,7 @@ export function RequestDetailView({ id }: { id: string }) {
       setApiLoading(true);
     }
     detailFetchedForIdRef.current = id;
-    const wasNew = !cached || cached.status === "new";
+    const wasNew = !cached || cached.status === "new" || !cached.firstViewedAt;
     void dispatch(fetchRequestDetail(id))
       .unwrap()
       .then((item) => {
@@ -651,6 +653,7 @@ export function RequestDetailView({ id }: { id: string }) {
     const shouldFetchEstimates =
       tab === "estimates" ||
       tab === "jobs" ||
+      request?.status === "converted_to_estimate" ||
       request?.status === "estimate_sent" ||
       request?.status === "accepted" ||
       request?.status === "converted_to_job";
@@ -1079,6 +1082,7 @@ export function RequestDetailView({ id }: { id: string }) {
 
   const hasEstimate =
     relatedEstimates.length > 0 ||
+    request.status === "converted_to_estimate" ||
     request.status === "estimate_sent" ||
     request.status === "accepted" ||
     request.status === "converted_to_job";
@@ -1363,13 +1367,13 @@ export function RequestDetailView({ id }: { id: string }) {
                 </Link>
               </Button>
             ) : estimate ? (
-              <Button size="sm" asChild>
+              <Button size="sm" variant="secondary" asChild>
                 <Link href={`/pro/dashboard/new-estimate/${estimate.id}`}>
-                  {estimate.number ? `Open ${estimate.number}` : "Open estimate"}
+                  {estimate.number ? `View estimate ${estimate.number}` : "View estimate"}
                 </Link>
               </Button>
             ) : hasEstimate ? (
-              <Button size="sm" asChild>
+              <Button size="sm" variant="secondary" asChild>
                 <Link href={`/pro/dashboard/requests/${request.id}?tab=estimates`}>
                   View estimate
                 </Link>

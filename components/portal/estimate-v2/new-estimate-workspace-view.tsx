@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, CheckCircle2, ChevronDown, ChevronUp, LayoutTemplate, Link2, MapPin, Printer } from "lucide-react";
@@ -1722,7 +1723,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         </div>
       }
       badge={
-        estimate?.status && estimate.status !== "converted_to_job" ? (
+        <>
+        {estimate?.status && estimate.status !== "converted_to_job" ? (
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
@@ -1740,7 +1742,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           >
             {opportunityStatusLabel(opportunity.status)}
           </span>
-        ) : null
+        ) : null}
+        {isAiGenerated(opportunity.source) ? <AiGeneratedBadge className="text-[11px]" /> : null}
+        </>
       }
       actions={
         <>

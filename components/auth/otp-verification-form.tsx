@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 
 const OTP_LENGTH = REGISTRATION_OTP_LENGTH;
 
-function OtpBoxes({
+export function OtpBoxes({
   value,
   onChange,
   disabled,

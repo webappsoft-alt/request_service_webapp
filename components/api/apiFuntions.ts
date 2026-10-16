@@ -20,6 +20,10 @@ import {
 } from "@/store/authSlice";
 import { decryptData } from "./encrypted";
 import { authApi, userApi } from "./ApiRoutesFile";
+import {
+  PHONE_VERIFICATION_REQUIRED,
+  requestPhoneVerification,
+} from "@/lib/auth/phone-verification";
 
 export type QueryParams = Record<
   string,
@@ -309,9 +313,42 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
   }
 }
 
+function errorCodeOf(error: unknown): string {
+  if (!axios.isAxiosError(error)) return "";
+  const data = error.response?.data as { code?: unknown } | undefined;
+  return typeof data?.code === "string" ? data.code : "";
+}
+
+/**
+ * The account itself lost access (deleted by an admin, or set inactive /
+ * suspended / banned). Refreshing can't help, so the session ends.
+ */
+const ACCOUNT_BLOCKED_MESSAGE =
+  /^(This account has been deleted\.?|User account is (inactive|suspended|banned|deleted))$/;
+
+function isAccountBlocked(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  if (status !== 401 && status !== 403) return false;
+  const message = (error.response?.data as { message?: unknown } | undefined)?.message;
+  return typeof message === "string" && ACCOUNT_BLOCKED_MESSAGE.test(message.trim());
+}
+
 function notifyRequestError(error: unknown, silent?: boolean): void {
-  if (silent) return;
   if (!isBrowser()) return;
+  // The portal answers this with the verification modal instead of a toast.
+  if (errorCodeOf(error) === PHONE_VERIFICATION_REQUIRED) {
+    requestPhoneVerification();
+    return;
+  }
+  if (isAccountBlocked(error)) {
+    // One toast however many requests were in flight.
+    toast.error(extractErrorMessage(error), { id: "account-blocked" });
+    // Only an existing session ends; a refused login attempt has none.
+    if (getAuthToken()) handleUserLogout({ silent: true });
+    return;
+  }
+  if (silent) return;
   toast.error(extractErrorMessage(error));
 }
 

@@ -11,6 +11,7 @@ import {
 import { proPaths } from "@/lib/pro-paths";
 import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
 import { contractorPaths, isContractorRole } from "@/lib/contractor-paths";
+import { PhoneVerificationGate } from "@/components/portal/phone-verification-gate";
 
 export function PortalGate({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -50,5 +51,5 @@ export function PortalGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return children;
+  return <PhoneVerificationGate>{children}</PhoneVerificationGate>;
 }

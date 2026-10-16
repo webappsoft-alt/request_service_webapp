@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Camera, Loader2 } from "lucide-react";
+import { BadgeCheck, Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import {
@@ -51,6 +51,8 @@ import {
   asAuthProvider,
   type AuthProviderRecord,
 } from "@/lib/auth/provider-profile";
+import { isPhoneChanged } from "@/lib/auth/phone-verification";
+import { PhoneVerificationDialog } from "@/components/portal/phone-verification-dialog";
 import {
   coverageAreaSelectionKey,
   formatServiceAreaCoverageLabels,
@@ -323,6 +325,9 @@ export function ProfileView() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  // A changed phone is confirmed by SMS code before the profile save goes out.
+  const [phoneToVerify, setPhoneToVerify] = useState<string | null>(null);
+  const phoneVerifyResolver = useRef<((ok: boolean) => void) | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [hours, setHours] = useState(() => cloneWorkingHours(officeHours));
   const [gallery, setGallery] = useState<BusinessGalleryImage[]>([]);
@@ -856,7 +861,28 @@ export function ProfileView() {
     }
   }
 
+  /**
+   * Resolves true when the phone is unchanged, or once the new number passed
+   * its SMS code (the backend saved it as verified). False if the pro backs out.
+   */
+  function confirmPhoneChange(): Promise<boolean> {
+    const nextPhone = phone.trim();
+    if (!isPhoneChanged(nextPhone, user?.phone)) return Promise.resolve(true);
+    setPhoneToVerify(nextPhone);
+    return new Promise((resolve) => {
+      phoneVerifyResolver.current = resolve;
+    });
+  }
+
+  function settlePhoneVerification(ok: boolean, verifiedPhone?: string) {
+    if (ok && verifiedPhone) setPhone(verifiedPhone);
+    setPhoneToVerify(null);
+    phoneVerifyResolver.current?.(ok);
+    phoneVerifyResolver.current = null;
+  }
+
   async function onUpdate() {
+    if (!(await confirmPhoneChange())) return;
     setIsUpdating(true);
     try {
       const saved = await saveProfile(true);
@@ -879,6 +905,7 @@ export function ProfileView() {
       goTo("profile");
       return;
     }
+    if (!(await confirmPhoneChange())) return;
 
     setSaving(true);
     try {
@@ -1052,13 +1079,26 @@ export function ProfileView() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor="phone">Phone</FieldLabel>
+                  <FieldLabel htmlFor="phone" className="flex items-center gap-2">
+                    Phone
+                    {user?.isPhoneVerified === true && !isPhoneChanged(phone, user?.phone) ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
+                        <BadgeCheck className="size-3.5" />
+                        Verified
+                      </span>
+                    ) : null}
+                  </FieldLabel>
                   <AuthPhoneInput
                     id="phone"
                     value={phoneFieldValue}
                     onChange={setPhone}
                     placeholder="Enter phone number"
                   />
+                  {isPhoneChanged(phone, user?.phone) ? (
+                    <FieldDescription>
+                      You&apos;ll confirm the new number with a texted code when you save.
+                    </FieldDescription>
+                  ) : null}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="email">Work email</FieldLabel>
@@ -1562,6 +1602,19 @@ export function ProfileView() {
           </div>
         </div>
       </div>
+
+      {phoneToVerify !== null ? (
+        <PhoneVerificationDialog
+          key={phoneToVerify}
+          open
+          initialPhone={phoneToVerify}
+          lockPhone
+          title="Verify your new phone number"
+          description="We'll text a 4-digit code to this number. Your profile is saved once it's verified."
+          onCancel={() => settlePhoneVerification(false)}
+          onVerified={(verifiedPhone) => settlePhoneVerification(true, verifiedPhone)}
+        />
+      ) : null}
     </PortalPage>
   );
 }

@@ -83,6 +83,10 @@ export const providerApi = {
   profile: "provider/profile",
   /** PUT `{ workingHours: [...] }` */
   officeHours: "provider/settings/office-hours",
+  /** POST `{ phone }` — text a code to the number to verify / switch to */
+  phoneSendOtp: "provider/phone/send-otp",
+  /** POST `{ phone, code }` — verify and save it as the account's phone */
+  phoneVerify: "provider/phone/verify",
   /** GET list / POST create provider operational service areas */
   serviceAreas: "provider/service-areas",
   /** GET/PUT/DELETE one service area by id */

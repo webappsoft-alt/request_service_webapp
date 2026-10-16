@@ -11,9 +11,27 @@ export type ChatAttachment = {
   type: string;
 };
 
+/** Highlights of an AI receptionist phone intake, seeded as the first chat message. */
+export type ChatCallSummary = {
+  callLogId: string;
+  recordKind: "estimate" | "lead" | string;
+  recordNumber: string;
+  serviceCategory: string;
+  subService: string;
+  issue: string;
+  address: string;
+  preferredTime: string;
+  urgent: boolean;
+  callAt: string | null;
+  durationSec: number;
+};
+
 export type ChatMessage = {
   id: string;
-  from: ChatRole;
+  /** "system" is used for platform-generated cards (e.g. the AI call summary). */
+  from: ChatRole | "system";
+  kind?: "call_summary" | string;
+  callSummary?: ChatCallSummary | null;
   text: string;
   at: string;
   attachments: ChatAttachment[];

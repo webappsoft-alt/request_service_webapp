@@ -225,6 +225,19 @@ export function AiCallTestHarness() {
         });
         break;
       }
+      case "lead":
+        push({
+          kind: "notice",
+          tone: "success",
+          text: message.created
+            ? `Lead ${message.number} created (the caller did not ask for an estimate). Find it under Requests & Leads.`
+            : message.requestedIntent === "estimate"
+              ? `Lead ${message.number} got the follow-up notes: the same caller called within 24h and now wants an estimate.`
+              : `Lead ${message.number} got the follow-up call notes (same caller within 24h).`,
+          href: `/pro/dashboard/requests/${message.leadId}`,
+          linkLabel: "Open lead",
+        });
+        break;
       case "transfer":
         push({
           kind: "notice",
@@ -399,7 +412,7 @@ export function AiCallTestHarness() {
 
           <ul className="w-full space-y-1.5 text-left text-xs leading-5 text-muted-foreground">
             <li>• Uses your saved voice, greeting, and business categories.</li>
-            <li>• Draft estimates it creates are real and marked as a test call in their internal notes.</li>
+            <li>• Quote requests become draft estimates; other inquiries and callbacks become leads. Both are real and marked as a test call in their notes.</li>
             <li>• Transfers are simulated; no phone call is placed.</li>
           </ul>
         </CardContent>

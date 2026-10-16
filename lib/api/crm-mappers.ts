@@ -666,6 +666,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     chatThreadId,
     unreadMessagesCount,
     hasActiveChat,
+    address: trimmed(record.address) || trimmed(record.street) || undefined,
     zip: trimmed(record.zip),
     city: trimmed(record.city),
     state: trimmed(record.state),

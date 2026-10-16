@@ -22,6 +22,7 @@ import { PhotoLightbox } from "@/components/marketplace/portfolio-lightbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CallSummaryCard } from "@/components/shared/call-summary-card";
 import type { ChatAttachment, ChatMessage, ChatRole } from "@/lib/booking/chat-store";
 import {
   formatClockTime,
@@ -386,7 +387,22 @@ export function ChatPanel({
                   </div>
                 ) : null}
 
-                {/* Message Row */}
+                {message.kind === "call_summary" && message.callSummary ? (
+                  /* AI call summary: shown as an incoming message from the business. */
+                  <div className="flex items-end justify-start gap-2.5">
+                    <Avatar className="size-8 shrink-0 shadow-2xs ring-1 ring-border">
+                      {otherAvatar ? <AvatarImage src={otherAvatar} alt={otherName} /> : null}
+                      <AvatarFallback className={cn("text-xs font-semibold", getAvatarColor(otherName))}>
+                        {getInitials(otherName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex w-full max-w-[85%] flex-col items-start gap-1 sm:max-w-[70%]">
+                      <CallSummaryCard summary={message.callSummary} viewer={self} />
+                      <span className="px-1 text-[11px] text-muted-foreground">{formatClockTime(message.at)}</span>
+                    </div>
+                  </div>
+                ) : (
+                /* Message Row */
                 <div
                   className={cn(
                     "flex items-end gap-2.5",
@@ -530,6 +546,7 @@ export function ChatPanel({
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             );
           })

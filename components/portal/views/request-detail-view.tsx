@@ -24,6 +24,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import { ArchiveBadge, archiveRowAction } from "@/components/portal/archive-control";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
@@ -191,7 +192,10 @@ function windowFromLabel(value?: string): PortalTimeWindow {
   return "all_day";
 }
 
-function leadChannelCopy(channel?: string) {
+function leadChannelCopy(channel?: string, source?: string) {
+  if (isAiGenerated(source)) {
+    return "Lead source: captured by your AI receptionist from a phone call";
+  }
   if (channel === "direct") {
     return "Lead source: submitted on your company website";
   }
@@ -1508,9 +1512,12 @@ export function RequestDetailView({ id }: { id: string }) {
                   <LeadCard hideHeader borderless>
                     <div className="space-y-6 px-1 py-1 sm:px-2">
                       <div>
-                        <h2 className="text-base font-semibold capitalize tracking-tight text-foreground">
-                          {request.serviceName}
-                        </h2>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-base font-semibold capitalize tracking-tight text-foreground">
+                            {request.serviceName}
+                          </h2>
+                          {isAiGenerated(request.source) ? <AiGeneratedBadge className="text-[11px]" /> : null}
+                        </div>
                         <p className="mt-1 text-sm text-muted-foreground">
                           #{request.number}
                           {request.categoryName ? ` · ${request.categoryName}` : ""}
@@ -1546,7 +1553,7 @@ export function RequestDetailView({ id }: { id: string }) {
                           </p>
                         </div>
                         <p className="mt-1 text-[11px] leading-snug opacity-75">
-                          {leadChannelCopy(request.channel)}
+                          {leadChannelCopy(request.channel, request.source)}
                         </p>
                       </div>
 

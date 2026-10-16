@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import { archiveRowAction } from "@/components/portal/archive-control";
 import { CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ function sourceLabel(source?: string) {
   if (source === "quote_request") return "Lead";
   if (source === "phone") return "Phone";
   if (source === "walk_in") return "Walk-in";
+  if (source === "ai_receptionist") return "AI phone call";
   return source || "Direct";
 }
 
@@ -413,7 +415,8 @@ export function RequestsView() {
                     </span>
                   ) : null}
                   <span className="text-xs text-muted-foreground capitalize">{row.channel}</span>
-                  {row.source && row.source !== "quote_request" ? (
+                  {isAiGenerated(row.source) ? <AiGeneratedBadge /> : null}
+                  {row.source && row.source !== "quote_request" && !isAiGenerated(row.source) ? (
                     <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
                       {sourceLabel(row.source)}
                     </span>

@@ -38,6 +38,8 @@ export type AiCallSummary = {
   leadNumber: string;
   opportunityId: string | null;
   estimateNumber: string;
+  /** "estimate" | "lead": what the intake was saved as (empty on older calls). */
+  intakeKind?: string;
   transferredTo: string;
   turns?: number;
   preview?: string;
@@ -78,6 +80,10 @@ export const OUTCOME_META: Record<string, { label: string; className: string }> 
     label: "Estimate drafted",
     className: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400",
   },
+  lead_saved: {
+    label: "Lead captured",
+    className: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400",
+  },
   transferred: { label: "Transferred", className: "bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-400" },
   ended_by_ai: { label: "Completed", className: "bg-muted text-muted-foreground ring-border" },
   caller_hung_up: { label: "Caller hung up", className: "bg-muted text-muted-foreground ring-border" },
@@ -89,8 +95,13 @@ export const OUTCOME_META: Record<string, { label: string; className: string }> 
   in_progress: { label: "In progress", className: "bg-primary/10 text-primary ring-primary/25" },
 };
 
-export function outcomeMeta(call: Pick<AiCallSummary, "status" | "outcome">) {
+export function outcomeMeta(
+  call: Pick<AiCallSummary, "status" | "outcome"> & Partial<Pick<AiCallSummary, "intakeKind" | "leadNumber" | "estimateNumber">>,
+) {
   if (call.status === "in_progress") return OUTCOME_META.in_progress;
+  // A saved intake is either a lead or a draft estimate; label it by what was created.
+  const savedLead = call.intakeKind ? call.intakeKind === "lead" : Boolean(call.leadNumber && !call.estimateNumber);
+  if (call.outcome === "lead_captured" && savedLead) return OUTCOME_META.lead_saved;
   return OUTCOME_META[call.outcome] || OUTCOME_META.ended_by_ai;
 }
 
@@ -99,6 +110,7 @@ export const EVENT_LABELS: Record<string, string> = {
   interrupted: "Caller interrupted the AI",
   ignored_noise: "Background noise ignored",
   out_of_scope: "Out-of-scope request",
+  email_invalid: "Unclear email, asked again",
   lead_created: "Lead created",
   lead_updated: "Existing lead updated",
   estimate_drafted: "Draft estimate created",

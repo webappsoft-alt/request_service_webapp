@@ -110,6 +110,7 @@ export const EVENT_LABELS: Record<string, string> = {
   interrupted: "Caller interrupted the AI",
   ignored_noise: "Background noise ignored",
   out_of_scope: "Out-of-scope request",
+  coverage_check: "Service area checked",
   email_invalid: "Unclear email, asked again",
   lead_created: "Lead created",
   lead_updated: "Existing lead updated",

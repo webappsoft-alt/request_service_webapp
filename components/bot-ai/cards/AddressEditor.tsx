@@ -12,8 +12,9 @@ import { useBot } from "../BotProvider";
  * so it reads as a new action rather than part of the context card above it.
  */
 export function AddressEditor() {
-  const { closeAddressEditor, applyAddress } = useBot();
-  const [draft, setDraft] = useState("");
+  const { closeAddressEditor, applyAddress, addressDraft } = useBot();
+  // Prefilled with an address typed in chat that couldn't be resolved on its own.
+  const [draft, setDraft] = useState(addressDraft);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // The shared autocomplete has no autoFocus prop; focus its input once on open.
@@ -59,7 +60,7 @@ export function AddressEditor() {
         placeholder="Street address, city or ZIP"
         autoComplete="off"
         hideStatus
-        inputClassName="h-9 text-[13px]"
+        inputClassName="h-9 text-base sm:text-[13px]"
       />
       <p className="mt-1.5 text-[10px] text-muted-foreground">
         Pick a suggestion — I&apos;ll check which pros serve that address.

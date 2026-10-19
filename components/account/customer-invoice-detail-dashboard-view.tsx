@@ -417,13 +417,10 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                             <p className="mt-0.5 text-xs text-muted-foreground capitalize">
                               {item.kind}
                               {item.taxRate
-                                ? ` · Tax ${
-                                    Number(item.taxRate) > 1
-                                      ? Number(item.taxRate).toFixed(
-                                          Number(item.taxRate) % 1 ? 2 : 0,
-                                        )
-                                      : (Number(item.taxRate) * 100).toFixed(0)
-                                  }%`
+                                ? // taxRate is stored as a percent (0.5 = 0.5%, 8.25 = 8.25%).
+                                  ` · Tax ${Number(item.taxRate).toFixed(
+                                    Number(item.taxRate) % 1 ? 2 : 0,
+                                  )}%`
                                 : ""}
                             </p>
                           ) : null}

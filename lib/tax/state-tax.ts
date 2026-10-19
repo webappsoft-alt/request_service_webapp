@@ -11,9 +11,6 @@ type TaxRateResponse = {
   rate?: number;
 };
 
-const cache = new Map<string, { rate: number; at: number }>();
-const TTL_MS = 5 * 60 * 1000;
-
 function http() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- deferred to break circular import
   return require("@/components/api/apiFuntions") as typeof import("@/components/api/apiFuntions");
@@ -32,6 +29,7 @@ function readRate(payload: unknown): number {
 /**
  * Resolve admin-configured sales tax percent for a U.S. state.
  * Returns 0 when the state is unknown or no rate is configured.
+ * Never cached (client or GET cache) — every call reads the live admin rate.
  */
 export async function fetchTaxRatePercent(
   state: string | null | undefined,
@@ -40,24 +38,14 @@ export async function fetchTaxRatePercent(
   const code = normalizeUsStateCode(state || "");
   if (!code) return 0;
 
-  const cached = cache.get(code);
-  if (!options?.force && cached && Date.now() - cached.at < TTL_MS) {
-    return cached.rate;
-  }
-
   try {
     const endpoint = options?.public
       ? `${publicApi.taxRate}?state=${encodeURIComponent(code)}`
       : `${providerCrmApi.taxRate}?state=${encodeURIComponent(code)}`;
-    const payload = await http().getData(endpoint, {
-      silent: true,
-      ...(options?.force ? { force: true } : {}),
-    });
-    const rate = readRate(payload);
-    cache.set(code, { rate, at: Date.now() });
-    return rate;
+    const payload = await http().getData(endpoint, { silent: true, force: true });
+    return readRate(payload);
   } catch {
-    return cached?.rate ?? 0;
+    return 0;
   }
 }
 
@@ -68,15 +56,6 @@ export function applyTaxRatePercentToItems<T extends { taxRate?: number }>(
 ): T[] {
   const rate = Math.max(0, Number(taxRatePercent) || 0);
   return (items || []).map((item) => ({ ...item, taxRate: rate }));
-}
-
-export function invalidateTaxRateCache(stateCode?: string) {
-  if (stateCode) {
-    const code = normalizeUsStateCode(stateCode);
-    if (code) cache.delete(code);
-    return;
-  }
-  cache.clear();
 }
 
 /** Display helper: always show a numeric percent (including 0). */

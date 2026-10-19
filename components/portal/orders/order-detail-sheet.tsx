@@ -48,6 +48,19 @@ export {
   OrderStatusPill,
 };
 
+/**
+ * Tax percent for display. `taxRate` is a percent (8.25 = 8.25%), matching the admin config;
+ * orders that only store the tax amount derive it from the taxable subtotal.
+ */
+function orderTaxPercent(pricing?: ProviderOrder["pricing"]) {
+  const rate = Number(pricing?.taxRate) || 0;
+  if (rate > 0) return rate;
+  const taxable =
+    (Number(pricing?.basePrice) || 0) + (Number(pricing?.changeOrdersTotal) || 0);
+  const tax = Number(pricing?.taxAmount) || 0;
+  return taxable > 0 && tax > 0 ? Math.round((tax / taxable) * 10000) / 100 : 0;
+}
+
 export function OrderDetailSheet({
   order,
   isOpen,
@@ -395,7 +408,7 @@ export function OrderDetailSheet({
                     <span className="text-foreground">${order.pricing?.subtotal?.toFixed(2) || "0.00"}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Sales Tax ({(Number(order.pricing?.taxRate || 0) * 100).toFixed(2)}%)</span>
+                    <span>Sales Tax ({orderTaxPercent(order.pricing).toFixed(2)}%)</span>
                     <span className="text-foreground">${order.pricing?.taxAmount?.toFixed(2) || "0.00"}</span>
                   </div>
                   <div className="flex justify-between border-t border-border pt-2 text-sm font-semibold">

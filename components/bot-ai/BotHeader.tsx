@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { History, Minus, RotateCcw, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BOT_NAME } from "./systemPromptGuide";
+import { BOT_NAME, BOT_STATUS } from "./systemPromptGuide";
 
 export function BotAvatar({ className }: { className?: string }) {
   return (
@@ -78,7 +78,7 @@ export function BotHeader({
         </DialogPrimitive.Title>
         <p className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
           <span className="size-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_1px] shadow-emerald-500/70" />
-          Online · Home services
+          {BOT_STATUS}
         </p>
         <DialogPrimitive.Description className="sr-only">
           Describe a home issue to get matched with verified local professionals, then book or request a quote.

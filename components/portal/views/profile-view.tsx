@@ -1116,7 +1116,7 @@ export function ProfileView() {
         ) : null}
 
         {step === "business" ? (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <section className="rounded-xl border border-input bg-card p-5">
               <p className="text-sm font-semibold">Business</p>
               <p className="mt-1 text-xs text-muted-foreground">

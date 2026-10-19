@@ -24,6 +24,8 @@ const MAX_GAP = 20;
 function shortLabel(name: string) {
   const trimmed = name.trim();
   if (!trimmed) return "Service";
+  // Short multi-word names stay whole ("House Cleaning", "Pest Control"); only long ones are cut.
+  if (trimmed.length <= 16) return trimmed;
   const first = trimmed.split(/\s+/)[0] ?? trimmed;
   return first.length > 14 ? `${first.slice(0, 13)}…` : first;
 }

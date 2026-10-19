@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { Mail, MapPin, Phone } from "lucide-react";
+import { Mail, MapPin, MessageCircle } from "lucide-react";
+import { useOptionalBot } from "@/components/bot-ai";
 import { Logo } from "@/components/layout/logo";
 import { footerNav } from "@/lib/data/navigation";
 import { serviceCategories } from "@/lib/data/services";
@@ -58,12 +59,8 @@ export function SiteFooter() {
   const addressLines = branding.address2
     ? [branding.address, branding.address2].filter(Boolean)
     : splitAddress(branding.address);
-  const phones = [
-    { label: branding.phone, href: branding.phoneHref },
-    branding.phone2
-      ? { label: branding.phone2, href: branding.phone2Href }
-      : null,
-  ].filter(Boolean) as Array<{ label: string; href: string }>;
+  // Present on marketing pages (footer renders inside BotProvider); null elsewhere.
+  const bot = useOptionalBot();
   // Footer shows the CMS "Customer support email" (falls back to the general email).
   const emails = [...new Set([branding.supportEmail || branding.email, branding.email2].filter(Boolean))];
 
@@ -99,17 +96,27 @@ export function SiteFooter() {
                 </span>
               </li>
             ) : null}
-            {phones.map((item) => (
-              <li key={item.label}>
-                <a
-                  className="inline-flex items-center gap-2.5 transition-colors hover:text-white"
-                  href={item.href || undefined}
+            {/* Phone number intentionally hidden — "Chat With Us" opens the AI assistant instead. */}
+            <li>
+              {bot ? (
+                <button
+                  type="button"
+                  onClick={bot.openBot}
+                  className="inline-flex items-center gap-2.5 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
                 >
-                  <Phone className="size-4 shrink-0" aria-hidden="true" />
-                  {item.label}
-                </a>
-              </li>
-            ))}
+                  <MessageCircle className="size-4 shrink-0" aria-hidden="true" />
+                  Chat With Us
+                </button>
+              ) : (
+                <Link
+                  href="/contact"
+                  className="inline-flex items-center gap-2.5 transition-colors hover:text-white"
+                >
+                  <MessageCircle className="size-4 shrink-0" aria-hidden="true" />
+                  Chat With Us
+                </Link>
+              )}
+            </li>
             {emails.map((email) => (
               <li key={email}>
                 <a

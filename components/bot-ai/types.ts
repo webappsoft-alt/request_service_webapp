@@ -1,5 +1,7 @@
 /** Shared models for the customer AI assistant (components/bot-ai ↔ backend /bot-ai). */
 
+import type { PlaceSuggestion } from "@/lib/google-places";
+
 export type BotStep = "identifying" | "provider_selection" | "quote_or_booking";
 
 export type BotProviderCard = {
@@ -180,6 +182,10 @@ export type BotMessage = {
   /** AI lead brief to confirm, verify by OTP and send. */
   quoteBrief?: BotQuoteBrief | null;
   quoteSuccess?: BotQuoteSuccess | null;
+  /** Client-only: candidates for an address typed in chat (one tap to confirm). */
+  addressOptions?: PlaceSuggestion[];
+  /** Client-only: message to send once the picked address is set (address was part of it). */
+  addressPendingText?: string | null;
 };
 
 export type BotSessionSummary = {

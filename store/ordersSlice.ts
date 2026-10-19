@@ -696,7 +696,7 @@ function parseCheckout(response: unknown): OrderCheckoutResult {
         changeOrdersTotal: toNumber(pricing.changeOrdersTotal, 0),
         subtotal: toNumber(pricing.subtotal, 0),
         taxRate: toNumber(pricing.taxRate, 0),
-        taxAmount: toNumber(pricing.taxAmount, 0),
+        taxAmount: toNumber(pricing.taxAmount ?? pricing.tax, 0),
         platformFee: toNumber(pricing.platformFee, 0),
         totalAmount: toNumber(pricing.totalAmount, 0),
         currency:

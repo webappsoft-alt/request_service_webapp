@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowUp, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BOT_DISCLAIMER } from "./systemPromptGuide";
 
 const MAX_LENGTH = 500;
 
@@ -54,7 +55,8 @@ export function BotInputBar({
   useEffect(() => () => recognitionRef.current?.stop(), []);
 
   useEffect(() => {
-    if (autoFocus) textareaRef.current?.focus();
+    // Desktop only: on phones the keyboard would pop up over the chat as soon as it opens.
+    if (autoFocus && window.matchMedia("(min-width: 640px)").matches) textareaRef.current?.focus();
   }, [autoFocus]);
 
   // Auto-grow up to ~4 lines.
@@ -127,7 +129,9 @@ export function BotInputBar({
           }}
           placeholder={listening ? "Listening…" : placeholder}
           aria-label="Message the assistant"
-          className="max-h-28 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-[13px] leading-5 outline-none placeholder:text-muted-foreground"
+          // 16px on phones: iOS Safari zooms the page into any focused field under 16px,
+          // which pushed the full-screen chat off the viewport.
+          className="max-h-28 min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-base leading-5 outline-none placeholder:text-muted-foreground sm:text-[13px]"
         />
         {speechSupported ? (
           <button
@@ -166,8 +170,8 @@ export function BotInputBar({
           <ArrowUp className="size-4" />
         </button>
       </form>
-      <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
-        AI assistant for home services · Suggestions may need a pro&apos;s confirmation
+      <p className="mt-1.5 text-center text-[10px] leading-snug text-muted-foreground">
+        {BOT_DISCLAIMER}
       </p>
     </div>
   );

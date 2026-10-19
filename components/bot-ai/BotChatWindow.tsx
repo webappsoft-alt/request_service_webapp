@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, FileText, LayoutDashboard, LogIn, RotateCcw, TriangleAlert, UserPlus } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, LayoutDashboard, LogIn, MapPin, RotateCcw, TriangleAlert, UserPlus } from "lucide-react";
 import { customerPaths } from "@/lib/customer-paths";
+import type { PlaceSuggestion } from "@/lib/google-places";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./BotHeader";
 import { isChangeAddressLabel, pathForLabel, useBot } from "./BotProvider";
@@ -135,8 +136,40 @@ function QuoteSuccessCard({ success }: { success: BotQuoteSuccess }) {
   );
 }
 
+/** Candidates for an address typed in chat — one tap sets it (with lat/lng). */
+function AddressOptionsCard({
+  options,
+  onPick,
+}: {
+  options: PlaceSuggestion[];
+  onPick: (option: PlaceSuggestion) => void;
+}) {
+  return (
+    <ul className="ml-9 flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+      {options.map((option) => (
+        <li key={option.placeId} className="border-b last:border-b-0">
+          <button
+            type="button"
+            onClick={() => onPick(option)}
+            className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition hover:bg-primary/5 focus-visible:bg-primary/5 focus-visible:outline-none"
+          >
+            <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0">
+              <span className="block truncate text-[12px] font-semibold">{option.mainText || option.description}</span>
+              {option.secondaryText ? (
+                <span className="block truncate text-[11px] text-muted-foreground">{option.secondaryText}</span>
+              ) : null}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function BotBubble({ message, isLatest, isNewest }: { message: BotMessage; isLatest: boolean; isNewest: boolean }) {
-  const { sendText, choosePath, context, selectProvider, requestService, retryLast, openAddressEditor } = useBot();
+  const { sendText, choosePath, context, selectProvider, requestService, retryLast, openAddressEditor, pickAddressOption } =
+    useBot();
   // Only the newest reply that arrived live is revealed at a reading pace (cards and
   // buttons follow once it's done); history and older replies render instantly.
   const reveal = useSmoothText(message.id, message.text, Boolean(message.live) && isNewest, !message.streaming);
@@ -211,6 +244,13 @@ function BotBubble({ message, isLatest, isNewest }: { message: BotMessage; isLat
 
         {message.authPrompt ? <AuthPromptCard prompt={message.authPrompt} /> : null}
 
+        {isLatest && message.addressOptions?.length ? (
+          <AddressOptionsCard
+            options={message.addressOptions}
+            onPick={(option) => pickAddressOption(option, message.addressPendingText ?? null)}
+          />
+        ) : null}
+
         {isLatest && message.error ? (
           <div className="pl-9">
             <button
@@ -274,7 +314,8 @@ function UserBubble({ message }: { message: BotMessage }) {
 }
 
 export function BotChatWindow() {
-  const { messages, typing, context, locationLabel, connected, addressEditorOpen, openAddressEditor } = useBot();
+  const { messages, typing, context, locationLabel, connected, addressEditorOpen, addressDraft, openAddressEditor } =
+    useBot();
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -311,7 +352,8 @@ export function BotChatWindow() {
   }, [safetyTarget]);
 
   return (
-    <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
+    // overflow-x-hidden: wide cards / carousels must never widen the panel on phones.
+    <div ref={scrollRef} className="relative min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
       <div className="sticky top-0 z-10 bg-popover px-3 pt-3 pb-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.25)]">
         <CapturedContextCard
           context={context}
@@ -319,10 +361,10 @@ export function BotChatWindow() {
           connected={connected}
           onChangeAddress={openAddressEditor}
         />
-        {addressEditorOpen ? <AddressEditor /> : null}
+        {addressEditorOpen ? <AddressEditor key={addressDraft} /> : null}
       </div>
 
-      <div ref={contentRef} className="flex flex-col gap-4 px-3 pb-4" aria-live="polite" aria-relevant="additions">
+      <div ref={contentRef} className="flex min-w-0 flex-col gap-4 px-3 pb-4" aria-live="polite" aria-relevant="additions">
         {messages.map((message) =>
           message.role === "user" ? (
             <UserBubble key={message.id} message={message} />

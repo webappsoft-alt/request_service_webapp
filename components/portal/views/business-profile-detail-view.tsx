@@ -209,8 +209,9 @@ export function BusinessProfileDetailView() {
           </CardContent>
         </Card>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
-        <div className="flex flex-col gap-4">
+      {/* Balanced 7/5 split; min-w-0 keeps wide content (gallery, long URLs) inside its column. */}
+      <div className="grid items-start gap-4 lg:grid-cols-12">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-7">
           <Card className={softCardClass}>
             <CardHeader className="border-b border-border-soft">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -352,9 +353,34 @@ export function BusinessProfileDetailView() {
               )}
             </CardContent>
           </Card>
+
+          <Card className={softCardClass}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
+              <CardTitle>Working hours</CardTitle>
+              <SectionEdit href="/pro/dashboard/profile?step=hours" />
+            </CardHeader>
+            <CardContent className="pt-4">
+              {officeHours.length ? (
+                <ul className="flex flex-col gap-1.5 text-sm">
+                  {officeHours.map((hours) => (
+                    <li key={hours.day} className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">
+                        {formatWorkingDay(hours.day)}
+                      </span>
+                      <span className="font-medium tabular-nums">
+                        {formatHoursValue(hours)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">Hours not listed yet.</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
           <Card className={softCardClass}>
             <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Services</CardTitle>
@@ -402,52 +428,27 @@ export function BusinessProfileDetailView() {
 
           <Card className={softCardClass}>
             <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
-              <CardTitle>Working hours</CardTitle>
-              <SectionEdit href="/pro/dashboard/profile?step=hours" />
-            </CardHeader>
-            <CardContent className="pt-4">
-              {officeHours.length ? (
-                <ul className="flex flex-col gap-1.5 text-sm">
-                  {officeHours.map((hours) => (
-                    <li key={hours.day} className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">
-                        {formatWorkingDay(hours.day)}
-                      </span>
-                      <span className="font-medium tabular-nums">
-                        {formatHoursValue(hours)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Hours not listed yet.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={softCardClass}>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Main business gallery</CardTitle>
               <SectionEdit href="/pro/dashboard/profile?step=gallery" />
             </CardHeader>
             <CardContent className="pt-4">
               {banner ? (
                 <div className="flex flex-col gap-3">
-                  <div className="relative aspect-[16/8] overflow-hidden rounded-md border border-border-soft">
+                  <div className="relative aspect-2/1 w-full overflow-hidden rounded-md border border-border-soft">
                     <Image
                       src={banner.url}
                       alt="Main banner"
                       fill
                       unoptimized
                       className="object-cover"
-                      sizes="360px"
+                      sizes="(min-width: 1024px) 40vw, 100vw"
                     />
                   </div>
                   {otherPhotos.length ? (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3">
                       {otherPhotos.map((photo) => (
-                        <div key={photo.url} className="relative aspect-square overflow-hidden rounded-md border border-border-soft">
-                          <Image src={photo.url} alt="" fill unoptimized className="object-cover" sizes="120px" />
+                        <div key={photo.url} className="relative aspect-square min-w-0 overflow-hidden rounded-md border border-border-soft">
+                          <Image src={photo.url} alt="" fill unoptimized className="object-cover" sizes="(min-width: 640px) 160px, 50vw" />
                         </div>
                       ))}
                     </div>

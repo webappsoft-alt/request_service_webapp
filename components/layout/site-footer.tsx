@@ -162,7 +162,7 @@ export function SiteFooter() {
           </div>
         </div>
 
-        {/* Navigation: 4 columns side by side (2 on small screens, 1 on mobile); Support sits under Company. */}
+        {/* Navigation: 4 columns side by side (2 on small screens, 1 on mobile). */}
         <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 md:grid-cols-4">
           <div className="flex flex-col gap-8">
             <FooterColumn title="Homeowners" items={footerNav.customers} />
@@ -175,7 +175,6 @@ export function SiteFooter() {
           </div>
           <div className="flex flex-col gap-8">
             <FooterColumn title="Company" items={footerNav.company} />
-            <FooterColumn title="Support" items={footerNav.support} />
           </div>
         </div>
 

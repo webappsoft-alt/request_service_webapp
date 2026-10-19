@@ -2,12 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, FileText, LayoutDashboard, LogIn, RotateCcw, TriangleAlert, UserPlus } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, LayoutDashboard, LogIn, MapPin, Pencil, RotateCcw, TriangleAlert, UserPlus } from "lucide-react";
 import { customerPaths } from "@/lib/customer-paths";
 import { cn } from "@/lib/utils";
 import { BotAvatar } from "./BotHeader";
 import { isChangeAddressLabel, pathForLabel, useBot } from "./BotProvider";
 import { CapturedContextCard } from "./cards/CapturedContextCard";
+import { suggestionLabel } from "./address-in-chat";
+import { AddressEditor } from "./cards/AddressEditor";
 import { PathChoiceCard } from "./cards/PathChoiceCard";
 import { ProviderCardCarousel } from "./cards/ProviderCardCarousel";
 import { ServiceCardCarousel } from "./cards/ServiceCardCarousel";
@@ -135,7 +137,8 @@ function QuoteSuccessCard({ success }: { success: BotQuoteSuccess }) {
 }
 
 function BotBubble({ message, isLatest, isNewest }: { message: BotMessage; isLatest: boolean; isNewest: boolean }) {
-  const { sendText, choosePath, context, selectProvider, requestService, retryLast, openAddressEditor } = useBot();
+  const { sendText, choosePath, context, selectProvider, requestService, retryLast, openAddressEditor, pickAddressOption } =
+    useBot();
   // Only the newest reply that arrived live is revealed at a reading pace (cards and
   // buttons follow once it's done); history and older replies render instantly.
   const reveal = useSmoothText(message.id, message.text, Boolean(message.live) && isNewest, !message.streaming);
@@ -210,6 +213,33 @@ function BotBubble({ message, isLatest, isNewest }: { message: BotMessage; isLat
 
         {message.authPrompt ? <AuthPromptCard prompt={message.authPrompt} /> : null}
 
+        {/* "Please confirm your address": tap a suggestion to set it (latest message only). */}
+        {isLatest && message.addressOptions?.length ? (
+          <div className="flex flex-wrap gap-1.5 pl-9">
+            {message.addressOptions.map((option) => (
+              <button
+                key={option.placeId}
+                type="button"
+                onClick={() => pickAddressOption(option, message.addressPendingText ?? null)}
+                title={option.description}
+                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-3 py-1.5 text-left text-[11px] font-semibold text-primary transition hover:-translate-y-px hover:border-primary/50 hover:bg-primary/10 active:translate-y-0"
+              >
+                <MapPin className="size-3 shrink-0" aria-hidden />
+                <span className="truncate">{suggestionLabel(option)}</span>
+              </button>
+            ))}
+            {/* None of these: search it in the address box under the header instead. */}
+            <button
+              type="button"
+              onClick={openAddressEditor}
+              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:-translate-y-px hover:border-primary/40 hover:text-primary active:translate-y-0"
+            >
+              <Pencil className="size-3 shrink-0" aria-hidden />
+              Type different address
+            </button>
+          </div>
+        ) : null}
+
 
         {isLatest && message.error ? (
           <div className="pl-9">
@@ -274,7 +304,8 @@ function UserBubble({ message }: { message: BotMessage }) {
 }
 
 export function BotChatWindow() {
-  const { messages, typing, context, locationLabel, connected, openAddressEditor } = useBot();
+  const { messages, typing, context, locationLabel, connected, addressEditorOpen, addressDraft, openAddressEditor } =
+    useBot();
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -313,13 +344,21 @@ export function BotChatWindow() {
   return (
     // overflow-x-hidden: wide cards / carousels must never widen the panel on phones.
     <div ref={scrollRef} className="relative min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
-      <div className="sticky top-0 z-10 bg-popover px-3 pt-3 pb-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.25)]">
+      {/* Above the blur backdrop (BotModal) while the address card is open. */}
+      <div
+        className={cn(
+          "sticky top-0 bg-popover px-3 pt-3 pb-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.25)]",
+          addressEditorOpen ? "z-30" : "z-10",
+        )}
+      >
         <CapturedContextCard
           context={context}
           locationLabel={locationLabel}
           connected={connected}
           onChangeAddress={openAddressEditor}
         />
+        {/* Address card under the header (keyed so a new prefill starts fresh). */}
+        {addressEditorOpen ? <AddressEditor key={addressDraft} /> : null}
       </div>
 
       <div ref={contentRef} className="flex min-w-0 flex-col gap-4 px-3 pb-4" aria-live="polite" aria-relevant="additions">

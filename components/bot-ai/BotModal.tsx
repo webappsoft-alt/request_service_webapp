@@ -16,7 +16,7 @@ import { useVisualViewportBox } from "./hooks/useVisualViewportBox";
  * header ✕ ends the chat and archives it to history.
  */
 export function BotModal() {
-  const { open, minimize, close, reset, sendText, typing, addressEditorOpen } = useBot();
+  const { open, minimize, close, reset, sendText, typing, addressEditorOpen, closeAddressEditor } = useBot();
   const [historyOpen, setHistoryOpen] = useState(false);
   const viewportBox = useVisualViewportBox(open);
 
@@ -36,10 +36,11 @@ export function BotModal() {
         />
         <DialogPrimitive.Content
           onOpenAutoFocus={(event) => event.preventDefault()}
-          // The Location Modal (and its address menu) render above this panel; clicks there
-          // must not count as "outside" and minimise the chat.
+          // The header address input's suggestion menu is portaled to <body>: picking from it
+          // must not count as an "outside" click and minimise the chat.
           onInteractOutside={(event) => {
-            if (addressEditorOpen) event.preventDefault();
+            const target = event.target as Element | null;
+            if (target?.closest?.("[data-google-address-menu]")) event.preventDefault();
           }}
           style={viewportBox}
           className={cn(
@@ -72,6 +73,18 @@ export function BotModal() {
 
           <div className="relative flex min-h-0 flex-1 flex-col">
             <BotChatWindow />
+            {/* Address card open: soften the chat behind it so the input and its suggestions
+                stand out (the sticky header sits above this at z-30). Click to dismiss. */}
+            {addressEditorOpen ? (
+              <button
+                type="button"
+                aria-label="Close address search"
+                onClick={closeAddressEditor}
+                // Frosted glass, kept light: a slight blur + faint white wash so the chat stays
+                // readable but steps back behind the address card.
+                className="absolute inset-0 z-20 cursor-default bg-white/25 backdrop-blur-[1.5px] animate-in fade-in duration-200 motion-reduce:animate-none dark:bg-black/20"
+              />
+            ) : null}
             <BotInputBar
               onSend={sendText}
               disabled={typing}

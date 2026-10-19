@@ -1,14 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  FileSignature,
-  MapPin,
-  MessageSquareOff,
-  PenLine,
-  Route,
-  ShieldCheck,
-  Timer,
-} from "lucide-react";
+import { ArrowRight, FileSignature, FolderOpen, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container, Section } from "@/components/layout/container";
 import { cn } from "@/lib/utils";
@@ -18,47 +9,29 @@ const pillars = [
     icon: MapPin,
     step: "01",
     accent: "from-[#003F7D]/14 via-[#003F7D]/4 to-transparent",
-    title: "Matched to your address and trade",
-    body: "Your request goes only to professionals who cover your area and actually offer the service you asked for — not a blast to every company in town.",
+    title: "Tell Us What You Need",
+    body: "Select a service, enter your ZIP code, and describe your project. Add photos to help professionals understand the job.",
   },
   {
-    icon: MessageSquareOff,
+    icon: Users,
     step: "02",
     accent: "from-sky-500/12 via-sky-500/4 to-transparent",
-    title: "You decide when the conversation starts",
-    body: "Pros see your project details in their inbox. You message when you’re ready. No cold calls from a list of strangers.",
+    title: "Connect With Local Pros",
+    body: "Find professionals who serve your area and offer the service you need. Review profiles, experience, and available customer feedback.",
   },
   {
     icon: FileSignature,
     step: "03",
     accent: "from-emerald-600/12 via-emerald-600/4 to-transparent",
-    title: "Written estimates you can approve online",
-    body: "Review line items, ask for changes, then sign digitally. The estimate you approve becomes the job and the invoice — nothing gets rewritten quietly.",
+    title: "Review Estimates & Hire",
+    body: "Discuss project details, review written estimates, ask questions, and choose the professional who fits your needs.",
   },
   {
-    icon: ShieldCheck,
+    icon: FolderOpen,
     step: "04",
     accent: "from-amber-500/14 via-amber-500/4 to-transparent",
-    title: "One record from request to payment",
-    body: "Quotes, messages, the signed scope, and payments stay on the same project file so you always know what was agreed and what is owed.",
-  },
-] as const;
-
-const highlights = [
-  {
-    icon: Route,
-    title: "Local first",
-    label: "Pros matched by ZIP and service area",
-  },
-  {
-    icon: PenLine,
-    title: "Written scope",
-    label: "Line-item estimates you can sign",
-  },
-  {
-    icon: Timer,
-    title: "Your pace",
-    label: "Message only when you’re ready",
+    title: "Manage Your Project",
+    body: "Keep messages, project details, schedules, and estimates organized in one convenient place.",
   },
 ] as const;
 
@@ -84,16 +57,14 @@ export function CustomerTrustSection() {
               <span className="eyebrow text-primary">Built for homeowners</span>
             </p>
             <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.65rem] md:leading-[1.12]">
-              Care for your home without the{" "}
+              Find the Right Home Service Professional.{" "}
               <span className="trust-highlight relative inline-block whitespace-nowrap">
-                guessing game
+                Get the Job Done.
               </span>
-              .
             </h2>
             <p className="max-w-xl text-sm leading-7 text-muted-foreground md:text-[15px]">
-              Request Service is the calm path from “something needs fixing” to a signed estimate,
-              scheduled work, and a clear invoice — with local professionals who already cover your
-              neighborhood.
+              Tell us what you need, connect with local professionals, review written estimates, and
+              manage your project—all in one place.
             </p>
           </div>
 
@@ -116,46 +87,6 @@ export function CustomerTrustSection() {
               <Link href="/find-a-professional">Browse professionals</Link>
             </Button>
           </div>
-        </div>
-
-        {/* Highlights — icon chips, not a plain numbered strip */}
-        <div
-          data-stagger
-          className="grid gap-3 sm:grid-cols-3"
-        >
-          {highlights.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.title}
-                className={cn(
-                  "group relative flex items-start gap-4 overflow-hidden rounded-2xl border border-[#d7e2ef] bg-white px-4 py-4",
-                  "shadow-[0_12px_28px_-24px_rgba(0,63,125,0.45)] transition-all duration-300",
-                  "hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_18px_36px_-22px_rgba(0,63,125,0.4)]",
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-y-0 left-0 w-1 bg-primary/0 transition-colors duration-300 group-hover:bg-primary"
-                />
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/[0.08] text-primary ring-1 ring-primary/10">
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0 pt-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] tracking-[0.16em] text-primary/55 uppercase">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <span className="h-px flex-1 bg-[#e6edf5]" aria-hidden="true" />
-                  </div>
-                  <p className="mt-1.5 text-[15px] font-semibold tracking-tight text-foreground">
-                    {item.title}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.label}</p>
-                </div>
-              </div>
-            );
-          })}
         </div>
 
         <div data-stagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

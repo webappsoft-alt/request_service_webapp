@@ -34,15 +34,14 @@ export function CapturedContextCard({
           title="Change address"
           aria-label={`${locationLabel || "Location not set"} — change address`}
           className={cn(
-            "inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-semibold transition",
-            locationLabel
-              ? "bg-primary/10 text-primary hover:bg-primary/15"
-              : "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300",
+            // Soft neutral container (#F5F5F5) matching the card around it.
+            "inline-flex min-w-0 items-center gap-1.5 rounded-full bg-[#F5F5F5] px-2.5 py-1 text-[11px] font-semibold transition hover:bg-[#EBEBEB] dark:bg-white/10 dark:hover:bg-white/15",
+            locationLabel ? "text-foreground" : "text-amber-700 dark:text-amber-300",
           )}
         >
-          <MapPin className="size-3 shrink-0" aria-hidden />
+          <MapPin className={cn("size-3 shrink-0", locationLabel ? "text-primary" : "")} aria-hidden />
           <span className="truncate">{locationLabel || "Set your address"}</span>
-          <Pencil className="size-2.5 shrink-0 opacity-70" aria-hidden />
+          <Pencil className="size-2.5 shrink-0 opacity-60" aria-hidden />
         </button>
         <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
           Step {stepIndex + 1} of 3: <span className="text-foreground">{STEPS[stepIndex].label}</span>

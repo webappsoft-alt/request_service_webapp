@@ -35,18 +35,18 @@ export const footerNav = {
     { label: "Create a Pro Account", href: "/pro/register" },
     { label: "Pro dashboard", href: "/pro/dashboard" },
   ],
+  // Contact Us / FAQ sit under Company (no separate Support heading).
   company: [
     { label: "About", href: "/about" },
     { label: "Blog", href: "/blog" },
-    { label: "Sitemap", href: "/sitemap.xml" },
-  ],
-  support: [
     { label: "Contact Us", href: "/contact" },
     { label: "FAQ", href: "/faq" },
   ],
+  // Bottom bar: Privacy Policy · Terms of Service · Sitemap
   legal: [
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms of Service", href: "/terms" },
+    { label: "Sitemap", href: "/sitemap.xml" },
   ],
 };
 

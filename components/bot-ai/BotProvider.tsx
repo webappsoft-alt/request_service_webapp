@@ -13,9 +13,8 @@ import {
 import { useRouter } from "next/navigation";
 import { useCustomerLoginDialog } from "@/components/auth/customer-login-dialog";
 import { deleteData, getData, postData } from "@/components/api/apiFuntions";
-import type { PlaceAddress } from "@/lib/google-places";
-import { LocationModal } from "@/components/shared/location-modal";
-import { useAppSelector } from "@/store/hooks";
+import type { PlaceAddress, PlaceSuggestion } from "@/lib/google-places";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   selectAuth,
   selectAuthToken,
@@ -26,9 +25,17 @@ import {
 import {
   locationDisplayLabel,
   locationFromPlace,
+  setLocationFromPlace,
   type CustomerLocation,
 } from "@/store/locationSlice";
-import { couldBeAddress, detectTypedAddress } from "./address-in-chat";
+import {
+  couldBeAddress,
+  detectTypedAddress,
+  geocodeSuggestion,
+  rankNearby,
+  resolveTypedAddress,
+  suggestionLabel,
+} from "./address-in-chat";
 import { useBotSocket, type BotSocketAction, type BotSocketLocation } from "./hooks/useBotSocket";
 import { WELCOME_MESSAGE, WELCOME_SERVICES } from "./systemPromptGuide";
 import type {
@@ -90,6 +97,10 @@ type BotContextValue = {
   closeAddressEditor: () => void;
   /** Save the picked address site-wide and re-check which pros serve it. */
   applyAddress: (place: PlaceAddress) => void;
+  /** Prefill for the header address input (a typed address that could not be found). */
+  addressDraft: string;
+  /** Tap on an in-chat address suggestion chip. */
+  pickAddressOption: (option: PlaceSuggestion, pendingText?: string | null) => void;
 };
 
 const BotContext = createContext<BotContextValue | null>(null);
@@ -225,6 +236,7 @@ export function quoteHref(input: { providerSlug?: string | null; categorySlug?: 
 
 export function BotProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const token = useAppSelector(selectAuthToken);
@@ -245,6 +257,8 @@ export function BotProvider({ children }: { children: ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState("");
   const [addressEditorOpen, setAddressEditorOpen] = useState(false);
   const [addressDraft, setAddressDraft] = useState("");
+  /** Looking up an address typed in chat (shows the typing dots, holds the input). */
+  const [resolvingAddress, setResolvingAddress] = useState(false);
 
   const messagesRef = useRef<BotMessage[]>([]);
   const sessionIdRef = useRef("");
@@ -258,8 +272,6 @@ export function BotProvider({ children }: { children: ReactNode }) {
   const afterReconnectRef = useRef<(() => void) | null>(null);
   /** Last reply asked for the job address — the next typed message is treated as one. */
   const awaitingAddressRef = useRef(false);
-  /** Message to send once the Location Modal pick lands (the address came inside it). */
-  const pendingAddressTextRef = useRef<string | null>(null);
 
   useEffect(() => {
     openRef.current = open;
@@ -445,12 +457,24 @@ export function BotProvider({ children }: { children: ReactNode }) {
   }, [commit, ensureSession, loadSession]);
 
   // ---- Conversation -------------------------------------------------------------
-  /** Open the site Location Modal prefilled with what they typed (suggestions load at once). */
-  const openLocationModal = useCallback((query: string, pendingText: string | null) => {
-    pendingAddressTextRef.current = pendingText;
-    setAddressDraft(query);
-    setAddressEditorOpen(true);
-  }, []);
+  /**
+   * Bind a resolved address (lat/lng + formatted address) to the site location slice — the
+   * header badge updates — then let the assistant move on: re-check coverage, or send the
+   * problem message the address came in.
+   */
+  const bindAddress = useCallback(
+    (place: PlaceAddress, pendingText: string | null) => {
+      const next = locationFromPlace(place);
+      dispatch(setLocationFromPlace(place));
+      setAddressEditorOpen(false);
+      setAddressDraft("");
+      awaitingAddressRef.current = false;
+      // Redux updates on the next render, so the new location is passed explicitly.
+      if (pendingText) emit({ message: pendingText }, next);
+      else emit({ action: { type: "location_changed" } }, next);
+    },
+    [dispatch, emit],
+  );
 
   const sendText = useCallback(
     (text: string) => {
@@ -460,7 +484,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
       pushMessage({ id: newId("msg"), role: "user", text: value, createdAt: Date.now() });
 
       // Any address typed at any time (street, ZIP, "City, ST") — or any reply to
-      // "Where's the job?" — opens the Location Modal instead of going to the model.
+      // "Where's the job?" — is resolved silently in the background, right here in the chat.
       const typed = detectTypedAddress(value);
       const answeringAddress =
         awaitingAddressRef.current &&
@@ -475,9 +499,71 @@ export function BotProvider({ children }: { children: ReactNode }) {
       // Address inside a problem description ("sink leaks at 8594 e nassau ave") →
       // send that message once the address is set, so nothing they said is lost.
       const pendingText = !answeringAddress && typed && !typed.wholeMessage ? value : null;
-      openLocationModal(typed?.query ?? value, pendingText);
+      const query = typed?.query ?? value;
+      setResolvingAddress(true);
+      void resolveTypedAddress(query)
+        .then(({ place, options }) => {
+          // Clear match: bind it and carry on — no extra step for the customer.
+          if (place) {
+            bindAddress(place, pendingText);
+            return;
+          }
+          // Ambiguous: confirm with tap-to-pick chips inside the conversation.
+          if (options.length) {
+            pushMessage({
+              id: newId("msg"),
+              role: "bot",
+              text: "Please confirm your address from the suggestions below:",
+              createdAt: Date.now(),
+              // Nearest to where they are (saved / detected location) first.
+              addressOptions: rankNearby(options, { state: location.state, city: location.city }),
+              addressPendingText: pendingText,
+            });
+            return;
+          }
+          // Not an address after all (part of a problem description): just send it.
+          if (pendingText) {
+            emit({ message: pendingText });
+            return;
+          }
+          // Nothing found: open the header's inline address input with their text in it.
+          setAddressDraft(query);
+          setAddressEditorOpen(true);
+          pushMessage({
+            id: newId("msg"),
+            role: "bot",
+            text: "I couldn't find that address. Add the city or ZIP in the address box above and pick it from the list.",
+            createdAt: Date.now(),
+          });
+        })
+        .finally(() => setResolvingAddress(false));
     },
-    [emit, engage, openLocationModal, pushMessage],
+    [bindAddress, emit, engage, location.city, location.state, pushMessage],
+  );
+
+  /** Tap on a suggestion chip: geocode it, bind it, move on to matching pros. */
+  const pickAddressOption = useCallback(
+    (option: PlaceSuggestion, pendingText: string | null = null) => {
+      pushMessage({ id: newId("msg"), role: "user", text: suggestionLabel(option), createdAt: Date.now() });
+      setResolvingAddress(true);
+      void geocodeSuggestion(option)
+        .then((place) => {
+          if (place) {
+            bindAddress(place, pendingText);
+            return;
+          }
+          setAddressDraft(option.description);
+          setAddressEditorOpen(true);
+          pushMessage({
+            id: newId("msg"),
+            role: "bot",
+            text: "I couldn't place that one on the map. Try picking it from the address box above.",
+            createdAt: Date.now(),
+          });
+        })
+        .finally(() => setResolvingAddress(false));
+    },
+    [bindAddress, pushMessage],
   );
 
   const selectProvider = useCallback(
@@ -510,7 +596,6 @@ export function BotProvider({ children }: { children: ReactNode }) {
     setAddressEditorOpen(false);
     setAddressDraft("");
     awaitingAddressRef.current = false;
-    pendingAddressTextRef.current = null;
     pendingActionRef.current = null;
     commit([welcomeMessage()]);
   }, [clearAwaitTimeout, commit]);
@@ -696,38 +781,24 @@ export function BotProvider({ children }: { children: ReactNode }) {
   );
 
   // ---- Address ------------------------------------------------------------------
-  /** Header badge / "Change Address" pill: the same Location Modal, empty. */
-  const openAddressEditor = useCallback(() => openLocationModal("", null), [openLocationModal]);
-
-  /** Modal dismissed without a pick: a problem message that carried the address still goes out. */
+  /** Header badge / "Change Address" pill: turns the badge into an inline address input. */
+  const openAddressEditor = useCallback(() => {
+    setAddressDraft("");
+    setAddressEditorOpen(true);
+  }, []);
   const closeAddressEditor = useCallback(() => {
-    const pendingText = pendingAddressTextRef.current;
-    pendingAddressTextRef.current = null;
     setAddressEditorOpen(false);
     setAddressDraft("");
-    if (pendingText) emit({ message: pendingText });
-  }, [emit]);
+  }, []);
 
-  /**
-   * Address picked in the Location Modal (it already saved it to the Redux location slice,
-   * so the chat's address badge and the rest of the site update). Tell the assistant, so it
-   * moves on to matching pros instead of asking for the address again.
-   */
+  /** Picked from the header's inline input: same Redux location as the hero search and /services. */
   const applyAddress = useCallback(
     (place: PlaceAddress) => {
-      const next = locationFromPlace(place);
-      const pendingText = pendingAddressTextRef.current;
-      pendingAddressTextRef.current = null;
-      setAddressEditorOpen(false);
-      setAddressDraft("");
-      awaitingAddressRef.current = false;
-      const label = locationDisplayLabel(next) || place.formattedAddress;
+      const label = locationDisplayLabel(locationFromPlace(place)) || place.formattedAddress;
       pushMessage({ id: newId("msg"), role: "user", text: `Changed my address to ${label}`, createdAt: Date.now() });
-      // Redux updates on the next render, so the new location is passed explicitly.
-      if (pendingText) emit({ message: pendingText }, next);
-      else emit({ action: { type: "location_changed" } }, next);
+      bindAddress(place, null);
     },
-    [emit, pushMessage],
+    [bindAddress, pushMessage],
   );
 
   /** Collapse a sent brief so it can't be sent twice (the server flags it too). */
@@ -832,7 +903,10 @@ export function BotProvider({ children }: { children: ReactNode }) {
     () => ({
       open,
       hasUnread,
-      typing: Boolean(awaiting) && (serverTyping || !messages.some((item) => item.id === `reply-${awaiting}`)),
+      // Also "typing" while a typed address is looked up, so the input waits for it.
+      typing:
+        resolvingAddress ||
+        (Boolean(awaiting) && (serverTyping || !messages.some((item) => item.id === `reply-${awaiting}`))),
       connected,
       messages,
       context,
@@ -862,29 +936,19 @@ export function BotProvider({ children }: { children: ReactNode }) {
       openAddressEditor,
       closeAddressEditor,
       applyAddress,
+      addressDraft,
+      pickAddressOption,
     }),
     [
       open, hasUnread, awaiting, serverTyping, connected, messages, context, sessions, activeSessionId,
       isAuthenticated, locationLabel, openBot, openWithQuery, openWithSuggestion, choosePath, minimize, close, reset, sendText, selectProvider,
       requestService, requestQuote, markQuoteSubmitted, reportQuoteSubmitted, retryLast, signIn, refreshSessions, restoreSession, deleteSession,
-      addressEditorOpen, openAddressEditor, closeAddressEditor, applyAddress,
+      addressEditorOpen, openAddressEditor, closeAddressEditor, applyAddress, addressDraft, pickAddressOption,
+      resolvingAddress,
     ],
   );
 
-  return (
-    <BotContext.Provider value={value}>
-      {children}
-      {/* Site Location Modal, opened from the chat; layered above the assistant panel. */}
-      <LocationModal
-        open={addressEditorOpen}
-        onOpenChange={(next) => {
-          if (!next) closeAddressEditor();
-        }}
-        initialQuery={addressDraft}
-        onSelect={applyAddress}
-      />
-    </BotContext.Provider>
-  );
+  return <BotContext.Provider value={value}>{children}</BotContext.Provider>;
 }
 
 export function useBot() {

@@ -121,7 +121,7 @@ export function FeaturedProvidersSection() {
         </div>
         <div
           data-stagger
-          className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4"
           aria-busy={showSkeleton || undefined}
         >
           {showSkeleton ? (

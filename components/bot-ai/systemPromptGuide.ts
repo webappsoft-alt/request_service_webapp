@@ -14,7 +14,7 @@ export const BOT_STATUS = "Online · Ready to help";
 export const BOT_DISCLAIMER = "AI-powered help for your home · Your pro will confirm the service details.";
 
 export const WELCOME_MESSAGE =
-  "Hi! I'm your home service helper. What do you need help with today? Pick a service below, or describe what's going on in your own words.";
+  "Hi! Welcome to Request Service! Please tell me what you need help with, and I’ll guide you to the right home service professional.";
 
 /**
  * Quick-select chips on the welcome message. Sent as a plain message, so each label is

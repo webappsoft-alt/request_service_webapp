@@ -144,7 +144,7 @@ export function ProviderProfile({
 
   return (
     <HomeMotion>
-      <section className="pt-6 pb-10 md:pt-7 md:pb-10">
+      <section className="pt-6 pb-6 md:pt-7 md:pb-8">
       <Container>
         <nav className="mb-4" aria-label="Breadcrumb">
           <ol className="flex flex-wrap items-center gap-2 text-sm">
@@ -165,8 +165,8 @@ export function ProviderProfile({
         </nav>
 
         <BookServiceProvider provider={provider} services={fixedServices}>
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem]">
-          <div className="flex flex-col gap-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-5">
+          <div className="flex flex-col gap-6">
             {live?.portfolioLoading && !photos.length ? (
               <div className="overflow-hidden rounded-xl border border-input bg-card">
                 <Skeleton className="h-[min(22rem,50svh)] w-full rounded-none md:h-[min(28rem,48svh)]" />
@@ -212,7 +212,7 @@ export function ProviderProfile({
               services={live ? fixedServices : undefined}
             />
 
-            <section className="flex flex-col gap-4">
+            <section className="flex flex-col gap-3">
               <div>
                 <p className="eyebrow text-muted-foreground">Service area</p>
                 <h2 className="mt-1 text-2xl font-semibold">Where they work</h2>
@@ -462,7 +462,7 @@ export function ProviderProfile({
       </section>
 
       {showRelated ? (
-        <section className="pb-10 md:pb-14">
+        <section className="pb-6 md:pb-8">
           <Container className="flex flex-col gap-4">
             <div>
               <p className="eyebrow text-muted-foreground">More professionals</p>
@@ -470,7 +470,7 @@ export function ProviderProfile({
             </div>
             {live?.relatedLoading ? (
               <div
-                className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4"
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
                 aria-busy="true"
                 aria-label="Loading related professionals"
               >
@@ -479,7 +479,7 @@ export function ProviderProfile({
                 ))}
               </div>
             ) : relatedProviders.length ? (
-              <div data-stagger className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+              <div data-stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {relatedProviders.map((related) => (
                   <ProviderCard
                     key={related.id}

@@ -13,15 +13,26 @@ export function ProfileExplore({ columns }: { columns: ExploreColumn[] }) {
   if (!columns.length) return null;
 
   return (
-    <Section density="tight">
-      <Container className="flex flex-col gap-6">
+    // Follows "Relevant Pros" (which already pads its bottom) and sits right above the footer:
+    // short padding both ways so there's no blank band above or below.
+    <Section density="tight" className="pt-4! pb-8! md:pt-6! md:pb-10!">
+      <Container className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <p className="eyebrow text-muted-foreground">Explore around this pro</p>
           <h2 className="max-w-2xl text-2xl font-semibold md:text-3xl">
             Compare estimates, nearby trades, and other areas they cover
           </h2>
         </div>
-        <div data-stagger className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Three boxes (Popular / You might also like / Nearby areas) fill one row; a fourth
+            (starting prices) switches to 2 × 2 → 4 across instead of leaving a gap. */}
+        <div
+          data-stagger
+          className={
+            columns.length >= 4
+              ? "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
+              : "grid grid-cols-1 gap-4 md:grid-cols-3"
+          }
+        >
           {columns.map((column) => (
             <ExploreColumnList key={column.id} column={column} />
           ))}

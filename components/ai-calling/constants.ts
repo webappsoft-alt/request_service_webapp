@@ -35,7 +35,7 @@ export const AI_VOICES: AiVoiceOption[] = [
 export const GREETING_MAX_LENGTH = 300;
 
 export const DEFAULT_GREETING =
-  "Thanks for calling! I'm the virtual assistant. I can help you book a service, get a quote, or answer questions. How can I help you today?";
+  "Thanks for calling! How can I help you today?";
 
 export const DEFAULT_AI_CALLING_SETTINGS: AiCallingSettings = {
   enabled: false,
@@ -44,5 +44,6 @@ export const DEFAULT_AI_CALLING_SETTINGS: AiCallingSettings = {
   provisioningNote: "",
   escalationNumber: "",
   greeting: DEFAULT_GREETING,
+  defaultGreeting: DEFAULT_GREETING,
   voiceId: "skylar",
 };

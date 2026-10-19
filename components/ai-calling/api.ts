@@ -37,6 +37,10 @@ export function parseAiCallingSettings(response: unknown): AiCallingSettings {
     provisioningNote: typeof data.provisioningNote === "string" ? data.provisioningNote : "",
     escalationNumber: typeof data.escalationNumber === "string" ? data.escalationNumber : "",
     greeting: typeof data.greeting === "string" && data.greeting.trim() ? data.greeting : fallback.greeting,
+    defaultGreeting:
+      typeof data.defaultGreeting === "string" && data.defaultGreeting.trim()
+        ? data.defaultGreeting
+        : fallback.defaultGreeting,
     voiceId,
   };
 }

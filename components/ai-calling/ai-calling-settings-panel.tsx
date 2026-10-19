@@ -278,8 +278,8 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-xs"
-                      onClick={() => update("greeting", DEFAULT_GREETING)}
-                      disabled={draft.greeting === DEFAULT_GREETING}
+                      onClick={() => update("greeting", saved.defaultGreeting || DEFAULT_GREETING)}
+                      disabled={draft.greeting === (saved.defaultGreeting || DEFAULT_GREETING)}
                     >
                       <Sparkles className="size-3" aria-hidden="true" />
                       Use default

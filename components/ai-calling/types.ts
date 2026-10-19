@@ -24,6 +24,8 @@ export type AiCallingSettings = {
   /** Where the AI transfers calls when a caller asks for a human (E.164). */
   escalationNumber: string;
   greeting: string;
+  /** Read-only: this business's default greeting ("Thanks for calling <company>! …"). */
+  defaultGreeting: string;
   voiceId: AiVoiceId;
 };
 

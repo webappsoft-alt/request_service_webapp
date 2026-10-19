@@ -8,6 +8,7 @@ import { BotHeader } from "./BotHeader";
 import { BotHistoryDrawer } from "./BotHistoryDrawer";
 import { BotInputBar } from "./BotInputBar";
 import { useBot } from "./BotProvider";
+import { useVisualViewportBox } from "./hooks/useVisualViewportBox";
 
 /**
  * Assistant dialog: full-screen sheet on phones, floating panel anchored bottom-right
@@ -15,8 +16,9 @@ import { useBot } from "./BotProvider";
  * header ✕ ends the chat and archives it to history.
  */
 export function BotModal() {
-  const { open, minimize, close, reset, sendText, typing } = useBot();
+  const { open, minimize, close, reset, sendText, typing, addressEditorOpen } = useBot();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const viewportBox = useVisualViewportBox(open);
 
   return (
     <DialogPrimitive.Root
@@ -34,9 +36,17 @@ export function BotModal() {
         />
         <DialogPrimitive.Content
           onOpenAutoFocus={(event) => event.preventDefault()}
+          // The Location Modal (and its address menu) render above this panel; clicks there
+          // must not count as "outside" and minimise the chat.
+          onInteractOutside={(event) => {
+            if (addressEditorOpen) event.preventDefault();
+          }}
+          style={viewportBox}
           className={cn(
             "fixed z-[61] flex flex-col overflow-hidden bg-popover text-popover-foreground outline-none",
-            "inset-0 h-dvh w-full",
+            // Phones: full screen (dvh, then the visible viewport above the keyboard via
+            // viewportBox), never wider than the screen.
+            "inset-0 h-dvh w-full max-w-[100vw] overscroll-none",
             "sm:inset-auto sm:right-5 sm:bottom-5 sm:h-[min(44rem,calc(100dvh-2.5rem))] sm:w-[26.5rem] sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/25",
             "duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-6 sm:data-open:zoom-in-95",
             "data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-4",

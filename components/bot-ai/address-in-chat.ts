@@ -1,13 +1,9 @@
-import {
-  getGooglePlaceDetails,
-  searchGoogleAddresses,
-  type PlaceAddress,
-  type PlaceSuggestion,
-} from "@/lib/google-places";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 
 /**
- * Addresses typed straight into the chat ("8594 e nassau ave denver"), so the customer
- * isn't sent round the "Where's the job?" loop when they've already told us.
+ * Addresses typed straight into the chat ("8594 e nassau ave denver"). They open the
+ * Location Modal prefilled with the text, so the customer confirms a real (geocoded)
+ * address in one tap instead of being sent round the "Where's the job?" loop.
  */
 
 const STREET_SUFFIX =
@@ -19,16 +15,43 @@ const STREET_RE = new RegExp(
   "i",
 );
 const ZIP_RE = /^\d{5}(?:-\d{4})?$/;
+/**
+ * Whole message is "City, ST" or "City ST" with the code in capitals ("Denver CO").
+ * Lower-case "denver co" without a comma is left alone so chat like "say hi" (HI) or
+ * "count me in" (IN) isn't read as a place; it still counts when answering "Where's the job?".
+ */
+const CITY_COMMA_STATE_RE = /^[A-Za-z][A-Za-z .'-]{1,40}?,\s*([A-Za-z]{2})$/;
+const CITY_CAPS_STATE_RE = /^[A-Za-z][A-Za-z .'-]{1,40}?\s+([A-Z]{2})$/;
+/** "my address is …", "I'm at …" — dropped before matching. */
+const LEAD_IN_RE = /^(?:(?:my|the|job)\s+)?(?:address|location)(?:\s+is)?\s*:?\s+|^(?:i'?m|we'?re|it'?s|located)\s+(?:at|in)\s+|^at\s+/i;
 
-/** The address part of a message ("…leaks at 8594 e nassau ave denver" → "8594 e nassau ave denver"). */
-export function extractTypedAddress(text: string): string | null {
-  const match = STREET_RE.exec(text);
-  if (!match) return null;
-  return text
-    .slice(match.index)
-    .replace(/[.!?]+$/, "")
-    .trim()
-    .slice(0, 160);
+export type TypedAddress = {
+  /** Text to prefill into the Location Modal search. */
+  query: string;
+  /** The message was only an address (vs. a problem description that included one). */
+  wholeMessage: boolean;
+};
+
+export function detectTypedAddress(text: string): TypedAddress | null {
+  const value = text.trim().replace(/[.!?]+$/, "");
+  if (!value) return null;
+  const stripped = value.replace(LEAD_IN_RE, "").trim();
+
+  if (ZIP_RE.test(stripped)) return { query: stripped, wholeMessage: true };
+
+  const stateCode = (CITY_COMMA_STATE_RE.exec(stripped) || CITY_CAPS_STATE_RE.exec(stripped))?.[1];
+  if (stateCode && normalizeUsStateCode(stateCode)) {
+    return { query: stripped, wholeMessage: true };
+  }
+
+  const street = STREET_RE.exec(stripped);
+  if (street) {
+    return {
+      query: stripped.slice(street.index).trim().slice(0, 160),
+      wholeMessage: street.index === 0,
+    };
+  }
+  return null;
 }
 
 /** Reply to "Where's the job?": anything short that could be a street, city or ZIP. */
@@ -36,63 +59,4 @@ export function couldBeAddress(text: string) {
   const value = text.trim();
   if (ZIP_RE.test(value)) return true;
   return value.length >= 3 && value.length <= 160 && /[a-z]/i.test(value);
-}
-
-function words(text: string) {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length >= 3);
-}
-
-/** A suggestion we can apply without asking, or null when the customer should pick. */
-function confidentSuggestion(query: string, suggestions: PlaceSuggestion[]) {
-  if (suggestions.length === 1) return suggestions[0];
-  const value = query.trim();
-  if (ZIP_RE.test(value)) {
-    return suggestions.find((item) => item.description.includes(value.slice(0, 5))) ?? null;
-  }
-  const houseNumber = /^\D*?(\d{1,6})\s/.exec(value)?.[1];
-  if (!houseNumber) return null;
-  // Same house number and every typed word (street, city) present → one clear match.
-  const typed = words(value);
-  const matches = suggestions.filter((item) => {
-    const description = item.description.toLowerCase();
-    return description.startsWith(houseNumber) && typed.every((word) => description.includes(word));
-  });
-  return matches.length === 1 ? matches[0] : null;
-}
-
-export type TypedAddressResult = {
-  /** Geocoded address (lat/lng set) when the match is unambiguous. */
-  place: PlaceAddress | null;
-  /** Candidates for one-tap selection when it's ambiguous. */
-  options: PlaceSuggestion[];
-};
-
-function withTimeout(ms: number) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  return { signal: controller.signal, done: () => clearTimeout(timer) };
-}
-
-export async function resolveTypedAddress(query: string): Promise<TypedAddressResult> {
-  const { signal, done } = withTimeout(8000);
-  try {
-    const suggestions = await searchGoogleAddresses(query, signal).catch(() => []);
-    if (!suggestions.length) return { place: null, options: [] };
-    const options = suggestions.slice(0, 5);
-    const pick = confidentSuggestion(query, suggestions);
-    if (!pick) return { place: null, options };
-    const place = await geocodeSuggestion(pick, signal);
-    return place ? { place, options: [] } : { place: null, options };
-  } finally {
-    done();
-  }
-}
-
-/** Place details (incl. lat/lng) for a suggestion; null when Google has no coordinates. */
-export async function geocodeSuggestion(suggestion: PlaceSuggestion, signal?: AbortSignal) {
-  const place = await getGooglePlaceDetails(suggestion.placeId, signal).catch(() => null);
-  return place && place.latitude != null && place.longitude != null ? place : null;
 }

@@ -8,28 +8,32 @@ const pillars = [
   {
     icon: MapPin,
     step: "01",
-    accent: "from-[#003F7D]/14 via-[#003F7D]/4 to-transparent",
+    surface: "from-blue-50/60 via-white/40 to-transparent",
+    accent: "from-[#0B4379]/10 via-[#0B4379]/3 to-transparent",
     title: "Tell Us What You Need",
     body: "Select a service, enter your ZIP code, and describe your project. Add photos to help professionals understand the job.",
   },
   {
     icon: Users,
     step: "02",
-    accent: "from-sky-500/12 via-sky-500/4 to-transparent",
+    surface: "from-sky-50 via-blue-50/80 to-transparent",
+    accent: "from-[#0B4379]/12 via-[#0B4379]/4 to-transparent",
     title: "Connect With Local Pros",
     body: "Find professionals who serve your area and offer the service you need. Review profiles, experience, and available customer feedback.",
   },
   {
     icon: FileSignature,
     step: "03",
-    accent: "from-emerald-600/12 via-emerald-600/4 to-transparent",
+    surface: "from-blue-50 via-sky-100/40 to-transparent",
+    accent: "from-sky-600/12 via-sky-500/4 to-transparent",
     title: "Review Estimates & Hire",
     body: "Discuss project details, review written estimates, ask questions, and choose the professional who fits your needs.",
   },
   {
     icon: FolderOpen,
     step: "04",
-    accent: "from-amber-500/14 via-amber-500/4 to-transparent",
+    surface: "from-sky-100/50 via-blue-50 to-blue-50/30",
+    accent: "from-[#0B4379]/16 via-[#0B4379]/5 to-transparent",
     title: "Manage Your Project",
     body: "Keep messages, project details, schedules, and estimates organized in one convenient place.",
   },
@@ -103,18 +107,31 @@ export function CustomerTrustSection() {
                   "hover:-translate-y-1.5 hover:border-primary/20 hover:shadow-[0_28px_50px_-28px_rgba(0,63,125,0.45)]",
                 )}
               >
+                {/* Brand-blue wash, a little deeper per step (01 → 04); muted in dark mode. */}
                 <div
                   aria-hidden="true"
                   className={cn(
-                    "pointer-events-none absolute inset-x-0 top-0 h-28 bg-linear-to-b",
+                    "pointer-events-none absolute inset-0 bg-linear-to-br dark:opacity-15",
+                    pillar.surface,
+                  )}
+                />
+                <div
+                  aria-hidden="true"
+                  className={cn(
+                    "pointer-events-none absolute inset-x-0 top-0 h-28 bg-linear-to-b dark:opacity-60",
                     pillar.accent,
                   )}
                 />
+                {/* Brand-blue top edge. */}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-linear-to-r from-[#0B4379]/70 via-sky-500/50 to-transparent"
+                />
                 <div className="relative flex items-start justify-between gap-3">
-                  <span className="flex size-11 items-center justify-center rounded-2xl bg-white text-primary shadow-[0_10px_24px_-14px_rgba(0,63,125,0.7)] ring-1 ring-[#003F7D]/10 transition-transform duration-300 group-hover:scale-105">
+                  <span className="flex size-11 items-center justify-center rounded-2xl bg-white text-primary shadow-[0_10px_24px_-14px_rgba(11,67,121,0.7)] ring-1 ring-[#0B4379]/15 transition-transform duration-300 group-hover:scale-105">
                     <Icon className="size-5" aria-hidden="true" />
                   </span>
-                  <span className="font-mono text-[11px] tracking-[0.16em] text-muted-foreground/80">
+                  <span className="rounded-full bg-[#0B4379]/8 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-[0.16em] text-primary ring-1 ring-[#0B4379]/15 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/20">
                     {pillar.step}
                   </span>
                 </div>
@@ -126,7 +143,7 @@ export function CustomerTrustSection() {
                 </div>
                 <div
                   aria-hidden="true"
-                  className="relative mt-5 h-px w-full overflow-hidden bg-[#e6edf5]"
+                  className="relative mt-5 h-px w-full overflow-hidden bg-[#0B4379]/12 dark:bg-sky-400/15"
                 >
                   <span className="absolute inset-y-0 left-0 w-0 bg-primary transition-[width] duration-500 ease-out group-hover:w-full" />
                 </div>

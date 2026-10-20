@@ -161,6 +161,9 @@ export function hasProfessionalDetailFields(
 
 export type PublicProfessionalsQuery = {
   search?: string;
+  /** Customer City + State — the location filter (ZIP / pin only help resolve it). */
+  city?: string;
+  state?: string;
   zipCode?: string;
   lat?: number | null;
   lng?: number | null;
@@ -1059,6 +1062,8 @@ export function resolvePublicProfessionalsQuery(
   };
 
   if (wantsAllLocations) {
+    delete query.city;
+    delete query.state;
     delete query.zipCode;
     delete query.lat;
     delete query.lng;
@@ -1066,6 +1071,8 @@ export function resolvePublicProfessionalsQuery(
     query.locationToken = "all";
   } else {
     // City/place picks include a center ZIP — don't AND it with radius or results empty.
+    query.city = location.city.trim() && location.state.trim() ? location.city.trim() : undefined;
+    query.state = location.city.trim() && location.state.trim() ? location.state.trim() : undefined;
     query.zipCode = hasZip && !hasCoords ? location.zip.trim() : undefined;
     query.lat = hasCoords ? location.latitude : undefined;
     query.lng = hasCoords ? location.longitude : undefined;
@@ -1083,6 +1090,10 @@ export function resolvePublicProfessionalsQuery(
   }
 
   if (!(hasZip && !hasCoords) || wantsAllLocations) delete query.zipCode;
+  if (!query.city || !query.state) {
+    delete query.city;
+    delete query.state;
+  }
   if (query.lat == null || !Number.isFinite(query.lat)) delete query.lat;
   if (query.lng == null || !Number.isFinite(query.lng)) delete query.lng;
   if (query.minRating == null || query.minRating <= 0) delete query.minRating;
@@ -1112,6 +1123,8 @@ function toRequestParams(
     limit,
     search: query.search?.trim() || undefined,
     q: undefined,
+    city: query.city?.trim() || undefined,
+    state: query.state?.trim() || undefined,
     zipCode: query.zipCode?.trim() || undefined,
     lat: hasCoords ? query.lat : undefined,
     lng: hasCoords ? query.lng : undefined,

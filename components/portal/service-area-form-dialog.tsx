@@ -12,79 +12,37 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   SearchableMultiSelect,
   SearchableSelect,
 } from "@/components/ui/searchable-select";
-import {
-  areasForServiceAreaCity,
-  cityServiceAreaKey,
-  type CityServiceAreaNeighborhood,
-} from "@/lib/data/city-service-areas";
-import { normalizeUsStateCode } from "@/lib/data/us-states";
-import {
-  getUsCityAreas,
-  searchUsCities,
-  type UsCityAreas,
-} from "@/lib/api/us-cities-client";
+import { normalizeUsStateCode, US_STATES } from "@/lib/data/us-states";
+import { searchUsCities, type UsCity } from "@/lib/api/us-cities-client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   createServiceAreas,
   updateServiceArea,
   type ServiceArea,
-  type CityServiceAreasPayload,
 } from "@/store/serviceAreasSlice";
 
-/** Merge selected neighborhoods under one city object. */
-function buildCityAreasPayload(
-  city: string,
-  state: string,
-  areas: CityServiceAreaNeighborhood[],
-): CityServiceAreasPayload {
-  const seen = new Set<string>();
-  const merged: CityServiceAreasPayload["areas"] = [];
+const STATE_OPTIONS = US_STATES.map((state) => ({
+  value: state.code,
+  label: `${state.name} (${state.code})`,
+}));
 
-  for (const area of areas) {
-    const name = area.name.trim();
-    if (!name) continue;
-    const key = name.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({
-      name,
-      lat: area.lat,
-      lng: area.lng,
-      ...(area.zip ? { zip: area.zip } : {}),
+/** Every city / town in a state, largest first (cached per state while the page is open). */
+const citiesByState = new Map<string, Promise<UsCity[]>>();
+function loadStateCities(state: string) {
+  let pending = citiesByState.get(state);
+  if (!pending) {
+    pending = searchUsCities("", { state, limit: 5000 }).catch((error) => {
+      citiesByState.delete(state);
+      throw error;
     });
+    citiesByState.set(state, pending);
   }
-
-  return { city, state, areas: merged };
-}
-
-type CityChoice = { city: string; state: string };
-
-/**
- * Main areas of a city: curated neighborhoods, the city itself, nearby suburbs,
- * then ZIP (postal) areas. Areas already saved on this service area stay listed.
- */
-function buildAreaChoices(
-  data: UsCityAreas | null,
-  city: CityChoice,
-  saved: CityServiceAreaNeighborhood[],
-): CityServiceAreaNeighborhood[] {
-  const choices = new Map<string, CityServiceAreaNeighborhood>();
-  const add = (choice: CityServiceAreaNeighborhood) => {
-    const key = choice.name.trim().toLowerCase();
-    if (key && !choices.has(key)) choices.set(key, choice);
-  };
-
-  for (const item of areasForServiceAreaCity(city.city, city.state)) add(item);
-  if (data) add({ name: data.city.name, lat: data.city.lat, lng: data.city.lng });
-  for (const item of data?.suburbs || []) add({ name: item.name, lat: item.lat, lng: item.lng });
-  for (const item of data?.zips || []) add({ name: `ZIP ${item.zip}`, lat: item.lat, lng: item.lng, zip: item.zip });
-  for (const item of saved) add(item);
-  return [...choices.values()];
+  return pending;
 }
 
 export function ServiceAreaFormDialog({
@@ -108,11 +66,11 @@ export function ServiceAreaFormDialog({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update the city and neighborhoods for this service area."
-              : "Choose a city, then select one or more areas to cover."}
+              ? "Change the city for this service area."
+              : "Choose a state, then every city you serve in it."}
           </DialogDescription>
         </DialogHeader>
-        {/* Mounted per open so it starts from the area (or profile city) each time. */}
+        {/* Mounted per open so it starts from the area (or profile state) each time. */}
         {open ? (
           <ServiceAreaFormBody
             area={area}
@@ -139,135 +97,60 @@ function ServiceAreaFormBody({
   const provider = useAppSelector((state) => state.auth.provider);
   const isEdit = Boolean(area);
 
-  const profileCity = String(provider?.location?.city || "").trim();
   const profileState = normalizeUsStateCode(
     typeof provider?.location?.state === "string" ? provider.location.state : "",
   );
 
-  const [city, setCity] = useState<CityChoice | null>(() =>
-    area?.location.city && area.location.state
-      ? { city: area.location.city, state: normalizeUsStateCode(area.location.state) || area.location.state }
-      : null,
+  const [state, setState] = useState(
+    () => normalizeUsStateCode(area?.location.state) || profileState || "",
   );
-  const [selectedAreaNames, setSelectedAreaNames] = useState<string[]>(() =>
-    area ? (area.areas?.length ? area.areas.map((item) => item.name) : area.title ? [area.title] : []) : [],
+  const [cityNames, setCityNames] = useState<string[]>(() =>
+    area?.location.city ? [area.location.city] : [],
   );
 
-  // New area: start on the provider's business city when the city list has it.
+  const [loaded, setLoaded] = useState<{ state: string; rows: UsCity[] } | null>(null);
   useEffect(() => {
-    if (area || !profileCity || !profileState) return;
+    if (!state) return;
     let cancelled = false;
-    searchUsCities(`${profileCity}, ${profileState}`, { limit: 5 })
+    loadStateCities(state)
       .then((rows) => {
-        const match = rows.find((row) => row.name.toLowerCase() === profileCity.toLowerCase());
-        if (!cancelled && match) setCity((current) => current || { city: match.name, state: match.state });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [area, profileCity, profileState]);
-
-  // City search runs on the backend (every US city / town); results keyed by query.
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  useEffect(() => {
-    const handle = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
-    return () => window.clearTimeout(handle);
-  }, [query]);
-  const [results, setResults] = useState<{ query: string; rows: CityChoice[] } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    // Empty search: the largest cities in the provider's state (or the US).
-    searchUsCities(debouncedQuery, { state: debouncedQuery ? undefined : profileState || undefined })
-      .then((rows) => {
-        if (!cancelled) {
-          setResults({ query: debouncedQuery, rows: rows.map((row) => ({ city: row.name, state: row.state })) });
-        }
+        if (!cancelled) setLoaded({ state, rows });
       })
       .catch(() => {
-        if (!cancelled) setResults({ query: debouncedQuery, rows: [] });
+        if (!cancelled) setLoaded({ state, rows: [] });
       });
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, profileState]);
-  const searching = query.trim() !== debouncedQuery || results?.query !== debouncedQuery;
+  }, [state]);
+  const citiesLoading = Boolean(state) && loaded?.state !== state;
 
   const cityOptions = useMemo(() => {
-    const rows = [...(results?.rows || [])];
-    // Keep the picked city listed so its label shows.
-    if (city && !rows.some((row) => cityServiceAreaKey(row.city, row.state) === cityServiceAreaKey(city.city, city.state))) {
-      rows.unshift(city);
-    }
-    return rows.map((row) => ({
-      value: cityServiceAreaKey(row.city, row.state),
-      label: `${row.city}, ${row.state}`,
+    const rows = loaded?.state === state ? loaded.rows : [];
+    const options = rows.map((row) => ({
+      value: row.name,
+      label: row.name,
+      description: row.zipCount ? `${row.zipCount} ZIP codes` : undefined,
     }));
-  }, [results, city]);
-
-  // Main areas of the picked city.
-  const areaKey = city ? cityServiceAreaKey(city.city, city.state) : "";
-  const [areasResult, setAreasResult] = useState<{ key: string; data: UsCityAreas | null } | null>(null);
-  useEffect(() => {
-    if (!city) return;
-    const key = cityServiceAreaKey(city.city, city.state);
-    let cancelled = false;
-    getUsCityAreas(city.state, city.city)
-      .then((data) => {
-        if (!cancelled) setAreasResult({ key, data });
-      })
-      .catch(() => {
-        if (!cancelled) setAreasResult({ key, data: null });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [city]);
-  const areasData = areasResult?.key === areaKey ? areasResult.data : null;
-  const areasLoading = Boolean(areaKey) && areasResult?.key !== areaKey;
-
-  const cityAreas = useMemo(
-    () => (city ? buildAreaChoices(areasData, city, isEdit ? area?.areas || [] : []) : []),
-    [city, areasData, isEdit, area?.areas],
-  );
-  const areaOptions = useMemo(
-    () => cityAreas.map((entry) => ({ value: entry.name, label: entry.name })),
-    [cityAreas],
-  );
+    // Keep the edited city listed so its label shows while the list loads.
+    for (const name of cityNames) {
+      if (!options.some((option) => option.value === name)) options.unshift({ value: name, label: name, description: undefined });
+    }
+    return options;
+  }, [loaded, state, cityNames]);
 
   async function save() {
-    if (!city) {
-      toast.error("Select a city.");
+    if (!state) {
+      toast.error("Select a state.");
       return;
     }
-
-    const chosen = cityAreas.filter((item) => selectedAreaNames.includes(item.name));
-    if (!chosen.length) {
-      toast.error("Select at least one area.");
+    if (!cityNames.length) {
+      toast.error("Select at least one city.");
       return;
     }
-
-    const payload = buildCityAreasPayload(city.city, city.state, chosen);
 
     if (isEdit && area) {
-      const primary = payload.areas[0];
-      const result = await dispatch(
-        updateServiceArea({
-          id: area.id,
-          title: `${city.city}, ${city.state}`,
-          areas: payload.areas,
-          location: {
-            type: "Point",
-            coordinates: [primary.lng, primary.lat],
-            city: city.city,
-            state: city.state,
-            country: "US",
-            address: `${city.city}, ${city.state}`,
-            zip: primary.zip || "",
-          },
-        }),
-      );
+      const result = await dispatch(updateServiceArea({ id: area.id, city: cityNames[0], state }));
       if (updateServiceArea.fulfilled.match(result)) {
         toast.success("Service area updated.");
         onClose();
@@ -278,52 +161,76 @@ function ServiceAreaFormBody({
       return;
     }
 
-    const result = await dispatch(createServiceAreas(payload));
+    const result = await dispatch(createServiceAreas({ state, cityNames }));
     if (createServiceAreas.fulfilled.match(result)) {
-      toast.success(`${city.city} added with ${payload.areas.length} area${payload.areas.length === 1 ? "" : "s"}.`);
+      toast.success(
+        cityNames.length === 1
+          ? `${cityNames[0]}, ${state} added.`
+          : `${cityNames.length} cities in ${state} added.`,
+      );
       onClose();
       onSaved();
       return;
     }
-
-    toast.error(typeof result.payload === "string" ? result.payload : "Could not create service areas.");
+    toast.error(typeof result.payload === "string" ? result.payload : "Could not add service areas.");
   }
+
+  const cityPlaceholder = !state
+    ? "Select a state first"
+    : citiesLoading
+      ? "Loading cities…"
+      : isEdit
+        ? "Search or select a city…"
+        : "Search or select cities…";
 
   return (
     <>
       <FieldGroup className="gap-4">
         <Field>
-          <FieldLabel htmlFor="sa-city">City</FieldLabel>
+          <FieldLabel htmlFor="sa-state">State</FieldLabel>
           <SearchableSelect
-            id="sa-city"
-            options={cityOptions}
-            value={areaKey || null}
+            id="sa-state"
+            options={STATE_OPTIONS}
+            value={state || null}
             onChange={(value) => {
-              const [name, state] = String(value || "").split("|");
-              setCity(name && state ? { city: name, state } : null);
-              setSelectedAreaNames([]);
+              setState(value || "");
+              setCityNames([]);
             }}
-            onSearchChange={setQuery}
-            loading={searching}
-            placeholder="Search or select a city…"
-            emptyMessage="No US city by that name."
-            disabled={isEdit}
+            placeholder="Select a state…"
+            emptyMessage="No US state by that name."
           />
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="sa-areas">Areas</FieldLabel>
-          <SearchableMultiSelect
-            id="sa-areas"
-            options={areaOptions}
-            value={selectedAreaNames}
-            onChange={setSelectedAreaNames}
-            maxResults={150}
-            disabled={!city || areasLoading}
-            placeholder={
-              !city ? "Select a city first" : areasLoading ? "Loading areas…" : "Search or select areas…"
-            }
-          />
+          <FieldLabel htmlFor="sa-cities">{isEdit ? "City" : "Cities"}</FieldLabel>
+          {isEdit ? (
+            <SearchableSelect
+              id="sa-cities"
+              options={cityOptions}
+              value={cityNames[0] || null}
+              onChange={(value) => setCityNames(value ? [value] : [])}
+              maxResults={200}
+              disabled={!state || citiesLoading}
+              placeholder={cityPlaceholder}
+              emptyMessage="No city by that name in this state."
+            />
+          ) : (
+            <SearchableMultiSelect
+              id="sa-cities"
+              keepOpen
+              options={cityOptions}
+              value={cityNames}
+              onChange={setCityNames}
+              maxResults={200}
+              disabled={!state || citiesLoading}
+              placeholder={cityPlaceholder}
+              emptyMessage="No city by that name in this state."
+            />
+          )}
+          <FieldDescription>
+            Customers in these cities can find you and send you requests. Every ZIP code
+            in a city is covered.
+          </FieldDescription>
         </Field>
       </FieldGroup>
 
@@ -335,9 +242,9 @@ function ServiceAreaFormBody({
           {mutating ? <Loader2 className="size-4 animate-spin" /> : null}
           {isEdit
             ? "Save changes"
-            : selectedAreaNames.length > 1
-              ? `Add ${selectedAreaNames.length} areas`
-              : "Add area"}
+            : cityNames.length > 1
+              ? `Add ${cityNames.length} cities`
+              : "Add city"}
         </Button>
       </DialogFooter>
     </>

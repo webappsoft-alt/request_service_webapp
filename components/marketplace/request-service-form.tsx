@@ -743,9 +743,7 @@ export function RequestServiceForm({
       setPendingAfterVerify(null);
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to send the booking request.",
+        extractErrorMessage(error) || "Unable to send the booking request.",
       );
     } finally {
       setSubmitting(false);
@@ -824,9 +822,7 @@ export function RequestServiceForm({
       );
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to send the quote request.",
+        extractErrorMessage(error) || "Unable to send the quote request.",
       );
     } finally {
       setSubmitting(false);
@@ -988,7 +984,7 @@ export function RequestServiceForm({
       request = result.request;
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Unable to send the request.",
+        extractErrorMessage(error) || "Unable to send the request.",
       );
       return;
     }
@@ -1015,9 +1011,7 @@ export function RequestServiceForm({
       });
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "The request was sent, but the chat thread could not be opened.",
+        extractErrorMessage(error) || "The request was sent, but the chat thread could not be opened.",
       );
     }
     clearPendingQuote();

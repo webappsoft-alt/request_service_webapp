@@ -485,6 +485,8 @@ export function ServicesDirectory({
   initialJob = "",
   initialZip = "",
   initialLocation = "",
+  initialCity = "",
+  initialState = "",
   initialProviderId = "",
   initialProviderName = "",
   initialFocus = "",
@@ -494,6 +496,9 @@ export function ServicesDirectory({
   initialJob?: string;
   initialZip?: string;
   initialLocation?: string;
+  /** `?city=&state=` — the location filter. */
+  initialCity?: string;
+  initialState?: string;
   initialProviderId?: string;
   initialProviderName?: string;
   /** When `professionals`, scroll to Matching professionals on land. */
@@ -1020,7 +1025,15 @@ export function ServicesDirectory({
     );
     setProviderId(next.providerId || initialProviderId.trim() || "");
     setProviderName(next.providerName || initialProviderName.trim() || "");
-    if (next.location || next.zip) {
+    if (initialCity.trim() && initialState.trim()) {
+      dispatch(
+        hydrateLocationIfEmpty({
+          city: initialCity.trim(),
+          state: initialState.trim(),
+          zip: next.zip,
+        }),
+      );
+    } else if (next.location || next.zip) {
       dispatch(
         hydrateLocationIfEmpty({
           address: next.location,
@@ -1033,8 +1046,10 @@ export function ServicesDirectory({
   }, [
     dispatch,
     initialCategory,
+    initialCity,
     initialJob,
     initialLocation,
+    initialState,
     initialProviderId,
     initialProviderName,
     initialQuery,
@@ -1086,6 +1101,9 @@ export function ServicesDirectory({
       job: subOption?.job ?? subOption?.value ?? (answers["sub-service"] || undefined),
       zip: zip || extractZip(location),
       location,
+      // City + State is the URL's location filter whenever the location has both.
+      city: customerLocation.city.trim() && customerLocation.state.trim() ? customerLocation.city.trim() : undefined,
+      state: customerLocation.city.trim() && customerLocation.state.trim() ? customerLocation.state.trim() : undefined,
       providerId: providerId || undefined,
       providerName: providerName || undefined,
     });
@@ -1103,6 +1121,8 @@ export function ServicesDirectory({
     subOption,
     answers,
     zip,
+    customerLocation.city,
+    customerLocation.state,
   ]);
 
   function applyIntent(intent: SearchIntent) {

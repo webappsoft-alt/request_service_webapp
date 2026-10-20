@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { QuoteGuide } from "@/components/marketplace/quote-hero";
 import { RequestIntake } from "@/components/marketplace/request-intake";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -85,7 +86,7 @@ export function CustomerEstimateRequestView() {
       router.push(customerPaths.estimateRequests);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Could not send your request.",
+        extractErrorMessage(err) || "Could not send your request.",
       );
     } finally {
       setSubmitting(false);

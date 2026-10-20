@@ -48,6 +48,11 @@ export type SearchableSelectProps = CommonProps & {
 export type SearchableMultiSelectProps = CommonProps & {
   value: string[];
   onChange: (value: string[]) => void;
+  /**
+   * Stay open while ticking options; the menu closes on an outside click, Escape
+   * or its "Done" button.
+   */
+  keepOpen?: boolean;
 };
 
 const triggerClassName = cn(
@@ -425,6 +430,7 @@ export function SearchableMultiSelect({
   maxResults,
   onSearchChange,
   loading = false,
+  keepOpen = false,
 }: SearchableMultiSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -533,7 +539,8 @@ export function SearchableMultiSelect({
     } else {
       onChange([...value, optionValue]);
     }
-    closeMenu();
+    if (keepOpen) inputRef.current?.focus();
+    else closeMenu();
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -612,6 +619,24 @@ export function SearchableMultiSelect({
             );
           })
         )}
+        {keepOpen ? (
+          <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-input bg-popover px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              {value.length} selected
+            </span>
+            <button
+              type="button"
+              className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                closeMenu();
+              }}
+            >
+              Done
+            </button>
+          </div>
+        ) : null}
       </div>
     ) : null;
 

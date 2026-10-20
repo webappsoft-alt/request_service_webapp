@@ -54,14 +54,6 @@ import {
 import { isPhoneChanged } from "@/lib/auth/phone-verification";
 import { PhoneVerificationDialog } from "@/components/portal/phone-verification-dialog";
 import {
-  coverageAreaSelectionKey,
-  formatServiceAreaCoverageLabels,
-  parseCoverageAreaSelectionKey,
-} from "@/lib/coverage-areas";
-import {
-  areasForServiceAreaCity,
-} from "@/lib/data/city-service-areas";
-import {
   galleryIsReady,
   normalizeBusinessGallery,
   type BusinessGalleryImage,
@@ -76,68 +68,11 @@ import {
   type AuthUser,
 } from "@/store/authSlice";
 import {
-  deleteServiceArea,
   fetchServiceAreasPicker,
-  updateServiceArea,
   type ServiceArea,
-  type ServiceAreaNeighborhood,
 } from "@/store/serviceAreasSlice";
 import { useCategoryJobs } from "@/components/portal/use-category-jobs";
 
-/** Catalog + existing neighborhoods for independent coverage chips. */
-function coverageNeighborhoodPool(
-  area: ServiceArea,
-): ServiceAreaNeighborhood[] {
-  const byName = new Map<string, ServiceAreaNeighborhood>();
-  for (const item of areasForServiceAreaCity(
-    area.location?.city,
-    area.location?.state,
-  )) {
-    const name = item.name.trim();
-    if (!name) continue;
-    byName.set(name.toLowerCase(), {
-      name,
-      lat: item.lat,
-      lng: item.lng,
-      ...(item.zip ? { zip: item.zip } : {}),
-    });
-  }
-  for (const item of area.areas || []) {
-    const name = item.name?.trim();
-    if (!name) continue;
-    const key = name.toLowerCase();
-    if (byName.has(key)) continue;
-    byName.set(key, {
-      name,
-      lat: item.lat,
-      lng: item.lng,
-      ...(item.zip ? { zip: item.zip } : {}),
-    });
-  }
-  return Array.from(byName.values()).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
-}
-
-function coverageChipLabel(area: ServiceArea, neighborhoodName: string) {
-  const city = [area.location?.city, area.location?.state]
-    .filter(Boolean)
-    .join(", ");
-  return city ? `${neighborhoodName} · ${city}` : neighborhoodName;
-}
-
-function selectedKeysFromServiceAreas(serviceAreas: ServiceArea[]): string[] {
-  const keys: string[] = [];
-  for (const area of serviceAreas) {
-    for (const item of area.areas || []) {
-      const name = item.name?.trim();
-      if (!name) continue;
-      const key = coverageAreaSelectionKey(area.id, name);
-      if (!keys.includes(key)) keys.push(key);
-    }
-  }
-  return keys;
-}
 const TEAM_SIZES = ["Just me", "2–5", "6–10", "11–20", "21+"] as const;
 
 const EMPLOYEE_TO_API: Record<string, string> = {
@@ -314,13 +249,6 @@ export function ProfileView() {
   );
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [jobs, setJobs] = useState<string[]>([]);
-  /** Per-neighborhood coverage keys: `${serviceAreaId}::${areaName}`. */
-  const [selectedCoverageKeys, setSelectedCoverageKeys] = useState<string[]>(
-    [],
-  );
-  const coverageKeysSeededRef = useRef(false);
-  const seededServiceAreaIdsRef = useRef<Set<string>>(new Set());
-  const [formHydrated, setFormHydrated] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -355,26 +283,6 @@ export function ProfileView() {
       a.title.localeCompare(b.title),
     );
   }, [listItems, pickerItems]);
-
-  const areasById = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const area of coverageAreas) {
-      if (area.id) map.set(area.id, formatServiceAreaCoverageLabels(area));
-    }
-    return map;
-  }, [coverageAreas]);
-
-  const coverageChips = useMemo(() => {
-    return coverageAreas.flatMap((area) =>
-      coverageNeighborhoodPool(area).map((neighborhood) => ({
-        key: coverageAreaSelectionKey(area.id, neighborhood.name),
-        serviceAreaId: area.id,
-        name: neighborhood.name,
-        label: coverageChipLabel(area, neighborhood.name),
-        neighborhood,
-      })),
-    );
-  }, [coverageAreas]);
 
   // Jobs per category come from the database (all subcategories), not the static list.
   const { jobsFor } = useCategoryJobs();
@@ -416,41 +324,8 @@ export function ProfileView() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (!formHydrated || !coverageAreas.length) return;
-
-    const freshAreas = coverageAreas.filter(
-      (area) => !seededServiceAreaIdsRef.current.has(area.id),
-    );
-    if (!freshAreas.length && coverageKeysSeededRef.current) return;
-
-    for (const area of coverageAreas) {
-      seededServiceAreaIdsRef.current.add(area.id);
-    }
-
-    const freshKeys = selectedKeysFromServiceAreas(
-      coverageKeysSeededRef.current ? freshAreas : coverageAreas,
-    );
-
-    if (!coverageKeysSeededRef.current) {
-      setSelectedCoverageKeys(freshKeys);
-      coverageKeysSeededRef.current = true;
-      return;
-    }
-
-    if (!freshKeys.length) return;
-    setSelectedCoverageKeys((current) => {
-      const next = [...current];
-      for (const key of freshKeys) {
-        if (!next.includes(key)) next.push(key);
-      }
-      return next;
-    });
-  }, [coverageAreas, formHydrated]);
-
-  useEffect(() => {
     if (!user && !authProvider) {
       formReadyRef.current = false;
-      setFormHydrated(false);
       return;
     }
 
@@ -485,10 +360,7 @@ export function ProfileView() {
       setCategoryIds(next.categoryIds);
       setJobs(next.jobs);
       setGallery(next.gallery);
-      coverageKeysSeededRef.current = false;
-      seededServiceAreaIdsRef.current = new Set();
       formReadyRef.current = true;
-      setFormHydrated(true);
       return;
     }
 
@@ -569,83 +441,6 @@ export function ProfileView() {
     }
   }
 
-  async function syncSelectedCoverageAreas(): Promise<string[] | null> {
-    const selectedByCity = new Map<string, string[]>();
-    for (const key of selectedCoverageKeys) {
-      const parsed = parseCoverageAreaSelectionKey(key);
-      if (!parsed) continue;
-      const list = selectedByCity.get(parsed.serviceAreaId) ?? [];
-      if (!list.includes(parsed.areaName)) list.push(parsed.areaName);
-      selectedByCity.set(parsed.serviceAreaId, list);
-    }
-
-    const cityIds: string[] = [];
-
-    for (const area of coverageAreas) {
-      const selectedNames = selectedByCity.get(area.id) ?? [];
-      const pool = coverageNeighborhoodPool(area);
-      const nextAreas = pool.filter((item) =>
-        selectedNames.includes(item.name),
-      );
-      const prevNames = (area.areas || [])
-        .map((item) => item.name.trim())
-        .filter(Boolean)
-        .sort()
-        .join("\0");
-      const nextNames = nextAreas
-        .map((item) => item.name)
-        .sort()
-        .join("\0");
-
-      if (!nextAreas.length) {
-        if ((area.areas || []).length > 0) {
-          const result = await dispatch(deleteServiceArea(area.id));
-          if (deleteServiceArea.rejected.match(result)) {
-            toast.error(
-              typeof result.payload === "string"
-                ? result.payload
-                : "Could not update coverage areas.",
-            );
-            return null;
-          }
-        }
-        continue;
-      }
-
-      if (prevNames !== nextNames) {
-        const primary = nextAreas[0];
-        const result = await dispatch(
-          updateServiceArea({
-            id: area.id,
-            title:
-              [area.location.city, area.location.state]
-                .filter(Boolean)
-                .join(", ") || area.title,
-            areas: nextAreas,
-            location: {
-              ...area.location,
-              coordinates: [primary.lng, primary.lat],
-              zip: primary.zip || area.location.zip || "",
-            },
-          }),
-        );
-        if (updateServiceArea.rejected.match(result)) {
-          toast.error(
-            typeof result.payload === "string"
-              ? result.payload
-              : "Could not update coverage areas.",
-          );
-          return null;
-        }
-      }
-
-      cityIds.push(area.id);
-    }
-
-    void dispatch(fetchServiceAreasPicker());
-    return cityIds;
-  }
-
   async function saveProfile(isUpdate = false): Promise<{ provider: AuthProviderRecord; user: AuthUser } | false> {
     const nextFirst = firstName.trim();
     const nextLast = lastName.trim();
@@ -656,12 +451,6 @@ export function ProfileView() {
     }
     if (!isUpdate && !companyName.trim()) {
       toast.error("Company name is required.");
-      goTo("business");
-      return false;
-    }
-
-    const coverageCityIds = await syncSelectedCoverageAreas();
-    if (coverageCityIds == null) {
       goTo("business");
       return false;
     }
@@ -682,8 +471,6 @@ export function ProfileView() {
       ...(location ? { location } : {}),
       categoryIds,
       offeredJobs: jobs,
-      neighborhoods: coverageCityIds,
-      serviceArea: coverageCityIds,
       yearsInBusiness: Number.isFinite(years) ? years : undefined,
       employeeCount:
         EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
@@ -774,9 +561,6 @@ export function ProfileView() {
           insured,
           language: language || "",
           paymentMethods,
-        },
-        coverage: {
-          neighborhoods: coverageCityIds,
         },
         businessGallery: gallery,
         ...(fromApi || {}),
@@ -1172,39 +956,27 @@ export function ProfileView() {
             <section className="rounded-xl border border-input bg-card p-5">
               <p className="text-sm font-semibold">Coverage</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Select each area separately. You can pick multiple areas in the
-                same city. Manage cities on the Service Areas page.
+                The cities you serve. Customers in these cities can find you and
+                send you requests. Add or remove cities on the Service Areas page.
               </p>
-              {coverageChips.length ? (
+              {coverageAreas.length ? (
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {coverageChips.map((chip) => {
-                    const checked = selectedCoverageKeys.includes(chip.key);
-                    return (
-                      <button
-                        key={chip.key}
-                        type="button"
-                        onClick={() =>
-                          setSelectedCoverageKeys((current) =>
-                            toggleValue(current, chip.key),
-                          )
-                        }
-                        className={cn(
-                          "rounded-lg border px-3 py-1.5 text-sm",
-                          checked
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "bg-card hover:border-foreground/20",
-                        )}
-                      >
-                        {chip.label}
-                      </button>
-                    );
-                  })}
+                  {coverageAreas.map((area) => (
+                    <span
+                      key={area.id}
+                      className="rounded-lg border bg-card px-3 py-1.5 text-sm"
+                    >
+                      {[area.location?.city, area.location?.state]
+                        .filter(Boolean)
+                        .join(", ") || area.title}
+                    </span>
+                  ))}
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-muted-foreground">
                   {pickerLoading
                     ? "Loading service areas…"
-                    : "No service areas yet. Add coverage zones first."}
+                    : "No service areas yet. Add the cities you serve."}
                 </p>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -1221,7 +993,7 @@ export function ProfileView() {
                     {pickerLoading ? (
                       <Loader2 className="size-3.5 animate-spin" aria-hidden />
                     ) : null}
-                    Load more areas
+                    Load more cities
                   </Button>
                 ) : null}
                 <Button asChild variant="link" size="sm" className="h-auto px-0">
@@ -1230,15 +1002,6 @@ export function ProfileView() {
                   </Link>
                 </Button>
               </div>
-              {selectedCoverageKeys.length > 0 &&
-              selectedCoverageKeys.some((key) => {
-                const parsed = parseCoverageAreaSelectionKey(key);
-                return parsed ? !areasById.has(parsed.serviceAreaId) : true;
-              }) ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Some selected areas are still loading names…
-                </p>
-              ) : null}
             </section>
           </div>
         ) : null}

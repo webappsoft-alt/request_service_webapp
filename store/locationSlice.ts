@@ -115,10 +115,11 @@ export function isCommittedLocation(location: CustomerLocation): boolean {
 }
 
 /**
- * Location is usable for Fixed Services / directory API calls.
- * Require zip or lat/lng — city-only must not trigger a fetch (avoids a second call once coords arrive).
+ * Location is usable for Fixed Services / directory API calls: City + State (the
+ * matching standard), a ZIP or lat/lng. A city without its state is not enough.
  */
 export function hasServiceGeoLocation(location: CustomerLocation): boolean {
+  if (location.city.trim() && location.state.trim()) return true;
   const hasZip = Boolean(location.zip.trim());
   const hasCoords =
     location.latitude != null &&
@@ -238,15 +239,17 @@ const locationSlice = createSlice({
     /** Partial hydrate from URL/search defaults when Redux is still empty. */
     hydrateLocationIfEmpty(
       state,
-      action: PayloadAction<{ address?: string; city?: string; zip?: string }>,
+      action: PayloadAction<{ address?: string; city?: string; state?: string; zip?: string }>,
     ) {
       if (hasLocation(state)) return;
       const address = action.payload.address?.trim() ?? "";
       const city = action.payload.city?.trim() ?? "";
+      const region = action.payload.state?.trim() ?? "";
       const zip = action.payload.zip?.trim() ?? "";
       if (!address && !city && !zip) return;
-      state.address = address || city || zip;
+      state.address = address || [city, region].filter(Boolean).join(", ") || zip;
       state.city = city || (address && !/^\d{5}$/.test(address) ? address : "");
+      state.state = region;
       state.zip = zip;
       state.detectAttempted = true;
     },

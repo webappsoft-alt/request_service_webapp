@@ -27,7 +27,9 @@ export type ServiceAreaNeighborhood = {
 export type ServiceArea = {
   id: string;
   title: string;
-  /** Neighborhoods under this city (one API row per city). */
+  /** Every ZIP code of the city. */
+  zips: string[];
+  /** @deprecated Old neighborhood sub-areas — coverage is State → City now. */
   areas: ServiceAreaNeighborhood[];
   location: ServiceAreaLocation;
   isActive: boolean;
@@ -41,7 +43,13 @@ export type ServiceAreaInput = {
   areas?: ServiceAreaNeighborhood[];
 };
 
-/** One city with all selected neighborhoods (merged — city appears once). */
+/** State → City coverage: one row per city, ZIP codes filled in by the API. */
+export type StateCitiesPayload = {
+  state: string;
+  cityNames: string[];
+};
+
+/** @deprecated One city with neighborhoods — use StateCitiesPayload. */
 export type CityServiceAreasPayload = {
   city: string;
   state: string;
@@ -190,6 +198,9 @@ export function normalizeServiceArea(raw: unknown): ServiceArea | null {
   return {
     id,
     title: typeof record.title === "string" ? record.title : "",
+    zips: Array.isArray(record.zips)
+      ? record.zips.filter((zip): zip is string => typeof zip === "string" && Boolean(zip))
+      : [],
     areas,
     location,
     isActive: Boolean(record.isActive ?? true),
@@ -326,10 +337,10 @@ export const createServiceArea = createAsyncThunk<
   }
 });
 
-/** Create areas for one city: `{ city, state, areas: [{ name, lat, lng, zip? }] }`. */
+/** Add cities: `{ state, cityNames: ["Los Angeles", …] }` (one row per city). */
 export const createServiceAreas = createAsyncThunk<
   ServiceArea[],
-  CityServiceAreasPayload | { cities: CityServiceAreasPayload[] },
+  StateCitiesPayload | CityServiceAreasPayload | { cities: CityServiceAreasPayload[] },
   { rejectValue: string }
 >("serviceAreas/createMany", async (payload, { rejectWithValue }) => {
   try {
@@ -350,20 +361,15 @@ export const createServiceAreas = createAsyncThunk<
 
 export const updateServiceArea = createAsyncThunk<
   ServiceArea,
-  { id: string } & ServiceAreaInput,
+  { id: string } & (ServiceAreaInput | { city: string; state: string }),
   { rejectValue: string }
 >("serviceAreas/update", async ({ id, ...payload }, { rejectWithValue }) => {
   try {
     const response = await putData(providerApi.serviceArea(id), payload, {
       silent: true,
     });
-    const updated = extractEntity(response) ?? {
-      id,
-      title: payload.title,
-      areas: payload.areas ?? [],
-      location: payload.location,
-      isActive: true,
-    };
+    const updated = extractEntity(response);
+    if (!updated) return rejectWithValue("Service area was saved but could not be read.");
     return updated;
   } catch (error) {
     return rejectWithValue(extractErrorMessage(error));

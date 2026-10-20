@@ -59,6 +59,9 @@ export default async function ServicesPage({ searchParams }: PageParams) {
   const loc = firstSearchValue(params.loc);
   const zip = firstSearchValue(params.zip);
   const job = firstSearchValue(params.job);
+  // Location filter: ?city=Los Angeles&state=CA (zip / loc kept for older links).
+  const city = firstSearchValue(params.city);
+  const state = firstSearchValue(params.state);
 
   return (
     <>
@@ -77,6 +80,8 @@ export default async function ServicesPage({ searchParams }: PageParams) {
         initialJob={job}
         initialZip={zip}
         initialLocation={loc}
+        initialCity={city}
+        initialState={state}
         initialProviderId={firstSearchValue(params.provider)}
         initialProviderName={firstSearchValue(params.providerName)}
         initialFocus={firstSearchValue(params.focus)}

@@ -79,6 +79,9 @@ export type PublicFixedService = {
 
 export type PublicFixedServicesQuery = {
   search?: string;
+  /** Customer City + State — the location filter (ZIP / pin only help resolve it). */
+  city?: string;
+  state?: string;
   zipCode?: string;
   lat?: number | null;
   lng?: number | null;
@@ -418,6 +421,8 @@ function toRequestParams(
     search: query.search?.trim() || undefined,
     q: undefined,
     // Omit when cleared so the previous zip/geo is not reused.
+    city: query.city?.trim() || undefined,
+    state: query.state?.trim() || undefined,
     zipCode: query.zipCode?.trim() || undefined,
     lat:
       query.lat != null && Number.isFinite(query.lat) ? query.lat : undefined,
@@ -487,14 +492,16 @@ function resolveQueryWithLiveLocation(
     Number.isFinite(location.latitude) &&
     location.longitude != null &&
     Number.isFinite(location.longitude);
-  // Only zip or coords count — city-only must not produce a fetchable query.
-  const usable = hasZip || hasCoords;
+  // City + State, zip or coords — a city without its state must not produce a fetchable query.
+  const usable = hasZip || hasCoords || Boolean(location.city.trim() && location.state.trim());
 
   const nextQuery: PublicFixedServicesQuery = {
     sortBy: incoming?.sortBy || fallbackSortBy || "recommended",
     ...incoming,
     // When lat/lng exist (city/place pick), omit ZIP — Places center ZIPs AND-filter
     // against exact postal matches and wipe nearby results. Radius handles discovery.
+    city: usable && location.city.trim() && location.state.trim() ? location.city.trim() : undefined,
+    state: usable && location.city.trim() && location.state.trim() ? location.state.trim() : undefined,
     zipCode: hasZip && !hasCoords ? location.zip.trim() : undefined,
     lat: hasCoords ? location.latitude! : undefined,
     lng: hasCoords ? location.longitude! : undefined,
@@ -512,6 +519,10 @@ function resolveQueryWithLiveLocation(
 
   // Cleared / typing location must not keep a previous zip/geo via undefined merges.
   if (!(hasZip && !hasCoords)) delete nextQuery.zipCode;
+  if (!nextQuery.city || !nextQuery.state) {
+    delete nextQuery.city;
+    delete nextQuery.state;
+  }
   if (!hasCoords) {
     delete nextQuery.lat;
     delete nextQuery.lng;

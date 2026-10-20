@@ -143,6 +143,9 @@ export type SearchIntent = {
   job?: string;
   zip?: string;
   location?: string;
+  /** Customer City + State — the location filter in /services URLs. */
+  city?: string;
+  state?: string;
   /** Professional ObjectId (preferred) or slug for scoped services directory. */
   providerId?: string;
   /** Display name for the selected-professional chip. */
@@ -293,8 +296,13 @@ export function servicesHref(intent: SearchIntent) {
   if (intent.query) params.set("q", intent.query);
   if (intent.service) params.set("service", intent.service);
   if (intent.job) params.set("job", intent.job);
-  if (intent.zip) params.set("zip", intent.zip);
-  if (intent.location && intent.location !== intent.zip) params.set("loc", intent.location);
+  if (intent.city && intent.state) {
+    params.set("city", intent.city);
+    params.set("state", intent.state);
+  } else {
+    if (intent.zip) params.set("zip", intent.zip);
+    if (intent.location && intent.location !== intent.zip) params.set("loc", intent.location);
+  }
   if (intent.providerId) params.set("provider", intent.providerId);
   if (intent.providerName) params.set("providerName", intent.providerName);
   const query = params.toString();

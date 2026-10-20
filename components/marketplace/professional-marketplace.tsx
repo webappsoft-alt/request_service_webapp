@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { CategoryExplorer } from "@/components/marketplace/category-explorer";
 import { QuoteGuide, QuoteHero } from "@/components/marketplace/quote-hero";
 import { RequestIntake } from "@/components/marketplace/request-intake";
@@ -118,9 +119,7 @@ export function ProfessionalMarketplace({
                     );
                   } catch (error) {
                     toast.error(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to send the quote request.",
+                      extractErrorMessage(error) || "Unable to send the quote request.",
                     );
                     throw error;
                   }

@@ -5,8 +5,8 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { ServiceAreaDetailDialog } from "@/components/portal/service-area-detail-dialog";
 import { ServiceAreaFormDialog } from "@/components/portal/service-area-form-dialog";
-import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { usStateName } from "@/lib/data/us-states";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   clearServiceAreasError,
@@ -29,6 +30,31 @@ import {
 } from "@/store/serviceAreasSlice";
 
 const SEARCH_DEBOUNCE_MS = 400;
+const ZIP_PREVIEW = 12;
+
+function cityLabel(row: ServiceArea) {
+  return [row.location.city, row.location.state].filter(Boolean).join(", ") || row.title;
+}
+
+/** First ZIP codes of the city; "+N more" opens the details modal with all of them. */
+function ZipCodes({ row, onMore }: { row: ServiceArea; onMore: () => void }) {
+  const { zips } = row;
+  if (!zips.length) return <span className="text-muted-foreground">—</span>;
+  return (
+    <p className="max-w-xl text-sm leading-6 tabular-nums">
+      {zips.slice(0, ZIP_PREVIEW).join(", ")}
+      {zips.length > ZIP_PREVIEW ? (
+        <button
+          type="button"
+          onClick={onMore}
+          className="ml-1.5 text-xs font-semibold text-primary hover:underline"
+        >
+          +{zips.length - ZIP_PREVIEW} more
+        </button>
+      ) : null}
+    </p>
+  );
+}
 
 export function ServiceAreasView() {
   const dispatch = useAppDispatch();
@@ -62,6 +88,7 @@ export function ServiceAreasView() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ServiceArea | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ServiceArea | null>(null);
+  const [viewing, setViewing] = useState<ServiceArea | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -151,7 +178,7 @@ export function ServiceAreasView() {
     <PortalPage
       eyebrow="Catalog"
       title="Service areas"
-      description="Operational zones and coverage locations used when customers book fixed services."
+      description="The cities you serve. Customers in these cities (any of their ZIP codes) can find you and send you requests."
       actions={
         <Button type="button" onClick={openCreate}>
           Add service area
@@ -165,7 +192,7 @@ export function ServiceAreasView() {
       ) : isTrulyEmpty ? (
         <div className="flex min-h-[50vh] items-center justify-center border border-input bg-card px-6 py-16 text-center">
           <p className="max-w-md text-base text-muted-foreground">
-            No service areas yet. Add your first coverage zone.
+            No service areas yet. Add the cities you serve.
           </p>
         </div>
       ) : (
@@ -180,7 +207,7 @@ export function ServiceAreasView() {
           empty={
             search.trim()
               ? "No service areas match this search."
-              : "No service areas yet. Add your first coverage zone."
+              : "No service areas yet. Add the cities you serve."
           }
           serverPagination={{
             page,
@@ -193,116 +220,44 @@ export function ServiceAreasView() {
           }}
           columns={[
             {
-              id: "areas",
-              header: "Areas",
-              sortValue: (row) =>
-                row.areas?.map((a) => a.name).join(", ") || row.title,
-              searchValue: (row) =>
-                [
-                  row.title,
-                  row.location.city,
-                  ...(row.areas?.map((a) => a.name) ?? []),
-                ].join(" "),
-              exportValue: (row) =>
-                row.areas?.map((a) => a.name).join(", ") || row.title,
-              cell: (row) => {
-                const names =
-                  row.areas?.length > 0
-                    ? row.areas.map((a) => a.name).filter(Boolean)
-                    : [row.title].filter(Boolean);
-                return (
-                  <div>
-                    <button
-                      type="button"
-                      className="flex flex-wrap gap-1.5 text-left"
-                      onClick={() => openEdit(row)}
-                    >
-                      {names.map((name) => (
-                        <span
-                          key={name}
-                          className="rounded-md border border-input bg-card px-2 py-0.5 text-xs font-medium text-primary hover:underline"
-                        >
-                          {name}
-                        </span>
-                      ))}
-                    </button>
-                    <p className="mt-1 max-w-md truncate text-xs text-muted-foreground">
-                      {row.location.address ||
-                        [row.location.city, row.location.state]
-                          .filter(Boolean)
-                          .join(", ") ||
-                        "No address"}
-                    </p>
-                  </div>
-                );
-              },
-            },
-            {
               id: "city",
               header: "City",
-              sortValue: (row) => row.location.city,
-              searchValue: (row) =>
-                [row.location.city, row.location.state].filter(Boolean).join(" "),
-              exportValue: (row) =>
-                [row.location.city, row.location.state]
-                  .filter(Boolean)
-                  .join(", ") || row.location.city,
-              cell: (row) =>
-                [row.location.city, row.location.state]
-                  .filter(Boolean)
-                  .join(", ") ||
-                row.location.city ||
-                "—",
-            },
-            {
-              id: "zip",
-              header: "ZIP",
-              sortValue: (row) =>
-                row.areas?.map((a) => a.zip).filter(Boolean).join(",") ||
-                row.location.zip,
-              searchValue: (row) =>
-                row.areas?.map((a) => a.zip).filter(Boolean).join(" ") ||
-                row.location.zip,
-              exportValue: (row) => {
-                const zips = [
-                  ...new Set(
-                    (row.areas || [])
-                      .map((a) => a.zip)
-                      .filter((z): z is string => Boolean(z)),
-                  ),
-                ];
-                return zips.length
-                  ? zips.join(", ")
-                  : row.location.zip || "";
-              },
-              cell: (row) => {
-                const zips = [
-                  ...new Set(
-                    (row.areas || [])
-                      .map((a) => a.zip)
-                      .filter((z): z is string => Boolean(z)),
-                  ),
-                ];
-                if (zips.length) return zips.join(", ");
-                return row.location.zip || "—";
-              },
-            },
-          
-            {
-              id: "status",
-              header: "Status",
-              sortValue: (row) => (row.isActive ? "active" : "inactive"),
-              searchValue: (row) => (row.isActive ? "Active" : "Inactive"),
-              exportValue: (row) => (row.isActive ? "Active" : "Inactive"),
+              sortValue: (row) => cityLabel(row),
+              searchValue: (row) => cityLabel(row),
+              exportValue: (row) => cityLabel(row),
               cell: (row) => (
-                <StatusPill
-                  label={row.isActive ? "Active" : "Inactive"}
-                  tone={row.isActive ? "success" : "neutral"}
-                />
+                <button
+                  type="button"
+                  onClick={() => setViewing(row)}
+                  className="rounded-md border border-input bg-card px-2 py-0.5 text-left text-sm font-medium text-primary hover:underline"
+                >
+                  {cityLabel(row)}
+                </button>
               ),
+            },
+            {
+              id: "state",
+              header: "State",
+              sortValue: (row) => row.location.state || "",
+              searchValue: (row) =>
+                [row.location.state, usStateName(row.location.state)].filter(Boolean).join(" "),
+              exportValue: (row) => usStateName(row.location.state) || row.location.state || "",
+              cell: (row) => usStateName(row.location.state) || row.location.state || "—",
+            },
+            {
+              id: "zips",
+              header: "ZIP Codes",
+              sortValue: (row) => row.zips[0] || "",
+              searchValue: (row) => row.zips.join(" "),
+              exportValue: (row) => row.zips.join(", "),
+              cell: (row) => <ZipCodes row={row} onMore={() => setViewing(row)} />,
             },
           ]}
           actions={(row) => [
+            {
+              label: "View details",
+              onSelect: () => setViewing(row),
+            },
             {
               label: "Edit",
               onSelect: () => openEdit(row),
@@ -317,6 +272,14 @@ export function ServiceAreasView() {
           ]}
         />
       )}
+
+      <ServiceAreaDetailDialog
+        area={viewing}
+        onOpenChange={(open) => {
+          if (!open) setViewing(null);
+        }}
+        onEdit={openEdit}
+      />
 
       <ServiceAreaFormDialog
         open={dialogOpen}
@@ -338,7 +301,7 @@ export function ServiceAreasView() {
               {deleteTarget
                 ? `This will permanently remove “${
                     deleteTarget.location.city || deleteTarget.title
-                  }” and all its areas from your service areas.`
+                  }” from your service areas. Customers there will no longer be matched to you.`
                 : "This will permanently remove this service area."}
             </DialogDescription>
           </DialogHeader>

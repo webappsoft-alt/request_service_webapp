@@ -10,6 +10,7 @@ import { getServiceCategoryBySlug } from "@/lib/data/services";
 import { breadcrumbJsonLd, servicesItemListJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
+import { usStateName } from "@/lib/data/us-states";
 
 export async function generateMetadata({ searchParams }: PageParams) {
   const params = await searchParams;
@@ -56,12 +57,14 @@ export default async function ServicesPage({ searchParams }: PageParams) {
   const selectedCategory = selectedSlug
     ? getServiceCategoryBySlug(selectedSlug)
     : undefined;
-  const loc = firstSearchValue(params.loc);
   const zip = firstSearchValue(params.zip);
   const job = firstSearchValue(params.job);
-  // Location filter: ?city=Los Angeles&state=CA (zip / loc kept for older links).
+  // Location filter: ?city=Los Angeles&state=CA or ?state=CA (zip / loc kept for older links).
   const city = firstSearchValue(params.city);
   const state = firstSearchValue(params.state);
+  const loc =
+    firstSearchValue(params.loc) ||
+    (state ? (city ? `${city}, ${state}` : usStateName(state) || state) : "");
 
   return (
     <>

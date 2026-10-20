@@ -428,11 +428,6 @@ function toRequestParams(
       query.lat != null && Number.isFinite(query.lat) ? query.lat : undefined,
     lng:
       query.lng != null && Number.isFinite(query.lng) ? query.lng : undefined,
-    // Backend Joi default is 25; customer marketplace uses 50 miles.
-    radius:
-      query.radius != null && Number.isFinite(query.radius)
-        ? query.radius
-        : 50,
     // Backend accepts ObjectId(s), slug(s), or comma-separated — not JSON arrays.
     category: categoryIds.length ? categoryIds.join(",") : undefined,
     subCategory: query.subCategory?.trim() || undefined,
@@ -492,19 +487,23 @@ function resolveQueryWithLiveLocation(
     Number.isFinite(location.latitude) &&
     location.longitude != null &&
     Number.isFinite(location.longitude);
-  // City + State, zip or coords — a city without its state must not produce a fetchable query.
-  const usable = hasZip || hasCoords || Boolean(location.city.trim() && location.state.trim());
+  const state = location.state.trim();
+  const city = state ? location.city.trim() : "";
+  // State (alone = the whole state), City + State, a ZIP or a pin — the API resolves the
+  // ZIP / pin to City + State. lat/lng only sort by distance; there is no radius.
+  const usable = Boolean(state) || hasZip || hasCoords;
+  // A pin is sent only when it is the sole location (the API resolves it to City + State).
+  // With a state or ZIP the API sorts from the city centre — no lat/lng needed.
+  const pinOnly = hasCoords && !state && !hasZip;
 
   const nextQuery: PublicFixedServicesQuery = {
     sortBy: incoming?.sortBy || fallbackSortBy || "recommended",
     ...incoming,
-    // When lat/lng exist (city/place pick), omit ZIP — Places center ZIPs AND-filter
-    // against exact postal matches and wipe nearby results. Radius handles discovery.
-    city: usable && location.city.trim() && location.state.trim() ? location.city.trim() : undefined,
-    state: usable && location.city.trim() && location.state.trim() ? location.state.trim() : undefined,
-    zipCode: hasZip && !hasCoords ? location.zip.trim() : undefined,
-    lat: hasCoords ? location.latitude! : undefined,
-    lng: hasCoords ? location.longitude! : undefined,
+    city: usable && city ? city : undefined,
+    state: usable && state ? state : undefined,
+    zipCode: hasZip ? location.zip.trim() : undefined,
+    lat: pinOnly ? location.latitude! : undefined,
+    lng: pinOnly ? location.longitude! : undefined,
     locationToken: usable
       ? [
           location.zip,
@@ -518,12 +517,11 @@ function resolveQueryWithLiveLocation(
   };
 
   // Cleared / typing location must not keep a previous zip/geo via undefined merges.
-  if (!(hasZip && !hasCoords)) delete nextQuery.zipCode;
-  if (!nextQuery.city || !nextQuery.state) {
-    delete nextQuery.city;
-    delete nextQuery.state;
-  }
-  if (!hasCoords) {
+  delete nextQuery.radius;
+  if (!nextQuery.zipCode) delete nextQuery.zipCode;
+  if (!nextQuery.city) delete nextQuery.city;
+  if (!nextQuery.state) delete nextQuery.state;
+  if (!pinOnly) {
     delete nextQuery.lat;
     delete nextQuery.lng;
   }

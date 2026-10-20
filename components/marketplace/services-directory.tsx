@@ -50,11 +50,13 @@ import {
 import { serviceCategories } from "@/lib/data/services";
 import { formatStartingPrice } from "@/lib/format";
 import {
+  cityStateFromLabel,
   extractZip,
   resolveSearchIntent,
   servicesHref,
   type SearchIntent,
 } from "@/lib/search";
+import { usStateName } from "@/lib/data/us-states";
 import { cn } from "@/lib/utils";
 import type { Provider, ServiceCategory, ServiceCategorySlug } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -72,6 +74,7 @@ import {
   hydrateLocationIfEmpty,
   isCommittedLocation,
   locationDisplayLabel,
+  locationServesLabel,
 } from "@/store/locationSlice";
 import {
   buildPublicFixedServicesQueryKey,
@@ -323,6 +326,7 @@ function listingFromService(
   service: PublicFixedService,
   onBeforeNavigate?: () => void,
   highlightTag?: string,
+  servesLabel?: string,
 ): ServiceJobListing {
   const tags = [service.subcategory?.name, ...service.commonServices]
     .map((tag) => String(tag || "").trim())
@@ -340,6 +344,7 @@ function listingFromService(
     reviewCount: service.provider?.rating.totalReviews,
     city: service.provider?.location.city,
     state: service.provider?.location.state,
+    servesLabel: servesLabel || undefined,
     href: publicFixedServicePath(service),
     online: true,
     tags: [...new Set(tags)],
@@ -508,6 +513,8 @@ export function ServicesDirectory({
   const dispatch = useAppDispatch();
   const customerLocation = useAppSelector((state) => state.location);
   const location = locationDisplayLabel(customerLocation);
+  // Cards say "Serves Denver, CO" (why they matched) instead of the pro's business address.
+  const servesLabel = locationServesLabel(customerLocation);
   const zip = customerLocation.zip;
   const parentCategories = useAppSelector(selectParentCategories);
   const parentsLoaded = useAppSelector((state) => state.categories.parentsLoaded);
@@ -760,7 +767,6 @@ export function ServicesDirectory({
     if (maxPrice < priceBounds.max) next.maxPrice = maxPrice;
     if (minRating) next.rating = minRating;
     if (providerId.trim()) next.providerId = providerId.trim();
-    next.radius = 50;
     return next;
   }, [
     answers,
@@ -1025,19 +1031,25 @@ export function ServicesDirectory({
     );
     setProviderId(next.providerId || initialProviderId.trim() || "");
     setProviderName(next.providerName || initialProviderName.trim() || "");
-    if (initialCity.trim() && initialState.trim()) {
+    if (initialState.trim()) {
       dispatch(
         hydrateLocationIfEmpty({
+          address: initialCity.trim()
+            ? `${initialCity.trim()}, ${initialState.trim()}`
+            : usStateName(initialState) || initialState.trim(),
           city: initialCity.trim(),
           state: initialState.trim(),
           zip: next.zip,
         }),
       );
     } else if (next.location || next.zip) {
+      // Older ?loc= links: "Alabama" is a whole state, "Mobile, AL" a City + State.
+      const parsed = cityStateFromLabel(next.location || "");
       dispatch(
         hydrateLocationIfEmpty({
           address: next.location,
-          city: next.location,
+          city: parsed ? parsed.city : next.location,
+          state: parsed?.state,
           zip: next.zip,
         }),
       );
@@ -1101,9 +1113,9 @@ export function ServicesDirectory({
       job: subOption?.job ?? subOption?.value ?? (answers["sub-service"] || undefined),
       zip: zip || extractZip(location),
       location,
-      // City + State is the URL's location filter whenever the location has both.
-      city: customerLocation.city.trim() && customerLocation.state.trim() ? customerLocation.city.trim() : undefined,
-      state: customerLocation.city.trim() && customerLocation.state.trim() ? customerLocation.state.trim() : undefined,
+      // The URL's location filter: ?state= (whole state) or ?city=&state=.
+      city: customerLocation.state.trim() && customerLocation.city.trim() ? customerLocation.city.trim() : undefined,
+      state: customerLocation.state.trim() || undefined,
       providerId: providerId || undefined,
       providerName: providerName || undefined,
     });
@@ -1646,6 +1658,7 @@ export function ServicesDirectory({
                                 service,
                                 () => dispatch(setPublicFixedServiceDetail(service)),
                                 selectedApiSub?.name || subOption?.label,
+                                servesLabel,
                               )}
                             />
                           </li>
@@ -1696,6 +1709,7 @@ export function ServicesDirectory({
                               visual={view === "grid"}
                               place={parsePlaceInput(location || zip)}
                               highlightService={selectedApiSub?.name || subOption?.label}
+                              servesLabel={servesLabel}
                             />
                           </li>
                         ))}

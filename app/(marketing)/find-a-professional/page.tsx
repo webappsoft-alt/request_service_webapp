@@ -5,6 +5,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { getJobRecord } from "@/lib/data/jobs";
 import { getLocalKeywordPhrases, getLocalPageCopy, readPlaceFromSearch } from "@/lib/data/local-keywords";
 import { firstSearchValue, getExplorePlaceLabel } from "@/lib/data/markets";
+import { usStateName } from "@/lib/data/us-states";
 import { directoryHref } from "@/lib/data/related-categories";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
 import { breadcrumbJsonLd } from "@/lib/json-ld";
@@ -53,7 +54,13 @@ export default async function FindProfessionalPage({ searchParams }: PageParams)
   const service = firstSearchValue(params.service);
   const zip = firstSearchValue(params.zip);
   const job = firstSearchValue(params.job);
-  const loc = firstSearchValue(params.loc) || firstSearchValue(params.location);
+  // Location filter: ?city=Mobile&state=AL or ?state=AL (older ?loc= links still work).
+  const city = firstSearchValue(params.city);
+  const state = firstSearchValue(params.state);
+  const loc =
+    (state ? (city ? `${city}, ${state}` : usStateName(state) || state) : "") ||
+    firstSearchValue(params.loc) ||
+    firstSearchValue(params.location);
   const ask = params.ask === "1" || params.ask === "true";
   const category = service ? getServiceCategoryBySlug(service) : undefined;
 

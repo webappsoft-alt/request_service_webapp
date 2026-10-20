@@ -1,5 +1,6 @@
 import { findSubServiceValue, getSubServices } from "@/lib/data/service-directory";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
+import { normalizeUsStateCode } from "@/lib/data/us-states";
 import { serviceSuggestions, type ServiceSuggestion } from "@/lib/data/service-suggestions";
 
 const synonyms: Record<string, string[]> = {
@@ -296,8 +297,9 @@ export function servicesHref(intent: SearchIntent) {
   if (intent.query) params.set("q", intent.query);
   if (intent.service) params.set("service", intent.service);
   if (intent.job) params.set("job", intent.job);
-  if (intent.city && intent.state) {
-    params.set("city", intent.city);
+  if (intent.state) {
+    // Location filter: ?state=AL (whole state) or ?city=Mobile&state=AL.
+    if (intent.city) params.set("city", intent.city);
     params.set("state", intent.state);
   } else {
     if (intent.zip) params.set("zip", intent.zip);
@@ -327,6 +329,21 @@ export function servicesForProviderHref(provider: {
     providerId: providerKey,
     providerName: provider.companyName?.trim() || undefined,
   });
+}
+
+/**
+ * A location label as City + State: "Alabama" / "Alabama, USA" → whole state AL;
+ * "Mobile, AL" / "Mobile, AL 36601, USA" → Mobile, AL. null when it names no US state.
+ */
+export function cityStateFromLabel(label: string): { city: string; state: string } | null {
+  const parts = label
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part && !/^(usa|us|united states)$/i.test(part));
+  if (!parts.length) return null;
+  const last = normalizeUsStateCode(parts[parts.length - 1].replace(/\s+\d{5}(-\d{4})?$/, ""));
+  if (!last) return null;
+  return { city: parts.length >= 2 ? parts[parts.length - 2] : "", state: last };
 }
 
 export function extractZip(value: string) {

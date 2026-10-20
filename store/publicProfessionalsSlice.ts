@@ -1070,12 +1070,17 @@ export function resolvePublicProfessionalsQuery(
     delete query.radius;
     query.locationToken = "all";
   } else {
-    // City/place picks include a center ZIP — don't AND it with radius or results empty.
-    query.city = location.city.trim() && location.state.trim() ? location.city.trim() : undefined;
-    query.state = location.city.trim() && location.state.trim() ? location.state.trim() : undefined;
-    query.zipCode = hasZip && !hasCoords ? location.zip.trim() : undefined;
-    query.lat = hasCoords ? location.latitude : undefined;
-    query.lng = hasCoords ? location.longitude : undefined;
+    // State (alone = the whole state), City + State, a ZIP or a pin — the API resolves the
+    // ZIP / pin to City + State. lat/lng only sort by distance; there is no radius.
+    const state = location.state.trim();
+    query.state = state || undefined;
+    query.city = state && location.city.trim() ? location.city.trim() : undefined;
+    query.zipCode = hasZip ? location.zip.trim() : undefined;
+    // A pin is sent only when it is the sole location (the API resolves it to City + State).
+    // With a state or ZIP the API sorts from the city centre — no lat/lng needed.
+    const pinOnly = hasCoords && !state && !hasZip;
+    query.lat = pinOnly ? location.latitude : undefined;
+    query.lng = pinOnly ? location.longitude : undefined;
     query.locationToken = [
       location.zip,
       location.city,
@@ -1084,16 +1089,12 @@ export function resolvePublicProfessionalsQuery(
       location.latitude ?? "",
       location.longitude ?? "",
     ].join("|");
-    if (hasCoords && (query.radius == null || !Number.isFinite(query.radius))) {
-      query.radius = 50;
-    }
   }
 
-  if (!(hasZip && !hasCoords) || wantsAllLocations) delete query.zipCode;
-  if (!query.city || !query.state) {
-    delete query.city;
-    delete query.state;
-  }
+  delete query.radius;
+  if (!query.zipCode) delete query.zipCode;
+  if (!query.city) delete query.city;
+  if (!query.state) delete query.state;
   if (query.lat == null || !Number.isFinite(query.lat)) delete query.lat;
   if (query.lng == null || !Number.isFinite(query.lng)) delete query.lng;
   if (query.minRating == null || query.minRating <= 0) delete query.minRating;
@@ -1101,7 +1102,6 @@ export function resolvePublicProfessionalsQuery(
     delete query.sortBy;
     delete query.sortOrder;
   }
-  if (query.lat == null || query.lng == null) delete query.radius;
 
   // Location is optional — empty means unfiltered catalog (pagination still applies).
   return { query, committed: true };
@@ -1128,13 +1128,6 @@ function toRequestParams(
     zipCode: query.zipCode?.trim() || undefined,
     lat: hasCoords ? query.lat : undefined,
     lng: hasCoords ? query.lng : undefined,
-    // Radius only applies with coordinates — omit so backend returns the full catalog.
-    radius:
-      hasCoords
-        ? query.radius != null && Number.isFinite(query.radius)
-          ? query.radius
-          : 50
-        : undefined,
     category: query.category?.trim() || undefined,
     subCategory: query.subCategory?.trim() || undefined,
     commonServices: query.commonServices?.trim() || undefined,

@@ -237,12 +237,21 @@ export function ServiceSearchForm({
     const nextZip = customerLocation.zip;
     const nextLocation = locationLabel || customerLocation.address || nextZip;
     setError("");
-    const intent = resolveSearchIntent({
-      query: nextQuery,
-      picked: match,
-      zip: nextZip,
-      location: nextLocation,
-    });
+    const intent = {
+      ...resolveSearchIntent({
+        query: nextQuery,
+        picked: match,
+        zip: nextZip,
+        location: nextLocation,
+      }),
+      // /services filters on City + State (or a whole state) — carried in the URL.
+      ...(customerLocation.state.trim()
+        ? {
+            state: customerLocation.state.trim(),
+            ...(customerLocation.city.trim() ? { city: customerLocation.city.trim() } : {}),
+          }
+        : {}),
+    };
     if (onSearch) {
       await onSearch(intent);
       return;

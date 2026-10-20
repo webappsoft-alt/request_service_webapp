@@ -46,13 +46,16 @@ function professionalHref(slug: string, place?: ExplorePlace) {
 function ProviderCardLocation({
   city,
   state,
+  servesLabel,
   className,
 }: {
   city?: string | null;
   state?: string | null;
+  /** Location search active: the covered place instead of the business address. */
+  servesLabel?: string;
   className?: string;
 }) {
-  const label = formatProviderCardLocation(city, state);
+  const label = servesLabel ? `Serves ${servesLabel}` : formatProviderCardLocation(city, state);
   return (
     <span
       className={cn(
@@ -118,6 +121,7 @@ export function ProviderCard({
   onMouseLeave,
   onBeforeNavigate,
   highlightService,
+  servesLabel,
 }: {
   provider: Provider;
   visual?: boolean;
@@ -132,6 +136,11 @@ export function ProviderCard({
   onBeforeNavigate?: () => void;
   /** Selected sub-service filter: its badge is shown first and highlighted when the pro offers it. */
   highlightService?: string;
+  /**
+   * The searched City + State (or state) — it's why this pro matched, so the card shows
+   * "Serves Denver, CO" instead of the business address.
+   */
+  servesLabel?: string;
 }) {
   const categories = provider.categoryIds
     .map((id) => getServiceCategoryById(id))
@@ -233,7 +242,7 @@ export function ProviderCard({
                     </span>
                   </span>
                 ) : null}
-                <ProviderCardLocation city={provider.city} state={provider.state} />
+                <ProviderCardLocation city={provider.city} state={provider.state} servesLabel={servesLabel} />
                 {!hideCredentials && hasCredentials ? (
                   <span className="text-sm text-muted-foreground">
                     {credentialLabel(provider.licensed, provider.insured)}
@@ -340,6 +349,7 @@ export function ProviderCard({
             <ProviderCardLocation
               city={provider.city}
               state={provider.state}
+              servesLabel={servesLabel}
               className="leading-5"
             />
           </div>

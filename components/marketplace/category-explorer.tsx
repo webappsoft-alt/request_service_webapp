@@ -31,7 +31,7 @@ import {
 import { usePaginatedCategoryOptions } from "@/components/portal/use-paginated-category-options";
 import { findMarketCity, stateLabel } from "@/lib/data/markets";
 import { parsePlaceInput } from "@/lib/data/profile-explore";
-import { extractZip } from "@/lib/search";
+import { cityStateFromLabel, extractZip } from "@/lib/search";
 import { getSubServices } from "@/lib/data/service-directory";
 import { serviceCategories } from "@/lib/data/services";
 import { formatLocation, formatStartingPrice } from "@/lib/format";
@@ -49,6 +49,7 @@ import {
   hydrateLocationIfEmpty,
   isCommittedLocation,
   locationDisplayLabel,
+  locationServesLabel,
   setLocationFromPlace,
 } from "@/store/locationSlice";
 import {
@@ -101,6 +102,27 @@ function sortByFromUi(sort: SortKey): PublicProfessionalSortBy {
   if (sort === "years") return "experience";
   if (sort === "rating") return "rating";
   return "newest";
+}
+
+/**
+ * Location in the Find a Professional URL: ?state=AL (whole state) or ?city=Mobile&state=AL
+ * — the API filters on City + State. Without a US state, the old zip / loc label is kept.
+ */
+function setLocationParams(
+  params: URLSearchParams,
+  place: { city?: string; state?: string; zip?: string; label?: string },
+) {
+  const state = String(place.state || "").trim();
+  if (state) {
+    const city = String(place.city || "").trim();
+    if (city) params.set("city", city);
+    params.set("state", state);
+    return;
+  }
+  const zip = String(place.zip || "").trim();
+  const label = String(place.label || "").trim();
+  if (zip) params.set("zip", zip);
+  if (label && label !== zip) params.set("loc", label);
 }
 
 export function CategoryExplorer({
@@ -180,6 +202,8 @@ export function CategoryExplorer({
   const prevLiveQueryKeyRef = useRef("");
 
   const useLive = Boolean(marketplace && liveProfessionals);
+  // Live results matched on City + State: cards say "Serves Denver, CO", not the business address.
+  const servesLabel = useLive ? locationServesLabel(customerLocation) : "";
 
   const filterParentPaging = usePaginatedCategoryOptions("parents", useLive);
   const filterSubPaging = usePaginatedCategoryOptions(
@@ -321,7 +345,6 @@ export function CategoryExplorer({
     if (hasCoords) {
       next.lat = customerLocation.latitude!;
       next.lng = customerLocation.longitude!;
-      next.radius = 50;
     }
 
     return next;
@@ -361,10 +384,13 @@ export function CategoryExplorer({
     if (!useLive) return;
     const zipFromAddress = extractZip(initialAddress);
     if (initialAddress.trim() || zipFromAddress) {
+      // "Alabama, USA" → the whole state; "Mobile, AL" → City + State.
+      const parsed = cityStateFromLabel(initialAddress);
       dispatch(
         hydrateLocationIfEmpty({
           address: initialAddress,
-          city: initialAddress,
+          city: parsed ? parsed.city : initialAddress,
+          state: parsed?.state,
           zip: zipFromAddress || undefined,
         }),
       );
@@ -522,10 +548,12 @@ export function CategoryExplorer({
     if (slug !== "all") params.set("service", slug);
     if (slug !== "all" && job) params.set("job", job);
     if (useLive) {
-      const zip = customerLocation.zip.trim();
-      const loc = locationLabel.trim();
-      if (zip) params.set("zip", zip);
-      if (loc && loc !== zip) params.set("loc", loc);
+      setLocationParams(params, {
+        city: customerLocation.city,
+        state: customerLocation.state,
+        zip: customerLocation.zip,
+        label: locationLabel,
+      });
     } else {
       const trimmed = address.trim();
       const zip = extractZip(trimmed);
@@ -545,13 +573,12 @@ export function CategoryExplorer({
       const params = new URLSearchParams();
       if (serviceSlug !== "all") params.set("service", serviceSlug);
       if (serviceSlug !== "all" && subService) params.set("job", subService);
-      const zip = place.zipCode?.trim() || "";
-      const loc =
-        place.formattedAddress?.trim() ||
-        [place.city, place.state].filter(Boolean).join(", ") ||
-        zip;
-      if (zip) params.set("zip", zip);
-      if (loc && loc !== zip) params.set("loc", loc);
+      setLocationParams(params, {
+        city: place.city,
+        state: place.state,
+        zip: place.zipCode,
+        label: place.formattedAddress,
+      });
       const query = params.toString();
       router.replace(query ? `/find-a-professional?${query}` : "/find-a-professional");
     }
@@ -955,6 +982,7 @@ export function CategoryExplorer({
                             ? locationInputValue || locationLabel
                             : address,
                         )}
+                        servesLabel={servesLabel}
                         onClick={() => setSelectedId(provider.id)}
                         onMouseEnter={() => setHoveredId(provider.id)}
                         onMouseLeave={() => setHoveredId(null)}

@@ -24,6 +24,8 @@ export type ServiceJobListing = {
   reviewCount?: number;
   city?: string;
   state?: string;
+  /** Location search active: the covered place shown instead of the business address. */
+  servesLabel?: string;
   href?: string;
   online?: boolean;
   responseLabel?: string;
@@ -201,10 +203,10 @@ export function ServiceJobCard({
                       ({reviewCount ?? 0} reviews)
                     </span>
                   </span>
-                  {city || state ? (
+                  {listing?.servesLabel || city || state ? (
                     <span className="inline-flex items-center gap-1">
                       <MapPin className="size-3.5" aria-hidden="true" />
-                      {formatLocation(city || "", state || "")}
+                      {listing?.servesLabel ? `Serves ${listing.servesLabel}` : formatLocation(city || "", state || "")}
                     </span>
                   ) : null}
                 </span>
@@ -260,12 +262,12 @@ export function ServiceJobCard({
                     {ratingValue.toFixed(1)}
                   </span>
                   <span>({reviewCount ?? 0} reviews)</span>
-                  {city || state ? (
+                  {listing?.servesLabel || city || state ? (
                     <>
                       <span aria-hidden="true">·</span>
                       <span className="inline-flex items-center gap-1">
                         <MapPin className="size-3.5" aria-hidden="true" />
-                        {formatLocation(city || "", state || "")}
+                        {listing?.servesLabel ? `Serves ${listing.servesLabel}` : formatLocation(city || "", state || "")}
                       </span>
                     </>
                   ) : null}

@@ -7,7 +7,7 @@ import {
   reverseGeocodeCoordinates,
   type PlaceAddress,
 } from "@/lib/google-places";
-import { normalizeUsStateCode } from "@/lib/data/us-states";
+import { normalizeUsStateCode, usStateName } from "@/lib/data/us-states";
 
 export type CustomerLocation = {
   address: string;
@@ -115,11 +115,11 @@ export function isCommittedLocation(location: CustomerLocation): boolean {
 }
 
 /**
- * Location is usable for Fixed Services / directory API calls: City + State (the
- * matching standard), a ZIP or lat/lng. A city without its state is not enough.
+ * Location is usable for Fixed Services / directory API calls: a state (alone = the whole
+ * state), City + State, a ZIP or lat/lng. A city without its state is not enough.
  */
 export function hasServiceGeoLocation(location: CustomerLocation): boolean {
-  if (location.city.trim() && location.state.trim()) return true;
+  if (location.state.trim()) return true;
   const hasZip = Boolean(location.zip.trim());
   const hasCoords =
     location.latitude != null &&
@@ -127,6 +127,18 @@ export function hasServiceGeoLocation(location: CustomerLocation): boolean {
     Number.isFinite(location.latitude) &&
     Number.isFinite(location.longitude);
   return hasZip || hasCoords;
+}
+
+/**
+ * The searched place for "Serves …" on result cards: "Denver, CO", or "Alabama" for a
+ * whole state. "" when no state is set (no City + State filter is active).
+ */
+export function locationServesLabel(location: CustomerLocation): string {
+  const state = location.state.trim();
+  if (!state) return "";
+  const code = normalizeUsStateCode(state) || state;
+  const city = location.city.trim();
+  return city ? `${city}, ${code}` : usStateName(code) || state;
 }
 
 export function hasLocation(location: CustomerLocation): boolean {
@@ -246,7 +258,7 @@ const locationSlice = createSlice({
       const city = action.payload.city?.trim() ?? "";
       const region = action.payload.state?.trim() ?? "";
       const zip = action.payload.zip?.trim() ?? "";
-      if (!address && !city && !zip) return;
+      if (!address && !city && !region && !zip) return;
       state.address = address || [city, region].filter(Boolean).join(", ") || zip;
       state.city = city || (address && !/^\d{5}$/.test(address) ? address : "");
       state.state = region;

@@ -10,10 +10,10 @@ export const AI_VOICES: AiVoiceOption[] = [
     accentClassName: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
   },
   {
-    id: "daniel",
-    label: "Daniel",
+    id: "max",
+    label: "Max",
     gender: "male",
-    tone: "Calm & professional",
+    tone: "Warm & engaging",
     accentClassName: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
   },
   {

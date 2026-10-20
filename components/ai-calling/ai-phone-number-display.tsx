@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Clock, Copy, PhoneCall } from "lucide-react";
+import { Check, Clock, Copy, Lock, PhoneCall } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -65,10 +65,13 @@ function emptyMessage(status: AiPhoneNumberStatus, note: string) {
 export function AiPhoneNumberDisplay({
   phoneNumber,
   status,
+  planActive = true,
   note = "",
 }: {
   phoneNumber: string | null;
   status: AiPhoneNumberStatus;
+  /** Without the AI Receptionist plan there's no number, only a subscribe prompt. */
+  planActive?: boolean;
   note?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -100,10 +103,25 @@ export function AiPhoneNumberDisplay({
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Your AI number</p>
-        <AiPhoneNumberStatusBadge status={status} />
+        {planActive ? (
+          <AiPhoneNumberStatusBadge status={status} />
+        ) : (
+          <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-muted px-2 text-xs font-medium text-muted-foreground ring-1 ring-border ring-inset">
+            No plan
+          </span>
+        )}
       </div>
 
-      {phoneNumber ? (
+      {!planActive ? (
+        <div className="mt-3 flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <Lock className="size-4" aria-hidden="true" />
+          </span>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {note || "AI Receptionist plan not active. Please subscribe to get a dedicated business phone number."}
+          </p>
+        </div>
+      ) : phoneNumber ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="flex items-center gap-2.5 font-mono text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-[1.65rem]">
             <PhoneCall className="size-5 text-primary" aria-hidden="true" />

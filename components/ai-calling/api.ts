@@ -34,6 +34,7 @@ export function parseAiCallingSettings(response: unknown): AiCallingSettings {
     enabled: typeof data.enabled === "boolean" ? data.enabled : fallback.enabled,
     aiPhoneNumber,
     aiPhoneNumberStatus: status,
+    planActive: data.planActive !== false,
     provisioningNote: typeof data.provisioningNote === "string" ? data.provisioningNote : "",
     escalationNumber: typeof data.escalationNumber === "string" ? data.escalationNumber : "",
     greeting: typeof data.greeting === "string" && data.greeting.trim() ? data.greeting : fallback.greeting,
@@ -41,6 +42,10 @@ export function parseAiCallingSettings(response: unknown): AiCallingSettings {
       typeof data.defaultGreeting === "string" && data.defaultGreeting.trim()
         ? data.defaultGreeting
         : fallback.defaultGreeting,
+    greetingOptions:
+      Array.isArray(data.greetingOptions) && data.greetingOptions.some((item) => typeof item === "string" && item.trim())
+        ? data.greetingOptions.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+        : fallback.greetingOptions,
     voiceId,
   };
 }

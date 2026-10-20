@@ -7,6 +7,7 @@ export type AiCallOutcome =
   | "transferred"
   | "ended_by_ai"
   | "caller_hung_up"
+  | "no_response"
   | "out_of_scope"
   | "error"
   | "";
@@ -87,6 +88,7 @@ export const OUTCOME_META: Record<string, { label: string; className: string }> 
   transferred: { label: "Transferred", className: "bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-400" },
   ended_by_ai: { label: "Completed", className: "bg-muted text-muted-foreground ring-border" },
   caller_hung_up: { label: "Caller hung up", className: "bg-muted text-muted-foreground ring-border" },
+  no_response: { label: "No response", className: "bg-muted text-muted-foreground ring-border" },
   out_of_scope: {
     label: "Out of scope",
     className: "bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:text-amber-400",
@@ -118,6 +120,8 @@ export const EVENT_LABELS: Record<string, string> = {
   estimate_updated: "Draft estimate updated",
   transfer: "Transferred to a person",
   ended_by_ai: "AI ended the call",
+  silence_check: "Caller went quiet, AI checked in",
+  silence_hangup: "Ended after no response",
   error: "Error",
   call_ended: "Call ended",
 };

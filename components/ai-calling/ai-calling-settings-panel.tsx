@@ -6,12 +6,12 @@ import {
   AlertCircle,
   AudioLines,
   Bot,
+  Check,
   Headphones,
   Loader2,
   PhoneForwarded,
   PhoneIncoming,
   Play,
-  Sparkles,
   Square,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +28,7 @@ import { AiCallingSwitch } from "./ai-calling-switch";
 import { AiPhoneNumberDisplay } from "./ai-phone-number-display";
 import { AiVoicePicker } from "./ai-voice-picker";
 import { fetchGreetingPreview, fetchVoiceSample } from "./audio";
-import { DEFAULT_GREETING, GREETING_MAX_LENGTH } from "./constants";
+import { GREETING_MAX_LENGTH } from "./constants";
 import { formatPhone } from "./phone";
 import { useAiCallingSettings } from "./use-ai-calling-settings";
 import { useAudioPreview } from "./use-audio-preview";
@@ -211,6 +211,7 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
               <AiPhoneNumberDisplay
                 phoneNumber={saved.aiPhoneNumber}
                 status={saved.aiPhoneNumberStatus}
+                planActive={saved.planActive}
                 note={saved.provisioningNote}
               />
 
@@ -271,19 +272,10 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
 
               <Field data-invalid={Boolean(errors.greeting)}>
                 <div className="flex items-center justify-between gap-2">
-                  <FieldLabel htmlFor={`${ids}-greeting`}>Greeting message</FieldLabel>
+                  <FieldLabel id={`${ids}-greeting-label`} htmlFor={`${ids}-greeting`}>
+                    Greeting message
+                  </FieldLabel>
                   <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => update("greeting", saved.defaultGreeting || DEFAULT_GREETING)}
-                      disabled={draft.greeting === (saved.defaultGreeting || DEFAULT_GREETING)}
-                    >
-                      <Sparkles className="size-3" aria-hidden="true" />
-                      Use default
-                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -309,6 +301,43 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
                     </Button>
                   </div>
                 </div>
+                <div role="radiogroup" aria-labelledby={`${ids}-greeting-label`} className="flex flex-col gap-1.5">
+                  {saved.greetingOptions.map((option, index) => {
+                    const selected = draft.greeting.trim() === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => update("greeting", option)}
+                        className={cn(
+                          "flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left text-sm leading-5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                          selected
+                            ? "border-primary/40 bg-primary/[0.06] text-foreground dark:bg-primary/15"
+                            : "border-border-soft text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        )}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+                            selected ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                          )}
+                        >
+                          {selected ? <Check className="size-2.5" strokeWidth={3} /> : null}
+                        </span>
+                        <span className="min-w-0 flex-1">{option}</span>
+                        {index === 0 ? (
+                          <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground uppercase">
+                            Default
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs font-medium text-muted-foreground">Or write your own</p>
                 <Textarea
                   id={`${ids}-greeting`}
                   rows={4}
@@ -322,7 +351,7 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
                   {errors.greeting ? (
                     <FieldError>{errors.greeting}</FieldError>
                   ) : (
-                    <FieldDescription className="text-xs">Keep it short and friendly. Callers hear this first.</FieldDescription>
+                    <FieldDescription className="text-xs">Pick one above or edit it. Callers hear this first.</FieldDescription>
                   )}
                   <span
                     className={cn(

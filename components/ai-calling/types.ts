@@ -19,6 +19,8 @@ export type AiCallingSettings = {
   /** Read-only: assigned by the platform (E.164, e.g. +15125550123). */
   aiPhoneNumber: string | null;
   aiPhoneNumberStatus: AiPhoneNumberStatus;
+  /** Read-only: on the AI Receptionist plan (only then is a dedicated number assigned). */
+  planActive: boolean;
   /** Why the number is still pending, from the backend. */
   provisioningNote: string;
   /** Where the AI transfers calls when a caller asks for a human (E.164). */
@@ -26,6 +28,8 @@ export type AiCallingSettings = {
   greeting: string;
   /** Read-only: this business's default greeting ("Thanks for calling <company>! …"). */
   defaultGreeting: string;
+  /** Read-only: ready-made greetings with this business's name filled in. */
+  greetingOptions: string[];
   voiceId: AiVoiceId;
 };
 

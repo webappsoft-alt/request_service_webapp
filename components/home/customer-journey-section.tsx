@@ -34,7 +34,7 @@ const screens = [
       "Typical starting range before you submit",
       "Only licensed pros who cover your ZIP get the request",
     ],
-    url: "requestservices.com/get-a-quote",
+    url: "requestservice.com/get-a-quote",
     alt: "Get a quote form asking which service you need, with next steps and trust notes alongside",
   },
   {
@@ -48,7 +48,7 @@ const screens = [
       "Photos of real jobs, not stock images",
       "Years in business, team size, and how they take payment",
     ],
-    url: "requestservices.com/professionals/summit-home-services",
+    url: "requestservice.com/professionals/summit-home-services",
     alt: "Public professional profile with photo gallery and verified business information",
   },
   {
@@ -62,7 +62,7 @@ const screens = [
       "What's waiting on you, at a glance",
       "Jump straight into the item that needs attention",
     ],
-    url: "requestservices.com/account/dashboard",
+    url: "requestservice.com/account/dashboard",
     alt: "Customer dashboard overview with quote requests, estimates to review, recent orders and invoices",
   },
   {
@@ -76,7 +76,7 @@ const screens = [
       "See how many pros were notified and viewed",
       "Track status from sent to converted to job",
     ],
-    url: "requestservices.com/account/dashboard/requests",
+    url: "requestservice.com/account/dashboard/requests",
     alt: "Quote requests table showing service, address, status, notified pros and estimate counts",
   },
   {
@@ -90,7 +90,7 @@ const screens = [
       "Message the pro without leaving the page",
       "Open any estimate to review the full scope",
     ],
-    url: "requestservices.com/account/dashboard/estimates",
+    url: "requestservice.com/account/dashboard/estimates",
     alt: "Estimates list with professional, status, message button and totals",
   },
   {
@@ -104,7 +104,7 @@ const screens = [
       "Accept, request changes, or decline online",
       "What you sign becomes the job and the invoice",
     ],
-    url: "requestservices.com/account/dashboard/estimates/EST-408",
+    url: "requestservice.com/account/dashboard/estimates/EST-408",
     alt: "Estimate review page with work details table, totals and accept / request changes actions",
   },
   {
@@ -118,7 +118,7 @@ const screens = [
       "Share photos and PDFs in the thread",
       "No lost texts — history stays on the project",
     ],
-    url: "requestservices.com/account/dashboard/messages",
+    url: "requestservice.com/account/dashboard/messages",
     alt: "Messages view with a conversation about a kitchen plumbing rough-in estimate",
   },
   {
@@ -132,7 +132,7 @@ const screens = [
       "Matched to the estimate you already signed",
       "Export or open any invoice when you need it",
     ],
-    url: "requestservices.com/account/dashboard/invoices",
+    url: "requestservice.com/account/dashboard/invoices",
     alt: "Invoices list with status, due dates, totals and remaining balance",
   },
 ] as const;

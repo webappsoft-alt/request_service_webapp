@@ -17,6 +17,9 @@ export const customerPaths = {
   payments: "/account/dashboard/payments",
   payment: (id: string) => `/account/dashboard/payments/${id}`,
   messages: "/account/dashboard/messages",
+  /** Existing admin direct chat thread (Platform Support). */
+  supportChat: "/account/dashboard/messages?direct=admin",
+  support: "/account/dashboard/support",
   settings: "/account/dashboard/settings",
   site: "/",
 } as const;

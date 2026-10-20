@@ -36,7 +36,7 @@ const featured = [
     url: "…/pro/dashboard/new-estimate",
     secondaryShot: "customer-estimate-public",
     secondaryAlt: "What the customer sees: the public estimate page with Accept and Request changes buttons",
-    secondaryUrl: "requestservices.com/e/…",
+    secondaryUrl: "requestservice.com/e/…",
     secondaryCaption: "The customer's view",
   },
   {

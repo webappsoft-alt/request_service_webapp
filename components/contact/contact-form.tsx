@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -13,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { submitContactUs } from "@/store/contactUsSlice";
+import { selectAuthUser } from "@/store/authSlice";
+import { customerPaths } from "@/lib/customer-paths";
 
 const subjects = [
   "General question",
@@ -26,6 +29,8 @@ const subjects = [
 export function ContactForm() {
   const dispatch = useAppDispatch();
   const submitting = useAppSelector((state) => state.contactUs.submitting);
+  const authUser = useAppSelector(selectAuthUser);
+  const router = useRouter();
   const [formKey, setFormKey] = useState(0);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -55,7 +60,18 @@ export function ContactForm() {
           message,
         }),
       ).unwrap();
-      toast.success(result.message);
+      // Signed-in customers can track the admin's reply under Support.
+      toast.success(
+        result.message,
+        authUser?.role === "customer"
+          ? {
+              action: {
+                label: "View in Support",
+                onClick: () => router.push(customerPaths.support),
+              },
+            }
+          : undefined,
+      );
       setFormKey((key) => key + 1);
     } catch (error) {
       toast.error(

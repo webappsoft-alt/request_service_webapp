@@ -141,6 +141,9 @@ function getCurrentCustomerSection(pathname: string) {
   if (pathname.startsWith(customerPaths.messages)) {
     return { href: customerPaths.messages, label: "Messages" };
   }
+  if (pathname.startsWith(customerPaths.support)) {
+    return { href: customerPaths.support, label: "Support" };
+  }
   if (pathname.startsWith(customerPaths.settings)) {
     return { href: customerPaths.settings, label: "Settings" };
   }

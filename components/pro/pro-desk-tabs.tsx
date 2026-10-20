@@ -205,7 +205,7 @@ const tabs: readonly DeskTab[] = [
     shotWidth: 1600,
     shotHeight: 1667,
     alt: "Public professional profile page as homeowners see it",
-    url: "requestservices.com/professionals/…",
+    url: "requestservice.com/professionals/…",
   },
   {
     id: "mobile",

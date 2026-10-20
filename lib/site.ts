@@ -2,7 +2,7 @@
 export const HERO_HOME_IMAGE = "/images/home/hero-home.jpg";
 export const HERO_PRO_IMAGE = "/images/home/split-provider.jpg";
 
-const DEFAULT_SITE_URL = "https://www.requestservices.com";
+const DEFAULT_SITE_URL = "https://requestservice.com";
 
 /** Never return "" — `new URL("")` throws and breaks Netlify/Next builds. */
 function resolveSiteUrl() {
@@ -30,7 +30,7 @@ export const siteConfig = {
   language: "en-US",
   country: "United States",
   email: "hello@requestservice.com",
-  supportEmail: "support@requestservices.com",
+  supportEmail: "support@requestservice.com",
   phone: "+1 (800) 555-0148",
   phoneHref: "tel:+18005550148",
   address: {

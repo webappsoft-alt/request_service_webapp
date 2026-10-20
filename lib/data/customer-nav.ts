@@ -6,6 +6,7 @@ import {
   Home,
   Inbox,
   LayoutDashboard,
+  LifeBuoy,
   MessageCircle,
   Receipt,
   Settings,
@@ -53,6 +54,7 @@ export const customerNavGroups: CustomerNavGroup[] = [
       { href: customerPaths.invoices, label: "Invoices", icon: Receipt },
       { href: customerPaths.payments, label: "Payments", icon: CreditCard },
       { href: customerPaths.messages, label: "Messages", icon: MessageCircle },
+      { href: customerPaths.support, label: "Support", icon: LifeBuoy },
     ],
   },
   {

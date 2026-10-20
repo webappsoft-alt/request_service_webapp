@@ -121,7 +121,7 @@ export function ProHero() {
         <div className="mx-auto w-full max-w-4xl">
           <ProScreenshot
             name="dashboard-main"
-            alt="Request Services pro dashboard showing today's overview, lead pipeline, incoming requests, and revenue"
+            alt="Request Service pro dashboard showing today's overview, lead pipeline, incoming requests, and revenue"
             mobileName="m-dashboard-main"
             mobileAlt="The same dashboard on a phone"
             priority

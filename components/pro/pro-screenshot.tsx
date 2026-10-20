@@ -44,7 +44,7 @@ export function ProScreenshot({
   sizes = "(min-width: 1280px) 60vw, 100vw",
   className,
   chrome = true,
-  url = "app.requestservices.com/pro/dashboard",
+  url = "app.requestservice.com/pro/dashboard",
   width = DESKTOP_SHOT.width,
   height = DESKTOP_SHOT.height,
 }: ProScreenshotProps) {

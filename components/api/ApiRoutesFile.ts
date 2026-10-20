@@ -388,6 +388,12 @@ export const directChatApi = {
   adminRead: "direct-chats/admin/read",
 } as const;
 
+/** Customer: own Contact Us inquiries + admin responses. */
+export const supportInquiriesApi = {
+  list: "support-inquiries",
+  detail: (id: string) => `support-inquiries/${id}`,
+} as const;
+
 export const uploadApi = {
   /** POST multipart field `image` → `{ image: url }` */
   image: "upload-image",

@@ -68,10 +68,11 @@ export const submitContactUs = createAsyncThunk<
   { rejectValue: string }
 >("contactUs/submit", async (payload, { rejectWithValue }) => {
   try {
+    // Session token (when signed in) links the inquiry to the account so it shows
+    // under Support in the customer dashboard; guests submit anonymously.
     const response = await postData(publicApi.contactUs, payload, {
       silent: true,
       skipLogoutOn401: true,
-      token: null,
     });
     return parseContactUsResponse(response);
   } catch (error) {

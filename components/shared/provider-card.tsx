@@ -67,6 +67,45 @@ function ProviderCardLocation({
   );
 }
 
+/** Case/punctuation-insensitive key for matching a service label to a filter. */
+function serviceKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function ServiceBadges({
+  services,
+  highlighted,
+  hidden,
+  className,
+}: {
+  services: string[];
+  highlighted?: string;
+  hidden: string[];
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-wrap gap-1.5", className)}>
+      {services.map((service) => (
+        <Badge
+          key={service}
+          variant="secondary"
+          className={cn(
+            service === highlighted &&
+              "bg-primary text-primary-foreground ring-1 ring-primary/30 dark:bg-primary dark:text-primary-foreground",
+          )}
+        >
+          {service}
+        </Badge>
+      ))}
+      {hidden.length ? (
+        <Badge variant="secondary" title={hidden.join(", ")}>
+          +{hidden.length} more
+        </Badge>
+      ) : null}
+    </div>
+  );
+}
+
 export function ProviderCard({
   provider,
   visual = false,
@@ -78,6 +117,7 @@ export function ProviderCard({
   onMouseEnter,
   onMouseLeave,
   onBeforeNavigate,
+  highlightService,
 }: {
   provider: Provider;
   visual?: boolean;
@@ -90,6 +130,8 @@ export function ProviderCard({
   onMouseLeave?: () => void;
   /** Stash list/detail data before navigating to the profile (Fixed Services pattern). */
   onBeforeNavigate?: () => void;
+  /** Selected sub-service filter: its badge is shown first and highlighted when the pro offers it. */
+  highlightService?: string;
 }) {
   const categories = provider.categoryIds
     .map((id) => getServiceCategoryById(id))
@@ -99,8 +141,16 @@ export function ProviderCard({
       ? provider.serviceLabels
       : categories.map((category) => category.name),
   );
-  const services = allServices.slice(0, 2);
-  const extraServiceCount = Math.max(0, allServices.length - services.length);
+  const highlightKey = serviceKey(highlightService || "");
+  const highlighted = highlightKey
+    ? allServices.find((service) => serviceKey(service) === highlightKey)
+    : undefined;
+  // The filtered sub-service leads so it is never hidden behind "+N more".
+  const orderedServices = highlighted
+    ? [highlighted, ...allServices.filter((service) => service !== highlighted)]
+    : allServices;
+  const services = orderedServices.slice(0, 2);
+  const hiddenServices = orderedServices.slice(services.length);
   // Card photo = main business gallery banner. Small logo overlay stays on ProviderLogo.
   const coverImage = getProviderCardCover(provider);
   // Visual marketplace cards always keep the photo header layout (previous design).
@@ -202,16 +252,7 @@ export function ProviderCard({
               </p>
             ) : null}
             {services.length ? (
-              <div className="flex flex-wrap gap-1.5">
-                {services.map((service) => (
-                  <Badge key={service} variant="secondary">
-                    {service}
-                  </Badge>
-                ))}
-                {extraServiceCount > 0 ? (
-                  <Badge variant="secondary">+{extraServiceCount} more</Badge>
-                ) : null}
-              </div>
+              <ServiceBadges services={services} highlighted={highlighted} hidden={hiddenServices} />
             ) : null}
           </div>
 
@@ -322,16 +363,12 @@ export function ProviderCard({
         )}
 
         {services.length ? (
-          <div className="flex min-h-11 shrink-0 flex-wrap content-start gap-1.5">
-            {services.map((service) => (
-              <Badge key={service} variant="secondary">
-                {service}
-              </Badge>
-            ))}
-            {extraServiceCount > 0 ? (
-              <Badge variant="secondary">+{extraServiceCount} more</Badge>
-            ) : null}
-          </div>
+          <ServiceBadges
+            className="min-h-11 shrink-0 content-start"
+            services={services}
+            highlighted={highlighted}
+            hidden={hiddenServices}
+          />
         ) : (
           <div className="min-h-11 shrink-0" aria-hidden="true" />
         )}

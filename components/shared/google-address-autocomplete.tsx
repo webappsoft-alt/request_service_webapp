@@ -21,6 +21,15 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, LocateFixed, MapPin } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   getGoogleMapsApiKey,
@@ -106,8 +115,26 @@ export type GoogleAddressAutocompleteProps = {
   preferCityDisplay?: boolean;
   /** Home search only: fill with "City, ZIP" instead of "City, ST". */
   preferCityZipDisplay?: boolean;
+  /** Hide the "use current location" crosshair (e.g. inside the blocked-location dialog). */
+  hideLocateButton?: boolean;
   "aria-invalid"?: boolean;
 };
+
+const LOCATION_BLOCKED_MESSAGE =
+  "Location permission is currently blocked. Please enable location access in your browser site settings, or search manually by entering your City or ZIP code.";
+
+
+/** True when the browser reports geolocation as already denied for this site. */
+async function isGeolocationDenied(): Promise<boolean> {
+  try {
+    if (!navigator.permissions?.query) return false;
+    const status = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+    return status.state === "denied";
+  } catch {
+    // Some browsers (older Safari) don't support querying geolocation; fall through.
+    return false;
+  }
+}
 
 function streetDisplayFromParsed(parsed: PlaceAddress): string {
   return (
@@ -149,6 +176,7 @@ export function GoogleAddressAutocomplete({
   hideStatus = false,
   preferCityDisplay = false,
   preferCityZipDisplay = false,
+  hideLocateButton = false,
   "aria-invalid": ariaInvalid,
 }: GoogleAddressAutocompleteProps) {
   const listboxId = useId();
@@ -175,6 +203,9 @@ export function GoogleAddressAutocomplete({
   const [suggestions, setSuggestions] = useState<Prediction[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  // Blocked geolocation: explain how to re-enable it and offer a manual City / ZIP search.
+  const [locationBlocked, setLocationBlocked] = useState(false);
+  const [manualLocation, setManualLocation] = useState("");
 
   preferCityRef.current = preferCityDisplay;
   preferCityZipRef.current = preferCityZipDisplay;
@@ -488,15 +519,24 @@ export function GoogleAddressAutocomplete({
     }
   }
 
-  async function useCurrentLocation() {
+  async function locateCurrentPosition() {
     if (!navigator.geolocation) {
       setError("Geolocation is not supported in this browser.");
       return;
     }
 
-    setLocating(true);
     setError(null);
     setOpen(false);
+
+    // A previously dismissed / blocked prompt never reappears, so the click would
+    // otherwise do nothing — show the dialog instead.
+    if (await isGeolocationDenied()) {
+      setManualLocation("");
+      setLocationBlocked(true);
+      return;
+    }
+
+    setLocating(true);
 
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -555,6 +595,16 @@ export function GoogleAddressAutocomplete({
         applyResolvedAddress(address, "current_location_rest");
       }
     } catch (err) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as GeolocationPositionError).code === (err as GeolocationPositionError).PERMISSION_DENIED
+      ) {
+        setManualLocation("");
+        setLocationBlocked(true);
+        return;
+      }
       const message =
         err && typeof err === "object" && "code" in err
           ? (err as GeolocationPositionError).code === 1
@@ -722,14 +772,14 @@ export function GoogleAddressAutocomplete({
             className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
             aria-hidden="true"
           />
-        ) : (
+        ) : hideLocateButton ? null : (
           <button
             type="button"
             className="absolute top-1/2 right-1.5 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             title="Use current location"
             aria-label="Use current location"
             disabled={disabled}
-            onClick={() => void useCurrentLocation()}
+            onClick={() => void locateCurrentPosition()}
           >
             <LocateFixed className="size-4" />
           </button>
@@ -743,6 +793,52 @@ export function GoogleAddressAutocomplete({
           {error}
         </p>
       ) : null}
+
+      <Dialog open={locationBlocked} onOpenChange={setLocationBlocked}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="size-4 text-primary" aria-hidden="true" />
+              Location access is blocked
+            </DialogTitle>
+            <DialogDescription>{LOCATION_BLOCKED_MESSAGE}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-1.5 py-3">
+            {/* Same Google autocomplete as the search bar: pick a suggestion to set the location. */}
+            <GoogleAddressAutocomplete
+              id={`${listboxId}-manual-location`}
+              value={manualLocation}
+              onChange={setManualLocation}
+              onSelect={(address) => {
+                setLocationBlocked(false);
+                applyResolvedAddress(address, "manual_after_blocked_location");
+              }}
+              placeholder="City / ZIP code"
+              preferCityDisplay
+              preferCityZipDisplay={preferCityZipDisplay}
+              hideLocateButton
+              hideStatus
+            />
+            <p className="text-xs text-muted-foreground">Start typing, then pick your city or ZIP from the list.</p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setLocationBlocked(false)}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                // After the customer re-enables it in site settings.
+                setLocationBlocked(false);
+                void locateCurrentPosition();
+              }}
+            >
+              <LocateFixed className="size-4" aria-hidden="true" />
+              Try again
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

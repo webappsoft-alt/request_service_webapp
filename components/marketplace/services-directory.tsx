@@ -256,6 +256,19 @@ function subcategoryFilter(items: PublicCategory[]): DirectoryFilter | null {
   };
 }
 
+/** A sub-service URL/job key matches by ObjectId, slug, name, or slugified name. */
+function subMatchesKey(item: PublicCategory, key: string) {
+  const value = key.trim();
+  if (!value) return false;
+  const lower = value.toLowerCase();
+  return (
+    item.id === value ||
+    item.slug === value ||
+    item.name.toLowerCase() === lower ||
+    slugifyJob(item.name) === slugifyJob(value)
+  );
+}
+
 function answersFromIntent(intent: SearchIntent) {
   const next: Record<string, string> = {};
   if (!intent.job) return next;
@@ -309,7 +322,11 @@ function categoryStubFromService(service: PublicFixedService): ServiceCategory {
 function listingFromService(
   service: PublicFixedService,
   onBeforeNavigate?: () => void,
+  highlightTag?: string,
 ): ServiceJobListing {
+  const tags = [service.subcategory?.name, ...service.commonServices]
+    .map((tag) => String(tag || "").trim())
+    .filter(Boolean);
   return {
     id: service.id,
     title: service.servicesName,
@@ -325,6 +342,8 @@ function listingFromService(
     state: service.provider?.location.state,
     href: publicFixedServicePath(service),
     online: true,
+    tags: [...new Set(tags)],
+    highlightTag,
     onBeforeNavigate,
   };
 }
@@ -569,10 +588,9 @@ export function ServicesDirectory({
     return filters;
   }, [apiSubcategories, selectedParent]);
 
-  const selectedApiSub = apiSubcategories.find(
-    (item) =>
-      item.id === answers["sub-service"] || item.slug === answers["sub-service"],
-  );
+  const selectedApiSub = answers["sub-service"]
+    ? apiSubcategories.find((item) => subMatchesKey(item, answers["sub-service"]))
+    : undefined;
   const staticSubOption = getSubServiceOption(activeCategory, answers["sub-service"]);
   const featuredJobKey =
     selectedApiSub?.slug ||
@@ -1044,12 +1062,7 @@ export function ServicesDirectory({
   useEffect(() => {
     const current = answers["sub-service"];
     if (!current || !apiSubcategories.length) return;
-    const match = apiSubcategories.find(
-      (item) =>
-        item.id === current ||
-        item.slug === current ||
-        item.name.toLowerCase() === current.toLowerCase(),
-    );
+    const match = apiSubcategories.find((item) => subMatchesKey(item, current));
     if (!match || match.id === current) return;
     setAnswers((prev) => ({ ...prev, "sub-service": match.id }));
   }, [answers["sub-service"], apiSubcategories]);
@@ -1068,7 +1081,9 @@ export function ServicesDirectory({
       confidence: featuredJob ? "exact-job" : activeCategory ? "exact-category" : "related",
       query,
       service: activeCategory || undefined,
-      job: subOption?.job ?? subOption?.value,
+      // Until sub-services load, keep the pending ?job= in the URL. Dropping it here
+      // changed initialJob and the re-seed effect then cleared the selection.
+      job: subOption?.job ?? subOption?.value ?? (answers["sub-service"] || undefined),
       zip: zip || extractZip(location),
       location,
       providerId: providerId || undefined,
@@ -1086,6 +1101,7 @@ export function ServicesDirectory({
     query,
     router,
     subOption,
+    answers,
     zip,
   ]);
 
@@ -1606,8 +1622,10 @@ export function ServicesDirectory({
                               job={service.servicesName}
                               index={index}
                               layout={view}
-                              listing={listingFromService(service, () =>
-                                dispatch(setPublicFixedServiceDetail(service)),
+                              listing={listingFromService(
+                                service,
+                                () => dispatch(setPublicFixedServiceDetail(service)),
+                                selectedApiSub?.name || subOption?.label,
                               )}
                             />
                           </li>
@@ -1657,6 +1675,7 @@ export function ServicesDirectory({
                               provider={provider}
                               visual={view === "grid"}
                               place={parsePlaceInput(location || zip)}
+                              highlightService={selectedApiSub?.name || subOption?.label}
                             />
                           </li>
                         ))}

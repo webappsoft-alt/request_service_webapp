@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { BotAvatar } from "./BotHeader";
 import { isChangeAddressLabel, pathForLabel, useBot } from "./BotProvider";
 import { CapturedContextCard } from "./cards/CapturedContextCard";
+import { CategoryQuickPicks } from "./cards/CategoryQuickPicks";
 import { suggestionLabel } from "./address-in-chat";
 import { AddressEditor } from "./cards/AddressEditor";
 import { PathChoiceCard } from "./cards/PathChoiceCard";
@@ -304,8 +305,10 @@ function UserBubble({ message }: { message: BotMessage }) {
 }
 
 export function BotChatWindow() {
-  const { messages, typing, context, locationLabel, connected, addressEditorOpen, addressDraft, openAddressEditor } =
+  const { messages, typing, context, locationLabel, connected, addressEditorOpen, addressDraft, openAddressEditor, sendText } =
     useBot();
+  // Category pills stay pinned under the header until a service is chosen.
+  const serviceChosen = Boolean(context.categorySlug || context.categoryName || context.categoryId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -359,6 +362,9 @@ export function BotChatWindow() {
         />
         {/* Address card under the header (keyed so a new prefill starts fresh). */}
         {addressEditorOpen ? <AddressEditor key={addressDraft} /> : null}
+        {!serviceChosen && !addressEditorOpen ? (
+          <CategoryQuickPicks onPick={sendText} disabled={typing} />
+        ) : null}
       </div>
 
       <div ref={contentRef} className="flex min-w-0 flex-col gap-4 px-3 pb-4" aria-live="polite" aria-relevant="additions">

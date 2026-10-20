@@ -4,6 +4,22 @@ import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BotSearchSuggestion } from "../types";
 
+/** "Tile and shower updates", "Tile & grout", "A/B", "A, B" — a catalog entry bundling several jobs. */
+const JOINED_JOBS = /\s(?:and|&|\+)\s|\/|,/i;
+
+/**
+ * "Category → job" under each suggestion: the catalog sub-service name, unless that
+ * name bundles several jobs — then the suggestion's own single-job label, so the line
+ * never shows jobs the customer didn't ask for.
+ */
+function hierarchyLabel(suggestion: BotSearchSuggestion) {
+  const sub = suggestion.subCategoryName?.trim() || "";
+  const job = sub && !JOINED_JOBS.test(sub) ? sub : suggestion.label;
+  return job && job.toLowerCase() !== suggestion.categoryName.toLowerCase()
+    ? `${suggestion.categoryName} → ${job}`
+    : suggestion.categoryName;
+}
+
 /**
  * Inline dropdown under the hero search: "Plumbing → Kitchen Pipe Leak Repair".
  * Picking one opens the AI assistant with that service already identified.
@@ -55,10 +71,7 @@ export function AiSuggestionList({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{suggestion.label}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {suggestion.categoryName}
-                    {suggestion.subCategoryName && suggestion.subCategoryName !== suggestion.label
-                      ? ` → ${suggestion.subCategoryName}`
-                      : ""}
+                    {hierarchyLabel(suggestion)}
                   </span>
                 </span>
                 <span className="hidden shrink-0 items-center gap-0.5 text-[11px] font-semibold text-primary opacity-0 transition group-hover:opacity-100 group-aria-selected:opacity-100 sm:flex">

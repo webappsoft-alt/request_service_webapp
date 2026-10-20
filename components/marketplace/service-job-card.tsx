@@ -6,6 +6,7 @@ import { getJobDetail, getJobPath } from "@/lib/data/jobs";
 import { getJobImage, getJobStartingPrice } from "@/lib/data/provider-media";
 import { getProvidersByCategoryId } from "@/lib/data/providers";
 import { getProviderPresence } from "@/lib/data/service-directory";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ServiceCategory } from "@/lib/types";
 
@@ -26,6 +27,10 @@ export type ServiceJobListing = {
   href?: string;
   online?: boolean;
   responseLabel?: string;
+  /** Sub-category + common-service pills (like pro cards). */
+  tags?: string[];
+  /** Active sub-service filter: that pill leads and is highlighted. */
+  highlightTag?: string;
   /** Called before navigation so Redux can stash the listing service. */
   onBeforeNavigate?: () => void;
 };
@@ -69,6 +74,18 @@ export function ServiceJobCard({
   const title = listing?.title || job;
   const points =
     listing?.covered?.length ? listing.covered.slice(0, 3) : detail.points.slice(0, 3);
+  const tagKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const allTags = listing?.tags ?? [];
+  const highlightKey = tagKey(listing?.highlightTag || "");
+  const highlighted = highlightKey
+    ? allTags.find((tag) => tagKey(tag) === highlightKey)
+    : undefined;
+  // The filtered sub-service leads so it is never hidden behind "+N more".
+  const orderedTags = highlighted
+    ? [highlighted, ...allTags.filter((tag) => tag !== highlighted)]
+    : allTags;
+  const shownTags = orderedTags.slice(0, 2);
+  const hiddenTags = orderedTags.slice(shownTags.length);
   const href = listing?.href ?? getJobPath(category.slug, job);
   const canNavigate = Boolean(href && href !== "#");
 
@@ -88,6 +105,28 @@ export function ServiceJobCard({
       ))}
     </ul>
   );
+
+  const tagPills = shownTags.length ? (
+    <div className="flex flex-wrap gap-1.5">
+      {shownTags.map((tag) => (
+        <Badge
+          key={tag}
+          variant="secondary"
+          className={cn(
+            tag === highlighted &&
+              "bg-primary text-primary-foreground ring-1 ring-primary/30 dark:bg-primary dark:text-primary-foreground",
+          )}
+        >
+          {tag}
+        </Badge>
+      ))}
+      {hiddenTags.length ? (
+        <Badge variant="secondary" title={hiddenTags.join(", ")}>
+          +{hiddenTags.length} more
+        </Badge>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <Link
@@ -178,6 +217,7 @@ export function ServiceJobCard({
             ) : (
               ticks
             )}
+            {tagPills}
             {presence?.responseLabel ? (
               <p className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
                 <Clock className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -234,6 +274,7 @@ export function ServiceJobCard({
             </div>
 
             {ticks}
+            {tagPills}
             {presence?.responseLabel ? (
               <p className="inline-flex items-center gap-1.5 text-xs font-medium">
                 <Clock className="size-3.5 text-muted-foreground" aria-hidden="true" />

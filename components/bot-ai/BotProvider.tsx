@@ -37,7 +37,7 @@ import {
   suggestionLabel,
 } from "./address-in-chat";
 import { useBotSocket, type BotSocketAction, type BotSocketLocation } from "./hooks/useBotSocket";
-import { WELCOME_MESSAGE, WELCOME_SERVICES } from "./systemPromptGuide";
+import { WELCOME_MESSAGE } from "./systemPromptGuide";
 import type {
   BotConversationContext,
   BotHandoff,
@@ -156,7 +156,7 @@ function welcomeMessage(): BotMessage {
     role: "bot",
     text: WELCOME_MESSAGE,
     createdAt: Date.now(),
-    suggestions: [...WELCOME_SERVICES],
+    // Service pills live under the step header (CategoryQuickPicks), from the live catalog.
   };
 }
 

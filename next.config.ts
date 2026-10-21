@@ -1,20 +1,13 @@
 import type { NextConfig } from "next";
+import { OPTIMIZED_IMAGE_HOSTS } from "./lib/image-hosts";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["ckeditor5", "@ckeditor/ckeditor5-react"],
   images: {
     // AVIF first (smaller hero/LCP bytes), WebP fallback; source URLs are unchanged.
     formats: ["image/avif", "image/webp"],
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
-      },
-      {
-        protocol: "https",
-        hostname: "storage.googleapis.com",
-      },
-    ],
+    // Same list `canOptimizeImage()` checks before dropping `unoptimized`.
+    remotePatterns: OPTIMIZED_IMAGE_HOSTS.map((hostname) => ({ protocol: "https" as const, hostname })),
   },
   async redirects() {
     return [

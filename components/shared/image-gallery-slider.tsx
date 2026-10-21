@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 type ImageGallerySliderProps = {
   images: string[];
@@ -88,7 +89,7 @@ export function ImageGallerySlider({
                     : "(min-width: 1024px) 55vw, 90vw"
                 }
                 className="object-cover"
-                unoptimized={src.startsWith("http")}
+                unoptimized={!canOptimizeImage(src)}
                 priority={priority && i === 0}
               />
             </div>
@@ -164,7 +165,7 @@ export function ImageGallerySlider({
                   fill
                   sizes="80px"
                   className="object-cover"
-                  unoptimized={src.startsWith("http")}
+                  unoptimized={!canOptimizeImage(src)}
                 />
               </button>
             );

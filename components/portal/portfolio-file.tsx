@@ -39,6 +39,7 @@ import {
   type PortfolioMedia,
   type PortfolioStatus,
 } from "@/store/portfolioSlice";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 type DraftMedia = PortfolioMedia;
 
@@ -631,7 +632,7 @@ export function PortfolioFormView({
                 fill
                 sizes="80px"
                 className="object-cover"
-                unoptimized={item.url.startsWith("http")}
+                unoptimized={!canOptimizeImage(item.url)}
               />
               <button
                 type="button"
@@ -787,7 +788,7 @@ export function PortfolioFormView({
                   fill
                   sizes="(min-width: 1024px) 28vw, 90vw"
                   className="object-cover"
-                  unoptimized={cover.startsWith("http")}
+                  unoptimized={!canOptimizeImage(cover)}
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-white/70">

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Expand } from "lucide-react";
 import { PhotoLightbox } from "@/components/marketplace/portfolio-lightbox";
 import { cn } from "@/lib/utils";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 export type ProjectGalleryPhoto = {
   src: string;
@@ -115,7 +116,7 @@ function ProjectPortfolioGalleryInner({
               className="object-cover! transition-transform duration-500 ease-out group-hover:scale-[1.03]"
               style={{ objectFit: "cover" }}
               priority={photoIndex === 0}
-              unoptimized={photo.src.startsWith("http")}
+              unoptimized={!canOptimizeImage(photo.src)}
             />
             {photo.label ? (
               <span className="absolute top-3 left-3 rounded-md bg-black/55 px-2 py-1 text-[11px] font-semibold tracking-wide text-white uppercase backdrop-blur-sm">

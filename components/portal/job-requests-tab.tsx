@@ -98,7 +98,6 @@ export function JobRequestsTab({
 
   useEffect(() => {
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag for the fetch below
     setLoading(true);
     listContractorReviewRequests({ jobId, status: status || "all", type: type || undefined, page, limit: PAGE_SIZE })
       .then((result) => {

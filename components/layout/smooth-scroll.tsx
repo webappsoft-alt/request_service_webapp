@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import Lenis from "lenis";
+import type Lenis from "lenis";
 import "lenis/dist/lenis.css";
 import { proPaths } from "@/lib/pro-paths";
 
@@ -101,23 +101,31 @@ export function SmoothScroll() {
       return;
     }
 
-    const lenis = new Lenis({
-      autoRaf: true,
-      lerp: 0.075,
-      smoothWheel: true,
-      wheelMultiplier: 0.9,
-      touchMultiplier: 1.15,
-      syncTouch: true,
-      allowNestedScroll: true,
+    // Loaded on demand so Lenis stays out of the initial bundle (main-thread / TBT).
+    let cancelled = false;
+    let lenis: Lenis | null = null;
+    void import("lenis").then(({ default: LenisClass }) => {
+      if (cancelled) return;
+      lenis = new LenisClass({
+        autoRaf: true,
+        lerp: 0.075,
+        smoothWheel: true,
+        wheelMultiplier: 0.9,
+        touchMultiplier: 1.15,
+        syncTouch: true,
+        allowNestedScroll: true,
+      });
+
+      lenisRef.current = lenis;
+
+      // Scroll to top upon Lenis initialization — unless the visitor already
+      // started scrolling while Lenis was loading.
+      if (window.scrollY < 4) lenis.scrollTo(0, { immediate: true });
     });
 
-    lenisRef.current = lenis;
-
-    // Scroll to top upon Lenis initialization
-    lenis.scrollTo(0, { immediate: true });
-
     return () => {
-      lenis.destroy();
+      cancelled = true;
+      lenis?.destroy();
       lenisRef.current = null;
     };
   }, [skip]);

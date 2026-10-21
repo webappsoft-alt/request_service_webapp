@@ -59,6 +59,7 @@ import {
   type FixedServiceUnit,
 } from "@/store/fixedServicesSlice";
 import { fetchServiceAreasPicker } from "@/store/serviceAreasSlice";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 const selectTriggerClass =
   "h-10 w-full min-w-0 justify-between rounded-lg border border-input bg-transparent px-3 text-sm shadow-none";
@@ -226,7 +227,7 @@ function ServicePreview({
             sizes="(min-width: 1024px) 28vw, 90vw"
             className="object-cover"
             loading="eager"
-            unoptimized={photo.startsWith("http")}
+            unoptimized={!canOptimizeImage(photo)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-white/70">
@@ -259,7 +260,7 @@ function ServicePreview({
                 fill
                 sizes="48px"
                 className="object-cover"
-                unoptimized={src.startsWith("http")}
+                unoptimized={!canOptimizeImage(src)}
               />
             </button>
           ))}
@@ -1096,7 +1097,7 @@ export function ServiceFormView({ id }: { id?: string }) {
                         fill
                         sizes="160px"
                         className="object-cover"
-                        unoptimized={src.startsWith("http")}
+                        unoptimized={!canOptimizeImage(src)}
                       />
                       <span className="absolute top-1.5 left-1.5 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white shadow-sm">
                         Cover

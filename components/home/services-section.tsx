@@ -17,8 +17,12 @@ import {
   selectSubcategoriesForParent,
   type PublicCategory,
 } from "@/store/categoriesSlice";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 const CATEGORY_SKELETON_COUNT = 8;
+/** Tiles visible in the first row on load — fetched eagerly (one is the mobile LCP). */
+const EAGER_TILE_COUNT = 4;
+const EMPTY_PARENTS: PublicCategory[] = [];
 
 function servicesDirectoryHref(serviceKey: string, jobKey?: string) {
   const params = new URLSearchParams();
@@ -32,10 +36,12 @@ function CategoryCard({
   item,
   href,
   image,
+  eager = false,
 }: {
   item: PublicCategory;
   href: string;
   image: string;
+  eager?: boolean;
 }) {
   return (
     <Link
@@ -49,8 +55,9 @@ function CategoryCard({
             alt=""
             fill
             sizes="(min-width: 1024px) 13vw, 40vw"
+            loading={eager ? "eager" : undefined}
             className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-            unoptimized={image.startsWith("http")}
+            unoptimized={!canOptimizeImage(image)}
             onError={(event) => {
               event.currentTarget.style.visibility = "hidden";
             }}
@@ -64,10 +71,16 @@ function CategoryCard({
   );
 }
 
-export function ServicesSection() {
+export function ServicesSection({
+  initialParents = EMPTY_PARENTS,
+}: {
+  /** Server-fetched first page so the tiles are in the HTML (LCP); the store takes over once loaded. */
+  initialParents?: PublicCategory[];
+} = {}) {
   const dispatch = useAppDispatch();
   const { selected, setSelected } = useHomeCategoryFilter();
-  const parents = useAppSelector(selectParentCategories);
+  const storeParents = useAppSelector(selectParentCategories);
+  const parents = storeParents.length ? storeParents : initialParents;
   const parentsLoaded = useAppSelector((state) => state.categories.parentsLoaded);
   const loadingParents = useAppSelector((state) => state.categories.loadingParents);
   const parentsHasMore = useAppSelector((state) => state.categories.parentsHasMore);
@@ -246,6 +259,7 @@ export function ServicesSection() {
                       item={item}
                       href={href}
                       image={cardImages[index] || ""}
+                      eager={!showingSubs && index < EAGER_TILE_COUNT}
                     />
                   </CardCarouselItem>
                 );

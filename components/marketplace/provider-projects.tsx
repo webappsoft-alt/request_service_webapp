@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Provider, ProviderProject } from "@/lib/types";
 import { publicPaths } from "@/lib/public-paths";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 type PortfolioSlide = {
   key: string;
@@ -84,7 +85,7 @@ export function ProviderProjectCard({
             fill
             sizes="(min-width: 1024px) 18rem, (min-width: 640px) 45vw, 92vw"
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-            unoptimized={project.cover.startsWith("http")}
+            unoptimized={!canOptimizeImage(project.cover)}
           />
         ) : null}
         {extraCount > 0 ? (
@@ -199,7 +200,7 @@ export function ProviderProjects({
                       fill
                       sizes="(min-width: 1024px) 22rem, (min-width: 640px) 45vw, 92vw"
                       className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-                      unoptimized={slide.src.startsWith("http")}
+                      unoptimized={!canOptimizeImage(slide.src)}
                     />
                   </button>
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] bg-gradient-to-t from-black/70 via-black/35 to-transparent px-3 pt-8 pb-2.5">

@@ -11,6 +11,7 @@ import { ServicesSection } from "@/components/home/services-section";
 import { HomeFaqSection } from "@/components/home/faq-section";
 import { WorkflowSection } from "@/components/home/workflow-section";
 import { JsonLd } from "@/components/seo/json-ld";
+import { fetchParentCategoriesForSeo } from "@/lib/data/public-categories-seo";
 import { servicesItemListJsonLd } from "@/lib/json-ld";
 import { buildMetadata, defaultKeywords } from "@/lib/seo";
 
@@ -22,7 +23,10 @@ export const metadata = buildMetadata({
   keywords: defaultKeywords,
 });
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Server-render the first "Browse services" tiles — they are the mobile LCP element.
+  const initialCategories = await fetchParentCategoriesForSeo();
+
   return (
     <>
       <JsonLd data={[servicesItemListJsonLd()]} />
@@ -33,7 +37,7 @@ export default function HomePage() {
           <HeroSection />
           <div>
             <HomeSearchDock />
-            <ServicesSection />
+            <ServicesSection initialParents={initialCategories} />
           </div>
 
           <CustomerTrustSection />

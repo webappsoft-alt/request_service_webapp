@@ -17,6 +17,7 @@ import {
   portfolioCoverUrl,
   type PortfolioStatus,
 } from "@/store/portfolioSlice";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -148,7 +149,7 @@ export function PortfolioDetailView({ id }: { id: string }) {
                   fill
                   sizes="(min-width: 1024px) 55vw, 100vw"
                   className="object-cover"
-                  unoptimized={cover.startsWith("http")}
+                  unoptimized={!canOptimizeImage(cover)}
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
@@ -178,7 +179,7 @@ export function PortfolioDetailView({ id }: { id: string }) {
                       fill
                       sizes="64px"
                       className="object-cover"
-                      unoptimized={src.startsWith("http")}
+                      unoptimized={!canOptimizeImage(src)}
                     />
                   </button>
                 ))}

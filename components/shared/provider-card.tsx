@@ -18,6 +18,7 @@ import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
 import { publicPaths } from "@/lib/public-paths";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 /** Unique labels already scoped to this pro — leftover is list.length − 2. */
 function cardServiceLabels(labels: string[]): string[] {
@@ -205,7 +206,7 @@ export function ProviderCard({
             sizes="(max-width: 640px) 90vw, 288px"
             className="object-cover!"
             style={{ objectFit: "cover" }}
-            unoptimized={coverImage.startsWith("http")}
+            unoptimized={!canOptimizeImage(coverImage)}
           />
           <span className="absolute top-3 left-3 rounded-md bg-card/95 px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-sm">
             {categoryBadge}
@@ -303,7 +304,7 @@ export function ProviderCard({
             sizes="(max-width: 768px) 82vw, 25vw"
             className="object-cover!"
             style={{ objectFit: "cover" }}
-            unoptimized={coverImage.startsWith("http")}
+            unoptimized={!canOptimizeImage(coverImage)}
           />
           <span
             className="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-black/25"

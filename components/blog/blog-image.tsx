@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Newspaper } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 type BlogImageProps = {
   src?: string | null;
@@ -49,7 +50,7 @@ export function BlogImage({ src, alt, sizes, priority, className }: BlogImagePro
         alt={alt}
         fill
         priority={priority}
-        unoptimized={usable.startsWith("http")}
+        unoptimized={!canOptimizeImage(usable)}
         sizes={sizes}
         onError={() => setFailedSrc(usable)}
         className={cn("object-cover", className)}

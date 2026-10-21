@@ -28,6 +28,7 @@ import {
   setPortfolioSearch,
   type PortfolioProject,
 } from "@/store/portfolioSlice";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -174,7 +175,7 @@ export function PortfolioView({ embedded = false }: { embedded?: boolean }) {
                       fill
                       sizes="48px"
                       className="object-cover"
-                      unoptimized={cover.startsWith("http")}
+                      unoptimized={!canOptimizeImage(cover)}
                     />
                   ) : null}
                 </span>

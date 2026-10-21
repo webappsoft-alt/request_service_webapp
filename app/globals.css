@@ -898,9 +898,12 @@
   background-size: 22px 22px;
 }
 
+/* Entrance fades start at 0.01, not 0: Chrome never counts an element first painted at
+   opacity 0 as an LCP candidate, which hid the hero (headline + image) from LCP entirely.
+   0.01 is visually identical. */
 @keyframes reveal-in {
   from {
-    opacity: 0;
+    opacity: 0.01;
     transform: translateY(1.5rem);
   }
   to {
@@ -911,7 +914,7 @@
 
 @keyframes page-enter {
   from {
-    opacity: 0;
+    opacity: 0.01;
     transform: translateY(10px);
   }
   to {

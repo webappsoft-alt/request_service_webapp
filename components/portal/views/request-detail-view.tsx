@@ -133,6 +133,7 @@ import {
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
 import type { Estimate, Job, RequestStatus, ServiceAddress } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 const TABS = [
   { id: "summary", label: "Summary" },
@@ -2448,7 +2449,7 @@ export function RequestDetailView({ id }: { id: string }) {
                                 fill
                                 className="object-cover"
                                 sizes="(min-width: 640px) 50vw, 100vw"
-                                unoptimized={src.startsWith("http")}
+                                unoptimized={!canOptimizeImage(src)}
                               />
                             </a>
                           ))}

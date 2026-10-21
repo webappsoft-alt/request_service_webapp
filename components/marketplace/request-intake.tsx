@@ -35,6 +35,7 @@ import {
   selectAuthUser,
   selectIsAuthenticated,
 } from "@/store/authSlice";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 const MAX_INTAKE_PHOTOS = 8;
 
@@ -509,7 +510,7 @@ function RequestIntakeInner({
                       fill
                       className="object-cover"
                       sizes="120px"
-                      unoptimized={src.startsWith("http")}
+                      unoptimized={!canOptimizeImage(src)}
                     />
                     <button
                       type="button"

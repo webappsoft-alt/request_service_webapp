@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 /**
@@ -225,27 +224,35 @@ export function GoogleAddressAutocomplete({
     });
   }, []);
 
-  // Load Maps JS + Places once.
+  // Maps JS + Places (~380KB) loads on first intent (hover / touch / focus / locate),
+  // not on mount — it sat on the homepage critical path for every visitor.
+  const mapsRequestedRef = useRef(false);
+  const unmountedRef = useRef(false);
   useEffect(() => {
-    let cancelled = false;
+    unmountedRef.current = false;
     if (!getGoogleMapsApiKey()) {
       setError("Google Places API key is not configured.");
-      return;
+    } else if (isGoogleMapsReady()) {
+      setMapsReady(true);
     }
-    void loadGoogleMapsScript()
+    return () => {
+      unmountedRef.current = true;
+    };
+  }, []);
+
+  const ensureMaps = useCallback((): Promise<void> => {
+    if (mapsRequestedRef.current || !getGoogleMapsApiKey()) return loadGoogleMapsScript().catch(() => {});
+    mapsRequestedRef.current = true;
+    return loadGoogleMapsScript()
       .then(() => {
-        if (!cancelled) setMapsReady(true);
+        if (!unmountedRef.current) setMapsReady(true);
       })
       .catch((err) => {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Google Maps failed to load.",
-          );
+        mapsRequestedRef.current = false;
+        if (!unmountedRef.current) {
+          setError(err instanceof Error ? err.message : "Google Maps failed to load.");
         }
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   // Init Places services (no native Autocomplete widget / .pac-container).
@@ -285,6 +292,13 @@ export function GoogleAddressAutocomplete({
       placesServiceRef.current = null;
       autocompleteServiceRef.current = null;
     };
+  }, [mapsReady]);
+
+  // Typed before Maps finished loading → show suggestions as soon as it's ready.
+  useEffect(() => {
+    if (!mapsReady || document.activeElement !== inputRef.current) return;
+    if (value.trim().length >= 2) fetchSuggestions(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on the ready transition
   }, [mapsReady]);
 
   useEffect(() => {
@@ -537,6 +551,8 @@ export function GoogleAddressAutocomplete({
     }
 
     setLocating(true);
+    // Start Maps in parallel with the GPS prompt so reverse-geocoding is ready after it.
+    const mapsLoading = ensureMaps();
 
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -548,6 +564,7 @@ export function GoogleAddressAutocomplete({
       });
 
       const { latitude, longitude } = position.coords;
+      await mapsLoading;
 
       if (isGoogleMapsReady()) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -728,7 +745,13 @@ export function GoogleAddressAutocomplete({
       : null;
 
   return (
-    <div ref={rootRef} className={cn("relative", className)}>
+    <div
+      ref={rootRef}
+      className={cn("relative", className)}
+      onPointerEnter={() => void ensureMaps()}
+      onPointerDown={() => void ensureMaps()}
+      onFocusCapture={() => void ensureMaps()}
+    >
       <div className="relative">
         <MapPin
           className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"

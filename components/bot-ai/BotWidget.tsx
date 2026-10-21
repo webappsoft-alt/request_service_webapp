@@ -3,8 +3,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { BotModal } from "./BotModal";
+import dynamic from "next/dynamic";
 import { useBot } from "./BotProvider";
+
+// The chat window (+ cards, history, address editor) renders nothing while closed,
+// so its code loads on first open instead of with every page.
+const BotModal = dynamic(() => import("./BotModal").then((mod) => mod.BotModal), { ssr: false });
 
 const noopSubscribe = () => () => {};
 
@@ -51,6 +55,9 @@ function clampBottom(bottom: number) {
 export function BotWidget() {
   const { open, openBot, hasUnread, messages } = useBot();
   const resumable = messages.some((message) => message.role === "user");
+  // Stays true after the first open so the close animation and dialog state survive.
+  const [everOpened, setEverOpened] = useState(open);
+  if (open && !everOpened) setEverOpened(true);
   // Portal to <body>: page wrappers animate with transform, which would trap `position: fixed`.
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
@@ -187,7 +194,7 @@ export function BotWidget() {
         </span>
       </button>
 
-      <BotModal />
+      {everOpened ? <BotModal /> : null}
     </>,
     document.body,
   );

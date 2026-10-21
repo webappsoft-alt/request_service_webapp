@@ -65,6 +65,7 @@ import {
   selectCustomerOrders,
   setCustomerOrderDetail,
 } from "@/store/ordersSlice";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 function normalizeWebsiteUrl(raw: string): string {
   const value = raw.trim();
@@ -1293,7 +1294,7 @@ export function CustomerOrderDetailView({
                           fill
                           sizes="44px"
                           className="object-cover"
-                          unoptimized={provider.avatarUrl.startsWith("http")}
+                          unoptimized={!canOptimizeImage(provider.avatarUrl)}
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-muted-foreground font-semibold">

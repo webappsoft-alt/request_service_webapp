@@ -9,6 +9,7 @@ import { getProviderPresence } from "@/lib/data/service-directory";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ServiceCategory } from "@/lib/types";
+import { canOptimizeImage } from "@/lib/image-hosts";
 
 /** Optional live Fixed Service fields — same card layout, API-backed values. */
 export type ServiceJobListing = {
@@ -159,7 +160,7 @@ export function ServiceJobCard({
             fill
             sizes="(min-width: 1280px) 22vw, (min-width: 640px) 40vw, 90vw"
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.05]"
-            unoptimized={image.startsWith("http")}
+            unoptimized={!canOptimizeImage(image)}
           />
         ) : null}
         {isList ? null : (

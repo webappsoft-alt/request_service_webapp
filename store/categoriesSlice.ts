@@ -145,7 +145,7 @@ export function normalizePublicCategory(raw: unknown): PublicCategory | null {
   };
 }
 
-function extractCategoryList(response: unknown): PublicCategory[] {
+export function extractCategoryList(response: unknown): PublicCategory[] {
   const root = asRecord(response) ?? {};
   const list =
     (Array.isArray(root.data) && root.data) ||

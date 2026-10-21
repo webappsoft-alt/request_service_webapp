@@ -5,7 +5,7 @@
  */
 
 import type { MetadataRoute } from "next";
-import { blogCategories, blogPosts } from "@/lib/data/blog";
+import { BLOG_CATEGORIES, fetchPublicBlogs } from "@/lib/data/public-blogs";
 import { getAllJobs } from "@/lib/data/jobs";
 import { listLocationCities, listLocationStates } from "@/lib/data/locations";
 import { proTrades } from "@/lib/data/pro-trades";
@@ -21,6 +21,8 @@ type Entry = MetadataRoute.Sitemap[number];
 type ChangeFrequency = NonNullable<Entry["changeFrequency"]>;
 
 const LOCATION_CHUNK_SIZE = 40_000;
+/** Live blog posts are paged from the API, 50 at a time. */
+const MAX_BLOG_PAGES = 40;
 /** Live Pros are paged from the API, 50 at a time. */
 const MAX_LIVE_PRO_PAGES = 40;
 
@@ -45,11 +47,26 @@ function corePaths(): Entry[] {
     "/terms",
   ].map((path) => entry(path, path === "/" ? 1 : 0.8));
 
-  return [
-    ...staticRoutes,
-    ...blogPosts.map((post) => entry(`/blog/${post.slug}`, 0.6, "monthly", new Date(post.updatedAt))),
-    ...blogCategories.map((category) => entry(`/blog/category/${category.slug}`, 0.5)),
-  ];
+  return staticRoutes;
+}
+
+/** Blog categories + every published post (from the blogs API). */
+async function blogPaths(): Promise<Entry[]> {
+  const entries = BLOG_CATEGORIES.filter((category) => category.slug !== "all").map((category) =>
+    entry(`/blog/category/${category.slug}`, 0.5),
+  );
+  const seen = new Set<string>();
+  for (let page = 1; page <= MAX_BLOG_PAGES; page += 1) {
+    const { data, pagination } = await fetchPublicBlogs({ page, limit: 50 });
+    for (const post of data) {
+      if (!post.slug || seen.has(post.slug)) continue;
+      seen.add(post.slug);
+      const updated = new Date(post.updatedAt || post.publishedAt || post.createdAt || Date.now());
+      entries.push(entry(`/blog/${post.slug}`, 0.6, "monthly", Number.isNaN(updated.getTime()) ? new Date() : updated));
+    }
+    if (!data.length || page >= (pagination?.totalPages || 1)) break;
+  }
+  return entries;
 }
 
 function servicePaths(): Entry[] {
@@ -116,6 +133,7 @@ function locationChunkCount() {
 export function sitemapIds(): string[] {
   return [
     "core",
+    "blog",
     "services",
     "pros",
     "for-pros",
@@ -125,6 +143,7 @@ export function sitemapIds(): string[] {
 
 export async function sitemapSection(id: string): Promise<MetadataRoute.Sitemap> {
   if (id === "core") return corePaths();
+  if (id === "blog") return blogPaths();
   if (id === "services") return servicePaths();
   if (id === "pros") return professionalPaths();
   if (id === "for-pros") return proLandingPaths();

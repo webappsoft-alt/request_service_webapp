@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import type Lenis from "lenis";
 import "lenis/dist/lenis.css";
+import { afterLoadIdle } from "@/lib/idle";
 import { proPaths } from "@/lib/pro-paths";
 
 function shouldSkipLenis(pathname: string) {
@@ -101,10 +102,20 @@ export function SmoothScroll() {
       return;
     }
 
-    // Loaded on demand so Lenis stays out of the initial bundle (main-thread / TBT).
+    // Lenis restyles the whole document when it starts (~1s main thread on mobile), so it is
+    // loaded on the visitor's first scroll intent — after window load — never during page load (TBT).
     let cancelled = false;
     let lenis: Lenis | null = null;
-    void import("lenis").then(({ default: LenisClass }) => {
+    // Real scrolling only — not taps/typing in the hero search.
+    const intents = ["wheel", "touchmove", "scroll"] as const;
+    let cancelIdle = () => {};
+    const start = () => {
+      for (const type of intents) window.removeEventListener(type, start);
+      cancelIdle = afterLoadIdle(load, 300);
+    };
+    for (const type of intents) window.addEventListener(type, start, { passive: true });
+
+    const load = () => void import("lenis").then(({ default: LenisClass }) => {
       if (cancelled) return;
       lenis = new LenisClass({
         autoRaf: true,
@@ -125,6 +136,8 @@ export function SmoothScroll() {
 
     return () => {
       cancelled = true;
+      for (const type of intents) window.removeEventListener(type, start);
+      cancelIdle();
       lenis?.destroy();
       lenisRef.current = null;
     };

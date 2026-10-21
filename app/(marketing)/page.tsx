@@ -11,6 +11,7 @@ import { ServicesSection } from "@/components/home/services-section";
 import { HomeFaqSection } from "@/components/home/faq-section";
 import { WorkflowSection } from "@/components/home/workflow-section";
 import { JsonLd } from "@/components/seo/json-ld";
+import { DeferredHydration } from "@/components/shared/deferred-hydration";
 import { fetchParentCategoriesForSeo } from "@/lib/data/public-categories-seo";
 import { servicesItemListJsonLd } from "@/lib/json-ld";
 import { buildMetadata, defaultKeywords } from "@/lib/seo";
@@ -42,15 +43,22 @@ export default async function HomePage() {
 
           <CustomerTrustSection />
           {/* 4 business profiles from the API + "See all professionals" link. */}
-          <FeaturedProvidersSection />
+          <DeferredHydration>
+            <FeaturedProvidersSection />
+          </DeferredHydration>
           {/*
             Customer journey section parked — restore by swapping it back in:
             <CustomerJourneySection />
           */}
           <CustomerAssuranceSection />
 
-          <WorkflowSection />
-          <HomeFaqSection />
+          {/* Below the fold: server HTML stays crawlable, hydration waits until it scrolls near. */}
+          <DeferredHydration>
+            <WorkflowSection />
+          </DeferredHydration>
+          <DeferredHydration>
+            <HomeFaqSection />
+          </DeferredHydration>
         </HomeMotion>
       </HomeCategoryFilterProvider>
     </>

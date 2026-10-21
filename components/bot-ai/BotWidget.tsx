@@ -42,8 +42,8 @@ function writeDock(dock: Dock) {
   }
 }
 
-function clampBottom(bottom: number) {
-  const max = Math.max(EDGE, window.innerHeight - SIZE - EDGE);
+function clampBottom(bottom: number, viewportHeight = window.innerHeight) {
+  const max = Math.max(EDGE, viewportHeight - SIZE - EDGE);
   return Math.min(Math.max(EDGE, bottom), max);
 }
 
@@ -63,7 +63,9 @@ export function BotWidget() {
 
   const [dock, setDock] = useState<Dock>(DEFAULT_DOCK);
   const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
-  const [, setViewport] = useState(0);
+  // Cached viewport height: reading window.innerHeight during render forces a synchronous
+  // style + layout pass (a long task on mobile), so it is only read in rAF / resize.
+  const [viewportHeight, setViewportHeight] = useState(0);
   const dragRef = useRef<DragState | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const suppressClickRef = useRef(false);
@@ -72,8 +74,11 @@ export function BotWidget() {
   useEffect(() => {
     if (!mounted) return;
     const saved = readDock();
-    const frame = requestAnimationFrame(() => setDock(saved));
-    const onResize = () => setViewport(window.innerHeight);
+    const frame = requestAnimationFrame(() => {
+      setViewportHeight(window.innerHeight);
+      setDock(saved);
+    });
+    const onResize = () => setViewportHeight(window.innerHeight);
     window.addEventListener("resize", onResize);
     return () => {
       cancelAnimationFrame(frame);
@@ -144,7 +149,7 @@ export function BotWidget() {
   const left = dock.side === "left";
   const style: CSSProperties = dragging
     ? { left: dragPoint.x, top: dragPoint.y }
-    : { [dock.side]: EDGE, bottom: clampBottom(dock.bottom) };
+    : { [dock.side]: EDGE, bottom: viewportHeight ? clampBottom(dock.bottom, viewportHeight) : EDGE };
 
   return createPortal(
     <>

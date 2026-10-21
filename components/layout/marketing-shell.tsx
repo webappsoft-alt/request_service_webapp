@@ -7,6 +7,7 @@ import { BotProvider, BotWidget } from "@/components/bot-ai";
 import { HomeMotion } from "@/components/home/home-motion";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { DeferredHydration } from "@/components/shared/deferred-hydration";
 import { useAppDispatch } from "@/store/hooks";
 import { fetchSiteBranding } from "@/store/siteBrandingSlice";
 
@@ -48,7 +49,11 @@ export function MarketingShell({ children }: { children: ReactNode }) {
       <main key={pathname} id="main-content" className="page-enter flex-1">
         <HomeMotion>{children}</HomeMotion>
       </main>
-      {isExplorer ? null : <SiteFooter />}
+      {isExplorer ? null : (
+        <DeferredHydration>
+          <SiteFooter />
+        </DeferredHydration>
+      )}
     </>
   );
 

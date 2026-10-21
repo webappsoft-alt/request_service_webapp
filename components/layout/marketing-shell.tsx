@@ -16,6 +16,7 @@ const BOT_EXCLUDED_PREFIXES = [
   "/dashboard",
   "/customer",
   "/pro",
+  "/for-pros",
   "/contractor",
   "/technical",
   "/technician",

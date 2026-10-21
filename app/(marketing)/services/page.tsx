@@ -2,9 +2,12 @@ import { RelatedBrowse } from "@/components/marketplace/related-browse";
 import { ServicesDirectory } from "@/components/marketplace/services-directory";
 import { WhyHireSection } from "@/components/marketplace/why-hire-section";
 import { JsonLd } from "@/components/seo/json-ld";
+import { ProRecruitCta } from "@/components/seo/pro-recruit-cta";
 import { getJobRecord } from "@/lib/data/jobs";
 import { getLocalKeywordPhrases, getLocalPageCopy, readPlaceFromSearch } from "@/lib/data/local-keywords";
+import { findLocationCity } from "@/lib/data/locations";
 import { firstSearchValue } from "@/lib/data/markets";
+import { publicPaths } from "@/lib/public-paths";
 import { directoryHref } from "@/lib/data/related-categories";
 import { getServiceCategoryBySlug } from "@/lib/data/services";
 import { breadcrumbJsonLd, servicesItemListJsonLd } from "@/lib/json-ld";
@@ -26,12 +29,28 @@ export async function generateMetadata({ searchParams }: PageParams) {
     loc: firstSearchValue(params.loc),
   });
 
+  // Canonical: the clean directory URL for this filter (/locations/co/denver/plumbing,
+  // /services/plumbing, …) so ?city=&state=&service= variants don't compete with it.
+  const cityPage = findLocationCity(firstSearchValue(params.city), firstSearchValue(params.state));
+  const jobRecord = category && jobSlug ? getJobRecord(category.slug, jobSlug) : undefined;
+  const canonical = cityPage
+    ? category
+      ? jobRecord
+        ? publicPaths.locationSubService(cityPage.state.slug, cityPage.slug, category.slug, jobRecord.slug)
+        : publicPaths.locationService(cityPage.state.slug, cityPage.slug, category.slug)
+      : publicPaths.locationCity(cityPage.state.slug, cityPage.slug)
+    : category
+      ? jobRecord
+        ? publicPaths.subService(category.slug, jobRecord.slug)
+        : publicPaths.service(category.slug)
+      : publicPaths.services;
+
   return buildMetadata({
     title: local?.title ?? "Home Services Directory",
     description:
       local?.description ??
       "Browse plumbing, HVAC, electrical, cleaning, roofing, and more. Pick a category to see common jobs, starting prices, and the companies that offer them.",
-    path: "/services",
+    path: canonical,
     keywords: [
       ...getLocalKeywordPhrases({
         category,
@@ -109,6 +128,7 @@ export default async function ServicesPage({ searchParams }: PageParams) {
         zip={zip || undefined}
         loc={loc || undefined}
       />
+      <ProRecruitCta place={city || usStateName(state) || undefined} />
     </>
   );
 }

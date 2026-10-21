@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Container, Section } from "@/components/layout/container";
 import { SectionHeader } from "@/components/shared/section-header";
 import { cn } from "@/lib/utils";
+import { proPaths } from "@/lib/pro-paths";
 
 const estimateRows = [
   { label: "Labor — 6 hrs @ $80.00", amount: "$480.00" },
@@ -80,7 +81,7 @@ export function PlatformSection() {
           description="Every job keeps a financial audit trail. Extra materials are added as change orders instead of quietly rewriting the quote a customer already approved."
           action={
             <Button variant="outline" asChild>
-              <Link href="/pro">
+              <Link href={proPaths.home}>
                 Explore the platform
                 <ArrowRight data-icon="inline-end" />
               </Link>

@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatPlanPrice } from "@/lib/data/plans";
 import type { SubscriptionPlan } from "@/lib/types";
+import { proPaths } from "@/lib/pro-paths";
 
 export function PricingCard({ plan }: { plan: SubscriptionPlan }) {
   const intervalLabel = plan.interval === "month" ? "month" : "year";
@@ -52,7 +53,7 @@ export function PricingCard({ plan }: { plan: SubscriptionPlan }) {
       </CardContent>
       <CardFooter className="bg-transparent">
         <Button asChild className="w-full" variant={plan.highlighted ? "default" : "outline"}>
-          <Link href={`/pro/register?plan=${plan.slug}`}>{plan.ctaLabel}</Link>
+          <Link href={`${proPaths.join}?plan=${plan.slug}`}>{plan.ctaLabel}</Link>
         </Button>
       </CardFooter>
     </Card>

@@ -17,6 +17,7 @@ import { formatProviderCardLocation } from "@/lib/format";
 import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/types";
+import { publicPaths } from "@/lib/public-paths";
 
 /** Unique labels already scoped to this pro — leftover is list.length − 2. */
 function cardServiceLabels(labels: string[]): string[] {
@@ -40,7 +41,7 @@ function professionalHref(slug: string, place?: ExplorePlace) {
   if (place?.state) params.set("state", place.state);
   if (place?.location && !place.city && !place.zip) params.set("location", place.location);
   const query = params.toString();
-  return query ? `/professionals/${slug}?${query}` : `/professionals/${slug}`;
+  return query ? `${publicPaths.professional(slug)}?${query}` : publicPaths.professional(slug);
 }
 
 function ProviderCardLocation({

@@ -30,7 +30,7 @@ export function BlogHero({
           fill
           sizes="100vw"
           className="object-cover object-[50%_28%]"
-          priority
+          preload
         />
         <div
           className="absolute inset-0 bg-[rgba(4,26,54,0.62)] lg:hidden"

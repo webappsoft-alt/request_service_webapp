@@ -7,6 +7,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import { siteConfig } from "@/lib/site";
+import { proPaths } from "@/lib/pro-paths";
 
 export const metadata = buildMetadata({
   title: "About Request Service",
@@ -89,7 +90,7 @@ export default function AboutPage() {
         title="See the product from either side"
         description="Homeowners can search the marketplace. Service businesses can review the provider platform and placeholder plans."
         primary={{ href: "/find-a-professional", label: "Find a professional" }}
-        secondary={{ href: "/pro", label: "For providers" }}
+        secondary={{ href: proPaths.home, label: "For providers" }}
       />
     </>
   );

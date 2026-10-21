@@ -6,6 +6,8 @@ import {
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
+  Suspense,
+  type ComponentProps,
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -124,7 +126,7 @@ function OtpBoxes({
   );
 }
 
-export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
+function ForgotPasswordOtpFormInner({ role }: { role: DemoRole }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isProvider = role === "provider";
@@ -301,5 +303,14 @@ export function ForgotPasswordOtpForm({ role }: { role: DemoRole }) {
         </p>
       </form>
     </AuthShell>
+  );
+}
+
+/** useSearchParams() needs a Suspense boundary so the page can still be prerendered. */
+export function ForgotPasswordOtpForm(props: ComponentProps<typeof ForgotPasswordOtpFormInner>) {
+  return (
+    <Suspense fallback={null}>
+      <ForgotPasswordOtpFormInner {...props} />
+    </Suspense>
   );
 }

@@ -11,6 +11,7 @@ import { ProviderProjectCard } from "@/components/marketplace/provider-projects"
 import { ProviderLogo } from "@/components/shared/provider-logo";
 import type { Provider, ProviderProject } from "@/lib/types";
 import type { PortfolioProject } from "@/store/portfolioSlice";
+import { publicPaths } from "@/lib/public-paths";
 
 function portfolioToCard(project: PortfolioProject, provider: Provider): ProviderProject {
   const images = project.media
@@ -102,7 +103,7 @@ export function ProjectDetail({
               <li className="text-muted-foreground/70">/</li>
               <li>
                 <Link
-                  href={`/professionals/${provider.slug}`}
+                  href={publicPaths.professional(provider.slug)}
                   className="text-muted-foreground hover:text-primary"
                 >
                   {provider.companyName}
@@ -143,7 +144,7 @@ export function ProjectDetail({
               ) : null}
 
               <Button variant="outline" asChild className="w-fit">
-                <Link href={`/professionals/${provider.slug}`}>
+                <Link href={publicPaths.professional(provider.slug)}>
                   <ArrowLeft data-icon="inline-start" />
                   Back to {provider.companyName}
                 </Link>
@@ -157,7 +158,7 @@ export function ProjectDetail({
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4 pt-4">
                   <Link
-                    href={`/professionals/${provider.slug}`}
+                    href={publicPaths.professional(provider.slug)}
                     className="flex items-center gap-3 rounded-lg transition-colors hover:bg-muted/60"
                   >
                     <ProviderLogo provider={provider} size="md" />
@@ -200,7 +201,7 @@ export function ProjectDetail({
                       </Link>
                     </Button>
                     <Button variant="outline" size="xl" asChild className="w-full">
-                      <Link href={`/professionals/${provider.slug}`}>
+                      <Link href={publicPaths.professional(provider.slug)}>
                         View full profile
                       </Link>
                     </Button>

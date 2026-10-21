@@ -112,7 +112,7 @@ function AuthFormInner({
   }
 
   const loginHref = isProvider ? "/pro/login" : "/login";
-  const registerHref = isProvider ? "/pro/register" : "/register";
+  const registerHref = isProvider ? proPaths.join : "/register";
   const forgotHref = isProvider ? "/pro/forgot-password" : "/forgot-password";
   const verifyForgotHref = isProvider
     ? "/pro/verify-forgot-otp"

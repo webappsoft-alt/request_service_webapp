@@ -48,7 +48,7 @@ const screens = [
       "Photos of real jobs, not stock images",
       "Years in business, team size, and how they take payment",
     ],
-    url: "requestservice.com/professionals/summit-home-services",
+    url: "requestservice.com/pros/summit-home-services",
     alt: "Public professional profile with photo gallery and verified business information",
   },
   {

@@ -1,4 +1,5 @@
 import type { NavItem } from "@/lib/types";
+import { proPaths } from "@/lib/pro-paths";
 
 export const primaryNav: NavItem[] = [
   { label: "Services", href: "/services", description: "Browse home service categories." },
@@ -25,14 +26,15 @@ export const footerNav = {
     { label: "Find a Professional", href: "/find-a-professional" },
     { label: "Get a quote", href: "/get-a-quote" },
     { label: "Services", href: "/services" },
+    { label: "Browse by City", href: "/locations" },
     { label: "How It Works", href: "/how-it-works" },
     // { label: "Customer Login", href: "/login" },
   ],
   providers: [
-    { label: "For Pros", href: "/pro" },
-    { label: "Plans & Pricing", href: "/pro/pricing" },
+    { label: "For Pros", href: proPaths.home },
+    { label: "Plans & Pricing", href: proPaths.pricing },
     { label: "Pro Login", href: "/pro/login" },
-    { label: "Create a Pro Account", href: "/pro/register" },
+    { label: "Create a Pro Account", href: proPaths.join },
     { label: "Pro dashboard", href: "/pro/dashboard" },
   ],
   // Contact Us / FAQ sit under Company (no separate Support heading).

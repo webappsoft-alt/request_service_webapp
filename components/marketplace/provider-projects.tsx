@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Provider, ProviderProject } from "@/lib/types";
+import { publicPaths } from "@/lib/public-paths";
 
 type PortfolioSlide = {
   key: string;
@@ -71,7 +72,7 @@ export function ProviderProjectCard({
 
   return (
     <Link
-      href={`/professionals/${provider.slug}/projects/${project.slug}`}
+      href={publicPaths.professionalProject(provider.slug, project.slug)}
       onClick={() => onBeforeNavigate?.()}
       className="group flex flex-col overflow-hidden rounded-xl border border-input bg-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
@@ -151,7 +152,7 @@ export function ProviderProjects({
     (slide: PortfolioSlide) => {
       onBeforeNavigate?.();
       router.push(
-        `/professionals/${provider.slug}/projects/${slide.projectSlug}?photo=${slide.imageIndexInProject}`,
+        `${publicPaths.professionalProject(provider.slug, slide.projectSlug)}?photo=${slide.imageIndexInProject}`,
       );
     },
     [onBeforeNavigate, provider.slug, router],

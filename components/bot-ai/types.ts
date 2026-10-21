@@ -6,7 +6,7 @@ export type BotStep = "identifying" | "provider_selection" | "quote_or_booking";
 
 export type BotProviderCard = {
   id: string;
-  /** Public profile slug (/professionals/[slug]). */
+  /** Public profile slug (/pros/[slug]). */
   slug: string | null;
   name: string;
   avatarUrl: string | null;

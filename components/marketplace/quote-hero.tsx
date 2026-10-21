@@ -50,7 +50,7 @@ export function QuoteHero({ categoryName }: { categoryName?: string }) {
           fill
           sizes="100vw"
           className="object-cover object-[66%_22%]"
-          priority
+          preload
         />
         <div
           className="absolute inset-0 bg-[rgba(4,26,54,0.62)] lg:hidden"

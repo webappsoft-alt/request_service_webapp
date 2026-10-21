@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
-import { proPaths } from "@/lib/pro-paths";
+import { isProMarketingPath, proPaths } from "@/lib/pro-paths";
 import { customerPaths } from "@/lib/customer-paths";
 import { readPendingFixedOrder } from "@/lib/booking/pending-fixed-order";
 import { isTechnicianLoginPath, isTechnicianPath, technicianPaths } from "@/lib/technician-paths";
@@ -28,12 +28,13 @@ function isCustomerAuthPath(pathname: string): boolean {
   );
 }
 
+/** Pro auth/portal (/pro/*) + Pro marketing (/for-pros/*). Not /pros/[slug] — that's a public customer page. */
 function isProArea(pathname: string): boolean {
-  return pathname === "/pro" || pathname.startsWith("/pro/");
+  return pathname === "/pro" || pathname.startsWith("/pro/") || isProMarketingPath(pathname);
 }
 
 function isProLanding(pathname: string): boolean {
-  return pathname === "/pro" || pathname === "/pro/";
+  return pathname === proPaths.home || pathname === `${proPaths.home}/`;
 }
 
 function isProDashboard(pathname: string): boolean {
@@ -45,13 +46,13 @@ function isProDashboard(pathname: string): boolean {
 function isProAuthPath(pathname: string): boolean {
   return (
     pathname === "/pro/login" ||
-    pathname === "/pro/register" ||
+    pathname === proPaths.join ||
     pathname === "/pro/forgot-password" ||
     pathname === "/pro/reset-password" ||
     pathname === "/pro/verify-otp" ||
     pathname === "/pro/verify-forgot-otp" ||
     pathname.startsWith("/pro/login/") ||
-    pathname.startsWith("/pro/register/")
+    pathname.startsWith(`${proPaths.join}/`)
   );
 }
 

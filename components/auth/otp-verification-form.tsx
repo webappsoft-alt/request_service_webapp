@@ -6,6 +6,8 @@ import {
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
+  Suspense,
+  type ComponentProps,
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -127,7 +129,7 @@ export function OtpBoxes({
   );
 }
 
-export function OtpVerificationForm({
+function OtpVerificationFormInner({
   role = "customer",
 }: {
   role?: DemoRole;
@@ -149,7 +151,7 @@ export function OtpVerificationForm({
   // A verified code can't be used twice: keep the proof so a failed register can retry.
   const [verificationToken, setVerificationToken] = useState("");
 
-  const registerHref = isProvider ? "/pro/register" : "/register";
+  const registerHref = isProvider ? proPaths.join : "/register";
   const nextPath = searchParams.get("next")?.trim() || "";
   const safeNext =
     !isProvider &&
@@ -358,5 +360,14 @@ export function OtpVerificationForm({
         </p>
       </form>
     </AuthShell>
+  );
+}
+
+/** useSearchParams() needs a Suspense boundary so the page can still be prerendered. */
+export function OtpVerificationForm(props: ComponentProps<typeof OtpVerificationFormInner>) {
+  return (
+    <Suspense fallback={null}>
+      <OtpVerificationFormInner {...props} />
+    </Suspense>
   );
 }

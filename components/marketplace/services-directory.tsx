@@ -495,6 +495,7 @@ export function ServicesDirectory({
   initialProviderId = "",
   initialProviderName = "",
   initialFocus = "",
+  syncUrl = true,
 }: {
   initialQuery?: string;
   initialCategory?: string;
@@ -508,8 +509,12 @@ export function ServicesDirectory({
   initialProviderName?: string;
   /** When `professionals`, scroll to Matching professionals on land. */
   initialFocus?: string;
+  /** false on SEO landing pages (/locations/…) so filters never rewrite the canonical URL to /services?… */
+  syncUrl?: boolean;
 }) {
   const router = useRouter();
+  // SEO landing pages (syncUrl=false) render their own <h1> above the directory.
+  const ResultsHeading = syncUrl ? "h1" : "h2";
   const dispatch = useAppDispatch();
   const customerLocation = useAppSelector((state) => state.location);
   const location = locationDisplayLabel(customerLocation);
@@ -1103,6 +1108,7 @@ export function ServicesDirectory({
       skipUrlRef.current = false;
       return;
     }
+    if (!syncUrl) return;
 
     const href = servicesHref({
       confidence: featuredJob ? "exact-job" : activeCategory ? "exact-category" : "related",
@@ -1135,6 +1141,7 @@ export function ServicesDirectory({
     zip,
     customerLocation.city,
     customerLocation.state,
+    syncUrl,
   ]);
 
   function applyIntent(intent: SearchIntent) {
@@ -1454,11 +1461,11 @@ export function ServicesDirectory({
           <div className="flex min-w-0 flex-col gap-5" ref={resultsRef}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h1 className="text-xl font-semibold">
+                <ResultsHeading className="text-xl font-semibold">
                   {selectedCategory
                     ? `${selectedCategory.name} services`
                     : "Services"}
-                </h1>
+                </ResultsHeading>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {showInitialServicesSpinner
                     ? "\u00a0"

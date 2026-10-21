@@ -64,6 +64,7 @@ import {
   selectIsAuthenticated,
 } from "@/store/authSlice";
 import { cn } from "@/lib/utils";
+import { publicPaths } from "@/lib/public-paths";
 
 type FilterTab = "all" | "unread";
 
@@ -1200,7 +1201,7 @@ export function CustomerMessagesView({
                         className="gap-1.5 text-xs font-medium"
                         asChild
                       >
-                        <Link href={`/professionals/${selectedProvider.slug}`}>
+                        <Link href={publicPaths.professional(selectedProvider.slug)}>
                           <ExternalLink className="size-3.5" />
                           <span className="hidden sm:inline">View</span> Profile
                         </Link>

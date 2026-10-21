@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense, type ComponentProps } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Wrench } from "lucide-react";
 import { getData } from "@/components/api/apiFuntions";
@@ -377,7 +377,7 @@ function mergeProviders(...lists: Provider[][]): Provider[] {
   return next;
 }
 
-export function PublicFixedServiceDetail({
+function PublicFixedServiceDetailInner({
   categorySlug,
   serviceSlug,
 }: {
@@ -807,5 +807,14 @@ export function PublicFixedServiceDetail({
         <Link href={`/services/${categorySlug}`}>Back to services</Link>
       </Button>
     </Container>
+  );
+}
+
+/** useSearchParams() needs a Suspense boundary so the page can still be prerendered. */
+export function PublicFixedServiceDetail(props: ComponentProps<typeof PublicFixedServiceDetailInner>) {
+  return (
+    <Suspense fallback={null}>
+      <PublicFixedServiceDetailInner {...props} />
+    </Suspense>
   );
 }

@@ -4,6 +4,7 @@ import {
   getRelatedProviderProjects,
 } from "@/lib/data/provider-projects";
 import { getProviderBySlug } from "@/lib/data/providers";
+import { publicPaths } from "@/lib/public-paths";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
@@ -21,7 +22,7 @@ export async function generateMetadata({
     return buildMetadata({
       title: "Portfolio project",
       description: "View this professional’s portfolio project.",
-      path: `/professionals/${slug}/projects/${projectSlug}`,
+      path: publicPaths.professionalProject(slug, projectSlug),
       index: false,
     });
   }
@@ -29,7 +30,7 @@ export async function generateMetadata({
   return buildMetadata({
     title: `${project.title} | ${provider.companyName}`,
     description: project.summary,
-    path: `/professionals/${provider.slug}/projects/${project.slug}`,
+    path: publicPaths.professionalProject(provider.slug, project.slug),
     keywords: [project.title, provider.companyName, project.categoryName, provider.city],
     images: [project.cover],
   });

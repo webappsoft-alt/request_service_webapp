@@ -10,9 +10,11 @@ ${siteConfig.description}
 ## Primary pages
 - [Home](${siteConfig.url}/)
 - [Services](${siteConfig.url}/services)
+- [Locations](${siteConfig.url}/locations)
 - [Find a professional](${siteConfig.url}/find-a-professional)
 - [Get a quote](${siteConfig.url}/get-a-quote)
-- [For Pros](${siteConfig.url}/pro)
+- [For Pros](${siteConfig.url}/for-pros)
+- [Join as a Pro](${siteConfig.url}/for-pros/join)
 - [How it works](${siteConfig.url}/how-it-works)
 - [Blog](${siteConfig.url}/blog)
 - [FAQ](${siteConfig.url}/faq)

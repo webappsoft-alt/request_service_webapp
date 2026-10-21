@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * Auth lives in Redux Persist (`userData`) — not readable on the Edge.
  * Protected pages enforce access after client rehydrate.
  */
-export function middleware(_request: NextRequest) {
+export function proxy(_request: NextRequest) {
   return NextResponse.next();
 }
 

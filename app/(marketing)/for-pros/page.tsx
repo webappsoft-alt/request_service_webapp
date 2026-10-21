@@ -5,6 +5,7 @@ import { ProFaqSection } from "@/components/pro/pro-faq-section";
 import { ProHero } from "@/components/pro/pro-hero";
 import { ProLandingPlans } from "@/components/pro/pro-pricing-view";
 import { ProProduct } from "@/components/pro/pro-product";
+import { ProRegionalLinks } from "@/components/pro/pro-seo-landing";
 import { ProWorkflow } from "@/components/pro/pro-workflow";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbJsonLd } from "@/lib/json-ld";
@@ -32,7 +33,7 @@ export default function ProLandingPage() {
       <JsonLd
         data={breadcrumbJsonLd([
           { name: "Home", path: "/" },
-          { name: "For Professionals", path: proPaths.home },
+          { name: "For Pros", path: proPaths.home },
         ])}
       />
       <HomeMotion>
@@ -41,6 +42,8 @@ export default function ProLandingPage() {
         <ProProduct />
 
         <ProLandingPlans />
+
+        <ProRegionalLinks />
 
         <ProFaqSection />
 

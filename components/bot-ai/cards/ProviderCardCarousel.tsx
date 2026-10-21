@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { BotProviderCard } from "../types";
 import { CarouselRail, RailItem } from "./CarouselRail";
 import { ProviderAvatar } from "./ProviderAvatar";
+import { publicPaths } from "@/lib/public-paths";
 
 function distanceLabel(provider: BotProviderCard) {
   const parts = [] as string[];
@@ -80,7 +81,7 @@ export function ProviderCardCarousel({
               <div className="mt-auto grid grid-cols-2 gap-1.5">
                 {provider.slug ? (
                   <Link
-                    href={`/professionals/${provider.slug}`}
+                    href={publicPaths.professional(provider.slug)}
                     target="_blank"
                     rel="noopener"
                     draggable={false}

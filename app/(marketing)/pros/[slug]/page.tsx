@@ -1,12 +1,14 @@
 import { PublicProfessionalDetail } from "@/components/marketplace/public-professional-detail";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getLocalKeywordPhrases } from "@/lib/data/local-keywords";
+import { findLocationCity } from "@/lib/data/locations";
 import { fetchPublicProfessionalForSeo } from "@/lib/data/public-professional-seo";
 import { getStartingPrice } from "@/lib/data/provider-media";
 import { getProviderBySlug } from "@/lib/data/providers";
 import { getServiceCategoryById } from "@/lib/data/services";
 import { formatStartingPrice } from "@/lib/format";
-import { breadcrumbJsonLd, providerJsonLd } from "@/lib/json-ld";
+import { breadcrumbJsonLd, liveProfessionalJsonLd, providerJsonLd } from "@/lib/json-ld";
+import { publicPaths } from "@/lib/public-paths";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
@@ -26,7 +28,7 @@ export async function generateMetadata({ params }: PageParams<{ slug: string }>)
     return buildMetadata({
       title: "Professional profile",
       description: "View this professional’s profile and request a quote.",
-      path: `/professionals/${slug}`,
+      path: publicPaths.professional(slug),
     });
   }
 
@@ -45,7 +47,7 @@ export async function generateMetadata({ params }: PageParams<{ slug: string }>)
         liveProfessional.description ||
         provider?.description ||
         "View this professional’s profile and request a quote.",
-      path: `/professionals/${liveProfessional.slug || slug}`,
+      path: publicPaths.professional(liveProfessional.slug || slug),
       keywords: [
         liveProfessional.companyName,
         city ? `${city} home services` : "",
@@ -59,14 +61,14 @@ export async function generateMetadata({ params }: PageParams<{ slug: string }>)
     return buildMetadata({
       title: "Professional profile",
       description: "View this professional’s profile and request a quote.",
-      path: `/professionals/${slug}`,
+      path: publicPaths.professional(slug),
     });
   }
 
   return buildMetadata({
     title: `${provider.companyName} | ${provider.city}, ${provider.state}`,
     description: provider.description,
-    path: `/professionals/${provider.slug}`,
+    path: publicPaths.professional(provider.slug),
     keywords: [
       provider.companyName,
       `${provider.city} home services`,
@@ -111,9 +113,32 @@ export default async function ProviderProfilePage({
         .map((id) => getServiceCategoryById(id))
         .filter((item): item is NonNullable<typeof item> => Boolean(item))
     : [];
+  // Live (API) Pros: same fetch as generateMetadata, served from the fetch cache.
+  const liveProfessional = provider ? null : await fetchPublicProfessionalForSeo(slug);
+  const liveCity = liveProfessional
+    ? findLocationCity(liveProfessional.city, liveProfessional.state)
+    : undefined;
 
   return (
     <>
+      {liveProfessional ? (
+        <JsonLd
+          data={[
+            liveProfessionalJsonLd({ ...liveProfessional, slug: liveProfessional.slug || slug }),
+            breadcrumbJsonLd([
+              { name: "Home", path: "/" },
+              ...(liveCity
+                ? [
+                    { name: "Locations", path: publicPaths.locations },
+                    { name: liveCity.state.name, path: publicPaths.locationState(liveCity.state.slug) },
+                    { name: liveCity.city, path: publicPaths.locationCity(liveCity.state.slug, liveCity.slug) },
+                  ]
+                : [{ name: "Find a Professional", path: "/find-a-professional" }]),
+              { name: liveProfessional.companyName, path: publicPaths.professional(liveProfessional.slug || slug) },
+            ]),
+          ]}
+        />
+      ) : null}
       {provider ? (
         <JsonLd
           data={[
@@ -124,7 +149,7 @@ export default async function ProviderProfilePage({
             breadcrumbJsonLd([
               { name: "Home", path: "/" },
               { name: "Find a Professional", path: "/find-a-professional" },
-              { name: provider.companyName, path: `/professionals/${provider.slug}` },
+              { name: provider.companyName, path: publicPaths.professional(provider.slug) },
             ]),
           ]}
         />

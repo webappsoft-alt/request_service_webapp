@@ -106,17 +106,17 @@ export const proResourceGroups = [
     links: [
       { href: "/blog", label: "Blog", hint: "Notes for service companies" },
       {
-        href: "/blog/why-change-orders-matter-on-home-service-jobs",
+        href: "/blog/why-change-orders-protect-contractors-and-homeowners",
         label: "Change orders",
         hint: "Keep the original estimate",
       },
       {
-        href: "/blog/deposits-progress-payments-and-balances",
+        href: "/blog/invoice-and-milestone-billing-habits-that-reduce-payment-delays",
         label: "Deposits and balances",
         hint: "How the invoice stays the parent",
       },
       {
-        href: "/blog/what-belongs-on-a-professional-service-profile",
+        href: "/blog/building-a-public-profile-that-converts-visitors",
         label: "Your public profile",
         hint: "What homeowners see",
       },

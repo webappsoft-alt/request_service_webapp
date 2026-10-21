@@ -24,7 +24,7 @@ export default function ProPricingPage() {
       <JsonLd
         data={breadcrumbJsonLd([
           { name: "Home", path: "/" },
-          { name: "For Professionals", path: proPaths.home },
+          { name: "For Pros", path: proPaths.home },
           { name: "Pricing", path: proPaths.pricing },
         ])}
       />

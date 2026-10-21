@@ -56,14 +56,55 @@ function parseSeoEntity(raw: unknown): PublicProfessionalSeoData | null {
   };
 }
 
+function apiBase() {
+  return String(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+}
+
+/**
+ * One page of GET /public/professionals for server-rendered SEO
+ * (local landing pages + sitemap). Never throws; empty on any failure.
+ */
+export async function fetchPublicProfessionalsForSeo(options: {
+  city?: string;
+  state?: string;
+  page?: number;
+  limit?: number;
+  revalidate?: number;
+}): Promise<{ items: PublicProfessionalSeoData[]; hasNextPage: boolean }> {
+  const base = apiBase();
+  if (!base) return { items: [], hasNextPage: false };
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    limit: String(Math.min(options.limit ?? 12, 50)),
+  });
+  if (options.city) params.set("city", options.city);
+  if (options.state) params.set("state", options.state);
+
+  try {
+    const response = await fetch(`${base}/${publicApi.professionals}?${params}`, {
+      headers: { Accept: "application/json" },
+      next: { revalidate: options.revalidate ?? 900 },
+    });
+    if (!response.ok) return { items: [], hasNextPage: false };
+    const json = asRecord(await response.json()) ?? {};
+    const rows = Array.isArray(json.data) ? json.data : [];
+    const pagination = asRecord(json.pagination) ?? {};
+    return {
+      items: rows
+        .map(parseSeoEntity)
+        .filter((item): item is PublicProfessionalSeoData => Boolean(item?.slug)),
+      hasNextPage: pagination.hasNextPage === true,
+    };
+  } catch {
+    return { items: [], hasNextPage: false };
+  }
+}
+
 export async function fetchPublicProfessionalForSeo(
   slug: string,
 ): Promise<PublicProfessionalSeoData | null> {
   const trimmed = String(slug || "").trim();
-  const base = String(process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(
-    /\/+$/,
-    "",
-  );
+  const base = apiBase();
   if (!trimmed || !base) return null;
 
   try {

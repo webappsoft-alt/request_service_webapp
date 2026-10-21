@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Lenis from "lenis";
 import "lenis/dist/lenis.css";
+import { proPaths } from "@/lib/pro-paths";
 
 function shouldSkipLenis(pathname: string) {
   // Nested / page-owned scrollers — Lenis syncTouch makes touch scroll intermittent.
@@ -25,7 +26,7 @@ function shouldSkipLenis(pathname: string) {
     pathname === "/verify-otp" ||
     pathname === "/reset-password" ||
     pathname === "/pro/login" ||
-    pathname === "/pro/register" ||
+    pathname === proPaths.join ||
     pathname === "/pro/verify-otp" ||
     pathname === "/pro/forgot-password" ||
     pathname === "/pro/verify-forgot-otp" ||

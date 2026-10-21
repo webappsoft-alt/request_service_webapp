@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -32,7 +32,7 @@ const emptyAddress: AddressFieldsValue = {
   label: "",
 };
 
-export function CustomerRegisterForm() {
+function CustomerRegisterFormInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next")?.trim() || "";
@@ -236,5 +236,14 @@ export function CustomerRegisterForm() {
         </Button>
       </form>
     </AuthShell>
+  );
+}
+
+/** useSearchParams() needs a Suspense boundary so the page can still be prerendered. */
+export function CustomerRegisterForm() {
+  return (
+    <Suspense fallback={null}>
+      <CustomerRegisterFormInner />
+    </Suspense>
   );
 }

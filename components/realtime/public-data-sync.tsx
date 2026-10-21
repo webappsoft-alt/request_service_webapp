@@ -40,7 +40,8 @@ function isCustomerCatalogPath(pathname: string) {
     pathname.startsWith("/services") ||
     pathname.startsWith("/find-a-professional") ||
     pathname.startsWith("/get-a-quote") ||
-    pathname.startsWith("/professionals") ||
+    pathname.startsWith("/pros/") ||
+    pathname.startsWith("/locations") ||
     pathname.startsWith("/fixed-services")
   );
 }

@@ -23,7 +23,7 @@ import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { ProHeader } from "@/components/pro/pro-header";
 import { primaryNav, secondaryNav } from "@/lib/data/navigation";
 import { customerPaths } from "@/lib/customer-paths";
-import { proPaths } from "@/lib/pro-paths";
+import { isProMarketingPath, proPaths } from "@/lib/pro-paths";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
@@ -36,7 +36,8 @@ import { handleUserLogout } from "@/components/api/apiFuntions";
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const onPro = pathname === proPaths.home || pathname.startsWith(`${proPaths.home}/`);
+  // Pro marketing (/for-pros/*) and Pro auth (/pro/*) share the Pro header; /pros/[slug] is a customer page.
+  const onPro = pathname === "/pro" || pathname.startsWith("/pro/") || isProMarketingPath(pathname);
 
   if (onPro) {
     return <ProHeader />;

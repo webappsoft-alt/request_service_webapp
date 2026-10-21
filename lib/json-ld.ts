@@ -1,4 +1,6 @@
 import { siteConfig, absoluteUrl } from "@/lib/site";
+import { publicPaths } from "@/lib/public-paths";
+import type { PublicProfessionalSeoData } from "@/lib/data/public-professional-seo";
 import { getServiceAreaNames } from "@/lib/data/service-areas";
 import { serviceCategories } from "@/lib/data/services";
 import type { JobRecord } from "@/lib/data/jobs";
@@ -78,7 +80,7 @@ export function jobServiceJsonLd(record: JobRecord, price: number) {
       "@type": "Country",
       name: "United States",
     },
-    url: absoluteUrl(`/services/${record.category.slug}/${record.slug}`),
+    url: absoluteUrl(publicPaths.subService(record.category.slug, record.slug)),
     offers: {
       "@type": "Offer",
       price,
@@ -103,7 +105,7 @@ export function serviceCategoryJsonLd(category: ServiceCategory) {
       "@type": "Country",
       name: "United States",
     },
-    url: absoluteUrl(`/services/${category.slug}`),
+    url: absoluteUrl(publicPaths.service(category.slug)),
   };
 }
 
@@ -115,7 +117,7 @@ export function providerJsonLd(provider: Provider, categories: ServiceCategory[]
     description: provider.description,
     telephone: provider.phone,
     email: provider.email,
-    url: absoluteUrl(`/professionals/${provider.slug}`),
+    url: absoluteUrl(publicPaths.professional(provider.slug)),
     address: {
       "@type": "PostalAddress",
       streetAddress: provider.street,
@@ -206,8 +208,77 @@ export function servicesItemListJsonLd() {
     itemListElement: serviceCategories.map((category, index) => ({
       "@type": "ListItem",
       position: index + 1,
-      url: absoluteUrl(`/services/${category.slug}`),
+      url: absoluteUrl(publicPaths.service(category.slug)),
       name: category.name,
     })),
+  };
+}
+
+/** A service offered through the marketplace in one city (local landing pages). */
+export function localServiceJsonLd(input: {
+  name: string;
+  description: string;
+  path: string;
+  serviceType: string;
+  city: string;
+  state: string;
+  stateName: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: input.name,
+    description: input.description,
+    serviceType: input.serviceType,
+    url: absoluteUrl(input.path),
+    provider: {
+      "@type": "Organization",
+      name: siteConfig.name,
+      url: siteConfig.url,
+    },
+    areaServed: {
+      "@type": "City",
+      name: input.city,
+      containedInPlace: {
+        "@type": "State",
+        name: input.stateName,
+        identifier: input.state,
+      },
+    },
+  };
+}
+
+/** LocalBusiness for a live (API) Pro profile. */
+export function liveProfessionalJsonLd(pro: PublicProfessionalSeoData) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: pro.companyName,
+    description: pro.description || undefined,
+    url: absoluteUrl(publicPaths.professional(pro.slug)),
+    address:
+      pro.city || pro.state
+        ? {
+            "@type": "PostalAddress",
+            addressLocality: pro.city || undefined,
+            addressRegion: pro.state || undefined,
+            postalCode: pro.zip || undefined,
+            addressCountry: "US",
+          }
+        : undefined,
+    knowsAbout: pro.categoryNames.length ? pro.categoryNames : undefined,
+  };
+}
+
+/** The live Pros listed on a local landing page, each as a LocalBusiness. */
+export function professionalsItemListJsonLd(name: string, pros: PublicProfessionalSeoData[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name,
+    itemListElement: pros.map((pro, index) => {
+      const { "@context": _context, ...item } = liveProfessionalJsonLd(pro);
+      return { "@type": "ListItem", position: index + 1, item };
+    }),
   };
 }

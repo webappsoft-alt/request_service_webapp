@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense, type ComponentProps } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ImagePlus, Trash2 } from "lucide-react";
@@ -60,7 +60,7 @@ function phoneDigits(value: string) {
   return String(value || "").replace(/\D/g, "");
 }
 
-export function RequestIntake({
+function RequestIntakeInner({
   onComplete,
 }: {
   onComplete: (answers: IntakeAnswers) => void | Promise<void>;
@@ -630,5 +630,14 @@ export function RequestIntake({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** useSearchParams() needs a Suspense boundary so the page can still be prerendered. */
+export function RequestIntake(props: ComponentProps<typeof RequestIntakeInner>) {
+  return (
+    <Suspense fallback={null}>
+      <RequestIntakeInner {...props} />
+    </Suspense>
   );
 }

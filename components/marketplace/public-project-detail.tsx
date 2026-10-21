@@ -19,6 +19,7 @@ import {
   type PortfolioProject,
 } from "@/store/portfolioSlice";
 import type { Provider, ProviderProject } from "@/lib/types";
+import { publicPaths } from "@/lib/public-paths";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -158,7 +159,7 @@ export function PublicProjectDetailView({
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild>
-            <Link href={`/professionals/${providerSlug}`}>Back to profile</Link>
+            <Link href={publicPaths.professional(providerSlug)}>Back to profile</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href="/find-a-professional">Find a professional</Link>

@@ -2,12 +2,19 @@ import { notFound } from "next/navigation";
 import { RelatedBrowse } from "@/components/marketplace/related-browse";
 import { ServicesDirectory } from "@/components/marketplace/services-directory";
 import { WhyHireSection } from "@/components/marketplace/why-hire-section";
+import { Container } from "@/components/layout/container";
+import { Breadcrumbs } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
+import { ProRecruitCta } from "@/components/seo/pro-recruit-cta";
+import { tradePeople } from "@/lib/data/local-seo-copy";
+import { getProTradeForCategory } from "@/lib/data/pro-trades";
+import { proPaths } from "@/lib/pro-paths";
+import { publicPaths } from "@/lib/public-paths";
 import { getLocalKeywordPhrases, getLocalPageCopy, readPlaceFromSearch } from "@/lib/data/local-keywords";
 import { firstSearchValue } from "@/lib/data/markets";
 import { directoryHref } from "@/lib/data/related-categories";
 import { getServiceCategoryBySlug, serviceCategories } from "@/lib/data/services";
-import { breadcrumbJsonLd, serviceCategoryJsonLd } from "@/lib/json-ld";
+import { serviceCategoryJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
@@ -60,19 +67,20 @@ export default async function ServiceCategoryPage({
   const loc = firstSearchValue(query.loc);
   const zip = firstSearchValue(query.zip);
   const job = firstSearchValue(query.job);
+  const trade = getProTradeForCategory(category.slug);
 
   return (
     <>
-      <JsonLd
-        data={[
-          serviceCategoryJsonLd(category),
-          breadcrumbJsonLd([
+      <JsonLd data={serviceCategoryJsonLd(category)} />
+      <Container className="pt-6">
+        <Breadcrumbs
+          items={[
             { name: "Home", path: "/" },
-            { name: "Services", path: "/services" },
-            { name: category.name, path: `/services/${category.slug}` },
-          ]),
-        ]}
-      />
+            { name: "Services", path: publicPaths.services },
+            { name: category.name, path: publicPaths.service(category.slug) },
+          ]}
+        />
+      </Container>
 
       <ServicesDirectory
         initialCategory={category.slug}
@@ -94,6 +102,10 @@ export default async function ServiceCategoryPage({
         basePath="/services"
         zip={zip || undefined}
         loc={loc || undefined}
+      />
+      <ProRecruitCta
+        trade={tradePeople(category)}
+        learnMoreHref={trade ? proPaths.trade(trade.slug) : proPaths.home}
       />
     </>
   );

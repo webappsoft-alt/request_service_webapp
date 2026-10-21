@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense, type ComponentProps } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -54,6 +54,7 @@ import {
   type PublicProfessional,
 } from "@/store/publicProfessionalsSlice";
 import type { Provider, ServiceCategorySlug } from "@/lib/types";
+import { publicPaths } from "@/lib/public-paths";
 
 const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
 
@@ -377,7 +378,7 @@ function ProviderServiceScroller({
   );
 }
 
-export function RequestServiceForm({
+function RequestServiceFormInner({
   initial = {},
 }: {
   initial?: {
@@ -1058,7 +1059,7 @@ export function RequestServiceForm({
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild>
-            <Link href={`/professionals/${provider.slug}`}>
+            <Link href={publicPaths.professional(provider.slug)}>
               Back to {provider.companyName}
             </Link>
           </Button>
@@ -1100,7 +1101,7 @@ export function RequestServiceForm({
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild>
-            <Link href={`/professionals/${provider.slug}`}>
+            <Link href={publicPaths.professional(provider.slug)}>
               Back to {provider.companyName}
             </Link>
           </Button>
@@ -1125,7 +1126,7 @@ export function RequestServiceForm({
         </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild>
-            <Link href={`/professionals/${provider.slug}`}>
+            <Link href={publicPaths.professional(provider.slug)}>
               Chat with {provider.companyName}
             </Link>
           </Button>
@@ -1547,5 +1548,14 @@ export function RequestServiceForm({
               : "Send quote request"}
       </Button>
     </form>
+  );
+}
+
+/** useSearchParams() needs a Suspense boundary so the page can still be prerendered. */
+export function RequestServiceForm(props: ComponentProps<typeof RequestServiceFormInner>) {
+  return (
+    <Suspense fallback={null}>
+      <RequestServiceFormInner {...props} />
+    </Suspense>
   );
 }

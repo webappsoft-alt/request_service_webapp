@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Pro membership plan UI shared by the public pricing page (/pro/pricing) and the
+ * Pro membership plan UI shared by the public pricing page (/for-pros/pricing) and the
  * dashboard subscription page. Plans come from the admin-managed public endpoint.
  */
 

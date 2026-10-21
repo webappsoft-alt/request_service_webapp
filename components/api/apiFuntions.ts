@@ -10,6 +10,7 @@ import axios, {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getPersistor, getStore, resetStore } from "@/store";
+import { isProMarketingPath } from "@/lib/pro-paths";
 import {
   clearAuth,
   logout as logoutAction,
@@ -280,7 +281,7 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
           path.startsWith("/signup") ||
           path.startsWith("/verify-otp") ||
           path.startsWith("/pro/login") ||
-          path.startsWith("/pro/register") ||
+          path.startsWith("/for-pros/join") ||
           path.startsWith("/pro/verify-otp") ||
           path.startsWith("/forgot-password") ||
           path.startsWith("/verify-forgot-otp") ||
@@ -296,7 +297,7 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
             ? "/contractor/login"
             : path.startsWith("/technical")
               ? "/technical/login"
-              : path.startsWith("/pro")
+              : path === "/pro" || path.startsWith("/pro/") || isProMarketingPath(path)
                 ? "/pro/login"
                 : "/login";
         }

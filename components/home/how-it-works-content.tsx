@@ -16,6 +16,7 @@ import { Container, Section } from "@/components/layout/container";
 import { customerWorkflow } from "@/lib/data/navigation";
 import { HERO_PRO_IMAGE } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { proPaths } from "@/lib/pro-paths";
 
 function stepNo(step: number) {
   return String(step).padStart(2, "0");
@@ -108,7 +109,7 @@ export function HowItWorksContent() {
                   className="border-white/35 bg-transparent text-white hover:bg-white/10 hover:text-white"
                   asChild
                 >
-                  <Link href="/pro">Join as a Pro</Link>
+                  <Link href={proPaths.home}>Join as a Pro</Link>
                 </Button>
               </div>
             </div>
@@ -202,7 +203,7 @@ export function HowItWorksContent() {
               </ul>
 
               <Button className="w-fit" asChild>
-                <Link href="/pro">
+                <Link href={proPaths.home}>
                   Explore the Pro portal
                   <ArrowRight data-icon="inline-end" />
                 </Link>
@@ -308,7 +309,7 @@ export function HowItWorksContent() {
               Create an account, review plans, and run requests through payment in one login.
             </p>
             <Button size="lg" variant="outline" className="mt-1 w-fit border-input bg-card" asChild>
-              <Link href="/pro">
+              <Link href={proPaths.home}>
                 Join as a Pro
                 <ArrowRight data-icon="inline-end" />
               </Link>

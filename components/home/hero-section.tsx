@@ -19,6 +19,7 @@ export function HeroSection() {
           fill
           preload
           sizes="100vw"
+          quality={75}
           className="object-cover object-[66%_22%]"
         />
 

@@ -184,6 +184,10 @@ export interface Estimate {
   id: string;
   number: string;
   title?: string;
+  /** "site_assessment": price-less draft the AI receptionist created with a booked visit. */
+  type?: string;
+  /** "ai_receptionist" when the AI receptionist drafted it from a phone call. */
+  source?: string;
   providerId: string;
   customerId: string;
   customerName?: string;

@@ -88,7 +88,7 @@ import {
   shareEstimate,
   updateEstimate,
 } from "@/lib/api/crm-client";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, visitWallClock } from "@/lib/format";
 import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
@@ -1172,7 +1172,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       const label =
         sourceVisit.visitTypeLabel ||
         `Visit #${sourceVisit.sequenceNumber || 1}`;
-      const when = sourceVisit.scheduledAt || sourceVisit.completedAt;
+      // Booked visits read in the zone they were booked in (matches the Schedule calendar).
+      const when = sourceVisit.scheduledAt
+        ? visitWallClock(sourceVisit.scheduledAt, sourceVisit.tzOffsetMinutes)
+        : sourceVisit.completedAt;
       return `Site assessment · ${label}${when ? ` · ${formatDate(when)}` : ""}`;
     }
     if (opportunity.prepChoice === "create_now") return "Created directly";

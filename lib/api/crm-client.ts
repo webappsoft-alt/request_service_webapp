@@ -2610,6 +2610,11 @@ export async function querySchedule(query: CrmListQuery = {}) {
       estList.forEach((est) => {
         if (!est.id || existingIds.has(est.id)) return;
         if (est.isArchived || est.isArchieved) return;
+        // An AI site-assessment draft is already on the calendar as its (AI Booked) visit, and an
+        // AI draft with no visit date isn't an appointment: keep both off the calendar until the
+        // Pro schedules them. Estimates the Pro creates are unaffected.
+        if (est.type === "site_assessment") return;
+        if (est.source === "ai_receptionist" && !est.scheduledDate) return;
         const dateSource =
           est.scheduledDate ||
           est.siteVisit?.scheduledAt ||

@@ -317,6 +317,8 @@ export type PortalCalendarEvent = {
   price?: string;
   /** Service category / type label */
   category?: string;
+  /** "ai_receptionist" when the AI receptionist booked it on a call (shown as "AI Booked"). */
+  source?: string;
 };
 
 const MULTI_SCHEDULE_KINDS = new Set<PortalEventKind>(["estimate", "visit"]);

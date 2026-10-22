@@ -140,6 +140,8 @@ export type EstimateV2SiteAssessment = {
   assignedEmployeeId?: string | null;
   assignedEmployeeName?: string;
   scheduledAt?: string | null;
+  /** getTimezoneOffset() of whoever booked it (the property's zone for AI-booked visits). */
+  tzOffsetMinutes?: number | null;
   durationMinutes?: number;
   instructions?: string;
   status: VisitStatus;

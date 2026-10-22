@@ -44,7 +44,7 @@ import {
 } from "@/lib/api/estimate-v2-client";
 import { WorkItemsEditor } from "@/components/portal/estimate-v2/work-items-editor";
 import { employeeName, type PortalEmployee } from "@/lib/data/portal";
-import { formatDate } from "@/lib/format";
+import { formatDate, visitWallClock } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { DateTimeField } from "@/components/ui/date-time-field";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -720,7 +720,7 @@ export function SiteVisitsPanel({
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-slate-500">
-                        {visit.scheduledAt ? formatDate(visit.scheduledAt) : "No time set"}
+                        {visit.scheduledAt ? formatDate(visitWallClock(visit.scheduledAt, visit.tzOffsetMinutes)) : "No time set"}
                         {visit.assignedEmployeeName ? ` · ${visit.assignedEmployeeName}` : ""}
                       </p>
                       <p className="mt-1.5 text-[11px] text-slate-400">
@@ -826,7 +826,7 @@ export function SiteVisitsPanel({
             <p className="mt-4 text-sm leading-relaxed text-slate-500">
               {[
                 selected.assignedEmployeeName || (employeeId ? "Technician assigned" : "Unassigned"),
-                selected.scheduledAt ? formatDate(selected.scheduledAt) : null,
+                selected.scheduledAt ? formatDate(visitWallClock(selected.scheduledAt, selected.tzOffsetMinutes)) : null,
                 `${selected.photos?.length || 0} photos`,
                 `${(selected.workItems || []).filter((item) => String(item.description || "").trim()).length} work items`,
               ]

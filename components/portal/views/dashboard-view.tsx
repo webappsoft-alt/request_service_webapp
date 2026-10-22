@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { AiCallActivityCard } from "@/components/ai-calling/ai-call-activity-card";
 import { DashboardSwitcher } from "@/components/portal/dashboard-switcher";
 import { DashboardActionAlerts } from "@/components/portal/dashboard-action-alerts";
 import { DashboardActionCenter } from "@/components/portal/dashboard-action-center";
@@ -345,6 +346,9 @@ export function DashboardView() {
           loading={loading}
           error={error}
         />
+
+        {/* What the AI receptionist booked / captured (drafts wait for the Pro to send) */}
+        <AiCallActivityCard />
 
         <PeriodBar value={period} onChange={setPeriod} />
 

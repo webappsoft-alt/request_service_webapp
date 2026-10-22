@@ -186,6 +186,10 @@ export type RealtimeEvents = {
     customerName?: string;
     title?: string;
     href?: string;
+    /** "site_assessment" when the AI receptionist booked an on-site visit. */
+    type?: string;
+    visitAt?: string;
+    visitLabel?: string;
   };
   ESTIMATE_ACCEPTED: {
     estimateId?: string;

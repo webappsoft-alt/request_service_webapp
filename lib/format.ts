@@ -10,6 +10,21 @@ const dayLabels: Record<WorkingHours["day"], string> = {
   sunday: "Sunday",
 };
 
+/**
+ * A site visit's start in the timezone it was booked in (`tzOffsetMinutes`, same sign as
+ * getTimezoneOffset), as a Date whose local fields show that wall clock — the same day/time
+ * the Schedule calendar shows. A Denver 2 PM visit stays "Oct 23, 2 PM" for a Pro abroad.
+ * Without an offset the instant is returned as-is (browser time).
+ */
+export function visitWallClock(scheduledAt?: string | null, tzOffsetMinutes?: number | null) {
+  if (!scheduledAt) return null;
+  const instant = new Date(scheduledAt);
+  if (Number.isNaN(instant.getTime())) return null;
+  if (typeof tzOffsetMinutes !== "number" || !Number.isFinite(tzOffsetMinutes)) return instant;
+  const wall = new Date(instant.getTime() - tzOffsetMinutes * 60000);
+  return new Date(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate(), wall.getUTCHours(), wall.getUTCMinutes());
+}
+
 export function formatDate(value?: string | Date | null) {
   if (!value) return "—";
   try {

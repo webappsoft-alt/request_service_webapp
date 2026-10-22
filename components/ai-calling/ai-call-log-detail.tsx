@@ -31,6 +31,7 @@ const EVENT_TONE: Record<string, string> = {
   lead_updated: "bg-emerald-500",
   estimate_drafted: "bg-violet-500",
   estimate_updated: "bg-violet-500",
+  assessment_booked: "bg-violet-500",
   transfer: "bg-sky-500",
   out_of_scope: "bg-amber-500",
   error: "bg-destructive",

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } 
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,21 @@ import {
 import { formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+
+/** Visits the AI receptionist booked on a phone call keep the normal card; only this badge marks them. */
+const isAiBooked = (event: { source?: string }) => event.source === "ai_receptionist";
+
+/** White pill (reads on any card colour) with the project AI gradient behind the sparkle, like the RS AI Assistant. */
+function AiBookedChip() {
+  return (
+    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-0.5 text-[9.5px] leading-none font-semibold text-primary shadow-sm ring-1 ring-primary/10">
+      <span className="flex size-3.5 items-center justify-center rounded-full bg-linear-to-br from-primary via-primary to-primary/80 text-primary-foreground">
+        <Sparkles className="size-2" aria-hidden="true" />
+      </span>
+      AI Booked Visit
+    </span>
+  );
+}
 
 export function getEventDetailUrl(event: PortalCalendarEvent): string {
   const id = event.recordId || event.id;
@@ -1411,7 +1426,7 @@ function TimedBar({
         calendarEventTone(event.kind),
         isCut && "opacity-40 saturate-50 grayscale-[30%]",
       )}
-      title={`${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`}
+      title={`${isAiBooked(event) ? "Booked by your AI receptionist · " : ""}${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`}
     >
       {/* Technician header — only shown when technician is assigned */}
       {event.technicianName || (resolvedLabel && resolvedLabel !== "Unassigned") ? (
@@ -1423,6 +1438,7 @@ function TimedBar({
       {/* Main card details */}
       <div className="min-w-0 flex-1 flex flex-col justify-between gap-0.5">
         <div className="space-y-0.5">
+          {isAiBooked(event) ? <AiBookedChip /> : null}
           {/* Job No */}
           <span className="truncate text-xs font-bold leading-tight block">{event.title}</span>
 
@@ -1581,7 +1597,7 @@ function CalendarChip({
         calendarEventTone(event.kind),
         isCut && "opacity-40 saturate-50 grayscale-[30%]",
       )}
-      title={`${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`}
+      title={`${isAiBooked(event) ? "Booked by your AI receptionist · " : ""}${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`}
     >
       {/* Technician header — only shown when assigned */}
       {event.technicianName || (resolvedLabel && resolvedLabel !== "Unassigned") ? (
@@ -1592,7 +1608,8 @@ function CalendarChip({
 
       {/* Main card details */}
       <div className="min-w-0 space-y-0.5">
-        {/* Job No */}
+        {isAiBooked(event) ? <AiBookedChip /> : null}
+          {/* Job No */}
         <span className="block truncate text-[11px] font-bold leading-snug">{event.title}</span>
 
         {/* Estimate / Job / Request / Task Name */}

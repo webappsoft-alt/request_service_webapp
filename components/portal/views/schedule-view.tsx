@@ -838,6 +838,16 @@ export function ScheduleView() {
     void loadSchedule();
   }, [loadSchedule]);
 
+  // A visit the AI receptionist books (or a new lead / estimate) shows up without a reload.
+  useEffect(() => {
+    const onRealtime = (event: Event) => {
+      const type = (event as CustomEvent<{ type?: string }>).detail?.type;
+      if (type === "ESTIMATE_CREATED" || type === "LEAD_CREATED") void loadSchedule({ quiet: true });
+    };
+    window.addEventListener("rs-realtime", onRealtime);
+    return () => window.removeEventListener("rs-realtime", onRealtime);
+  }, [loadSchedule]);
+
   useEffect(() => {
     if (initialEmployeeId) setMemberFilter(initialEmployeeId);
   }, [initialEmployeeId]);

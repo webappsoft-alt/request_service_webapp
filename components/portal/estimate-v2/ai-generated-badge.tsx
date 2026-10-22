@@ -3,9 +3,11 @@ import { cn } from "@/lib/utils";
 
 /** Source value for estimates the AI receptionist drafted from a phone call. */
 export const AI_RECEPTIONIST_SOURCE = "ai_receptionist";
+/** Source value for leads the AI receptionist saved from a call without a booked visit. */
+export const AI_PHONE_CALL_SOURCE = "ai_phone_call";
 
 export function isAiGenerated(source?: string | null) {
-  return source === AI_RECEPTIONIST_SOURCE;
+  return source === AI_RECEPTIONIST_SOURCE || source === AI_PHONE_CALL_SOURCE;
 }
 
 /** "AI Generated" pill for drafts created by the AI receptionist (review before sending). */

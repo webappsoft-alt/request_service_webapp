@@ -62,7 +62,7 @@ function sourceLabel(source?: string) {
   if (source === "quote_request") return "Lead";
   if (source === "phone") return "Phone";
   if (source === "walk_in") return "Walk-in";
-  if (source === "ai_receptionist") return "AI phone call";
+  if (source === "ai_receptionist" || source === "ai_phone_call") return "AI phone call";
   return source || "Direct";
 }
 

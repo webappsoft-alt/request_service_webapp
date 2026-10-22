@@ -14,3 +14,4 @@ export { providerAiCallingAdapter, parseAiCallingSettings, AI_CALLING_ENDPOINT }
 export { AI_VOICES, DEFAULT_GREETING, DEFAULT_AI_CALLING_SETTINGS, GREETING_MAX_LENGTH } from "./constants";
 export { formatPhone, isValidE164, normalizePhone } from "./phone";
 export type * from "./types";
+export { AiCallActivityCard, fetchAiCallActivity, type AiCallActivity } from "./ai-call-activity-card";

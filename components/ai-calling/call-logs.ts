@@ -118,6 +118,7 @@ export const EVENT_LABELS: Record<string, string> = {
   lead_updated: "Existing lead updated",
   estimate_drafted: "Draft estimate created",
   estimate_updated: "Draft estimate updated",
+  assessment_booked: "On-site assessment booked",
   transfer: "Transferred to a person",
   ended_by_ai: "AI ended the call",
   silence_check: "Caller went quiet, AI checked in",

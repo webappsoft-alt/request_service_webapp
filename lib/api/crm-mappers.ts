@@ -1295,6 +1295,8 @@ export function mapEstimate(raw: unknown): Estimate | null {
     ),
     shareToken: trimmed(record.shareToken || record.token || record.share_token) || undefined,
     shareUrl: trimmed(record.shareUrl || record.customerUrl || record.publicUrl) || undefined,
+    type: trimmed(record.type) || undefined,
+    source: trimmed(record.source) || undefined,
     isArchived: record.isArchived !== undefined || record.isArchieved !== undefined
       ? Boolean(record.isArchived ?? record.isArchieved)
       : undefined,
@@ -2530,6 +2532,7 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     serviceAddress,
     price,
     category,
+    source: trimmed(record.source) || undefined,
   };
 }
 

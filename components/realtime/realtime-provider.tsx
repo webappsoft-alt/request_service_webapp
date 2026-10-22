@@ -413,7 +413,15 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("ESTIMATE_CREATED", (payload) => {
         broadcastRealtime({ type: "ESTIMATE_CREATED", payload });
         window.dispatchEvent(new Event("rs-crm-api"));
-        if (payload?.source === "ai_receptionist") {
+        if (payload?.source === "ai_receptionist" && payload?.type === "site_assessment") {
+          const href = payload.href ? String(payload.href) : "/pro/dashboard/schedule";
+          const who = payload.customerName ? ` with ${payload.customerName}` : "";
+          showNotificationToast(
+            "On-site assessment booked",
+            `AI Receptionist booked a visit${who}${payload.visitLabel ? ` for ${payload.visitLabel}` : ""}. Draft ${payload.number || "estimate"} is ready for review.`,
+            { href, onOpen: () => router.push(href) },
+          );
+        } else if (payload?.source === "ai_receptionist") {
           const href = payload.href ? String(payload.href) : "/pro/dashboard/new-estimate";
           const forCustomer = payload.customerName ? ` for ${payload.customerName}` : "";
           showNotificationToast(

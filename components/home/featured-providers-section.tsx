@@ -53,8 +53,6 @@ export function FeaturedProvidersSection() {
     void dispatch(
       fetchPublicProfessionals({
         query: {
-          sortBy: "newest",
-          sortOrder: "desc",
           zipCode:
             usable &&
             !(
@@ -79,6 +77,7 @@ export function FeaturedProvidersSection() {
   }, [
     customerLocation.address,
     customerLocation.city,
+    customerLocation.state,
     customerLocation.detecting,
     customerLocation.latitude,
     customerLocation.longitude,

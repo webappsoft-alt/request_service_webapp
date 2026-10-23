@@ -113,6 +113,14 @@ export function ServicesSection({
     parentId ? selectSubcategoriesForParent(state, parentId) : [],
   );
   const subMeta = parentId ? subMetaByParent[parentId] : undefined;
+  const city = useAppSelector((state) => state.location.city.trim());
+  const region = useAppSelector((state) => state.location.state.trim());
+  const zipCode = useAppSelector((state) => state.location.zip.trim());
+  const lat = useAppSelector((state) => state.location.latitude);
+  const lng = useAppSelector((state) => state.location.longitude);
+  const hasCityState = Boolean(city && region);
+  // Any location the sub-categories request is filtered by (see fetchSubcategories).
+  const hasLocationFilter = Boolean(region || zipCode || (lat != null && lng != null));
 
   useEffect(() => {
     void dispatch(fetchParentCategories());
@@ -145,18 +153,35 @@ export function ServicesSection({
 
   useEffect(() => {
     if (!parentId) return;
-    void dispatch(fetchSubcategories({ parentId }));
-  }, [dispatch, parentId]);
+    void dispatch(
+      fetchSubcategories({ parentId, city, state: region, zipCode, lat, lng }),
+    );
+  }, [dispatch, parentId, city, region, zipCode, lat, lng]);
 
   useEffect(() => {
     if (!parentId || !subMeta?.hasMore) return;
     if (loadingSubcategories || loadingMoreSubcategories) return;
-    void dispatch(fetchSubcategories({ parentId, append: true }));
+    void dispatch(
+      fetchSubcategories({
+        parentId,
+        append: true,
+        city,
+        state: region,
+        zipCode,
+        lat,
+        lng,
+      }),
+    );
   }, [
+    city,
     dispatch,
+    lat,
+    lng,
     loadingMoreSubcategories,
     loadingSubcategories,
     parentId,
+    region,
+    zipCode,
     subMeta?.hasMore,
     subMeta?.page,
   ]);
@@ -199,13 +224,13 @@ export function ServicesSection({
       : loadingParents || !parentsLoaded);
 
   const eyebrow = selectedParent?.name ?? selected?.name ?? "Services";
-  const heading = selectedParent
-    ? `${selectedParent.name} services`
-    : selected?.name
-      ? `${selected.name} services`
-      : "Browse services";
+  const categoryName = selectedParent?.name ?? selected?.name ?? "";
+  const locationSuffix = hasCityState ? ` in ${city}, ${region}` : "";
+  const heading = categoryName
+    ? `${categoryName} Services${locationSuffix}`
+    : "Browse services";
   const description = selectedParent
-    ? `Pick a ${selectedParent.name.toLowerCase()} job to see local companies and typical starting prices.`
+    ? `Explore ${selectedParent.name.toLowerCase()} repairs, installations, maintenance, and more. Find local ${selectedParent.name.toLowerCase()} professionals, compare estimates, and choose the right service for your home.`
     : "Pick a category above, or browse every main service we list. Select a category to see its sub-services.";
   const seeAllHref = selectedParent
     ? servicesDirectoryHref(selectedParent.slug || selectedParent.id)
@@ -268,7 +293,9 @@ export function ServicesSection({
 
         {!showSkeleton && !cards.length ? (
           <p className="text-sm text-muted-foreground">
-            {showingSubs
+            {showingSubs && hasLocationFilter
+              ? `No services in this category${locationSuffix || " in your area"} yet. Try another location or category.`
+              : showingSubs
               ? "No sub-services in this category yet. Try another category, or browse all services."
               : "No services are published yet. Check back soon."}
           </p>

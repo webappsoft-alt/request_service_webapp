@@ -25,6 +25,8 @@ type SubMeta = {
   page: number;
   totalPages: number;
   hasMore: boolean;
+  /** City + State the cached page was fetched for ("" when unfiltered). */
+  locationKey: string;
 };
 
 type CategoriesState = {
@@ -45,7 +47,37 @@ type CategoriesState = {
 };
 
 const PARENTS_PAGE_SIZE = 50;
-const SUBS_PAGE_SIZE = 50;
+const SUBS_PAGE_SIZE = 10;
+
+type SubsLocation = Pick<FetchSubsArg, "city" | "state" | "zipCode" | "lat" | "lng">;
+
+/**
+ * Location filter for sub-categories — same standard as Fixed Services: a state (alone = the
+ * whole state), City + State, a ZIP or a pin. The API resolves a ZIP / pin to City + State and
+ * a place outside the US covers nothing. No location → null (full catalog).
+ */
+function subsLocationParams({ city, state, zipCode, lat, lng }: SubsLocation) {
+  const trimmedState = state?.trim() ?? "";
+  const trimmedCity = trimmedState ? (city?.trim() ?? "") : "";
+  const trimmedZip = zipCode?.trim() ?? "";
+  const hasCoords =
+    lat != null && Number.isFinite(lat) && lng != null && Number.isFinite(lng);
+  const params: Record<string, string | number> = {};
+  if (trimmedCity) params.city = trimmedCity;
+  if (trimmedState) params.state = trimmedState;
+  if (trimmedZip) params.zipCode = trimmedZip;
+  // A pin is sent only when it is the sole location.
+  if (hasCoords && !trimmedState && !trimmedZip) {
+    params.lat = lat;
+    params.lng = lng;
+  }
+  return Object.keys(params).length ? params : null;
+}
+
+function subsLocationKey(location: SubsLocation) {
+  const params = subsLocationParams(location);
+  return params ? Object.values(params).join("|").toLowerCase() : "";
+}
 
 const initialState: CategoriesState = {
   parents: [],
@@ -205,6 +237,12 @@ export type FetchParentsResult = {
 export type FetchSubsArg = {
   parentId: string;
   append?: boolean;
+  /** Customer location (see `subsLocationParams`); none → full catalog. */
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type FetchSubsResult = {
@@ -214,6 +252,7 @@ export type FetchSubsResult = {
   totalPages: number;
   hasMore: boolean;
   append: boolean;
+  locationKey: string;
 };
 
 /**
@@ -311,12 +350,17 @@ export const fetchSubcategories = createAsyncThunk<
   { state: { categories: CategoriesState }; rejectValue: string }
 >(
   "categories/fetchSubcategories",
-  async ({ parentId, append = false }, { getState, rejectWithValue }) => {
+  async (
+    { parentId, append = false, ...place },
+    { getState, rejectWithValue },
+  ) => {
     const state = getState().categories;
     const meta = state.subMetaByParent[parentId];
     const cached = state.subcategoriesByParent[parentId];
+    const location = subsLocationParams(place);
+    const locationKey = subsLocationKey(place);
 
-    if (!append && cached && meta) {
+    if (!append && cached && meta && meta.locationKey === locationKey) {
       return {
         parentId,
         items: cached,
@@ -324,6 +368,7 @@ export const fetchSubcategories = createAsyncThunk<
         totalPages: meta.totalPages,
         hasMore: meta.hasMore,
         append: false,
+        locationKey,
       };
     }
 
@@ -336,6 +381,7 @@ export const fetchSubcategories = createAsyncThunk<
           page: nextPage,
           limit: SUBS_PAGE_SIZE,
           parent_category_id: parentId,
+          ...(location ?? {}),
         },
         { silent: true, token: null },
       );
@@ -353,13 +399,14 @@ export const fetchSubcategories = createAsyncThunk<
         totalPages: pagination.totalPages,
         hasMore,
         append,
+        locationKey,
       };
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
     }
   },
   {
-    condition: ({ parentId, append = false }, { getState }) => {
+    condition: ({ parentId, append = false, ...place }, { getState }) => {
       if (!parentId) return false;
       const state = getState().categories;
       if (append) {
@@ -369,6 +416,8 @@ export const fetchSubcategories = createAsyncThunk<
         const meta = state.subMetaByParent[parentId];
         // Trust hasMore from the last response (do not block on totalPages alone).
         if (!meta?.hasMore) return false;
+        // Never append a page for a different location onto the cached list.
+        if (meta.locationKey !== subsLocationKey(place)) return false;
         return true;
       }
       if (state.loadingSubcategories) return false;
@@ -470,10 +519,12 @@ const categoriesSlice = createSlice({
       .addCase(fetchSubcategories.pending, (state, action) => {
         const append = Boolean(action.meta.arg?.append);
         const parentId = action.meta.arg?.parentId ?? "";
+        const meta = state.subMetaByParent[parentId];
         if (append) state.loadingMoreSubcategories = true;
         else if (
           !state.subcategoriesByParent[parentId] ||
-          !state.subMetaByParent[parentId]
+          !meta ||
+          meta.locationKey !== subsLocationKey(action.meta.arg ?? {})
         ) {
           state.loadingSubcategories = true;
         }
@@ -482,10 +533,10 @@ const categoriesSlice = createSlice({
       .addCase(fetchSubcategories.fulfilled, (state, action) => {
         state.loadingSubcategories = false;
         state.loadingMoreSubcategories = false;
-        const { parentId, items, page, totalPages, hasMore, append } =
+        const { parentId, items, page, totalPages, hasMore, append, locationKey } =
           action.payload;
 
-        state.subMetaByParent[parentId] = { page, totalPages, hasMore };
+        state.subMetaByParent[parentId] = { page, totalPages, hasMore, locationKey };
 
         if (append) {
           const current = state.subcategoriesByParent[parentId] ?? [];

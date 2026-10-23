@@ -394,10 +394,9 @@ export function CategoryExplorer({
           zip: zipFromAddress || undefined,
         }),
       );
-      return;
     }
-    // Empty location box → full unfiltered catalog (ignore leftover Redux geo).
-    dispatch(clearLocation());
+    // No URL location: keep the app-wide Redux location (e.g. picked on the landing page) so the
+    // input and the City + State filter stay in sync. Clearing the input still shows all pros.
   }, [dispatch, initialAddress, useLive]);
 
   // Do not auto-detect browser location — empty location must return the full catalog.

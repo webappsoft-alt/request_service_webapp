@@ -27,19 +27,87 @@ import { formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-/** Visits the AI receptionist booked on a phone call keep the normal card; only this badge marks them. */
+/** Visits the AI receptionist booked on a phone call get their own light AI card, not the solid card. */
 const isAiBooked = (event: { source?: string }) => event.source === "ai_receptionist";
 
-/** White pill (reads on any card colour) with the project AI gradient behind the sparkle, like the RS AI Assistant. */
-function AiBookedChip() {
+/** AI card surface — light and tinted, set apart from the solid job / estimate card tones. */
+const AI_VISIT_TONE =
+  "overflow-hidden border-primary/15 bg-linear-to-br from-primary/10 via-card to-card text-foreground shadow-sm hover:-translate-y-px hover:shadow-md dark:from-primary/25";
+
+/** "Jane Tester" → "JT". */
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "")).toUpperCase();
+}
+
+/**
+ * AI card body: gradient "AI Booked" badge + time tag, the visit title and detail, the customer,
+ * and the site address pinned to the bottom (the card stretches to its calendar row).
+ */
+function AiVisitCard({ event, time }: { event: PortalCalendarEvent; time: string }) {
   return (
-    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white py-0.5 pr-2 pl-0.5 text-[9.5px] leading-none font-semibold text-primary shadow-sm ring-1 ring-primary/10">
-      <span className="flex size-3.5 items-center justify-center rounded-full bg-linear-to-br from-primary via-primary to-primary/80 text-primary-foreground">
-        <Sparkles className="size-2" aria-hidden="true" />
+    <>
+      {/* Gradient accent bar, like the RS AI Assistant */}
+      <span
+        className="absolute inset-y-0 left-0 w-1 bg-linear-to-b from-primary to-primary/70"
+        aria-hidden="true"
+      />
+      <span className="flex min-w-0 flex-1 flex-col gap-1 pl-1.5">
+        <span className="flex min-w-0 items-center justify-between gap-1">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-linear-to-r from-primary to-primary/80 px-1.5 py-0.5 text-[9px] leading-none font-semibold text-primary-foreground shadow-sm shadow-primary/30">
+            <Sparkles className="size-2.5" aria-hidden="true" />
+            AI Booked
+          </span>
+          <span className="truncate rounded-sm bg-primary/10 px-1 py-0.5 text-[8.5px] leading-none font-bold tracking-wide text-primary uppercase dark:text-primary-foreground">
+            {time}
+          </span>
+        </span>
+
+        <span className="min-w-0">
+          <span className="block truncate text-[12px] leading-tight font-bold">{event.title}</span>
+          {event.detail && event.detail !== event.title ? (
+            <span className="block truncate text-[10px] leading-tight font-medium text-muted-foreground">
+              {event.detail}
+            </span>
+          ) : null}
+        </span>
+
+        {event.customerName ? (
+          <span className="flex min-w-0 items-center gap-1.5 text-[10px] leading-tight font-medium">
+            <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[7.5px] font-bold text-primary dark:text-primary-foreground">
+              {initials(event.customerName)}
+            </span>
+            <span className="truncate">{event.customerName}</span>
+          </span>
+        ) : null}
+
+        {event.serviceAddress ? (
+          <span className="mt-auto flex min-w-0 items-center gap-1 border-t border-primary/10 pt-1 text-[9.5px] leading-tight text-muted-foreground">
+            <svg className="size-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+            <span className="truncate">{event.serviceAddress}</span>
+          </span>
+        ) : null}
       </span>
-      AI Booked Visit
-    </span>
+    </>
   );
+}
+
+/** Hover text for an AI card: the full details, including what the card truncates. */
+function aiVisitTooltip(event: PortalCalendarEvent, time: string) {
+  return [
+    "Booked by your AI receptionist",
+    event.title,
+    event.detail,
+    event.customerName,
+    event.serviceAddress,
+    event.date ? `${formatDate(event.date)} · ${time}` : time,
+    "Click to open details, right-click for options",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function getEventDetailUrl(event: PortalCalendarEvent): string {
@@ -1422,12 +1490,20 @@ function TimedBar({
         width: `calc(${widthPct}% - 6px)`,
       }}
       className={cn(
-        "pointer-events-auto absolute z-20 flex cursor-pointer select-none flex-col justify-start rounded-md p-1.5 text-left active:cursor-grabbing transition shadow-sm hover:shadow-lg hover:brightness-105 border border-white/25",
-        calendarEventTone(event.kind),
+        "pointer-events-auto absolute z-20 flex cursor-pointer select-none flex-col justify-start rounded-md p-1.5 text-left active:cursor-grabbing transition shadow-sm hover:shadow-lg hover:brightness-105 border",
+        isAiBooked(event) ? AI_VISIT_TONE : ["border-white/25", calendarEventTone(event.kind)],
         isCut && "opacity-40 saturate-50 grayscale-[30%]",
       )}
-      title={`${isAiBooked(event) ? "Booked by your AI receptionist · " : ""}${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`}
+      title={
+        isAiBooked(event)
+          ? aiVisitTooltip(event, `${formatClock(times.start)} – ${formatClock(end)}`)
+          : `${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`
+      }
     >
+      {isAiBooked(event) ? (
+        <AiVisitCard event={event} time={`${formatClock(times.start)} – ${formatClock(end)}`} />
+      ) : (
+      <>
       {/* Technician header — only shown when technician is assigned */}
       {event.technicianName || (resolvedLabel && resolvedLabel !== "Unassigned") ? (
         <div className="-mx-1.5 -mt-1.5 mb-1 flex items-center bg-neutral-900 text-white dark:bg-black dark:text-neutral-100 px-2 py-0.5 rounded-t-sm text-[10px] leading-tight font-semibold">
@@ -1438,7 +1514,6 @@ function TimedBar({
       {/* Main card details */}
       <div className="min-w-0 flex-1 flex flex-col justify-between gap-0.5">
         <div className="space-y-0.5">
-          {isAiBooked(event) ? <AiBookedChip /> : null}
           {/* Job No */}
           <span className="truncate text-xs font-bold leading-tight block">{event.title}</span>
 
@@ -1497,12 +1572,17 @@ function TimedBar({
           </span>
         </div>
       </div>
+      </>
+      )}
 
       {/* Side handle for dragging across days to extend date range in time grid */}
       <span
         draggable
         onDragStart={(drag) => startDrag("resize", drag)}
-        className="absolute top-0 bottom-1.5 right-0 w-2 cursor-ew-resize rounded-r-md bg-white/40 hover:bg-white/70"
+        className={cn(
+          "absolute top-0 bottom-1.5 right-0 w-2 cursor-ew-resize rounded-r-md",
+          isAiBooked(event) ? "bg-primary/15 hover:bg-primary/30" : "bg-white/40 hover:bg-white/70",
+        )}
         aria-label="Extend dates"
         title="Drag right to extend dates across days"
       />
@@ -1531,7 +1611,10 @@ function TimedBar({
           handle.addEventListener("pointermove", move);
           handle.addEventListener("pointerup", up);
         }}
-        className="absolute bottom-0 inset-x-0 h-1.5 cursor-s-resize rounded-b-md bg-white/40 hover:bg-white/70"
+        className={cn(
+          "absolute bottom-0 inset-x-0 h-1.5 cursor-s-resize rounded-b-md",
+          isAiBooked(event) ? "bg-primary/15 hover:bg-primary/30" : "bg-white/40 hover:bg-white/70",
+        )}
         aria-label="Extend time"
         title="Drag down to extend time"
       />
@@ -1593,12 +1676,32 @@ function CalendarChip({
         onContextMenu?.(menu, event);
       }}
       className={cn(
-        "relative flex cursor-pointer select-none flex-col gap-0.5 rounded-md p-1.5 text-left active:cursor-grabbing shadow-xs transition hover:shadow-md hover:brightness-105 border border-white/20 h-auto w-full",
-        calendarEventTone(event.kind),
+        "relative flex cursor-pointer select-none flex-col gap-0.5 text-left active:cursor-grabbing shadow-xs transition hover:shadow-md hover:brightness-105 border h-auto w-full",
+        isAiBooked(event)
+          ? ["h-full rounded-md p-1.5", AI_VISIT_TONE]
+          : ["rounded-md p-1.5 border-white/20", calendarEventTone(event.kind)],
         isCut && "opacity-40 saturate-50 grayscale-[30%]",
       )}
-      title={`${isAiBooked(event) ? "Booked by your AI receptionist · " : ""}${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`}
+      title={
+        isAiBooked(event)
+          ? aiVisitTooltip(
+              event,
+              isAllDay(event) ? windowShort(event.timeWindow) : `${formatClock(times.start)} – ${formatClock(times.end)}`,
+            )
+          : `${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`
+      }
     >
+      {isAiBooked(event) ? (
+        <AiVisitCard
+          event={event}
+          time={
+            isAllDay(event)
+              ? windowShort(event.timeWindow)
+              : `${formatClock(times.start)} – ${formatClock(times.end)}`
+          }
+        />
+      ) : (
+      <>
       {/* Technician header — only shown when assigned */}
       {event.technicianName || (resolvedLabel && resolvedLabel !== "Unassigned") ? (
         <div className="-mx-1.5 -mt-1.5 mb-1 flex items-center bg-neutral-900 text-white dark:bg-black dark:text-neutral-100 px-1.5 py-0.5 rounded-t-sm text-[10px] leading-tight font-semibold">
@@ -1608,8 +1711,7 @@ function CalendarChip({
 
       {/* Main card details */}
       <div className="min-w-0 space-y-0.5">
-        {isAiBooked(event) ? <AiBookedChip /> : null}
-          {/* Job No */}
+        {/* Job No */}
         <span className="block truncate text-[11px] font-bold leading-snug">{event.title}</span>
 
         {/* Estimate / Job / Request / Task Name */}
@@ -1672,6 +1774,8 @@ function CalendarChip({
           </span>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

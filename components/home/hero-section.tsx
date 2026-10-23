@@ -4,9 +4,9 @@ import { Container } from "@/components/layout/container";
 import { HERO_HOME_IMAGE } from "@/lib/site";
 
 const trustMarkers = [
-  { icon: ShieldCheck, label: "Licensed and insured" },
-  { icon: FileCheck2, label: "Itemized estimates" },
-  { icon: Wallet, label: "Flexible payment schedules" },
+  { icon: ShieldCheck, label: "Local professionals" },
+  { icon: FileCheck2, label: "Written estimates" },
+  { icon: Wallet, label: "Clear project details" },
 ];
 
 export function HeroSection() {
@@ -43,16 +43,17 @@ export function HeroSection() {
           <div className="enter-stagger flex max-w-3xl flex-col items-start gap-3 text-white">
             <span className="flex items-center gap-3">
               <span className="h-px w-8 bg-white/50" aria-hidden="true" />
-              <span className="eyebrow text-white/80">Homeowners hire. Pros get the work.</span>
+              <span className="eyebrow text-white/80">Home services, made simple.</span>
             </span>
 
             <h1 className="text-[1.85rem] leading-[1.08] text-white sm:text-[2.35rem] lg:text-[3rem]">
-              <span className="block">Hire a licensed local pro.</span>
-              <span className="block">Get the work in writing.</span>
+              <span className="block">Big Project. Small Repair.</span>
+              <span className="block">Find the Right Pro.</span>
             </h1>
 
             <p className="max-w-2xl text-sm text-white/80 md:text-base">
-              Search by service and ZIP. Compare estimates. Hire with a signed scope.
+              Connect with local home service professionals for repairs, maintenance, and
+              remodeling. Explore profiles, compare written estimates, and choose with confidence.
             </p>
 
             <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5">

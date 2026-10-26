@@ -11,8 +11,10 @@ import {
   ImageIcon,
   Loader2,
   Music,
+  Plus,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -42,7 +44,7 @@ import { RecordWorkspace } from "@/components/portal/record-workspace";
 import { StatusPill } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
-import { weekdayLabel, type EmployeeDayHours, defaultAvailability } from "@/components/portal/use-employee-file";
+import { weekdayLabel, defaultAvailability } from "@/components/portal/use-employee-file";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
@@ -155,34 +157,74 @@ function hireDateApiValue(value: string) {
   return `${trimmed}T00:00:00.000Z`;
 }
 
-function availabilityFromWorkingHours(hours?: PortalEmployeeWorkingHours[]): EmployeeDayHours[] {
-  const byDay = new Map((hours ?? []).map((item) => [item.day, item]));
+type ShiftTimes = { start: string; end: string };
+/** One weekday in the Availability tab: off, or one or more shifts (e.g. 08:00–13:00 and 16:00–18:00). */
+type DayShifts = { day: number; off: boolean; shifts: ShiftTimes[] };
+
+function availabilityFromWorkingHours(hours?: PortalEmployeeWorkingHours[]): DayShifts[] {
   return WEEKDAY_INDEX.map((day, index) => {
-    const match = byDay.get(day);
-    if (!match) {
-      return {
-        day: index,
-        off: index === 0 || index === 6,
-        start: "08:00",
-        end: "17:00",
-      };
+    const rows = (hours ?? [])
+      .filter((item) => item.day === day)
+      .sort((a, b) => a.startMinutes - b.startMinutes);
+    if (!rows.length) {
+      return { day: index, off: index === 0 || index === 6, shifts: [{ start: "08:00", end: "17:00" }] };
     }
+    const active = rows.filter((item) => item.active);
     return {
       day: index,
-      off: !match.active,
-      start: minutesToTimeInput(match.startMinutes),
-      end: minutesToTimeInput(match.endMinutes),
+      off: !active.length,
+      // A day off keeps its last hours so switching it back on restores them.
+      shifts: (active.length ? active : rows.slice(0, 1)).map((item) => ({
+        start: minutesToTimeInput(item.startMinutes),
+        end: minutesToTimeInput(item.endMinutes),
+      })),
     };
   });
 }
 
-function workingHoursFromAvailability(days: EmployeeDayHours[]): PortalEmployeeWorkingHours[] {
-  return days.map((item) => ({
-    day: WEEKDAY_INDEX[item.day] ?? "monday",
-    startMinutes: timeInputToMinutes(item.start || "08:00"),
-    endMinutes: timeInputToMinutes(item.end || "17:00"),
-    active: !item.off,
+function defaultShifts(): DayShifts[] {
+  return defaultAvailability().map((item) => ({
+    day: item.day,
+    off: item.off,
+    shifts: [{ start: item.start, end: item.end }],
   }));
+}
+
+/** Every shift is its own interval; a day off is one inactive interval (its remembered hours). */
+function workingHoursFromAvailability(days: DayShifts[]): PortalEmployeeWorkingHours[] {
+  return days.flatMap((item) => {
+    const day = WEEKDAY_INDEX[item.day] ?? "monday";
+    const shifts = item.shifts.length ? item.shifts : [{ start: "08:00", end: "17:00" }];
+    const interval = (shift: ShiftTimes, active: boolean) => ({
+      day,
+      startMinutes: timeInputToMinutes(shift.start || "08:00"),
+      endMinutes: timeInputToMinutes(shift.end || "17:00"),
+      active,
+    });
+    return item.off ? [interval(shifts[0], false)] : shifts.map((shift) => interval(shift, true));
+  });
+}
+
+/** Why the week can't be saved (a shift ending before it starts, or two shifts overlapping), or null. */
+function shiftsError(days: DayShifts[]) {
+  for (const item of days) {
+    if (item.off) continue;
+    const ranges = item.shifts
+      .map((shift) => [timeInputToMinutes(shift.start), timeInputToMinutes(shift.end)] as const)
+      .sort((a, b) => a[0] - b[0]);
+    for (let index = 0; index < ranges.length; index += 1) {
+      if (ranges[index][1] <= ranges[index][0]) return `${weekdayLabel(item.day)}: each shift must end after it starts.`;
+      if (index > 0 && ranges[index][0] < ranges[index - 1][1]) return `${weekdayLabel(item.day)}: shifts overlap.`;
+    }
+  }
+  return null;
+}
+
+/** A second shift after the day's last one (an hour's break, two hours long). */
+function nextShift(shifts: ShiftTimes[]): ShiftTimes {
+  const lastEnd = Math.max(...shifts.map((shift) => timeInputToMinutes(shift.end)), 12 * 60);
+  const start = Math.min(lastEnd + 60, 22 * 60);
+  return { start: minutesToTimeInput(start), end: minutesToTimeInput(Math.min(start + 120, 24 * 60 - 1)) };
 }
 
 export function TeamMemberView({ id }: { id: string }) {
@@ -943,10 +985,10 @@ export function EmployeeAvailabilityTab({
   onActionsChange?: (actions: { saving: boolean; save: () => void } | null) => void;
 }) {
   const hoursKey = JSON.stringify(employee.workingHours ?? null);
-  const [days, setDays] = useState<EmployeeDayHours[]>(() =>
+  const [days, setDays] = useState<DayShifts[]>(() =>
     employee.workingHours?.length
       ? availabilityFromWorkingHours(employee.workingHours)
-      : defaultAvailability(),
+      : defaultShifts(),
   );
   const [saving, setSaving] = useState(false);
 
@@ -954,18 +996,33 @@ export function EmployeeAvailabilityTab({
     setDays(
       employee.workingHours?.length
         ? availabilityFromWorkingHours(employee.workingHours)
-        : defaultAvailability(),
+        : defaultShifts(),
     );
     // hoursKey captures workingHours content without unstable array identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync when employee or hours payload changes
   }, [employee.id, hoursKey]);
 
-  function patch(day: number, next: Partial<EmployeeDayHours>) {
+  function patch(day: number, next: Partial<DayShifts>) {
     setDays((current) => current.map((item) => (item.day === day ? { ...item, ...next } : item)));
+  }
+
+  function patchShift(day: number, index: number, next: Partial<ShiftTimes>) {
+    setDays((current) =>
+      current.map((item) =>
+        item.day === day
+          ? { ...item, shifts: item.shifts.map((shift, at) => (at === index ? { ...shift, ...next } : shift)) }
+          : item,
+      ),
+    );
   }
 
   async function save() {
     if (saving) return;
+    const problem = shiftsError(days);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
     setSaving(true);
     try {
       const workingHours = workingHoursFromAvailability(days);
@@ -1024,8 +1081,7 @@ export function EmployeeAvailabilityTab({
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Day</th>
               <th className="px-3 py-2 text-left font-semibold">Working</th>
-              <th className="px-3 py-2 text-left font-semibold">Start</th>
-              <th className="px-3 py-2 text-left font-semibold">End</th>
+              <th className="px-3 py-2 text-left font-semibold">Shifts</th>
             </tr>
           </thead>
           <tbody>
@@ -1047,22 +1103,54 @@ export function EmployeeAvailabilityTab({
                   </Select>
                 </td>
                 <td className="px-3 py-2">
-                  <Input
-                    type="time"
-                    className="w-32"
-                    disabled={item.off}
-                    value={item.start}
-                    onChange={(event) => patch(item.day, { start: event.target.value })}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <Input
-                    type="time"
-                    className="w-32"
-                    disabled={item.off}
-                    value={item.end}
-                    onChange={(event) => patch(item.day, { end: event.target.value })}
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    {item.shifts.map((shift, index) => (
+                      <div key={index} className="flex flex-wrap items-center gap-1.5">
+                        <Input
+                          type="time"
+                          className="w-32"
+                          aria-label={`${weekdayLabel(item.day)} shift ${index + 1} start`}
+                          disabled={item.off}
+                          value={shift.start}
+                          onChange={(event) => patchShift(item.day, index, { start: event.target.value })}
+                        />
+                        <span className="text-muted-foreground">–</span>
+                        <Input
+                          type="time"
+                          className="w-32"
+                          aria-label={`${weekdayLabel(item.day)} shift ${index + 1} end`}
+                          disabled={item.off}
+                          value={shift.end}
+                          onChange={(event) => patchShift(item.day, index, { end: event.target.value })}
+                        />
+                        {item.shifts.length > 1 ? (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-muted-foreground hover:text-destructive"
+                            aria-label={`Remove ${weekdayLabel(item.day)} shift ${index + 1}`}
+                            disabled={item.off}
+                            onClick={() => patch(item.day, { shifts: item.shifts.filter((_, at) => at !== index) })}
+                          >
+                            <X className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    ))}
+                    {item.off ? null : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-fit gap-1 px-2 text-xs text-primary"
+                        onClick={() => patch(item.day, { shifts: [...item.shifts, nextShift(item.shifts)] })}
+                      >
+                        <Plus className="size-3.5" />
+                        Add shift
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1102,9 +1190,13 @@ export function EmployeePayTab({
   const weekHours = useMemo(() => {
     return availabilityFromWorkingHours(employee.workingHours).reduce((total, day) => {
       if (day.off) return total;
-      const [startH, startM] = day.start.split(":").map(Number);
-      const [endH, endM] = day.end.split(":").map(Number);
-      return total + Math.max(0, endH * 60 + endM - (startH * 60 + startM)) / 60;
+      return (
+        total +
+        day.shifts.reduce(
+          (sum, shift) => sum + Math.max(0, timeInputToMinutes(shift.end) - timeInputToMinutes(shift.start)) / 60,
+          0,
+        )
+      );
     }, 0);
   }, [employee.workingHours]);
 

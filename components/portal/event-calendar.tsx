@@ -20,6 +20,7 @@ import {
   calendarEventStatusLabel,
   calendarEventTone,
   formatClock,
+  isSyntheticCalendarId,
   minutesForWindow,
   timeWindowLabel,
 } from "@/lib/data/portal";
@@ -288,6 +289,36 @@ function snapMinutes(value: number, min = DAY_START, max = DAY_END) {
   return Math.min(max, Math.max(min, snapped));
 }
 
+/**
+ * Key for an optimistic move that must survive the card's id changing (a card built from a record
+ * becomes a real row once saved). Real rows return "" — they are matched by id only. With
+ * `anyRow`, also give the key for real rows so a saved row picks up its pending move.
+ */
+function pendingRecordKey(event: PortalCalendarEvent, anyRow = false) {
+  if (!event.recordId) return "";
+  if (!anyRow && !isSyntheticCalendarId(event.id)) return "";
+  return `${event.kind}:${event.recordId}`;
+}
+
+const DRAGGING_CLASS = "rs-cal-dragging";
+
+/**
+ * While a card is dragged, cards and card rows let the drag through (see globals.css) so the
+ * day / time cell under the cursor receives the drop, even where other cards cover it.
+ */
+function markCalendarDragging() {
+  if (typeof window === "undefined") return;
+  // After dragstart: changing the page during dragstart can cancel the drag.
+  window.setTimeout(() => document.body.classList.add(DRAGGING_CLASS), 0);
+  const done = () => {
+    document.body.classList.remove(DRAGGING_CLASS);
+    window.removeEventListener("dragend", done, true);
+    window.removeEventListener("drop", done, true);
+  };
+  window.addEventListener("dragend", done, true);
+  window.addEventListener("drop", done, true);
+}
+
 type DragPayload = {
   id: string;
   mode: "move" | "resize";
@@ -363,9 +394,8 @@ export function EventCalendar({
     }
     setLocalEvents(
       propEvents.map((entry) => {
-        const patch =
-          pending.get(entry.id) ||
-          (entry.recordId ? pending.get(entry.recordId) : undefined);
+        const recordKey = pendingRecordKey(entry, true);
+        const patch = pending.get(entry.id) || (recordKey ? pending.get(recordKey) : undefined);
         if (!patch) return entry;
         return {
           ...entry,
@@ -501,17 +531,16 @@ export function EventCalendar({
   }
 
   function applyMove(item: PortalCalendarEvent, move: CalendarMove) {
-    // Register optimistic patch so propEvents re-syncs don't flicker
+    // Register optimistic patch so propEvents re-syncs don't flicker. A card built from a record
+    // (task_, inv_…) gets a new id once saved, so it is also tracked by kind + record; a real row
+    // only by its id (other rows of the same record, e.g. more site visits, must not move).
+    const recordKey = pendingRecordKey(item);
     pendingMovesRef.current.set(item.id, move);
-    if (item.recordId) {
-      pendingMovesRef.current.set(item.recordId, move);
-    }
+    if (recordKey) pendingMovesRef.current.set(recordKey, move);
     // Optimistic instantaneous UI update for zero lag
     setLocalEvents((prev) =>
       prev.map((entry) => {
-        const isMatch =
-          entry.id === item.id ||
-          (entry.kind === item.kind && entry.recordId && entry.recordId === item.recordId);
+        const isMatch = entry.id === item.id || (recordKey !== "" && pendingRecordKey(entry, true) === recordKey);
         if (!isMatch) return entry;
         return {
           ...entry,
@@ -525,9 +554,7 @@ export function EventCalendar({
     // Clear the pending patch once the move resolves (success or failure)
     const cleanup = () => {
       pendingMovesRef.current.delete(item.id);
-      if (item.recordId) {
-        pendingMovesRef.current.delete(item.recordId);
-      }
+      if (recordKey) pendingMovesRef.current.delete(recordKey);
     };
     const result = onMove(item, move);
     if (result && typeof (result as Promise<unknown>).then === "function") {
@@ -540,14 +567,21 @@ export function EventCalendar({
     if (move.date) setSelectedDay(move.date);
   }
 
+  /** The dragged card: by exact id, else (an id that changed after saving) by its record. */
+  function findDragged(id?: string) {
+    if (!id) return undefined;
+    const exact = visible.find((entry) => entry.id === id) ?? localEvents.find((entry) => entry.id === id);
+    if (exact) return exact;
+    const byRecord = (entry: PortalCalendarEvent) => Boolean(entry.recordId) && id.includes(entry.recordId);
+    return visible.find(byRecord) ?? localEvents.find(byRecord);
+  }
+
   function dropOnDay(iso: string, drag: DragEvent) {
     if (readOnly) return;
     drag.preventDefault();
     setOverDay(null);
     const payload = readPayload(drag);
-    const item =
-      visible.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId))) ??
-      localEvents.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId)));
+    const item = findDragged(payload?.id);
     if (!payload || !item) return;
     const spanDays = Math.max(1, payload.span || diffDays(item.date || iso, eventEndDate(item) || iso) + 1);
     applyMove(item, {
@@ -563,9 +597,7 @@ export function EventCalendar({
     drag.preventDefault();
     setOverDay(null);
     const payload = readPayload(drag);
-    const item =
-      visible.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId))) ??
-      localEvents.find((entry) => entry.id === payload?.id || (entry.recordId && payload?.id?.includes(entry.recordId)));
+    const item = findDragged(payload?.id);
     if (!payload || !item) return;
     const times = eventTimes(item);
     const duration = Math.max(SLOT, payload.duration || times.end - times.start);
@@ -836,6 +868,7 @@ export function EventCalendar({
             cutEventId={clipboard?.action === "cut" ? clipboard.event.id : undefined}
             onSelect={setSelectedDay}
             onDropSlot={dropOnSlot}
+            onDropDay={dropOnDay}
             onResize={resizeTo}
             onClickCard={handleCardClick}
             onContextMenuCard={readOnly ? undefined : handleContextMenu}
@@ -1196,7 +1229,7 @@ function MonthGrid({
                   );
                 })}
               </div>
-              <div className="relative z-10 flex flex-col gap-1 px-1 pb-2 pt-1">
+              <div data-cal-overlay className="relative z-10 flex flex-col gap-1 px-1 pb-2 pt-1">
                 {lanes.map((lane, laneIndex) => (
                   <div key={laneIndex} className="grid grid-cols-7 gap-1">
                     {lane.map((item) => (
@@ -1240,6 +1273,7 @@ function TimeGrid({
   cutEventId,
   onSelect,
   onDropSlot,
+  onDropDay,
   onResize,
   onClickCard,
   onContextMenuCard,
@@ -1252,6 +1286,7 @@ function TimeGrid({
   cutEventId?: string;
   onSelect: (iso: string) => void;
   onDropSlot: (iso: string, slotStart: number, drag: DragEvent) => void;
+  onDropDay: (iso: string, drag: DragEvent) => void;
   onResize: (event: PortalCalendarEvent, endMinutes: number) => void;
   onClickCard?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
   onContextMenuCard?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
@@ -1305,7 +1340,7 @@ function TimeGrid({
               key={iso}
               className="min-h-10 space-y-1 border-l border-border-soft p-1"
               onDragOver={(drag) => drag.preventDefault()}
-              onDrop={(drag) => onDropSlot(iso, DAY_START, drag)}
+              onDrop={(drag) => onDropDay(iso, drag)}
             >
               {allDay.map((item) => (
                 <CalendarChip
@@ -1488,6 +1523,7 @@ function TimedBar({
 
   function startDrag(mode: "move" | "resize", drag: DragEvent) {
     drag.stopPropagation();
+    markCalendarDragging();
     drag.dataTransfer.setData(
       "text/plain",
       JSON.stringify({ id: event.id, mode, span, duration } satisfies DragPayload),
@@ -1504,6 +1540,7 @@ function TimedBar({
     (event.employeeId ? "Assigned" : "Unassigned");
   return (
     <div
+      data-cal-card
       draggable={draftEnd == null}
       onDragStart={(drag) => startDrag("move", drag)}
       onClick={(click) => {
@@ -1674,6 +1711,7 @@ function CalendarChip({
 
   function startDrag(drag: DragEvent) {
     drag.stopPropagation();
+    markCalendarDragging();
     drag.dataTransfer.setData(
       "text/plain",
       JSON.stringify({
@@ -1696,6 +1734,7 @@ function CalendarChip({
     (event.employeeId ? "Assigned" : "Unassigned");
   return (
     <div
+      data-cal-card
       draggable
       onDragStart={(drag) => startDrag(drag)}
       onClick={(click) => {

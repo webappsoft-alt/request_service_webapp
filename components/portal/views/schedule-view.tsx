@@ -8,6 +8,7 @@ import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import {
   EventCalendar,
   EventCalendarSkeleton,
+  eventTimes,
   type CalendarMove,
 } from "@/components/portal/event-calendar";
 import { PortalPage } from "@/components/portal/portal-page";
@@ -15,23 +16,27 @@ import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
-import { querySchedule } from "@/lib/api/crm-client";
+import { queryCalendar, querySchedule, updateSchedule as updateScheduleApi } from "@/lib/api/crm-client";
 import type {
   PortalCalendarEvent,
+  PortalEmployee,
   PortalEventKind,
   PortalTimeWindow,
 } from "@/lib/data/portal";
+import type { PortalContractor } from "@/lib/data/crm-people";
 import {
   calendarEventKindLabel,
   employeeName,
   formatClock,
   windowFromMinutes,
   dedupeCalendarEvents,
+  isSyntheticCalendarId,
   taskCalendarSlot,
 } from "@/lib/data/portal";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectAuthUser } from "@/store/authSlice";
 import { fetchTeam } from "@/store/teamSlice";
 
 export type ScheduleMemberOption = {
@@ -59,6 +64,22 @@ function formatScheduleError(error: unknown): string {
   return raw || "Could not update the schedule.";
 }
 
+/**
+ * Last calendar per filter (member | kind) for this browser session: coming back to Schedule,
+ * or flipping between filters, shows it at once and refreshes quietly in the background.
+ */
+const scheduleCache = new Map<string, PortalCalendarEvent[]>();
+const scheduleCacheKey = (userKey: string, memberId: string, kind: string) => `${userKey}|${memberId}|${kind}`;
+
+/** Team + contractors that came with the last calendar response, per signed-in user. */
+type CalendarPeople = { team: PortalEmployee[]; contractors: PortalContractor[] };
+const peopleCache = new Map<string, CalendarPeople>();
+/** The server has no one-request calendar yet (older API): use the separate list requests. */
+let calendarEndpointMissing = false;
+
+const isNotFound = (error: unknown) =>
+  (error as { response?: { status?: number } } | null)?.response?.status === 404;
+
 export function ScheduleView() {
   const searchParams = useSearchParams();
   const initialEmployeeId =
@@ -69,13 +90,25 @@ export function ScheduleView() {
   const crm = useCrmApiData();
   const crmEnabled = crm.enabled;
   const ensureCrmLoaded = crm.ensureLoaded;
-  const team = useAppSelector((state) => state.team.items);
-  const teamLoading = useAppSelector((state) => state.team.loading);
-  const { contractors } = useCrmDirectory();
+  const reduxTeam = useAppSelector((state) => state.team.items);
+  const { contractors: directoryContractors } = useCrmDirectory();
   const { assign, employeeLabel, removeSchedule } = usePortalCrew();
 
-  const [events, setEvents] = useState<PortalCalendarEvent[]>([]);
-  const [scheduleLoading, setScheduleLoading] = useState(true);
+  // Per signed-in user, so another account in the same tab never sees this calendar.
+  const authUser = useAppSelector(selectAuthUser);
+  const userKey = authUser?.id || authUser?.email || "";
+  const [people, setPeople] = useState<CalendarPeople | null>(() => peopleCache.get(userKey) ?? null);
+  /** Older API: load the team / CRM lists the page used to read card details from. */
+  const [legacyLoad, setLegacyLoad] = useState(calendarEndpointMissing);
+  const team = people?.team.length ? people.team : reduxTeam;
+  const contractors = people ? people.contractors : directoryContractors;
+  const initialKey = scheduleCacheKey(userKey, initialEmployeeId, "");
+  const [events, setEvents] = useState<PortalCalendarEvent[]>(() => scheduleCache.get(initialKey) ?? []);
+  const [scheduleLoading, setScheduleLoading] = useState(() => !scheduleCache.has(initialKey));
+  /** Filter key whose data `events` currently holds (so local edits are cached under the right key). */
+  const eventsKeyRef = useRef(scheduleCache.has(initialKey) ? initialKey : "");
+  /** Latest load wins: a slow response for an old filter must not overwrite the current one. */
+  const loadSeqRef = useRef(0);
   const [memberFilter, setMemberFilter] = useState(initialEmployeeId);
   const [kindFilter, setKindFilter] = useState<PortalEventKind | "">("");
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
@@ -777,18 +810,27 @@ export function ScheduleView() {
   );
 
   useEffect(() => {
+    if (!legacyLoad) return;
     void dispatch(fetchTeam({ limit: 100 }));
     if (crmEnabled) void ensureCrmLoaded();
-  }, [crmEnabled, dispatch, ensureCrmLoaded]);
+  }, [crmEnabled, dispatch, ensureCrmLoaded, legacyLoad]);
 
   const loadSchedule = useCallback(
     async (opts?: { quiet?: boolean }) => {
-      if (!opts?.quiet) setScheduleLoading(true);
+      const key = scheduleCacheKey(userKey, memberFilter, kindFilter);
+      const seq = ++loadSeqRef.current;
+      const cached = scheduleCache.get(key);
+      if (cached && eventsKeyRef.current !== key) {
+        eventsKeyRef.current = key;
+        setEvents(cached);
+      }
+      // Spinner only the first time this filter loads; otherwise refresh in place.
+      if (!opts?.quiet && !cached) setScheduleLoading(true);
       try {
         const selected = memberOptionsRef.current.find(
           (item) => item.id === memberFilter,
         );
-        const items = await querySchedule({
+        const query = {
           employeeId:
             selected?.kind === "employee"
               ? memberFilter
@@ -800,17 +842,48 @@ export function ScheduleView() {
           kind: kindFilter || undefined,
           force: true,
           silent: true,
-        });
-        setEvents(dedupeCalendarEvents(items));
+        };
+        let items: PortalCalendarEvent[] | null = null;
+        if (!calendarEndpointMissing) {
+          try {
+            // One request: rows, record cards, team and contractors.
+            const result = await queryCalendar(query);
+            items = result.events;
+            if (seq === loadSeqRef.current) {
+              const next = { team: result.team, contractors: result.contractors };
+              peopleCache.set(userKey, next);
+              setPeople(next);
+            }
+          } catch (error) {
+            if (isNotFound(error)) calendarEndpointMissing = true;
+            setLegacyLoad(true);
+          }
+        }
+        if (!items) items = await querySchedule(query);
+        if (seq !== loadSeqRef.current) return;
+        const next = dedupeCalendarEvents(items);
+        scheduleCache.set(key, next);
+        eventsKeyRef.current = key;
+        setEvents(next);
       } catch (error) {
+        if (seq !== loadSeqRef.current) return;
         toast.error(formatScheduleError(error));
-        setEvents([]);
+        if (!cached) {
+          eventsKeyRef.current = key;
+          setEvents([]);
+        }
       } finally {
-        setScheduleLoading(false);
+        if (seq === loadSeqRef.current) setScheduleLoading(false);
       }
     },
-    [kindFilter, memberFilter],
+    [kindFilter, memberFilter, userKey, setLegacyLoad, setPeople],
   );
+
+  // Keep the cache in step with moves / assignments made on this page.
+  useEffect(() => {
+    const key = scheduleCacheKey(userKey, memberFilter, kindFilter);
+    if (eventsKeyRef.current === key) scheduleCache.set(key, events);
+  }, [events, kindFilter, memberFilter, userKey]);
 
   useEffect(() => {
     void loadSchedule();
@@ -831,61 +904,76 @@ export function ScheduleView() {
   }, [initialEmployeeId]);
 
   function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
-    // Optimistically update schedule-view's events state immediately
+    const before = eventTimes(event);
+    const sameTimes = move.startMinutes === before.start && move.endMinutes === before.end;
+    const timeWindow =
+      (sameTimes && event.timeWindow) || windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow;
+    // A real calendar row moves by its own id: several rows can share one record (an estimate's
+    // site visits), so matching on the record would move — or overwrite — the wrong one. Cards
+    // built from a record (task_, inv_, est_…) get their first row through assign.
+    const synthetic = isSyntheticCalendarId(event.id);
+    const isMoved = (e: PortalCalendarEvent) =>
+      e.id === event.id ||
+      (synthetic && e.kind === event.kind && Boolean(e.recordId) && e.recordId === event.recordId);
+
     setEvents((prev) =>
       prev.map((e) =>
-        e.id === event.id ||
-        (e.kind === event.kind && e.recordId && e.recordId === event.recordId)
+        isMoved(e)
           ? {
               ...e,
               date: move.date,
               endDate: move.endDate,
               startMinutes: move.startMinutes ?? e.startMinutes,
               endMinutes: move.endMinutes ?? e.endMinutes,
-              timeWindow:
-                windowFromMinutes(move.startMinutes, move.endMinutes) ||
-                e.timeWindow,
+              timeWindow,
             }
           : e,
       ),
     );
 
-    return assign({
-      kind: event.kind,
-      recordId: event.recordId,
-      title: event.title,
-      status: event.status,
-      date: move.date,
-      endDate: move.endDate,
-      startMinutes: move.startMinutes,
-      endMinutes: move.endMinutes,
-      timeWindow:
-        windowFromMinutes(move.startMinutes, move.endMinutes) ||
-        event.timeWindow,
-      employeeId: event.employeeId ?? memberOptionsRef.current[0]?.id ?? "",
-    })
+    const save = synthetic
+      ? assign({
+          kind: event.kind,
+          recordId: event.recordId,
+          title: event.title,
+          status: event.status,
+          date: move.date,
+          endDate: move.endDate,
+          startMinutes: move.startMinutes,
+          endMinutes: move.endMinutes,
+          timeWindow,
+          // Keep whoever it is assigned to (or nobody): moving never assigns a person.
+          employeeId: event.employeeId || "",
+        })
+      : updateScheduleApi(event.id, {
+          date: move.date,
+          endDate: move.endDate ?? null,
+          startMinutes: move.startMinutes,
+          endMinutes: move.endMinutes,
+          timeWindow,
+        });
+
+    return save
       .then((saved) => {
         if (saved) {
           setEvents((prev) =>
             prev.map((e) =>
-              e.id === event.id ||
-              e.id === saved.id ||
-              (e.kind === saved.kind &&
-                e.recordId &&
-                e.recordId === saved.recordId)
+              isMoved(e) || e.id === saved.id
                 ? {
                     ...e,
                     ...saved,
+                    // The card details come from this page's enrichment; keep them.
+                    detail: e.detail || saved.detail,
+                    customerName: e.customerName || saved.customerName,
+                    serviceAddress: e.serviceAddress || saved.serviceAddress,
+                    price: e.price || saved.price,
+                    category: e.category || saved.category,
+                    notes: e.notes || saved.notes,
                     date: saved.date || move.date,
                     endDate: saved.endDate ?? move.endDate,
-                    startMinutes:
-                      saved.startMinutes ?? move.startMinutes ?? e.startMinutes,
-                    endMinutes:
-                      saved.endMinutes ?? move.endMinutes ?? e.endMinutes,
-                    timeWindow:
-                      saved.timeWindow ||
-                      windowFromMinutes(move.startMinutes, move.endMinutes) ||
-                      e.timeWindow,
+                    startMinutes: saved.startMinutes ?? move.startMinutes ?? e.startMinutes,
+                    endMinutes: saved.endMinutes ?? move.endMinutes ?? e.endMinutes,
+                    timeWindow: saved.timeWindow || timeWindow,
                   }
                 : e,
             ),

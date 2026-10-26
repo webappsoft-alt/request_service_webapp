@@ -2536,6 +2536,7 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     price,
     category,
     source: trimmed(record.source) || undefined,
+    enriched: record.enriched === true || undefined,
   };
 }
 

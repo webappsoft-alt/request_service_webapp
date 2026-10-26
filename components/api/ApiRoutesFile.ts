@@ -226,6 +226,8 @@ export const providerCrmApi = {
   task: (id: string) => `provider/tasks/${id}`,
   taskStatus: (id: string) => `provider/tasks/${id}/status`,
   schedule: "provider/schedule",
+  /** GET — the whole Schedule page (rows, record cards, team, contractors) in one response */
+  scheduleCalendar: "provider/schedule/calendar",
   scheduleAssign: "provider/schedule/assign",
   scheduleItem: (id: string) => `provider/schedule/${id}`,
   reminders: "provider/reminders",

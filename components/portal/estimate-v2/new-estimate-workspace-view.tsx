@@ -2050,8 +2050,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     Assigned technician
                   </p>
                   <p className="mt-0.5 truncate text-sm font-semibold text-foreground">{technicianLabel}</p>
-                  {nextVisitAt ? (
-                    <p className="mt-0.5 text-xs text-muted-foreground">Scheduled {formatDate(nextVisitAt)}</p>
+                  {nextVisitAt || estimate?.scheduledDate ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Scheduled {formatDate(nextVisitAt || estimate?.scheduledDate || "")}
+                    </p>
                   ) : null}
                 </div>
               </div>

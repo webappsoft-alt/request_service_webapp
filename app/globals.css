@@ -2114,3 +2114,10 @@
     background: #ffffff;
   }
 }
+
+/* Schedule drag and drop: while a card is dragged, cards and card rows let the drag reach the
+   day / time cell underneath (event-calendar.tsx, markCalendarDragging). */
+body.rs-cal-dragging [data-cal-card],
+body.rs-cal-dragging [data-cal-overlay] {
+  pointer-events: none !important;
+}

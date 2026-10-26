@@ -8,7 +8,7 @@ import type {
   PortalTask,
   PortalVendor,
 } from "@/lib/data/crm-people";
-import { dedupeCalendarEvents, employeeName, taskCalendarSlot, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
+import { dedupeCalendarEvents, employeeName, isSyntheticCalendarId, taskCalendarSlot, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
 import type { Estimate, EstimateActivity, EstimateSiteVisitRecord, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
@@ -2490,7 +2490,52 @@ export async function listSchedule(options?: CrmRequestOptions) {
 }
 
 /** GET /api/provider/schedule?customerId=&recordId=&employeeId=&contractorId=&startDate=&endDate=&kind= */
-export async function querySchedule(query: CrmListQuery = {}) {
+/** Raw lists from GET provider/schedule/calendar (each as its own list endpoint returns it; null = not needed for the kind). */
+export type CalendarBundle = {
+  schedule: unknown[];
+  invoices: unknown[] | null;
+  payments: unknown[] | null;
+  estimates: unknown[] | null;
+  tasks: unknown[] | null;
+  orders: unknown[] | null;
+  team: unknown[] | null;
+  contractors: unknown[] | null;
+};
+
+const bundleList = <T>(list: unknown[] | null | undefined, mapper: (value: unknown) => T | null) =>
+  mapCrmList({ data: list ?? [] }, mapper).items;
+
+/**
+ * The whole Schedule page in one request: calendar rows with card details, the invoices /
+ * payments / estimates / tasks / fixed-service orders that become cards, and the team and
+ * contractors. Cards are built exactly as querySchedule builds them. Throws when the server
+ * doesn't have the endpoint yet (callers fall back to querySchedule).
+ */
+export async function queryCalendar(query: CrmListQuery = {}) {
+  const params: Record<string, string> = {};
+  const employeeId = query.employeeId?.trim();
+  const contractorId = query.contractorId?.trim();
+  const kind = query.kind?.trim();
+  if (employeeId) params.employeeId = employeeId;
+  if (contractorId) params.contractorId = contractorId;
+  if (kind) params.kind = kind;
+  const response = await getData(providerCrmApi.scheduleCalendar, params, {
+    silent: query.silent ?? true,
+    force: query.force ?? true,
+  });
+  const bundle = (response as { data?: CalendarBundle } | null)?.data;
+  if (!bundle || !Array.isArray(bundle.schedule)) {
+    throw new Error("Calendar response missing.");
+  }
+  const events = await querySchedule(query, bundle);
+  return {
+    events,
+    team: bundleList(bundle.team, mapPortalEmployee),
+    contractors: bundleList(bundle.contractors, mapPortalContractor),
+  };
+}
+
+export async function querySchedule(query: CrmListQuery = {}, bundle?: CalendarBundle) {
   const params: Record<string, string | number> = {};
   const customerId = query.customerId?.trim();
   const recordId = query.recordId?.trim();
@@ -2512,10 +2557,12 @@ export async function querySchedule(query: CrmListQuery = {}) {
   if (kind && !SYNTHESIS_KINDS.has(kind)) {
     params.kind = kind;
   }
-  const response = await getData(providerCrmApi.schedule, params, {
-    silent: query.silent ?? true,
-    force: query.force ?? true,
-  });
+  const response = bundle
+    ? { data: bundle.schedule }
+    : await getData(providerCrmApi.schedule, params, {
+        silent: query.silent ?? true,
+        force: query.force ?? true,
+      });
   const rawItems = mapCrmList(response, mapScheduleEvent).items.filter(
     (item): item is NonNullable<typeof item> => Boolean(item),
   );
@@ -2526,7 +2573,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
 
   if (!kind || kind === "invoice") {
     try {
-      const invList = await listInvoices({ silent: true });
+      const invList = bundle ? bundleList(bundle.invoices, mapInvoice) : await listInvoices({ silent: true });
       const existingIds = new Set(items.map((it) => it.recordId || it.id));
       invList.forEach((inv) => {
         if (!inv.id || existingIds.has(inv.id)) return;
@@ -2573,7 +2620,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
 
   if (!kind || kind === "payment") {
     try {
-      const payList = await listPayments({ silent: true });
+      const payList = bundle ? bundleList(bundle.payments, mapPayment) : await listPayments({ silent: true });
       const existingIds = new Set(items.map((it) => it.recordId || it.id));
       payList.forEach((pay) => {
         if (!pay.id || existingIds.has(pay.id)) return;
@@ -2610,7 +2657,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
 
   if (!kind || kind === "estimate") {
     try {
-      const estList = await listEstimates({ silent: true });
+      const estList = bundle ? bundleList(bundle.estimates, mapEstimate) : await listEstimates({ silent: true });
       const existingIds = new Set(items.map((it) => it.recordId || it.id));
       estList.forEach((est) => {
         if (!est.id || existingIds.has(est.id)) return;
@@ -2676,7 +2723,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
 
   if (!kind || kind === "task") {
     try {
-      const taskList = await listTasks({ silent: true });
+      const taskList = bundle ? bundleList(bundle.tasks, mapPortalTask) : await listTasks({ silent: true });
       const existingIds = new Set(items.map((it) => it.recordId || it.id));
       taskList.forEach((task) => {
         if (!task.id || existingIds.has(task.id)) return;
@@ -2714,12 +2761,13 @@ export async function querySchedule(query: CrmListQuery = {}) {
   // Fixed Service Orders: merge booking dates onto Schedule (existing + checkout sync).
   if (!kind || kind === "fixed_service") {
     try {
-      const { providerOrdersApi } = await import("@/components/api/ApiRoutesFile");
-      const ordersResponse = await getData(
-        providerOrdersApi.list,
-        { page: 1, limit: 200 },
-        { silent: true, force: true },
-      );
+      const ordersResponse = bundle
+        ? { data: bundle.orders ?? [] }
+        : await getData(
+            (await import("@/components/api/ApiRoutesFile")).providerOrdersApi.list,
+            { page: 1, limit: 200 },
+            { silent: true, force: true },
+          );
       const root =
         ordersResponse && typeof ordersResponse === "object"
           ? (ordersResponse as Record<string, unknown>)
@@ -2850,11 +2898,16 @@ export async function querySchedule(query: CrmListQuery = {}) {
     }
   }
 
+  // Only real calendar rows the server didn't already fill in (older API) need a per-record
+  // fetch; cards built here from list data (task_, inv_, est_, fso_ …) already have it.
+  const needsDetails = (item: PortalCalendarEvent) => !item.enriched && !isSyntheticCalendarId(item.id);
+
   const missingJobIds = Array.from(
     new Set(
       items
         .filter(
           (item) =>
+            needsDetails(item) &&
             item.kind === "job" &&
             item.recordId &&
             (!item.serviceAddress || !item.price || !item.category || !item.notes),
@@ -2868,6 +2921,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
       items
         .filter(
           (item) =>
+            needsDetails(item) &&
             item.kind === "estimate" &&
             item.recordId &&
             (!item.serviceAddress || !item.price || !item.category || !item.notes),
@@ -2881,6 +2935,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
       items
         .filter(
           (item) =>
+            needsDetails(item) &&
             item.kind === "request" &&
             item.recordId &&
             (!item.serviceAddress || !item.customerName || !item.category || !item.notes),
@@ -2894,6 +2949,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
       items
         .filter(
           (item) =>
+            needsDetails(item) &&
             item.kind === "task" &&
             item.recordId &&
             (!item.customerName || !item.category || !item.notes || !item.detail),
@@ -2907,6 +2963,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
       items
         .filter(
           (item) =>
+            needsDetails(item) &&
             item.kind === "invoice" &&
             item.recordId &&
             (!item.serviceAddress || !item.price || !item.customerName || !item.category || !item.notes),

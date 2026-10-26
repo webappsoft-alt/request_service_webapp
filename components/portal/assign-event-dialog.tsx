@@ -31,6 +31,7 @@ import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import type { PortalAssignment, PortalCalendarEvent, PortalEmployee, PortalTimeWindow } from "@/lib/data/portal";
 import { calendarEventKindLabel, employeeName } from "@/lib/data/portal";
+import { eventCovers, eventTimes } from "@/components/portal/event-calendar";
 
 type TimeSlotOption = {
   value: string;
@@ -70,6 +71,39 @@ const TIME_INTERVAL_SLOTS: TimeSlotOption[] = (() => {
 
 const AM_SLOTS = TIME_INTERVAL_SLOTS.filter((s) => s.period === "AM");
 const PM_SLOTS = TIME_INTERVAL_SLOTS.filter((s) => s.period === "PM");
+
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+
+type Availability = { state: "free" | "off" | "busy"; note?: string };
+
+/**
+ * Is this person free for the slot? "off" = outside every shift they work that day (several shifts a
+ * day are allowed); "busy" = another calendar item of theirs overlaps. People with no hours saved
+ * count as available.
+ */
+function availabilityFor(
+  personId: string,
+  slot: { date: string; start: number; end: number; ignoreId?: string },
+  employees: PortalEmployee[],
+  events: PortalCalendarEvent[],
+): Availability {
+  if (!personId || !slot.date) return { state: "free" };
+  const clash = events.find((item) => {
+    if (item.employeeId !== personId || item.id === slot.ignoreId || !eventCovers(item, slot.date)) return false;
+    const times = eventTimes(item);
+    return times.start < slot.end && times.end > slot.start;
+  });
+  if (clash) return { state: "busy", note: `${clash.title} ${formatClockMinutes(eventTimes(clash).start)}–${formatClockMinutes(eventTimes(clash).end)}` };
+  const hours = employees.find((item) => item.id === personId)?.workingHours;
+  if (hours?.length) {
+    const weekday = WEEKDAYS[new Date(`${slot.date}T12:00:00`).getDay()];
+    const onShift = hours.some(
+      (shift) => shift.day === weekday && shift.active && shift.startMinutes <= slot.start && shift.endMinutes >= slot.end,
+    );
+    if (!onShift) return { state: "off" };
+  }
+  return { state: "free" };
+}
 
 function formatClockMinutes(total: number) {
   const hours24 = Math.floor(total / 60) % 24;
@@ -156,6 +190,35 @@ export function AssignEventDialog({
     const seen = new Set(employeeRows.map((item) => item.id));
     return [...employeeRows, ...contractorRows.filter((item) => !seen.has(item.id))];
   }, [assigneePaging.options, contractors, employees, useApi]);
+
+  // Who is free at the chosen date + time (shifts and other calendar items).
+  const chosenSlot = useMemo(() => {
+    const slot = TIME_INTERVAL_SLOTS.find((item) => item.value === timeSlot) ?? TIME_INTERVAL_SLOTS[18];
+    return { date, start: slot.startMinutes, end: slot.endMinutes, ignoreId: event?.id };
+  }, [date, event?.id, timeSlot]);
+  const availabilityById = useMemo(() => {
+    const map = new Map<string, Availability>();
+    for (const option of technicianOptions) {
+      map.set(option.id, availabilityFor(option.id, chosenSlot, employees, events));
+    }
+    return map;
+  }, [chosenSlot, employees, events, technicianOptions]);
+  const rankedOptions = useMemo(() => {
+    const rank = { free: 0, off: 1, busy: 2 } as const;
+    return technicianOptions
+      .map((option, index) => ({ option, index, availability: availabilityById.get(option.id) ?? { state: "free" as const } }))
+      .sort((a, b) => rank[a.availability.state] - rank[b.availability.state] || a.index - b.index)
+      .map(({ option, availability }) => ({
+        ...option,
+        label:
+          availability.state === "busy"
+            ? `${option.label} · Busy at this time`
+            : availability.state === "off"
+              ? `${option.label} · Off at this time`
+              : option.label,
+      }));
+  }, [availabilityById, technicianOptions]);
+  const chosenAvailability = employeeId ? availabilityById.get(employeeId) : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -394,9 +457,9 @@ export function AssignEventDialog({
                 selected?.kind === "payment"
                   ? [
                       { id: "", label: "Assign later (optional)" },
-                      ...technicianOptions,
+                      ...rankedOptions,
                     ]
-                  : technicianOptions
+                  : rankedOptions
               }
               placeholder={
                 selected?.kind === "estimate" ||
@@ -424,6 +487,15 @@ export function AssignEventDialog({
                 setEmployeeLabel(option?.label && id ? option.label : "");
               }}
             />
+            {chosenAvailability?.state === "busy" ? (
+              <p className="text-xs text-destructive">
+                {employeeLabel || "This person"} is already booked then ({chosenAvailability.note}). Pick another time or person.
+              </p>
+            ) : chosenAvailability?.state === "off" ? (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                {employeeLabel || "This person"} isn&apos;t working at this time (outside their shifts). You can still assign them.
+              </p>
+            ) : null}
             {selected?.kind === "estimate" ? (
               <p className="text-xs text-muted-foreground">
                 Technician is optional — you can schedule the date now and assign later.

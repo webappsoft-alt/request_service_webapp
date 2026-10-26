@@ -321,6 +321,8 @@ export type PortalCalendarEvent = {
   category?: string;
   /** "ai_receptionist" when the AI receptionist booked it on a call (shown as "AI Booked"). */
   source?: string;
+  /** The schedule API already attached the card details (address, total, notes…). */
+  enriched?: boolean;
 };
 
 const MULTI_SCHEDULE_KINDS = new Set<PortalEventKind>(["estimate", "visit"]);

@@ -126,6 +126,7 @@ import {
   updateJobRecord,
   upsertJobItem,
 } from "@/store/jobsSlice";
+import { JobTechnicianCrew } from "@/components/portal/job-technician-crew";
 import {
   estimateAsJob,
   filledWorkLines,
@@ -2294,12 +2295,16 @@ export function JobDetailView({ id }: { id: string }) {
   async function removeJobAssignee() {
     if (!job || removingAssignee) return;
     setRemovingAssignee(true);
-    // Optimistic UI — show Unassigned immediately.
-    setAssigneeOverride({ employeeId: "", name: "" });
+    // With more than one technician, the next one becomes the lead (and takes the calendar row).
+    const remaining = (job.assignedEmployeeIds || []).filter((id) => id && id !== resolvedEmployeeId);
+    const nextLead = remaining[0] || "";
+    const nextLeadName = nextLead ? employeeLabel(nextLead) : "";
+    // Optimistic UI — show the next lead (or Unassigned) immediately.
+    setAssigneeOverride({ employeeId: nextLead, name: nextLeadName });
     dispatch(
       patchJobLocally({
         id: job.id,
-        patch: { assignedTo: "", assignedEmployeeId: "" },
+        patch: { assignedTo: nextLeadName, assignedEmployeeId: nextLead, assignedEmployeeIds: remaining },
       }),
     );
     try {
@@ -2309,8 +2314,9 @@ export function JobDetailView({ id }: { id: string }) {
           employees,
           job: {
             ...job,
-            assignedTo: "",
-            assignedEmployeeId: "",
+            assignedTo: nextLeadName,
+            assignedEmployeeId: nextLead,
+            assignedEmployeeIds: remaining,
           },
         }),
       ).unwrap();
@@ -2322,7 +2328,7 @@ export function JobDetailView({ id }: { id: string }) {
           title: job.number || "Job",
           date: start,
           endDate: due || start,
-          employeeId: null,
+          employeeId: nextLead || null,
           startMinutes: event?.startMinutes,
           endMinutes: event?.endMinutes,
           timeWindow: event?.timeWindow,
@@ -2332,7 +2338,7 @@ export function JobDetailView({ id }: { id: string }) {
         await clearCalendarAssignment({ kind: "job", recordId: job.id });
       }
       if (crm.ready) void crm.refresh({ silent: true });
-      toast.success("Team member removed from this job.");
+      toast.success(nextLead ? `Team member removed. ${nextLeadName} now leads this job.` : "Team member removed from this job.");
     } catch (error) {
       // Roll back optimistic clear.
       setAssigneeOverride(null);
@@ -2887,6 +2893,20 @@ export function JobDetailView({ id }: { id: string }) {
                           </Button>
                         ) : null}
                       </div>
+                      {resolvedEmployeeId ? (
+                        <div className="basis-full">
+                          <JobTechnicianCrew
+                            job={job}
+                            leadId={resolvedEmployeeId}
+                            employees={employees}
+                            locked={jobClosed}
+                            lockedHint={closedHint}
+                            onChanged={() => {
+                              if (crm.ready) void crm.refresh({ silent: true });
+                            }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                     ) : null}
                   <JobContractorsCard job={job} onChanged={reloadJobContractors} locked={jobClosed} />

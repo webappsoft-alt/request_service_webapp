@@ -94,6 +94,7 @@ import { PersonAddressFields } from "@/components/shared/person-address-fields";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { ExpertisePicker, initialExpertise, tradeFromExpertise } from "@/components/portal/expertise-picker";
 import {
   clearTeamDetail,
   bindTeamDetailEmployee,
@@ -700,6 +701,7 @@ function EmployeeSettingsTab({
           lastName: draft.lastName,
           role: draft.role,
           trade: draft.trade,
+          expertise: initialExpertise(draft),
           email: draft.email,
           phone: draft.phone,
           active: draft.active,
@@ -782,7 +784,10 @@ function EmployeeSettingsTab({
           </Select>
         </Field>
         <Field label="Expertise">
-          <Input value={draft.trade} onChange={(event) => setDraft({ ...draft, trade: event.target.value })} />
+          <ExpertisePicker
+            value={initialExpertise(draft)}
+            onChange={(next) => setDraft({ ...draft, expertise: next, trade: tradeFromExpertise(next) })}
+          />
         </Field>
         <Field label="Email">
           <Input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />

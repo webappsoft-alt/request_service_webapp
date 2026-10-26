@@ -198,6 +198,7 @@ export const providerCrmApi = {
   /** Isolated estimate-v2 (Opportunity / Site Assessment). Removable with New estimate UI. */
   estimateV2Opportunities: "provider/estimate-v2/opportunities",
   estimateV2Opportunity: (id: string) => `provider/estimate-v2/opportunities/${id}`,
+  estimateV2OpportunityCrew: (id: string) => `provider/estimate-v2/opportunities/${id}/crew`,
   estimateV2OpportunityByEstimate: (estimateId: string) =>
     `provider/estimate-v2/opportunities/by-estimate/${estimateId}`,
   estimateV2OpportunityAssessments: (id: string) =>

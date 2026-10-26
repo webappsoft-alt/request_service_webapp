@@ -4,6 +4,7 @@ import {
   invalidateGetCache,
   patchData,
   postData,
+  putData,
 } from "@/components/api/apiFuntions";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 import { mapEstimate } from "@/lib/api/crm-mappers";
@@ -86,6 +87,9 @@ export type EstimateV2Opportunity = {
   workItems?: AssessmentWorkItem[];
   customerAttachments?: OpportunityAttachment[];
   internalNotes?: string;
+  /** Technician / contractor assigned on the estimate page (or by the AI receptionist). */
+  assignedEmployeeId?: string | null;
+  assignedContractorId?: string | null;
   followUpAt?: string | null;
   followUpNotes?: string;
   siteAssessments?: EstimateV2SiteAssessment[];
@@ -139,6 +143,8 @@ export type EstimateV2SiteAssessment = {
   visitTypeLabel?: string;
   assignedEmployeeId?: string | null;
   assignedEmployeeName?: string;
+  assignedContractorId?: string | null;
+  assignedContractorName?: string;
   scheduledAt?: string | null;
   /** getTimezoneOffset() of whoever booked it (the property's zone for AI-booked visits). */
   tzOffsetMinutes?: number | null;
@@ -291,6 +297,19 @@ export async function updateEstimateV2Opportunity(
   }>,
 ) {
   const response = await patchData(providerCrmApi.estimateV2Opportunity(id), patch);
+  return normalizeOpportunity(unwrapData<EstimateV2Opportunity>(response));
+}
+
+/**
+ * Assign technician / contractor on an estimate (null clears). With applyToVisits (default),
+ * every open site visit and its calendar row get the same crew.
+ */
+export async function assignEstimateV2Crew(
+  id: string,
+  input: { employeeId?: string | null; contractorId?: string | null; applyToVisits?: boolean },
+) {
+  const response = await putData(providerCrmApi.estimateV2OpportunityCrew(id), input);
+  bustEstimateV2Cache();
   return normalizeOpportunity(unwrapData<EstimateV2Opportunity>(response));
 }
 

@@ -803,6 +803,7 @@ export function mapPortalEmployee(raw: unknown): PortalEmployee | null {
     email: trimmed(record.email),
     phone: trimmed(record.phone),
     trade: trimmed(record.trade),
+    expertise: toStringArray(record.expertise),
     active: booleanValue(record.active, true),
     hourlyRate: numberValue(record.hourlyRate, 0) || undefined,
     overtimeRate: numberValue(record.overtimeRate, 0) || undefined,

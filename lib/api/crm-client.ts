@@ -953,6 +953,7 @@ function employeePayload(employee: PortalEmployee | Partial<PortalEmployee>) {
   if (employee.phone !== undefined) payload.phone = employee.phone || "";
   if (employee.role !== undefined) payload.role = employee.role || "technician";
   if (employee.trade !== undefined) payload.trade = employee.trade || "";
+  if (employee.expertise !== undefined) payload.expertise = employee.expertise;
   if (employee.active !== undefined) payload.active = employee.active ?? true;
   if (employee.hourlyRate !== undefined) payload.hourlyRate = employee.hourlyRate ?? 0;
   if (employee.overtimeRate !== undefined) payload.overtimeRate = employee.overtimeRate ?? 0;

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, LayoutTemplate, Link2, MapPin, Printer } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, Pencil, Printer, Trash2 } from "lucide-react";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
@@ -35,6 +35,10 @@ import {
   type EstimateShareSnapshot,
 } from "@/components/portal/use-estimate-share";
 import { SiteVisitsPanel } from "@/components/portal/estimate-v2/site-visits-panel";
+import { EstimateCrewDialog, type EstimateCrewMode } from "@/components/portal/estimate-v2/estimate-crew-dialog";
+import { useCrmDirectory } from "@/components/portal/use-crm-directory";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
+import { extractErrorMessage } from "@/components/api/apiFuntions";
 import { ExistingInformationPanel } from "@/components/portal/estimate-v2/existing-information-panel";
 import { SectionedLineItemsEditor } from "@/components/portal/estimate-v2/sectioned-line-items-editor";
 import { EstimateStartDialog, SaveTemplatePrompt } from "@/components/portal/estimate-v2/estimate-template-dialogs";
@@ -72,6 +76,7 @@ import {
   getEstimateV2Opportunity,
   getOpportunityByEstimateId,
   updateEstimateV2Opportunity,
+  assignEstimateV2Crew,
   createEstimateV2SiteAssessment,
   createEstimateV2Estimate,
   resolveEstimateV2Acceptance,
@@ -92,7 +97,7 @@ import { formatDate, formatMoney, visitWallClock } from "@/lib/format";
 import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
-import { estimateCanShare } from "@/lib/data/portal";
+import { employeeName, estimateCanShare } from "@/lib/data/portal";
 import { stripChangeRequestLinesFromNotes } from "@/lib/data/estimate-change-requests";
 
 const PREP_OPTIONS = [
@@ -949,6 +954,55 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     return [...seen].map(([employeeId, name]) => ({ employeeId, name }));
   }, [visits]);
 
+  // Assign technician / Assign contractor: header buttons + crew cards (same as on a job).
+  const { contractors } = useCrmDirectory();
+  const [crewMode, setCrewMode] = useState<EstimateCrewMode | null>(null);
+  const [removingCrew, setRemovingCrew] = useState<EstimateCrewMode | null>(null);
+  const crewLocked = opportunity?.status === "won" || opportunity?.status === "lost";
+  const openVisitCount = visits.filter((visit) => !["completed", "cancelled", "no_show"].includes(visit.status)).length;
+  const technicianId = opportunity?.assignedEmployeeId || "";
+  const technicianLabel = useMemo(() => {
+    if (!technicianId) return "";
+    const member = employees.find((item) => item.id === technicianId);
+    if (member) return employeeName(member);
+    return visits.find((visit) => visit.assignedEmployeeId === technicianId)?.assignedEmployeeName || "Assigned technician";
+  }, [employees, technicianId, visits]);
+  const contractorId = opportunity?.assignedContractorId || "";
+  const contractorLabel = useMemo(() => {
+    if (!contractorId) return "";
+    const match = contractors.find((item) => item.id === contractorId);
+    if (match) return match.companyName || `${match.firstName} ${match.lastName}`.trim();
+    return visits.find((visit) => visit.assignedContractorId === contractorId)?.assignedContractorName || "Assigned contractor";
+  }, [contractorId, contractors, visits]);
+
+  /** Next open site visit, for "Scheduled …" on the technician card. */
+  const nextVisitAt = useMemo(() => {
+    const times = visits
+      .filter((visit) => visit.scheduledAt && !["completed", "cancelled", "no_show"].includes(visit.status))
+      .map((visit) => String(visit.scheduledAt))
+      .sort();
+    return times[0] || "";
+  }, [visits]);
+
+  /** Remove on the crew cards: clears the person from the estimate and its open visits. */
+  async function removeCrew(mode: EstimateCrewMode) {
+    if (!opportunity || removingCrew) return;
+    if (mode === "contractor" && !window.confirm(`Remove ${contractorLabel} from ${opportunity.number}?`)) return;
+    setRemovingCrew(mode);
+    try {
+      const updated = await assignEstimateV2Crew(opportunity.id, {
+        ...(mode === "technician" ? { employeeId: null } : { contractorId: null }),
+        applyToVisits: true,
+      });
+      setOpportunity((prev) => (prev ? { ...prev, ...updated } : updated));
+      toast.success(mode === "technician" ? "Technician removed." : `${contractorLabel} removed from this estimate.`);
+    } catch (error) {
+      toast.error(extractErrorMessage(error) || `Could not remove the ${mode}.`);
+    } finally {
+      setRemovingCrew(null);
+    }
+  }
+
   const hasCompletedVisit = useMemo(
     () => visits.some((visit) => visit.status === "completed"),
     [visits],
@@ -1751,6 +1805,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       }
       actions={
         <>
+          {crewLocked ? null : (
+            <>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setCrewMode("contractor")}>
+                <Handshake className="size-3.5 text-primary" />
+                {contractorId ? "Change contractor" : "Assign contractor"}
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setCrewMode("technician")}>
+                <HardHat className="size-3.5 text-primary" />
+                {technicianId ? "Change technician" : "Assign technician"}
+              </Button>
+            </>
+          )}
           {/* Prints the customer-facing document (same layout the customer signs), in place, at any status. */}
           <Button
             variant="outline"
@@ -1964,6 +2030,103 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
         {/* Main column */}
         <section className="min-w-0 space-y-4">
+          {/* Same cards as the job Summary tab; only once someone is assigned ("Assign …" is in the header). */}
+          {technicianId ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-4 py-3 shadow-xs">
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+                  aria-hidden
+                >
+                  {technicianLabel
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase())
+                    .join("")}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+                    Assigned technician
+                  </p>
+                  <p className="mt-0.5 truncate text-sm font-semibold text-foreground">{technicianLabel}</p>
+                  {nextVisitAt ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">Scheduled {formatDate(nextVisitAt)}</p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {estimate?.id ? (
+                  <TechChatButton
+                    side="provider"
+                    contextType="estimate"
+                    contextId={estimate.id}
+                    employeeId={technicianId}
+                    label="Chat"
+                    variant="default"
+                    className="h-8"
+                  />
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 bg-background"
+                  disabled={crewLocked}
+                  title={crewLocked ? "This estimate is closed" : undefined}
+                  onClick={() => setCrewMode("technician")}
+                >
+                  Change
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={removingCrew === "technician" || crewLocked}
+                  title={crewLocked ? "This estimate is closed" : undefined}
+                  onClick={() => void removeCrew("technician")}
+                >
+                  {removingCrew === "technician" ? "Removing…" : "Remove"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {contractorId ? (
+            <div className="rounded-lg border border-input bg-background px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Handshake className="size-4 text-muted-foreground" aria-hidden />
+                <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Contractor</p>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Link href={`/pro/dashboard/contractors/${contractorId}`} className="text-sm font-semibold hover:underline">
+                  {contractorLabel}
+                </Link>
+                <span className="ml-auto flex items-center gap-1.5">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7"
+                    aria-label={`Edit ${contractorLabel}`}
+                    disabled={crewLocked}
+                    title={crewLocked ? "This estimate is closed" : undefined}
+                    onClick={() => setCrewMode("contractor")}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Remove ${contractorLabel}`}
+                    disabled={crewLocked || removingCrew === "contractor"}
+                    title={crewLocked ? "This estimate is closed" : undefined}
+                    onClick={() => void removeCrew("contractor")}
+                  >
+                    {removingCrew === "contractor" ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                  </Button>
+                </span>
+              </div>
+            </div>
+          ) : null}
           <QuoteAnswersAccordion answers={opportunity.quoteAnswers} />
           {showVisits ? (
             <SiteVisitsPanel
@@ -2594,6 +2757,20 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             rememberTemplate({ prompted: savePrompt.signature });
             finishSavePrompt();
           }}
+        />
+      ) : null}
+      {crewMode ? (
+        <EstimateCrewDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setCrewMode(null);
+          }}
+          mode={crewMode}
+          opportunity={opportunity}
+          currentId={crewMode === "technician" ? technicianId : contractorId}
+          currentLabel={crewMode === "technician" ? technicianLabel : contractorLabel}
+          openVisitCount={openVisitCount}
+          onSaved={(updated) => setOpportunity((prev) => (prev ? { ...prev, ...updated } : updated))}
         />
       ) : null}
     </PortalPage>

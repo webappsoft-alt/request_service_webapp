@@ -27,6 +27,7 @@ import {
   type PortalEmployee,
   type PortalEmployeeRole, emptyPersonAddress, type PortalPersonAddress } from "@/lib/data/portal";
 import { PersonAddressFields } from "@/components/shared/person-address-fields";
+import { ExpertisePicker, tradeFromExpertise } from "@/components/portal/expertise-picker";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
 import { createTeamMember, fetchTeam } from "@/store/teamSlice";
@@ -73,7 +74,7 @@ export function CreateEmployeeDialog({
   const [role, setRole] = useState<PortalEmployeeRole>(defaultRole);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [trade, setTrade] = useState("");
+  const [expertise, setExpertise] = useState<string[]>([]);
   const [payRate, setPayRate] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -86,7 +87,7 @@ export function CreateEmployeeDialog({
     setRole(defaultRole);
     setEmail("");
     setPhone("");
-    setTrade("");
+    setExpertise([]);
     setPayRate("");
     setUsername("");
     setPassword("");
@@ -113,7 +114,8 @@ export function CreateEmployeeDialog({
       role,
       email: email.trim(),
       phone: phone.trim(),
-      trade: trade.trim() || "General",
+      trade: tradeFromExpertise(expertise),
+      expertise,
       active: true as const,
       hourlyRate: Math.max(0, Number(payRate) || 0),
       address,
@@ -207,12 +209,10 @@ export function CreateEmployeeDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="create-emp-trade">Expertise</Label>
-            <Input
-              id="create-emp-trade"
-              value={trade}
-              placeholder="Plumbing, HVAC, Electrical…"
-              onChange={(e) => setTrade(e.target.value)}
-            />
+            <ExpertisePicker id="create-emp-trade" value={expertise} onChange={setExpertise} />
+            <p className="text-xs text-muted-foreground">
+              Calls the AI receptionist takes for these services are assigned to them automatically.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="create-emp-email">Email</Label>

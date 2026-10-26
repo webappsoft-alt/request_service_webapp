@@ -218,6 +218,8 @@ export type PortalEmployee = {
   email: string;
   phone: string;
   trade: string;
+  /** Sub-services this member handles (drives AI auto-assignment); `trade` is their joined label. */
+  expertise?: string[];
   active: boolean;
   hourlyRate?: number;
   overtimeRate?: number;

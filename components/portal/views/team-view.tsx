@@ -36,6 +36,7 @@ import type { PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
 import { emptyPersonAddress, employeeRoleLabel, type PortalPersonAddress } from "@/lib/data/portal";
 import { PersonAddressFields } from "@/components/shared/person-address-fields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { ExpertisePicker, initialExpertise, tradeFromExpertise } from "@/components/portal/expertise-picker";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
   clearTeamError,
@@ -408,7 +409,7 @@ function EmployeeFormDialog({
   const [role, setRole] = useState<PortalEmployeeRole>("technician");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [trade, setTrade] = useState("");
+  const [expertise, setExpertise] = useState<string[]>([]);
   const [payRate, setPayRate] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -422,7 +423,7 @@ function EmployeeFormDialog({
     setRole("technician");
     setEmail("");
     setPhone("");
-    setTrade("");
+    setExpertise([]);
     setPayRate("");
     setUsername("");
     setPassword("");
@@ -441,7 +442,7 @@ function EmployeeFormDialog({
     setRole(employee.role);
     setEmail(employee.email);
     setPhone(employee.phone);
-    setTrade(employee.trade);
+    setExpertise(initialExpertise(employee));
     setPayRate(employee.hourlyRate ? String(employee.hourlyRate) : "");
     setUsername(employee.username ?? "");
     setPassword("");
@@ -457,7 +458,8 @@ function EmployeeFormDialog({
       role,
       email: email.trim(),
       phone: phone.trim(),
-      trade: trade.trim() || "General",
+      trade: tradeFromExpertise(expertise),
+      expertise,
       active: true as const,
       hourlyRate: Math.max(0, Number(payRate) || 0),
       address,
@@ -565,12 +567,7 @@ function EmployeeFormDialog({
           </Field>
           <Field>
             <FieldLabel htmlFor="emp-trade">Expertise</FieldLabel>
-            <Input
-              id="emp-trade"
-              value={trade}
-              placeholder="Plumbing, HVAC, Electrical…"
-              onChange={(change) => setTrade(change.target.value)}
-            />
+            <ExpertisePicker id="emp-trade" value={expertise} onChange={setExpertise} />
           </Field>
           <Field>
             <FieldLabel htmlFor="emp-email">Email</FieldLabel>

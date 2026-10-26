@@ -167,7 +167,7 @@ import {
 } from "@/components/api/apiFuntions";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
-import { formatTaxRatePercent, moneyWithStateTax } from "@/lib/tax/state-tax";
+import { formatTaxRatePercent, storedInvoiceMoney } from "@/lib/tax/state-tax";
 import { paymentMethodLabel } from "@/lib/data/portal";
 import {
   InvoicePrintDocument,
@@ -3561,22 +3561,6 @@ export function InvoiceDetailView({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, useApi, invoiceRef, router]);
 
-  // Same state-tax rate the Summary tab uses, so the printed totals match the screen.
-  const printTaxState =
-    job?.address?.state || estimate?.propertyAddress?.state || invoice?.address?.state || "";
-  const [printTaxRate, setPrintTaxRate] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
-      const rate = await fetchTaxRatePercent(printTaxState);
-      if (!cancelled) setPrintTaxRate(rate);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [printTaxState]);
-
   if (!invoice) {
     // Wait while loading or recovering a stale local inv_* link.
     if (useApi && (detailLoading || resolvingStale)) {
@@ -3598,7 +3582,8 @@ export function InvoiceDetailView({ id }: { id: string }) {
   const invoiceId = invoice.id;
   const invoiceNumber = invoice.number;
 
-  const printMoney = moneyWithStateTax(invoice.subtotal, printTaxRate, invoice.discount);
+  // The invoice's saved totals, same as the Summary tab.
+  const printMoney = storedInvoiceMoney(invoice);
   const printSite = job?.address || invoice.address || estimate?.propertyAddress;
   const printSiteLines = printSite
     ? [
@@ -3649,11 +3634,11 @@ export function InvoiceDetailView({ id }: { id: string }) {
     })),
     subtotal: printMoney.subtotal,
     discount: printMoney.discount,
-    taxLabel: `Tax (${formatTaxRatePercent(printTaxRate)}%)`,
+    taxLabel: `Tax (${formatTaxRatePercent(printMoney.taxRatePercent)}%)`,
     tax: printMoney.tax,
     total: printMoney.total,
     amountPaid: invoice.amountPaid || 0,
-    balanceDue: Math.max(0, printMoney.total - (invoice.amountPaid || 0)),
+    balanceDue: printMoney.balanceDue,
     payments: relatedPayments
       .filter((payment) => payment.status === "succeeded")
       .map((payment) => ({

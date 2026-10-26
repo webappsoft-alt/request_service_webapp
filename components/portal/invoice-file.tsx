@@ -51,7 +51,7 @@ import {
   paymentStatusLabel,
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
-import { formatTaxRatePercent, moneyWithStateTax } from "@/lib/tax/state-tax";
+import { formatTaxRatePercent, storedInvoiceMoney } from "@/lib/tax/state-tax";
 import type { Estimate, Invoice, InvoiceStatus, Job, Payment, PaymentMethodType } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -513,34 +513,9 @@ export function InvoiceSummaryTab({
 }) {
   const [summaryTab, setSummaryTab] = useState<"overview" | "payments">("overview");
   const address = job?.address;
-  const estimateAddr = estimate?.propertyAddress;
-  const addressState = address?.state || estimateAddr?.state || "";
-  const [taxRatePercent, setTaxRatePercent] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
-      const rate = await fetchTaxRatePercent(addressState);
-      if (!cancelled) setTaxRatePercent(rate);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [addressState]);
-  const money = useMemo(() => {
-    const sheet = moneyWithStateTax(
-      invoice.subtotal,
-      taxRatePercent,
-      invoice.discount,
-    );
-    const balanceDue = Math.max(0, sheet.total - (invoice.amountPaid || 0));
-    return { ...sheet, balanceDue, amountPaid: invoice.amountPaid || 0 };
-  }, [
-    invoice.subtotal,
-    invoice.discount,
-    invoice.amountPaid,
-    taxRatePercent,
-  ]);
+  // The invoice's own saved totals (same as the backend, the customer and payments use).
+  const money = storedInvoiceMoney(invoice);
+  const taxRatePercent = money.taxRatePercent;
   const overdueDays = invoiceDaysOverdue(invoice);
   const kind = invoiceKindLabel(invoiceKind(invoice));
   const changeOrder =

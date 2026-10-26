@@ -90,14 +90,21 @@ import {
 import {
   finalizeEstimate,
   getEstimate,
+  getInvoice,
   shareEstimate,
   updateEstimate,
 } from "@/lib/api/crm-client";
 import { formatDate, formatMoney, visitWallClock } from "@/lib/format";
-import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate } from "@/lib/types";
+import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate, Invoice } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
-import { employeeName, estimateCanShare } from "@/lib/data/portal";
+import {
+  employeeName,
+  estimateCanShare,
+  invoiceIsUnpaid,
+  invoiceStatusLabel,
+  invoiceStatusTone,
+} from "@/lib/data/portal";
 import { stripChangeRequestLinesFromNotes } from "@/lib/data/estimate-change-requests";
 
 const PREP_OPTIONS = [
@@ -591,8 +598,29 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     const invoiceDue = new Date(`${today}T12:00:00`);
     invoiceDue.setDate(invoiceDue.getDate() + 14);
     setInvoiceDueAt(invoiceDue.toISOString().slice(0, 10));
-    setAcceptStep(estimate?.jobId ? "invoice" : "choose");
-  }, [acceptOpen, estimate?.jobId]);
+    setAcceptStep(estimate?.invoiceId ? "job" : "choose");
+  }, [acceptOpen, estimate?.invoiceId]);
+
+  /** The invoice made from this estimate (directly, or later from its job), for its status line. */
+  const [linkedInvoice, setLinkedInvoice] = useState<Invoice | null>(null);
+  useEffect(() => {
+    const invoiceId = estimate?.invoiceId;
+    if (!invoiceId) {
+      setLinkedInvoice(null);
+      return;
+    }
+    let cancelled = false;
+    void getInvoice(invoiceId)
+      .then((invoice) => {
+        if (!cancelled) setLinkedInvoice(invoice);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkedInvoice(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [estimate?.invoiceId]);
 
   const [scopeOfWork, setScopeOfWork] = useState("");
   const [terms, setTerms] = useState("Proposal valid for 30 calendar days from issue date.");
@@ -2224,6 +2252,37 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         <span className="font-medium text-slate-800">{informationSourceLabel}</span>
                       </p>
                     ) : null}
+                    {estimate?.invoiceId ? (
+                      <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                        Invoice ·
+                        <span className="font-medium text-slate-800">{linkedInvoice?.number || "Linked invoice"}</span>
+                        {linkedInvoice ? (
+                          <>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                                invoiceStatusTone(linkedInvoice.status),
+                              )}
+                            >
+                              {invoiceStatusLabel(linkedInvoice.status)}
+                            </span>
+                            <span>
+                              {linkedInvoice.balanceDue > 0
+                                ? `${formatMoney(linkedInvoice.balanceDue)} due of ${formatMoney(linkedInvoice.total)}`
+                                : `${formatMoney(linkedInvoice.total)} total`}
+                            </span>
+                            {linkedInvoice.dueAt && invoiceIsUnpaid(linkedInvoice.status) ? (
+                              <span>· Due {formatDate(linkedInvoice.dueAt)}</span>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </p>
+                    ) : estimate?.jobId ? (
+                      <p className="mt-1.5 text-xs text-slate-500">
+                        Invoice ·{" "}
+                        <span className="font-medium text-slate-800">Created from the job once the work is complete</span>
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <Button
@@ -2293,21 +2352,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                               Open invoice
                             </Link>
                           </Button>
-                        ) : (
+                        ) : null}
+                        {/* With a job, the invoice comes from the job when the work is done. */}
+                        {!estimate.jobId ? (
                           <Button
                             size="sm"
                             variant="secondary"
                             disabled={saving}
                             onClick={() => setAcceptOpen(true)}
                           >
-                            {estimate.jobId
-                              ? "Create invoice…"
-                              : estimate.status === "accepted" ||
-                                  estimate.status === "converted_to_job"
-                                ? "Create job or invoice…"
-                                : "Customer accepted…"}
+                            {estimate.invoiceId ? "Convert to job" : "Create job or invoice…"}
                           </Button>
-                        )}
+                        ) : null}
                       </>
                     ) : null}
                   </div>
@@ -2586,7 +2642,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             </DialogTitle>
             <DialogDescription>
               {acceptStep === "job"
-                ? "Set when work starts and when it is due. The job shows on the calendar from start through due."
+                ? `Set when work starts and when it is due. The job shows on the calendar from start through due.${
+                    estimate?.invoiceId
+                      ? ` It uses this estimate's invoice${linkedInvoice?.number ? ` (${linkedInvoice.number})` : ""} — no new invoice is created.`
+                      : ""
+                  }`
                 : acceptStep === "invoice"
                   ? "Set when this invoice is due. That date is shown on the calendar and to the customer."
                   : estimate?.jobId
@@ -2637,15 +2697,17 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   </div>
                 </div>
                 <div className="flex w-full gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    disabled={saving}
-                    onClick={() => setAcceptStep("choose")}
-                  >
-                    Back
-                  </Button>
+                  {estimate?.invoiceId ? null : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      disabled={saving}
+                      onClick={() => setAcceptStep("choose")}
+                    >
+                      Back
+                    </Button>
+                  )}
                   <Button
                     className="flex-1"
                     disabled={saving || !jobStartAt || !jobDueAt || jobDueAt < jobStartAt}

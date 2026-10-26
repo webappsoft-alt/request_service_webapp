@@ -66,6 +66,36 @@ export function formatTaxRatePercent(rate: number | null | undefined) {
 }
 
 /**
+ * An invoice's money exactly as the backend saved it: its tax was fixed when the invoice was
+ * made (from the estimate / job lines), so it is never recalculated from an address here.
+ * `taxRatePercent` is the rate that tax works out to, for the "Tax (x%)" label.
+ */
+export function storedInvoiceMoney(invoice: {
+  subtotal: number;
+  discount?: number;
+  tax?: number;
+  total: number;
+  amountPaid?: number;
+  balanceDue?: number;
+}) {
+  const cents = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
+  const subtotal = cents(invoice.subtotal);
+  const tax = cents(invoice.tax);
+  const total = cents(invoice.total);
+  const amountPaid = cents(invoice.amountPaid);
+  return {
+    subtotal,
+    discount: cents(invoice.discount),
+    tax,
+    total,
+    amountPaid,
+    balanceDue: Math.max(0, invoice.balanceDue != null ? cents(invoice.balanceDue) : cents(total - amountPaid)),
+    // Tax is charged on the pre-discount subtotal (see moneyWithStateTax).
+    taxRatePercent: subtotal > 0 ? Math.round((tax / subtotal) * 10000) / 100 : 0,
+  };
+}
+
+/**
  * Subtotal → State Tax → Total (cents-correct; matches backend calculateTotals).
  * Tax is computed on the pre-discount subtotal, then discount is applied to the total.
  */

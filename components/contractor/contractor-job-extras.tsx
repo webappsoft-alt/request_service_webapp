@@ -1,11 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Play, Square } from "lucide-react";
+import { Loader2, Pause, Play, Square } from "lucide-react";
 import { toast } from "sonner";
 import { LiveTimer } from "@/components/time-tracking/time-tracking-ui";
+import { ContractorMapButton } from "@/components/contractor/contractor-job-actions";
+import { ClockProblemDialog, type ClockProblem } from "@/components/technician/tech-ui";
 import { Button } from "@/components/ui/button";
-import { contractorClockIn, contractorClockOut, type ContractorJobDetail } from "@/lib/api/contractor-portal-client";
+import {
+  contractorClockIn,
+  contractorClockOut,
+  contractorPauseTimer,
+  contractorResumeTimer,
+  type ContractorJobDetail,
+} from "@/lib/api/contractor-portal-client";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { getDeviceLocation, LocationError, tryDeviceLocation, type DeviceLocation } from "@/lib/geolocation";
 import { formatMoney } from "@/lib/format";
 import { useAppDispatch } from "@/store/hooks";
 import { fetchContractorJob } from "@/store/contractorPortalSlice";
@@ -27,42 +37,103 @@ export function ContractorClockButton({ detail, closed }: { detail: ContractorJo
   const runningHere = activeEntry?.status === "active" && activeEntry.job?.id === job.id;
   const runningElsewhere = activeEntry?.status === "active" && !runningHere;
 
+  const paused = runningHere && Boolean(activeEntry?.pausedAt);
+  const [problem, setProblem] = useState<ClockProblem | null>(null);
+
+  /** The device position, or null after telling the contractor how to turn location on. */
+  async function requireLocation(): Promise<DeviceLocation | null> {
+    try {
+      return await getDeviceLocation();
+    } catch (error) {
+      const issue = error instanceof LocationError ? error : null;
+      setProblem({
+        title: issue?.title || "Turn on location to check in/out",
+        message: issue?.message || "Allow location access for this site, then try again.",
+      });
+      return null;
+    }
+  }
+
+  async function run(action: () => Promise<unknown>, success: string, failure: string) {
+    try {
+      await action();
+      toast.success(success);
+      await dispatch(fetchContractorJob(job.id));
+    } catch (error) {
+      const message = extractErrorMessage(error);
+      const awayFromSite = message?.startsWith("You must be at the site location");
+      setProblem({
+        title: awayFromSite ? "You must be at the site location to check in/out." : failure,
+        message: message || "Please try again.",
+      });
+    }
+  }
+
   async function toggle() {
     setBusy(true);
     try {
       if (runningHere) {
-        await contractorClockOut(job.id);
-        toast.success("Clocked out.");
+        const location = await requireLocation();
+        if (!location) return;
+        await run(() => contractorClockOut(job.id, "", location), "Clocked out.", "Couldn't clock out");
       } else {
-        await contractorClockIn(job.id);
-        toast.success(`Clocked in on ${job.number}.`);
+        const location = await requireLocation();
+        if (!location) return;
+        await run(() => contractorClockIn(job.id, "", location), `Clocked in on ${job.number}.`, "Couldn't clock in");
       }
-      await dispatch(fetchContractorJob(job.id));
-    } catch (error) {
-      const message = error && typeof error === "object" && "message" in error ? String(error.message) : "";
-      toast.error(message || "Could not update your time.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pauseOrResume() {
+    setBusy(true);
+    try {
+      if (paused) {
+        const location = await requireLocation();
+        if (!location) return;
+        await run(() => contractorResumeTimer(location), "Back on the clock.", "Couldn't restart your timer");
+      } else {
+        const location = await tryDeviceLocation();
+        await run(() => contractorPauseTimer(location), "Timer paused. Paused time isn't counted.", "Couldn't pause your timer");
+      }
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Button
-      type="button"
-      onClick={() => void toggle()}
-      disabled={busy || closed || runningElsewhere}
-      variant={runningHere ? "destructive" : "default"}
-      title={runningElsewhere ? `Clocked in on ${activeEntry?.job?.number || "another job"} — clock out there first.` : undefined}
-    >
-      {busy ? <Loader2 className="animate-spin" /> : runningHere ? <Square /> : <Play />}
-      {runningHere && activeEntry ? (
-        <>
-          Clock out · <LiveTimer entry={activeEntry} />
-        </>
-      ) : (
-        "Clock in"
-      )}
-    </Button>
+    <>
+      {runningHere ? (
+        <Button type="button" variant="outline" onClick={() => void pauseOrResume()} disabled={busy}>
+          {paused ? <Play /> : <Pause />}
+          {paused ? "Resume" : "Pause"}
+        </Button>
+      ) : null}
+      <Button
+        type="button"
+        onClick={() => void toggle()}
+        disabled={busy || closed || runningElsewhere}
+        variant={runningHere ? "destructive" : "default"}
+        title={runningElsewhere ? `Clocked in on ${activeEntry?.job?.number || "another job"} — clock out there first.` : undefined}
+      >
+        {busy ? <Loader2 className="animate-spin" /> : runningHere ? <Square /> : <Play />}
+        {runningHere && activeEntry ? (
+          <>
+            Clock out · <LiveTimer entry={activeEntry} />
+            {paused ? " · paused" : ""}
+          </>
+        ) : (
+          "Clock in"
+        )}
+      </Button>
+      <ClockProblemDialog
+        problem={problem}
+        onClose={() => setProblem(null)}
+        site={{ location: { address: job.site?.address, city: job.site?.city, state: job.site?.state, zip: job.site?.zip } }}
+        directions={<ContractorMapButton job={job} />}
+      />
+    </>
   );
 }
 

@@ -10,6 +10,22 @@ export type TimeEntryRef = {
   status?: string;
 };
 
+/** One step of a session's audit trail (written by the server, never edited). */
+export type TimeEvent = {
+  type: "clock_in" | "pause" | "resume" | "clock_out";
+  at: string;
+  /** "system": automatic clock-out after leaving the job site. */
+  by: "worker" | "office" | "system";
+  /** Why, when the system did it. */
+  reason?: string;
+  lat: number | null;
+  lng: number | null;
+  accuracyMeters: number | null;
+  /** Clock in / resume: within the 200 m site radius, or the site has no mapped address. */
+  geofence: "verified" | "no_site_location" | null;
+  distanceMeters: number | null;
+};
+
 export type TimeEntry = {
   id: string;
   /** Employee id, or the Contractor id for contractor sessions. */
@@ -27,6 +43,12 @@ export type TimeEntry = {
   /** Saved pay (completed) or pay so far when fetched (active). */
   pay: number;
   notes: string;
+  /** Set while the session is paused (it still counts as clocked in). */
+  pausedAt?: string | null;
+  /** Seconds of finished pauses (not worked, not paid). */
+  pausedSeconds?: number;
+  /** Clock in / pause / resume / clock out trail. */
+  events?: TimeEvent[];
 };
 
 export type TimeDayRow = {
@@ -136,6 +158,78 @@ export function mapTimeEntry(raw: unknown): TimeEntry | null {
     payRate: Number(row.payRate) || 0,
     pay: Number(status === "active" ? row.livePay : row.pay ?? row.livePay) || 0,
     notes: String(row.notes || ""),
+    pausedAt: row.pausedAt ? String(row.pausedAt) : null,
+    pausedSeconds: Number(row.pausedSeconds) || 0,
+    events: Array.isArray(row.events) ? row.events.map(mapTimeEvent).filter((event): event is TimeEvent => Boolean(event)) : [],
+  };
+}
+
+const EVENT_TYPES = ["clock_in", "pause", "resume", "clock_out"] as const;
+
+function mapTimeEvent(raw: unknown): TimeEvent | null {
+  const row = asRecord(raw);
+  const type = EVENT_TYPES.find((item) => item === row.type);
+  if (!type || !row.at) return null;
+  const num = (value: unknown) => (value === null || value === undefined || value === "" ? null : Number(value));
+  return {
+    type,
+    at: String(row.at),
+    by: row.by === "office" || row.by === "system" ? row.by : "worker",
+    reason: row.reason ? String(row.reason) : undefined,
+    lat: num(row.lat),
+    lng: num(row.lng),
+    accuracyMeters: num(row.accuracyMeters),
+    geofence: row.geofence === "verified" || row.geofence === "no_site_location" ? row.geofence : null,
+    distanceMeters: num(row.distanceMeters),
+  };
+}
+
+const EVENT_LABELS: Record<TimeEvent["type"], string> = {
+  clock_in: "In",
+  pause: "Pause",
+  resume: "Resume",
+  clock_out: "Out",
+};
+
+export function timeEventLabel(type: TimeEvent["type"]) {
+  return EVENT_LABELS[type];
+}
+
+/** "In 8:02 AM · Pause 10:15 AM · Resume 10:40 AM · Out 1:00 PM" (for exports and tooltips). */
+export function entryTrailText(entry: Pick<TimeEntry, "events">) {
+  return (entry.events ?? [])
+    .map(
+      (event) =>
+        `${EVENT_LABELS[event.type]} ${formatClockTime(event.at)}${
+          event.by === "office" ? " (office)" : event.by === "system" ? ` (automatic: ${event.reason || "left the site"})` : ""
+        }`,
+    )
+    .join(" · ");
+}
+
+/** The site check made at clock-in (or the last resume): verified distance or unverified. */
+export function entrySiteCheck(entry: Pick<TimeEntry, "events">) {
+  return [...(entry.events ?? [])].reverse().find((event) => event.geofence) ?? null;
+}
+
+/** Answer to a position report while on the clock (portal location watch). */
+export type LocationReport = {
+  /** The session after the report (completed when the worker was clocked out). */
+  entry: TimeEntry | null;
+  autoClockedOut: boolean;
+  /** Clearly outside the site radius on this report. */
+  outside: boolean;
+  distanceMeters: number | null;
+};
+
+export function mapLocationReport(raw: unknown): LocationReport {
+  const row = asRecord(raw);
+  const distance = row.distanceMeters;
+  return {
+    entry: mapTimeEntry(row.entry),
+    autoClockedOut: row.autoClockedOut === true,
+    outside: row.outside === true,
+    distanceMeters: distance === null || distance === undefined ? null : Number(distance),
   };
 }
 
@@ -195,12 +289,17 @@ export function mapTimeTotals(raw: unknown): TimeTotals | undefined {
   };
 }
 
-/** Seconds elapsed for an entry right now (live for running timers). */
-export function liveSeconds(entry: Pick<TimeEntry, "status" | "clockInAt" | "seconds">, now = Date.now()) {
+/** Worked seconds for an entry right now (live for running timers; pauses don't count). */
+export function liveSeconds(
+  entry: Pick<TimeEntry, "status" | "clockInAt" | "seconds" | "pausedAt" | "pausedSeconds">,
+  now = Date.now(),
+) {
   if (entry.status !== "active") return entry.seconds;
   const start = new Date(entry.clockInAt).getTime();
   if (!Number.isFinite(start)) return entry.seconds;
-  return Math.max(0, Math.floor((now - start) / 1000));
+  const pausedAt = entry.pausedAt ? new Date(entry.pausedAt).getTime() : NaN;
+  const until = Number.isFinite(pausedAt) ? pausedAt : now;
+  return Math.max(0, Math.floor((until - start) / 1000) - (entry.pausedSeconds || 0));
 }
 
 /** 01:02:03 style timer text. */
@@ -265,7 +364,7 @@ export function browserTimeZone() {
   }
 }
 
-export type TimeRangePreset = "today" | "week" | "lastWeek" | "month" | "all" | "custom";
+export type TimeRangePreset = "today" | "week" | "lastWeek" | "month" | "last6Months" | "all" | "custom";
 
 export type TimeRange = {
   preset: TimeRangePreset;
@@ -331,6 +430,15 @@ export function resolveTimeRange(range: TimeRange): { from?: string; to?: string
         from: monthStart.toISOString(),
         to: monthEnd.toISOString(),
         label: monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      };
+    }
+    case "last6Months": {
+      // This month and the five before it.
+      const from = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      return {
+        from: from.toISOString(),
+        to: end.toISOString(),
+        label: `${from.toLocaleDateString("en-US", { month: "short", year: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`,
       };
     }
     case "custom": {

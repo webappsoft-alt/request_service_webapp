@@ -1,3 +1,5 @@
+import { mapLocationReport, type LocationReport } from "@/lib/time-tracking";
+import type { DeviceLocation } from "@/lib/geolocation";
 import { technicianApi, providerCrmApi } from "@/components/api/ApiRoutesFile";
 import { getData, postData, putData } from "@/components/api/sliceHttp";
 import {
@@ -531,19 +533,43 @@ export async function getTechnicianActiveEntry(): Promise<TimeEntry | null> {
 
 export type ClockTarget = { kind: "job" | "estimate"; id: string };
 
-export async function clockIn(target: ClockTarget, notes?: string): Promise<TimeEntry | null> {
-  const endpoint =
-    target.kind === "job" ? technicianApi.jobClockIn(target.id) : technicianApi.estimateClockIn(target.id);
-  return mapTimeEntry(dataOf(await postData(endpoint, notes ? { notes } : {}, { silent: true })));
+/** Body for a clock action: optional note + device position (lat / lng / accuracy). */
+function clockBody(notes?: string, location?: DeviceLocation | null) {
+  return {
+    ...(notes ? { notes } : {}),
+    ...(location ? { lat: location.lat, lng: location.lng, accuracy: Math.round(location.accuracy) } : {}),
+  };
 }
 
-export async function clockOut(target: ClockTarget | null, notes?: string): Promise<TimeEntry | null> {
+/** Clock in: the server checks `location` is within 200 m of the job / estimate site. */
+export async function clockIn(target: ClockTarget, notes?: string, location?: DeviceLocation | null): Promise<TimeEntry | null> {
+  const endpoint =
+    target.kind === "job" ? technicianApi.jobClockIn(target.id) : technicianApi.estimateClockIn(target.id);
+  return mapTimeEntry(dataOf(await postData(endpoint, clockBody(notes, location), { silent: true })));
+}
+
+export async function clockOut(target: ClockTarget | null, notes?: string, location?: DeviceLocation | null): Promise<TimeEntry | null> {
   const endpoint = !target
     ? technicianApi.clockOutActive
     : target.kind === "job"
       ? technicianApi.jobClockOut(target.id)
       : technicianApi.estimateClockOut(target.id);
-  return mapTimeEntry(dataOf(await postData(endpoint, notes ? { notes } : {}, { silent: true })));
+  return mapTimeEntry(dataOf(await postData(endpoint, clockBody(notes, location), { silent: true })));
+}
+
+/** Pause the running timer (break, supplies run…); paused time isn't paid. */
+export async function pauseTimer(location?: DeviceLocation | null): Promise<TimeEntry | null> {
+  return mapTimeEntry(dataOf(await postData(technicianApi.pauseActive, clockBody(undefined, location), { silent: true })));
+}
+
+/** Position while on the clock (the server clocks out after leaving the site). */
+export async function reportTechnicianLocation(location: DeviceLocation): Promise<LocationReport> {
+  return mapLocationReport(dataOf(await postData(technicianApi.reportLocation, clockBody(undefined, location), { silent: true })));
+}
+
+/** Restart a paused timer; like clock-in, only within 200 m of the site. */
+export async function resumeTimer(location: DeviceLocation): Promise<TimeEntry | null> {
+  return mapTimeEntry(dataOf(await postData(technicianApi.resumeActive, clockBody(undefined, location), { silent: true })));
 }
 
 export async function getTechnicianProfile(): Promise<TechProfile> {

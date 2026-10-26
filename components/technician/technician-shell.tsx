@@ -21,6 +21,7 @@ import {
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { LiveTimer } from "@/components/time-tracking/time-tracking-ui";
 import { TechnicianRealtimeBridge } from "@/components/technician/technician-realtime-bridge";
+import { TechnicianGeofenceWatch } from "@/components/time-tracking/geofence-watch";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -317,6 +318,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
   return (
     <div className="technician-theme portal-app min-h-svh bg-[var(--tech-bg)]">
       <TechnicianRealtimeBridge />
+      <TechnicianGeofenceWatch />
       <TechnicianLocationShare />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-gradient-to-b from-[var(--tech-sidebar)] to-[var(--tech-sidebar-2)] lg:flex">
         <div className="flex h-14 items-center border-b border-[var(--tech-sidebar-border)] px-4">

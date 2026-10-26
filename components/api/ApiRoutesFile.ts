@@ -349,6 +349,11 @@ export const technicianApi = {
   timeEntries: "technician/time-entries",
   activeEntry: "technician/time-entries/active",
   clockOutActive: "technician/time-entries/clock-out",
+  /** POST — pause / restart the running timer (restart sends the device location) */
+  pauseActive: "technician/time-entries/pause",
+  resumeActive: "technician/time-entries/resume",
+  /** POST — position while on the clock; leaving the site clocks out automatically */
+  reportLocation: "technician/time-entries/location",
   payments: "technician/payments",
   /** PUT { section } — mark a nav section's notifications read (persists badge reset) */
   sectionRead: "technician/notifications/read-section",
@@ -369,6 +374,11 @@ export const contractorPortalApi = {
   jobClockIn: (id: string) => `contractor/jobs/${id}/clock-in`,
   jobClockOut: (id: string) => `contractor/jobs/${id}/clock-out`,
   activeEntry: "contractor/time-entries/active",
+  /** POST — pause / restart the running timer (restart sends the device location) */
+  pauseActive: "contractor/time-entries/pause",
+  resumeActive: "contractor/time-entries/resume",
+  /** POST — position while on the clock; leaving the site clocks out automatically */
+  reportLocation: "contractor/time-entries/location",
   schedule: "contractor/schedule",
   changeRequests: "contractor/change-requests",
   payouts: "contractor/payouts",

@@ -35,6 +35,7 @@ import type {
 } from "@/lib/api/technician-client";
 import {
   dateKey,
+  entryTrailText,
   formatClockTime,
   formatDuration,
   formatEntryDate,
@@ -447,7 +448,7 @@ function SessionCard({
     ) : (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
         <span className="size-1.5 animate-pulse rounded-full bg-emerald-600" aria-hidden />
-        Live
+        {entry.pausedAt ? "Paused" : "Live"}
       </span>
     );
   } else if (ledgerRow && ledgerRow.remaining > 0) {
@@ -473,7 +474,7 @@ function SessionCard({
 
   return (
     <article
-      title={[record?.title, `${formatMoney(entry.payRate)}/hr`].filter(Boolean).join(" · ")}
+      title={[record?.title, `${formatMoney(entry.payRate)}/hr`, entryTrailText(entry)].filter(Boolean).join(" · ")}
       className={cn(
         "space-y-1 rounded-md border bg-card p-1.5 text-[11px] leading-tight shadow-[0_1px_2px_rgba(15,23,42,0.05)]",
         running ? "border-emerald-300 ring-1 ring-emerald-200 dark:border-emerald-500/50 dark:ring-emerald-500/20" : "border-[#94a3b8] dark:border-border",

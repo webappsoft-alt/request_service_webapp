@@ -1,3 +1,4 @@
+import type { DeviceLocation } from "@/lib/geolocation";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import {
@@ -165,22 +166,30 @@ export const fetchActiveEntry = createAsyncThunk<TimeEntry | null, { force?: boo
   },
 );
 
-export const clockInThunk = createAsyncThunk<TimeEntry | null, { target: ClockTarget; notes?: string }, { rejectValue: string }>(
+export const clockInThunk = createAsyncThunk<
+  TimeEntry | null,
+  { target: ClockTarget; notes?: string; location?: DeviceLocation | null },
+  { rejectValue: string }
+>(
   "timeTracking/clockIn",
-  async ({ target, notes }, { rejectWithValue }) => {
+  async ({ target, notes, location }, { rejectWithValue }) => {
     try {
-      return await clockIn(target, notes);
+      return await clockIn(target, notes, location);
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
     }
   },
 );
 
-export const clockOutThunk = createAsyncThunk<TimeEntry | null, { target: ClockTarget | null; notes?: string }, { rejectValue: string }>(
+export const clockOutThunk = createAsyncThunk<
+  TimeEntry | null,
+  { target: ClockTarget | null; notes?: string; location?: DeviceLocation | null },
+  { rejectValue: string }
+>(
   "timeTracking/clockOut",
-  async ({ target, notes }, { rejectWithValue }) => {
+  async ({ target, notes, location }, { rejectWithValue }) => {
     try {
-      return await clockOut(target, notes);
+      return await clockOut(target, notes, location);
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
     }
@@ -256,7 +265,8 @@ export const stopTimeEntryThunk = createAsyncThunk<TimeEntry | null, string, { r
 );
 
 function applyEntry(state: TimeTrackingState, entry: TimeEntry, { technician }: { technician: boolean }) {
-  const key = `${entry.id}:${entry.status}`;
+  // Pause / resume keep the status "active", so the key also covers the pause and the trail.
+  const key = `${entry.id}:${entry.status}:${entry.pausedAt || ""}:${entry.events?.length ?? 0}`;
   if (state.lastEntryKey === key) return;
   state.lastEntryKey = key;
   if (technician) {

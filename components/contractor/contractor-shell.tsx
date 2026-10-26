@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { ContractorRealtimeBridge } from "@/components/contractor/contractor-realtime-bridge";
+import { ContractorGeofenceWatch } from "@/components/time-tracking/geofence-watch";
 import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
 import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
 import { Button } from "@/components/ui/button";
@@ -270,6 +271,7 @@ export function ContractorShell({ children }: { children: ReactNode }) {
   return (
     <div className="contractor-theme portal-app min-h-svh bg-[var(--ct-bg)]">
       <ContractorRealtimeBridge />
+      <ContractorGeofenceWatch />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-gradient-to-b from-[var(--ct-sidebar)] to-[var(--ct-sidebar-2)] lg:flex">
         <div className="flex h-14 items-center border-b border-[var(--ct-sidebar-border)] px-4">
           <SidebarBrand company={company} />

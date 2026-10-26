@@ -328,7 +328,10 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
           }
           return (
             <div className="space-y-3">
-              <ClockControl target={{ kind: "estimate", id: estimate.id }} />
+              <ClockControl
+                target={{ kind: "estimate", id: estimate.id }}
+                site={{ location, record: { recordType: "estimate", recordNumber: estimate.number, customerName: name } }}
+              />
               <div className="grid gap-3 lg:grid-cols-3">
                 <DetailCard title="Customer">
                   <div className="space-y-2">

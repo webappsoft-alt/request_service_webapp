@@ -298,6 +298,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
             <div className="space-y-3">
               <ClockControl
                 target={{ kind: "job", id: job.id }}
+                site={{ location, record: { recordType: "job", recordNumber: job.number, customerName: name } }}
                 disabled={closed}
                 disabledReason={closed ? `This job is ${job.status}; clocking in is closed.` : undefined}
               />

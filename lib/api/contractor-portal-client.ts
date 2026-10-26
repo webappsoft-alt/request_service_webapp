@@ -1,6 +1,14 @@
+import type { DeviceLocation } from "@/lib/geolocation";
 import { contractorPortalApi, providerCrmApi, technicianApi } from "@/components/api/ApiRoutesFile";
 import { deleteData, getData, postData, putData } from "@/components/api/sliceHttp";
-import { mapTimeEntry, mapTimeSummary, type TimeEntry, type TimeSummary } from "@/lib/time-tracking";
+import {
+  mapLocationReport,
+  mapTimeEntry,
+  mapTimeSummary,
+  type LocationReport,
+  type TimeEntry,
+  type TimeSummary,
+} from "@/lib/time-tracking";
 import type { LedgerRow, TechnicianLedger, TechnicianPaymentMethod } from "@/lib/api/technician-client";
 
 /* ───────────────────────────── Types ───────────────────────────── */
@@ -622,12 +630,40 @@ export async function listContractorPayouts(query: { page?: number; limit?: numb
   };
 }
 
-export async function contractorClockIn(jobId: string, notes = ""): Promise<TimeEntry | null> {
-  return mapTimeEntry(dataOf(await postData(contractorPortalApi.jobClockIn(jobId), { notes }, { silent: true })));
+const positionBody = (location?: DeviceLocation | null) =>
+  location ? { lat: location.lat, lng: location.lng, accuracy: Math.round(location.accuracy) } : {};
+
+/** Clock in: the server checks `location` is within 200 m of the job site. */
+export async function contractorClockIn(jobId: string, notes = "", location?: DeviceLocation | null): Promise<TimeEntry | null> {
+  return mapTimeEntry(
+    dataOf(await postData(contractorPortalApi.jobClockIn(jobId), { notes, ...positionBody(location) }, { silent: true })),
+  );
 }
 
-export async function contractorClockOut(jobId: string, notes = ""): Promise<TimeEntry | null> {
-  return mapTimeEntry(dataOf(await postData(contractorPortalApi.jobClockOut(jobId), { notes }, { silent: true })));
+export async function contractorClockOut(jobId: string, notes = "", location?: DeviceLocation | null): Promise<TimeEntry | null> {
+  return mapTimeEntry(
+    dataOf(await postData(contractorPortalApi.jobClockOut(jobId), { notes, ...positionBody(location) }, { silent: true })),
+  );
+}
+
+/** Pause the running timer; paused time isn't paid. */
+export async function contractorPauseTimer(location?: DeviceLocation | null): Promise<TimeEntry | null> {
+  return mapTimeEntry(dataOf(await postData(contractorPortalApi.pauseActive, positionBody(location), { silent: true })));
+}
+
+/** The contractor's running (or paused) session, if any. */
+export async function getContractorActiveEntry(): Promise<TimeEntry | null> {
+  return mapTimeEntry(dataOf(await getData(contractorPortalApi.activeEntry, undefined, quiet)));
+}
+
+/** Position while on the clock (the server clocks out after leaving the site). */
+export async function reportContractorLocation(location: DeviceLocation): Promise<LocationReport> {
+  return mapLocationReport(dataOf(await postData(contractorPortalApi.reportLocation, positionBody(location), { silent: true })));
+}
+
+/** Restart a paused timer; like clock-in, only within 200 m of the site. */
+export async function contractorResumeTimer(location: DeviceLocation): Promise<TimeEntry | null> {
+  return mapTimeEntry(dataOf(await postData(contractorPortalApi.resumeActive, positionBody(location), { silent: true })));
 }
 
 export async function listContractorSchedule(range: { startDate: string; endDate: string }): Promise<ContractorScheduleRow[]> {

@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMoney } from "@/lib/format";
 import {
+  entrySiteCheck,
+  entryTrailText,
   formatClockTime,
   formatDuration,
   formatEntryDate,
@@ -17,6 +19,7 @@ import {
   formatTimer,
   liveSeconds,
   resolveTimeRange,
+  timeEventLabel,
   todayInputValue,
   type TimeDayRow,
   type TimeEmployeeRow,
@@ -38,9 +41,53 @@ export function useNow(enabled = true) {
   return now;
 }
 
+/**
+ * A session's audit trail: each clock in / pause / resume / clock out with its time, the paused
+ * total, and the site check made at clock-in (distance from the job site).
+ */
+export function EntryTrail({ entry }: { entry: TimeEntry }) {
+  const events = entry.events ?? [];
+  if (!events.length) return <span className="text-xs text-muted-foreground">—</span>;
+  const site = entrySiteCheck(entry);
+  return (
+    <div className="min-w-44 space-y-0.5 text-xs">
+      <p className="flex flex-wrap gap-x-2 gap-y-0.5">
+        {events.map((event, index) => (
+          <span key={`${event.type}-${event.at}-${index}`} className="whitespace-nowrap">
+            <span className="font-medium text-foreground">{timeEventLabel(event.type)}</span>{" "}
+            <span className="text-muted-foreground tabular-nums">{formatClockTime(event.at)}</span>
+            {event.by === "office" ? <span className="text-muted-foreground"> · office</span> : null}
+            {event.by === "system" ? (
+              <span className="text-amber-700 dark:text-amber-400" title={event.reason || undefined}>
+                {" "}
+                · automatic (left site)
+              </span>
+            ) : null}
+          </span>
+        ))}
+      </p>
+      {entry.pausedSeconds ? (
+        <p className="text-muted-foreground">Paused {formatExactDuration(entry.pausedSeconds)} (not paid)</p>
+      ) : null}
+      {site?.geofence === "verified" ? (
+        <p className="text-emerald-700 dark:text-emerald-400">On site · {site.distanceMeters ?? 0} m from the job</p>
+      ) : site?.geofence === "no_site_location" ? (
+        <p className="text-amber-700 dark:text-amber-400">Location not verified · job address isn&apos;t mapped</p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Ticking HH:MM:SS for a running entry, computed from the server clock-in time. */
-export function LiveTimer({ entry, className }: { entry: Pick<TimeEntry, "status" | "clockInAt" | "seconds">; className?: string }) {
-  const now = useNow(entry.status === "active");
+export function LiveTimer({
+  entry,
+  className,
+}: {
+  entry: Pick<TimeEntry, "status" | "clockInAt" | "seconds" | "pausedAt" | "pausedSeconds">;
+  className?: string;
+}) {
+  // A paused timer stands still.
+  const now = useNow(entry.status === "active" && !entry.pausedAt);
   return (
     <span className={cn("font-mono tabular-nums", className)} aria-live="off">
       {formatTimer(liveSeconds(entry, now))}
@@ -53,6 +100,7 @@ const PRESETS: { id: TimeRangePreset; label: string }[] = [
   { id: "week", label: "This week" },
   { id: "lastWeek", label: "Last week" },
   { id: "month", label: "This month" },
+  { id: "last6Months", label: "Last 6 months" },
   { id: "custom", label: "Custom" },
   { id: "all", label: "All time" },
 ];
@@ -282,7 +330,12 @@ export function TimeEntriesTable({
       exportValue: (row) => (row.status === "active" ? "Running" : formatClockTime(row.clockOutAt)),
       className: "whitespace-nowrap",
       cell: (row) =>
-        row.status === "active" ? (
+        row.status === "active" && row.pausedAt ? (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
+            <span className="size-1.5 rounded-full bg-amber-500" aria-hidden />
+            Paused
+          </span>
+        ) : row.status === "active" ? (
           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
             <span className="size-1.5 animate-pulse rounded-full bg-emerald-600" aria-hidden />
             Running
@@ -298,6 +351,21 @@ export function TimeEntriesTable({
       exportValue: (row) => formatExactDuration(secondsOf(row)),
       className: "whitespace-nowrap tabular-nums",
       cell: (row) => (row.status === "active" ? formatTimer(secondsOf(row)) : formatExactDuration(secondsOf(row))),
+    },
+    {
+      id: "activity",
+      header: "Activity & location",
+      exportValue: (row) => {
+        const site = entrySiteCheck(row);
+        const where =
+          site?.geofence === "verified"
+            ? `On site (${site.distanceMeters ?? 0} m)`
+            : site?.geofence === "no_site_location"
+              ? "Site not mapped"
+              : "";
+        return [entryTrailText(row), where].filter(Boolean).join(" · ");
+      },
+      cell: (row) => <EntryTrail entry={row} />,
     },
     {
       id: "rate",

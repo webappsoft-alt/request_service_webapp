@@ -323,6 +323,8 @@ export type PortalCalendarEvent = {
   source?: string;
   /** The schedule API already attached the card details (address, total, notes…). */
   enriched?: boolean;
+  /** A project-stage entry (one per stage of a multi-day estimate / job). */
+  stageId?: string;
 };
 
 const MULTI_SCHEDULE_KINDS = new Set<PortalEventKind>(["estimate", "visit"]);
@@ -345,7 +347,8 @@ export function dedupeCalendarEvents(events: PortalCalendarEvent[]): PortalCalen
     return value;
   };
   for (const event of events) {
-    if (MULTI_SCHEDULE_KINDS.has(event.kind) || !event.recordId) {
+    // Project-stage entries sit beside the record's own card (one per stage).
+    if (MULTI_SCHEDULE_KINDS.has(event.kind) || !event.recordId || event.stageId) {
       kept.push(event);
       continue;
     }

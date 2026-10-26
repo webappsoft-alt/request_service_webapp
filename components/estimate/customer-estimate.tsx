@@ -47,6 +47,9 @@ import {
   showApiErrorToast,
 } from "@/components/api/apiFuntions";
 import { publicApi, userApi } from "@/components/api/ApiRoutesFile";
+import { CustomerProjectProgress } from "@/components/estimate/customer-project-progress";
+import { mapProjectUpdates, type ProjectUpdate } from "@/lib/field-notes";
+import { mapProjectStages, type ProjectStage } from "@/lib/project-stages";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
@@ -520,6 +523,9 @@ export function CustomerEstimatePage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<EstimateShareSnapshot | null>(null);
+  /** Project stages + shared updates (crew / office notes) for this estimate. */
+  const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
+  const [projectUpdates, setProjectUpdates] = useState<ProjectUpdate[]>([]);
   const [approval, setApproval] = useState<EstimateApproval | undefined>(
     undefined,
   );
@@ -624,6 +630,8 @@ export function CustomerEstimatePage({
             : shareToken || mapped.snapshot.estimateId || publicToken,
         );
         setSnapshot(mapped.snapshot);
+        setProjectStages(mapProjectStages(estimate?.stages));
+        setProjectUpdates(mapProjectUpdates(estimate?.projectUpdates));
         setApproval(
           mapped.approval || share.approvalOf(mapped.snapshot.estimateId),
         );
@@ -1056,6 +1064,8 @@ export function CustomerEstimatePage({
             estimate.
           </div>
         ) : null}
+
+        <CustomerProjectProgress stages={projectStages} updates={projectUpdates} />
 
         {/* Side column only while the conversation panel shows; otherwise the document is centered. */}
         <div

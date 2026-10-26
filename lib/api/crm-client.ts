@@ -1,3 +1,4 @@
+import { mapProjectStages, type ProjectStage, type ProjectStageStatus } from "@/lib/project-stages";
 import { providerCrmApi, publicApi } from "@/components/api/ApiRoutesFile";
 import type {
   CustomerDetailPayload,
@@ -4042,3 +4043,27 @@ export function extractId(value: unknown) {
 }
 
 export { resolveCrmObjectId, isLocalInvoicePortalKey };
+
+/** The stages list from a stages response ({ data: { stages, totals } }). */
+function stagesOf(response: unknown) {
+  const data = (response as { data?: { stages?: unknown } } | null)?.data;
+  return data?.stages;
+}
+
+/** Save an estimate's project stages (order = array order). */
+export async function saveEstimateStages(
+  estimateId: string,
+  stages: { id?: string; name: string; section: string; durationDays: number; durationHours: number; status: ProjectStageStatus }[],
+): Promise<ProjectStage[]> {
+  const response = await putData(providerCrmApi.estimateStages(estimateId), { stages }, { silent: true });
+  return mapProjectStages(stagesOf(response));
+}
+
+/** Put each stage on the Schedule, one after another from `startDate` (yyyy-mm-dd). */
+export async function scheduleEstimateStages(
+  estimateId: string,
+  input: { startDate: string; employeeId?: string },
+): Promise<ProjectStage[]> {
+  const response = await postData(providerCrmApi.estimateStagesSchedule(estimateId), input, { silent: true });
+  return mapProjectStages(stagesOf(response));
+}

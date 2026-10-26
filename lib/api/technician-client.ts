@@ -1,3 +1,4 @@
+import { mapFieldNote, mapFieldNotes, type FieldNote } from "@/lib/field-notes";
 import { mapLocationReport, type LocationReport } from "@/lib/time-tracking";
 import type { DeviceLocation } from "@/lib/geolocation";
 import { technicianApi, providerCrmApi } from "@/components/api/ApiRoutesFile";
@@ -855,4 +856,19 @@ export async function getTechnicianBadges(): Promise<TechBadges> {
 export async function markTechnicianSectionRead(section: string): Promise<TechBadges> {
   const data = asRecord(dataOf(await putData(technicianApi.sectionRead, { section }, { silent: true })));
   return mapBadges(data.badges);
+}
+
+/** Notes on an assigned job / estimate: field notes + updates the office shared. */
+export async function listTechnicianNotes(kind: "job" | "estimate", id: string): Promise<FieldNote[]> {
+  const endpoint = kind === "job" ? technicianApi.jobNotes(id) : technicianApi.estimateNotes(id);
+  return mapFieldNotes(dataOf(await getData(endpoint, undefined, quiet)));
+}
+
+export async function addTechnicianNote(
+  kind: "job" | "estimate",
+  id: string,
+  input: { content: string; visibleToCustomer: boolean },
+): Promise<FieldNote | null> {
+  const endpoint = kind === "job" ? technicianApi.jobNotes(id) : technicianApi.estimateNotes(id);
+  return mapFieldNote(dataOf(await postData(endpoint, input, { silent: true })));
 }

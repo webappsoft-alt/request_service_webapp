@@ -33,7 +33,7 @@ import {
   listEstimateV2Opportunities,
   type PrepChoice,
 } from "@/lib/api/estimate-v2-client";
-import { getRequest, updateCustomer } from "@/lib/api/crm-client";
+import { getCustomer, getRequest, updateCustomer } from "@/lib/api/crm-client";
 import {
   findTemplateCategory,
   getEstimateTemplateCatalog,
@@ -143,6 +143,8 @@ export function NewEstimateCreateView() {
   const [linkedRequestId, setLinkedRequestId] = useState(requestParam);
 
   const [customerId, setCustomerId] = useState(customerParam);
+  /** The customer this estimate was started for (customer page or lead): always listed first. */
+  const [pinnedCustomerId, setPinnedCustomerId] = useState(customerParam);
   const [customerQuery, setCustomerQuery] = useState("");
   const [addressId, setAddressId] = useState("");
 
@@ -192,7 +194,10 @@ export function NewEstimateCreateView() {
           return;
         }
         setLinkedRequestId(request.id);
-        if (request.customerId) setCustomerId(request.customerId);
+        if (request.customerId) {
+          setCustomerId(request.customerId);
+          setPinnedCustomerId(request.customerId);
+        }
         if (request.serviceName) setCategoryName(request.serviceName);
         const requestTitle =
           String(request.serviceName || "").trim() ||
@@ -220,6 +225,7 @@ export function NewEstimateCreateView() {
 
   useEffect(() => {
     if (customerParam && !customerId) setCustomerId(customerParam);
+    if (customerParam) setPinnedCustomerId((prev) => prev || customerParam);
   }, [customerParam, customerId]);
 
   // Subcategories (offered jobs) for the picked category — they choose the ready-made template.
@@ -268,16 +274,35 @@ export function NewEstimateCreateView() {
     [customers, customerId],
   );
 
+  const pinnedCustomer = useMemo(
+    () => (pinnedCustomerId ? customers.find((item) => item.id === pinnedCustomerId) || null : null),
+    [customers, pinnedCustomerId],
+  );
+
+  // The pinned customer may be beyond the first page of the list: load it on its own.
+  useEffect(() => {
+    if (!useApi || !pinnedCustomerId || pinnedCustomer) return;
+    let cancelled = false;
+    void getCustomer(pinnedCustomerId)
+      .then((found) => {
+        if (cancelled || !found?.id) return;
+        setLocalCustomers((prev) => (prev.some((item) => item.id === found.id) ? prev : [found, ...prev]));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [pinnedCustomer, pinnedCustomerId, useApi]);
+
   const filteredCustomers = useMemo(() => {
     const q = customerQuery.trim().toLowerCase();
-    if (!q) return customers.slice(0, 40);
-    return customers
-      .filter((item) => {
-        const hay = `${crmCustomerName(item)} ${item.email || ""} ${item.phone || ""}`.toLowerCase();
-        return hay.includes(q);
-      })
-      .slice(0, 40);
-  }, [customers, customerQuery]);
+    const matches = (item: PortalCustomerCrm) =>
+      !q || `${crmCustomerName(item)} ${item.email || ""} ${item.phone || ""}`.toLowerCase().includes(q);
+    const list = customers.filter(matches).slice(0, 40);
+    // The customer this estimate was started for stays at the very top (while it matches the search).
+    if (!pinnedCustomer || !matches(pinnedCustomer)) return list;
+    return [pinnedCustomer, ...list.filter((item) => item.id !== pinnedCustomer.id)];
+  }, [customers, customerQuery, pinnedCustomer]);
 
   const addresses = selectedCustomer?.addresses || [];
 

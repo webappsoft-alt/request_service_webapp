@@ -189,7 +189,7 @@ export function InvoiceFileChrome({
             </p>
             <p className="mt-1 text-sm font-medium">
               <Link
-                href={`/pro/dashboard/new-estimate/${estimate.id}`}
+                href={`/pro/dashboard/estimates/${estimate.id}`}
                 className="font-semibold text-primary hover:underline"
               >
                 {estimate.number}
@@ -740,7 +740,7 @@ export function InvoiceSummaryTab({
               label="Estimate"
               value={
                 estimate ? (
-                  <Link href={`/pro/dashboard/new-estimate/${estimate.id}`} className="font-semibold text-primary hover:underline">
+                  <Link href={`/pro/dashboard/estimates/${estimate.id}`} className="font-semibold text-primary hover:underline">
                     {estimate.number}
                   </Link>
                 ) : (

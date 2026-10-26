@@ -119,7 +119,7 @@ export function getEventDetailUrl(event: PortalCalendarEvent): string {
     case "fixed_service":
       return `/pro/dashboard/orders/${id}`;
     case "estimate":
-      return `/pro/dashboard/new-estimate/${id}`;
+      return `/pro/dashboard/estimates/${id}`;
     case "request":
       return `/pro/dashboard/requests/${id}`;
     case "invoice":

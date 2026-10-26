@@ -26,6 +26,8 @@ import { formatClock } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatHours } from "@/lib/time-tracking";
 import { technicianPaths } from "@/lib/technician-paths";
+import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
+import { addTechnicianNote, listTechnicianNotes } from "@/lib/api/technician-client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   TECH_PAGE_SIZE,
@@ -233,7 +235,7 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
     { id: "visit", label: "Site visit" },
     { id: "materials", label: `Labour & Material (${items.length})` },
     { id: "time", label: "My time", icon: Clock3 },
-    ...(notes ? [{ id: "notes", label: "Notes" }] : []),
+    { id: "notes", label: "Notes" },
   ];
 
   return (
@@ -324,7 +326,21 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
             );
           }
           if (tab === "notes") {
-            return <p className="text-sm whitespace-pre-wrap">{notes}</p>;
+            return (
+              <div className="space-y-3">
+                {notes ? (
+                  <DetailCard title="Notes from the office">
+                    <p className="text-sm whitespace-pre-wrap">{notes}</p>
+                  </DetailCard>
+                ) : null}
+                <FieldNotesPanel
+                  noun="estimate"
+                  recordKey={estimate.id}
+                  load={() => listTechnicianNotes("estimate", estimate.id)}
+                  add={(input) => addTechnicianNote("estimate", estimate.id, input)}
+                />
+              </div>
+            );
           }
           return (
             <div className="space-y-3">

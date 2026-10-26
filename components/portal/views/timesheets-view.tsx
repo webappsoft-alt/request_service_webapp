@@ -77,7 +77,7 @@ export function TimesheetsView() {
         showEmployee
         canPay
         allowStop
-        hrefFor={(kind, id) => (kind === "job" ? `/pro/dashboard/jobs/${id}?tab=time` : `/pro/dashboard/new-estimate/${id}`)}
+        hrefFor={(kind, id) => (kind === "job" ? `/pro/dashboard/jobs/${id}?tab=time` : `/pro/dashboard/estimates/${id}`)}
       />
       <ContractorTimesheet />
     </PortalPage>

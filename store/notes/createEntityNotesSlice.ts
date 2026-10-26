@@ -128,6 +128,7 @@ export function createEntityNotesSlice(options: {
           isPinned: payload.isPinned ?? false,
           color: payload.color ?? null,
           attachments: payload.attachments ?? [],
+          ...(payload.visibleToCustomer !== undefined ? { visibleToCustomer: payload.visibleToCustomer } : {}),
         },
         { silent: true },
       );
@@ -153,6 +154,7 @@ export function createEntityNotesSlice(options: {
       if (payload.tags !== undefined) body.tags = payload.tags;
       if (payload.isPinned !== undefined) body.isPinned = payload.isPinned;
       if (payload.color !== undefined) body.color = payload.color;
+      if (payload.visibleToCustomer !== undefined) body.visibleToCustomer = payload.visibleToCustomer;
       if (payload.attachments !== undefined) {
         body.attachments = payload.attachments;
       }

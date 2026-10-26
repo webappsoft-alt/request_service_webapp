@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { CalendarDays, List, Wallet } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -115,6 +115,9 @@ export function TimeTrackingPanel({
   const ledgerState = useAppSelector((state) => selectLedger(state, scopeKey));
   const version = useAppSelector((state) => state.timeTracking?.version ?? 0);
   const paymentVersion = useAppSelector((state) => state.timeTracking?.paymentVersion ?? 0);
+  /** Counters as they were when this panel opened: older events are already in the first load. */
+  const seenVersion = useRef(version);
+  const seenPaymentVersion = useRef(paymentVersion);
 
   const kindsKey = kinds.join(",");
   const employeeKey = employeeIds.join(",");
@@ -161,7 +164,8 @@ export function TimeTrackingPanel({
 
   // A clock-in/out anywhere (this tab, another device, or the office) refreshes hours and pay.
   useEffect(() => {
-    if (!version) return;
+    if (version === seenVersion.current) return;
+    seenVersion.current = version;
     void dispatch(fetchTimeEntries({ scopeKey: listScope, query, technician, force: true }));
     void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when version bumps
@@ -169,7 +173,8 @@ export function TimeTrackingPanel({
 
   // A payout (here or from another device) refreshes paid / remaining immediately.
   useEffect(() => {
-    if (!paymentVersion) return;
+    if (paymentVersion === seenPaymentVersion.current) return;
+    seenPaymentVersion.current = paymentVersion;
     void dispatch(fetchLedger({ scopeKey, query: ledgerQuery, force: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when a payout lands
   }, [paymentVersion]);

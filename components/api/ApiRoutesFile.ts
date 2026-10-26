@@ -183,6 +183,9 @@ export const providerCrmApi = {
     `provider/requests/${id}/convert-to-estimate`,
   estimates: "provider/estimates",
   estimate: (id: string) => `provider/estimates/${id}`,
+  /** PUT — project stages (durations, progress); POST …/schedule puts each stage on the calendar */
+  estimateStages: (id: string) => `provider/estimates/${id}/stages`,
+  estimateStagesSchedule: (id: string) => `provider/estimates/${id}/stages/schedule`,
   estimateActivities: (id: string) => `provider/estimates/${id}/activities`,
   estimateActivity: (id: string, activityId: string) => `provider/estimates/${id}/activities/${activityId}`,
   estimateShare: (id: string) => `provider/estimates/${id}/share`,
@@ -338,6 +341,9 @@ export const technicianApi = {
   job: (id: string) => `technician/jobs/${id}`,
   jobClockIn: (id: string) => `technician/jobs/${id}/clock-in`,
   jobClockOut: (id: string) => `technician/jobs/${id}/clock-out`,
+  /** GET / POST — notes on an assigned job (field updates; the office sees them) */
+  jobNotes: (id: string) => `technician/jobs/${id}/notes`,
+  estimateNotes: (id: string) => `technician/estimates/${id}/notes`,
   /** POST: technician asks the office for a change order (reviewed on the job's Requests tab). */
   jobChangeRequests: (id: string) => `technician/jobs/${id}/change-requests`,
   jobChangeOrderAccept: (id: string, orderId: string) => `technician/jobs/${id}/change-orders/${orderId}/accept`,
@@ -373,6 +379,8 @@ export const contractorPortalApi = {
   jobChangeRequests: (id: string) => `contractor/jobs/${id}/change-requests`,
   jobClockIn: (id: string) => `contractor/jobs/${id}/clock-in`,
   jobClockOut: (id: string) => `contractor/jobs/${id}/clock-out`,
+  /** GET / POST — notes on an assigned job (field updates; the office sees them) */
+  jobNotes: (id: string) => `contractor/jobs/${id}/notes`,
   activeEntry: "contractor/time-entries/active",
   /** POST — pause / restart the running timer (restart sends the device location) */
   pauseActive: "contractor/time-entries/pause",

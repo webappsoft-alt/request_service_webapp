@@ -641,7 +641,7 @@ export function reminderSubjectHref(kind: ReminderSubjectKind, id: string) {
     case "vendor":
       return `/pro/dashboard/vendors/${id}`;
     case "estimate":
-      return `/pro/dashboard/new-estimate/${id}`;
+      return `/pro/dashboard/estimates/${id}`;
     case "request":
       return `/pro/dashboard/requests/${id}`;
     case "job":

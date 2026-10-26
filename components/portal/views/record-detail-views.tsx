@@ -3019,7 +3019,7 @@ export function JobDetailView({ id }: { id: string }) {
                   canPay
                   allowStop
                   hrefFor={(kind, recordId) =>
-                    kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/new-estimate/${recordId}`
+                    kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/estimates/${recordId}`
                   }
                   header={
                     <div>

@@ -37,6 +37,8 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { technicianPaths } from "@/lib/technician-paths";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchTechJob } from "@/store/technicianSlice";
+import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
+import { addTechnicianNote, listTechnicianNotes } from "@/lib/api/technician-client";
 
 const CLOSED_STATUSES = ["cancelled", "paid", "invoiced"];
 
@@ -171,6 +173,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
     { id: "summary", label: "Summary" },
     { id: "materials", label: `Labour & Material (${items.length})${awaitingMe ? " · accept" : ""}` },
     { id: "time", label: "My time & pay", icon: Clock3 },
+    { id: "notes", label: "Notes" },
     ...(estimate || changeOrders.length ? [{ id: "estimates", label: "Estimate & changes" }] : []),
   ];
 
@@ -255,6 +258,16 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                 defaultRange={{ preset: "all" }}
                 defaultView="sessions"
                 hrefFor={(kind, recordId) => (kind === "job" ? technicianPaths.job(recordId) : technicianPaths.estimate(recordId))}
+              />
+            );
+          }
+          if (tab === "notes") {
+            return (
+              <FieldNotesPanel
+                noun="job"
+                recordKey={job.id}
+                load={() => listTechnicianNotes("job", job.id)}
+                add={(input) => addTechnicianNote("job", job.id, input)}
               />
             );
           }

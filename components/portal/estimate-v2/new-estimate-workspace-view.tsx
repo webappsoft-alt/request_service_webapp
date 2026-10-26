@@ -97,6 +97,13 @@ import {
 import { formatDate, formatMoney, visitWallClock } from "@/lib/format";
 import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate, Invoice } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { NotesPanel } from "@/components/portal/notes-panel";
+import {
+  ProjectStagesDialog,
+  ProjectStagesPrompt,
+  ProjectStagesSummary,
+  SectionStageButton,
+} from "@/components/portal/estimate-v2/project-stages";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
 import {
   employeeName,
@@ -582,6 +589,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [saving, setSaving] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
+  const [stagesOpen, setStagesOpen] = useState(false);
   const [acceptStep, setAcceptStep] = useState<"choose" | "job" | "invoice">("choose");
   const [jobStartAt, setJobStartAt] = useState("");
   const [jobDueAt, setJobDueAt] = useState("");
@@ -626,6 +634,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [terms, setTerms] = useState("Proposal valid for 30 calendar days from issue date.");
   const [discount, setDiscount] = useState(0);
   const [lines, setLines] = useState<JobCostLine[]>([createEmptyLine("labor")]);
+  /** Line sections in first-seen order ("" = General) — the default project stages. */
+  const lineSections = useMemo(() => {
+    const seen: string[] = [];
+    for (const line of lines) {
+      const key = String(line.section || "").trim();
+      if (!seen.includes(key)) seen.push(key);
+    }
+    return seen;
+  }, [lines]);
   const [taxRatePercent, setTaxRatePercent] = useState(0);
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
@@ -792,22 +809,29 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
     if (!silent) setLoading(true);
+    /** Leaving for another URL: keep the spinner instead of flashing "Estimate not found". */
+    let handingOver = false;
     try {
       let data: EstimateV2Opportunity;
       // A save started just before leaving the page must land before we read it back.
       await pendingSheetSaves.get(opportunityId);
       try {
-        data = await getEstimateV2Opportunity(opportunityId);
-      } catch {
+        data = await getEstimateV2Opportunity(opportunityId, { silent: true });
+      } catch (lookupError) {
+        // Only a missing opportunity falls through to the classic estimate; other failures show as errors.
+        if ((lookupError as { response?: { status?: number } } | null)?.response?.status !== 404) throw lookupError;
         // Deep links may still carry a classic Estimate id — resolve to opportunity.
         const byEstimate = await getOpportunityByEstimateId(opportunityId, {
           silent: true,
-        });
+        }).catch(() => null);
+        handingOver = true;
         if (byEstimate?.id && byEstimate.id !== opportunityId) {
           router.replace(`/pro/dashboard/new-estimate/${byEstimate.id}`);
           return;
         }
-        throw new Error("Estimate not found.");
+        // A classic estimate without an opportunity: open it in the classic estimate view.
+        router.replace(`/pro/dashboard/estimates/${opportunityId}`);
+        return;
       }
       setOpportunity(data);
       autoSaveCtx.current = { ...autoSaveCtx.current, opportunity: data };
@@ -952,7 +976,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load estimate.");
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && !handingOver) setLoading(false);
     }
   }, [opportunityId, router]);
 
@@ -2403,6 +2427,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       lines={lines}
                       onChange={setLines}
                       locked={estimateLocked}
+                      sectionActions={(section) =>
+                        estimate?.id ? (
+                          <SectionStageButton
+                            estimateId={estimate.id}
+                            section={section.key}
+                            label={section.label}
+                            stages={estimate.stages || []}
+                            sections={lineSections}
+                            onSaved={(stages) => setEstimate((current) => (current ? { ...current, stages } : current))}
+                          />
+                        ) : null
+                      }
                     />
                   </div>
 
@@ -2423,6 +2459,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           .join(" · ")}
                       </p>
                     </div>
+                    {estimate?.stages?.length ? (
+                      <ProjectStagesSummary stages={estimate.stages} onSchedule={() => setStagesOpen(true)} />
+                    ) : null}
 
                     <div className="grid gap-6 bg-white p-4 sm:grid-cols-2">
                       <div className="space-y-2.5 text-sm">
@@ -2546,6 +2585,21 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       </p>
                     </div>
                   ) : null}
+
+                  {estimate?.id ? (
+                    <>
+                      <div className="rounded-xl border border-[#b4becc] bg-white px-4 py-3.5 dark:bg-card">
+                        <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+                          Notes &amp; updates
+                        </h3>
+                        <p className="mt-1 mb-2 text-xs text-slate-500">
+                          Office notes and updates from technicians / contractors on this estimate. Notes marked
+                          &quot;Shared with customer&quot; show on the customer&apos;s estimate page.
+                        </p>
+                        <NotesPanel kind="estimate" id={estimate.id} empty="No notes on this estimate yet." />
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               </>
             ) : (
@@ -2620,6 +2674,26 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             await load({ silent: true });
           }}
         />
+      ) : null}
+
+      {estimate?.id ? (
+        <>
+          <ProjectStagesDialog
+            open={stagesOpen}
+            onOpenChange={setStagesOpen}
+            estimateId={estimate.id}
+            estimateNumber={estimate.number || opportunity?.number || "Estimate"}
+            stages={estimate.stages || []}
+            sections={lineSections}
+            onSaved={(stages) => setEstimate((current) => (current ? { ...current, stages } : current))}
+          />
+          <ProjectStagesPrompt
+            estimateId={estimate.id}
+            sectionCount={lineSections.filter(Boolean).length}
+            hasStages={Boolean(estimate.stages?.length)}
+            onSetUp={() => setStagesOpen(true)}
+          />
+        </>
       ) : null}
 
       <Dialog

@@ -1846,6 +1846,8 @@ export function CreateNoteDialog({
         }[],
         authorId: "",
         authorName: note.authorName,
+        authorRole: "provider" as const,
+        visibleToCustomer: false,
         isDeleted: false,
         createdAt: note.createdAt,
         updatedAt: note.createdAt,

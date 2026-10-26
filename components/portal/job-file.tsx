@@ -193,7 +193,7 @@ export function JobFileChrome({
             label="Source estimate"
             value={
               <Link
-                href={`/pro/dashboard/new-estimate/${estimate.id}`}
+                href={`/pro/dashboard/estimates/${estimate.id}`}
                 className="font-semibold text-primary hover:underline"
               >
                 {estimate.number}
@@ -1374,7 +1374,7 @@ export function JobSettingsTab({
             <p className="text-sm text-muted-foreground sm:col-span-2">
               Converted from{" "}
               <Link
-                href={`/pro/dashboard/new-estimate/${estimate.id}`}
+                href={`/pro/dashboard/estimates/${estimate.id}`}
                 className="font-semibold text-primary hover:underline"
               >
                 {estimate.number}
@@ -1476,7 +1476,7 @@ export function JobSettingsTab({
               <p className="border-t border-border-soft pt-3 text-xs text-muted-foreground">
                 Source estimate{" "}
                 <Link
-                  href={`/pro/dashboard/new-estimate/${estimate.id}`}
+                  href={`/pro/dashboard/estimates/${estimate.id}`}
                   className="font-semibold text-primary hover:underline"
                 >
                   {estimate.number}

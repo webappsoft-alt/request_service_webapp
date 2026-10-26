@@ -41,6 +41,10 @@ export type CrmNote = {
   attachments: NoteAttachment[];
   authorId: string;
   authorName: string;
+  /** Office, or a technician / contractor writing from the field. */
+  authorRole: "provider" | "technician" | "contractor";
+  /** Also shown to the customer (job / estimate updates). */
+  visibleToCustomer: boolean;
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
@@ -54,6 +58,7 @@ export type NoteCreateInput = {
   isPinned?: boolean;
   color?: string | null;
   attachments?: NoteAttachment[];
+  visibleToCustomer?: boolean;
 };
 
 export type NoteUpdateInput = {
@@ -63,6 +68,7 @@ export type NoteUpdateInput = {
   isPinned?: boolean;
   color?: string | null;
   attachments?: NoteAttachment[];
+  visibleToCustomer?: boolean;
 };
 
 export type NotesPaginationMeta = {

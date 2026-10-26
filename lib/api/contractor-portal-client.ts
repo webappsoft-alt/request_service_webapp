@@ -1,3 +1,4 @@
+import { mapFieldNote, mapFieldNotes, type FieldNote } from "@/lib/field-notes";
 import type { DeviceLocation } from "@/lib/geolocation";
 import { contractorPortalApi, providerCrmApi, technicianApi } from "@/components/api/ApiRoutesFile";
 import { deleteData, getData, postData, putData } from "@/components/api/sliceHttp";
@@ -915,4 +916,16 @@ export async function acceptContractorChangeOrder(jobId: string, orderId: string
 /** Technician accepts the scope of a change order the office created from their request. */
 export async function acceptTechnicianChangeOrder(jobId: string, orderId: string): Promise<void> {
   await postData(technicianApi.jobChangeOrderAccept(jobId, orderId), {}, { silent: true });
+}
+
+/** Notes on an assigned job: field notes + updates the office shared. */
+export async function listContractorJobNotes(jobId: string): Promise<FieldNote[]> {
+  return mapFieldNotes(dataOf(await getData(contractorPortalApi.jobNotes(jobId), undefined, quiet)));
+}
+
+export async function addContractorJobNote(
+  jobId: string,
+  input: { content: string; visibleToCustomer: boolean },
+): Promise<FieldNote | null> {
+  return mapFieldNote(dataOf(await postData(contractorPortalApi.jobNotes(jobId), input, { silent: true })));
 }

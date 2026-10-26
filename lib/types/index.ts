@@ -217,6 +217,8 @@ export interface Estimate {
   siteVisits?: EstimateSiteVisitRecord[];
   /** Provider-assigned calendar date for this estimate. */
   scheduledDate?: string;
+  /** Stages of a larger project, each with its own duration, dates and progress. */
+  stages?: import("@/lib/project-stages").ProjectStage[];
   /** Customer digital acceptance (when signed). */
   signature?: EstimateSignature;
   /** Provider / company authorization signature from Send for approval. */

@@ -81,6 +81,9 @@ export function normalizeCrmNote(
       : [],
     authorId: idOf(record.authorId) || stringValue(record.authorId),
     authorName: stringValue(record.authorName) || "Office",
+    authorRole:
+      record.authorRole === "technician" || record.authorRole === "contractor" ? record.authorRole : "provider",
+    visibleToCustomer: record.visibleToCustomer === true,
     isDeleted: Boolean(record.isDeleted),
     createdAt: stringValue(record.createdAt) || stringValue(record.updatedAt),
     updatedAt: stringValue(record.updatedAt) || stringValue(record.createdAt),

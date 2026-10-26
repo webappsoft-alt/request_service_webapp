@@ -27,10 +27,13 @@ export function SectionedLineItemsEditor({
   onChange,
   locked = false,
   showPricing = true,
+  sectionActions,
 }: {
   lines: JobCostLine[];
   onChange: (lines: JobCostLine[]) => void;
   locked?: boolean;
+  /** Extra control in each section header (e.g. the stage time), shown even when locked. */
+  sectionActions?: (section: { key: string; label: string }) => React.ReactNode;
   /** Price / Total columns and section totals (default true). */
   showPricing?: boolean;
 }) {
@@ -193,6 +196,7 @@ export function SectionedLineItemsEditor({
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-1.5">
+                {sectionActions?.({ key: group.key, label: group.label })}
                 {!locked ? (
                   <>
                     <Button

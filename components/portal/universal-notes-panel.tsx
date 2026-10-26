@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format";
@@ -55,13 +56,17 @@ export function CreateUniversalNoteDialog({
   );
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [shared, setShared] = useState(false);
   const [saving, setSaving] = useState(false);
   const label = reminderSubjectKindLabel(subjectKind).toLowerCase();
+  /** Job / estimate notes can be shared with the customer (shown on their estimate page). */
+  const canShare = subjectKind === "job" || subjectKind === "estimate";
 
   useEffect(() => {
     if (!open) return;
     setTitle(note?.title ?? "");
     setBody(note?.content ?? "");
+    setShared(Boolean(note?.visibleToCustomer));
     setSaving(false);
   }, [note, open]);
 
@@ -87,6 +92,7 @@ export function CreateUniversalNoteDialog({
             id: note.id,
             title: nextTitle,
             content,
+            ...(canShare ? { visibleToCustomer: shared } : {}),
           }),
         );
         if (!module.updateNote.fulfilled.match(result)) {
@@ -103,6 +109,7 @@ export function CreateUniversalNoteDialog({
             entityId,
             title: nextTitle,
             content,
+            ...(canShare ? { visibleToCustomer: shared } : {}),
           }),
         );
         if (!module.createNote.fulfilled.match(result)) {
@@ -166,6 +173,17 @@ export function CreateUniversalNoteDialog({
               placeholder="Gate code, billing preference, access…"
             />
           </Field>
+          {canShare ? (
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={shared} onCheckedChange={(value) => setShared(value === true)} className="mt-0.5" />
+              <span>
+                Share with the customer
+                <span className="block text-xs text-muted-foreground">
+                  Shown as a project update on their estimate page. Leave off for internal notes.
+                </span>
+              </span>
+            </label>
+          ) : null}
         </FieldGroup>
         <DialogFooter>
           <Button
@@ -410,8 +428,27 @@ export function UniversalNotesPanel({
             header: "Author",
             sortValue: (row) => row.authorName,
             searchValue: (row) => row.authorName,
-            exportValue: (row) => row.authorName,
-            cell: (row) => row.authorName,
+            exportValue: (row) =>
+              [row.authorName, row.authorRole !== "provider" ? `(${row.authorRole})` : "", row.visibleToCustomer ? "· shared with customer" : ""]
+                .filter(Boolean)
+                .join(" "),
+            cell: (row) => (
+              <span className="flex flex-col gap-0.5">
+                <span>{row.authorName}</span>
+                <span className="flex flex-wrap gap-1">
+                  {row.authorRole !== "provider" ? (
+                    <span className="rounded-full bg-sky-50 px-1.5 py-px text-[10px] font-semibold text-sky-800 capitalize dark:bg-sky-950/60 dark:text-sky-300">
+                      {row.authorRole} · field
+                    </span>
+                  ) : null}
+                  {row.visibleToCustomer ? (
+                    <span className="rounded-full bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      Shared with customer
+                    </span>
+                  ) : null}
+                </span>
+              </span>
+            ),
           },
           {
             id: "date",

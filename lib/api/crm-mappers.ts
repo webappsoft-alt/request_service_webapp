@@ -1,3 +1,4 @@
+import { mapProjectStages } from "@/lib/project-stages";
 import type {
   PortalContractor,
   PortalCustomerCrm,
@@ -310,7 +311,7 @@ function makeHref(kind: PortalEventKind, recordId: string): string {
     case "fixed_service":
       return `/pro/dashboard/orders/${recordId}`;
     case "estimate":
-      return `/pro/dashboard/new-estimate/${recordId}`;
+      return `/pro/dashboard/estimates/${recordId}`;
     case "request":
       return `/pro/dashboard/requests/${recordId}`;
     case "invoice":
@@ -1291,6 +1292,7 @@ export function mapEstimate(raw: unknown): Estimate | null {
       .map((entry) => mapEstimateSiteVisit(entry))
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),
     scheduledDate: toIsoString(record.scheduledDate) || undefined,
+    stages: mapProjectStages(record.stages),
     signature: mapApprovalSignature(record.approval ?? record.signature),
     companySignature: mapApprovalSignature(
       record.companySignature ?? record.providerSignature ?? record.companyApproval,
@@ -2537,6 +2539,7 @@ export function mapScheduleEvent(raw: unknown): PortalCalendarEvent | null {
     category,
     source: trimmed(record.source) || undefined,
     enriched: record.enriched === true || undefined,
+    stageId: crmIdOf(record.stageId) || undefined,
   };
 }
 

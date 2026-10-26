@@ -25,6 +25,8 @@ import { contractorPaths } from "@/lib/contractor-paths";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchContractorJob } from "@/store/contractorPortalSlice";
+import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
+import { addContractorJobNote, listContractorJobNotes } from "@/lib/api/contractor-portal-client";
 
 const CLOSED_STATUSES = ["completed", "invoiced", "paid", "cancelled"];
 
@@ -178,6 +180,13 @@ export function ContractorJobDetailView({ id }: { id: string }) {
               <p className="text-sm whitespace-pre-wrap text-foreground">{job.notes}</p>
             </DetailCard>
           ) : null}
+
+          <FieldNotesPanel
+            noun="job"
+            recordKey={job.id}
+            load={() => listContractorJobNotes(job.id)}
+            add={(input) => addContractorJobNote(job.id, input)}
+          />
 
           <DetailCard title="Completion history">
             {completions.length ? (

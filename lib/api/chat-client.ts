@@ -9,7 +9,7 @@ import {
   ADMIN_DIRECT_THREAD_ID,
 } from "@/lib/api/crm-mappers";
 import type { ChatAttachment, ChatThread } from "@/lib/booking/chat-store";
-
+// 
 export { ADMIN_DIRECT_THREAD_ID };
 
 type ProviderThreadInput = {

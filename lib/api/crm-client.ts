@@ -8,7 +8,7 @@ import type {
   PortalTask,
   PortalVendor,
 } from "@/lib/data/crm-people";
-import { dedupeCalendarEvents, employeeName, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
+import { dedupeCalendarEvents, employeeName, taskCalendarSlot, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
 import type { Estimate, EstimateActivity, EstimateSiteVisitRecord, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
@@ -511,6 +511,9 @@ function requestPayload(request: Partial<PortalRequest>) {
   if (request.preferredDate && request.preferredDate.trim()) {
     payload.preferredDate = request.preferredDate;
   }
+  if (request.preferredStartTime) {
+    payload.preferredStartTime = request.preferredStartTime;
+  }
   // Provider-added CRM leads must not look like marketplace quote requests.
   if (request.source) {
     payload.source = request.source;
@@ -727,6 +730,7 @@ function taskPayload(task: PortalTask) {
       ? task.dueAt
       : new Date(task.dueAt).toISOString();
   }
+  if (task.dueTime !== undefined) payload.dueTime = task.dueTime || "";
 
   return payload;
 }
@@ -2693,9 +2697,7 @@ export async function querySchedule(query: CrmListQuery = {}) {
           notes: task.note || (task as unknown as Record<string, unknown>).notes ? String(task.note || (task as unknown as Record<string, unknown>).notes) : undefined,
           date: dueIso,
           dueDate: dueIso,
-          timeWindow: "morning",
-          startMinutes: 540,
-          endMinutes: 570,
+          ...taskCalendarSlot(task),
           employeeId: task.assignedEmployeeId || task.assignedContractorId || undefined,
           technicianName: task.assignedEmployeeName || task.assignedContractorName || undefined,
           href: `/pro/dashboard/tasks`,

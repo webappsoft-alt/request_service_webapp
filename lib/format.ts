@@ -79,6 +79,12 @@ export function formatShortDate(value?: string | Date | null) {
   }
 }
 
+/** "Oct 26, 2026 · 2:30 PM" when an exact due time is set, else the date alone. */
+export function formatDueAt(item: { dueAt?: string | null; dueTime?: string | null }) {
+  const date = formatDate(item.dueAt);
+  return item.dueTime ? `${date} · ${formatTime(item.dueTime)}` : date;
+}
+
 export function formatTime(value: string) {
   const [hours, minutes] = value.split(":").map(Number);
   const date = new Date();

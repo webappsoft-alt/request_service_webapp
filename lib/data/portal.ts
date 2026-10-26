@@ -1080,6 +1080,36 @@ export function windowFromMinutes(start?: number, end?: number): PortalTimeWindo
   return "afternoon";
 }
 
+/** "14:30" → 870 (null when empty or not a 24-hour HH:MM). */
+export function minutesFromClockTime(value?: string | null) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+/** 870 → "14:30" (the value of an <input type="time">). */
+export function clockTimeFromMinutes(minutes?: number | null) {
+  if (minutes == null || !Number.isFinite(minutes)) return "";
+  const normalized = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+}
+
+/** Calendar slot for a task: 30 minutes at its due time, or all day when it has no time. */
+export function taskCalendarSlot(task: { dueTime?: string | null }) {
+  const start = minutesFromClockTime(task.dueTime);
+  if (start === null) {
+    return { timeWindow: "all_day" as PortalTimeWindow, startMinutes: 540, endMinutes: 570 };
+  }
+  return {
+    timeWindow: "custom" as PortalTimeWindow,
+    startMinutes: start,
+    endMinutes: Math.min(start + 30, 24 * 60),
+  };
+}
+
 export function formatClock(minutes: number) {
   // Normalize so that 24*60 (midnight end-of-day) displays as "12 AM"
   const normalized = minutes % (24 * 60);

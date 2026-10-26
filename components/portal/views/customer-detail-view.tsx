@@ -108,7 +108,7 @@ import {
   type PortalRequest,
 } from "@/lib/data/portal";
 import type { Estimate, Invoice, Job, JobStatus, Payment } from "@/lib/types";
-import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { formatDate, formatDueAt, formatLocation, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -2094,7 +2094,7 @@ function CustomerTasksPanel({ customerId }: { customerId: string }) {
                   {item.number} · {item.title}
                 </Link>
                 <p className="text-xs text-muted-foreground">
-                  Due {formatDate(item.dueAt)} · {item.note}
+                  Due {formatDueAt(item)} · {item.note}
                 </p>
               </div>
             </div>
@@ -2264,9 +2264,9 @@ function CustomerRemindersPanel({
             id: "due",
             header: "Due",
             sortValue: (row) => row.dueAt,
-            searchValue: (row) => formatDate(row.dueAt),
-            exportValue: (row) => formatDate(row.dueAt),
-            cell: (row) => formatDate(row.dueAt),
+            searchValue: (row) => formatDueAt(row),
+            exportValue: (row) => formatDueAt(row),
+            cell: (row) => formatDueAt(row),
           },
           {
             id: "status",

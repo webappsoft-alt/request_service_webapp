@@ -243,6 +243,8 @@ export type PortalTask = {
   priority: CrmTaskPriority;
   status: CrmTaskStatus;
   dueAt: string;
+  /** Exact due time on dueAt's day, 24-hour "HH:MM". */
+  dueTime?: string;
   createdAt: string;
 };
 

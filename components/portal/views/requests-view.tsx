@@ -48,7 +48,7 @@ import {
   displayLeadEmail,
 } from "@/lib/lead-display";
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 import type { RequestStatus } from "@/lib/types";
 import { visibleQuoteAnswers } from "@/components/portal/quote-answers-card";
 import { LocationCell, locationText } from "@/components/portal/location-cell";
@@ -66,10 +66,11 @@ function sourceLabel(source?: string) {
   return source || "Direct";
 }
 
-function formatPreferredDate(dateStr?: string | null, windowStr?: string | null) {
+function formatPreferredDate(dateStr?: string | null, windowStr?: string | null, timeStr?: string | null) {
   if (!dateStr || dateStr === "—") return <span className="text-muted-foreground">—</span>;
   const formatted = formatDate(dateStr);
-  const cleanWindow = windowStr ? windowStr.replace(/_/g, " ") : null;
+  const windowLabel = windowStr ? windowStr.replace(/_/g, " ") : null;
+  const cleanWindow = timeStr ? `${formatTime(timeStr)}${windowLabel ? ` · ${windowLabel}` : ""}` : windowLabel;
   return (
     <div className="flex flex-col gap-0.5">
       <span className="font-medium text-foreground">{formatted}</span>
@@ -533,9 +534,12 @@ export function RequestsView() {
             id: "window",
             header: "Preferred",
             sortValue: (row) => row.preferredDate ?? "",
-            searchValue: (row) => `${row.preferredDate ? formatDate(row.preferredDate) : ""} ${row.preferredTimeWindow ?? ""}`,
-            exportValue: (row) => row.preferredDate ? formatDate(row.preferredDate) : "—",
-            cell: (row) => formatPreferredDate(row.preferredDate, row.preferredTimeWindow),
+            searchValue: (row) => `${row.preferredDate ? formatDate(row.preferredDate) : ""} ${row.preferredStartTime ? formatTime(row.preferredStartTime) : ""} ${row.preferredTimeWindow ?? ""}`,
+            exportValue: (row) =>
+              row.preferredDate
+                ? `${formatDate(row.preferredDate)}${row.preferredStartTime ? ` ${formatTime(row.preferredStartTime)}` : ""}`
+                : "—",
+            cell: (row) => formatPreferredDate(row.preferredDate, row.preferredTimeWindow, row.preferredStartTime),
           },
           {
             id: "received",

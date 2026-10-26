@@ -82,7 +82,7 @@ import {
   type PortalCalendarEvent,
   type PortalEmployeeWorkingHours,
 } from "@/lib/data/portal";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatDueAt, formatMoney } from "@/lib/format";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { PasswordInput } from "@/components/auth/password-input";
 import { PersonAddressFields } from "@/components/shared/person-address-fields";
@@ -1682,9 +1682,9 @@ function ContractorTasksTab({ contractorId }: { contractorId: string }) {
           id: "due",
           header: "Due",
           sortValue: (row: PortalTask) => row.dueAt ?? "",
-          searchValue: (row: PortalTask) => (row.dueAt ? formatDate(row.dueAt) : ""),
-          exportValue: (row: PortalTask) => (row.dueAt ? formatDate(row.dueAt) : ""),
-          cell: (row: PortalTask) => (row.dueAt ? formatDate(row.dueAt) : "—"),
+          searchValue: (row: PortalTask) => (row.dueAt ? formatDueAt(row) : ""),
+          exportValue: (row: PortalTask) => (row.dueAt ? formatDueAt(row) : ""),
+          cell: (row: PortalTask) => (row.dueAt ? formatDueAt(row) : "—"),
         },
         {
           id: "status",
@@ -1801,9 +1801,9 @@ function ContractorRemindersTab({
             id: "due",
             header: "Due",
             sortValue: (row) => row.dueAt,
-            searchValue: (row) => formatDate(row.dueAt),
-            exportValue: (row) => formatDate(row.dueAt),
-            cell: (row) => formatDate(row.dueAt),
+            searchValue: (row) => formatDueAt(row),
+            exportValue: (row) => formatDueAt(row),
+            cell: (row) => formatDueAt(row),
           },
           {
             id: "status",

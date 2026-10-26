@@ -38,6 +38,7 @@ import {
   getEstimate,
   updateEstimate as updateEstimateApi,
   createRequest,
+  querySchedule,
 } from "@/lib/api/crm-client";
 import { syncCalendarAssignment } from "@/lib/portal-schedule-sync";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
@@ -87,6 +88,8 @@ import {
   employeeName,
   JOB_STATUSES,
   jobStatusLabel,
+  clockTimeFromMinutes,
+  minutesFromClockTime,
   type PortalRequest,
   type PortalTimeWindow,
 } from "@/lib/data/portal";
@@ -1333,6 +1336,9 @@ export function CreateJobDialog({
   );
   const [start, setStart] = useState(todayISO());
   const [due, setDue] = useState("");
+  /** Exact start time ("HH:MM") for the job's calendar row; the job record keeps the day. */
+  const [startTime, setStartTime] = useState("");
+  const [slotMinutes, setSlotMinutes] = useState(30);
   const [status, setStatus] = useState<JobStatus>("unscheduled");
   const [employeeId, setEmployeeId] = useState("");
   const [employeeLabel, setEmployeeLabel] = useState("");
@@ -1481,6 +1487,28 @@ export function CreateJobDialog({
     // Intentionally only when dialog opens or the edited job id changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once per open
   }, [open, job?.id]);
+
+  // Start time: blank for a new job; for an edit, read it from the job's calendar row.
+  useEffect(() => {
+    if (!open) return;
+    setStartTime("");
+    setSlotMinutes(30);
+    if (!job?.id || !useApi) return;
+    let active = true;
+    void querySchedule({ recordId: job.id, kind: "job", silent: true })
+      .then((rows) => {
+        const row = (rows || []).find((item) => item.recordId === job.id && item.startMinutes != null);
+        if (!active || !row || row.startMinutes == null) return;
+        setStartTime(clockTimeFromMinutes(row.startMinutes));
+        if (row.endMinutes != null && row.endMinutes > row.startMinutes) {
+          setSlotMinutes(row.endMinutes - row.startMinutes);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [open, job?.id, useApi]);
 
   useEffect(() => {
     if (!open || lockedCustomer || selectedCustomer || job?.id) return;
@@ -1635,6 +1663,20 @@ export function CreateJobDialog({
       }
       return;
     }
+    const startMinutes = minutesFromClockTime(startTime);
+    if (start && startMinutes === null) {
+      toast.error("Pick a start time for this job.");
+      setTab("schedule");
+      return;
+    }
+    const calendarTime =
+      startMinutes === null
+        ? {}
+        : {
+            startMinutes,
+            endMinutes: Math.min(24 * 60, startMinutes + slotMinutes),
+            timeWindow: (startMinutes < 12 * 60 ? "morning" : "afternoon") as PortalTimeWindow,
+          };
     setSaving(true);
     try {
       const workLines = filledWorkLines(lines);
@@ -1702,6 +1744,7 @@ export function CreateJobDialog({
             date: start,
             endDate: due || start,
             employeeId: techId || null,
+            ...calendarTime,
             status: "scheduled",
           });
         }
@@ -1787,6 +1830,7 @@ export function CreateJobDialog({
           date: start,
           endDate: due || start,
           employeeId: techId || null,
+          ...calendarTime,
           status: status === "unscheduled" ? "scheduled" : "scheduled",
         });
       }
@@ -1934,6 +1978,14 @@ export function CreateJobDialog({
                 value={start}
                 placeholder="mm/dd/yyyy"
                 onChange={(event) => setStart(event.target.value)}
+              />
+            </Field>
+            <Field label={<>Start time {start ? <span className="text-destructive">*</span> : null}</>}>
+              <Input
+                type="time"
+                step={300}
+                value={startTime}
+                onChange={(event) => setStartTime(event.target.value)}
               />
             </Field>
             <Field label="Due">
@@ -2108,6 +2160,7 @@ export function CreateLeadDialog({
   const [details, setDetails] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
   const [preferredTimeWindow, setPreferredTimeWindow] = useState<PortalTimeWindow>("morning");
+  const [preferredStartTime, setPreferredStartTime] = useState("");
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const customer = customers.find((item) => item.id === customerId) ?? first;
   const address = customer?.addresses[0];
@@ -2133,6 +2186,7 @@ export function CreateLeadDialog({
     setDetails("");
     setPreferredDate("");
     setPreferredTimeWindow("morning");
+    setPreferredStartTime("");
     if (!customerId && customerOptions[0]) {
       setCustomerId(customerOptions[0].id);
       setCustomerLabel(customerOptions[0].label);
@@ -2162,6 +2216,10 @@ export function CreateLeadDialog({
       toast.error("Please select a time window.");
       return;
     }
+    if (!preferredStartTime) {
+      toast.error("Please select a preferred time.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -2176,6 +2234,7 @@ export function CreateLeadDialog({
             details: details.trim(),
             preferredDate,
             preferredTimeWindow,
+            preferredStartTime,
           });
         } catch (error) {
           const msg = extractErrorMessage(error);
@@ -2203,6 +2262,7 @@ export function CreateLeadDialog({
         details: details.trim(),
         preferredDate,
         preferredTimeWindow,
+        preferredStartTime,
         photoUrls: [],
         status: "new",
         createdAt: new Date().toISOString(),
@@ -2286,6 +2346,20 @@ export function CreateLeadDialog({
                 onChange={(event) => setPreferredDate(event.target.value)}
               />
             </Field>
+            <Field label={<>Preferred time <span className="text-destructive">*</span></>}>
+              <Input
+                type="time"
+                step={300}
+                value={preferredStartTime}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setPreferredStartTime(next);
+                  // Keep the day-part window in step with the exact time.
+                  const minutes = minutesFromClockTime(next);
+                  if (minutes !== null) setPreferredTimeWindow(minutes < 12 * 60 ? "morning" : "afternoon");
+                }}
+              />
+            </Field>
             <Field label={<>Window <span className="text-destructive">*</span></>}>
               <NativeSelect
                 className="w-full"
@@ -2316,6 +2390,7 @@ export function CreateLeadDialog({
               !details.trim() ||
               !preferredDate ||
               !preferredTimeWindow ||
+              !preferredStartTime ||
               submitting
             }
             onClick={() => void save()}

@@ -122,6 +122,7 @@ import {
   formatClock,
   getPortalCustomerName,
   minutesForWindow,
+  minutesFromClockTime,
   requestStatusLabel,
   timeWindowLabel,
   windowFromMinutes,
@@ -130,7 +131,7 @@ import {
   type PortalRequest,
   type PortalTimeWindow,
 } from "@/lib/data/portal";
-import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { formatDate, formatDueAt, formatLocation, formatMoney, formatTime } from "@/lib/format";
 import type { Estimate, Job, RequestStatus, ServiceAddress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { canOptimizeImage } from "@/lib/image-hosts";
@@ -184,6 +185,11 @@ function leadStageCopy(status: RequestStatus, hasEstimate: boolean, hasJob: bool
   if (status === "contacted") return "You spoke with them. Confirm the work, then write the estimate.";
   if (status === "viewed") return "Seen in the inbox. Call or text so this does not go cold.";
   return "New inbound request. Review their answers, then send a written estimate if you can take it.";
+}
+
+function preferredSlot(time?: string) {
+  const start = minutesFromClockTime(time);
+  return start === null ? {} : { startMinutes: start, endMinutes: Math.min(start + 30, 24 * 60) };
 }
 
 function windowFromLabel(value?: string): PortalTimeWindow {
@@ -1596,6 +1602,10 @@ export function RequestDetailView({ id }: { id: string }) {
                           label="Preferred date"
                           value={request.preferredDate ? formatDate(request.preferredDate) : "Flexible"}
                         />
+                        <InfoRow
+                          label="Preferred time"
+                          value={request.preferredStartTime ? formatTime(request.preferredStartTime) : "Not set"}
+                        />
                         <InfoRow label="Window" value={request.preferredTimeWindow ?? "Any time"} />
                         <InfoRow label="Date created" value={formatDate(request.createdAt)} />
                         {request.scheduledDate ? (
@@ -2019,9 +2029,9 @@ export function RequestDetailView({ id }: { id: string }) {
                           id: "due",
                           header: "Due",
                           sortValue: (row) => row.dueAt,
-                          searchValue: (row) => formatDate(row.dueAt),
-                          exportValue: (row) => formatDate(row.dueAt),
-                          cell: (row) => formatDate(row.dueAt),
+                          searchValue: (row) => formatDueAt(row),
+                          exportValue: (row) => formatDueAt(row),
+                          cell: (row) => formatDueAt(row),
                         },
                         {
                           id: "status",
@@ -2189,9 +2199,9 @@ export function RequestDetailView({ id }: { id: string }) {
                           id: "due",
                           header: "Due",
                           sortValue: (row) => row.dueAt,
-                          searchValue: (row) => formatDate(row.dueAt),
-                          exportValue: (row) => formatDate(row.dueAt),
-                          cell: (row) => formatDate(row.dueAt),
+                          searchValue: (row) => formatDueAt(row),
+                          exportValue: (row) => formatDueAt(row),
+                          cell: (row) => formatDueAt(row),
                         },
                         {
                           id: "status",
@@ -2504,6 +2514,8 @@ export function RequestDetailView({ id }: { id: string }) {
             customerName: request.customerName,
             date: request.preferredDate || "",
             timeWindow: windowFromLabel(request.preferredTimeWindow),
+            // Start the booking at the customer's preferred time when they gave one.
+            ...preferredSlot(request.preferredStartTime),
             href: `/pro/dashboard/requests/${id}`,
             status: "scheduled",
           }

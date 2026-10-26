@@ -253,9 +253,34 @@ export function eventTimes(event: PortalCalendarEvent) {
   return { start: fallback.startMinutes, end: fallback.endMinutes };
 }
 
+/** Has its own start/end minutes (not just a morning / afternoon / all-day window). */
+function hasExactTime(event: PortalCalendarEvent) {
+  return (
+    event.timeWindow !== "all_day" &&
+    event.startMinutes != null &&
+    event.endMinutes != null &&
+    event.endMinutes > event.startMinutes
+  );
+}
+
+/**
+ * Week/day placement: the all-day row holds all-day items and anything that ends before the
+ * timed grid starts; every other item sits at its exact time, however long it runs.
+ */
 function isAllDay(event: PortalCalendarEvent) {
+  return event.timeWindow === "all_day" || eventTimes(event).end <= DAY_START;
+}
+
+/** Card time text: the exact range when the item has one, else its window ("Day", "AM"...). */
+function eventTimeLabel(event: PortalCalendarEvent) {
+  if (!hasExactTime(event)) return windowShort(event.timeWindow);
   const times = eventTimes(event);
-  return event.timeWindow === "all_day" || times.end - times.start >= 6 * 60;
+  return `${formatClock(times.start)} – ${formatClock(times.end)}`;
+}
+
+/** Chronological order within a day: all-day / window-only items first, then by start time. */
+function eventTimeSortKey(event: PortalCalendarEvent) {
+  return hasExactTime(event) ? eventTimes(event).start : -1;
 }
 
 function snapMinutes(value: number, min = DAY_START, max = DAY_END) {
@@ -462,7 +487,9 @@ export function EventCalendar({
     [selectedDay],
   );
 
-  const dayEvents = visible.filter((item) => eventCovers(item, selectedDay));
+  const dayEvents = visible
+    .filter((item) => eventCovers(item, selectedDay))
+    .sort((a, b) => eventTimeSortKey(a) - eventTimeSortKey(b));
   const unscheduled = visible.filter((item) => !item.date);
 
   function readPayload(event: DragEvent) {
@@ -995,7 +1022,12 @@ function layoutWeekEvents(weekIsos: string[], events: PortalCalendarEvent[]): We
       continuesRight: end > weekEndIso,
     });
   }
-  items.sort((a, b) => a.startCol - b.startCol || b.span - a.span);
+  items.sort(
+    (a, b) =>
+      a.startCol - b.startCol ||
+      b.span - a.span ||
+      eventTimeSortKey(a.event) - eventTimeSortKey(b.event),
+  );
   const lanes: WeekLaneItem[][] = [];
   for (const item of items) {
     const itemEnd = item.startCol + item.span - 1;
@@ -1686,7 +1718,7 @@ function CalendarChip({
         isAiBooked(event)
           ? aiVisitTooltip(
               event,
-              isAllDay(event) ? windowShort(event.timeWindow) : `${formatClock(times.start)} – ${formatClock(times.end)}`,
+              eventTimeLabel(event),
             )
           : `${calendarEventKindLabel(event.kind)} · Technician: ${techName} · ${event.title} (Click to open details, right-click for options)`
       }
@@ -1694,11 +1726,7 @@ function CalendarChip({
       {isAiBooked(event) ? (
         <AiVisitCard
           event={event}
-          time={
-            isAllDay(event)
-              ? windowShort(event.timeWindow)
-              : `${formatClock(times.start)} – ${formatClock(times.end)}`
-          }
+          time={eventTimeLabel(event)}
         />
       ) : (
       <>
@@ -1769,7 +1797,7 @@ function CalendarChip({
             {isDueEvent && dueDateDisplay ? (
               <span className="text-amber-200">Due: {formatDate(dueDateDisplay)}</span>
             ) : (
-              <span>{isAllDay(event) ? windowShort(event.timeWindow) : `${formatClock(times.start)} – ${formatClock(times.end)}`}</span>
+              <span>{eventTimeLabel(event)}</span>
             )}
           </span>
         </div>

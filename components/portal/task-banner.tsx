@@ -15,7 +15,7 @@ import {
   taskIsOverdue,
   type ReminderSubjectKind,
 } from "@/lib/data/crm-people";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDueAt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/store/hooks";
 import { patchCustomerTaskStatus } from "@/store/customersSlice";
@@ -81,7 +81,7 @@ export function OpenTaskBanner({ kind, id }: { kind: ReminderSubjectKind; id: st
                   {item.number} · {item.title}
                 </Link>
                 <span className={taskIsOverdue(item) ? "font-medium" : "opacity-80"}>
-                  {crmTaskPriorityLabel(item.priority)} · {crmTaskStatusLabel(item.status)} · Due {formatDate(item.dueAt)}
+                  {crmTaskPriorityLabel(item.priority)} · {crmTaskStatusLabel(item.status)} · Due {formatDueAt(item)}
                 </span>
                 <Button
                   size="sm"

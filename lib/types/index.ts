@@ -112,6 +112,8 @@ export interface ServiceRequest {
   details: string;
   preferredDate?: string;
   preferredTimeWindow?: string;
+  /** Exact preferred start time on preferredDate, 24-hour "HH:MM". */
+  preferredStartTime?: string;
   /** Provider-assigned calendar date for this lead. */
   scheduledDate?: string;
   photoUrls: string[];

@@ -27,6 +27,7 @@ import {
   formatClock,
   windowFromMinutes,
   dedupeCalendarEvents,
+  taskCalendarSlot,
 } from "@/lib/data/portal";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate } from "@/lib/format";
@@ -484,30 +485,7 @@ export function ScheduleView() {
           return;
         }
 
-        let startMinutes = 540;
-        let endMinutes = 570;
-        let timeWindow: PortalTimeWindow = "morning";
-
-        try {
-          if (task.dueAt.includes("T")) {
-            const d = new Date(task.dueAt);
-            if (!Number.isNaN(d.getTime())) {
-              const mins = d.getHours() * 60 + d.getMinutes();
-              if (mins > 0) {
-                startMinutes = mins;
-                endMinutes = Math.min(mins + 30, 24 * 60);
-                timeWindow =
-                  mins < 720
-                    ? "morning"
-                    : mins < 1020
-                      ? "afternoon"
-                      : "all_day";
-              }
-            }
-          }
-        } catch {
-          /* use defaults */
-        }
+        const { startMinutes, endMinutes, timeWindow } = taskCalendarSlot(task);
 
         let serviceAddress: string | undefined;
         let foundCustomerId = task.customerId;

@@ -114,6 +114,7 @@ export const EVENT_LABELS: Record<string, string> = {
   out_of_scope: "Out-of-scope request",
   coverage_check: "Service area checked",
   email_invalid: "Unclear email, asked again",
+  outside_hours: "Requested time outside working hours, asked again",
   lead_created: "Lead created",
   lead_updated: "Existing lead updated",
   estimate_drafted: "Draft estimate created",

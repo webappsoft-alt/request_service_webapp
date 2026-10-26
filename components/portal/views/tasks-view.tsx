@@ -81,7 +81,7 @@ import {
   type PortalTask,
 } from "@/lib/data/crm-people";
 import { jobStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
-import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { formatDate, formatDueAt, formatLocation, formatMoney } from "@/lib/format";
 import type { Estimate, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -570,9 +570,9 @@ export function TasksView() {
             header: "Due",
             className: "whitespace-nowrap",
             sortValue: (row) => row.dueAt,
-            searchValue: (row) => formatDate(row.dueAt),
-            exportValue: (row) => formatDate(row.dueAt),
-            cell: (row) => formatDate(row.dueAt),
+            searchValue: (row) => formatDueAt(row),
+            exportValue: (row) => formatDueAt(row),
+            cell: (row) => formatDueAt(row),
           },
           {
             id: "status",
@@ -1487,7 +1487,7 @@ export function TaskDetailView({ id }: { id: string }) {
                         : "text-lg font-semibold tabular-nums text-foreground"
                     }
                   >
-                    {task.dueAt ? formatDate(task.dueAt) : "—"}
+                    {task.dueAt ? formatDueAt(task) : "—"}
                   </p>
                 </div>
               </div>
@@ -1501,7 +1501,7 @@ export function TaskDetailView({ id }: { id: string }) {
                     <InfoRow
                       icon={CalendarDays}
                       label="Due Date"
-                      value={task.dueAt ? formatDate(task.dueAt) : "No due date"}
+                      value={task.dueAt ? formatDueAt(task) : "No due date"}
                       warn={overdue}
                     />
                     <InfoRow

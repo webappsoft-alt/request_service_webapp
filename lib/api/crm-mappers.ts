@@ -673,6 +673,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     details: trimmed(record.details),
     preferredDate: toIsoString(record.preferredDate) || undefined,
     preferredTimeWindow: mapRequestTimeWindow(record.preferredTimeWindow) || undefined,
+    preferredStartTime: trimmed(record.preferredStartTime) || undefined,
     scheduledDate: toIsoString(record.scheduledDate) || undefined,
     photoUrls: photos,
     photos,
@@ -2034,6 +2035,7 @@ export function mapPortalTask(raw: unknown): PortalTask | null {
         ? (trimmed(record.status) as PortalTask["status"])
         : "open",
     dueAt: toIsoString(record.dueAt) || toIsoString(record.dueDate) || toIsoString(record.date) || toIsoString(record.createdAt),
+    dueTime: trimmed(record.dueTime) || undefined,
     createdAt: toIsoString(record.createdAt),
   };
 }

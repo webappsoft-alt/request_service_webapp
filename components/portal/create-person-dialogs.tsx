@@ -1407,6 +1407,7 @@ export function CreateTaskDialog({
   const [priority, setPriority] = useState<CrmTaskPriority>("normal");
   const [status, setStatus] = useState<CrmTaskStatus>("open");
   const [dueAt, setDueAt] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const [saving, setSaving] = useState(false);
   const [lookupsLoading, setLookupsLoading] = useState(false);
 
@@ -1446,6 +1447,7 @@ export function CreateTaskDialog({
     setPriority(task?.priority ?? "normal");
     setStatus(task?.status ?? "open");
     setDueAt(task?.dueAt ? task.dueAt.slice(0, 10) : "");
+    setDueTime(task?.dueTime ?? "");
     setSaving(false);
   }, [open, task, subjectKind, subjectId]);
 
@@ -1493,6 +1495,10 @@ export function CreateTaskDialog({
       toast.error("Please select a due date.");
       return;
     }
+    if (!dueTime) {
+      toast.error("Please select a due time.");
+      return;
+    }
 
     const payload: PortalTask = {
       id: task?.id ?? `task_${provider.id}_new_${Date.now()}`,
@@ -1507,6 +1513,7 @@ export function CreateTaskDialog({
       priority,
       status: status || task?.status || "open",
       dueAt: dueAt || new Date().toISOString().slice(0, 10),
+      dueTime,
       createdAt: task?.createdAt ?? new Date().toISOString().slice(0, 10),
     };
 
@@ -1737,13 +1744,28 @@ export function CreateTaskDialog({
               />
             </Field>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="hidden sm:block" />
+            <Field>
+              <FieldLabel htmlFor="task-due-time">
+                Due time <span className="text-destructive">*</span>
+              </FieldLabel>
+              <Input
+                id="task-due-time"
+                type="time"
+                step={300}
+                value={dueTime}
+                onChange={(change) => setDueTime(change.target.value)}
+              />
+            </Field>
+          </div>
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
           <Button
-            disabled={saving || !title.trim() || !note.trim() || !dueAt || !linkedReady}
+            disabled={saving || !title.trim() || !note.trim() || !dueAt || !dueTime || !linkedReady}
             onClick={() => void save()}
           >
             {saving ? (

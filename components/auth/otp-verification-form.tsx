@@ -23,7 +23,15 @@ import {
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import {
+  TurnstileField,
+  turnstileEnabled,
+  type TurnstileInstance,
+} from "@/components/auth/turnstile-field";
+import {
   clearPendingRegistration,
+  clearSignupCheck,
+  isSignupCheckFresh,
+  readSignupCheck,
   OTP_RESEND_SECONDS,
   readPendingRegistration,
   REGISTRATION_OTP_LENGTH,
@@ -150,6 +158,12 @@ function OtpVerificationFormInner({
   const [resendSeconds, setResendSeconds] = useState(OTP_RESEND_SECONDS);
   // A verified code can't be used twice: keep the proof so a failed register can retry.
   const [verificationToken, setVerificationToken] = useState("");
+  // Cloudflare Turnstile: the signup form's token is used once; when it's gone or expired the
+  // widget appears here for a new one (and stays, refreshing itself, once shown).
+  const [humanCheck, setHumanCheck] = useState<{ token: string; at: number } | null>(null);
+  const [humanCheckRead, setHumanCheckRead] = useState(false);
+  const [showHumanCheck, setShowHumanCheck] = useState(false);
+  const humanCheckRef = useRef<TurnstileInstance | undefined>(undefined);
 
   const registerHref = isProvider ? proPaths.join : "/register";
   const nextPath = searchParams.get("next")?.trim() || "";
@@ -184,6 +198,21 @@ function OtpVerificationFormInner({
   }, [emailFromQuery, registerHref, router]);
 
   useEffect(() => {
+    const saved = readSignupCheck();
+    setHumanCheck(saved);
+    setShowHumanCheck(!saved);
+    setHumanCheckRead(true);
+  }, []);
+
+  /** A new token is needed (the last one was sent, or it expired): show / refresh the widget. */
+  function askForHumanCheck() {
+    clearSignupCheck();
+    setHumanCheck(null);
+    if (showHumanCheck) humanCheckRef.current?.reset();
+    setShowHumanCheck(true);
+  }
+
+  useEffect(() => {
     if (resendSeconds <= 0) return;
     const timer = window.setTimeout(
       () => setResendSeconds((value) => value - 1),
@@ -201,7 +230,15 @@ function OtpVerificationFormInner({
       return;
     }
 
+    const check = turnstileEnabled ? humanCheck : null;
+    if (turnstileEnabled && (!check || !isSignupCheckFresh(check.at))) {
+      askForHumanCheck();
+      toast.error("Please complete the verification check, then tap Verify again.");
+      return;
+    }
+
     setLoading(true);
+    let sentCheck = false;
     try {
       let token = verificationToken;
       if (!token) {
@@ -230,6 +267,8 @@ function OtpVerificationFormInner({
         const { kind: _kind, ...rest } = draft;
         registerPayload = { ...rest, verificationToken: token };
       }
+      if (check) registerPayload.turnstileToken = check.token;
+      sentCheck = Boolean(check);
 
       const registered = await postData(
         endpoint,
@@ -254,6 +293,8 @@ function OtpVerificationFormInner({
       router.replace(successHref);
     } catch (error) {
       showApiErrorToast(error, "Invalid verification code.");
+      // The token was spent on the failed attempt; a retry needs a new one.
+      if (sentCheck) askForHumanCheck();
     } finally {
       setLoading(false);
     }
@@ -294,7 +335,11 @@ function OtpVerificationFormInner({
   }
 
   const canVerify =
-    otp.length === OTP_LENGTH && !loading && Boolean(email) && Boolean(phone);
+    otp.length === OTP_LENGTH &&
+    !loading &&
+    Boolean(email) &&
+    Boolean(phone) &&
+    (!turnstileEnabled || (humanCheckRead && Boolean(humanCheck)));
 
   return (
     <AuthShell
@@ -334,6 +379,13 @@ function OtpVerificationFormInner({
           </p>
           <OtpBoxes value={otp} onChange={setOtp} disabled={loading} />
         </div>
+
+        {showHumanCheck ? (
+          <TurnstileField
+            ref={humanCheckRef}
+            onToken={(value) => setHumanCheck(value ? { token: value, at: Date.now() } : null)}
+          />
+        ) : null}
 
         <Button
           type="submit"

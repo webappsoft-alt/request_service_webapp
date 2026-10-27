@@ -98,6 +98,49 @@ export function readPendingRegistration(): PendingRegistration | null {
 export function clearPendingRegistration(): void {
   try {
     sessionStorage.removeItem(PENDING_REGISTRATION_KEY);
+    sessionStorage.removeItem(SIGNUP_CHECK_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/* Cloudflare Turnstile token from the signup form, sent with the register call on the code page. */
+
+const SIGNUP_CHECK_KEY = "rs-signup-check";
+
+/** Turnstile tokens last 300 s; leave a margin for the register request itself. */
+const SIGNUP_CHECK_MAX_AGE_MS = 270_000;
+
+export function saveSignupCheck(token: string): void {
+  try {
+    sessionStorage.setItem(SIGNUP_CHECK_KEY, JSON.stringify({ token, at: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+/** The saved token while it's still valid; null when missing or too old. */
+export function readSignupCheck(): { token: string; at: number } | null {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(SIGNUP_CHECK_KEY) || "null") as {
+      token?: unknown;
+      at?: unknown;
+    } | null;
+    if (!parsed || typeof parsed.token !== "string" || !parsed.token || typeof parsed.at !== "number") return null;
+    return isSignupCheckFresh(parsed.at) ? { token: parsed.token, at: parsed.at } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isSignupCheckFresh(at: number): boolean {
+  return Date.now() - at < SIGNUP_CHECK_MAX_AGE_MS;
+}
+
+/** A token works once — drop it as soon as it's sent. */
+export function clearSignupCheck(): void {
+  try {
+    sessionStorage.removeItem(SIGNUP_CHECK_KEY);
   } catch {
     // ignore
   }

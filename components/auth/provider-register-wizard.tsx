@@ -35,6 +35,7 @@ import {
   showApiErrorToast,
 } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
+import { TurnstileField, turnstileEnabled } from "@/components/auth/turnstile-field";
 import { areasForServiceAreaCity } from "@/lib/data/city-service-areas";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -45,6 +46,7 @@ import { serviceCategories } from "@/lib/data/services";
 import {
   isValidMobileNumber,
   savePendingRegistration,
+  saveSignupCheck,
   type PendingProviderRegistration,
 } from "@/lib/auth/pending-registration";
 import {
@@ -190,6 +192,9 @@ export function ProviderRegisterWizard() {
   const [step, setStep] = useState<Step>("account");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [submitting, setSubmitting] = useState(false);
+  /** Cloudflare Turnstile: the widget stays mounted through every step so the token stays fresh. */
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const humanChecked = !turnstileEnabled || Boolean(turnstileToken);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailChecking, setEmailChecking] = useState(false);
   const stepIndex = STEPS.indexOf(step);
@@ -297,6 +302,10 @@ export function ProviderRegisterWizard() {
       goTo("account");
       return;
     }
+    if (!humanChecked) {
+      toast.error("Please complete the verification check.");
+      return;
+    }
 
     const yearsInBusiness = Number(draft.yearsInBusiness);
 
@@ -350,6 +359,7 @@ export function ProviderRegisterWizard() {
         { silent: true, skipLogoutOn401: true },
       );
       savePendingRegistration(pending);
+      if (turnstileToken) saveSignupCheck(turnstileToken);
       toast.success(
         data?.message || "We texted you a verification code.",
       );
@@ -909,6 +919,8 @@ export function ProviderRegisterWizard() {
           </FieldGroup>
         ) : null}
 
+        <TurnstileField onToken={setTurnstileToken} />
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
             {stepIndex > 0 ? (
@@ -921,14 +933,18 @@ export function ProviderRegisterWizard() {
                 type="button"
                 variant="ghost"
                 size="xl"
-                disabled={submitting}
+                disabled={submitting || !humanChecked}
                 onClick={() => void finish()}
               >
                 Skip and finish
               </Button>
             ) : null}
           </div>
-          <Button type="submit" size="xl" disabled={!canContinue || submitting}>
+          <Button
+            type="submit"
+            size="xl"
+            disabled={!canContinue || submitting || (step === "coverage" && !humanChecked)}
+          >
             {submitting
               ? "Creating account…"
               : step === "coverage"
@@ -942,7 +958,7 @@ export function ProviderRegisterWizard() {
         {step === "business" ? (
           <button
             type="button"
-            disabled={submitting}
+            disabled={submitting || !humanChecked}
             onClick={() => {
               if (!draft.companyName.trim()) {
                 toast.error("Add a company name to create the account.");

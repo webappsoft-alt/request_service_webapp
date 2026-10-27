@@ -17,7 +17,12 @@ import {
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import {
+  TurnstileField,
+  turnstileEnabled,
+} from "@/components/auth/turnstile-field";
+import {
   isValidMobileNumber,
+  saveSignupCheck,
   savePendingRegistration,
   type PendingCustomerRegistration,
 } from "@/lib/auth/pending-registration";
@@ -50,8 +55,11 @@ function CustomerRegisterFormInner() {
   const [addressFields, setAddressFields] =
     useState<AddressFieldsValue>(emptyAddress);
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const humanChecked = !turnstileEnabled || Boolean(turnstileToken);
 
   const canSubmit =
+    humanChecked &&
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
     email.trim().length > 0 &&
@@ -97,6 +105,10 @@ function CustomerRegisterFormInner() {
       toast.error("Enter your mobile number so we can text you a code.");
       return;
     }
+    if (!humanChecked) {
+      toast.error("Please complete the verification check.");
+      return;
+    }
 
     const draft: PendingCustomerRegistration = {
       kind: "customer",
@@ -117,6 +129,7 @@ function CustomerRegisterFormInner() {
         { silent: true, skipLogoutOn401: true },
       );
       savePendingRegistration(draft);
+      if (turnstileToken) saveSignupCheck(turnstileToken);
       toast.success(
         data?.message || "We texted you a verification code.",
       );
@@ -231,6 +244,7 @@ function CustomerRegisterFormInner() {
             </Field>
           </div>
         </FieldGroup>
+        <TurnstileField onToken={setTurnstileToken} />
         <Button type="submit" size="xl" disabled={!canSubmit || submitting}>
           {submitting ? "Sending code…" : "Create account"}
         </Button>

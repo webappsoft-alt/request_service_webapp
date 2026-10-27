@@ -28,6 +28,7 @@ import {
 import { CreateJobDialog, CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { CreateTaskDialog } from "@/components/portal/create-person-dialogs";
 import { PortalPage } from "@/components/portal/portal-page";
+import { LiveTeamMap } from "@/components/tracking/live-team-map";
 import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
 import { getProfileSetupItems, profileSetupProgress } from "@/lib/business-profile-setup";
 import { selectAuthProvider, selectAuthUser } from "@/store/authSlice";
@@ -346,6 +347,9 @@ export function DashboardView() {
           loading={loading}
           error={error}
         />
+
+        {/* Where employees and subcontractors are today (live while on the clock) */}
+        <LiveTeamMap />
 
         {/* What the AI receptionist booked / captured (drafts wait for the Pro to send) */}
         <AiCallActivityCard />

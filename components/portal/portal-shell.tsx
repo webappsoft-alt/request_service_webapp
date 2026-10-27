@@ -4,9 +4,10 @@ import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Search, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { PeopleSubnav, WorkSubnav } from "@/components/portal/people-subnav";
 import { PortalNotifications } from "@/components/portal/portal-notifications";
+import { GlobalSearch } from "@/components/portal/global-search";
 import { ContractorReviewsBridge } from "@/components/portal/contractor-reviews-bridge";
 import { useOpenRecords } from "@/components/portal/use-open-records";
 import { usePortalInbox } from "@/components/portal/use-portal-inbox";
@@ -15,7 +16,6 @@ import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetClose,
@@ -159,7 +159,6 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const authUser = useAppSelector(selectAuthUser);
   const { records, closeRecord } = useOpenRecords();
   const [collapsed, setCollapsed] = useState(false);
-  const [headerSearch, setHeaderSearch] = useState("");
   const showPeople = isPeoplePath(pathname);
   const showWork = isWorkPath(pathname);
 
@@ -243,29 +242,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
               ))}
             </div>
 
-            <div className="relative ml-auto hidden w-56 lg:block">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search records…"
-                className="h-8 bg-[#f7f8fa] dark:bg-slate-800/80 dark:border-input pl-8 text-sm"
-                aria-label="Search records"
-                value={headerSearch}
-                onChange={(event) => setHeaderSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  const q = headerSearch.trim();
-                  const segments = pathname.split("/").filter(Boolean);
-                  // /pro/dashboard/<module> or /pro/dashboard/<module>/<id>
-                  const modulePath =
-                    segments.length >= 3
-                      ? `/${segments.slice(0, 3).join("/")}`
-                      : "/pro/dashboard/customers";
-                  const listBase =
-                    modulePath === "/pro/dashboard" ? "/pro/dashboard/customers" : modulePath;
-                  router.push(q ? `${listBase}?q=${encodeURIComponent(q)}` : listBase);
-                }}
-              />
-            </div>
+            <GlobalSearch className="ml-auto hidden w-[22rem] lg:block xl:w-[26rem]" />
             <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
               <ThemeToggle />
               <PortalNotifications />

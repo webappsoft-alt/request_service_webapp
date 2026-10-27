@@ -175,12 +175,13 @@ export function faqJsonLd(items: FaqItem[]) {
   };
 }
 
-export function articleJsonLd(post: BlogPost, authorName: string) {
+export function articleJsonLd(post: BlogPost, authorName: string, keywords: string[] = []) {
   return {
     "@context": "https://schema.org",
     "@type": "Article",
     headline: post.title,
     description: post.description,
+    ...(keywords.length ? { keywords: keywords.join(", ") } : {}),
     datePublished: post.publishedAt,
     dateModified: post.updatedAt,
     author: {

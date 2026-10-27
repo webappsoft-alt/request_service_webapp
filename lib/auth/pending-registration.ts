@@ -45,7 +45,6 @@ export type PendingProviderRegistration = {
   password: string;
   phone?: string;
   companyName: string;
-  tagline?: string;
   /** Preferred street line (API key: address). */
   address?: string;
   /** @deprecated Prefer `address`. */

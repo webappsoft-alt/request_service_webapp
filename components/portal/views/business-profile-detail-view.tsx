@@ -168,7 +168,6 @@ export function BusinessProfileDetailView() {
   const phone = String(provider.phone || "").trim();
   const email = String(provider.email || user?.email || "").trim();
   const about = String(authProvider?.description || provider.description || "").trim();
-  const tagline = String(authProvider?.tagline || provider.tagline || "").trim();
   const gallery = normalizeBusinessGallery(authProvider?.businessGallery);
   const banner = galleryBanner(gallery);
   const otherPhotos = galleryRest(gallery);
@@ -231,7 +230,6 @@ export function BusinessProfileDetailView() {
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {displayName}
-                    {tagline ? ` · ${tagline}` : ""}
                     {role ? ` · ${role}` : ""}
                   </p>
                 </div>

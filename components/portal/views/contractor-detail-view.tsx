@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getContractorLedger, type ContractorPayRow, type ContractorPayTotals } from "@/lib/api/contractor-portal-client";
 import { formatDuration, formatHours } from "@/lib/time-tracking";
 import Link from "next/link";
+import { trackingHref } from "@/lib/tracking";
 import {
   ChevronDown,
   Eye,
@@ -494,6 +495,12 @@ export function ContractorDetailView({ id }: { id: string }) {
               onClick={() => setAssignOpen(true)}
             >
               Assign job
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href={trackingHref({ id: contractor.id, participantType: "contractor" })}>Location history</Link>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href="/pro/dashboard/timesheets">Timesheets</Link>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

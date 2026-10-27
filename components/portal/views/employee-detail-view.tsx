@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { trackingHref } from "@/lib/tracking";
+import { TimeSelect } from "@/components/ui/time-select";
 import {
   ChevronDown,
   Clock3,
@@ -528,6 +530,12 @@ export function TeamMemberView({ id }: { id: string }) {
           <>
             <Button size="sm" className="h-8" asChild>
               <Link href={`/pro/dashboard/schedule?employeeId=${employee.id}`}>Open calendar</Link>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href={trackingHref({ id: employee.id, participantType: "technician" })}>Location history</Link>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href="/pro/dashboard/timesheets">Timesheets</Link>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1106,22 +1114,20 @@ export function EmployeeAvailabilityTab({
                   <div className="flex flex-col gap-1.5">
                     {item.shifts.map((shift, index) => (
                       <div key={index} className="flex flex-wrap items-center gap-1.5">
-                        <Input
-                          type="time"
+                        <TimeSelect
                           className="w-32"
                           aria-label={`${weekdayLabel(item.day)} shift ${index + 1} start`}
                           disabled={item.off}
                           value={shift.start}
-                          onChange={(event) => patchShift(item.day, index, { start: event.target.value })}
+                          onChange={(value) => patchShift(item.day, index, { start: value })}
                         />
                         <span className="text-muted-foreground">–</span>
-                        <Input
-                          type="time"
+                        <TimeSelect
                           className="w-32"
                           aria-label={`${weekdayLabel(item.day)} shift ${index + 1} end`}
                           disabled={item.off}
                           value={shift.end}
-                          onChange={(event) => patchShift(item.day, index, { end: event.target.value })}
+                          onChange={(value) => patchShift(item.day, index, { end: value })}
                         />
                         {item.shifts.length > 1 ? (
                           <Button

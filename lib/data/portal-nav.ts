@@ -15,6 +15,7 @@ import {
   LayoutTemplate,
   ListTodo,
   MapPin,
+  MapPinned,
   MessageCircle,
   Sparkles,
   Receipt,
@@ -50,8 +51,9 @@ export const portalNavGroups: PortalNavGroup[] = [
       { href: "/pro/dashboard/customers", label: "Customers", icon: Users },
       { href: "/pro/dashboard/team", label: "Employees", icon: UserRound },
       { href: "/pro/dashboard/contractors", label: "Contractors", icon: Handshake },
-      { href: "/pro/dashboard/timesheets", label: "Timesheets", icon: Timer },
       { href: "/pro/dashboard/vendors", label: "Vendors", icon: Building2 },
+      { href: "/pro/dashboard/timesheets", label: "Timesheets", icon: Timer },
+      { href: "/pro/dashboard/tracking", label: "Employee tracking", icon: MapPinned },
       { href: "/pro/dashboard/reminders", label: "Reminders", icon: Bell },
     ],
   },
@@ -112,6 +114,8 @@ export const peopleSubnav: { href: string; label: string }[] = [
   { href: "/pro/dashboard/team", label: "Employees" },
   { href: "/pro/dashboard/contractors", label: "Contractors" },
   { href: "/pro/dashboard/vendors", label: "Vendors" },
+  { href: "/pro/dashboard/timesheets", label: "Timesheets" },
+  { href: "/pro/dashboard/tracking", label: "Tracking" },
   { href: "/pro/dashboard/reminders", label: "Reminders" },
 ];
 

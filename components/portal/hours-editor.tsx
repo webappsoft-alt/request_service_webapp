@@ -1,7 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { TimeSelect } from "@/components/ui/time-select";
 import { cloneWorkingHours } from "@/lib/data/portal";
 import { formatWorkingDay, groupWorkingHours } from "@/lib/format";
 import type { WorkingHours } from "@/lib/types";
@@ -39,30 +39,31 @@ export function HoursEditor({
             <span className="text-sm text-muted-foreground">Closed</span>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="time"
+              <TimeSelect
                 value={entry.open ?? "08:00"}
                 aria-label={`${formatWorkingDay(entry.day)} opens`}
-                onChange={(event) =>
+                onChange={(value) =>
                   onChange(
                     cloneWorkingHours(hours).map((item) =>
-                      item.day === entry.day ? { ...item, open: event.target.value, closed: false } : item,
+                      item.day === entry.day ? { ...item, open: value, closed: false } : item,
                     ),
                   )
                 }
               />
-              <Input
-                type="time"
+              <TimeSelect
                 value={entry.close ?? "17:00"}
                 aria-label={`${formatWorkingDay(entry.day)} closes`}
-                onChange={(event) =>
+                onChange={(value) =>
                   onChange(
                     cloneWorkingHours(hours).map((item) =>
-                      item.day === entry.day ? { ...item, close: event.target.value, closed: false } : item,
+                      item.day === entry.day ? { ...item, close: value, closed: false } : item,
                     ),
                   )
                 }
               />
+              {(entry.close ?? "17:00") <= (entry.open ?? "08:00") ? (
+                <p className="col-span-2 text-xs text-amber-700">Closing time is before the opening time.</p>
+              ) : null}
             </div>
           )}
         </li>

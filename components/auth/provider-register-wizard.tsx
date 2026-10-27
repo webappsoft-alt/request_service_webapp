@@ -88,7 +88,6 @@ type Draft = {
   password: string;
   confirmPassword: string;
   companyName: string;
-  tagline: string;
   address: string;
   city: string;
   state: string;
@@ -118,7 +117,6 @@ const emptyDraft: Draft = {
   password: "",
   confirmPassword: "",
   companyName: "",
-  tagline: "",
   address: "",
   city: "",
   state: "TX",
@@ -317,7 +315,6 @@ export function ProviderRegisterWizard() {
       phone: draft.phone.trim(),
       password: draft.password,
       companyName: draft.companyName.trim(),
-      tagline: draft.tagline.trim() || undefined,
       address: draft.address.trim() || undefined,
       street: draft.address.trim() || undefined,
       city: draft.city.trim() || undefined,
@@ -626,15 +623,6 @@ export function ProviderRegisterWizard() {
                 autoComplete="organization"
                 placeholder="Summit Home Systems"
                 required
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="tagline">Tagline</FieldLabel>
-              <Input
-                id="tagline"
-                value={draft.tagline}
-                onChange={(event) => patch({ tagline: event.target.value })}
-                placeholder="Optional — Plumbing and HVAC for Austin homes."
               />
             </Field>
             <AddressFields

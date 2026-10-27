@@ -180,7 +180,6 @@ export function ProviderProfile({
                 <ProviderLogo provider={provider} size="lg" />
                 <div className="min-w-0 flex-1">
                   <h1 className="text-3xl font-semibold md:text-4xl">{provider.companyName}</h1>
-                  <p className="mt-1 text-foreground">{provider.tagline}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <Rating value={provider.rating} count={provider.reviewCount} size="md" />
                     <CredentialMark licensed={provider.licensed} insured={provider.insured} />

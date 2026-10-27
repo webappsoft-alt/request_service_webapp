@@ -43,6 +43,11 @@ type CommonProps = {
 export type SearchableSelectProps = CommonProps & {
   value: string | null;
   onChange: (value: string | null) => void;
+  /** Infinite scroll (server lists): more pages exist; onLoadMore fetches the next one. */
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  /** Label for the value when it isn't in the loaded options (e.g. paged / searched lists). */
+  selectedLabel?: string;
 };
 
 export type SearchableMultiSelectProps = CommonProps & {
@@ -166,6 +171,9 @@ export function SearchableSelect({
   maxResults,
   onSearchChange,
   loading = false,
+  hasMore = false,
+  onLoadMore,
+  selectedLabel,
 }: SearchableSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -300,6 +308,14 @@ export function SearchableSelect({
         style={menuStyle}
         className="overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-md"
         onWheel={(event) => event.stopPropagation()}
+        onScroll={
+          onLoadMore
+            ? (event) => {
+                const el = event.currentTarget;
+                if (hasMore && !loading && el.scrollTop + el.clientHeight >= el.scrollHeight - 48) onLoadMore();
+              }
+            : undefined
+        }
       >
         {hiddenCount > 0 ? (
           <div className="border-b border-input px-3 py-1.5 text-xs text-muted-foreground">
@@ -337,6 +353,11 @@ export function SearchableSelect({
             );
           })
         )}
+        {onLoadMore && filtered.length > 0 && (hasMore || loading) ? (
+          <div className="px-3 py-2 text-center text-xs text-muted-foreground">
+            {loading ? "Loading more…" : "Scroll for more"}
+          </div>
+        ) : null}
       </div>
     ) : null;
 
@@ -384,11 +405,11 @@ export function SearchableSelect({
           onKeyDown={onTriggerKeyDown}
           className={cn(
             triggerClassName,
-            !selected && "text-muted-foreground",
+            !selected && !(value && selectedLabel) && "text-muted-foreground",
           )}
         >
           <span className="line-clamp-1 min-w-0 flex-1">
-            {selected?.label || placeholder}
+            {selected?.label || (value ? selectedLabel : "") || placeholder}
           </span>
           <span className="flex shrink-0 items-center gap-1">
             {value ? (

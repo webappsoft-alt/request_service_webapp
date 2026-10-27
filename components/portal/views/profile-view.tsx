@@ -168,7 +168,6 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
   const employeeRaw = String(provider?.profile?.employeeCount || "");
   return {
     companyName: String(provider?.companyName || ""),
-    tagline: String(provider?.tagline || ""),
     description: String(provider?.description || ""),
     phone: String(provider?.phone || ""),
     email: String(provider?.email || ""),
@@ -226,7 +225,6 @@ export function ProfileView() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [tagline, setTagline] = useState("");
   const [description, setDescription] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -338,7 +336,6 @@ export function ProfileView() {
       setLastName(String(user?.lastName || ""));
       setAvatarUrl(getUserAvatarSrc(user));
       setCompanyName(next.companyName);
-      setTagline(next.tagline);
       setDescription(next.description);
       setPhone(resolvedPhone);
       setEmail(next.email || String(user?.email || ""));
@@ -462,7 +459,6 @@ export function ProfileView() {
     // Backend expects flat service/coverage fields (not nested services/coverage objects).
     const providerPayload: Record<string, unknown> = {
       companyName: companyName.trim(),
-      tagline: tagline.trim() || undefined,
       description: description.trim() || undefined,
       phone: nextPhone || undefined,
       email: email.trim() || undefined,
@@ -540,7 +536,6 @@ export function ProfileView() {
       const nextProvider = {
         ...(authProvider || {}),
         companyName: companyName.trim(),
-        tagline: tagline.trim(),
         description: description.trim(),
         phone: nextPhone,
         email: email.trim(),
@@ -914,14 +909,6 @@ export function ProfileView() {
                     value={companyName}
                     onChange={(event) => setCompanyName(event.target.value)}
                     required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="tagline">Tagline</FieldLabel>
-                  <Input
-                    id="tagline"
-                    value={tagline}
-                    onChange={(event) => setTagline(event.target.value)}
                   />
                 </Field>
                 <AddressFields

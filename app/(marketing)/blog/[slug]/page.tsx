@@ -98,9 +98,14 @@ export async function generateMetadata({
   const modifiedTime = apiPost.updatedAt;
   const authorName = apiPost.authorName || "Request Service Editorial";
 
+  const keywords = Array.isArray(apiPost.meta?.keywords)
+    ? apiPost.meta.keywords.filter((keyword): keyword is string => typeof keyword === "string" && Boolean(keyword.trim()))
+    : [];
+
   return buildMetadata({
     title,
     description,
+    keywords,
     path: `/blog/${slug}`,
     ogType: "article",
     publishedTime,
@@ -188,6 +193,7 @@ export default async function BlogArticlePage({
               image: image || undefined,
             },
             authorName,
+            Array.isArray(apiPost.meta?.keywords) ? apiPost.meta.keywords : [],
           ),
           breadcrumbJsonLd([
             { name: "Home", path: "/" },

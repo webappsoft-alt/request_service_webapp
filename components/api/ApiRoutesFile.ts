@@ -138,6 +138,12 @@ export const providerCrmApi = {
     `provider/team/${id}/attachments/${attachmentId}`,
   /** GET technician time entries — query: employeeId | jobId | estimateId, from, to, tz */
   timeEntries: "provider/time-entries",
+  /** Pro portal header search: every module in one call. */
+  globalSearch: "provider/search",
+  trackingLive: "provider/tracking/live",
+  trackingHistory: "provider/tracking/history",
+  /** Employees + contractors for pickers (server search, paged). */
+  trackingWorkers: "provider/tracking/workers",
   /** Timesheets page bundle: sessions + pay ledger + contractor hours + team, one call. */
   timesheet: "provider/time-entries/timesheet",
   /** POST stop a technician's running timer */

@@ -50,6 +50,18 @@ export type RealtimeEvents = {
   TIME_ENTRY_UPDATED: {
     entry?: Record<string, unknown>;
   };
+  /** Provider room: a technician / subcontractor on the clock reported a position (live map). */
+  WORKER_LOCATION_UPDATED: {
+    workerId?: string;
+    participantType?: "technician" | "contractor";
+    lat?: number;
+    lng?: number;
+    accuracyMeters?: number | null;
+    source?: string;
+    at?: string;
+    clockedIn?: boolean;
+    paused?: boolean;
+  };
   /** Provider room: a technician payout was recorded. */
   TECHNICIAN_PAYMENT_UPDATED: {
     payment?: Record<string, unknown>;

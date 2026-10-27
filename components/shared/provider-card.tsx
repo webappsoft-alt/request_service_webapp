@@ -233,7 +233,6 @@ export function ProviderCard({
                   ) : null}
                 </p>
               ) : null}
-              <p className="line-clamp-1 text-sm text-muted-foreground">{provider.tagline}</p>
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                 {hasRating ? (
                   <span className="inline-flex items-center gap-1 font-medium text-foreground">
@@ -345,9 +344,6 @@ export function ProviderCard({
             >
               <span className="line-clamp-2 break-words">{provider.companyName}</span>
             </h3>
-            <p className="line-clamp-1 text-sm leading-5 text-muted-foreground">
-              {provider.tagline}
-            </p>
             <ProviderCardLocation
               city={provider.city}
               state={provider.state}

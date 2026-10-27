@@ -166,11 +166,6 @@ export function ProjectDetail({
                       <span className="block font-semibold leading-snug">
                         {provider.companyName}
                       </span>
-                      {provider.tagline ? (
-                        <span className="mt-0.5 block line-clamp-2 text-sm text-muted-foreground">
-                          {provider.tagline}
-                        </span>
-                      ) : null}
                     </span>
                   </Link>
 

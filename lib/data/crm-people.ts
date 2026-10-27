@@ -1,3 +1,4 @@
+import type { CustomerOrigin } from "@/lib/data/lead-origins";
 import {
   getPortalCustomers,
   getPortalEmployees,
@@ -20,6 +21,8 @@ export type CrmTaskPriority = "low" | "normal" | "high" | "urgent";
 
 export type PortalCustomerCrm = Customer & {
   customerNumber: string;
+  /** Grouped source from the list API (AI call / website / added by you / Request Services). */
+  origin?: CustomerOrigin;
   entityKind: CrmEntityKind;
   customerType: CrmCustomerType;
   source: CrmPersonSource;

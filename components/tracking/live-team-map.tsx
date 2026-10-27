@@ -76,7 +76,7 @@ export function workerStatusText(
 }
 
 /** Pro dashboard: where employees and subcontractors are today (live while they're on the clock). */
-export function LiveTeamMap() {
+export function LiveTeamMap({ className }: { className?: string } = {}) {
   const { items, status } = useLiveWorkers();
   const now = useNow();
   const { provider } = usePortalWorkspace();
@@ -108,7 +108,7 @@ export function LiveTeamMap() {
   }, [showRoster, roster]);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#94a3b8] bg-card">
+    <section className={cn("min-w-0 overflow-hidden rounded-2xl border border-[#94a3b8] bg-card", className)}>
       <div className="flex flex-wrap items-center gap-3 border-b border-input px-4 py-3">
         <MapPinned className="size-4 text-primary" aria-hidden />
         <div className="min-w-0">
@@ -132,7 +132,7 @@ export function LiveTeamMap() {
         </Button>
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_240px]">
         <div className="relative h-[320px] lg:h-[360px]">
           <WorkerMap
             workers={items}

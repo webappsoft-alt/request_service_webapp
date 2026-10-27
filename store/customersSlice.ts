@@ -34,6 +34,7 @@ import type {
   PortalReminder,
   PortalTask,
 } from "@/lib/data/crm-people";
+import type { CustomerOrigin } from "@/lib/data/lead-origins";
 import type { PortalCalendarEvent, PortalEmployee } from "@/lib/data/portal";
 import type { Estimate, Invoice, Job } from "@/lib/types";
 
@@ -81,6 +82,8 @@ type CustomersState = {
   search: string;
   /** Active A–Z letter (`""` = All). Sent as the API `search` param when set. */
   letter: string;
+  /** Source filter (`""` = All sources). */
+  origin: CustomerOrigin | "";
   loading: boolean;
   error: string | null;
   detail: PortalCustomerCrm | null;
@@ -122,6 +125,7 @@ const initialState: CustomersState = {
   totalPages: 1,
   search: "",
   letter: "",
+  origin: "",
   loading: false,
   error: null,
   detail: null,
@@ -142,8 +146,10 @@ export function customersPageCacheKey(
   letter: string,
   page: number,
   limit: number,
+  origin = "",
 ) {
-  return `${letter.trim()}|${search.trim()}|${page}|${limit}`;
+  const key = `${letter.trim()}|${search.trim()}|${page}|${limit}`;
+  return origin ? `${key}|${origin}` : key;
 }
 
 /** Letter filter takes priority; otherwise free-text search. */
@@ -158,6 +164,7 @@ export type FetchCustomersArg = {
   limit?: number;
   search?: string;
   letter?: string;
+  origin?: CustomerOrigin | "";
   /** Bypass pagesCache and always hit the API. */
   force?: boolean;
 };
@@ -234,6 +241,7 @@ export const fetchCustomers = createAsyncThunk<
     pagination: PaginationMeta;
     search: string;
     letter: string;
+    origin: CustomerOrigin | "";
   },
   FetchCustomersArg | void,
   { state: { customers: CustomersState }; rejectValue: string }
@@ -245,6 +253,7 @@ export const fetchCustomers = createAsyncThunk<
     const limit = params?.limit ?? state.limit;
     const search = params?.search ?? state.search;
     const letter = params?.letter ?? state.letter;
+    const origin = params?.origin ?? state.origin ?? "";
     const apiSearch = customersApiSearch(search, letter);
 
     try {
@@ -252,6 +261,7 @@ export const fetchCustomers = createAsyncThunk<
         page,
         limit,
         search: apiSearch || undefined,
+        origin: origin || undefined,
         silent: true,
         force: true,
       });
@@ -265,6 +275,7 @@ export const fetchCustomers = createAsyncThunk<
         },
         search,
         letter,
+        origin,
       };
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
@@ -279,7 +290,8 @@ export const fetchCustomers = createAsyncThunk<
       const limit = params?.limit ?? state.limit;
       const search = params?.search ?? state.search;
       const letter = params?.letter ?? state.letter;
-      const key = customersPageCacheKey(search, letter, page, limit);
+      const origin = params?.origin ?? state.origin ?? "";
+      const key = customersPageCacheKey(search, letter, page, limit, origin);
       if (key in state.pagesCache) return false;
       return true;
     },
@@ -765,6 +777,11 @@ const customersSlice = createSlice({
       state.page = 1;
       state.pagesCache = {};
     },
+    setCustomersOrigin(state, action: PayloadAction<CustomerOrigin | "">) {
+      state.origin = action.payload;
+      state.page = 1;
+      state.pagesCache = {};
+    },
     setCustomersPage(state, action: PayloadAction<number>) {
       state.page = Math.max(1, action.payload);
       const key = customersPageCacheKey(
@@ -772,6 +789,7 @@ const customersSlice = createSlice({
         state.letter,
         state.page,
         state.limit,
+        state.origin,
       );
       if (key in state.pagesCache) {
         state.items = state.pagesCache[key];
@@ -860,11 +878,13 @@ const customersSlice = createSlice({
         state.totalPages = Math.max(1, action.payload.pagination.totalPages);
         state.search = action.payload.search;
         state.letter = action.payload.letter;
+        state.origin = action.payload.origin;
         const key = customersPageCacheKey(
           state.search,
           state.letter,
           state.page,
           state.limit,
+          state.origin,
         );
         state.pagesCache[key] = action.payload.items;
       })
@@ -1095,6 +1115,7 @@ const customersSlice = createSlice({
 export const {
   setCustomersSearch,
   setCustomersLetter,
+  setCustomersOrigin,
   setCustomersPage,
   invalidateCustomersCache,
   clearCustomersError,

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { PortalPage } from "@/components/portal/portal-page";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
+import { SourceFilter } from "@/components/portal/source-filter";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import {
   AddressFields,
@@ -25,6 +26,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
+import { CUSTOMER_ORIGIN_OPTIONS, originLabel, type CustomerOrigin } from "@/lib/data/lead-origins";
 import { getServiceCategoryById } from "@/lib/data/services";
 import {
   createEstimateV2Opportunity,
@@ -33,7 +35,7 @@ import {
   listEstimateV2Opportunities,
   type PrepChoice,
 } from "@/lib/api/estimate-v2-client";
-import { getCustomer, getRequest, updateCustomer } from "@/lib/api/crm-client";
+import { getCustomer, getRequest, queryCustomers, updateCustomer } from "@/lib/api/crm-client";
 import {
   findTemplateCategory,
   getEstimateTemplateCatalog,
@@ -146,6 +148,9 @@ export function NewEstimateCreateView() {
   /** The customer this estimate was started for (customer page or lead): always listed first. */
   const [pinnedCustomerId, setPinnedCustomerId] = useState(customerParam);
   const [customerQuery, setCustomerQuery] = useState("");
+  /** Source filter for the picker ("" = all). Fetched on its own, so the Customers page filter is untouched. */
+  const [customerOrigin, setCustomerOrigin] = useState<CustomerOrigin | "">("");
+  const [originResults, setOriginResults] = useState<{ key: string; items: PortalCustomerCrm[] } | null>(null);
   const [addressId, setAddressId] = useState("");
 
   const [newProperty, setNewProperty] = useState<AddressFieldsValue>(EMPTY_PROPERTY);
@@ -257,17 +262,42 @@ export function NewEstimateCreateView() {
     return () => window.clearTimeout(handle);
   }, [customerQuery, dispatch, useApi]);
 
+  // With a source picked, list exactly what the API returns for that source (+ search).
+  const originKey = customerOrigin ? `${customerOrigin}|${customerQuery.trim()}` : "";
+  useEffect(() => {
+    if (!useApi || !originKey) return;
+    const [origin, search] = [customerOrigin, customerQuery.trim()];
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      queryCustomers({ origin, search: search || undefined, page: 1, limit: 100, silent: true, force: true })
+        .then((result) => {
+          if (!cancelled) setOriginResults({ key: originKey, items: result.items });
+        })
+        .catch(() => {
+          if (!cancelled) setOriginResults({ key: originKey, items: [] });
+        });
+    }, search ? 300 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [customerOrigin, customerQuery, originKey, useApi]);
+  const originItems = originKey && originResults?.key === originKey ? originResults.items : null;
+  const originLoading = Boolean(originKey) && !originItems;
+
   const customers = useMemo(() => {
     const map = new Map<string, PortalCustomerCrm>();
     for (const item of [
       ...directoryCustomers,
       ...reduxCustomers,
       ...localCustomers,
+      ...(originItems || []),
     ]) {
-      if (item?.id) map.set(item.id, item);
+      // Keep the origin label when a source without it (directory) holds the same customer.
+      if (item?.id) map.set(item.id, { ...map.get(item.id), ...item, origin: item.origin ?? map.get(item.id)?.origin });
     }
     return Array.from(map.values());
-  }, [directoryCustomers, localCustomers, reduxCustomers]);
+  }, [directoryCustomers, localCustomers, reduxCustomers, originItems]);
 
   const selectedCustomer = useMemo(
     () => customers.find((item) => item.id === customerId) || null,
@@ -298,11 +328,18 @@ export function NewEstimateCreateView() {
     const q = customerQuery.trim().toLowerCase();
     const matches = (item: PortalCustomerCrm) =>
       !q || `${crmCustomerName(item)} ${item.email || ""} ${item.phone || ""}`.toLowerCase().includes(q);
+    if (customerOrigin) {
+      // Server already filtered by source + search; keep the API order.
+      const list = (originItems || []).filter(matches);
+      if (!pinnedCustomer || !list.some((item) => item.id === pinnedCustomer.id)) return list;
+      return [pinnedCustomer, ...list.filter((item) => item.id !== pinnedCustomer.id)];
+    }
     const list = customers.filter(matches).slice(0, 40);
     // The customer this estimate was started for stays at the very top (while it matches the search).
     if (!pinnedCustomer || !matches(pinnedCustomer)) return list;
     return [pinnedCustomer, ...list.filter((item) => item.id !== pinnedCustomer.id)];
-  }, [customers, customerQuery, pinnedCustomer]);
+  }, [customers, customerQuery, customerOrigin, originItems, pinnedCustomer]);
+  const pickerLoading = customerOrigin ? originLoading : customersLoading;
 
   const addresses = selectedCustomer?.addresses || [];
 
@@ -562,14 +599,23 @@ export function NewEstimateCreateView() {
                 + New customer
               </Button>
             </div>
-            <Input
-              className="mt-3"
-              placeholder="Search by name, email, or phone"
-              value={customerQuery}
-              onChange={(e) => setCustomerQuery(e.target.value)}
-            />
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Input
+                className="sm:flex-1"
+                placeholder="Search by name, email, or phone"
+                value={customerQuery}
+                onChange={(e) => setCustomerQuery(e.target.value)}
+              />
+              <SourceFilter
+                size="default"
+                className="w-full sm:w-44"
+                value={customerOrigin}
+                options={CUSTOMER_ORIGIN_OPTIONS}
+                onChange={setCustomerOrigin}
+              />
+            </div>
             <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
-              {customersLoading && !filteredCustomers.length ? (
+              {pickerLoading && !filteredCustomers.length ? (
                 <p className="px-1 py-6 text-center text-sm text-muted-foreground">
                   Loading customers…
                 </p>
@@ -588,7 +634,14 @@ export function NewEstimateCreateView() {
                   )}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="font-medium">{crmCustomerName(item)}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-medium">{crmCustomerName(item)}</span>
+                      {item.origin && item.origin !== "manual" ? (
+                        <span className="rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                          {originLabel(item.origin)}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       {[item.email, item.phone].filter(Boolean).join(" · ") || "No contact yet"}
                     </span>
@@ -596,9 +649,11 @@ export function NewEstimateCreateView() {
                   <SelectionMark selected={customerId === item.id} />
                 </button>
               ))}
-              {!customersLoading && !filteredCustomers.length ? (
+              {!pickerLoading && !filteredCustomers.length ? (
                 <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-                  No customers match. Create a new customer to continue.
+                  {customerOrigin
+                    ? `No customers from "${originLabel(customerOrigin)}" match.`
+                    : "No customers match. Create a new customer to continue."}
                 </p>
               ) : null}
             </div>

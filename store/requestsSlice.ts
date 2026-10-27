@@ -37,8 +37,10 @@ export function requestsCacheKey(
   search = "",
   page = 1,
   limit = REQUESTS_DEFAULT_LIMIT,
+  origin = "",
 ) {
-  return `${status.trim()}|${search.trim()}|${page}|${limit}`;
+  const key = `${status.trim()}|${search.trim()}|${page}|${limit}`;
+  return origin ? `${key}|${origin}` : key;
 }
 
 export function leadTabCacheKey(requestId?: string, customerId?: string) {
@@ -102,6 +104,8 @@ export type RequestsState = {
   totalPages: number;
   search: string;
   status: string;
+  /** Source filter (`""` = All sources). */
+  origin: string;
   loading: boolean;
   error: string | null;
   detailLoading: boolean;
@@ -141,6 +145,7 @@ const initialState: RequestsState = {
   totalPages: 1,
   search: "",
   status: "",
+  origin: "",
   loading: false,
   error: null,
   detailLoading: false,
@@ -163,6 +168,7 @@ export const fetchRequests = createAsyncThunk<
     totalPages: number;
     search: string;
     status: string;
+    origin: string;
     cacheKey: string;
   },
   {
@@ -170,6 +176,7 @@ export const fetchRequests = createAsyncThunk<
     limit?: number;
     status?: string;
     search?: string;
+    origin?: string;
     force?: boolean;
     silent?: boolean;
   } | void,
@@ -183,12 +190,15 @@ export const fetchRequests = createAsyncThunk<
     hasParams && "status" in params ? params.status || "" : state.status;
   const targetSearch =
     hasParams && "search" in params ? params.search || "" : state.search;
+  const targetOrigin =
+    hasParams && "origin" in params ? params.origin || "" : state.origin || "";
   const force = Boolean(params?.force);
   const key = requestsCacheKey(
     targetStatus,
     targetSearch,
     targetPage,
     targetLimit,
+    targetOrigin,
   );
 
   // Never trust an empty cached page — it goes stale when a new lead arrives
@@ -202,6 +212,7 @@ export const fetchRequests = createAsyncThunk<
       totalPages: state.totalPages,
       search: targetSearch,
       status: targetStatus,
+      origin: targetOrigin,
       cacheKey: key,
     };
   }
@@ -217,6 +228,7 @@ export const fetchRequests = createAsyncThunk<
         limit: targetLimit,
         search: targetSearch.trim() || undefined,
         status: targetStatus.trim() || undefined,
+        origin: targetOrigin || undefined,
         force: true,
         silent: params?.silent ?? true,
       });
@@ -240,6 +252,7 @@ export const fetchRequests = createAsyncThunk<
       totalPages: resultTotalPages,
       search: targetSearch,
       status: targetStatus,
+      origin: targetOrigin,
       cacheKey: key,
     };
   } catch (error) {
@@ -480,6 +493,7 @@ const requestsSlice = createSlice({
         state.search,
         state.page,
         state.limit,
+        state.origin,
       );
       if (key in state.pagesCache) {
         state.items = state.pagesCache[key];
@@ -491,6 +505,11 @@ const requestsSlice = createSlice({
     },
     setRequestsStatus(state, action: PayloadAction<string>) {
       state.status = action.payload;
+      state.page = 1;
+      state.pagesCache = {};
+    },
+    setRequestsOrigin(state, action: PayloadAction<string>) {
+      state.origin = action.payload;
       state.page = 1;
       state.pagesCache = {};
     },
@@ -693,11 +712,16 @@ const requestsSlice = createSlice({
           action.meta.arg && "search" in action.meta.arg
             ? action.meta.arg.search || ""
             : state.search;
+        const targetOrigin =
+          action.meta.arg && "origin" in action.meta.arg
+            ? action.meta.arg.origin || ""
+            : state.origin;
         const key = requestsCacheKey(
           targetStatus,
           targetSearch,
           targetPage,
           targetLimit,
+          targetOrigin,
         );
 
         const cached = state.pagesCache[key];
@@ -726,6 +750,7 @@ const requestsSlice = createSlice({
         state.totalPages = Math.max(1, action.payload.totalPages);
         state.search = action.payload.search;
         state.status = action.payload.status;
+        state.origin = action.payload.origin;
         for (const item of merged) {
           const prev = state.detailsCache[item.id];
           state.detailsCache[item.id] = preserveScheduledLeadState(item, prev);
@@ -972,6 +997,7 @@ export const {
   setRequestsPage,
   setRequestsSearch,
   setRequestsStatus,
+  setRequestsOrigin,
   invalidateRequestsCache,
   setRequestStatusLocal,
   upsertRequestItem,

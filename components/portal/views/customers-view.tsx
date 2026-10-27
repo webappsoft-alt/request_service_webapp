@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { SourceFilter } from "@/components/portal/source-filter";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
 import { useCrmRecordPending } from "@/components/portal/use-crm-record-pending";
 import { usePortalRecords } from "@/components/portal/use-portal-records";
@@ -17,6 +18,7 @@ import {
   type PortalCustomerCrm,
 } from "@/lib/data/crm-people";
 import { formatDate, formatMoney } from "@/lib/format";
+import { CUSTOMER_ORIGIN_OPTIONS, originLabel } from "@/lib/data/lead-origins";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
@@ -25,11 +27,18 @@ import {
   fetchCustomers,
   invalidateCustomersCache,
   setCustomersLetter,
+  setCustomersOrigin,
   setCustomersPage,
   setCustomersSearch,
 } from "@/store/customersSlice";
 
 const SEARCH_DEBOUNCE_MS = 400;
+
+/** "AI call" / "Website" / "Request Services" from the API; the Pro's own pick otherwise. */
+function customerSourceLabel(row: PortalCustomerCrm) {
+  if (row.origin && row.origin !== "manual") return originLabel(row.origin);
+  return crmSourceLabel(row.source);
+}
 const CUSTOMERS_PAGE_SIZE = 10;
 
 export function CustomersView() {
@@ -70,6 +79,7 @@ export function CustomersView() {
     error: null,
   };
 
+  const origin = slice?.origin ?? "";
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalCustomerCrm | null>(null);
   const [searchInput, setSearchInput] = useState(search);
@@ -97,7 +107,7 @@ export function CustomersView() {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, useApi, page, search, letter]);
+  }, [dispatch, useApi, page, search, letter, origin]);
 
   useEffect(() => {
     return () => {
@@ -132,6 +142,12 @@ export function CustomersView() {
       setActionLoading(true);
       dispatch(setCustomersSearch(value.trim()));
     }, SEARCH_DEBOUNCE_MS);
+  }
+
+  function onOriginChange(next: typeof origin) {
+    if (next === origin) return;
+    setActionLoading(true);
+    dispatch(setCustomersOrigin(next));
   }
 
   function onPageChange(nextPage: number) {
@@ -173,10 +189,17 @@ export function CustomersView() {
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/customers/${row.id}`}
         pageSize={limit}
+        toolbar={
+          useApi ? (
+            <SourceFilter value={origin} options={CUSTOMER_ORIGIN_OPTIONS} onChange={onOriginChange} />
+          ) : null
+        }
         empty={
           apiSearch
             ? "No customers match this search."
-            : "No customers yet. Create your first customer."
+            : origin
+              ? `No customers from "${originLabel(origin)}".`
+              : "No customers yet. Create your first customer."
         }
         serverPagination={
           useApi
@@ -279,10 +302,10 @@ export function CustomersView() {
           {
             id: "source",
             header: "Source",
-            sortValue: (row) => row.source,
-            searchValue: (row) => crmSourceLabel(row.source),
-            exportValue: (row) => crmSourceLabel(row.source),
-            cell: (row) => crmSourceLabel(row.source),
+            sortValue: (row) => customerSourceLabel(row),
+            searchValue: (row) => customerSourceLabel(row),
+            exportValue: (row) => customerSourceLabel(row),
+            cell: (row) => customerSourceLabel(row),
           },
           {
             id: "owing",

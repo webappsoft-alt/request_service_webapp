@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Briefcase,
   CheckCircle2,
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { FilterTabs } from "@/components/portal/filter-tabs";
 import { PortalDataTable, type PortalTableAction } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
+import { SourceFilter } from "@/components/portal/source-filter";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -40,6 +41,7 @@ import {
   setRequestsPage,
   setRequestsSearch,
   setRequestsStatus,
+  setRequestsOrigin,
 } from "@/store/requestsSlice";
 import { crmCustomerName } from "@/lib/data/crm-people";
 import {
@@ -49,6 +51,7 @@ import {
 } from "@/lib/lead-display";
 import { requestStatusLabel, withArchiveFilter, type PortalRequest } from "@/lib/data/portal";
 import { formatDate, formatTime } from "@/lib/format";
+import { LEAD_ORIGIN_OPTIONS, isLeadOrigin, originLabel, type LeadOrigin } from "@/lib/data/lead-origins";
 import type { RequestStatus } from "@/lib/types";
 import { visibleQuoteAnswers } from "@/components/portal/quote-answers-card";
 import { LocationCell, locationText } from "@/components/portal/location-cell";
@@ -121,7 +124,12 @@ export function RequestsView() {
   const dispatch = useAppDispatch();
   const reduxRequests = useAppSelector((state) => state.requests);
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const status = searchParams.get("status") ?? "";
+  // Source filter lives in the URL (?origin=) next to ?status=, so it survives tab switches.
+  const originParam = searchParams.get("origin");
+  const origin: LeadOrigin | "" = isLeadOrigin(originParam) ? originParam : "";
   const { requests, estimates, jobs } = usePortalWorkspace();
   const crm = useCrmApiData();
   const { customers } = useCrmDirectory();
@@ -147,11 +155,11 @@ export function RequestsView() {
       ? "new,viewed"
       : status;
 
-  const cacheKey = requestsCacheKey(apiStatus, search, page, limit);
+  const cacheKey = requestsCacheKey(apiStatus, search, page, limit, origin);
   const cachedItems = reduxRequests.pagesCache[cacheKey];
   const hasCacheForKey = Array.isArray(cachedItems);
   const hasDataForKey = Array.isArray(cachedItems) && cachedItems.length > 0;
-  const prevQueryRef = useRef({ page, search, status: apiStatus, limit });
+  const prevQueryRef = useRef({ page, search, status: apiStatus, limit, origin });
   const isFirstMountRef = useRef(true);
 
   // While a search/filter/page change is loading, do not show the previous page's rows.
@@ -171,6 +179,22 @@ export function RequestsView() {
       dispatch(setRequestsStatus(apiStatus));
     }
   }, [apiStatus, dispatch, reduxRequests.status]);
+
+  useEffect(() => {
+    if ((reduxRequests.origin || "") !== origin) {
+      dispatch(setRequestsOrigin(origin));
+    }
+  }, [origin, dispatch, reduxRequests.origin]);
+
+  function handleOriginChange(next: LeadOrigin | "") {
+    if (next === origin) return;
+    setActionLoading(true);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next) params.set("origin", next);
+    else params.delete("origin");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   const updateLeadStatus = useCallback(
     async (id: string, newStatus: RequestStatus, message: string) => {
@@ -198,6 +222,7 @@ export function RequestsView() {
             limit,
             status: apiStatus,
             search,
+            origin,
             force: true,
             silent: true,
           }),
@@ -214,7 +239,7 @@ export function RequestsView() {
         setActionLoading(false);
       }
     },
-    [dispatch, page, limit, apiStatus, search],
+    [dispatch, page, limit, apiStatus, search, origin],
   );
 
   // Cache-aware refresh: silent when returning with data; loading on first visit /
@@ -226,8 +251,9 @@ export function RequestsView() {
       (prev.page !== page ||
         prev.search !== search ||
         prev.status !== apiStatus ||
-        prev.limit !== limit);
-    prevQueryRef.current = { page, search, status: apiStatus, limit };
+        prev.limit !== limit ||
+        prev.origin !== origin);
+    prevQueryRef.current = { page, search, status: apiStatus, limit, origin };
 
     const cached = reduxRequests.pagesCache[cacheKey];
     const hasData = Array.isArray(cached) && cached.length > 0;
@@ -237,7 +263,7 @@ export function RequestsView() {
 
     void refreshLeads({ showLoading, invalidate: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
-  }, [page, limit, apiStatus, search, cacheKey, refreshLeads]);
+  }, [page, limit, apiStatus, search, origin, cacheKey, refreshLeads]);
 
   // Opening Leads clears the sidebar badge locally — counts stay on the socket.
   useEffect(() => {
@@ -378,7 +404,17 @@ export function RequestsView() {
     >
       
 
-      <FilterTabs baseHref="/pro/dashboard/requests" value={status} options={withArchiveFilter(filters)} />
+      <FilterTabs
+        baseHref="/pro/dashboard/requests"
+        value={status}
+        options={withArchiveFilter(filters).map((option) => {
+          const params = new URLSearchParams();
+          if (option.value) params.set("status", option.value);
+          if (origin) params.set("origin", origin);
+          const query = params.toString();
+          return { ...option, href: `/pro/dashboard/requests${query ? `?${query}` : ""}` };
+        })}
+      />
       <PortalDataTable
         filename="requests"
         countLabel="Leads"
@@ -394,6 +430,8 @@ export function RequestsView() {
           search: searchInput,
           onSearchChange: handleSearchChange,
         }}
+        toolbar={<SourceFilter value={origin} options={LEAD_ORIGIN_OPTIONS} onChange={handleOriginChange} />}
+        empty={origin ? `No leads from "${originLabel(origin)}".` : undefined}
         rows={rows}
         rowKey={(row) => row.id}
         rowHref={(row) => `/pro/dashboard/requests/${row.id}`}

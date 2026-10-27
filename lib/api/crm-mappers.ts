@@ -1,4 +1,5 @@
 import { mapProjectStages } from "@/lib/project-stages";
+import { isCustomerOrigin } from "@/lib/data/lead-origins";
 import type {
   PortalContractor,
   PortalCustomerCrm,
@@ -522,6 +523,7 @@ export function mapPortalCustomerCrm(raw: unknown): PortalCustomerCrm | null {
       trimmed(record.source) === "walk_in"
         ? (trimmed(record.source) as PortalCustomerCrm["source"])
         : "external",
+    origin: isCustomerOrigin(record.origin) ? record.origin : undefined,
     companyName: trimmed(record.companyName) || undefined,
     altPhone: trimmed(record.altPhone) || undefined,
     doNotCall: booleanValue(record.doNotCall),

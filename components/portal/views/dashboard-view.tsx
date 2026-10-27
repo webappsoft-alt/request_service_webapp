@@ -348,11 +348,13 @@ export function DashboardView() {
           error={error}
         />
 
-        {/* Where employees and subcontractors are today (live while on the clock) */}
-        <LiveTeamMap />
-
-        {/* What the AI receptionist booked / captured (drafts wait for the Pro to send) */}
-        <AiCallActivityCard />
+        {/* Team map + AI call activity: one row on xl screens, stacked below that */}
+        <div className="grid gap-3 xl:grid-cols-2">
+          {/* Where employees and subcontractors are today (live while on the clock) */}
+          <LiveTeamMap />
+          {/* What the AI receptionist booked / captured (drafts wait for the Pro to send) */}
+          <AiCallActivityCard besideMap className="min-w-0" />
+        </div>
 
         <PeriodBar value={period} onChange={setPeriod} />
 

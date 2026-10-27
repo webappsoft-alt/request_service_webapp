@@ -103,8 +103,13 @@ function Column({
 /**
  * Pro dashboard: what the AI receptionist booked or captured. Nothing here was sent to the
  * caller; drafts wait for the Pro to review and send.
+ * `besideMap`: on xl screens the card shares a row with the team map, so the three groups
+ * stack and scroll inside the card (the map sets the row height).
  */
-export function AiCallActivityCard() {
+export function AiCallActivityCard({
+  besideMap = false,
+  className,
+}: { besideMap?: boolean; className?: string } = {}) {
   const [activity, setActivity] = useState<AiCallActivity | null>(null);
 
   const load = useCallback(async () => {
@@ -131,8 +136,9 @@ export function AiCallActivityCard() {
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-xl border border-input/80 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+        "flex flex-col overflow-hidden rounded-xl border border-input/80 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
         !activity && "opacity-60",
+        className,
       )}
       aria-busy={!activity}
     >
@@ -148,7 +154,14 @@ export function AiCallActivityCard() {
           Call history
         </Link>
       </div>
-      <div className="grid divide-y divide-input/60 md:grid-cols-3 md:divide-x md:divide-y-0">
+      <div className={cn("min-h-0", besideMap && "xl:relative xl:flex-1")}>
+      <div
+        className={cn(
+          "grid divide-y divide-input/60 md:grid-cols-3 md:divide-x md:divide-y-0",
+          besideMap &&
+            "xl:absolute xl:inset-0 xl:grid-cols-1 xl:content-start xl:divide-x-0 xl:divide-y xl:overflow-y-auto xl:overscroll-contain",
+        )}
+      >
         <Column
           title="Upcoming AI assessments"
           count={upcomingAssessments.total}
@@ -208,6 +221,7 @@ export function AiCallActivityCard() {
             </Link>
           ))}
         </Column>
+      </div>
       </div>
     </section>
   );

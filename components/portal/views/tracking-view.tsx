@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -15,19 +15,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  dayWindow,
   formatClock,
   formatDistance,
-  getWorkerRoute,
   recordHref,
   timeAgo,
   toDateKey,
   workerHref,
   type LiveWorker,
   type RoutePoint,
-  type WorkerRoute,
   type WorkerType,
 } from "@/lib/tracking";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchWorkerRoute, routeKey, routePointAppended, selectRoute } from "@/store/trackingSlice";
 
 const WorkerMap = dynamic(() => import("@/components/tracking/worker-map").then((mod) => mod.WorkerMap), {
   ssr: false,
@@ -65,8 +64,19 @@ export function TrackingView() {
   const businessCenter = provider?.lat && provider?.lng ? { lat: provider.lat, lng: provider.lng } : null;
 
   const live = useLiveWorkers(dateKey);
-  const [route, setRoute] = useState<WorkerRoute | null>(null);
-  const [routeStatus, setRouteStatus] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const dispatch = useAppDispatch();
+  // Routes are cached per worker + day in the tracking slice: a revisit shows the last route at
+  // once while a fresh copy loads in the background.
+  const selectedRouteKey = routeKey(workerId, dateKey);
+  const routeEntry = useAppSelector((state) => selectRoute(state, selectedRouteKey));
+  const route = workerId ? routeEntry.route : null;
+  const routeStatus: "idle" | "loading" | "ready" | "failed" = !workerId
+    ? "idle"
+    : routeEntry.loaded
+      ? "ready"
+      : routeEntry.error
+        ? "failed"
+        : "loading";
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -81,22 +91,14 @@ export function TrackingView() {
     [pathname, router, searchParams],
   );
 
-  const loadRoute = useCallback(async () => {
+  const loadRoute = useCallback(() => {
     if (!workerId) return;
-    setRouteStatus((current) => (current === "ready" ? current : "loading"));
-    try {
-      setRoute(await getWorkerRoute(workerId, dayWindow(dateKey)));
-      setRouteStatus("ready");
-    } catch {
-      setRouteStatus("failed");
-    }
-  }, [workerId, dateKey]);
+    void dispatch(fetchWorkerRoute({ workerId, dateKey }));
+  }, [dispatch, workerId, dateKey]);
 
   useEffect(() => {
-    setRoute(null);
-    setRouteStatus(workerId ? "loading" : "idle");
-    void loadRoute();
-  }, [loadRoute, workerId]);
+    loadRoute();
+  }, [loadRoute]);
 
   // Today: new positions extend the route as they arrive (no refetch).
   useEffect(() => {
@@ -115,13 +117,11 @@ export function TrackingView() {
         source: (String(payload.source || "ping") as RoutePoint["source"]) || "ping",
         at: String(payload.at || new Date().toISOString()),
       };
-      setRoute((current) =>
-        current ? { ...current, points: [...current.points, point], totalPoints: current.totalPoints + 1 } : current,
-      );
+      dispatch(routePointAppended({ key: routeKey(workerId, dateKey), point }));
       // Clock events change the sessions list: refresh that once.
-      if (point.source !== "ping") void loadRoute();
+      if (point.source !== "ping") loadRoute();
     });
-  }, [workerId, dateKey, today, loadRoute]);
+  }, [workerId, dateKey, today, loadRoute, dispatch]);
 
   const liveSelected = useMemo(
     () => live.items.find((item) => item.workerId === workerId) || null,
@@ -234,7 +234,7 @@ export function TrackingView() {
                 <button
                   type="button"
                   className="font-semibold underline"
-                  onClick={() => void (workerId ? loadRoute() : live.reload())}
+                  onClick={() => (workerId ? loadRoute() : live.reload())}
                 >
                   Retry
                 </button>

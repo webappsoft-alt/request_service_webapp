@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { QuoteAnswersAccordion } from "@/components/portal/quote-answers-card";
 import { PortalPage } from "@/components/portal/portal-page";
-import { CenteredSpinner } from "@/components/ui/spinner";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import {
   createEmptyLine,
@@ -103,6 +103,7 @@ import {
   ProjectStagesPrompt,
   ProjectStagesSummary,
   SectionStageButton,
+  shouldAskStages,
 } from "@/components/portal/estimate-v2/project-stages";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
 import {
@@ -671,6 +672,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const autoSaveTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
   const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  /** Draft the background auto-save created this visit: "Build estimate" stays offered until the Pro builds it. */
+  const [autoCreatedEstimateId, setAutoCreatedEstimateId] = useState<string | null>(null);
+  /** "Is this a multi-day project?" — only after Build estimate / Preview & send; `then` continues that action. */
+  const [stagePrompt, setStagePrompt] = useState<{ then?: () => void } | null>(null);
 
   /** Send pending edits now: creates the draft estimate when needed and saves every line. */
   const flushSheetAutoSave = useCallback(() => {
@@ -710,6 +715,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           const { saved } = result;
           setEstimate(saved);
           if (result.created) {
+            setAutoCreatedEstimateId(saved.id);
             setOpportunity((existing) =>
               existing && existing.id === opp.id ? { ...existing, estimates: [saved, ...(existing.estimates || [])] } : existing,
             );
@@ -785,8 +791,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const afterPromptRef = useRef<(() => void) | null>(null);
   const startParamHandled = useRef(false);
 
-  const refreshTemplateCatalog = useCallback(() => {
-    getEstimateTemplateCatalog()
+  const refreshTemplateCatalog = useCallback((force = false) => {
+    getEstimateTemplateCatalog({ force })
       .then(setTemplateCatalog)
       .catch(() => setTemplateCatalog([]));
   }, []);
@@ -1428,7 +1434,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         },
         prompted: savePrompt.signature,
       });
-      refreshTemplateCatalog();
+      refreshTemplateCatalog(true);
       toast.success(`Saved "${saved.name}" — future ${saved.subcategoryName} estimates will start from it.`);
       finishSavePrompt();
     } catch (err) {
@@ -1531,6 +1537,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   async function saveEstimateDraft(options?: {
     silent?: boolean;
+    /** false: skip the workspace reload afterwards (send reloads once it is done). */
+    reload?: boolean;
   }): Promise<Estimate | null> {
     if (!opportunity) return null;
     setSaving(true);
@@ -1569,7 +1577,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           next.status === "draft" ? "Estimate draft saved." : "Estimate saved.",
         );
       }
-      await load({ silent: true });
+      if (options?.reload !== false) await load({ silent: true });
       return next;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save estimate.");
@@ -1579,39 +1587,106 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     }
   }
 
-  async function openSendDialog() {
-    const saved = await saveEstimateDraft({ silent: true });
-    let current = saved || estimate;
-    if (!current?.id) current = await ensureEstimate();
-    if (!current?.id) return;
-    try {
-      if (
-        current.status === "draft" ||
-        current.status === "site_visit" ||
-        current.status === "inspected"
-      ) {
-        const finalized = await finalizeEstimate(current.id, current);
-        const refreshed = finalized || (await getEstimate(current.id));
-        current = refreshed || { ...current, status: "finalized" };
-        setEstimate(current);
-        const expected = opportunityStatusForEstimateStatus(current.status);
-        if (expected && opportunity && opportunity.status !== expected) {
-          try {
-            await updateEstimateV2Opportunity(opportunity.id, { status: expected });
-            setOpportunity({ ...opportunity, status: expected });
-          } catch {
-            /* non-blocking */
-          }
+  /**
+   * The estimate exactly as it will be sent: the saved record plus what is on the sheet right
+   * now (lines, scope, terms, discount). Built locally, so the preview needs no API call.
+   * Totals follow the server: discount capped at the subtotal, tax on the full line totals.
+   */
+  function previewEstimateFromSheet(current: Estimate): Estimate {
+    const filled = filledSheetLines(lines);
+    const local = buildEstimate({
+      id: current.id,
+      number: current.number,
+      providerId: current.providerId || "",
+      customerId: current.customerId || "",
+      address: current.propertyAddress,
+      status: current.status,
+      lines: filled.length ? filled : [createEmptyLine("labor")],
+      taxRatePercent,
+    });
+    const discountValue = Math.min(Math.max(0, Number(discount) || 0), local.subtotal);
+    return withWorkspaceLineMeta(
+      {
+        ...current,
+        notes: scopeOfWork,
+        terms,
+        items: local.items,
+        subtotal: local.subtotal,
+        tax: local.tax,
+        discount: discountValue,
+        total: Math.round((local.subtotal - discountValue + local.tax) * 100) / 100,
+      },
+      lines,
+    );
+  }
+
+  /** Preview & send: opens straight away from the sheet. Saving / finalizing waits for "Send for approval". */
+  function openSendDialog() {
+    if (estimate?.id) {
+      setSendEstimate(previewEstimateFromSheet(estimate));
+      setSendOpen(true);
+      return;
+    }
+    // No estimate yet: create the draft first (the page shows the loading overlay), then preview it.
+    void ensureEstimate().then((created) => {
+      if (!created?.id) return;
+      setSendEstimate(previewEstimateFromSheet(created));
+      setSendOpen(true);
+    });
+  }
+
+  /** Runs on "Send for approval": save the sheet, finalize a draft, and return what to share. */
+  async function prepareForSend(): Promise<Estimate | null> {
+    const saved = await saveEstimateDraft({ silent: true, reload: false });
+    if (!saved?.id) return null;
+    let current: Estimate = saved;
+    if (
+      current.status === "draft" ||
+      current.status === "site_visit" ||
+      current.status === "inspected"
+    ) {
+      const finalized = await finalizeEstimate(current.id, current);
+      const refreshed = finalized || (await getEstimate(current.id));
+      current = refreshed || { ...current, status: "finalized" };
+      const expected = opportunityStatusForEstimateStatus(current.status);
+      if (expected && opportunity && opportunity.status !== expected) {
+        try {
+          await updateEstimateV2Opportunity(opportunity.id, { status: expected });
+          setOpportunity({ ...opportunity, status: expected });
+        } catch {
+          /* non-blocking */
         }
       }
-      // Preview uses live workspace sections/images even if an older API omitted them.
-      const forSend = withWorkspaceLineMeta(current, lines);
-      setEstimate(forSend);
-      setSendEstimate(forSend);
-      setSendOpen(true);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not prepare estimate for send.");
     }
+    // Keep live workspace sections/images even if an older API omitted them.
+    const forSend = withWorkspaceLineMeta(current, lines);
+    setEstimate(forSend);
+    setAutoCreatedEstimateId(null);
+    return forSend;
+  }
+
+  /** Build estimate: create the draft (or save the one auto-save made), then offer template + stages. */
+  async function buildEstimateNow() {
+    const wasNew = !estimate?.id;
+    const built = await saveEstimateDraft({ silent: true });
+    if (!built?.id) return;
+    setAutoCreatedEstimateId(null);
+    toast.success(
+      wasNew
+        ? `${built.number || "Estimate"} created.`
+        : `${built.number || "Estimate"} is built — review the line items, then Preview & send.`,
+    );
+    offerSaveTemplate(() => askStagesThen(undefined, built));
+  }
+
+  /** Ask "multi-day project?" first when it applies (several sections, no stages, not answered yet). */
+  function askStagesThen(next?: () => void, target: Estimate | null = estimate) {
+    const sectionCount = lineSections.filter(Boolean).length;
+    if (target?.id && shouldAskStages(target.id, sectionCount, Boolean(target.stages?.length))) {
+      setStagePrompt({ then: next });
+      return;
+    }
+    next?.();
   }
 
   /**
@@ -1766,7 +1841,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   if (loading) {
     return (
       <PortalPage eyebrow="Work / Estimate" title="">
-        <CenteredSpinner className="min-h-64" />
+        <div className="min-h-64" />
+        <LoadingOverlay label="Opening estimate…" />
       </PortalPage>
     );
   }
@@ -2318,16 +2394,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       <MapPin className="size-3.5 text-primary" />
                       View on map
                     </Button>
-                    {!estimate && !showVisits ? (
-                      <Button
-                        size="sm"
-                        disabled={saving}
-                        onClick={() =>
-                          void ensureEstimate().then((created) => {
-                            if (created) offerSaveTemplate();
-                          })
-                        }
-                      >
+                    {(!estimate || estimate.id === autoCreatedEstimateId) && !showVisits && !estimateLocked ? (
+                      <Button size="sm" disabled={saving} onClick={() => void buildEstimateNow()}>
                         Build estimate
                       </Button>
                     ) : null}
@@ -2355,7 +2423,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     <Button
                       size="sm"
                       disabled={saving || estimateLocked}
-                      onClick={() => offerSaveTemplate(() => void openSendDialog())}
+                      onClick={() => offerSaveTemplate(() => askStagesThen(openSendDialog))}
                     >
                       {sendButtonLabel}
                     </Button>
@@ -2646,6 +2714,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           estimate={sendEstimate || estimate!}
           customer={customerContactFromOpportunity(opportunity)}
           customerLabel={customerNameFromOpportunity(opportunity)}
+          prepare={prepareForSend}
           mode={
             (sendEstimate || estimate)?.status === "changes_requested"
               ? "update"
@@ -2688,10 +2757,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             onSaved={(stages) => setEstimate((current) => (current ? { ...current, stages } : current))}
           />
           <ProjectStagesPrompt
+            open={Boolean(stagePrompt)}
             estimateId={estimate.id}
             sectionCount={lineSections.filter(Boolean).length}
-            hasStages={Boolean(estimate.stages?.length)}
-            onSetUp={() => setStagesOpen(true)}
+            onSetUp={() => {
+              setStagePrompt(null);
+              setStagesOpen(true);
+            }}
+            onNotNow={() => {
+              const next = stagePrompt?.then;
+              setStagePrompt(null);
+              next?.();
+            }}
           />
         </>
       ) : null}
@@ -2864,6 +2941,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         />
       ) : null}
 
+      {saving && !sendOpen ? <LoadingOverlay label="Saving…" /> : null}
+
       <EstimateStartDialog
         open={startOpen}
         onOpenChange={setStartOpen}
@@ -2882,7 +2961,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         <SaveTemplatePrompt
           open
           onOpenChange={(next) => {
-            if (!next) setSavePrompt(null);
+            // Closing (X / Esc) = Skip: remember the answer and carry on with what was clicked.
+            if (!next) {
+              rememberTemplate({ prompted: savePrompt.signature });
+              finishSavePrompt();
+            }
           }}
           catalog={templateCatalog}
           mode={savePrompt.mode}

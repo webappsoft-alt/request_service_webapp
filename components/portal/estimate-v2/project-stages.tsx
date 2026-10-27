@@ -511,49 +511,55 @@ export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectSt
   );
 }
 
+const stagePromptKey = (estimateId: string) => `rs-stage-prompt:${estimateId}`;
+
+/** True once the Pro answered the multi-day question for this estimate (Not now / Set up / closed). */
+export function stagePromptDismissed(estimateId: string) {
+  try {
+    return window.localStorage.getItem(stagePromptKey(estimateId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function dismissStagePrompt(estimateId: string) {
+  try {
+    window.localStorage.setItem(stagePromptKey(estimateId), "1");
+  } catch {
+    // Private mode: it may ask again next time.
+  }
+}
+
+/** Should Build estimate / Preview & send ask about stages first? (several sections, no stages, not answered) */
+export function shouldAskStages(estimateId: string | undefined, sectionCount: number, hasStages: boolean) {
+  return Boolean(estimateId) && !hasStages && sectionCount >= 2 && !stagePromptDismissed(estimateId!);
+}
+
 /**
- * Asks once per estimate, when it looks like a longer project (several line sections), whether
- * to set up stages and schedule days.
+ * "Is this a multi-day project?" — asked once per estimate, only when the Pro clicks Build estimate
+ * or Preview & send (never on its own while the sheet auto-saves). The parent decides when.
  */
 export function ProjectStagesPrompt({
+  open,
   estimateId,
   sectionCount,
-  hasStages,
   onSetUp,
+  onNotNow,
 }: {
+  open: boolean;
   estimateId: string;
   sectionCount: number;
-  hasStages: boolean;
   onSetUp: () => void;
+  /** "Not now" or closed: carry on with what the Pro clicked. */
+  onNotNow: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const storageKey = `rs-stage-prompt:${estimateId}`;
-
-  useEffect(() => {
-    if (!estimateId || hasStages || sectionCount < 2) return;
-    let dismissed = false;
-    try {
-      dismissed = window.localStorage.getItem(storageKey) === "1";
-    } catch {
-      dismissed = false;
-    }
-    if (!dismissed) setOpen(true);
-  }, [estimateId, hasStages, sectionCount, storageKey]);
-
-  const remember = () => {
-    try {
-      window.localStorage.setItem(storageKey, "1");
-    } catch {
-      // Private mode: it may ask again next time.
-    }
-  };
-
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) remember();
-        setOpen(next);
+        if (next) return;
+        dismissStagePrompt(estimateId);
+        onNotNow();
       }}
     >
       <DialogContent className="sm:max-w-md">
@@ -568,16 +574,15 @@ export function ProjectStagesPrompt({
           <Button
             variant="outline"
             onClick={() => {
-              remember();
-              setOpen(false);
+              dismissStagePrompt(estimateId);
+              onNotNow();
             }}
           >
             Not now
           </Button>
           <Button
             onClick={() => {
-              remember();
-              setOpen(false);
+              dismissStagePrompt(estimateId);
               onSetUp();
             }}
           >

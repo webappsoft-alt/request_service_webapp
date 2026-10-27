@@ -1,7 +1,7 @@
 "use client";
 
 import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -30,6 +30,16 @@ import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
 import { selectPendingReviewTotal } from "@/store/contractorReviewsSlice";
+import {
+  bumpPortalInboxCount,
+  getPortalInboxCounts,
+  subscribePortalInboxCounts,
+  type PortalInboxCounts,
+} from "@/components/portal/portal-inbox-counts-store";
+import {
+  markNotificationSectionRead,
+  type ProviderNotificationSection,
+} from "@/lib/api/notifications-client";
 import type { AuthUser } from "@/store/authSlice";
 
 function NavLinks({
@@ -49,7 +59,9 @@ function NavLinks({
     return (
       href === "/pro/dashboard/requests" ||
       href === "/pro/dashboard/new-estimate" ||
-      href === "/pro/dashboard/jobs"
+      href === "/pro/dashboard/jobs" ||
+      href === "/pro/dashboard/schedule" ||
+      href === "/pro/dashboard/orders"
     );
   }
 
@@ -58,10 +70,15 @@ function NavLinks({
     // Customer chats + technician chats share the Messages page.
     if (href === "/pro/dashboard/messages") return inbox.unreadChats + teamChatUnread;
     // Classic estimates nav is hidden; badge follows the new Estimate path.
-    if (href === "/pro/dashboard/new-estimate") return inbox.pendingEstimates;
-    if (href === "/pro/dashboard/orders") return inbox.pendingOrders;
-    // Completion proofs / change order requests from technicians and contractors.
-    if (href === "/pro/dashboard/jobs") return pendingFieldRequests;
+    // Customer responses (signed / declined / changes requested) — the larger of the two
+    // counts, since a change request shows in both.
+    if (href === "/pro/dashboard/new-estimate") return Math.max(inbox.pendingEstimates, inbox.estimateUpdates);
+    // New booking requests + other order updates (status, dispute, payment released).
+    if (href === "/pro/dashboard/orders") return inbox.pendingOrders + inbox.orderUpdates;
+    // Completion proofs / change order requests from the field + answered change orders.
+    if (href === "/pro/dashboard/jobs") return pendingFieldRequests + inbox.jobUpdates;
+    // Visits booked (e.g. by the AI receptionist).
+    if (href === "/pro/dashboard/schedule") return inbox.scheduleUpdates;
     return 0;
   }
 
@@ -151,8 +168,48 @@ function NavLinks({
   );
 }
 
+/** Sidebar sections whose badge counts unread notifications, and the count each one clears. */
+const NOTIFICATION_SECTIONS: Array<{
+  href: string;
+  section: ProviderNotificationSection;
+  count: keyof PortalInboxCounts;
+}> = [
+  { href: "/pro/dashboard/new-estimate", section: "estimates", count: "estimateUpdates" },
+  { href: "/pro/dashboard/jobs", section: "jobs", count: "jobUpdates" },
+  { href: "/pro/dashboard/schedule", section: "schedule", count: "scheduleUpdates" },
+  { href: "/pro/dashboard/orders", section: "orders", count: "orderUpdates" },
+];
+
+/**
+ * Opening Estimate / Jobs / Schedules / Fixed service orders reads that section's updates,
+ * so its badge clears (and the bell drops by the same amount, in every tab).
+ */
+function useReadSectionOnOpen(pathname: string) {
+  // Read the shared counts store directly (usePortalInbox would add another socket listener).
+  const [counts, setCounts] = useState(getPortalInboxCounts);
+  useEffect(() => subscribePortalInboxCounts(() => setCounts(getPortalInboxCounts())), []);
+  const inFlight = useRef(false);
+  const match = NOTIFICATION_SECTIONS.find(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  );
+  const pending = match ? counts[match.count] : 0;
+
+  useEffect(() => {
+    // On the section with something to clear — including updates that arrive while it is open.
+    if (!match || !pending || inFlight.current) return;
+    inFlight.current = true;
+    bumpPortalInboxCount(match.count, -pending);
+    void markNotificationSectionRead(match.section)
+      .catch(() => undefined)
+      .finally(() => {
+        inFlight.current = false;
+      });
+  }, [match, pending]);
+}
+
 export function PortalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  useReadSectionOnOpen(pathname);
   const router = useRouter();
   const { provider, session } = usePortalWorkspace();
   const routeOrigin = useRouteOrigin({ provider, businessName: provider?.companyName });

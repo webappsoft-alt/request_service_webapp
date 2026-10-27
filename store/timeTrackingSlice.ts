@@ -1,3 +1,4 @@
+import type { EmployeeOption } from "@/components/time-tracking/timesheet-ui";
 import type { DeviceLocation } from "@/lib/geolocation";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
@@ -64,6 +65,19 @@ export type LedgerQuery = {
   kinds?: ("job" | "estimate")[];
 };
 
+/** Timesheets page extras from its one opening call (the board + ledger go into lists / ledgers). */
+export type TimesheetsPageState = {
+  /** Technician filter options. */
+  team: EmployeeOption[] | null;
+  /** This week's subcontractor sessions. */
+  contractorRows: TimeEntry[] | null;
+  loading: boolean;
+  /** First copy is in — later visits show it at once and refresh in the background. */
+  loaded: boolean;
+  /** The opening call failed: each section loads on its own instead. */
+  failed: boolean;
+};
+
 export type TimeTrackingState = {
   lists: Record<string, TimeListState>;
   /** Technician pay ledgers (earned / paid / remaining) keyed like `lists`. */
@@ -80,6 +94,7 @@ export type TimeTrackingState = {
   version: number;
   /** `id:status` of the last applied entry — drops the socket echo of our own action. */
   lastEntryKey: string;
+  timesheets: TimesheetsPageState;
 };
 
 const initialState: TimeTrackingState = {
@@ -93,6 +108,7 @@ const initialState: TimeTrackingState = {
   clockError: null,
   version: 0,
   lastEntryKey: "",
+  timesheets: { team: null, contractorRows: null, loading: false, loaded: false, failed: false },
 };
 
 function emptyList(filterKey = ""): TimeListState {
@@ -317,6 +333,45 @@ const timeTrackingSlice = createSlice({
       };
       state.ledgers[ledgerScope] = { filterKey: ledgerKey(ledgerQuery), data: ledger, loading: false, loaded: true, error: null };
     },
+    timesheetBundleStarted(state) {
+      state.timesheets.loading = true;
+    },
+    /** Opening call in: seed the board + ledger, and keep the team and subcontractor rows. */
+    timesheetBundleLoaded(
+      state,
+      action: PayloadAction<{
+        listScope: string;
+        listQuery: ProviderTimeQuery;
+        entries: TimeEntriesPage;
+        ledgerScope: string;
+        ledgerQuery: LedgerQuery;
+        ledger: TechnicianLedger;
+        team: EmployeeOption[] | null;
+        contractorRows: TimeEntry[] | null;
+      }>,
+    ) {
+      timeTrackingSlice.caseReducers.timesheetSeeded(state, {
+        type: action.type,
+        payload: action.payload,
+      });
+      const { team, contractorRows } = action.payload;
+      state.timesheets = {
+        team: team ?? state.timesheets.team,
+        contractorRows,
+        loading: false,
+        loaded: true,
+        failed: false,
+      };
+    },
+    timesheetBundleFailed(state) {
+      state.timesheets.loading = false;
+      // A cached copy stays usable; without one, sections load on their own.
+      if (!state.timesheets.loaded) state.timesheets.failed = true;
+    },
+    /** Fallback team list when the opening call didn't bring it. */
+    timesheetTeamLoaded(state, action: PayloadAction<EmployeeOption[]>) {
+      state.timesheets.team = action.payload;
+    },
     clearTimeList(state, action: PayloadAction<string>) {
       delete state.lists[action.payload];
     },
@@ -431,7 +486,16 @@ const timeTrackingSlice = createSlice({
   },
 });
 
-export const { timeEntryReceived, clearTimeList, technicianPaymentReceived, timesheetSeeded } = timeTrackingSlice.actions;
+export const {
+  timeEntryReceived,
+  clearTimeList,
+  technicianPaymentReceived,
+  timesheetSeeded,
+  timesheetBundleStarted,
+  timesheetBundleLoaded,
+  timesheetBundleFailed,
+  timesheetTeamLoaded,
+} = timeTrackingSlice.actions;
 
 const EMPTY_LIST = emptyList();
 

@@ -25,6 +25,7 @@ import {
 } from "@/components/shared/address-fields";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import {
   CUSTOMER_FILTER_OPTIONS,
@@ -547,9 +548,9 @@ export function NewEstimateCreateView() {
       router.push(
         `/pro/dashboard/new-estimate/${opportunity.id}${prepChoice === "create_now" || prepChoice === "have_information" ? "?start=1" : ""}`,
       );
+      // Keep the overlay up until the workspace takes over (it shows its own while loading).
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create estimate.");
-    } finally {
       setSaving(false);
     }
   }
@@ -565,6 +566,7 @@ export function NewEstimateCreateView() {
         </Button>
       }
     >
+      {saving ? <LoadingOverlay label="Creating estimate…" /> : null}
       {resolvingLead ? (
         <div className="flex min-h-[30vh] flex-col items-center justify-center gap-3 py-12">
           <CenteredSpinner />

@@ -41,11 +41,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function countsFromPayload(payload: unknown): Partial<PortalInboxCounts> | null {
   const row = asRecord(payload);
   if (!row) return null;
+  const sections = asRecord(row.sectionUpdates);
   return {
     newLeads: Number(row.newLeads) || 0,
     unreadChats: Number(row.unreadChats) || 0,
     pendingOrders: Number(row.pendingOrders) || 0,
     pendingEstimates: Number(row.pendingEstimates) || 0,
+    ...(sections
+      ? {
+          estimateUpdates: Number(sections.estimates) || 0,
+          jobUpdates: Number(sections.jobs) || 0,
+          scheduleUpdates: Number(sections.schedule) || 0,
+          orderUpdates: Number(sections.orders) || 0,
+        }
+      : {}),
   };
 }
 
@@ -264,6 +273,10 @@ export function usePortalInbox() {
     unreadChats,
     pendingOrders,
     pendingEstimates,
+    estimateUpdates: counts.estimateUpdates || 0,
+    jobUpdates: counts.jobUpdates || 0,
+    scheduleUpdates: counts.scheduleUpdates || 0,
+    orderUpdates: counts.orderUpdates || 0,
     total: newLeadCount + unreadChats + pendingOrders + pendingEstimates,
     items,
   };

@@ -8,13 +8,33 @@ export type PortalInboxCounts = {
   unreadChats: number;
   pendingOrders: number;
   pendingEstimates: number;
+  /** Unread customer / field updates per section (estimate signed, change order answered…). */
+  estimateUpdates: number;
+  jobUpdates: number;
+  scheduleUpdates: number;
+  orderUpdates: number;
 };
+
+const KEYS: Array<keyof PortalInboxCounts> = [
+  "newLeads",
+  "unreadChats",
+  "pendingOrders",
+  "pendingEstimates",
+  "estimateUpdates",
+  "jobUpdates",
+  "scheduleUpdates",
+  "orderUpdates",
+];
 
 const counts: PortalInboxCounts = {
   newLeads: 0,
   unreadChats: 0,
   pendingOrders: 0,
   pendingEstimates: 0,
+  estimateUpdates: 0,
+  jobUpdates: 0,
+  scheduleUpdates: 0,
+  orderUpdates: 0,
 };
 
 const listeners = new Set<() => void>();
@@ -31,23 +51,17 @@ export function applyPortalInboxCounts(
   next: Partial<PortalInboxCounts> | null | undefined,
 ) {
   if (!next || typeof next !== "object") return;
-  const newLeads = Math.max(0, Number(next.newLeads) || 0);
-  const unreadChats = Math.max(0, Number(next.unreadChats) || 0);
-  const pendingOrders = Math.max(0, Number(next.pendingOrders) || 0);
-  const pendingEstimates = Math.max(0, Number(next.pendingEstimates) || 0);
-  if (
-    counts.newLeads === newLeads &&
-    counts.unreadChats === unreadChats &&
-    counts.pendingOrders === pendingOrders &&
-    counts.pendingEstimates === pendingEstimates
-  ) {
-    return;
+  let changed = false;
+  // Keys missing from `next` (older payloads) keep their value.
+  for (const key of KEYS) {
+    if (next[key] === undefined) continue;
+    const value = Math.max(0, Number(next[key]) || 0);
+    if (counts[key] !== value) {
+      counts[key] = value;
+      changed = true;
+    }
   }
-  counts.newLeads = newLeads;
-  counts.unreadChats = unreadChats;
-  counts.pendingOrders = pendingOrders;
-  counts.pendingEstimates = pendingEstimates;
-  notify();
+  if (changed) notify();
 }
 
 export function bumpPortalInboxCount(

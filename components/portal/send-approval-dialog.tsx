@@ -49,6 +49,7 @@ export function SendApprovalDialog({
   customerLabel,
   mode = "send",
   onSent,
+  prepare,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,12 +59,20 @@ export function SendApprovalDialog({
   /** First send vs resend / post-change update. */
   mode?: "send" | "resend" | "update";
   onSent: (result: SendApprovalResult) => void;
+  /**
+   * Runs when the Pro confirms, before sharing: saves the sheet and finalizes the draft, and
+   * returns the estimate to share. Lets the preview open instantly from on-screen data.
+   */
+  prepare?: () => Promise<Estimate | null>;
 }) {
   const crm = useCrmApiData();
   const auth = useAppSelector(selectAuth);
   const { session, provider } = usePortalWorkspace();
   const share = useEstimateShare();
-  const ready = estimateCanShare(estimate.status);
+  // A draft is fine when `prepare` finalizes it on send.
+  const ready =
+    estimateCanShare(estimate.status) ||
+    (Boolean(prepare) && ["draft", "site_visit", "inspected"].includes(String(estimate.status)));
   // Match estimate detail: send when CRM is on or a session token is already available.
   const apiReady =
     crm.enabled ||
@@ -159,7 +168,9 @@ export function SendApprovalDialog({
                 return;
               }
               try {
-                const shared = await shareEstimate(estimate.id, {
+                const target = prepare ? await prepare() : estimate;
+                if (!target?.id) return;
+                const shared = await shareEstimate(target.id, {
                   companySignedBy: signed.companySignedBy,
                   companySignedAt: signed.companySignedAt,
                   companySignatureDataUrl: signed.companySignatureDataUrl,
@@ -173,7 +184,7 @@ export function SendApprovalDialog({
                 }
                 const nextStatus =
                   (shared.status as Estimate["status"]) || "sent";
-                crm.patchEstimate(estimate.id, {
+                crm.patchEstimate(target.id, {
                   status: nextStatus,
                   shareToken: token,
                   companySignature: {

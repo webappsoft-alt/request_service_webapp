@@ -65,8 +65,13 @@ function unwrap<T>(response: unknown): T {
   return (root.data ?? root) as T;
 }
 
-export async function getEstimateTemplateCatalog() {
-  const response = await getData(providerCrmApi.estimateTemplateCatalog, {}, { silent: true });
+/** The catalog rarely changes: reuse it for 5 minutes (`force` after saving a template). */
+export async function getEstimateTemplateCatalog(options?: { force?: boolean }) {
+  const response = await getData(providerCrmApi.estimateTemplateCatalog, {}, {
+    silent: true,
+    cacheTtlMs: 5 * 60_000,
+    force: options?.force,
+  });
   const rows = unwrap<EstimateTemplateCategory[]>(response);
   return Array.isArray(rows) ? rows : [];
 }

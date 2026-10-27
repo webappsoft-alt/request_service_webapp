@@ -411,6 +411,8 @@ export const notificationsApi = {
   list: "notifications",
   markRead: (id: string) => `notifications/${id}/read`,
   markAllRead: "notifications/mark-all-read",
+  /** Pro sidebar: read one section's notifications (estimates / jobs / schedule / orders). */
+  readSection: "notifications/read-section",
 } as const;
 
 /** Customer / provider ↔ admin direct messaging */

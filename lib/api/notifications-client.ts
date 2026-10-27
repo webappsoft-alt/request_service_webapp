@@ -131,6 +131,19 @@ export async function markAllNotificationsRead() {
   };
 }
 
+export type ProviderNotificationSection = "estimates" | "jobs" | "schedule" | "orders";
+
+/** Pro opened a sidebar section: its customer / field updates are read (badge + bell drop together). */
+export async function markNotificationSectionRead(section: ProviderNotificationSection) {
+  const response = await http().putData(notificationsApi.readSection, { section }, { silent: true });
+  const root = asRecord(response) || {};
+  const data = asRecord(root.data) || root;
+  return {
+    updatedCount: Number(data.updatedCount ?? 0) || 0,
+    unreadCount: Number(data.unreadCount ?? 0) || 0,
+  };
+}
+
 /** Mark unread NEW_CHAT_MESSAGE notifications for a thread (opening that conversation). */
 export async function markUnreadChatNotificationsReadForThread(
   threadId: string,

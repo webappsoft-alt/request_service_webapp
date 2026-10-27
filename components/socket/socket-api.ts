@@ -155,6 +155,14 @@ export type RealtimeEvents = {
     type?: string;
     data?: Record<string, unknown>;
     notification?: Record<string, unknown>;
+    /** Recipient's unread total after this one was saved (newer backends). */
+    unreadCount?: number;
+  };
+  /** User room: bell items were read (here or in another tab/device). */
+  NOTIFICATIONS_READ: {
+    ids?: string[];
+    all?: boolean;
+    unreadCount?: number;
   };
   CUSTOMER_BADGE_INVALIDATE: {
     reason?: string;

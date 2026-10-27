@@ -2,9 +2,8 @@
 
 import { useEffect, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
-  Bell,
   Briefcase,
   CalendarDays,
   ChevronDown,
@@ -22,6 +21,7 @@ import { ContractorRealtimeBridge } from "@/components/contractor/contractor-rea
 import { ContractorGeofenceWatch } from "@/components/time-tracking/geofence-watch";
 import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
 import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,13 +34,12 @@ import {
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { ContractorSection } from "@/lib/api/contractor-portal-client";
 import { contractorPaths } from "@/lib/contractor-paths";
+import type { AppNotification } from "@/lib/api/notifications-client";
 import { cn } from "@/lib/utils";
 import { selectAuthUser } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchContractorProfile,
-  markAllContractorNotificationsRead,
-  markContractorNotificationRead,
   selectContractorSectionBadge,
 } from "@/store/contractorPortalSlice";
 
@@ -139,70 +138,13 @@ function SidebarBrand({ company }: { company: string }) {
   );
 }
 
-function ContractorNotifications() {
-  const dispatch = useAppDispatch();
-  const router = useRouter();
-  const notifications = useAppSelector((state) => state.contractorPortal.notifications);
-  const unread = Math.max(notifications.unread, notifications.items.filter((item) => !item.isRead).length);
+const contractorHref = (item: AppNotification) => {
+  const href = item.href || String(item.data?.href || "");
+  return href.startsWith("/contractor") ? href : contractorPaths.dashboard;
+};
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
-          className="relative"
-        >
-          <Bell />
-          {unread > 0 ? (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] font-semibold leading-none text-white">
-              {unread > 99 ? "99+" : unread}
-            </span>
-          ) : null}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0">
-        <DropdownMenuLabel className="flex items-center justify-between gap-2 px-3 py-2">
-          <span>Notifications</span>
-          {unread > 0 ? (
-            <button
-              type="button"
-              className="text-[10px] font-medium text-primary hover:underline"
-              onClick={() => void dispatch(markAllContractorNotificationsRead())}
-            >
-              Mark all read
-            </button>
-          ) : null}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator className="m-0" />
-        <div className="max-h-72 overflow-y-auto overscroll-contain">
-          {notifications.items.length ? (
-            notifications.items.slice(0, 30).map((item) => (
-              <DropdownMenuItem
-                key={item.id}
-                className="flex cursor-pointer flex-col items-start gap-0.5 rounded-none px-3 py-2"
-                onSelect={() => {
-                  if (!item.isRead) void dispatch(markContractorNotificationRead(item.id));
-                  const href = item.href || String(item.data?.href || "");
-                  router.push(href.startsWith("/contractor") ? href : contractorPaths.dashboard);
-                }}
-              >
-                <span className={cn("text-sm font-medium", item.isRead ? "text-muted-foreground" : "text-foreground")}>
-                  {item.title}
-                </span>
-                <span className="line-clamp-2 text-xs text-muted-foreground">{item.message}</span>
-              </DropdownMenuItem>
-            ))
-          ) : (
-            <p className="px-3 py-4 text-sm text-muted-foreground">
-              {notifications.loading ? "Loading…" : "You're all caught up."}
-            </p>
-          )}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+function ContractorNotifications() {
+  return <NotificationBell hrefFor={contractorHref} />;
 }
 
 import { ThemeToggle } from "@/components/theme/theme-toggle";

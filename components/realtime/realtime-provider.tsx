@@ -398,6 +398,9 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       onSocketEvent("TIME_ENTRY_UPDATED", (payload) => {
         broadcastRealtime({ type: "TIME_ENTRY_UPDATED", payload });
       }),
+      onSocketEvent("NOTIFICATIONS_READ", (payload) => {
+        broadcastRealtime({ type: "NOTIFICATIONS_READ", payload });
+      }),
       onSocketEvent("WORKER_LOCATION_UPDATED", (payload) => {
         broadcastRealtime({ type: "WORKER_LOCATION_UPDATED", payload });
       }),

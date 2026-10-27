@@ -8,20 +8,18 @@ import {
   contractorNotificationReceived,
   contractorRefreshRequested,
   fetchContractorBadges,
-  fetchContractorNotifications,
 } from "@/store/contractorPortalSlice";
 
 /**
  * Pipes socket events into Redux for the contractor portal:
- * - NEW_NOTIFICATION   → bell list + sidebar badge counts
+ * - NEW_NOTIFICATION   → sidebar badge counts (the bell keeps its own feed)
  * - contractor:refresh → bump list versions (jobs / changeRequests / payouts / dashboard)
- * Notifications and badges are fetched once here, not per page.
+ * Badges are fetched once here, not per page.
  */
 export function ContractorRealtimeBridge() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    void dispatch(fetchContractorNotifications());
     void dispatch(fetchContractorBadges());
   }, [dispatch]);
 
@@ -45,7 +43,6 @@ export function ContractorRealtimeBridge() {
       }
       if (type === "SOCKET_RECONNECTED") {
         // Catch up on anything missed while offline.
-        void dispatch(fetchContractorNotifications({ force: true }));
         void dispatch(fetchContractorBadges());
         dispatch(contractorRefreshRequested(["dashboard", "jobs", "changeRequests", "payouts", "schedule"]));
       }

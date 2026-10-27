@@ -3,21 +3,16 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, Menu, Search, X } from "lucide-react";
+import { LogOut, Menu, Search, X } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  NotificationBell,
+  isViewingNotificationChat,
+} from "@/components/notifications/notification-bell";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -42,7 +37,6 @@ import { ADMIN_DIRECT_THREAD_ID } from "@/lib/api/chat-client";
 import { mapAdminDirectChat } from "@/lib/api/crm-mappers";
 import type { ChatThread } from "@/lib/booking/chat-store";
 import {
-  markAllNotificationsRead,
   markNotificationRead,
   normalizeSocketNotification,
   notificationHref,
@@ -67,10 +61,7 @@ import {
   notificationReceived,
   notificationsMarkedRead,
   selectCustomerBadgeIds,
-  selectCustomerNotifications,
   selectCustomerUnreadMessages,
-  selectCustomerUnreadNotifications,
-  setUnreadNotifications,
   type CustomerBadgeKind,
 } from "@/store/customerInboxSlice";
 import { fetchCustomerChangeOrders } from "@/store/customerChangeOrdersSlice";
@@ -289,6 +280,8 @@ function asPayload(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+const customerNotificationHref = (item: AppNotification) => notificationHref(item);
+
 export function CustomerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -296,8 +289,6 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const store = useAppStore();
   const authUser = useAppSelector(selectAuthUser);
   const [collapsed, setCollapsed] = useState(false);
-  const notifications = useAppSelector(selectCustomerNotifications);
-  const unreadNotifications = useAppSelector(selectCustomerUnreadNotifications);
   const badgeIds = useAppSelector(selectCustomerBadgeIds);
   const unreadMessages = useAppSelector(selectCustomerUnreadMessages);
   const notificationsStatus = useAppSelector(
@@ -498,32 +489,12 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   const unreadInvoices = badgeIds.invoices.length;
   const unreadPayments = badgeIds.payments.length;
   const unreadOrders = badgeIds.orders.length;
-  // Header notification count only — messages stay on the sidebar.
-  const bellCount = unreadNotifications;
-
-  async function onOpenNotification(item: AppNotification) {
-    const href = notificationHref(item);
-    if (!item.isRead) {
-      dispatch(notificationsMarkedRead([item.id]));
-      try {
-        const result = await markNotificationRead(item.id);
-        dispatch(setUnreadNotifications(result.unreadCount));
-      } catch {
-        // still navigate
-      }
-    }
-    router.push(href);
-  }
-
-  async function onMarkAllRead() {
-    // Header only — sidebar badges reset when their tab is opened.
-    dispatch(allNotificationsMarkedRead());
-    try {
-      await markAllNotificationsRead();
-    } catch {
-      void dispatch(loadCustomerNotifications({ force: true }));
-    }
-  }
+  // The bell owns its list and count; keep the sidebar tab badges in step with it.
+  const onBellItemsRead = useCallback(
+    (ids: string[]) => dispatch(notificationsMarkedRead(ids)),
+    [dispatch],
+  );
+  const onBellAllRead = useCallback(() => dispatch(allNotificationsMarkedRead()), [dispatch]);
 
   return (
     <div className="portal-app min-h-svh bg-[#eef1f5] dark:bg-background">
@@ -658,78 +629,15 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             </div>
 
             <div className="ml-auto flex items-center gap-2 lg:ml-0">
-              {/* Notifications Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Notifications"
-                    className="relative size-8"
-                  >
-                    <Bell className="size-4" />
-                    {bellCount > 0 ? (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] font-semibold leading-none text-white">
-                        {bellCount > 99 ? "99+" : bellCount}
-                      </span>
-                    ) : null}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel className="flex items-center justify-between text-xs">
-                    <span>Notifications</span>
-                    {unreadNotifications > 0 ? (
-                      <button
-                        type="button"
-                        className="text-[10px] font-medium text-primary hover:underline"
-                        onClick={() => void onMarkAllRead()}
-                      >
-                        Mark all read
-                      </button>
-                    ) : null}
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {notifications.length > 0 ? (
-                    notifications.slice(0, 8).map((item) => (
-                      <DropdownMenuItem
-                        key={item.id}
-                        className="flex cursor-pointer flex-col items-start gap-0.5 py-2 text-xs"
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          void onOpenNotification(item);
-                        }}
-                      >
-                        <span className={cn("font-medium", !item.isRead && "text-foreground")}>
-                          {item.title}
-                        </span>
-                        <span className="line-clamp-2 text-muted-foreground">{item.message}</span>
-                      </DropdownMenuItem>
-                    ))
-                  ) : unreadMessages > 0 ? (
-                    <DropdownMenuItem asChild>
-                      <Link
-                        href={customerPaths.messages}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <span>Unread messages</span>
-                        <Badge className="bg-[#003F7D] text-white text-[10px]">
-                          {unreadMessages}
-                        </Badge>
-                      </Link>
-                    </DropdownMenuItem>
-                  ) : (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">
-                      No unread notifications.
-                    </p>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href={customerPaths.messages} className="text-xs">
-                      Open messages
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <NotificationBell
+                hrefFor={customerNotificationHref}
+                autoReadWhen={isViewingNotificationChat}
+                onItemsRead={onBellItemsRead}
+                onAllRead={onBellAllRead}
+                emptyText="No notifications yet."
+                buttonClassName="size-8"
+                iconClassName="size-4"
+              />
 
               <Button
                 asChild

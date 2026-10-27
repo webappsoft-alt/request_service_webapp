@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { selectAuthUser } from "@/store/authSlice";
 import type { DashboardActionItem } from "@/store/dashboardSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { selectNotificationUnread } from "@/store/notificationFeedSlice";
 import { fetchTechDashboard } from "@/store/technicianSlice";
 import { fetchLedger, selectLedger } from "@/store/timeTrackingSlice";
 
@@ -64,7 +65,7 @@ export function TechnicianDashboardView() {
   const version = useAppSelector((state) => state.technician.versions.dashboard);
   const timeVersion = useAppSelector((state) => state.timeTracking.version);
   const active = useAppSelector((state) => state.timeTracking.active);
-  const unread = useAppSelector((state) => state.technician.notifications.unread);
+  const unread = useAppSelector(selectNotificationUnread);
   const paymentVersion = useAppSelector((state) => state.timeTracking.paymentVersion);
   const pay = useAppSelector((state) => selectLedger(state, "tech")).data.summary;
 

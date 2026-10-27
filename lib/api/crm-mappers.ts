@@ -1,5 +1,5 @@
 import { mapProjectStages } from "@/lib/project-stages";
-import { isCustomerOrigin } from "@/lib/data/lead-origins";
+import { isCustomerAccount, isCustomerOrigin } from "@/lib/data/lead-origins";
 import type {
   PortalContractor,
   PortalCustomerCrm,
@@ -524,6 +524,7 @@ export function mapPortalCustomerCrm(raw: unknown): PortalCustomerCrm | null {
         ? (trimmed(record.source) as PortalCustomerCrm["source"])
         : "external",
     origin: isCustomerOrigin(record.origin) ? record.origin : undefined,
+    account: isCustomerAccount(record.account) ? record.account : undefined,
     companyName: trimmed(record.companyName) || undefined,
     altPhone: trimmed(record.altPhone) || undefined,
     doNotCall: booleanValue(record.doNotCall),
@@ -661,6 +662,7 @@ export function mapPortalRequest(raw: unknown): PortalRequest | null {
     channel: trimmed(record.channel) === "marketplace" ? "marketplace" : "direct",
     source: trimmed(record.source) || "quote_request",
     viewCount: Math.max(1, numberValue(record.viewCount, 1)),
+    customerAccount: isCustomerAccount(record.customerAccount) ? record.customerAccount : undefined,
     firstViewedAt: toIsoString(record.firstViewedAt) || null,
     lastInteractionAt:
       toIsoString(record.lastInteractionAt) ||

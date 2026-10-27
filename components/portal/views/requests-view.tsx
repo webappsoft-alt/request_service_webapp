@@ -24,6 +24,7 @@ import { FilterTabs } from "@/components/portal/filter-tabs";
 import { PortalDataTable, type PortalTableAction } from "@/components/portal/portal-data-table";
 import { PortalPage } from "@/components/portal/portal-page";
 import { SourceFilter } from "@/components/portal/source-filter";
+import { AccountBadge } from "@/components/portal/account-badge";
 import { StatusPill, requestTone } from "@/components/portal/status-pill";
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { useCrmDirectory } from "@/components/portal/use-crm-directory";
@@ -493,6 +494,7 @@ export function RequestsView() {
                   ) : (
                     <span>{row.customerName}</span>
                   )}
+                  <AccountBadge account={row.customerAccount} />
                   {typeof row.unreadMessagesCount === "number" && row.unreadMessagesCount > 0 ? (
                     <Link
                       href={chatHref}

@@ -1,3 +1,4 @@
+import type { CustomerAccount } from "@/lib/data/lead-origins";
 import type { DemoSession } from "@/lib/auth/demo-session";
 import { estimateStatusToneDistinct } from "@/lib/data/estimate-v2-status";
 import { getJobDetail } from "@/lib/data/jobs";
@@ -57,6 +58,8 @@ export type PortalRequest = ServiceRequest & {
     | "external"
     | string;
   viewCount?: number;
+  /** Lead's customer: registered account / website guest ("Has account" / "Guest" tag). */
+  customerAccount?: CustomerAccount;
   /** Null until the provider opens the lead. Used for unseen badges. */
   firstViewedAt?: string | null;
   lastInteractionAt?: string;

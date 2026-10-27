@@ -26,7 +26,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
-import { CUSTOMER_ORIGIN_OPTIONS, originLabel, type CustomerOrigin } from "@/lib/data/lead-origins";
+import {
+  CUSTOMER_FILTER_OPTIONS,
+  customerFilterLabel,
+  isAccountFilter,
+  originLabel,
+  type CustomerListFilter,
+} from "@/lib/data/lead-origins";
+import { AccountBadge } from "@/components/portal/account-badge";
 import { getServiceCategoryById } from "@/lib/data/services";
 import {
   createEstimateV2Opportunity,
@@ -149,7 +156,7 @@ export function NewEstimateCreateView() {
   const [pinnedCustomerId, setPinnedCustomerId] = useState(customerParam);
   const [customerQuery, setCustomerQuery] = useState("");
   /** Source filter for the picker ("" = all). Fetched on its own, so the Customers page filter is untouched. */
-  const [customerOrigin, setCustomerOrigin] = useState<CustomerOrigin | "">("");
+  const [customerOrigin, setCustomerOrigin] = useState<CustomerListFilter | "">("");
   const [originResults, setOriginResults] = useState<{ key: string; items: PortalCustomerCrm[] } | null>(null);
   const [addressId, setAddressId] = useState("");
 
@@ -269,7 +276,15 @@ export function NewEstimateCreateView() {
     const [origin, search] = [customerOrigin, customerQuery.trim()];
     let cancelled = false;
     const handle = window.setTimeout(() => {
-      queryCustomers({ origin, search: search || undefined, page: 1, limit: 100, silent: true, force: true })
+      queryCustomers({
+        origin: origin && !isAccountFilter(origin) ? origin : undefined,
+        account: isAccountFilter(origin) ? origin : undefined,
+        search: search || undefined,
+        page: 1,
+        limit: 100,
+        silent: true,
+        force: true,
+      })
         .then((result) => {
           if (!cancelled) setOriginResults({ key: originKey, items: result.items });
         })
@@ -294,7 +309,10 @@ export function NewEstimateCreateView() {
       ...(originItems || []),
     ]) {
       // Keep the origin label when a source without it (directory) holds the same customer.
-      if (item?.id) map.set(item.id, { ...map.get(item.id), ...item, origin: item.origin ?? map.get(item.id)?.origin });
+      if (item?.id) {
+        const prev = map.get(item.id);
+        map.set(item.id, { ...prev, ...item, origin: item.origin ?? prev?.origin, account: item.account ?? prev?.account });
+      }
     }
     return Array.from(map.values());
   }, [directoryCustomers, localCustomers, reduxCustomers, originItems]);
@@ -610,7 +628,7 @@ export function NewEstimateCreateView() {
                 size="default"
                 className="w-full sm:w-44"
                 value={customerOrigin}
-                options={CUSTOMER_ORIGIN_OPTIONS}
+                options={CUSTOMER_FILTER_OPTIONS}
                 onChange={setCustomerOrigin}
               />
             </div>
@@ -641,6 +659,7 @@ export function NewEstimateCreateView() {
                           {originLabel(item.origin)}
                         </span>
                       ) : null}
+                      <AccountBadge account={item.account} />
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {[item.email, item.phone].filter(Boolean).join(" · ") || "No contact yet"}
@@ -652,7 +671,7 @@ export function NewEstimateCreateView() {
               {!pickerLoading && !filteredCustomers.length ? (
                 <p className="px-1 py-6 text-center text-sm text-muted-foreground">
                   {customerOrigin
-                    ? `No customers from "${originLabel(customerOrigin)}" match.`
+                    ? `No customers match "${customerFilterLabel(customerOrigin)}".`
                     : "No customers match. Create a new customer to continue."}
                 </p>
               ) : null}

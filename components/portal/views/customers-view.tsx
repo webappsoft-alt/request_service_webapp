@@ -18,7 +18,8 @@ import {
   type PortalCustomerCrm,
 } from "@/lib/data/crm-people";
 import { formatDate, formatMoney } from "@/lib/format";
-import { CUSTOMER_ORIGIN_OPTIONS, originLabel } from "@/lib/data/lead-origins";
+import { CUSTOMER_FILTER_OPTIONS, customerFilterLabel, originLabel } from "@/lib/data/lead-origins";
+import { AccountBadge } from "@/components/portal/account-badge";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
@@ -191,14 +192,14 @@ export function CustomersView() {
         pageSize={limit}
         toolbar={
           useApi ? (
-            <SourceFilter value={origin} options={CUSTOMER_ORIGIN_OPTIONS} onChange={onOriginChange} />
+            <SourceFilter value={origin} options={CUSTOMER_FILTER_OPTIONS} onChange={onOriginChange} />
           ) : null
         }
         empty={
           apiSearch
             ? "No customers match this search."
             : origin
-              ? `No customers from "${originLabel(origin)}".`
+              ? `No customers match "${customerFilterLabel(origin)}".`
               : "No customers yet. Create your first customer."
         }
         serverPagination={
@@ -234,9 +235,12 @@ export function CustomersView() {
             exportValue: (row) => crmCustomerName(row),
             cell: (row) => (
               <div>
-                <Link href={`/pro/dashboard/customers/${row.id}`} className="font-medium text-primary hover:underline">
-                  {crmCustomerName(row)}
-                </Link>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Link href={`/pro/dashboard/customers/${row.id}`} className="font-medium text-primary hover:underline">
+                    {crmCustomerName(row)}
+                  </Link>
+                  <AccountBadge account={row.account} />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {row.entityKind === "company" ? `${row.firstName} ${row.lastName}` : row.email}
                 </p>

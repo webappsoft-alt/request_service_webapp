@@ -34,7 +34,7 @@ import type {
   PortalReminder,
   PortalTask,
 } from "@/lib/data/crm-people";
-import type { CustomerOrigin } from "@/lib/data/lead-origins";
+import { isAccountFilter, type CustomerListFilter } from "@/lib/data/lead-origins";
 import type { PortalCalendarEvent, PortalEmployee } from "@/lib/data/portal";
 import type { Estimate, Invoice, Job } from "@/lib/types";
 
@@ -82,8 +82,8 @@ type CustomersState = {
   search: string;
   /** Active A–Z letter (`""` = All). Sent as the API `search` param when set. */
   letter: string;
-  /** Source filter (`""` = All sources). */
-  origin: CustomerOrigin | "";
+  /** Source / account filter (`""` = All sources). */
+  origin: CustomerListFilter | "";
   loading: boolean;
   error: string | null;
   detail: PortalCustomerCrm | null;
@@ -164,7 +164,7 @@ export type FetchCustomersArg = {
   limit?: number;
   search?: string;
   letter?: string;
-  origin?: CustomerOrigin | "";
+  origin?: CustomerListFilter | "";
   /** Bypass pagesCache and always hit the API. */
   force?: boolean;
 };
@@ -241,7 +241,7 @@ export const fetchCustomers = createAsyncThunk<
     pagination: PaginationMeta;
     search: string;
     letter: string;
-    origin: CustomerOrigin | "";
+    origin: CustomerListFilter | "";
   },
   FetchCustomersArg | void,
   { state: { customers: CustomersState }; rejectValue: string }
@@ -261,7 +261,8 @@ export const fetchCustomers = createAsyncThunk<
         page,
         limit,
         search: apiSearch || undefined,
-        origin: origin || undefined,
+        origin: origin && !isAccountFilter(origin) ? origin : undefined,
+        account: isAccountFilter(origin) ? origin : undefined,
         silent: true,
         force: true,
       });
@@ -777,7 +778,7 @@ const customersSlice = createSlice({
       state.page = 1;
       state.pagesCache = {};
     },
-    setCustomersOrigin(state, action: PayloadAction<CustomerOrigin | "">) {
+    setCustomersOrigin(state, action: PayloadAction<CustomerListFilter | "">) {
       state.origin = action.payload;
       state.page = 1;
       state.pagesCache = {};

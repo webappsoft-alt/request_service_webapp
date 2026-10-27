@@ -777,6 +777,8 @@ export type CrmListQuery = {
   status?: string;
   /** Source group for customers / leads ("ai_call", "website", …). */
   origin?: string;
+  /** Customers only: "registered" (has an account) or "guest". */
+  account?: string;
   /** Soft-archive filter — independent of lifecycle `status`. */
   isArchived?: boolean;
   jobId?: string;
@@ -868,6 +870,7 @@ export async function queryCustomers(query: CrmListQuery = {}) {
   const search = query.search?.trim();
   if (search) params.search = search;
   if (query.origin) params.origin = query.origin;
+  if (query.account) params.account = query.account;
   const response = await getData(providerCrmApi.customers, params, {
     silent: query.silent ?? true,
     force: query.force ?? true,

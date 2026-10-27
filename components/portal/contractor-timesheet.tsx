@@ -20,7 +20,7 @@ const RANGES: Array<{ id: Range; label: string }> = [
   { id: "month", label: "This month" },
 ];
 
-function rangeBounds(range: Range) {
+export function rangeBounds(range: Range) {
   const now = new Date();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
@@ -46,9 +46,9 @@ function timeOf(value: string | null) {
  * is paid from each job's contractor ledger (fixed or hourly), not technician
  * payroll, so it lives in its own section.
  */
-export function ContractorTimesheet() {
+export function ContractorTimesheet({ initialRows }: { initialRows?: TimeEntry[] | null } = {}) {
   const [range, setRange] = useState<Range>("week");
-  const [rows, setRows] = useState<TimeEntry[] | null>(null);
+  const [rows, setRows] = useState<TimeEntry[] | null>(initialRows ?? null);
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
 
@@ -59,6 +59,11 @@ export function ContractorTimesheet() {
   }, []);
 
   useEffect(() => {
+    // This week's rows came with the Timesheets page's first call; fetch on a range change or live update.
+    if (range === "week" && version === 0 && initialRows) {
+      setRows(initialRows);
+      return;
+    }
     let cancelled = false;
     const { from, to } = rangeBounds(range);
     listProviderTimeEntries({
@@ -79,7 +84,7 @@ export function ContractorTimesheet() {
     return () => {
       cancelled = true;
     };
-  }, [range, version]);
+  }, [range, version, initialRows]);
 
   const totals = useMemo(() => {
     const list = rows ?? [];

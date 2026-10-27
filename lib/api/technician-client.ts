@@ -635,6 +635,53 @@ export async function listProviderTimeEntries(query: ProviderTimeQuery): Promise
   return mapEntriesPage(response, page, limit);
 }
 
+export type TimesheetBundle = {
+  entries: TimeEntriesPage;
+  ledger: TechnicianLedger;
+  contractorEntries: TimeEntriesPage | null;
+  /** Raw team rows (map with mapPortalEmployee). */
+  team: unknown[] | null;
+};
+
+/** Everything the Timesheets page opens with — sessions, pay ledger, contractor hours and team — in one call. */
+export async function getTimesheetBundle(query: {
+  from?: string;
+  to?: string;
+  kinds?: ProviderTimeQuery["kinds"];
+  limit: number;
+  paymentsLimit: number;
+  contractorFrom?: string;
+  contractorTo?: string;
+  contractorLimit?: number;
+}): Promise<TimesheetBundle> {
+  const response = await getData(
+    providerCrmApi.timesheet,
+    {
+      kinds: kindsParam(query.kinds),
+      from: query.from,
+      to: query.to,
+      page: 1,
+      limit: query.limit,
+      tz: browserTimeZone(),
+      paymentsPage: 1,
+      paymentsLimit: query.paymentsLimit,
+      contractorFrom: query.contractorFrom,
+      contractorTo: query.contractorTo,
+      contractorLimit: query.contractorLimit,
+    },
+    quiet,
+  );
+  const data = asRecord(dataOf(response));
+  return {
+    entries: mapEntriesPage(data.entries, 1, query.limit),
+    ledger: mapLedger(data.ledger),
+    contractorEntries: data.contractorEntries
+      ? mapEntriesPage(data.contractorEntries, 1, query.contractorLimit ?? 200)
+      : null,
+    team: Array.isArray(data.team) ? data.team : null,
+  };
+}
+
 export async function providerStopTimeEntry(id: string): Promise<TimeEntry | null> {
   return mapTimeEntry(dataOf(await postData(providerCrmApi.timeEntryClockOut(id), {}, { silent: true })));
 }

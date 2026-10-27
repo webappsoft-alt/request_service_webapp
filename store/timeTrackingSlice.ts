@@ -289,6 +289,34 @@ const timeTrackingSlice = createSlice({
     timeEntryReceived(state, action: PayloadAction<{ entry: TimeEntry; technician: boolean }>) {
       applyEntry(state, action.payload.entry, { technician: action.payload.technician });
     },
+    /** Timesheets bundle: fill the board list and the ledger as if each had been fetched on its own. */
+    timesheetSeeded(
+      state,
+      action: PayloadAction<{
+        listScope: string;
+        listQuery: ProviderTimeQuery;
+        entries: TimeEntriesPage;
+        ledgerScope: string;
+        ledgerQuery: LedgerQuery;
+        ledger: TechnicianLedger;
+      }>,
+    ) {
+      const { listScope, listQuery, entries, ledgerScope, ledgerQuery, ledger } = action.payload;
+      state.lists[listScope] = {
+        filterKey: timeFilterKey(listQuery),
+        items: entries.items,
+        summary: entries.summary,
+        overall: entries.overall ?? state.lists[listScope]?.overall,
+        page: entries.page,
+        limit: entries.limit,
+        total: entries.total,
+        totalPages: entries.totalPages,
+        loading: false,
+        loaded: true,
+        error: null,
+      };
+      state.ledgers[ledgerScope] = { filterKey: ledgerKey(ledgerQuery), data: ledger, loading: false, loaded: true, error: null };
+    },
     clearTimeList(state, action: PayloadAction<string>) {
       delete state.lists[action.payload];
     },
@@ -403,7 +431,7 @@ const timeTrackingSlice = createSlice({
   },
 });
 
-export const { timeEntryReceived, clearTimeList, technicianPaymentReceived } = timeTrackingSlice.actions;
+export const { timeEntryReceived, clearTimeList, technicianPaymentReceived, timesheetSeeded } = timeTrackingSlice.actions;
 
 const EMPTY_LIST = emptyList();
 

@@ -234,6 +234,16 @@ export async function listEstimateV2Opportunities(params?: {
   };
 }
 
+/** The opportunity id holding this estimate, or null for a classic estimate (no failed request). */
+export async function lookupOpportunityIdByEstimate(estimateId: string): Promise<string | null> {
+  const response = await getData(providerCrmApi.estimateV2OpportunityLookup(estimateId), undefined, {
+    force: true,
+    silent: true,
+  });
+  const data = unwrapData<{ opportunityId?: string | null }>(response);
+  return data?.opportunityId ? String(data.opportunityId) : null;
+}
+
 export async function getOpportunityByEstimateId(
   estimateId: string,
   options?: { force?: boolean; silent?: boolean },

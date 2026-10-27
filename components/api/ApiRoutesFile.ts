@@ -138,6 +138,8 @@ export const providerCrmApi = {
     `provider/team/${id}/attachments/${attachmentId}`,
   /** GET technician time entries — query: employeeId | jobId | estimateId, from, to, tz */
   timeEntries: "provider/time-entries",
+  /** Timesheets page bundle: sessions + pay ledger + contractor hours + team, one call. */
+  timesheet: "provider/time-entries/timesheet",
   /** POST stop a technician's running timer */
   timeEntryClockOut: (id: string) => `provider/time-entries/${id}/clock-out`,
   /** GET earned/paid/remaining ledger; POST record a technician payout (separate from customer payments) */
@@ -202,6 +204,9 @@ export const providerCrmApi = {
   estimateV2Opportunities: "provider/estimate-v2/opportunities",
   estimateV2Opportunity: (id: string) => `provider/estimate-v2/opportunities/${id}`,
   estimateV2OpportunityCrew: (id: string) => `provider/estimate-v2/opportunities/${id}/crew`,
+  /** 200 with { opportunityId: null } for a classic estimate (no 404). */
+  estimateV2OpportunityLookup: (estimateId: string) =>
+    `provider/estimate-v2/opportunities/lookup-estimate/${estimateId}`,
   estimateV2OpportunityByEstimate: (estimateId: string) =>
     `provider/estimate-v2/opportunities/by-estimate/${estimateId}`,
   estimateV2OpportunityAssessments: (id: string) =>

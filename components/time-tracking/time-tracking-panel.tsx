@@ -10,10 +10,11 @@ import {
   selectLedger,
   selectTimeList,
   stopTimeEntryThunk,
+  type LedgerQuery,
 } from "@/store/timeTrackingSlice";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { resolveTimeRange, type TimeEntry, type TimeRange } from "@/lib/time-tracking";
-import type { LedgerRow } from "@/lib/api/technician-client";
+import type { LedgerRow, ProviderTimeQuery } from "@/lib/api/technician-client";
 import { TimeEntriesTable, TimeRangeFilter } from "@/components/time-tracking/time-tracking-ui";
 import {
   LedgerTable,
@@ -41,6 +42,61 @@ const PAGE_SIZE = 10;
 const BOARD_LIMIT = 500;
 
 export type TimesheetView = "board" | "sessions" | "payments";
+
+/** Who / what a panel covers — shared by its list and ledger queries. */
+type PanelScope = {
+  technician?: boolean;
+  contractorId?: string;
+  contractorName?: string;
+  employeeId?: string;
+  employeeKey: string;
+  jobId?: string;
+  estimateId?: string;
+  kindsKey: string;
+};
+
+/** Board / sessions query; also used by the Timesheets page to pre-fill the first load. */
+export function panelListQuery(
+  scope: PanelScope,
+  range: { from?: string; to?: string },
+  view: TimesheetView,
+  page: number,
+): ProviderTimeQuery {
+  return {
+    contractorId: scope.contractorId,
+    participantType: scope.contractorId ? ("contractor" as const) : undefined,
+    employeeId: scope.employeeId,
+    employeeIds: scope.employeeId || !scope.employeeKey ? undefined : scope.employeeKey.split(","),
+    jobId: scope.jobId,
+    estimateId: scope.estimateId,
+    kinds: scope.kindsKey.split(",") as RecordKind[],
+    from: range.from,
+    to: range.to,
+    page: view === "sessions" ? page : 1,
+    limit: view === "sessions" ? PAGE_SIZE : BOARD_LIMIT,
+  };
+}
+
+/** Pay ledger query (earned / paid / remaining + a page of payout history). */
+export function panelLedgerQuery(scope: PanelScope, paymentsPage: number): LedgerQuery {
+  return {
+    technician: scope.technician,
+    contractorId: scope.contractorId,
+    contractorName: scope.contractorName,
+    employeeId: scope.employeeId,
+    employeeIds: scope.employeeId || !scope.employeeKey ? undefined : scope.employeeKey.split(","),
+    jobId: scope.jobId,
+    estimateId: scope.estimateId,
+    paymentsPage,
+    paymentsLimit: PAGE_SIZE,
+    kinds: scope.kindsKey.split(",") as RecordKind[],
+  };
+}
+
+/** The board list's cache key for a panel scope. */
+export const boardScopeKey = (scopeKey: string) => `${scopeKey}:board`;
+export const TIMESHEET_BOARD_LIMIT = BOARD_LIMIT;
+export const TIMESHEET_PAGE_SIZE = PAGE_SIZE;
 
 export type TimeTrackingPanelProps = {
   /** Slice cache key, e.g. `tech`, `employee:<id>`, `job:<id>`, `timesheets`. */
@@ -110,7 +166,7 @@ export function TimeTrackingPanel({
   const contractorName = contractor?.name;
 
   const resolved = useMemo(() => resolveTimeRange(range), [range]);
-  const listScope = view === "sessions" ? scopeKey : `${scopeKey}:board`;
+  const listScope = view === "sessions" ? scopeKey : boardScopeKey(scopeKey);
   const list = useAppSelector((state) => selectTimeList(state, listScope));
   const ledgerState = useAppSelector((state) => selectLedger(state, scopeKey));
   const version = useAppSelector((state) => state.timeTracking?.version ?? 0);
@@ -122,35 +178,22 @@ export function TimeTrackingPanel({
   const kindsKey = kinds.join(",");
   const employeeKey = employeeIds.join(",");
   const query = useMemo(
-    () => ({
-      contractorId,
-      participantType: contractorId ? ("contractor" as const) : undefined,
-      employeeId,
-      employeeIds: employeeId || !employeeKey ? undefined : employeeKey.split(","),
-      jobId,
-      estimateId,
-      kinds: kindsKey.split(",") as RecordKind[],
-      from: resolved.from,
-      to: resolved.to,
-      page: view === "sessions" ? page : 1,
-      limit: view === "sessions" ? PAGE_SIZE : BOARD_LIMIT,
-    }),
+    () =>
+      panelListQuery(
+        { contractorId, employeeId, employeeKey, jobId, estimateId, kindsKey },
+        { from: resolved.from, to: resolved.to },
+        view,
+        page,
+      ),
     [contractorId, employeeId, employeeKey, jobId, estimateId, kindsKey, resolved.from, resolved.to, page, view],
   );
   // Payment history is paged + filtered by the API; earned / remaining per job always cover everything.
   const ledgerQuery = useMemo(
-    () => ({
-      technician,
-      contractorId,
-      contractorName,
-      employeeId,
-      employeeIds: employeeId || !employeeKey ? undefined : employeeKey.split(","),
-      jobId,
-      estimateId,
-      paymentsPage,
-      paymentsLimit: PAGE_SIZE,
-      kinds: kindsKey.split(",") as RecordKind[],
-    }),
+    () =>
+      panelLedgerQuery(
+        { technician, contractorId, contractorName, employeeId, employeeKey, jobId, estimateId, kindsKey },
+        paymentsPage,
+      ),
     [technician, contractorId, contractorName, employeeId, employeeKey, jobId, estimateId, paymentsPage, kindsKey],
   );
 

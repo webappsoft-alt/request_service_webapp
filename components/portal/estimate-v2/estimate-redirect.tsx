@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CenteredSpinner } from "@/components/ui/spinner";
-import { getOpportunityByEstimateId } from "@/lib/api/estimate-v2-client";
+import { lookupOpportunityIdByEstimate } from "@/lib/api/estimate-v2-client";
 import { EstimateDetailView } from "@/components/portal/views/record-detail-views";
 
 /**
@@ -18,12 +18,10 @@ export function EstimateToOpportunityRedirect({ estimateId }: { estimateId: stri
     let cancelled = false;
     void (async () => {
       try {
-        const opportunity = await getOpportunityByEstimateId(estimateId, {
-          silent: true,
-        });
+        const opportunityId = await lookupOpportunityIdByEstimate(estimateId);
         if (cancelled) return;
-        if (opportunity?.id) {
-          router.replace(`/pro/dashboard/new-estimate/${opportunity.id}`);
+        if (opportunityId) {
+          router.replace(`/pro/dashboard/new-estimate/${opportunityId}`);
           return;
         }
         setClassic(true);

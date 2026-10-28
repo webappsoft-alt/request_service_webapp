@@ -65,7 +65,7 @@ function CustomerSiteHeader({ pathname }: { pathname: string }) {
   const showAccount = Boolean(user && (isAuthenticated || auth.token));
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-card">
+    <header className="sticky top-0 z-40 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.05),0_4px_14px_-8px_rgba(15,23,42,0.14)] dark:shadow-[0_1px_0_rgba(255,255,255,0.06),0_6px_16px_-10px_rgba(0,0,0,0.6)]">
       <div className="container-site flex h-17 items-center justify-between gap-6">
         <Logo />
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">

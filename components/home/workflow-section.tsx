@@ -178,7 +178,7 @@ export function WorkflowSection() {
             you pay.
           </p>
 
-          <div className="mt-8 hidden border-t border-input pt-6 lg:block">
+          <div className="mt-8 hidden border-t border-border-soft pt-6 lg:block">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
@@ -224,7 +224,7 @@ export function WorkflowSection() {
                 onClick={prev}
                 disabled={active === 0}
                 aria-label="Previous step"
-                className="flex size-11 items-center justify-center rounded-full border border-input bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35"
+                className="flex size-11 items-center justify-center rounded-full border border-border-soft bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35"
               >
                 <ArrowLeft className="size-4" />
               </button>
@@ -233,7 +233,7 @@ export function WorkflowSection() {
                 onClick={next}
                 disabled={active === TOTAL - 1}
                 aria-label="Next step"
-                className="flex size-11 items-center justify-center rounded-full border border-input bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35"
+                className="flex size-11 items-center justify-center rounded-full border border-border-soft bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35"
               >
                 <ArrowRight className="size-4" />
               </button>
@@ -385,7 +385,7 @@ export function WorkflowSection() {
                 <ArrowRight data-icon="inline-end" />
               </Link>
             </Button>
-            <Button size="lg" variant="outline" className="border-input bg-card" asChild>
+            <Button size="lg" variant="outline" className="border-border-soft bg-card" asChild>
               <Link href="/find-a-professional">Find a professional</Link>
             </Button>
           </div>

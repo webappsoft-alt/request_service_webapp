@@ -139,7 +139,7 @@ export function ServiceJobCard({
         if (!canNavigate) event.preventDefault();
       }}
       className={cn(
-        "group flex h-full overflow-hidden rounded-xl border border-foreground/35 bg-card transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:border-foreground/50 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "group flex h-full overflow-hidden rounded-xl border border-border-card bg-card shadow-sm transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:border-primary/25 hover:elevate focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         isList
           ? "flex-col p-5 sm:flex-row sm:items-stretch sm:gap-6"
           : "flex-col",
@@ -286,7 +286,7 @@ export function ServiceJobCard({
             ) : null}
           </div>
 
-          <div className="mt-auto flex items-end justify-between gap-3 border-t px-4 py-3">
+          <div className="mt-auto flex items-end justify-between gap-3 border-t border-border-soft px-4 py-3">
             <span className="flex flex-col gap-0.5">
               <span className="text-xs text-muted-foreground">
                 Typical start

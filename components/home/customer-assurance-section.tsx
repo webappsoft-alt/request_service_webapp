@@ -53,7 +53,7 @@ export function CustomerAssuranceSection() {
             return (
               <article
                 key={item.title}
-                className="rounded-2xl border border-input bg-card px-5 py-6 text-center shadow-[0_16px_36px_-28px_rgba(0,63,125,0.4)]"
+                className="rounded-2xl border border-border-card bg-card px-5 py-6 text-center shadow-[0_16px_36px_-28px_rgba(0,63,125,0.4)]"
               >
                 <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Icon className="size-5" aria-hidden="true" />
@@ -65,7 +65,7 @@ export function CustomerAssuranceSection() {
           })}
         </div>
 
-        <div className="overflow-hidden rounded-[1.75rem] border border-[#003F7D]/15 bg-[#003F7D] px-6 py-8 text-primary-foreground sm:px-10 sm:py-10 dark:border-sky-400/20 dark:bg-[linear-gradient(135deg,#0b3a6e,#0a2a52)] dark:text-white">
+        <div className="overflow-hidden rounded-[1.75rem] bg-[#003F7D] px-6 py-8 text-primary-foreground sm:px-10 sm:py-10 dark:bg-[linear-gradient(135deg,#0b3a6e,#0a2a52)] dark:text-white">
           <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="flex flex-col gap-3">
               <p className="inline-flex w-fit items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-[11px] font-medium tracking-[0.14em] uppercase dark:text-sky-100">

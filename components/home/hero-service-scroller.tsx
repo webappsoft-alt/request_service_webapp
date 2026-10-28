@@ -202,7 +202,7 @@ export function HeroServiceScroller() {
         aria-label="Previous services"
         disabled={!canPrev}
         onClick={() => move(-1)}
-        className="shrink-0 bg-card border-foreground/50 text-foreground disabled:opacity-70 [&_svg]:size-4"
+        className="shrink-0 bg-card border-border-soft text-foreground disabled:opacity-70 [&_svg]:size-4"
       >
         <ChevronLeft strokeWidth={2.5} />
       </Button>
@@ -278,7 +278,7 @@ export function HeroServiceScroller() {
         aria-label="Next services"
         disabled={!canNext}
         onClick={() => move(1)}
-        className="shrink-0 bg-card border-foreground/50 text-foreground disabled:opacity-70 [&_svg]:size-4"
+        className="shrink-0 bg-card border-border-soft text-foreground disabled:opacity-70 [&_svg]:size-4"
       >
         <ChevronRight strokeWidth={2.5} />
       </Button>

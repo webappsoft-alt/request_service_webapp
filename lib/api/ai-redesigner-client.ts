@@ -4,6 +4,11 @@ import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
 
 /** Customer page for the AI Kitchen & Bath Redesigner. */
 export const AI_DESIGNER_PATH = "/ai-kitchen-bath-designer";
+/**
+ * Launch switch for customers. While false, the home banner shows a "coming soon" toast and the
+ * designer page shows a placeholder (admins keep testing from the admin panel). Flip to true to launch.
+ */
+export const AI_DESIGNER_LIVE = false;
 
 export type RoomType = "kitchen" | "bathroom";
 export type FinishCategory = "cabinets" | "countertops" | "backsplash" | "hardware";

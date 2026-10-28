@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Camera, Palette, Sparkles, SwatchBook } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Container, Section } from "@/components/layout/container";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchRedesignCatalog, selectRedesignCatalog } from "@/store/aiRedesignerSlice";
+import { AI_DESIGNER_LIVE, AI_DESIGNER_PATH } from "@/lib/api/ai-redesigner-client";
 import { swatchStyle } from "./finish-swatch";
 
 /** The customer-facing designer isn't open yet — admins test it from the admin panel. */
@@ -30,6 +32,8 @@ const STEPS = [
 export function RedesignerSection() {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectRedesignCatalog);
+  const router = useRouter();
+  const openDesigner = () => (AI_DESIGNER_LIVE ? router.push(AI_DESIGNER_PATH) : showComingSoon());
 
   useEffect(() => {
     void dispatch(fetchRedesignCatalog());
@@ -61,7 +65,7 @@ export function RedesignerSection() {
               {STEPS.map((step, index) => {
                 const Icon = step.icon;
                 return (
-                  <li key={step.label} className="flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-2.5 text-xs font-medium">
+                  <li key={step.label} className="flex items-center gap-2 rounded-xl border border-border-card bg-background px-3 py-2.5 text-xs font-medium">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                       <Icon className="size-3.5" aria-hidden="true" />
                     </span>
@@ -74,7 +78,7 @@ export function RedesignerSection() {
               })}
             </ol>
             <div className="flex flex-wrap items-center gap-3">
-              <Button size="xl" type="button" onClick={showComingSoon}>
+              <Button size="xl" type="button" onClick={openDesigner}>
                 Try the AI designer
                 <ArrowRight data-icon="inline-end" />
               </Button>
@@ -84,7 +88,7 @@ export function RedesignerSection() {
 
           <button
             type="button"
-            onClick={showComingSoon}
+            onClick={openDesigner}
             aria-label="AI kitchen and bathroom designer — coming soon"
             className="group relative block w-full cursor-pointer overflow-hidden rounded-2xl bg-muted/40 p-3 text-left"
           >

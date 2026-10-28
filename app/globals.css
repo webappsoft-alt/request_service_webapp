@@ -27,6 +27,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-border-soft: var(--border-soft);
+  --color-border-card: var(--border-card);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -91,6 +92,8 @@
   --input: #969FAB;
   /* Soft border for greyish info/field tiles (lighter than --border). */
   --border-soft: #e2e8f0;
+  /* Listing / data card outline: clearly visible, lighter than --border. */
+  --border-card: #cbd5e1;
   --ring: oklch(0.42 0.1 254);
   --success: oklch(0.5 0.1 155);
   --success-foreground: oklch(0.985 0.01 155);
@@ -157,6 +160,7 @@
   --border: #334155;
   --input: #334155;
   --border-soft: #253346;
+  --border-card: #3b4b61;
   --ring: oklch(0.68 0.08 254);
 
   --success: oklch(0.7 0.12 155);

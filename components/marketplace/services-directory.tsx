@@ -431,7 +431,7 @@ function FilterBlock({
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="border-b py-3.5 last:border-b-0">
+    <div className="border-b border-border-soft py-3.5 last:border-b-0">
       <button
         type="button"
         aria-expanded={open}
@@ -1273,7 +1273,7 @@ export function ServicesDirectory({
 
   const filtersPanel = () => (
     <>
-      <div className="flex items-center justify-between gap-3 border-b pb-3.5">
+      <div className="flex items-center justify-between gap-3 border-b border-border-soft pb-3.5">
         <h2 className="flex items-center gap-2 text-base font-semibold">
           <ListFilter className="size-4 text-brand" aria-hidden="true" />
           Filters
@@ -1452,7 +1452,7 @@ export function ServicesDirectory({
             data-lenis-prevent-wheel
             data-lenis-prevent-touch
             tabIndex={0}
-            className="filters-sidebar max-lg:hidden sticky top-24 self-start rounded-xl border bg-card p-5 shadow-sm"
+            className="filters-sidebar max-lg:hidden sticky top-24 self-start rounded-xl border border-border-card bg-card p-5 shadow-sm"
             style={{ maxHeight: "calc(100dvh - 7rem)", overflowY: "scroll" }}
           >
             {filtersPanel()}
@@ -1518,7 +1518,7 @@ export function ServicesDirectory({
                         "flex size-8 items-center justify-center rounded-lg border transition-colors",
                         view === option.value
                           ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground",
+                          : "border-border-soft bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground",
                       )}
                     >
                       <option.icon className="size-4" aria-hidden="true" />
@@ -1529,7 +1529,7 @@ export function ServicesDirectory({
             </div>
 
             {Object.keys(answers).length && activeCategory ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-input bg-[#e8eef5] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-xl border border-border-soft bg-[#e8eef5] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-[#003F7D]">Send these answers as a quote request</p>
                   <p className="text-sm text-muted-foreground">
@@ -1553,7 +1553,7 @@ export function ServicesDirectory({
                 data-lenis-prevent
                 data-lenis-prevent-wheel
                 data-lenis-prevent-touch
-                className="max-h-[min(28rem,70dvh)] overflow-y-auto overscroll-contain rounded-xl border bg-card p-5 shadow-sm lg:hidden"
+                className="max-h-[min(28rem,70dvh)] overflow-y-auto overscroll-contain rounded-xl border border-border-card bg-card p-5 shadow-sm lg:hidden"
               >
                 {filtersPanel()}
               </div>
@@ -1566,7 +1566,7 @@ export function ServicesDirectory({
                     <button
                       type="button"
                       onClick={chip.clear}
-                      className="inline-flex items-center gap-1.5 rounded-lg border bg-card py-1.5 pr-2 pl-3 text-sm transition-colors hover:border-primary/40"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border-card bg-card py-1.5 pr-2 pl-3 text-sm transition-colors hover:border-primary/40"
                     >
                       {chip.label}
                       <X className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -1732,7 +1732,7 @@ export function ServicesDirectory({
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-5 py-14 text-center shadow-sm">
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-border-card bg-card px-5 py-14 text-center shadow-sm">
                 <p className="text-base font-medium">No services match those filters</p>
                 <p className="max-w-sm text-sm text-muted-foreground">
                   Try a different service, location, or clear the category and rating filters.
